@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FeedbackOps 현재 프로젝트 보고</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1117;
+      --panel: #171a22;
+      --panel-2: #1f2330;
+      --line: #303542;
+      --text: #eef1f7;
+      --muted: #a8b0c0;
+      --subtle: #7f8899;
+      --accent: #7aa2ff;
+      --good: #5dd6a3;
+      --warn: #f2c46d;
+      --bad: #ff7b86;
+      --radius: 8px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.55; }
+    .report { max-width: 1180px; margin: 0 auto; padding: 32px; }
+    .header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+    .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: 34px; line-height: 1.15; letter-spacing: 0; }
+    h2 { margin-bottom: 14px; font-size: 18px; letter-spacing: 0; }
+    .summary { font-size: 17px; color: #dce3f2; }
+    .meta { min-width: 260px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+    .meta-row { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; color: var(--muted); font-size: 13px; }
+    .meta-row strong { color: var(--text); font-weight: 600; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; margin-top: 20px; }
+    .card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 18px; }
+    .span-12 { grid-column: span 12; }
+    .span-8 { grid-column: span 8; }
+    .span-6 { grid-column: span 6; }
+    .span-4 { grid-column: span 4; }
+    .kpi-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .kpi { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .value { margin-top: 8px; font-size: 24px; font-weight: 700; }
+    ul { margin: 0; padding-left: 18px; color: var(--muted); }
+    li + li { margin-top: 8px; }
+    .table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .table th, .table td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .table th { color: var(--subtle); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .badge { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .badge.good { color: var(--good); }
+    .badge.warn { color: var(--warn); }
+    .badge.bad { color: var(--bad); }
+    .evidence { color: var(--muted); font-size: 13px; }
+    @media (max-width: 900px) {
+      .report { padding: 20px; }
+      .header { grid-template-columns: 1fr; }
+      .meta { min-width: 0; }
+      .span-8, .span-6, .span-4 { grid-column: span 12; }
+      .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+      h1 { font-size: 26px; }
+      .kpi-row { grid-template-columns: 1fr; }
+      .table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="report">
+    <header class="header">
+      <div>
+        <p class="eyebrow">FeedbackOps Suite</p>
+        <h1>현재 프로젝트 보고</h1>
+        <p class="summary">현재 저장소는 구현 코드보다 제품/프론트엔드/구현 계약 문서가 중심이며, MVP 화면 방향은 액션 큐와 목록-상세 패널 기반 운영 도구로 정리되어 있습니다.</p>
+      </div>
+      <aside class="meta" aria-label="Report metadata">
+        <div class="meta-row"><span>작성일</span><strong>2026-05-13</strong></div>
+        <div class="meta-row"><span>보고자</span><strong>Codex</strong></div>
+        <div class="meta-row"><span>대상</span><strong>프로젝트 오너</strong></div>
+        <div class="meta-row"><span>상태</span><strong>문서 기반 설계 정리</strong></div>
+      </aside>
+    </header>
+
+    <section class="grid" aria-label="Report body">
+      <article class="card span-12">
+        <h2>Executive Summary</h2>
+        <p class="summary">FeedbackOps는 고객 피드백, 설문 결과, 실행 업무, 개선 효과를 연결하는 운영 플랫폼입니다. 핵심 제품 흐름은 Evidence → Finding → Task Request → Task / Milestone → Reporter-facing Update → Outcome Survey이며, Dashboard는 차트보다 끊긴 연결과 다음 액션을 보여주는 Action Dashboard가 되어야 합니다.</p>
+      </article>
+
+      <article class="card span-12">
+        <h2>Key Metrics</h2>
+        <div class="kpi-row">
+          <div class="kpi"><div class="label">Canonical Systems</div><div class="value">8</div></div>
+          <div class="kpi"><div class="label">Primary Routes</div><div class="value">11</div></div>
+          <div class="kpi"><div class="label">Core Flow Steps</div><div class="value">6</div></div>
+          <div class="kpi"><div class="label">Current Code Focus</div><div class="value">Docs</div></div>
+        </div>
+      </article>
+
+      <article class="card span-6">
+        <h2>Current State</h2>
+        <ul>
+          <li>문서 체계는 `docs/design`, `docs/frontend`, `docs/implementation`으로 분리되어 있고 우선순위도 명시되어 있습니다.</li>
+          <li>프론트엔드 계약은 시스템 전환 레일, 시스템별 사이드바, MainRegion, RightDetailPanel, ObjectList 중심으로 해석하는 것이 적절합니다.</li>
+          <li>현 워크트리 기준 실제 앱 소스 파일은 거의 없고, 현재 산출물은 설계/보고 문서로 추가하는 것이 적절합니다.</li>
+        </ul>
+      </article>
+
+      <article class="card span-6">
+        <h2>Work Completed</h2>
+        <ul>
+          <li>프로젝트 문서 구조, 제품 개요, 도메인 모델, UX 원칙, 라우트 계약을 확인했습니다.</li>
+          <li>반복 보고용 HTML 템플릿을 `docs/reporting/report-template.html`로 만들었습니다.</li>
+          <li>현재 프로젝트 보고서와 MVP 와이어프레임 HTML을 별도 파일로 분리했습니다.</li>
+        </ul>
+      </article>
+
+      <article class="card span-6">
+        <h2>Decisions / Assumptions</h2>
+        <ul>
+          <li>보고 형식은 매번 같은 섹션을 유지하고 값만 바꿔 넣는 HTML 카드 레이아웃으로 고정합니다.</li>
+          <li>와이어프레임은 높은 시각 완성도보다 화면 정보 구조와 액션 흐름을 보여주는 저충실도 산출물로 둡니다.</li>
+          <li>각 시스템은 단일 메뉴가 아니라 워크스페이스, 프로젝트, 시스템 내부 메뉴를 가진 운영 콘솔로 봅니다.</li>
+        </ul>
+      </article>
+
+      <article class="card span-6">
+        <h2>Risks / Blockers</h2>
+        <table class="table">
+          <thead>
+            <tr><th>Risk</th><th>Impact</th><th>Owner</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>설계 문서와 실제 구현 코드 간 차이가 발생할 수 있음</td><td>와이어프레임이 구현 상태를 과대 표시할 수 있음</td><td>PM / Tech Lead</td><td><span class="badge warn">관리 필요</span></td></tr>
+            <tr><td>Dashboard를 BI 차트 중심으로 해석할 위험</td><td>제품 핵심인 missing-link recovery가 약해짐</td><td>Product</td><td><span class="badge bad">주의</span></td></tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="card span-8">
+        <h2>Next Actions</h2>
+        <table class="table">
+          <thead>
+            <tr><th>Action</th><th>Why</th><th>Owner</th><th>Due</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>와이어프레임 기준 화면 우선순위 확정</td><td>MVP 구현 순서를 고정하기 위함</td><td>Project Owner</td><td>다음 작업 전</td></tr>
+            <tr><td>각 화면의 API 계약과 요구사항 ID 연결</td><td>CTA 추적성과 구현 검증 기준 확보</td><td>PM / Engineer</td><td>구현 계획 작성 시</td></tr>
+            <tr><td>HTML 보고 템플릿을 이후 진행 보고에 적용</td><td>보고 형식 일관성과 비교 가능성 확보</td><td>Codex</td><td>다음 보고부터</td></tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="card span-4">
+        <h2>Evidence</h2>
+        <p class="evidence">이번 보고는 저장소의 문서와 git 상태를 기준으로 작성했습니다.</p>
+        <ul>
+          <li>`docs/design/00-product-overview.md`: 제품 포지셔닝과 시스템 맵</li>
+          <li>`docs/design/10-cross-system-workflows.md`: canonical flow와 dashboard recovery</li>
+          <li>`docs/frontend/routes-and-layout.md`: AppShell, route, desktop detail panel contract</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
