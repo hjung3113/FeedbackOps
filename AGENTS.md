@@ -72,3 +72,25 @@ Before implementation that changes product behavior, API contracts, domain rules
 - For frontend work, verify desktop, tablet, and mobile states when layout or interaction changes.
 - For backend work, verify permissions, entity link side effects, and audit behavior when touched.
 - If verification cannot run, report the exact command and blocker.
+
+## Codex Cloud
+
+This repository can be used from Codex Cloud after connecting `hjung3113/FeedbackOps` in ChatGPT Codex.
+
+Use `docs/codex-cloud-setup.md` when creating or updating the Codex Cloud environment. The setup command should be:
+
+```bash
+bash scripts/codex-cloud-setup.sh
+```
+
+This repo is currently a documentation and architecture scaffold for FeedbackOps. It defines app boundaries under `apps/*` and shared package boundaries under `packages/*`, but it does not yet contain package manager lockfiles, application source code, migrations, or test projects. Do not invent install, build, database, or test commands until the matching project files exist.
+
+For any new Codex task:
+
+1. Read `AGENTS.md`.
+2. Read any nested `AGENTS.md` that applies to the requested path.
+3. Read `docs/README.md`.
+4. Follow the required reading order for product, frontend, backend, or shared package work.
+5. Keep changes limited to files required by the user request.
+
+When asked to review a pull request, prioritize product invariant violations, ownership boundary violations, missing verification, accidental source code at the repository root, mismatches between docs and nested agent guides, and frontend changes that break the dense list-first operational UI model.
