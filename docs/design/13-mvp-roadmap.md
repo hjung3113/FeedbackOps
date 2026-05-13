@@ -9,9 +9,10 @@ This document defines release scope. System documents describe behavior; this do
 ```text
 - Core / AD / Workspace
 - 기본 권한
-- VOC 등록 / Inbox
-- Product Area Tree
-- Basic Task / Project
+- VOC 등록 / Triage / Inbox
+- Managed System Registry and defaults
+- Analytics Area Catalog
+- Basic Task
 - Entity Link
 ```
 
@@ -20,9 +21,9 @@ This document defines release scope. System documents describe behavior; this do
 ```text
 - Finding
 - Task Request
-- Assign 시 Task 생성 팝업
+- VOC follow-up to Task Request
 - Survey Type 구분
-- Survey → Finding → Task / Milestone 연결
+- optional Survey → Finding → Task Request → Task 연결
 - VOC 유사 추천
 - Action Dashboard 기본형
 ```
@@ -35,7 +36,7 @@ This document defines release scope. System documents describe behavior; this do
 - Notification Rule
 - Outcome Survey workflow
 - Dashboard coverage / unlinked data 고도화
-- Product Area별 리포트
+- Analytics Area별 리포트
 ```
 
 ## Phase 2
@@ -60,40 +61,45 @@ Core Platform:
 - Team: MUST
 - Basic Role / Permission: MUST
 - Permission Request: MUST
-- Customer / Account: MUST
-- Contact: MUST
-- Project Registry: MUST
-- Product Area / Menu Tree: MUST
+- Managed System Registry: MUST
+- Analytics Area Catalog: MUST
 - Basic Entity Link: MUST
 - Basic Audit Log: MUST
 
 VOC:
 - VOC 등록: MUST
 - 본인 VOC 상태 조회: MUST
+- VOC Triage: MUST
+- Primary Managed System: MUST
+- VOC Source Context: SHOULD
+- Unassigned VOC queue: MUST
 - 관리자 VOC Inbox: MUST
 - VOC Detail: MUST
 - 상태 변경: MUST
 - Category / Severity: MUST
 - Owner / Assignee: MUST
-- Product Area 연결: MUST
+- Analytics Area 연결: SHOULD
+- Reporter Reply: MUST
+- Public Update: MUST
 - VOC Cluster 수동 생성: MUST
 - 유사 VOC 추천: SHOULD
-- Finding 생성: MUST
-- Task 생성 / Task Request 팝업: MUST
+- Finding 생성: SHOULD
+- Task Request 생성: MUST
 
-Task / Project:
+Task:
 - Backstage 접근 제어: MUST
-- Project List / Overview: MUST
-- Product Area 기반 필터: MUST
+- Managed System 기반 필터: MUST
 - Milestone: SHOULD
 - Task 생성 / 수정: MUST
 - Task Board / List: MUST
 - 담당자 / 기한 / 우선순위: MUST
 - Task Request 승인: MUST
-- VOC / Survey / Finding 연결: MUST
+- Entity Link support: MUST
+- VOC / Survey / Finding 개별 연결: SHOULD
 
 Survey:
 - Survey 생성: MUST
+- Primary Managed System: MUST
 - Survey Type: MUST
 - Template 기반 생성: MUST
 - 기본 Builder: MUST
@@ -101,16 +107,17 @@ Survey:
 - 응답 저장: MUST
 - Response List: MUST
 - 기본 결과 요약: MUST
-- Finding 생성: MUST
-- Task Request / Task / Milestone 연결: MUST
-- Product Area 연결: MUST
+- Finding 생성: SHOULD
+- Task Request / Task 연결: SHOULD
+- Analytics Area 연결: SHOULD
 
 Dashboard:
 - System Dashboard: MUST
 - Action Dashboard: MUST
 - 연결된 데이터 조회: MUST
-- 연결되지 않은 중요 데이터 조회: MUST
-- Product Area별 현황: MUST
+- policy-driven follow-up gap 조회: MUST
+- Managed System 현황: MUST
+- Analytics Area별 현황: SHOULD when Analytics Area data exists
 - Coverage 지표: SHOULD
 ```
 
@@ -119,14 +126,14 @@ Dashboard:
 Recommended first success path:
 
 ```text
-1. 일반 사용자가 VOC를 등록한다.
-2. 관리자가 VOC Inbox에서 분류한다.
+1. 일반 사용자가 Managed System을 선택해 VOC를 등록한다.
+2. Admin 또는 same-scope Developer가 VOC Inbox에서 분류하고 severity를 지정한다.
 3. 유사 VOC를 묶어 VOC Cluster를 만든다.
 4. Cluster에서 Finding을 만든다.
 5. Finding에서 Task Request를 만든다.
-6. PM / Manager가 Task Request를 승인해 Task를 만든다.
+6. Admin 또는 same-scope Developer가 Task Request를 승인해 Backlog Task를 만든다.
 7. Task 상태와 별도로 Reporter-facing VOC Status를 수동 갱신한다.
-8. Action Dashboard에서 High Severity VOC → Finding → Task 연결 여부를 추적한다.
+8. Action Dashboard에서 High Severity VOC의 Finding / Task Request / Task / no-follow-up decision 여부를 추적한다.
 ```
 
 ## Explicit MVP Exclusions
@@ -140,4 +147,9 @@ Recommended first success path:
 - complex survey logic
 - advanced permission policy language
 - external tool integrations
+- external/customer-contact login
+- per-Managed System workflow customization
+- Analytics Area permission boundaries
+- affected_user field
+- raw Markdown/HTML-only rich content input
 ```

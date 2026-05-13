@@ -15,7 +15,19 @@ Testing must protect the product invariants that are hardest to repair later.
 - summary_visible exposes only the approved summary contract.
 - internal_only links are hidden from Reporter.
 - Cross-workspace entity links are rejected.
-- Product Area archive preserves historical links.
+- Managed System scope blocks sibling Managed System access.
+- Analytics Area belongs to one Managed System and does not grant permissions.
+- Analytics Area archive preserves historical links.
+- VOC create requires managed_system_id and rejects reporter-submitted severity.
+- VOC analytics_area_id must belong to the selected Managed System.
+- Reporter cannot edit VOC title, description, or attachments after triage begins.
+- Reporter Reply, Public Update, and Internal Comment remain separate communication types.
+- Rich content rejects base64 inline body images and external inline image rendering.
+- General user navigation shows Submit VOC, My VOCs, and assigned Surveys only.
+- Developer navigation shows My Work, Tasks, and Managed System-scoped work only for assigned or scoped Managed Systems.
+- Triage queues exclude Managed Systems outside effective Managed System scope.
+- managed_system_id=all returns only the actor's effective Managed System scope union unless the actor is Admin.
+- Direct route access renders blocked/request-access state instead of leaking hidden nav content.
 ```
 
 ## Backend Tests
@@ -36,8 +48,12 @@ Testing must protect the product invariants that are hardest to repair later.
 - permission blocked panel tests
 - cross-system creation pending/error tests
 - PublicUpdateComposer separation tests
+- ReporterReplyComposer and InternalCommentComposer visibility tests
 - CommandMenu action parity tests
 - status badge family separation tests
+- Navigation renders from backend permission contract
+- ManagedSystemScopeSwitcher filters lists and preserves URL state
+- CommandMenu excludes or disables actions according to backend permission state
 ```
 
 ## Integration Slices
@@ -90,4 +106,3 @@ Frontend implementation should verify:
 - permission blocked states
 - loading and error states
 ```
-

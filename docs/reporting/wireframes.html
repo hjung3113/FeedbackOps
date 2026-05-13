@@ -103,14 +103,14 @@
     </header>
 
     <section class="section">
-      <h2>Canonical Workflow</h2>
-      <div class="flow" aria-label="Canonical cross-system workflow">
-        <div class="flow-step"><strong>Evidence</strong>VOC, Survey Response, note</div>
-        <div class="flow-step"><strong>Finding</strong>증거 기반 판단</div>
-        <div class="flow-step"><strong>Task Request</strong>실행 후보 검토</div>
-        <div class="flow-step"><strong>Task / Milestone</strong>내부 실행</div>
-        <div class="flow-step"><strong>Public Update</strong>고객-facing 상태</div>
-        <div class="flow-step"><strong>Outcome Survey</strong>개선 효과 확인</div>
+      <h2>Optional Integration Workflow</h2>
+      <div class="flow" aria-label="Optional cross-system workflow">
+        <div class="flow-step"><strong>Source</strong>VOC, Survey, Task, note</div>
+        <div class="flow-step"><strong>Evidence</strong>optional highlight</div>
+        <div class="flow-step"><strong>Finding</strong>optional synthesis</div>
+        <div class="flow-step"><strong>Task Request</strong>optional intake</div>
+        <div class="flow-step"><strong>Public Update</strong>optional customer-facing status</div>
+        <div class="flow-step"><strong>Outcome Survey</strong>optional validation</div>
       </div>
     </section>
 
@@ -132,13 +132,12 @@
         <aside class="sidebar">
           <div class="workspace-switcher"><span><span class="workspace-mark">OPS</span> FeedbackOps</span><span>⌄</span></div>
           <div class="nav-section">Workspace</div>
-          <div class="nav-item active"><span>Action Dashboard</span><span class="nav-count">28</span></div>
+          <div class="nav-item active"><span>Integration</span><span class="nav-count">28</span></div>
           <div class="nav-item"><span>My Queues</span><span class="nav-count">6</span></div>
-          <div class="nav-item"><span>Projects</span><span class="nav-count">4</span></div>
-          <div class="nav-item"><span>Product Areas</span></div>
+          <div class="nav-item"><span>Managed Systems</span><span class="nav-count">4</span></div>
           <div class="nav-section">Recovery Queues</div>
-          <div class="nav-item"><span>Missing Finding</span><span class="nav-count">12</span></div>
-          <div class="nav-item"><span>Missing Task Request</span><span class="nav-count">8</span></div>
+          <div class="nav-item"><span>Unassigned VOC</span><span class="nav-count">12</span></div>
+          <div class="nav-item"><span>Configured Follow-up</span><span class="nav-count">8</span></div>
           <div class="nav-item"><span>Public Update Review</span><span class="nav-count">5</span></div>
           <div class="nav-item"><span>Outcome Follow-up</span><span class="nav-count">3</span></div>
           <div class="nav-section">Admin</div>
@@ -148,20 +147,20 @@
         <section class="main">
           <div class="toolbar">
             <div>
-              <h3>Action Dashboard</h3>
+              <h3>Integration Dashboard</h3>
               <div class="placeholder mid"></div>
             </div>
             <button class="button primary">Refresh Queues</button>
           </div>
           <div class="queue-grid">
             <div class="queue-card">
-              <h3>High Severity VOC without Finding</h3>
+              <h3>Unassigned VOC</h3>
               <div class="queue-value status-bad">12</div>
               <div class="placeholder"></div>
               <button class="button primary">Review VOCs</button>
             </div>
             <div class="queue-card">
-              <h3>Finding without Task Request</h3>
+              <h3>Actionable Finding without execution</h3>
               <div class="queue-value status-warn">8</div>
               <div class="placeholder"></div>
               <button class="button primary">Request Tasks</button>
@@ -216,7 +215,7 @@
           <div class="nav-section">Workspace</div>
           <div class="nav-item"><span>Inbox</span><span class="nav-count">3</span></div>
           <div class="nav-item"><span>My VOCs</span><span class="nav-count">8</span></div>
-          <div class="nav-item"><span>Projects</span><span class="nav-count">4</span></div>
+          <div class="nav-item"><span>Managed Systems</span><span class="nav-count">4</span></div>
           <div class="nav-item"><span>Roadmap</span></div>
           <div class="nav-section">Samsung VOC</div>
           <div class="nav-item"><span>Overview</span></div>
@@ -239,7 +238,7 @@
           <div class="tabs">
             <span class="tab active">Untriaged</span>
             <span class="tab">High Severity</span>
-            <span class="tab">Needs Owner</span>
+            <span class="tab">Unassigned</span>
             <span class="tab">Similar Suggested</span>
             <span class="tab">No Follow-up</span>
           </div>
@@ -298,7 +297,7 @@
           <div class="workspace-switcher"><span><span class="workspace-mark">FIN</span> Findings</span><span>⌄</span></div>
           <div class="nav-section">Workspace</div>
           <div class="nav-item"><span>Inbox</span><span class="nav-count">5</span></div>
-          <div class="nav-item"><span>Projects</span><span class="nav-count">4</span></div>
+          <div class="nav-item"><span>Managed Systems</span><span class="nav-count">4</span></div>
           <div class="nav-item"><span>Product Areas</span></div>
           <div class="nav-section">Finding System</div>
           <div class="nav-item"><span>Overview</span></div>
@@ -369,12 +368,12 @@
           <div class="nav-section">Workspace</div>
           <div class="nav-item"><span>Inbox</span><span class="nav-count">3</span></div>
           <div class="nav-item"><span>My Issues</span><span class="nav-count">8</span></div>
-          <div class="nav-item"><span>Projects</span><span class="nav-count">4</span></div>
+          <div class="nav-item"><span>Managed Systems</span><span class="nav-count">4</span></div>
           <div class="nav-item"><span>Roadmap</span></div>
           <div class="nav-section">Flowline</div>
           <div class="nav-item"><span>Overview</span></div>
           <div class="nav-item"><span>Board</span></div>
-          <div class="nav-item active"><span>Task Requests</span><span class="nav-count">11</span></div>
+          <div class="nav-item active"><span>Tasks Intake</span><span class="nav-count">11</span></div>
           <div class="nav-item"><span>Active Sprint</span></div>
           <div class="nav-item"><span>Backlog</span><span class="nav-count">124</span></div>
           <div class="nav-item"><span>Milestones</span></div>

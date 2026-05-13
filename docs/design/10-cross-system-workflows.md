@@ -4,29 +4,36 @@
 
 This document preserves the product's most important context: FeedbackOps is valuable because independent systems can be connected at the right moments.
 
-System documents define local behavior. This document defines end-to-end behavior.
+System documents define local behavior. This document defines optional integration behavior.
 
-## Canonical Flow
+## Optional Integration Patterns
 
 ```text
-Evidence
-→ Finding
-→ Task Request
-→ Task / Milestone
-→ Reporter-facing Update
-→ Outcome Survey
-→ Follow-up Finding / Task Request when needed
+VOC, Survey, and Task can operate independently.
+They do not require Finding, Evidence, Dashboard, or Entity Links to complete local workflows.
+
+Common optional integration pattern:
+
+Evidence or Source Record
+→ optional Finding / Evidence Highlight
+→ optional Task Request / Task link
+→ optional Reporter-facing Update
+→ optional Outcome Survey
+→ optional Follow-up Finding / Task Request when configured
 ```
 
-## Non-Negotiable Flow Rules
+## Non-Negotiable Integration Rules
 
 ```text
 - Survey Response must not create VOC.
 - VOC and Survey can both create Finding.
-- Finding can create Task Request, Task, or Milestone depending on authorization and scope.
-- Task Done does not mean customer problem is solved.
-- Released work should trigger reporter-facing status review and optional Outcome Survey.
-- Dashboard must detect broken or missing links in these flows.
+- Finding can create Task Request or link execution work depending on authorization and Managed System scope.
+- VOC follow-up creates Task Request, not Task directly.
+- Task Done does not mean the reported problem is solved.
+- Released work may create a reporter-facing status review candidate; it does not automatically resolve the VOC.
+- VOC Triage State, Reporter-Facing VOC Status, and Task Status are separate state machines.
+- Dashboard and Integration queues detect configured follow-up gaps, not every missing link.
+- MVP uses a shared Workflow Template for all Managed Systems.
 ```
 
 ## Workflow Catalog
@@ -37,12 +44,12 @@ Evidence
 VOC
 → Similar VOC Recommendation optional
 → VOC Cluster optional
-→ Finding
-→ Task Request
-→ Task
-→ Released
-→ Reporter-facing Status Review
-→ Public Update
+→ optional Finding
+→ optional Task Request
+→ approved Task starts in Backlog
+→ optional Released work review
+→ optional Reporter-facing Status Review
+→ optional Public Update
 ```
 
 Required docs:
@@ -60,9 +67,9 @@ Required docs:
 Survey
 → Responses
 → Result Summary
-→ Evidence Highlights
-→ Finding
-→ Task Request / Task / Milestone
+→ optional Evidence Highlights
+→ optional Finding
+→ optional Task Request
 ```
 
 Forbidden branch:
@@ -71,20 +78,22 @@ Forbidden branch:
 Survey Response → New VOC
 ```
 
-### WF-X-003: Task Release To Customer Update
+### WF-X-003: Task Release To Reporter Update
 
 ```text
 Task Done
 → no automatic reporter resolution
 → Task Released
 → Public update candidate
-→ Manager confirms Reporter-facing VOC Status
+→ Admin or same-scope Developer confirms Reporter-facing VOC Status
 → Reporter receives update
 ```
 
 ### WF-X-004: Milestone Outcome Validation
 
 ```text
+Future workflow, not MVP core:
+
 Milestone Released
 → Outcome Survey
 → Outcome Result
@@ -92,21 +101,27 @@ Milestone Released
 → If positive result: validate milestone outcome
 ```
 
-### WF-X-005: Action Dashboard Recovery
+### WF-X-005: Home / Integration Recovery
 
 ```text
-Dashboard detects:
-- High Severity VOC without Finding
-- Finding without Task Request
+Home or Integration detects:
+- Unassigned VOC in configured Managed System scope
+- High Severity VOC eligible for follow-up and currently unlinked
+- Finding marked actionable without Task Request or linked Task
 - Released Task with unresolved Reporter-facing VOC Status
-- Bad Outcome Survey without Follow-up Task
+- Bad Outcome Survey without configured follow-up
 
-User acts from dashboard:
+User acts from Home or Integration:
 → create missing link
 → request task
 → update status
 → create follow-up
 ```
+
+Finding is optional in MVP. A High Severity VOC does not require a Finding when
+it already has a Task Request, linked Task, or authorized no-follow-up-needed
+decision. Missing Finding is actionable only when workspace policy explicitly
+requires synthesis.
 
 ## Cross-System Acceptance Criteria
 
@@ -120,7 +135,7 @@ Acceptance Criteria:
 - A Task created from Finding shows source Finding and Evidence.
 - A Finding created from VOC Cluster shows source VOCs or highlights.
 - A Finding created from Survey shows source Survey Result or highlights.
-- Dashboard can identify unlinked but important records.
+- Dashboard can identify records missing links expected by workspace policy, Managed System policy, severity rules, or explicit workflow configuration.
 ```
 
 ### FR-X-002: Prevent Invalid Conversions
@@ -143,14 +158,14 @@ Acceptance Criteria:
 
 ```text
 - VOC Detail offers Create Finding / Request Task when appropriate.
-- Finding Detail offers Request Task / Create Task / Create Milestone.
+- Finding Detail offers Request Task / Link Existing Task; Create Milestone is future cross-system behavior when enabled.
 - Survey Result offers Create Finding / Link Finding / Request Task.
-- Dashboard queues deep-link to the next action.
+- Home and Integration queues deep-link to the next action.
 ```
 
 ## Implementation Guidance For AI Agents
 
-Before implementing any feature in one system, check whether it participates in a cross-system workflow here.
+Before implementing any feature in one system, check whether it participates in an optional cross-system workflow here.
 
 If it does, implement:
 

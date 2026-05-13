@@ -12,11 +12,13 @@ Applied migrations are the final database authority.
 
 ```text
 - All domain records include workspace_id unless explicitly global.
+- VOC, Finding, Task Request, Task, and Survey records include managed_system_id in MVP.
 - Prefer archive over hard delete for referenced objects.
 - Cross-system optional relationships use core.entity_links.
 - Direct cross-system convenience columns are denormalized projections, not canonical history.
 - Migrations must be reversible when practical.
 - Sensitive decisions append audit log entries.
+- Inline images are stored as governed attachment records and referenced from rich content; never store base64 body images.
 ```
 
 ## Schema Namespaces
@@ -30,10 +32,13 @@ module.
 core
 - workspaces
 - actors
+- role_levels
 - teams
+- managed_systems
 - customers
 - contacts
-- product_areas
+- analytics_areas
+- attachments
 - entity_links
 - audit_logs
 
@@ -49,8 +54,8 @@ finding
 task
 - task_requests
 - tasks
-- projects
-- milestones
+- work_initiatives / projects when future execution grouping is introduced
+- milestones when future execution grouping is introduced
 
 survey
 - surveys
@@ -82,9 +87,39 @@ survey_type
 permission_request_status
 entity_link_relation_type
 entity_link_visibility
+voc_source_context
 severity
 priority
 confidence
+```
+
+Reporter-facing VOC status, VOC triage state, and Task status are separate
+state machines and must use separate columns/enums. Task status changes may
+create review candidates, but they must not directly overwrite reporter-facing
+VOC status.
+
+## Managed System Data Rules
+
+```text
+- core.managed_systems is the MVP registry for scope, filters, defaults, and Developer permission grants.
+- core.analytics_areas rows require managed_system_id.
+- Analytics Area uniqueness should be scoped to workspace_id plus managed_system_id as needed.
+- Analytics Area archive preserves historical references.
+- core.analytics_areas is the MVP source of truth; external BI menu keys are optional metadata, not sync ownership.
+- analytics_areas.owner_team_id is a routing/defaulting hint only; permission grants remain Managed System scoped.
+- project_id columns in existing drafts are transitional only; new MVP migrations should use managed_system_id for scoped records.
+- Work Initiative / Project tables must not be required for VOC, Finding, Task Request, Task, Survey, Dashboard, or permission MVP scope.
+```
+
+## Rich Content And Attachments
+
+```text
+- Rich content may be stored as structured editor JSON or sanitized HTML plus a format/version column.
+- Inline images are attachment references inside the rich content document.
+- Attachment rows record workspace_id, owning entity, visibility, content type, size, storage key, and audit metadata.
+- External image URLs may be stored as normal links but must not render inline in MVP.
+- Rich Table support is spike-gated in MVP; when enabled, rich tables are stored as structured rich content with backend size limits.
+- Large spreadsheet-like data belongs in attachments, not oversized rich-content tables.
 ```
 
 ## Index Requirements
@@ -109,7 +144,7 @@ YYYYMMDDHHMM_descriptive_change.sql
 Examples:
 
 ```text
-202605121200_create_core_product_areas.sql
+202605121200_create_core_analytics_areas.sql
 202605121230_create_core_entity_links.sql
 ```
 
@@ -119,8 +154,9 @@ MVP seed data should include:
 
 ```text
 - one workspace
-- admin, manager, contributor, reporter actors
-- product area tree
+- admin, developer, user actors
+- managed systems such as Tableau, Power BI, and Looker
+- analytics area catalog under each managed system
 - sample VOCs
 - sample Finding with Evidence Highlight
 - sample Task Request

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Dashboard is an Action Dashboard, not a passive status board.
+Dashboard is an operational queue and coverage surface, not a passive status board.
 
-It shows connected data and, more importantly, important data that should be connected but is not.
+It shows local system queues, optional integration coverage, and configured follow-up gaps. A missing link is actionable only when a workspace policy, Managed System rule, severity rule, or user-created workflow expects that link.
 
 ## Boundary
 
@@ -52,17 +52,17 @@ VOC Dashboard:
 - 미분류 VOC
 - High Severity VOC
 - VOC Cluster
-- Product Area별 VOC
+- Analytics Area별 VOC
 ```
 
-Task / Project Dashboard:
+Task Dashboard:
 
 ```text
-- Project 진행률
+- Managed System별 Task
 - Milestone 진행률
 - 지연 Task
 - Blocked Task
-- Product Area별 Task
+- Analytics Area별 Task
 ```
 
 Survey Dashboard:
@@ -77,19 +77,26 @@ Survey Dashboard:
 
 ## Action Dashboard
 
-Core queues:
+Core queues are policy-driven. The dashboard must distinguish independent-system queues from optional integration recovery queues.
 
 ```text
-- Task로 전환되지 않은 High Severity VOC
-- VOC Cluster without Finding
-- Finding without Task Request
+- Unassigned VOC in configured Managed System scope
+- High Severity VOC eligible for follow-up and currently unlinked
+- VOC Cluster marked "needs synthesis" without Finding
+- Finding marked actionable without Task Request or linked Task
 - Task Request pending approval
 - Survey Finding without Task
 - Task without Evidence
-- Milestone without Outcome Survey
 - 완료됐지만 고객 상태가 갱신되지 않은 VOC
-- Outcome Survey 결과가 나쁜데 후속 Task가 없는 항목
+- Outcome Survey 결과가 나쁜데 configured follow-up이 없는 항목
 ```
+
+Milestone progress is a Task Dashboard grouping in MVP. Milestone-to-Outcome-Survey gap detection is a future cross-system workflow, not an MVP action queue.
+
+Finding is optional in MVP. High Severity VOC follow-up is considered present
+when the VOC has a linked Finding, linked Task Request, linked Task, or an
+authorized no-follow-up-needed decision. Missing Finding alone is not a gap
+unless workspace policy explicitly requires Finding synthesis for that case.
 
 ## Coverage Metrics
 
@@ -113,19 +120,22 @@ Acceptance Criteria:
 
 ```text
 - Dashboard shows missing-link queues.
+- Dashboard shows local ownership queues such as Unassigned VOC when configured.
 - Each queue item has a next action.
 - User can navigate to the relevant source object.
+- Dashboard must not treat every unlinked record as incomplete.
 ```
 
-### FR-DASH-002: Show Product Area Breakdowns
+### FR-DASH-002: Show Managed System And Analytics Area Breakdowns
 
 Priority: MUST
 
 Acceptance Criteria:
 
 ```text
-- VOC, Finding, Task, and Survey metrics can be grouped by Product Area.
-- Archived Product Areas remain visible in historical metrics.
+- VOC, Finding, Task, and Survey metrics can be grouped by Managed System.
+- Analytics Area breakdowns appear only when Analytics Area data exists and are nested under or filtered by Managed System.
+- Archived Analytics Areas remain visible in historical metrics.
 ```
 
 ### FR-DASH-003: Show Coverage
@@ -152,16 +162,17 @@ Acceptance Criteria:
 
 ```text
 - Basic User may see public or allowed dashboard summaries only.
-- Manager / PM can see operational dashboards.
-- Sensitive customer, survey response, and task details follow source permissions.
+- Admin and same-scope Developer can see operational dashboards.
+- Sensitive survey response and task details follow source permissions.
 ```
 
 ## Cross-System Dependencies
 
 ```text
-- Requires Entity Links to detect linked and unlinked records.
+- Requires Entity Links to detect linked and expected-but-missing records.
 - Requires Reporter-facing status to detect released tasks with unresolved VOC.
 - Requires Outcome Survey links to detect missing validation.
+- Requires Managed System scope and default owner rules to show ownership queues.
 ```
 
 ## Out Of Scope For MVP

@@ -6,7 +6,7 @@ This document defines workflow-level UX behavior that individual components cann
 
 ## Cross-System Creation Rule
 
-Every cross-system creation flow must show:
+Every cross-system creation flow must preserve source context. Default UI may be progressive, but the flow must make the following contract available:
 
 ```text
 - source object preview
@@ -30,9 +30,10 @@ If target creation succeeds but entity link creation fails:
 ## VOC Triage State Machine
 
 ```text
-untriaged
--> classified
+submitted
+-> unassigned
 -> owner_assigned
+-> classified
 -> finding_created | task_requested | public_update_written | no_follow_up
 ```
 
@@ -40,8 +41,12 @@ UX rules:
 
 ```text
 - Triage actions stay in list/detail context.
-- High severity VOC without Finding should surface in Dashboard recovery queues.
+- Unassigned must be a direct VOC Triage view because ownership is the first operational failure mode.
+- High severity VOC without configured follow-up should surface in Home or Integration recovery queues.
+- Assignment, classification, reporter-facing status, Finding creation, and Task creation are separate decisions.
 - Public update writing must use PublicUpdateComposer, never internal comment input.
+- VOC creation requires Managed System, may include Analytics Area under that Managed System, may include Source Context, and must not ask Reporter for severity.
+- Reporter Reply goes into the public VOC conversation; it must not be stored as Internal Comment.
 ```
 
 ## Task Request State Machine
@@ -58,7 +63,51 @@ UX rules:
 ```text
 - Approval and conversion show source evidence before decision.
 - Rejection and needs_more_evidence require decision note.
+- Review may be performed by Admin or by Developer within the same Managed System scope.
+- Same-Developer self-approval requires explicit scoped capability, reason, and visibly audited self-approval metadata.
 - Conversion must show created Task and preserved source links.
+```
+
+## VOC Communication Surfaces
+
+```text
+Public Update:
+- Admin or same Managed System Developer authored.
+- Reporter-visible.
+- Uses its own composer and cannot share input with Internal Comment.
+
+Reporter Reply:
+- Reporter authored.
+- Added to the public VOC conversation.
+- May move Waiting Reporter work back into an internal follow-up queue without directly changing reporter-facing status.
+
+Internal Comment:
+- Private operational note for Admins and scoped Developers.
+- Never appears in Reporter Summary or the public conversation.
+
+MVP conversation constraints:
+- Public Update and Reporter Reply share a public VOC timeline.
+- Internal Comment uses a separate internal timeline.
+- Conversation is append-only and not real-time chat.
+- Mentions, reactions, read receipts, threaded replies, and general edit/delete flows are later features.
+- Cluster update candidates are not auto-sent; selected VOCs receive individual Public Updates when applied.
+```
+
+## Reporter Summary Rules
+
+```text
+- Show only public-safe linked-work summary fields.
+- Do not expose raw Task statuses such as Backlog, Todo, Doing, Review, Done, Released, or Reopened.
+- Do not expose internal comments, priority, developer discussion, severity, confidence, private due dates, or root-cause detail.
+- Internal Task status can inform a public-safe reporter-facing VOC status only through VOC-owned review/update behavior.
+```
+
+## Task Board Boundary
+
+```text
+- Task Board is for internal execution work only.
+- VOC owner assignment is not Task assignee or kanban assignment.
+- Assigned Backlog Tasks may appear in My Work as planned work, but execution starts only when the Task moves to Todo or Doing.
 ```
 
 ## Permission Request State Machine
@@ -93,7 +142,7 @@ Linked objects render as one of:
 
 The frontend must use backend-provided visibility decisions and summaries. It must not infer summaries from hidden raw data.
 
-## Dashboard Recovery Queues
+## Home And Integration Recovery Queues
 
 Queue rows must answer:
 
@@ -106,10 +155,12 @@ Queue rows must answer:
 Resolution semantics:
 
 ```text
-- High Severity VOC without Finding is resolved when a valid Finding link exists or manager marks no follow-up.
-- VOC Cluster without Finding is resolved when created_finding link exists.
-- Finding without Task Request is resolved when requested_task, created_task, created_milestone, linked_existing_task, or not_actionable exists.
-- Released Task with unresolved reporter-facing VOC status is resolved when manager confirms public status review.
+- Unassigned VOC is resolved when an accountable owner or team exists, or when workspace policy marks ownership optional.
+- High Severity VOC eligible for follow-up is resolved when a valid Finding, Task Request, Task link, or authorized no-follow-up-needed decision exists.
+- Missing Finding alone is not actionable unless workspace policy requires Finding synthesis.
+- VOC Cluster marked "needs synthesis" is resolved when created_finding link exists or synthesis is dismissed.
+- Finding marked actionable is resolved when requested_task, created_task, created_milestone, linked_existing_task, or not_actionable exists.
+- Released Task with unresolved reporter-facing VOC status is resolved when an authorized Admin or Developer confirms public status review.
 - Bad Outcome Survey without follow-up is resolved when follow_up_for or requested_task link exists.
 ```
 
@@ -119,7 +170,7 @@ Resolution semantics:
 No VOC yet:
 - show create VOC action for users with permission.
 
-No dashboard recovery items:
+No Home or Integration recovery items:
 - show quiet empty state that all monitored queues are clear.
 
 Linked object hidden by permission:
@@ -133,4 +184,3 @@ Cross-system mutation failure:
 - offer retry.
 - show whether target creation or entity_link creation failed.
 ```
-

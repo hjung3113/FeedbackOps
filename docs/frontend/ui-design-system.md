@@ -68,7 +68,8 @@ The persistent application frame for all internal FeedbackOps screens.
 Anatomy:
 
 ```text
-- LeftSidebar
+- RoleLevelAwareSidebar
+- ManagedSystemScopeSwitcher when applicable
 - MainRegion
 - RightDetailPanel optional
 - CommandMenu overlay
@@ -93,6 +94,10 @@ Rules:
 - Opening a detail panel should not navigate away from the list context.
 - Object creation from a selected object should prefer inline panel or drawer over full-page redirect.
 - Avoid full-screen modals for routine workflow actions.
+- RoleLevelAwareSidebar renders backend-provided navigation items only.
+- ManagedSystemScopeSwitcher appears on scoped operational views when the actor has access to more than one Managed System.
+- Switching Managed System scope updates URL state and list queries; it must not navigate to a duplicated per-Managed-System app tree.
+- `All` in ManagedSystemScopeSwitcher means the actor's effective Managed System scope union; only Admin sees true workspace-wide all.
 ```
 
 ### Responsive Behavior
@@ -136,7 +141,7 @@ Desktop:
 Purpose:
 
 ```text
-Shared list pattern for VOC, Findings, Task Requests, Tasks, Surveys, and Dashboard queues.
+Shared list pattern for VOC Triage/Inbox, Integration Findings, Tasks, Task intake, Surveys, and Home/Integration queues.
 ```
 
 Anatomy:
@@ -213,18 +218,37 @@ Required row fields:
 - severity
 - reporter-facing status
 - owner
-- product area
+- analytics area
 - created time
 - similar VOC indicator
 - linked Finding / Task indicator
 - next action
 ```
 
+VOC creation required fields:
+
+```text
+- title
+- description using the shared RichContentEditor foundation
+- Managed System required
+- Analytics Area optional, limited to the selected Managed System
+- Source Context optional, defaulting to Direct Use
+```
+
+Rules:
+
+```text
+- Do not ask the reporter for Severity at creation.
+- Managed System cannot be changed by the reporter after creation.
+- Analytics Area can be corrected during triage by an authorized Developer or Admin.
+- When Source Context is Proxy Report, the description prompt should ask who or which team the Reporter is reporting for and the situation observed.
+```
+
 VOC next action examples:
 
 ```text
 - Triage
-- Link Product Area
+- Link Analytics Area
 - Add to Cluster
 - Create Finding
 - Request Task
@@ -314,7 +338,7 @@ Anatomy:
 ```text
 - source node
 - evidence node optional
-- finding node
+- finding node optional
 - task request node optional
 - task or milestone node optional
 - outcome survey node optional
@@ -324,14 +348,14 @@ Rules:
 
 ```text
 - Each node has object type, title, status, and jump action.
-- Missing expected link is shown as a dashed placeholder with CTA.
+- Missing expected link is shown as a dashed placeholder with CTA only when policy or workflow configuration expects it.
 - Permission-hidden node uses summary-visible contract when available.
 ```
 
 Example:
 
 ```text
-VOC → Evidence → Finding → Task Request → Task → Outcome Survey
+VOC → optional Evidence → optional Finding → optional Task Request → optional Task → optional Outcome Survey
 ```
 
 ### EvidenceHighlight
@@ -351,7 +375,7 @@ Anatomy:
 - customer/account optional
 - sentiment optional
 - importance optional
-- product area optional
+- analytics area optional
 - created by
 ```
 
@@ -436,6 +460,35 @@ Rules:
 - Critical and blocked states must remain distinguishable for color-blind users through icon or label.
 ```
 
+### RichContentEditor
+
+Purpose:
+
+```text
+Shared WYSIWYG-first rich input foundation for VOC description, Reporter Reply, Public Update, and Internal Comment.
+```
+
+Surface variants:
+
+```text
+- voc-description
+- reporter-reply
+- public-update
+- internal-comment
+```
+
+Rules:
+
+```text
+- Non-developer users must not need Markdown or HTML knowledge to write rich content.
+- Each surface may restrict toolbar actions, embeds, and rendering.
+- Pasted, dropped, or uploaded images appear inline but are stored as governed attachments.
+- Do not store base64 body images.
+- Do not render external image URLs inline in MVP.
+- Rich Table support is spike-gated in MVP; when enabled, tables are stored as rich table nodes.
+- Large spreadsheet-like data belongs in file attachments.
+```
+
 ### PublicUpdateComposer
 
 Purpose:
@@ -448,11 +501,10 @@ Anatomy:
 
 ```text
 - reporter-facing status selector
-- public update textarea
+- public update RichContentEditor surface
 - recipient scope
 - preview
 - send/save action
-- internal note toggle or separate tab
 ```
 
 Rules:
@@ -463,12 +515,62 @@ Rules:
 - Bulk update candidates show affected reporters before confirmation.
 ```
 
+### ConversationComposer
+
+Purpose:
+
+```text
+Keep Public Update, Reporter Reply, and Internal Comment visibly separate in VOC detail.
+```
+
+Rules:
+
+```text
+- Reporter Reply belongs to the public VOC conversation and uses the reporter-reply editor surface.
+- Public Update is authored by an Admin or same Managed System Developer and uses the public-update editor surface.
+- Internal Comment is private operational discussion and uses a separate internal-comment editor surface.
+- Internal Comment must never share the same input, submit action, or default visibility as Public Update.
+- Public Update and Reporter Reply render in a public timeline; Internal Comment renders in a separate internal timeline.
+- MVP conversation does not include real-time chat, mentions, reactions, read receipts, threaded replies, or general message editing.
+- Cluster update candidates must show selected target VOCs before applying; applying creates individual Public Updates and does not change Reporter-facing VOC Status automatically.
+```
+
+### ReporterSummaryBlock
+
+Purpose:
+
+```text
+Show public-safe linked-work progress to the Reporter without exposing internal execution detail.
+```
+
+May show:
+
+```text
+- public title
+- reporter-facing VOC status
+- owning team public name
+- expected resolution date when public
+- last public update time
+- public update excerpt
+```
+
+Must not show:
+
+```text
+- raw Task Status values such as Backlog, Todo, Doing, Review, Done, Released, or Reopened
+- internal comments
+- priority
+- developer discussion
+- severity or confidence
+- internal due dates or root-cause analysis detail
+```
+
 ### ActionQueueRow
 
 Purpose:
 
 ```text
-Dashboard row that explains a broken workflow and offers the next repair action.
+Home or Integration row that explains a local ownership gap, configured follow-up gap, or stale workflow state and offers the next repair action.
 ```
 
 Anatomy:
@@ -476,7 +578,7 @@ Anatomy:
 ```text
 - queue reason
 - source object preview
-- missing link or stale state
+- missing expected link or stale state
 - owner/status
 - recommended action
 - secondary actions
@@ -485,10 +587,11 @@ Anatomy:
 Examples:
 
 ```text
-- High Severity VOC without Finding
-- Finding without Task Request
+- Unassigned VOC in configured Managed System scope
+- High Severity VOC eligible for follow-up and currently unlinked
+- Finding marked actionable without Task Request or linked Task
 - Released Task with unresolved Reporter-facing VOC Status
-- Bad Outcome Survey without Follow-up Task
+- Bad Outcome Survey without configured follow-up
 ```
 
 Rules:
@@ -562,7 +665,9 @@ Rules:
 ```text
 - Command verbs must match visible UI actions.
 - Permission-blocked commands can appear disabled with reason.
-- Commands should be context-aware based on current screen and selected object.
+- Commands should be context-aware based on current screen, selected object, and Managed System scope.
+- Command results must be filtered by the current effective workspace/Managed System scope.
+- Blocked commands may appear only with backend-provided disabled reasons.
 ```
 
 ### ActionToolbar
@@ -589,6 +694,7 @@ Required field components:
 ```text
 - TextInput
 - Textarea
+- RichContentEditor
 - Select
 - Combobox
 - MultiSelect
@@ -597,7 +703,7 @@ Required field components:
 - SegmentedControl
 - DateInput
 - UserPicker
-- ProductAreaPicker
+- AnalyticsAreaPicker
 ```
 
 Form rules:
@@ -648,7 +754,7 @@ Rules:
 ```text
 - Lists use skeleton rows.
 - DetailPanel uses skeleton sections.
-- Dashboard queues show independent loading per queue when possible.
+- Home and Integration queues show independent loading per queue when possible.
 - Avoid full-page spinners after the app shell is loaded.
 ```
 
@@ -768,7 +874,7 @@ Layout:
 VOC Inbox:
 
 ```text
-AppShell + InboxList + DetailPanel + StatusBadge + SignalBadge + PublicUpdateComposer + LinkedEntityTrail
+AppShell + InboxList + DetailPanel + StatusBadge + SignalBadge + RichContentEditor + PublicUpdateComposer + ConversationComposer + ReporterSummaryBlock + LinkedEntityTrail
 ```
 
 Finding Detail:
@@ -783,10 +889,22 @@ Task Request Queue:
 ObjectList + ActionQueueRow pattern + DetailPanel + StatusBadge + ActionToolbar
 ```
 
+Task Board:
+
+```text
+ObjectList/KanbanBoard + DetailPanel + StatusBadge + SignalBadge + ActionToolbar
+```
+
+Rule:
+
+```text
+Task Board is execution work only. VOC owner assignment is not Task assignee/kanban assignment.
+```
+
 Task Detail:
 
 ```text
-DetailPanel + StatusBadge + EvidenceHighlight + LinkedEntityTrail + PublicUpdateComposer
+DetailPanel + StatusBadge + optional EvidenceHighlight + optional LinkedEntityTrail
 ```
 
 Survey Result:
@@ -795,7 +913,7 @@ Survey Result:
 DataTable/ObjectList + ResultSummaryBlock + EvidenceHighlight + ActionToolbar
 ```
 
-Action Dashboard:
+Home / Integration Action Queue:
 
 ```text
 ActionQueueRow + ObjectList + SignalBadge + LinkedEntityTrail + DetailPanel

@@ -57,6 +57,7 @@ Finding
 - summary
 - source_type: voc_cluster / survey / manual
 - source_id
+- managed_system_id
 - evidence_count
 - severity
 - confidence optional
@@ -78,8 +79,8 @@ evidence_highlights
 - source_type: voc / survey_response / note
 - source_id
 - quote_or_summary
-- customer_id optional
-- product_area_id optional
+- managed_system_id
+- analytics_area_id optional
 - sentiment optional
 - importance optional
 - created_by
@@ -92,18 +93,18 @@ evidence_highlights
 
 ```text
 VOC Cluster
-→ Evidence Highlights
-→ Finding
-→ Task Request / Task / Milestone
+→ optional Evidence Highlights
+→ optional Finding
+→ optional Task Request
 ```
 
 ### WF-FIND-002: Survey Evidence To Finding
 
 ```text
 Survey Result
-→ Text Response Highlights / Result Summary
-→ Finding
-→ Task Request / Task / Milestone
+→ optional Text Response Highlights / Result Summary
+→ optional Finding
+→ optional Task Request
 ```
 
 ## Functional Requirements
@@ -115,10 +116,12 @@ Priority: MUST
 Acceptance Criteria:
 
 ```text
-- Manager can create Finding from VOC, VOC Cluster, Survey Result, or manual analysis.
+- Admin or same-scope Developer can create Finding from VOC, VOC Cluster, Survey Result, or manual analysis when synthesis is needed.
+- Finding requires exactly one Primary Managed System.
 - Finding stores source_type and source_id.
-- Finding can link Product Area.
+- Finding can link Analytics Area under its Primary Managed System.
 - Finding can include Evidence Highlights.
+- Finding is not required for every VOC, Survey Result, or Task.
 ```
 
 ### FR-FIND-002: Manage Evidence Highlights
@@ -135,15 +138,14 @@ Acceptance Criteria:
 
 ### FR-FIND-003: Convert Finding To Execution Candidate
 
-Priority: MUST
+Priority: SHOULD
 
 Acceptance Criteria:
 
 ```text
 - Finding can create Task Request.
-- Authorized Manager can create Task directly.
-- Finding can create Milestone when work is larger than one Task.
-- Finding can link existing Task or Milestone.
+- Authorized Admin or same-scope Developer can link existing Task or future execution grouping when appropriate.
+- Simple VOC follow-up may bypass Finding and go directly to Task Request.
 ```
 
 ## UI / UX Requirements
@@ -164,10 +166,11 @@ Layout:
 - Severity
 - Confidence
 - Evidence Highlights
-- Affected Product Area
+- Primary Managed System
+- Affected Analytics Area
 - Linked VOC Cluster
 - Linked Survey Result
-- Linked Task Request / Task / Milestone
+- Linked Task Request / Task
 ```
 
 Primary CTAs:
@@ -176,16 +179,19 @@ Primary CTAs:
 - Add Evidence
 - Link Existing Evidence
 - Request Task
-- Create Task
-- Create Milestone
 - Mark as Not Actionable
 ```
+
+Finding-to-Milestone and Finding-to-Work-Initiative actions are future
+cross-system behavior. MVP Finding execution actions are Request Task and Link
+Existing Task.
 
 ## Permissions
 
 ```text
 - Reporter cannot read internal Finding details by default.
-- Manager / PM can create and manage Findings.
+- Admin can create and manage Findings.
+- Developer can create and manage Findings within their Managed System scope.
 - Evidence visibility follows source visibility and entity_links.visibility.
 ```
 
@@ -194,7 +200,7 @@ Primary CTAs:
 ```text
 - VOC System: source VOC and VOC Cluster
 - Survey System: source Survey Result and Response
-- Task / Project System: Task Request, Task, Milestone
+- Task System: Task Request, Task
 - Entity Linking: evidence_of, generated_finding, requested_task
 ```
 

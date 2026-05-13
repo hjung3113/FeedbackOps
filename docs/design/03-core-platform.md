@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Core Platform provides the shared objects that VOC, Finding, Task / Project, Survey, Dashboard, Permission, and Entity Linking depend on.
+Core Platform provides the shared objects that VOC, Finding, Task, Survey, Dashboard, Permission, and Entity Linking depend on.
 
 It should stay small and stable. Domain-specific behavior belongs in each system document.
 
@@ -14,9 +14,8 @@ Owns:
 - Workspace
 - User / Actor
 - Team
-- Customer / Account
-- Contact
-- Product Area / Menu Tree
+- Managed System Registry
+- Analytics Area
 - Audit Log baseline
 ```
 
@@ -47,19 +46,20 @@ Depends on:
 - Team
 - Role / Permission
 - Permission Request
-- Customer / Account
-- Contact
-- Project Registry
-- Product Area / Menu Tree
+- Managed System Registry
+- Managed System
+- Analytics Area
 - Entity Link
 - Taxonomy / Tag
 - Notification
 - Audit Log
 ```
 
-## Product Area / Menu Tree
+## Analytics Area
 
-Product Area is an internal context object used to classify VOC, Task, Survey, and Finding by product structure.
+Analytics Area is a managed analytical menu, report group, or business analysis area inside exactly one Managed System. It is used to classify VOC, Task, Survey, and Finding by the part of the analytics system the work concerns.
+
+The FeedbackOps Analytics Area catalog is the MVP source of truth. Analytics Areas may reflect real Tableau, Power BI, Looker, or internal analytics menus, but external BI menus do not own FeedbackOps classification state in MVP.
 
 It does not force sync with:
 
@@ -76,13 +76,54 @@ It may optionally store:
 - url_pattern
 ```
 
+Analytics Area rules:
+
+```text
+- Analytics Area belongs to exactly one Managed System.
+- VOC Analytics Area is optional and selectable only under the chosen Primary Managed System.
+- Analytics Area is not an MVP permission boundary.
+```
+
+## Managed System Scope
+
+Multiple internal analytics programs or managed analytics systems in one workspace are handled by Managed System scope, filters, and default ownership rules inside the same workspace systems.
+
+Managed System scope must not create separate VOC, Survey, Task, Finding, Dashboard, or Entity Link system instances.
+
+Managed System may be used as:
+
+```text
+- a global Managed System switcher context
+- a list and dashboard filter
+- a default owner / reviewer rule
+- an optional direct field where the owning system supports it
+- Analytics Area grouping context
+```
+
+Each Managed System may define default owners and reviewers used as creation and triage defaults across VOC, Survey, Task, and Finding workflows. Defaults prefill the actual owner or reviewer field when no permitted explicit value is provided; they do not mean the record is triaged or reviewed. Default resolution can create assigned-but-untriaged or assigned-but-pending-review work, and the value can be changed during the owning workflow.
+
+Project language in older docs is superseded for MVP. If needed later, use Work Initiative for execution grouping instead of scope, permissions, and defaults.
+
 ## Data Model Draft
 
 ```text
-core.product_areas
+core.managed_systems
 - id
 - workspace_id
-- project_id nullable
+- name
+- description
+- default_voc_owner_user_id nullable
+- default_voc_owner_team_id nullable
+- default_task_reviewer_user_id nullable
+- default_survey_operator_user_id nullable
+- status
+- created_at
+- updated_at
+
+core.analytics_areas
+- id
+- workspace_id
+- managed_system_id
 - parent_id nullable
 - name
 - description
@@ -107,28 +148,50 @@ All system records belong to a workspace unless explicitly global.
 Acceptance Criteria:
 
 ```text
-- VOC, Finding, Task, Survey, Product Area, Permission Request, and Entity Link include workspace_id.
+- VOC, Finding, Task, Survey, Analytics Area, Permission Request, and Entity Link include workspace_id.
 - Users only see workspace-scoped data they are authorized to access.
 - Cross-system links cannot connect records across workspaces unless an explicit future integration contract allows it.
+- Managed System scope filters data inside a workspace; it does not create separate system instances.
 ```
 
-### FR-CORE-002: Product Area Tree
+### FR-CORE-002: Managed System Registry And Defaults
 
 Priority: MUST
 
 Description:
-Admins can create and maintain a lightweight Product Area / Menu Tree.
+Admins can create Managed Systems used as operating context across VOC, Survey, Tasks, and Integration.
 
 Acceptance Criteria:
 
 ```text
-- Product Area supports parent-child hierarchy.
-- Product Area can be linked directly from VOC, Finding, Task, Survey, and Project.
-- Product Area can be archived without deleting historical links.
-- Product Area does not require real menu, route, or code-module synchronization.
+- Managed Systems are managed inside the workspace, not as separate app shells.
+- Managed System defaults can resolve VOC owners, Task Request reviewers, and Survey operators.
+- Default owner or team may prefill the actual owner field, but does not mean the record is triaged.
+- Authorized users can override defaults on individual records.
+- Managed System filters are available on managed-system-scoped lists and dashboards.
 ```
 
-### FR-CORE-003: Audit Log Baseline
+### FR-CORE-003: Analytics Area Catalog
+
+Priority: MUST
+
+Description:
+Admins can create and maintain a lightweight Analytics Area catalog.
+
+Acceptance Criteria:
+
+```text
+- Analytics Area supports an optional parent field for lightweight analytics menu grouping.
+- Analytics Area belongs to exactly one Managed System.
+- Analytics Area can be linked directly from VOC, Finding, Task, and Survey records for the same Managed System.
+- Analytics Area can be archived without deleting historical links.
+- Analytics Area may reflect real analytics menus, but does not require automatic menu, route, or code-module synchronization in MVP.
+- external_key and url_pattern are optional reference metadata, not sync contracts.
+- Analytics Area owner_team_id is a routing/defaulting hint only; it does not grant access.
+- Analytics Area is not used as an MVP permission boundary.
+```
+
+### FR-CORE-004: Audit Log Baseline
 
 Priority: MUST
 
@@ -147,9 +210,10 @@ Acceptance Criteria:
 ## UI / UX Requirements
 
 ```text
-- Product Area management should use a tree view and a compact detail panel.
-- Product Area selection should be searchable from all major object forms.
-- Archived Product Areas remain visible on historical records with archived labeling.
+- Managed System management should expose default owners/reviewers and scoped Developers.
+- Analytics Area management should use a grouped catalog list and a compact detail panel.
+- Analytics Area selection should be searchable from all major object forms after Managed System selection.
+- Archived Analytics Areas remain visible on historical records with archived labeling.
 ```
 
 ## Permissions
@@ -159,7 +223,8 @@ See `09-permission-access.md`.
 ## Cross-System Dependencies
 
 ```text
-- Product Area is used by VOC, Finding, Task / Project, Survey, and Dashboard.
+- Managed System Registry is used by VOC, Finding, Task, Survey, Dashboard, and Permission.
+- Analytics Area is used by VOC, Finding, Task, Survey, and Dashboard.
 - Audit Log is required by Permission Request and Entity Linking.
 - Workspace and Actor are required by all systems.
 ```
@@ -167,7 +232,8 @@ See `09-permission-access.md`.
 ## Out Of Scope For MVP
 
 ```text
-- External product menu sync
+- External analytics menu import or sync
+- Project-as-scope registry
 - Route discovery
 - Code module mapping
 - Advanced taxonomy governance

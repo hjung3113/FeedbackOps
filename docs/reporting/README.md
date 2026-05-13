@@ -49,14 +49,14 @@ Global System Rail
 - Dashboard
 - VOC
 - Finding
-- Task / Project
+- Tasks
 - Survey
 - Permission / Admin
 
 Selected System Sidebar
 - Workspace selector
 - Workspace-level shortcuts
-- Project list or project-scoped area
+- Managed System list or managed-system-scoped area
 - System-owned menus
 - Views and Settings
 ```

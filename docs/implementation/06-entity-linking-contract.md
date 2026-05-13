@@ -38,6 +38,7 @@ Every new entity link must validate:
 - source exists in workspace
 - target exists in workspace
 - source and target are in the same workspace
+- source and target Managed System scope is compatible when both records are MVP-scoped
 - relation_type is allowed for the entity pair
 - actor has permission to create the link
 - visibility is allowed for the relation and actor
@@ -60,10 +61,13 @@ listExpectedLinks(id)
 
 ```text
 internal_only
-- hidden from Reporter and Basic User unless separately authorized.
+- hidden from Reporter and User unless separately authorized.
 
 summary_visible
 - exposes only backend-provided summary contract.
+- Reporter summaries expose only public_title, reporter_facing_status,
+  owning_team_public_name, expected_resolution_date, last_public_update_at,
+  and public_update_excerpt.
 
 visible_to_reporter
 - visible to reporter when source and target permissions allow.
@@ -72,19 +76,22 @@ admin_only
 - visible to Admin only.
 ```
 
-Both source and target permissions are checked on read.
+Both source and target permissions are checked on read. Reporter-visible
+summaries must not expose raw Task Status, priority, internal comments,
+individual Developer names, internal due dates, root-cause detail, severity,
+confidence, or private notes.
 
 ## Dashboard Missing-Link Queries
 
-Dashboard may query entity links to detect:
+Dashboard may query entity links to detect records missing relation types expected by workspace policy, Managed System policy, severity rules, or explicit workflow configuration:
 
 ```text
-- High Severity VOC without Finding
-- VOC Cluster without Finding
-- Finding without Task Request, Task, Milestone, linked existing Task, or not_actionable decision
+- Unassigned VOC in configured Managed System scope
+- High Severity VOC eligible for follow-up and currently lacks a Finding, Task Request, Task link, or authorized no-follow-up-needed decision
+- VOC Cluster marked "needs synthesis" without Finding
+- Finding marked actionable without Task Request, Task, linked existing Task, or not_actionable decision
 - Released Task with unresolved reporter-facing VOC status
-- Bad Outcome Survey without follow-up Finding or Task Request
+- Bad Outcome Survey without configured follow-up Finding or Task Request
 ```
 
-Dashboard must deep-link users to owning module actions. Dashboard must not mutate source lifecycle state directly.
-
+Dashboard must not treat every unlinked record as incomplete. Dashboard must deep-link users to owning module actions and must not mutate source lifecycle state directly.

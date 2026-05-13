@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Permission / Access controls who can see customer data, internal work, survey responses, exports, and admin functions.
+Permission / Access controls who can see internal work, survey responses, exports, and admin functions.
 
 Default access should be low after AD login.
 
@@ -38,9 +38,11 @@ Depends on:
 ```text
 AD 로그인
 → 기본 Actor Type: Internal Member
-→ 기본 Role Level: User / Reporter / Viewer 수준
+→ 기본 Role Level: User
 → 민감 기능과 Backstage 접근은 기본 차단
 ```
+
+Role Level order is Admin > Developer > User. Reporter is not a role; it is the Actor who submitted a specific VOC.
 
 ## Default User Can
 
@@ -55,38 +57,84 @@ AD 로그인
 
 ```text
 - Task 내부 댓글 조회
-- Project Backstage 접근
+- Task Backstage 접근
 - Survey 개인 응답 조회
-- 고객 민감정보 조회
 - Export
 - Role / Permission 변경
 ```
 
+## Role Level, Scope, Capability
+
+Role Level and grants control authorization. Capabilities are the authoritative permission decision.
+
+Role Levels:
+
+```text
+- User: Submit VOC, My VOCs, assigned Surveys
+- Developer: My Work, assigned/scoped VOC triage, Task Requests, Tasks, Surveys, Integration queues
+- Admin: Admin, Permission Requests, all administrative functions
+```
+
+The backend returns effective navigation and capability states for the current workspace and Managed System context. The frontend must not derive authorization from display labels.
+
 ## Capability Matrix
 
-| Capability | Reporter / Basic User | Contributor | Manager / PM | Admin |
-| --- | --- | --- | --- | --- |
-| Create own VOC | yes | yes | yes | yes |
-| Read own VOC public status | yes | yes | yes | yes |
-| Read all workspace VOC | no | scoped | yes | yes |
-| Create Finding | no | scoped | yes | yes |
-| Create Task Request | no | yes | yes | yes |
-| Approve Task Request | no | no | yes | yes |
-| Create Task directly | no | no | yes | yes |
-| Read Task internal comments | no | assigned/scoped | yes | yes |
-| Create Survey | no | scoped | yes | yes |
-| Answer assigned Survey | yes | yes | yes | yes |
-| Read personal Survey responses | no | no | permission required | yes |
-| Export data | no | no | permission required | yes |
-| Approve Permission Request | no | no | no | yes |
+| Capability | User | Developer | Admin |
+| --- | --- | --- | --- |
+| Create own VOC | yes | yes | yes |
+| Read own VOC public status | yes | yes | yes |
+| Add Reporter Reply on own VOC | yes | yes | yes |
+| Write Public Update | no | same Managed System scope | yes |
+| Read all workspace VOC | no | scoped | yes |
+| Create Finding | no | scoped | yes |
+| Create Task Request | no | scoped | yes |
+| Approve Task Request | no | same Managed System scope | yes |
+| Self-approve own Task Request | no | explicit scoped capability | yes |
+| Create Task directly | no | scoped | yes |
+| Read Task internal comments | no | assigned/scoped | yes |
+| Create Survey | no | scoped | yes |
+| Answer assigned Survey | yes | yes | yes |
+| Read personal Survey responses | no | permission required | yes |
+| Export data | no | permission required | yes |
+| Approve Permission Request | no | no | yes |
 
 Notes:
 
 ```text
-- scoped means access depends on explicit project, team, or permission scope.
+- scoped means access depends on explicit Managed System, team, or permission scope.
+- Managed System scope is the MVP authorization boundary below workspace Admin.
+- Access to one Managed System does not grant access to sibling Managed Systems.
+- Analytics Area is not an MVP permission boundary.
+- Task Request self-approval is a sensitive scoped capability, not an automatic Developer permission.
 - Explicit Deny overrides this matrix.
 - Source object visibility still applies through entity_links.
 ```
+
+Permission scope shape:
+
+```text
+- workspace_id required
+- managed_system_id optional
+- team_id optional
+- object_type/object_id optional for single-object grants
+```
+
+List endpoints for Tasks, Task Requests, Managed Systems, Findings, VOC triage, and Dashboard queues must accept managed_system_id filters where scoped data can appear. Backend responses must exclude objects outside the actor's effective Managed System scopes.
+
+managed_system_id=all means the actor's effective Managed System scope union. Workspace Admin receives true workspace-wide results. A Developer with multiple Managed System scopes receives the union of those scopes. A Developer with one scope receives the same result as that single scope. User-facing views should not expose all as a workspace-wide bypass.
+
+## Default Owner / Reviewer Resolution
+
+When creating VOC, Finding, Task Request, Task, or Survey work tied to a Managed System, the application service resolves default owner or reviewer from:
+
+```text
+1. explicit request field when permitted
+2. Managed System default owner / reviewer
+3. Analytics Area owner team
+4. workspace fallback queue
+```
+
+The resolved owner or reviewer is written to the actual owner/reviewer field and must be visible in list filters and audit-relevant creation responses. Default owner does not mean the record is triaged, and default reviewer does not mean the record is reviewed. Analytics Area owner team is a routing/defaulting hint only and does not grant Managed System scope. If a resolved owner or reviewer lacks required Managed System scope, the service returns validation_failed or directs the actor to the permission request flow instead of silently granting access. Default resolution should record creation metadata such as default_resolved, source rule, and managed_system_id. Failure to resolve a required reviewer returns validation_failed instead of creating unowned review work.
 
 ## Permission Request Data Model
 
@@ -114,7 +162,7 @@ Priority: MUST
 Acceptance Criteria:
 
 ```text
-- User can request Task / Project access, specific Project access, Survey creation, Survey personal response access, Export, or Admin permission.
+- User can request Task access, specific Managed System access, Survey creation, Survey personal response access, Export, or Admin permission.
 - Sensitive permission requests require reason.
 - Request can include scope and expiration.
 ```
@@ -149,6 +197,7 @@ Acceptance Criteria:
 - Permission Request UI should be a simple request form and admin review queue.
 - The user should see why access is blocked and what permission can be requested.
 - Admin review should show requester, scope, reason, risk, and expiration.
+- Permission Request is normally an Admin surface or inline blocked-state action, not default navigation for general users.
 ```
 
 ## Cross-System Dependencies

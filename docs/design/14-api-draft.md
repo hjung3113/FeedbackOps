@@ -30,9 +30,9 @@ Expected behavior:
 POST /survey-responses/:id/create-finding
 POST /survey-findings/:id/request-task
 POST /survey-findings/:id/create-task
-POST /survey-findings/:id/create-milestone
 POST /survey-findings/:id/link-task
-POST /survey-findings/:id/link-milestone
+# future: POST /survey-findings/:id/create-milestone
+# future: POST /survey-findings/:id/link-milestone
 ```
 
 ## VOC APIs
@@ -46,8 +46,8 @@ POST /voc-clusters/:id/create-finding
 
 ```text
 POST /findings/:id/request-task
-POST /findings/:id/create-task
-POST /findings/:id/create-milestone
+POST /findings/:id/link-task
+# future: POST /findings/:id/create-milestone
 ```
 
 Recommended additions:
@@ -55,17 +55,16 @@ Recommended additions:
 ```text
 POST /findings/:id/evidence-highlights
 POST /findings/:id/link-evidence
-POST /findings/:id/link-task
-POST /findings/:id/link-milestone
+# future: POST /findings/:id/link-milestone
 ```
 
-## Product Area APIs
+## Analytics Area APIs
 
 ```text
-GET  /product-areas
-POST /product-areas
-PATCH /product-areas/:id
-POST /product-areas/:id/archive
+GET  /analytics-areas
+POST /analytics-areas
+PATCH /analytics-areas/:id
+POST /analytics-areas/:id/archive
 ```
 
 ## Permission Request APIs
@@ -93,7 +92,7 @@ DELETE /entity-links/:id
 
 ```text
 - Cross-system creation APIs must preserve source context.
-- APIs that create Task or Milestone from Finding must create entity_links.
+- APIs that create Task Request or link an existing Task from Finding must create entity_links.
 - APIs that expose linked objects must enforce visibility.
 - APIs must not expose generated_voc relation type.
 - Sensitive decisions must emit audit log events.

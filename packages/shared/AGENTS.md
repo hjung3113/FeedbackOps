@@ -7,6 +7,7 @@
 - Enum constants and discriminated unions.
 - DTO helpers that do not orchestrate workflows.
 - Pure utilities with no app, database, or UI dependency.
+- Managed System, Product Area, Role Level, status, source context, severity, permission, attachment, rich-content, and relation-type vocabulary when shared by backend and frontend contracts.
 
 ## Forbidden Content
 
@@ -16,6 +17,7 @@
 - React components or hooks.
 - Permission decisions with runtime authority.
 - Domain workflow orchestration.
+- Managed System default owner/reviewer resolution logic.
 
 ## Rules
 

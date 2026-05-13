@@ -33,9 +33,19 @@ Implementation should not start until these are reviewed for the target slice:
 ## Authority Rules
 
 ```text
+- CONTEXT.md and docs/adr/*.md own resolved domain decisions until incorporated into design docs.
 - 03-api-contracts.md owns endpoint behavior.
 - 04-database-and-migrations.md owns migration and storage rules.
 - docs/design/15-data-contracts.md owns design-level field and enum vocabulary until replaced by migrations.
 - docs/design/11-entity-linking.md owns relation type meaning and visibility rules.
 - docs/design/14-api-draft.md is historical design input only where not restated here.
+```
+
+Current implementation alignment rules:
+
+```text
+- Managed System replaces Project as the MVP scope, filter, defaulting, and Developer permission boundary.
+- Analytics Area belongs to one Managed System and is not an MVP permission boundary.
+- Project or Work Initiative is future execution grouping only unless a later ADR changes this.
+- Rich content is WYSIWYG-first; inline images are attachment references, not base64 body data or external inline image URLs.
 ```

@@ -25,8 +25,9 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Badge | status, signal, visibility, permission | default, muted, urgent, blocked | text label required |
 | TextInput | default, search, invalid | focus, disabled, invalid, loading | associated label and error |
 | Textarea | default, public-update, internal-note | focus, disabled, invalid | associated label and error |
+| RichContentEditor | voc-description, reporter-reply, public-update, internal-comment | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
 | Select | single, multi | focus, disabled, invalid, loading | keyboard navigable |
-| Combobox | user, product-area, entity | focus, empty, loading, error | keyboard navigable |
+| Combobox | user, analytics-area, entity | focus, empty, loading, error | keyboard navigable |
 | Checkbox | default, indeterminate | focus, checked, disabled | label required |
 | RadioGroup | default, segmented | focus, selected, disabled | group label required |
 | Tooltip | text, shortcut | open, closed | not sole source of critical info |
@@ -45,6 +46,9 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 
 ```text
 AppShell
+RoleLevelAwareSidebar
+ManagedSystemScopeSwitcher
+ScopeFilterBar
 ObjectList
 InboxList
 DataTable
@@ -54,11 +58,15 @@ EvidenceHighlight
 StatusBadge
 SignalBadge
 PublicUpdateComposer
+ConversationComposer
+ReporterSummaryBlock
 ActionQueueRow
 PermissionBlockedPanel
 CommandMenu
 ActionToolbar
-ProductAreaPicker
+ManagedSystemPicker
+AnalyticsAreaPicker
+ReviewerPicker
 UserPicker
 AuditTimeline
 ```
@@ -111,6 +119,25 @@ Visibility:
 - summary_visible
 - visible_to_reporter
 - admin_only
+```
+
+Rich content surfaces:
+
+```text
+- voc-description
+- reporter-reply
+- public-update
+- internal-comment
+```
+
+Rich content constraints:
+
+```text
+- One shared WYSIWYG-first editor foundation across all rich-content surfaces.
+- Surface-specific toolbar and rendering restrictions are required.
+- Inline images are uploaded/stored as attachments and referenced from rich content.
+- External image URLs and base64 body images are not allowed for inline rendering in MVP.
+- Rich tables are editor nodes; large spreadsheets are file attachments.
 ```
 
 ## Visual State Requirements

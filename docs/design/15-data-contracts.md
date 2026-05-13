@@ -14,17 +14,47 @@ System documents may explain why fields exist, but this document is the first pl
 - All records that can be changed include created_at and updated_at.
 - Archive is preferred over hard delete for objects referenced by other systems.
 - Cross-system optional relationships use entity_links unless a direct foreign key is explicitly listed.
+- VOC, Finding, Task Request, Task, and Survey require exactly one primary_managed_system_id in MVP.
 ```
 
-## Product Area
+## Managed System
 
 Owner: Core Platform
 
 ```text
-core.product_areas
+core.managed_systems
 - id: uuid, required
 - workspace_id: uuid, required
-- project_id: uuid, nullable
+- name: text, required
+- description: text, nullable
+- default_voc_owner_user_id: uuid, nullable
+- default_voc_owner_team_id: uuid, nullable
+- default_task_reviewer_user_id: uuid, nullable
+- default_survey_operator_user_id: uuid, nullable
+- status: enum(active, archived), required
+- created_at: timestamp, required
+- updated_at: timestamp, required
+```
+
+Rules:
+
+```text
+- Managed System is the MVP scope and defaulting context inside a workspace.
+- Managed System must not create separate VOC, Survey, Task, Finding, Dashboard, or Entity Link system instances.
+- Defaults prefill responsibility but can be overridden by authorized users.
+- Default owner or team may prefill actual owner fields but does not mean the record is triaged.
+- Project language in older contracts is superseded by Managed System for MVP scope.
+```
+
+## Analytics Area
+
+Owner: Core Platform
+
+```text
+core.analytics_areas
+- id: uuid, required
+- workspace_id: uuid, required
+- managed_system_id: uuid, required
 - parent_id: uuid, nullable
 - name: text, required
 - description: text, nullable
@@ -40,9 +70,53 @@ core.product_areas
 Rules:
 
 ```text
-- parent_id must reference a Product Area in the same workspace.
-- archived Product Areas remain visible on historical records.
-- external_key and url_pattern do not imply forced sync.
+- parent_id must reference an Analytics Area in the same workspace.
+- MVP UI treats parent_id as optional grouping metadata, not a required deep tree editor.
+- Analytics Area belongs to exactly one Managed System.
+- archived Analytics Areas remain visible on historical records.
+- FeedbackOps analytics_areas is the MVP source of truth.
+- external_key and url_pattern are optional reference metadata and do not imply forced sync.
+- owner_team_id is a routing/defaulting hint only and does not grant authorization.
+- Analytics Area is not an MVP permission boundary.
+- VOC Analytics Area must belong to the VOC Primary Managed System.
+```
+
+## VOC
+
+Owner: VOC
+
+```text
+vocs
+- id: uuid, required
+- workspace_id: uuid, required
+- primary_managed_system_id: uuid, required
+- reporter_id: uuid, required
+- title: text, required
+- description_rich_content: rich_content, required
+- source_context: enum(direct_use, proxy_report, operational_discovery, stakeholder_request), required default direct_use
+- triage_state: enum(untriaged, triaged, needs_more_information, dismissed_not_actionable), required
+- reporter_facing_status: enum from Reporter-Facing VOC Status, required
+- severity: enum(low, medium, high, critical), nullable until triage
+- analytics_area_id: uuid, nullable
+- owner_user_id: uuid, nullable
+- owner_team_id: uuid, nullable
+- created_by: uuid, required
+- created_at: timestamp, required
+- updated_at: timestamp, required
+```
+
+Rules:
+
+```text
+- reporter_id is the Actor who submitted the VOC.
+- Reporter is not a Role Level or external contact.
+- No affected_user field exists in MVP.
+- Proxy Report context is captured in description_rich_content, not a separate affected_user field.
+- Reporter can edit title, description, and attachments only before triage begins.
+- After triage begins, Reporter adds information through Reporter Reply.
+- Severity is assigned during triage by Admin or same-scope Developer.
+- Analytics Area is optional and must belong to primary_managed_system_id.
+- Absence of Analytics Area is valid in MVP.
 ```
 
 ## Finding
@@ -53,15 +127,16 @@ Owner: Finding / Insight
 findings
 - id: uuid, required
 - workspace_id: uuid, required
+- primary_managed_system_id: uuid, required
 - title: text, required
 - summary: text, required
-- source_type: enum(voc_cluster, survey, manual), required
+- source_type: enum(voc, voc_cluster, survey, manual), required
 - source_id: uuid, nullable when source_type=manual
 - evidence_count: integer, required
 - severity: enum(low, medium, high, critical), required
 - confidence: enum(low, medium, high), nullable
 - status: enum(draft, active, not_actionable, converted, archived), required
-- product_area_id: uuid, nullable
+- analytics_area_id: uuid, nullable
 - linked_task_id: uuid, nullable
 - linked_milestone_id: uuid, nullable
 - created_by: uuid, required
@@ -74,6 +149,9 @@ Rules:
 ```text
 - Finding should have at least one Evidence Highlight before Task Request approval.
 - linked_task_id and linked_milestone_id are convenience references; canonical cross-system history still uses entity_links.
+- primary_managed_system_id is the MVP scope context and must not create a separate app partition.
+- analytics_area_id must belong to primary_managed_system_id when present.
+- Absence of analytics_area_id is valid in MVP.
 ```
 
 ## Evidence Highlight
@@ -84,11 +162,11 @@ Owner: Finding / Insight
 evidence_highlights
 - id: uuid, required
 - workspace_id: uuid, required
+- primary_managed_system_id: uuid, required
 - source_type: enum(voc, survey_response, note), required
 - source_id: uuid, nullable when source_type=note
 - quote_or_summary: text, required
-- customer_id: uuid, nullable
-- product_area_id: uuid, nullable
+- analytics_area_id: uuid, nullable
 - sentiment: enum(negative, neutral, positive), nullable
 - importance: enum(low, medium, high), nullable
 - created_by: uuid, required
@@ -104,19 +182,20 @@ Rules:
 
 ## Task Request
 
-Owner: Task / Project
+Owner: Task
 
 ```text
 task_requests
 - id: uuid, required
 - workspace_id: uuid, required
+- primary_managed_system_id: uuid, required
 - title: text, required
 - summary: text, required
 - source_type: enum(voc, voc_cluster, finding, survey_finding, manual), required
 - source_id: uuid, nullable when source_type=manual
 - status: enum(pending_review, approved, rejected, needs_more_evidence, converted), required
 - priority: enum(low, medium, high, urgent), nullable
-- product_area_id: uuid, nullable
+- analytics_area_id: uuid, nullable
 - requested_by: uuid, required
 - reviewer_id: uuid, nullable
 - decided_at: timestamp, nullable
@@ -130,6 +209,10 @@ Rules:
 ```text
 - Approval, rejection, and conversion are audited.
 - Converted Task must preserve source context through entity_links.
+- Reviewer may be Admin or Developer within the same Managed System scope.
+- Self-approval by the same scoped Developer requires explicit task_request_self_approval capability.
+- Self-approval stores self_approved, reason, source_entity, and managed_system_id audit metadata.
+- reviewer_id may be resolved from Managed System defaults.
 ```
 
 ## Permission Request
@@ -155,6 +238,8 @@ Rules:
 
 ```text
 - Sensitive permissions require reason.
+- requested_scope uses managed_system_id for scoped Developer grants in MVP.
+- analytics_area_id is not an MVP permission boundary.
 - Expiry and revocation must be enforceable.
 - Decisions are audited.
 ```
@@ -205,12 +290,13 @@ Rules:
 
 ```text
 - Task Done does not automatically map to 해결됨.
-- Released can trigger a manager review for public status update.
+- Released can create a review candidate for Admin or same-scope Developer to write a Public Update.
+- Reporter-Facing VOC Status must not expose raw Task Status.
 ```
 
 ## Task Status
 
-Owner: Task / Project
+Owner: Task
 
 ```text
 enum:
@@ -227,6 +313,22 @@ Rules:
 
 ```text
 - Task status is internal.
+- Converted Task starts in Backlog.
+- Backlog Task may have an assignee, but execution starts at Todo or Doing.
 - Reporter-visible summaries use explicit summary contracts, not raw Task internals.
 ```
 
+## Rich Content
+
+Owner: Core Platform / surface owner
+
+Rules:
+
+```text
+- VOC description, Reporter Reply, Public Update, and Internal Comment use a shared rich content foundation.
+- Editor UX is WYSIWYG-first; Markdown or HTML must not be required from users.
+- Inline images are stored as uploaded attachments and referenced from rich content.
+- Base64 body images and external inline image URLs are not allowed in MVP.
+- Rich Table support is spike-gated in MVP; when enabled, tables are stored as rich content nodes.
+- Large spreadsheet-like data should be attachments.
+```

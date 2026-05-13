@@ -14,9 +14,13 @@
 
 Do not place source code at the repository root. Keep cross-app code in `packages/*` only when both apps need it.
 
-Product systems such as VOC, Finding, Task, Survey, Dashboard, Permission, and
-Entity Linking are bounded contexts inside the app shells. They are not separate
-deployable apps in the MVP architecture.
+Product systems such as Core Platform, VOC, Finding / Insight, Task, Survey,
+Dashboard, Permission, and Entity Linking are bounded contexts inside the app
+shells. They are not separate deployable apps in the MVP architecture.
+
+Do not create `systems/{system}/frontend` or `systems/{system}/backend`.
+Backend implementation belongs under `apps/backend/src/modules/*`. Frontend
+route composition belongs under `apps/frontend/src/features/*`.
 
 ## Required Reading Order
 
@@ -40,18 +44,20 @@ Before implementation that changes product behavior, API contracts, domain rules
 - Module ownership: `docs/implementation/02-domain-module-boundaries.md`.
 - Permission decisions: `docs/implementation/05-permission-policy.md`.
 - Entity links: `docs/implementation/06-entity-linking-contract.md`.
-- Frontend routes and panels: `docs/frontend/routes-and-layout.md`.
+- Frontend routes, feature boundaries, and panels: `docs/frontend/routes-and-layout.md`.
 - Component contracts: `docs/frontend/ui-design-system.md` and `docs/frontend/component-inventory.md`.
 - Visual token seed only: `DESIGN.md`.
 
 ## Product Invariants
 
-- VOC is customer or user-submitted voice; never create VOC from Survey Response.
+- VOC is AD-authenticated internal user-submitted voice; never create VOC from Survey Response.
 - Finding is the bridge from evidence to execution.
 - Task Request protects the Task backlog from unreviewed execution candidates.
 - Task status and reporter-facing VOC status are separate state machines.
 - Dashboard is an action queue surface, not a chart-only reporting page.
-- Product Area is business context, not a forced mirror of routes or code modules.
+- Analytics Area is managed analytics-menu context, not a forced mirror of routes or code modules.
+- Managed System is the MVP scope, filter, defaulting, and Developer permission context; do not duplicate VOC,
+  Survey, Task, Finding, Dashboard, or Integration trees per Managed System.
 - Cross-system history is canonical through `entity_links`, not convenience columns.
 
 ## Implementation Boundaries
@@ -61,6 +67,11 @@ Before implementation that changes product behavior, API contracts, domain rules
 - Repositories write only tables owned by their module.
 - Source-shaped routes do not grant write ownership to the source module.
 - Frontend screens compose typed API hooks and shared components; they do not enforce backend permissions as truth.
+- Frontend feature folders follow top-level route ownership: `home`, `my-work`,
+  `voc`, `surveys`, `tasks`, `integration`, and `admin`.
+- Findings, Evidence, Coverage, and Links live under Integration routes.
+- Managed System Registry, Analytics Areas, Permission Requests, and workspace settings
+  live under Admin routes.
 - `packages/shared` must not import either app.
 - `packages/ui` must not call APIs or own domain mutations.
 
@@ -83,7 +94,7 @@ Use `docs/codex-cloud-setup.md` when creating or updating the Codex Cloud enviro
 bash scripts/codex-cloud-setup.sh
 ```
 
-This repo is currently a documentation and architecture scaffold for FeedbackOps. It defines app boundaries under `apps/*` and shared package boundaries under `packages/*`, but it does not yet contain package manager lockfiles, application source code, migrations, or test projects. Do not invent install, build, database, or test commands until the matching project files exist.
+This repo is currently a documentation and architecture scaffold for FeedbackOps. It defines app boundaries under `apps/*`, frontend feature guide boundaries under `apps/frontend/src/features/*`, backend module guide boundaries under `apps/backend/src/modules/*`, and shared package boundaries under `packages/*`, but it does not yet contain package manager lockfiles, application source files, migrations, or test projects. Do not invent install, build, database, or test commands until the matching project files exist.
 
 For any new Codex task:
 

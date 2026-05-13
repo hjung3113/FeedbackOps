@@ -54,7 +54,7 @@ Product systems:
 - Core Platform
 - VOC
 - Finding / Insight
-- Task / Project
+- Task
 - Survey
 - Dashboard
 - Permission / Access
@@ -132,6 +132,7 @@ Cross-system commands must run in an application service that:
 
 ```text
 - validates workspace ownership
+- validates the Primary Managed System for scoped records
 - checks permission
 - writes the target object
 - writes required entity_links
@@ -152,7 +153,24 @@ Examples:
 - VOC Cluster -> Finding
 - Survey Response -> Finding
 - Finding -> Task Request
-- Finding -> Task
-- Finding -> Milestone
+- Task Request -> Task
+- Finding -> linked existing Task
+- VOC -> Task Request
+- Finding -> Work Initiative or Milestone only when future execution grouping is enabled
 - Task Released -> reporter-facing status review candidate
+```
+
+## Managed System Scope
+
+MVP scope, filtering, defaulting, and Developer permission checks are based on
+Managed System, not Project. Core owns the Managed System Registry, Product
+Areas, Actors, Role Levels, audit logs, and shared attachment governance.
+
+Implementation implications:
+
+```text
+- VOC, Finding, Task Request, Task, and Survey records require managed_system_id.
+- Analytics Areas belong to exactly one Managed System.
+- Analytics Area is business context, not an MVP permission boundary.
+- Work Initiative or Project may later group execution work, but it must not replace managed_system_id for MVP authorization or defaults.
 ```

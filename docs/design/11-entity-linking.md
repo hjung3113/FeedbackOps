@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Entity Link is the loose coupling layer between VOC, Finding, Task / Project, Survey, Dashboard, and Permission.
+Entity Link is the loose coupling layer between VOC, Finding, Task, Survey, Dashboard, and Permission.
 
 It enables cross-system context without forcing every object to own every relationship directly.
 
@@ -88,6 +88,8 @@ Example Task summary visible to Reporter:
 - last_public_update_at
 ```
 
+Reporter Summary must not expose raw Task Status, internal comments, priorities, developer discussion, severity, confidence, internal due dates, root-cause analysis detail, or private notes. It may expose only public-safe linked work information explicitly defined by the source summary contract.
+
 ## Functional Requirements
 
 ### FR-LINK-001: Create Entity Link
@@ -123,7 +125,8 @@ Acceptance Criteria:
 
 ```text
 - Dashboard can query records without expected relation types.
-- Dashboard can detect stale or missing workflow links.
+- Dashboard can query records missing relation types expected by workspace policy, Managed System policy, severity rules, or explicit workflow configuration.
+- Dashboard can detect stale or missing workflow links without treating every unlinked record as incomplete.
 - Missing-link detection does not require hard-coded foreign keys for every relationship.
 ```
 
@@ -132,7 +135,7 @@ Acceptance Criteria:
 Recommended:
 
 ```text
-- VOC / Task / Survey / Finding can store product_area_id directly.
+- VOC / Task / Survey / Finding store primary_managed_system_id directly and may store analytics_area_id directly.
 - Strong ownership relationships can use direct foreign keys.
 - Cross-system, optional, or many-to-many relationships use entity_links.
 ```
@@ -140,7 +143,7 @@ Recommended:
 ## Cross-System Dependencies
 
 ```text
-- 10-cross-system-workflows.md defines expected links.
+- 10-cross-system-workflows.md defines optional integration patterns and policy-driven expected links.
 - 09-permission-access.md defines visibility enforcement.
 - 08-dashboard-system.md depends on missing-link queries.
 ```

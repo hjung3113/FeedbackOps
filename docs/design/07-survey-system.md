@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Survey asks users, customers, or internal members questions and collects responses for discovery, validation, or outcome measurement.
+Survey asks internal users questions and collects responses for discovery, validation, or outcome measurement.
 
 Survey Response does not create VOC.
 
@@ -50,32 +50,33 @@ Outcome Survey:
 
 ## Key Workflows
 
-### WF-SURVEY-001: Survey To Finding
+### WF-SURVEY-001: Survey Local Workflow
 
 ```text
-Survey Response
+Survey
+→ Build
+→ Collect
+→ Responses
 → Survey Result
-→ Survey Finding
-→ Task Request
-→ Task
+→ Analyze
 ```
 
-### WF-SURVEY-002: Survey To Milestone
+### WF-SURVEY-002: Optional Survey To Execution
 
 ```text
-Survey Analysis
-→ Finding
-→ Milestone
-→ Tasks
+Survey Result
+→ optional Evidence Highlights
+→ optional Finding
+→ optional Task Request
 ```
 
 ### WF-SURVEY-003: Outcome Survey
 
 ```text
 Task / Milestone Released
-→ Outcome Survey
+→ optional Outcome Survey
 → Result Summary
-→ Follow-up Finding / Task Request if result is poor
+→ optional Follow-up Finding / Task Request if result is poor and workflow is configured
 ```
 
 ## Functional Requirements
@@ -88,7 +89,8 @@ Acceptance Criteria:
 
 ```text
 - Survey Operator can create Discovery, Validation, or Outcome Survey.
-- Survey can link Project and Product Area.
+- Survey requires exactly one Primary Managed System.
+- Survey can link Analytics Area under that Managed System.
 - Survey can be created from template.
 - Survey supports link distribution.
 ```
@@ -126,19 +128,20 @@ Acceptance Criteria:
 ```text
 - Result screen shows question summary and response distribution.
 - Text responses can be highlighted as evidence.
-- Results can be filtered by segment or Product Area when data exists.
+- Results can be filtered by Managed System, segment, or Analytics Area when data exists.
 ```
 
 ### FR-SURVEY-005: Convert Result To Action
 
-Priority: MUST
+Priority: SHOULD
 
 Acceptance Criteria:
 
 ```text
-- Result screen has Create Finding, Link Finding, and Request Task CTAs.
-- Survey Finding can link Task or Milestone.
+- Result screen has Create Finding, Link Finding, and Request Task CTAs when the actor has permission and the workflow is enabled.
+- Survey Finding can create Task Request or link execution work.
 - Outcome Survey with poor result can create follow-up Finding or Task Request.
+- Survey can be used independently without converting results to Finding or Task.
 ```
 
 ## UI / UX Requirements
@@ -153,7 +156,7 @@ Layout:
 - Question Summary
 - Response Distribution
 - Text Response Highlights
-- Filter by Segment / Product Area
+- Filter by Managed System / Segment / Analytics Area
 - Create Finding CTA
 - Link Finding CTA
 - Request Task CTA
@@ -173,8 +176,8 @@ Layout:
 ```text
 - Survey Result creates Finding, not VOC.
 - Survey can validate Task or Milestone.
-- Outcome Survey can reveal unresolved customer experience after release.
-- Product Area links Survey to product context.
+- Outcome Survey can reveal unresolved user experience after release.
+- Survey may optionally link Analytics Area to context inside one Managed System.
 ```
 
 ## Out Of Scope For MVP

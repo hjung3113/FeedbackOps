@@ -17,11 +17,11 @@ Finding owns:
 - Finding
 - Evidence Highlight
 
-Task / Project owns:
+Task owns:
 - Task Request
 - Task
-- Project
-- Milestone
+- Milestone as lightweight Task grouping
+- Work Initiative / Project execution grouping when introduced after MVP
 - internal task status
 
 Survey owns:
@@ -32,10 +32,13 @@ Survey owns:
 Core owns:
 - Workspace
 - Actor
+- Role Level
 - Team
-- Customer / Account
-- Contact
-- Product Area
+- Managed System Registry
+- Customer / Account reference data only if explicitly retained by data contracts
+- Contact reference data only if explicitly retained by data contracts; never Reporter identity
+- Analytics Area
+- Attachment governance and storage interfaces when shared across modules
 - Audit Log
 
 Permission owns:
@@ -80,10 +83,18 @@ Allowed:
 
 ```text
 - Workspace and actor context
-- Product Area tree
+- Role Level vocabulary and actor role assignment
+- Managed System Registry and default owner/reviewer inputs
+- Analytics Area tree, with each Analytics Area belonging to one Managed System
+- shared attachment governance
 - Audit log append API
 - shared identifiers and base types
 ```
+
+Core must not treat Analytics Area as an MVP authorization boundary. Analytics Area
+can influence classification, routing hints, and defaults inside its Managed
+System, but backend capability checks remain workspace-level for Admins or
+Managed-System scoped for Developers.
 
 ## Entity Link Provider Contract
 
@@ -112,7 +123,9 @@ Entity Linking uses providers to enforce:
 
 ```text
 - packages/ui implements reusable visual and interaction primitives.
-- apps/frontend/src/features/{voc,findings,tasks,surveys,dashboard,permissions,product-areas} own route and screen composition.
+- apps/frontend/src/features/{home,my-work,voc,surveys,tasks,integration,admin} own route and screen composition.
+- Findings, Evidence, Coverage, and Links are Integration feature surfaces.
+- Analytics Areas, Permission Requests, Managed System Registry, and settings are Admin feature surfaces.
 - Frontend features represent UI surfaces for product systems; they do not own domain rules or writes.
 - Feature screens compose UI primitives and call typed API hooks.
 - Frontend permission states are display hints only.

@@ -51,6 +51,9 @@ Most full UI kits solve generic app components, but they do not solve:
 - ActionQueueRow
 - PermissionBlockedPanel
 - PublicUpdateComposer
+- RichContentEditor
+- ConversationComposer
+- ReporterSummaryBlock
 - reporter-facing vs internal status separation
 - permission-aware redaction states
 ```
@@ -73,6 +76,7 @@ Examples:
 - Button
 - Input
 - Textarea
+- RichContentEditor
 - Select
 - Combobox
 - Dialog
@@ -130,7 +134,7 @@ Rules:
 ```text
 - These components encode FeedbackOps layout, density, and state contracts.
 - Feature screens should prefer these over composing tables, badges, panels, and permission states independently.
-- ObjectList and DataTable should be built once and reused across VOC, Finding, Task Request, Survey, Dashboard, and Permission screens.
+- ObjectList and DataTable should be built once and reused across VOC, Finding, Task Request, Survey, Home/Integration queue, and Permission screens.
 ```
 
 ### Layer 3: Domain Workflow Components
@@ -147,6 +151,8 @@ Examples:
 - LinkedEntityTrail
 - EvidenceHighlight
 - PublicUpdateComposer
+- ConversationComposer
+- ReporterSummaryBlock
 - ActionQueueRow
 - PermissionBlockedPanel
 - FindingExecutionActions
@@ -178,11 +184,11 @@ Examples:
 ```text
 - VOC Inbox
 - Finding Detail
-- Task Request Queue
+- Tasks Intake Queue
 - Task Detail
 - Survey Result
-- Action Dashboard
-- Permission Requests
+- Home/Integration Action Queue
+- Admin Permission Requests
 ```
 
 Rules:
@@ -266,7 +272,7 @@ Avoid:
 
 ```text
 - using drag as the primary workflow for permission queues
-- using drag as the only way to repair Action Dashboard items
+- using drag as the only way to repair Home or Integration action queue items
 - hidden state changes that are not keyboard-accessible
 ```
 
@@ -288,7 +294,59 @@ Use:
 Constraint:
 
 ```text
-Dashboard screens must remain action-queue-first, not BI-card-first.
+Home and Integration queue screens must remain action-queue-first, not BI-card-first.
+```
+
+### Rich Content Editor
+
+Primary spike candidates:
+
+```text
+Tiptap
+Plate
+```
+
+Prototype comparison only:
+
+```text
+Toast UI Editor
+```
+
+Use:
+
+```text
+- one shared WYSIWYG-first editor foundation
+- VOC description
+- Reporter Reply
+- Public Update
+- Internal Comment
+- surface-specific toolbar, embed, table, and rendering restrictions
+```
+
+Constraints:
+
+```text
+- Non-developer users must be able to author rich content without Markdown or HTML.
+- Images pasted, dropped, or uploaded appear inline but are stored as attachments.
+- Do not store base64 body images.
+- Do not render external image URLs inline in MVP.
+- Tables should be rich table nodes; large spreadsheets should be file attachments.
+- Public-facing surfaces must preserve reporter-safe rendering.
+```
+
+Spike criteria:
+
+```text
+- non-developer WYSIWYG usability
+- screenshot paste/drop with upload hooks and inline attachment rendering
+- Excel/table paste behavior
+- dark-theme quality
+- mobile editing
+- read-only rendering
+- surface-specific restrictions
+- safe storage/rendering model
+- internal SaaS licensing
+- maintenance activity
 ```
 
 ## Reference Registries
