@@ -6,7 +6,9 @@
     "lint": "tsc -b --pretty false",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "dev": "pnpm --filter @feedbackops/backend dev & pnpm --filter @feedbackops/frontend dev"
+    "dev": "pnpm --filter @feedbackops/backend dev & pnpm --filter @feedbackops/frontend dev",
+    "dev:backend": "pnpm --filter @feedbackops/backend dev",
+    "dev:frontend": "pnpm --filter @feedbackops/frontend dev"
   },
   "devDependencies": {
     "@types/node": "^22.15.18",
