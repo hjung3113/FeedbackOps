@@ -65,6 +65,8 @@ function makeId(prefix: string, count: number): string {
 }
 
 export class MvpStore {
+  persistence: "memory" | "postgres" = "memory";
+
   actors = new Map<string, Actor>();
   managedSystems = new Map<string, ManagedSystem>();
   analyticsAreas = new Map<string, AnalyticsArea>();
@@ -78,7 +80,7 @@ export class MvpStore {
   permissionRequests = new Map<string, PermissionRequest>();
   auditEvents: AuditEvent[] = [];
 
-  private counters = {
+  protected counters = {
     voc: 1,
     conversation: 1,
     cluster: 1,
@@ -412,14 +414,33 @@ export class MvpStore {
 
   approveTaskRequest(actor: Actor, id: string, body: Record<string, unknown>): TaskRequest {
     const taskRequest = this.getTaskRequest(actor, id);
-    if (actor.roleLevel === "User") {
-      throw new ApiError(403, "permission_denied", "User cannot approve task requests.");
-    }
-    if (taskRequest.requestedById === actor.id && actor.roleLevel === "Developer" && !actor.capabilities?.includes("task_request_self_approval")) {
-      throw new ApiError(403, "permission_denied", "Self-approval requires explicit capability.");
-    }
+    this.assertCanReviewTaskRequest(actor, taskRequest);
     taskRequest.status = "approved";
     this.audit(actor.workspaceId, "task_request_approved", { task_request_id: id, reason: body.reason ?? null });
+    return taskRequest;
+  }
+
+  rejectTaskRequest(actor: Actor, id: string, body: Record<string, unknown>): TaskRequest {
+    const taskRequest = this.getTaskRequest(actor, id);
+    this.assertCanReviewTaskRequest(actor, taskRequest);
+    this.assertReviewReason(body);
+    if (taskRequest.status === "converted") {
+      throw new ApiError(409, "invalid_transition", "Converted Task Request cannot be rejected.");
+    }
+    taskRequest.status = "rejected";
+    this.audit(actor.workspaceId, "task_request_rejected", { task_request_id: id, reason: body.reason });
+    return taskRequest;
+  }
+
+  requestMoreEvidenceForTaskRequest(actor: Actor, id: string, body: Record<string, unknown>): TaskRequest {
+    const taskRequest = this.getTaskRequest(actor, id);
+    this.assertCanReviewTaskRequest(actor, taskRequest);
+    this.assertReviewReason(body);
+    if (taskRequest.status === "converted") {
+      throw new ApiError(409, "invalid_transition", "Converted Task Request cannot request more evidence.");
+    }
+    taskRequest.status = "needs_more_evidence";
+    this.audit(actor.workspaceId, "task_request_more_evidence_requested", { task_request_id: id, reason: body.reason });
     return taskRequest;
   }
 
@@ -598,6 +619,21 @@ export class MvpStore {
     }
     this.assertManagedSystemAccess(actor, taskRequest.managedSystemId);
     return taskRequest;
+  }
+
+  private assertCanReviewTaskRequest(actor: Actor, taskRequest: TaskRequest): void {
+    if (actor.roleLevel === "User") {
+      throw new ApiError(403, "permission_denied", "User cannot review task requests.");
+    }
+    if (taskRequest.requestedById === actor.id && actor.roleLevel === "Developer" && !actor.capabilities?.includes("task_request_self_approval")) {
+      throw new ApiError(403, "permission_denied", "Self-approval requires explicit capability.");
+    }
+  }
+
+  private assertReviewReason(body: Record<string, unknown>): void {
+    if (!body.reason) {
+      throw new ApiError(400, "validation_failed", "reason is required for Task Request review decisions.");
+    }
   }
 
   private assertAnalyticsAreaMatches(analyticsAreaId: string, managedSystemId: string): void {

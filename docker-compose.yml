@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: feedbackops
+      POSTGRES_USER: feedbackops
+      POSTGRES_PASSWORD: feedbackops
+    volumes:
+      - feedbackops-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feedbackops -d feedbackops"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    environment:
+      AUTH_MODE: mock
+      PORT: 3000
+      DATABASE_URL: postgres://feedbackops:feedbackops@postgres:5432/feedbackops
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "pnpm --filter @feedbackops/backend db:migrate && pnpm --filter @feedbackops/backend db:seed && pnpm --filter @feedbackops/backend start"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    environment:
+      VITE_API_BASE_URL: http://localhost:3000
+    ports:
+      - "5180:5180"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  feedbackops-postgres:

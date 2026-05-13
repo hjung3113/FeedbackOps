@@ -1,6 +1,7 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app";
+import { createStoreFromEnv } from "./persistence";
 
 const app = createApp();
 
@@ -153,6 +154,58 @@ describe("FeedbackOps backend MVP invariants", () => {
       .set("x-actor-id", "admin")
       .send({})
       .expect(404);
+  });
+
+  it("rejects and requests more evidence for Task Requests without creating Tasks", async () => {
+    const rejectedRequest = await request(app)
+      .post("/vocs/voc-seeded-tableau/request-task")
+      .set("x-actor-id", "admin")
+      .send({ title: "Reject this execution candidate" })
+      .expect(201);
+
+    const rejected = await request(app)
+      .post(`/task-requests/${rejectedRequest.body.id}/reject`)
+      .set("x-actor-id", "admin")
+      .send({ reason: "The evidence does not justify execution yet." })
+      .expect(200);
+
+    expect(rejected.body.status).toBe("rejected");
+
+    const rejectedConversion = await request(app)
+      .post(`/task-requests/${rejectedRequest.body.id}/convert-to-task`)
+      .set("x-actor-id", "admin")
+      .send({});
+
+    expect(rejectedConversion.status).toBe(409);
+    expect(rejectedConversion.body.error.code).toBe("invalid_transition");
+
+    const evidenceRequest = await request(app)
+      .post("/vocs/voc-seeded-tableau/request-task")
+      .set("x-actor-id", "admin")
+      .send({ title: "Needs better source context" })
+      .expect(201);
+
+    const needsMoreEvidence = await request(app)
+      .post(`/task-requests/${evidenceRequest.body.id}/request-more-evidence`)
+      .set("x-actor-id", "admin")
+      .send({ reason: "Attach source dashboards and recent failure examples." })
+      .expect(200);
+
+    expect(needsMoreEvidence.body.status).toBe("needs_more_evidence");
+
+    const evidenceConversion = await request(app)
+      .post(`/task-requests/${evidenceRequest.body.id}/convert-to-task`)
+      .set("x-actor-id", "admin")
+      .send({});
+
+    expect(evidenceConversion.status).toBe(409);
+    expect(evidenceConversion.body.error.code).toBe("invalid_transition");
+  });
+
+  it("selects Postgres-backed persistence when DATABASE_URL is configured", () => {
+    const store = createStoreFromEnv({ DATABASE_URL: "postgres://feedbackops:feedbackops@localhost:5432/feedbackops" });
+
+    expect(store.persistence).toBe("postgres");
   });
 });
 

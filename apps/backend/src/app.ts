@@ -1,11 +1,27 @@
 import cors from "cors";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
-import { ApiError, MvpStore, toApi } from "./mvp";
+import { ApiError, toApi } from "./mvp";
+import { createStoreFromEnv, type AppStore } from "./persistence";
 
-export function createApp(store = new MvpStore()): Express {
+export function createApp(store: AppStore = createStoreFromEnv(process.env)): Express {
   const app = express();
   app.use(cors());
   app.use(express.json());
+  app.use(async (request, response, next) => {
+    try {
+      await store.ready;
+      if (request.method !== "GET" && store.persist) {
+        response.on("finish", () => {
+          if (response.statusCode < 400) {
+            void store.persist?.();
+          }
+        });
+      }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
 
   const actor = (request: Request) => store.actor(request.header("x-actor-id"));
 
@@ -168,6 +184,22 @@ export function createApp(store = new MvpStore()): Express {
   app.post("/task-requests/:id/approve", (request, response, next) => {
     try {
       response.json(toApi(store.approveTaskRequest(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/task-requests/:id/reject", (request, response, next) => {
+    try {
+      response.json(toApi(store.rejectTaskRequest(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/task-requests/:id/request-more-evidence", (request, response, next) => {
+    try {
+      response.json(toApi(store.requestMoreEvidenceForTaskRequest(actor(request), request.params.id, request.body)));
     } catch (error) {
       next(error);
     }

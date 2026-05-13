@@ -94,6 +94,37 @@
   gap: 10px;
 }
 
+.inline-create {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 1.5fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.inline-create label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.inline-create input,
+.inline-create textarea {
+  min-height: 36px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-row);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.inline-create textarea {
+  min-height: 58px;
+  resize: vertical;
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -320,6 +351,10 @@
   }
 
   .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-create {
     grid-template-columns: 1fr;
   }
 }
