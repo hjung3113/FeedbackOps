@@ -1,4 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import pg from "pg";
 
@@ -11,7 +12,7 @@ if (!databaseUrl) {
 }
 
 const pool = new Pool({ connectionString: databaseUrl });
-const migrationsDirectory = new URL("./migrations", import.meta.url);
+const migrationsDirectory = fileURLToPath(new URL("./migrations", import.meta.url));
 
 try {
   await pool.query("create table if not exists schema_migrations (filename text primary key, applied_at timestamptz not null default now())");
@@ -21,7 +22,7 @@ try {
     const alreadyApplied = await pool.query("select 1 from schema_migrations where filename = $1", [file]);
     if (alreadyApplied.rowCount) continue;
 
-    const sql = await readFile(join(migrationsDirectory.pathname, file), "utf8");
+    const sql = await readFile(join(migrationsDirectory, file), "utf8");
     await pool.query("begin");
     try {
       await pool.query(sql);

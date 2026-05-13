@@ -2,6 +2,7 @@ insert into core.actors (id, workspace_id, name, role_level) values
   ('admin', 'ws-main', 'Admin', 'Admin'),
   ('admin-denied-looker', 'ws-main', 'Denied Admin', 'Admin'),
   ('dev-tableau', 'ws-main', 'Tableau Developer', 'Developer'),
+  ('dev-tableau-self-approve', 'ws-main', 'Privileged Tableau Developer', 'Developer'),
   ('user-tableau', 'ws-main', 'Reporter', 'User')
 on conflict (id) do update set name = excluded.name, role_level = excluded.role_level;
 
@@ -19,6 +20,8 @@ on conflict (id) do update set name = excluded.name, managed_system_id = exclude
 
 insert into permission.permission_grants (id, workspace_id, actor_id, managed_system_id, capability) values
   ('grant-dev-tableau', 'ws-main', 'dev-tableau', 'ms-tableau', null),
+  ('grant-dev-tableau-self-approve', 'ws-main', 'dev-tableau-self-approve', 'ms-tableau', null),
+  ('grant-dev-tableau-self-approve-capability', 'ws-main', 'dev-tableau-self-approve', 'ms-tableau', 'task_request_self_approval'),
   ('grant-user-tableau', 'ws-main', 'user-tableau', 'ms-tableau', null)
 on conflict (id) do update set capability = excluded.capability;
 

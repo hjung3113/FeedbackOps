@@ -11,11 +11,17 @@ export function createApp(store: AppStore = createStoreFromEnv(process.env)): Ex
     try {
       await store.ready;
       if (request.method !== "GET" && store.persist) {
-        response.on("finish", () => {
+        const json = response.json.bind(response);
+        response.json = ((body: unknown) => {
           if (response.statusCode < 400) {
-            void store.persist?.();
+            void store.persist?.().then(
+              () => json(body),
+              (error: unknown) => next(error)
+            );
+            return response;
           }
-        });
+          return json(body);
+        }) as Response["json"];
       }
       next();
     } catch (error) {
@@ -127,7 +133,8 @@ export function createApp(store: AppStore = createStoreFromEnv(process.env)): Ex
 
   app.post("/voc-clusters", (request, response, next) => {
     try {
-      response.status(201).json(toApi(store.createCluster(actor(request), request.body)));
+      actor(request);
+      response.status(410).json({ error: { code: "not_found", message: "VOC Cluster endpoints are not available in the minimum MVP slice." } });
     } catch (error) {
       next(error);
     }
@@ -135,7 +142,8 @@ export function createApp(store: AppStore = createStoreFromEnv(process.env)): Ex
 
   app.post("/voc-clusters/:id/create-finding", (request, response, next) => {
     try {
-      response.status(201).json(toApi(store.createFindingFromCluster(actor(request), request.params.id, request.body)));
+      actor(request);
+      response.status(410).json({ error: { code: "not_found", message: "VOC Cluster endpoints are not available in the minimum MVP slice." } });
     } catch (error) {
       next(error);
     }
@@ -176,6 +184,22 @@ export function createApp(store: AppStore = createStoreFromEnv(process.env)): Ex
   app.get("/task-requests", (request, response, next) => {
     try {
       response.json(toApi(store.listTaskRequests(actor(request), request.query.managed_system_id?.toString())));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/task-requests", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createTaskRequest(actor(request), request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/task-requests/:id", (request, response, next) => {
+    try {
+      response.json(toApi(store.getTaskRequest(actor(request), request.params.id)));
     } catch (error) {
       next(error);
     }
@@ -224,6 +248,22 @@ export function createApp(store: AppStore = createStoreFromEnv(process.env)): Ex
   app.get("/tasks", (request, response, next) => {
     try {
       response.json(toApi(store.listTasks(actor(request), request.query.managed_system_id?.toString())));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/tasks", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createTask(actor(request), request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/tasks/:id", (request, response, next) => {
+    try {
+      response.json(toApi(store.getTask(actor(request), request.params.id)));
     } catch (error) {
       next(error);
     }

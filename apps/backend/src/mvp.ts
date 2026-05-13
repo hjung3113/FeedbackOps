@@ -161,6 +161,7 @@ export class MvpStore {
     return [...this.vocs.values()].filter((voc) => {
       if (voc.workspaceId !== actor.workspaceId) return false;
       if (managedSystemId && managedSystemId !== "all" && voc.managedSystemId !== managedSystemId) return false;
+      if (actor.roleLevel === "User" && voc.reporterId !== actor.id) return false;
       return this.canAccessManagedSystem(actor, voc.managedSystemId);
     });
   }
@@ -171,6 +172,9 @@ export class MvpStore {
       throw new ApiError(404, "not_found", "VOC not found.");
     }
     this.assertManagedSystemAccess(actor, voc.managedSystemId);
+    if (actor.roleLevel === "User" && voc.reporterId !== actor.id) {
+      throw new ApiError(403, "permission_denied", "User can only read their own VOC.");
+    }
     return voc;
   }
 
@@ -308,6 +312,7 @@ export class MvpStore {
   createFinding(actor: Actor, body: Record<string, unknown>): Finding {
     const managedSystemId = String(body.managed_system_id ?? "");
     this.assertManagedSystemAccess(actor, managedSystemId);
+    this.assertInternalExecutionAccess(actor);
     const finding: Finding = {
       id: makeId("finding", this.counters.finding++),
       workspaceId: actor.workspaceId,
@@ -321,6 +326,7 @@ export class MvpStore {
   }
 
   listFindings(actor: Actor, managedSystemId?: string): Finding[] {
+    this.assertInternalExecutionAccess(actor);
     if (managedSystemId && managedSystemId !== "all") {
       this.assertManagedSystemAccess(actor, managedSystemId);
     }
@@ -336,6 +342,7 @@ export class MvpStore {
     if (!finding || finding.workspaceId !== actor.workspaceId) {
       throw new ApiError(404, "not_found", "Finding not found.");
     }
+    this.assertInternalExecutionAccess(actor);
     this.assertManagedSystemAccess(actor, finding.managedSystemId);
     return finding;
   }
@@ -347,14 +354,6 @@ export class MvpStore {
       title: body.title ?? voc.title,
       source_type: "voc",
       source_id: voc.id
-    });
-    this.createEntityLink(actor, {
-      source_type: "voc",
-      source_id: voc.id,
-      target_type: "task_request",
-      target_id: taskRequest.id,
-      relation_type: "requested_task",
-      visibility: "summary_visible"
     });
     this.audit(actor.workspaceId, "task_request_created_from_voc", { voc_id: voc.id, task_request_id: taskRequest.id });
     return taskRequest;
@@ -372,21 +371,21 @@ export class MvpStore {
       source_type: "finding",
       source_id: finding.id
     });
-    this.createEntityLink(actor, {
-      source_type: "finding",
-      source_id: finding.id,
-      target_type: "task_request",
-      target_id: taskRequest.id,
-      relation_type: "requested_task",
-      visibility: "summary_visible"
-    });
     this.audit(actor.workspaceId, "task_request_created_from_finding", { finding_id: finding.id, task_request_id: taskRequest.id });
     return taskRequest;
   }
 
   createTaskRequest(actor: Actor, body: Record<string, unknown>): TaskRequest {
     const managedSystemId = String(body.managed_system_id ?? "");
+    if (!managedSystemId || !body.title || !body.source_type || !body.source_id) {
+      throw new ApiError(400, "validation_failed", "managed_system_id, title, source_type, and source_id are required.");
+    }
     this.assertManagedSystemAccess(actor, managedSystemId);
+    this.assertInternalExecutionAccess(actor);
+    const source = this.taskRequestSource(actor, String(body.source_type), String(body.source_id));
+    if (source.managedSystemId !== managedSystemId) {
+      throw new ApiError(400, "validation_failed", "Task Request source must belong to the same Managed System.");
+    }
     const taskRequest: TaskRequest = {
       id: makeId("task-request", this.counters.taskRequest++),
       workspaceId: actor.workspaceId,
@@ -398,10 +397,26 @@ export class MvpStore {
       requestedById: actor.id
     };
     this.taskRequests.set(taskRequest.id, taskRequest);
+    this.createEntityLink(actor, {
+      source_type: taskRequest.sourceType,
+      source_id: taskRequest.sourceId,
+      target_type: "task_request",
+      target_id: taskRequest.id,
+      relation_type: "requested_task",
+      visibility: "summary_visible"
+    });
+    this.audit(actor.workspaceId, "task_request_created", {
+      task_request_id: taskRequest.id,
+      source_entity: { type: taskRequest.sourceType, id: taskRequest.sourceId },
+      managed_system_id: managedSystemId
+    });
     return taskRequest;
   }
 
   listTaskRequests(actor: Actor, managedSystemId?: string): TaskRequest[] {
+    if (actor.roleLevel === "User") {
+      throw new ApiError(403, "permission_denied", "User cannot list task requests.");
+    }
     if (managedSystemId && managedSystemId !== "all") {
       this.assertManagedSystemAccess(actor, managedSystemId);
     }
@@ -415,8 +430,19 @@ export class MvpStore {
   approveTaskRequest(actor: Actor, id: string, body: Record<string, unknown>): TaskRequest {
     const taskRequest = this.getTaskRequest(actor, id);
     this.assertCanReviewTaskRequest(actor, taskRequest);
+    this.assertReviewReason(body);
     taskRequest.status = "approved";
-    this.audit(actor.workspaceId, "task_request_approved", { task_request_id: id, reason: body.reason ?? null });
+    this.audit(actor.workspaceId, "task_request_approved", {
+      task_request_id: id,
+      reason: body.reason ?? null,
+      ...(taskRequest.requestedById === actor.id
+        ? {
+            self_approved: true,
+            source_entity: { type: taskRequest.sourceType, id: taskRequest.sourceId },
+            managed_system_id: taskRequest.managedSystemId
+          }
+        : {})
+    });
     return taskRequest;
   }
 
@@ -446,21 +472,12 @@ export class MvpStore {
 
   convertTaskRequest(actor: Actor, id: string): Task {
     const taskRequest = this.getTaskRequest(actor, id);
-    if (taskRequest.status === "pending_review") {
-      taskRequest.status = "approved";
-    }
+    this.assertCanReviewTaskRequest(actor, taskRequest);
     if (taskRequest.status !== "approved") {
       throw new ApiError(409, "invalid_transition", "Task Request must be approved before conversion.");
     }
-    const task: Task = {
-      id: makeId("task", this.counters.task++),
-      workspaceId: actor.workspaceId,
-      managedSystemId: taskRequest.managedSystemId,
-      title: taskRequest.title,
-      status: "Backlog"
-    };
+    const task = this.createTask(actor, { managed_system_id: taskRequest.managedSystemId, title: taskRequest.title });
     taskRequest.status = "converted";
-    this.tasks.set(task.id, task);
     this.createEntityLink(actor, {
       source_type: "task_request",
       source_id: taskRequest.id,
@@ -473,12 +490,41 @@ export class MvpStore {
     return task;
   }
 
-  patchTask(actor: Actor, id: string, body: Record<string, unknown>): Task {
+  createTask(actor: Actor, body: Record<string, unknown>): Task {
+    const managedSystemId = String(body.managed_system_id ?? "");
+    if (!managedSystemId || !body.title) {
+      throw new ApiError(400, "validation_failed", "managed_system_id and title are required.");
+    }
+    this.assertManagedSystemAccess(actor, managedSystemId);
+    if (actor.roleLevel === "User") {
+      throw new ApiError(403, "permission_denied", "User cannot create Tasks.");
+    }
+    const task: Task = {
+      id: makeId("task", this.counters.task++),
+      workspaceId: actor.workspaceId,
+      managedSystemId,
+      title: String(body.title),
+      status: (body.status as TaskStatus | undefined) ?? "Backlog",
+      assigneeId: body.assignee_id ? String(body.assignee_id) : undefined,
+      priority: body.priority as Task["priority"]
+    };
+    this.tasks.set(task.id, task);
+    this.audit(actor.workspaceId, "task_created", { task_id: task.id, managed_system_id: managedSystemId });
+    return task;
+  }
+
+  getTask(actor: Actor, id: string): Task {
     const task = this.tasks.get(id);
     if (!task || task.workspaceId !== actor.workspaceId) {
       throw new ApiError(404, "not_found", "Task not found.");
     }
+    this.assertInternalExecutionAccess(actor);
     this.assertManagedSystemAccess(actor, task.managedSystemId);
+    return task;
+  }
+
+  patchTask(actor: Actor, id: string, body: Record<string, unknown>): Task {
+    const task = this.getTask(actor, id);
     if (body.status) {
       task.status = body.status as TaskStatus;
     }
@@ -487,6 +533,7 @@ export class MvpStore {
   }
 
   listTasks(actor: Actor, managedSystemId?: string): Task[] {
+    this.assertInternalExecutionAccess(actor);
     if (managedSystemId && managedSystemId !== "all") {
       this.assertManagedSystemAccess(actor, managedSystemId);
     }
@@ -612,7 +659,7 @@ export class MvpStore {
     };
   }
 
-  private getTaskRequest(actor: Actor, id: string): TaskRequest {
+  getTaskRequest(actor: Actor, id: string): TaskRequest {
     const taskRequest = this.taskRequests.get(id);
     if (!taskRequest || taskRequest.workspaceId !== actor.workspaceId) {
       throw new ApiError(404, "not_found", "Task Request not found.");
@@ -630,10 +677,26 @@ export class MvpStore {
     }
   }
 
+  private assertInternalExecutionAccess(actor: Actor): void {
+    if (actor.roleLevel === "User") {
+      throw new ApiError(403, "permission_denied", "User cannot access internal execution surfaces.");
+    }
+  }
+
   private assertReviewReason(body: Record<string, unknown>): void {
     if (!body.reason) {
       throw new ApiError(400, "validation_failed", "reason is required for Task Request review decisions.");
     }
+  }
+
+  private taskRequestSource(actor: Actor, type: string, id: string): Voc | Finding {
+    if (type === "voc") {
+      return this.getVoc(actor, id);
+    }
+    if (type === "finding") {
+      return this.getFinding(actor, id);
+    }
+    throw new ApiError(400, "validation_failed", "Task Request source_type must be voc or finding.");
   }
 
   private assertAnalyticsAreaMatches(analyticsAreaId: string, managedSystemId: string): void {
@@ -710,6 +773,14 @@ export class MvpStore {
       roleLevel: "Developer",
       managedSystemIds: ["ms-tableau"]
     });
+    this.actors.set("dev-tableau-self-approve", {
+      id: "dev-tableau-self-approve",
+      workspaceId: "ws-main",
+      name: "Privileged Tableau Developer",
+      roleLevel: "Developer",
+      managedSystemIds: ["ms-tableau"],
+      capabilities: ["task_request_self_approval"]
+    });
     this.actors.set("user-tableau", {
       id: "user-tableau",
       workspaceId: "ws-main",
@@ -741,6 +812,14 @@ export class MvpStore {
       triageState: "triaged",
       reporterFacingStatus: "검토 중",
       ownerId: "dev-tableau"
+    });
+    this.findings.set("finding-seeded-tableau", {
+      id: "finding-seeded-tableau",
+      workspaceId: "ws-main",
+      managedSystemId: "ms-tableau",
+      title: "Seeded Tableau performance finding",
+      summary: "Repeated VOCs indicate cache misses.",
+      status: "active"
     });
     this.findings.set("finding-other-workspace", {
       id: "finding-other-workspace",

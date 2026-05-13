@@ -66,12 +66,6 @@ create table if not exists core.audit_logs (
   created_at timestamptz not null default now()
 );
 
-create table if not exists core.app_state (
-  id text primary key,
-  payload jsonb not null,
-  updated_at timestamptz not null default now()
-);
-
 create table if not exists voc.vocs (
   id text primary key,
   workspace_id text not null,
