@@ -1,0 +1,173 @@
+import cors from "cors";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import { ApiError, MvpStore, toApi } from "./mvp";
+
+export function createApp(store = new MvpStore()): Express {
+  const app = express();
+  app.use(cors());
+  app.use(express.json());
+
+  const actor = (request: Request) => store.actor(request.header("x-actor-id"));
+
+  app.get("/api/health", (_request, response) => {
+    response.json({ ok: true });
+  });
+
+  app.post("/vocs", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createVoc(actor(request), request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/vocs", (request, response, next) => {
+    try {
+      response.json(toApi(store.listVocs(actor(request), request.query.managed_system_id?.toString())));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/vocs/:id", (request, response, next) => {
+    try {
+      response.json(toApi(store.getVoc(actor(request), request.params.id)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/vocs/:id", (request, response, next) => {
+    try {
+      response.json(toApi(store.patchVoc(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/vocs/:id/request-task", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.requestTaskFromVoc(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/vocs/:id/public-updates", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createConversation(actor(request), request.params.id, "public_update", request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/vocs/:id/reporter-replies", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createConversation(actor(request), request.params.id, "reporter_reply", request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/vocs/:id/internal-comments", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createConversation(actor(request), request.params.id, "internal_comment", request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/vocs/:id/reporter-summary", (request, response, next) => {
+    try {
+      response.json(store.reporterSummary(actor(request), request.params.id));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/voc-clusters", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createCluster(actor(request), request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/voc-clusters/:id/create-finding", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createFindingFromCluster(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/findings/:id/request-task", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.requestTaskFromFinding(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/task-requests/:id/approve", (request, response, next) => {
+    try {
+      response.json(toApi(store.approveTaskRequest(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/task-requests/:id/convert-to-task", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.convertTaskRequest(actor(request), request.params.id)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/tasks/:id", (request, response, next) => {
+    try {
+      response.json(toApi(store.patchTask(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/entity-links", (request, response, next) => {
+    try {
+      response.json(toApi(store.listEntityLinks(actor(request))));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/entity-links", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createEntityLink(actor(request), request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/dashboard/action-queues", (request, response, next) => {
+    try {
+      response.json(store.dashboardQueues(actor(request)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/survey-responses/:id/create-voc", (_request, response) => {
+    response.status(404).json({ error: { code: "not_found", message: "Survey Response to VOC conversion is not available." } });
+  });
+
+  app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
+    if (error instanceof ApiError) {
+      response.status(error.status).json({ error: { code: error.code, message: error.message } });
+      return;
+    }
+    response.status(500).json({ error: { code: "internal_error", message: error instanceof Error ? error.message : "Unknown error" } });
+  });
+
+  return app;
+}

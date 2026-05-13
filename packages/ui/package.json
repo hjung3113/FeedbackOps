@@ -1,0 +1,29 @@
+{
+  "name": "@feedbackops/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css"
+  },
+  "scripts": {
+    "test": "vitest run --environment jsdom",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@feedbackops/shared": "workspace:*",
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "jsdom": "^26.1.0",
+    "vitest": "^3.1.3"
+  }
+}
