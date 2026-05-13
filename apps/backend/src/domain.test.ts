@@ -157,6 +157,31 @@ describe("FeedbackOps backend MVP invariants", () => {
 });
 
 describe("FeedbackOps backend VOC-to-execution flow", () => {
+  it("exposes minimum MVP API surfaces from the implementation contract", async () => {
+    await request(app).get("/managed-systems").set("x-actor-id", "admin").expect(200);
+    await request(app).get("/analytics-areas?managed_system_id=ms-tableau").set("x-actor-id", "admin").expect(200);
+
+    const permissionRequest = await request(app)
+      .post("/permission-requests")
+      .set("x-actor-id", "user-tableau")
+      .send({ managed_system_id: "ms-tableau", reason: "Need to inspect follow-up work." })
+      .expect(201);
+
+    await request(app).get("/permission-requests").set("x-actor-id", "admin").expect(200);
+    await request(app).post(`/permission-requests/${permissionRequest.body.id}/approve`).set("x-actor-id", "admin").send({}).expect(200);
+
+    const finding = await request(app)
+      .post("/vocs/voc-seeded-tableau/create-finding")
+      .set("x-actor-id", "admin")
+      .send({ title: "Direct VOC finding", summary: "Single VOC has enough evidence." })
+      .expect(201);
+
+    await request(app).get("/findings").set("x-actor-id", "admin").expect(200);
+    await request(app).get(`/findings/${finding.body.id}`).set("x-actor-id", "admin").expect(200);
+    await request(app).get("/task-requests").set("x-actor-id", "admin").expect(200);
+    await request(app).get("/tasks").set("x-actor-id", "admin").expect(200);
+  });
+
   it("preserves source context from VOC cluster to finding to reviewed backlog task", async () => {
     const cluster = await request(app)
       .post("/voc-clusters")

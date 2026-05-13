@@ -13,6 +13,22 @@ export function createApp(store = new MvpStore()): Express {
     response.json({ ok: true });
   });
 
+  app.get("/managed-systems", (request, response, next) => {
+    try {
+      response.json(toApi(store.listManagedSystems(actor(request))));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/analytics-areas", (request, response, next) => {
+    try {
+      response.json(toApi(store.listAnalyticsAreas(actor(request), request.query.managed_system_id?.toString())));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/vocs", (request, response, next) => {
     try {
       response.status(201).json(toApi(store.createVoc(actor(request), request.body)));
@@ -48,6 +64,14 @@ export function createApp(store = new MvpStore()): Express {
   app.post("/vocs/:id/request-task", (request, response, next) => {
     try {
       response.status(201).json(toApi(store.requestTaskFromVoc(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/vocs/:id/create-finding", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createFindingFromVoc(actor(request), request.params.id, request.body)));
     } catch (error) {
       next(error);
     }
@@ -109,6 +133,38 @@ export function createApp(store = new MvpStore()): Express {
     }
   });
 
+  app.get("/findings", (request, response, next) => {
+    try {
+      response.json(toApi(store.listFindings(actor(request), request.query.managed_system_id?.toString())));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/findings/:id", (request, response, next) => {
+    try {
+      response.json(toApi(store.getFinding(actor(request), request.params.id)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/findings", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createFinding(actor(request), request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/task-requests", (request, response, next) => {
+    try {
+      response.json(toApi(store.listTaskRequests(actor(request), request.query.managed_system_id?.toString())));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/task-requests/:id/approve", (request, response, next) => {
     try {
       response.json(toApi(store.approveTaskRequest(actor(request), request.params.id, request.body)));
@@ -128,6 +184,38 @@ export function createApp(store = new MvpStore()): Express {
   app.patch("/tasks/:id", (request, response, next) => {
     try {
       response.json(toApi(store.patchTask(actor(request), request.params.id, request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/tasks", (request, response, next) => {
+    try {
+      response.json(toApi(store.listTasks(actor(request), request.query.managed_system_id?.toString())));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/permission-requests", (request, response, next) => {
+    try {
+      response.status(201).json(toApi(store.createPermissionRequest(actor(request), request.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/permission-requests", (request, response, next) => {
+    try {
+      response.json(toApi(store.listPermissionRequests(actor(request))));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/permission-requests/:id/approve", (request, response, next) => {
+    try {
+      response.json(toApi(store.approvePermissionRequest(actor(request), request.params.id)));
     } catch (error) {
       next(error);
     }

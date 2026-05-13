@@ -49,6 +49,15 @@ interface AuditEvent {
   metadata: Record<string, unknown>;
 }
 
+interface PermissionRequest {
+  id: string;
+  workspaceId: string;
+  managedSystemId: string;
+  requesterId: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected" | "revoked";
+}
+
 const now = () => new Date().toISOString();
 
 function makeId(prefix: string, count: number): string {
@@ -66,6 +75,7 @@ export class MvpStore {
   findings = new Map<string, Finding>();
   taskRequests = new Map<string, TaskRequest>();
   tasks = new Map<string, Task>();
+  permissionRequests = new Map<string, PermissionRequest>();
   auditEvents: AuditEvent[] = [];
 
   private counters = {
@@ -76,6 +86,7 @@ export class MvpStore {
     finding: 1,
     taskRequest: 1,
     task: 1,
+    permissionRequest: 1,
     audit: 1
   };
 
@@ -273,6 +284,25 @@ export class MvpStore {
     return finding;
   }
 
+  createFindingFromVoc(actor: Actor, vocId: string, body: Record<string, unknown>): Finding {
+    const voc = this.getVoc(actor, vocId);
+    const finding = this.createFinding(actor, {
+      managed_system_id: voc.managedSystemId,
+      title: body.title ?? voc.title,
+      summary: body.summary ?? voc.description
+    });
+    this.createEntityLink(actor, {
+      source_type: "voc",
+      source_id: voc.id,
+      target_type: "finding",
+      target_id: finding.id,
+      relation_type: "created_finding",
+      visibility: "summary_visible"
+    });
+    this.audit(actor.workspaceId, "finding_created_from_voc", { voc_id: voc.id, finding_id: finding.id });
+    return finding;
+  }
+
   createFinding(actor: Actor, body: Record<string, unknown>): Finding {
     const managedSystemId = String(body.managed_system_id ?? "");
     this.assertManagedSystemAccess(actor, managedSystemId);
@@ -285,6 +315,26 @@ export class MvpStore {
       status: "active"
     };
     this.findings.set(finding.id, finding);
+    return finding;
+  }
+
+  listFindings(actor: Actor, managedSystemId?: string): Finding[] {
+    if (managedSystemId && managedSystemId !== "all") {
+      this.assertManagedSystemAccess(actor, managedSystemId);
+    }
+    return [...this.findings.values()].filter((finding) => {
+      if (finding.workspaceId !== actor.workspaceId) return false;
+      if (managedSystemId && managedSystemId !== "all" && finding.managedSystemId !== managedSystemId) return false;
+      return this.canAccessManagedSystem(actor, finding.managedSystemId);
+    });
+  }
+
+  getFinding(actor: Actor, id: string): Finding {
+    const finding = this.findings.get(id);
+    if (!finding || finding.workspaceId !== actor.workspaceId) {
+      throw new ApiError(404, "not_found", "Finding not found.");
+    }
+    this.assertManagedSystemAccess(actor, finding.managedSystemId);
     return finding;
   }
 
@@ -349,6 +399,17 @@ export class MvpStore {
     return taskRequest;
   }
 
+  listTaskRequests(actor: Actor, managedSystemId?: string): TaskRequest[] {
+    if (managedSystemId && managedSystemId !== "all") {
+      this.assertManagedSystemAccess(actor, managedSystemId);
+    }
+    return [...this.taskRequests.values()].filter((taskRequest) => {
+      if (taskRequest.workspaceId !== actor.workspaceId) return false;
+      if (managedSystemId && managedSystemId !== "all" && taskRequest.managedSystemId !== managedSystemId) return false;
+      return this.canAccessManagedSystem(actor, taskRequest.managedSystemId);
+    });
+  }
+
   approveTaskRequest(actor: Actor, id: string, body: Record<string, unknown>): TaskRequest {
     const taskRequest = this.getTaskRequest(actor, id);
     if (actor.roleLevel === "User") {
@@ -402,6 +463,75 @@ export class MvpStore {
     }
     this.audit(actor.workspaceId, "task_updated", { task_id: id, status: task.status });
     return task;
+  }
+
+  listTasks(actor: Actor, managedSystemId?: string): Task[] {
+    if (managedSystemId && managedSystemId !== "all") {
+      this.assertManagedSystemAccess(actor, managedSystemId);
+    }
+    return [...this.tasks.values()].filter((task) => {
+      if (task.workspaceId !== actor.workspaceId) return false;
+      if (managedSystemId && managedSystemId !== "all" && task.managedSystemId !== managedSystemId) return false;
+      return this.canAccessManagedSystem(actor, task.managedSystemId);
+    });
+  }
+
+  listManagedSystems(actor: Actor): ManagedSystem[] {
+    return [...this.managedSystems.values()].filter(
+      (system) => system.workspaceId === actor.workspaceId && this.canAccessManagedSystem(actor, system.id)
+    );
+  }
+
+  listAnalyticsAreas(actor: Actor, managedSystemId?: string): AnalyticsArea[] {
+    if (managedSystemId) {
+      this.assertManagedSystemAccess(actor, managedSystemId);
+    }
+    return [...this.analyticsAreas.values()].filter((area) => {
+      if (area.workspaceId !== actor.workspaceId) return false;
+      if (managedSystemId && area.managedSystemId !== managedSystemId) return false;
+      return this.canAccessManagedSystem(actor, area.managedSystemId);
+    });
+  }
+
+  createPermissionRequest(actor: Actor, body: Record<string, unknown>): PermissionRequest {
+    const managedSystemId = String(body.managed_system_id ?? "");
+    if (!managedSystemId || !body.reason) {
+      throw new ApiError(400, "validation_failed", "managed_system_id and reason are required.");
+    }
+    const permissionRequest: PermissionRequest = {
+      id: makeId("permission-request", this.counters.permissionRequest++),
+      workspaceId: actor.workspaceId,
+      managedSystemId,
+      requesterId: actor.id,
+      reason: String(body.reason),
+      status: "pending"
+    };
+    this.permissionRequests.set(permissionRequest.id, permissionRequest);
+    this.audit(actor.workspaceId, "permission_request_created", {
+      permission_request_id: permissionRequest.id,
+      managed_system_id: managedSystemId
+    });
+    return permissionRequest;
+  }
+
+  listPermissionRequests(actor: Actor): PermissionRequest[] {
+    if (actor.roleLevel === "Admin") {
+      return [...this.permissionRequests.values()].filter((request) => request.workspaceId === actor.workspaceId);
+    }
+    return [...this.permissionRequests.values()].filter((request) => request.workspaceId === actor.workspaceId && request.requesterId === actor.id);
+  }
+
+  approvePermissionRequest(actor: Actor, id: string): PermissionRequest {
+    if (actor.roleLevel !== "Admin") {
+      throw new ApiError(403, "permission_denied", "Only Admin can approve permission requests.");
+    }
+    const permissionRequest = this.permissionRequests.get(id);
+    if (!permissionRequest || permissionRequest.workspaceId !== actor.workspaceId) {
+      throw new ApiError(404, "not_found", "Permission Request not found.");
+    }
+    permissionRequest.status = "approved";
+    this.audit(actor.workspaceId, "permission_request_approved", { permission_request_id: id });
+    return permissionRequest;
   }
 
   listEntityLinks(actor: Actor): EntityLink[] {
