@@ -110,6 +110,47 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
     expect(res.json().code).toBe('auth.session_invalid');
   });
 
+  // F-004: open-request lookup matches the requested managed_system_id
+  // (or null) tuple, not capability alone. A user with a workspace-scoped
+  // pending request should still see `request_access` when probing a
+  // different MS scope.
+  it('user with workspace-scoped pending request → MS-scoped probe still shows request_access', async () => {
+    const cookie = await loginAs(app, 'mock-user-1');
+    // Seed a pending workspace-level (null MS) request directly via SQL so
+    // we don't rely on the POST path (under separate test).
+    const actor = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.actors where external_id = 'mock-user-1' and workspace_id = $1`,
+      [WORKSPACE_ID],
+    );
+    const actorId = actor.rows[0]?.id;
+    if (!actorId) throw new Error('mock-user-1 missing');
+    await dbHandle.pool.query(
+      `insert into permission.permission_requests
+         (workspace_id, requester_actor_id, requested_capability, requested_managed_system_id, reason, status)
+       values ($1, $2, 'workspace.admin', null, 'seed test', 'pending')`,
+      [WORKSPACE_ID, actorId],
+    );
+    // Probing the same capability scoped to a CONCRETE MS id should NOT see
+    // the workspace-level open request — F-004 fix asserts this.
+    const otherMs = '22222222-2222-2222-2222-222222222222';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/permissions/check?capability=workspace.admin&managed_system_id=${otherMs}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().state).toBe('request_access');
+
+    // Whereas a workspace-level (no MS) probe SHOULD match → pending_request.
+    const res2 = await app.inject({
+      method: 'GET',
+      url: '/me/permissions/check?capability=workspace.admin',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(res2.statusCode).toBe(200);
+    expect(res2.json().state).toBe('pending_request');
+  });
+
   it('unknown capability → validation.unknown_capability envelope', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');
     const res = await app.inject({

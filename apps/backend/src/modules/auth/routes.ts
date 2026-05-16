@@ -1,7 +1,8 @@
 // Auth routes. Mounted at the root (no prefix) so URLs match ADR-0006 and
 // the issue body verbatim: GET/POST /auth/mock-login, POST /auth/logout, GET
-// /me. The plugin is the only place the AUTH_PROVIDER env var is consulted —
-// outside the auth module, code only sees the AuthProvider interface.
+// /me. The AuthProvider implementation is chosen in `buildServer` from
+// `config.AUTH_PROVIDER` (F-006); outside that switch, code only sees the
+// AuthProvider interface.
 
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';

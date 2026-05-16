@@ -7,7 +7,7 @@
 //
 // First-login auto-provisioning follows ADR-0006:42-52.
 
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
@@ -37,6 +37,49 @@ export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 /** ADR-0006:25 — 32+ bytes random, base64url-encoded. 48 bytes → 64 chars. */
 function newSessionId(): string {
   return randomBytes(48).toString('base64url');
+}
+
+// F-008: ADR-0006:38 names these columns `*_summary` with the explicit
+// intent that they be derived, low-resolution values rather than full PII.
+// We truncate IPs to a network prefix (/24 for v4, /48 for v6) and hash the
+// result so two requests from the same subnet collide but no single client
+// IP is recoverable from the audit. User-Agent is reduced to its product
+// family (the first token before `/` or `(`).
+export function summarizeIp(raw: string | undefined): string | null {
+  if (!raw || raw.length === 0) return null;
+  // Strip an IPv4-mapped IPv6 prefix like '::ffff:1.2.3.4' so the v4 branch
+  // handles it.
+  const stripped = raw.startsWith('::ffff:') ? raw.slice('::ffff:'.length) : raw;
+  let prefix: string;
+  if (stripped.includes('.')) {
+    // IPv4 → /24 (drop the last octet).
+    const parts = stripped.split('.');
+    if (parts.length !== 4) return hashTo16('ipv4:invalid');
+    prefix = `ipv4:${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+  } else if (stripped.includes(':')) {
+    // IPv6 → /48 (keep first three hextets).
+    const parts = stripped.split(':');
+    const head = parts.slice(0, 3).join(':');
+    prefix = `ipv6:${head}::/48`;
+  } else {
+    prefix = `unknown:${stripped.slice(0, 32)}`;
+  }
+  return hashTo16(prefix);
+}
+
+export function summarizeUserAgent(raw: string | undefined): string | null {
+  if (!raw || raw.length === 0) return null;
+  // Take the substring up to the first `/`, `(`, or whitespace — the UA
+  // product token (e.g. 'Mozilla', 'curl', 'Go-http-client'). No third
+  // party parser dependency; this is intentionally lossy.
+  const trimmed = raw.trim();
+  const cutAt = trimmed.search(/[/\s(]/);
+  const family = (cutAt === -1 ? trimmed : trimmed.slice(0, cutAt)).slice(0, 64);
+  return family.length > 0 ? family : null;
+}
+
+function hashTo16(input: string): string {
+  return createHash('sha256').update(input).digest('hex').slice(0, 16);
 }
 
 export interface SessionServiceDeps {
@@ -148,8 +191,8 @@ export function createSessionService(deps: SessionServiceDeps) {
           expiresAt,
           lastSeenAt: createdAt,
           createdAt,
-          createdUserAgentSummary: input.userAgent?.slice(0, 256),
-          createdIpSummary: input.ip?.slice(0, 64),
+          createdUserAgentSummary: summarizeUserAgent(input.userAgent),
+          createdIpSummary: summarizeIp(input.ip),
         });
 
         return {
@@ -164,26 +207,22 @@ export function createSessionService(deps: SessionServiceDeps) {
      * Look up an active session and touch `last_seen_at`. Returns null when
      * the row is missing, revoked, or expired — the caller renders the
      * `auth.session_invalid` 401 envelope.
+     *
+     * F-007: the predicate (`revoked_at IS NULL AND expires_at > now()`)
+     * MUST be evaluated in the same statement that writes `last_seen_at`,
+     * otherwise a concurrent `revoke()` between SELECT and UPDATE would
+     * see the touch land on an already-revoked row and the request would
+     * complete against a session the operator believes is dead. We use a
+     * single `UPDATE … WHERE … RETURNING …` so Postgres locks the row
+     * during the predicate evaluation, then JOIN-fetch the actor.
      */
     async loadAndTouch(
       sessionId: string,
     ): Promise<{ session: SessionRecord; actor: ActorRecord } | null> {
       const rightNow = now();
-      const rows = await deps.db
-        .select({
-          sessionId: sessions.id,
-          sessionActorId: sessions.actorId,
-          sessionWorkspaceId: sessions.workspaceId,
-          actorId: actors.id,
-          actorWorkspaceId: actors.workspaceId,
-          externalId: actors.externalId,
-          email: actors.email,
-          displayName: actors.displayName,
-          roleLevel: actors.roleLevel,
-          actorType: actors.actorType,
-        })
-        .from(sessions)
-        .innerJoin(actors, eq(actors.id, sessions.actorId))
+      const updated = await deps.db
+        .update(sessions)
+        .set({ lastSeenAt: rightNow })
         .where(
           and(
             eq(sessions.id, sessionId),
@@ -191,30 +230,46 @@ export function createSessionService(deps: SessionServiceDeps) {
             gt(sessions.expiresAt, rightNow),
           ),
         )
+        .returning({
+          id: sessions.id,
+          actorId: sessions.actorId,
+          workspaceId: sessions.workspaceId,
+        });
+
+      const sessionRow = updated[0];
+      if (!sessionRow) return null;
+
+      const actorRows = await deps.db
+        .select({
+          id: actors.id,
+          workspaceId: actors.workspaceId,
+          externalId: actors.externalId,
+          email: actors.email,
+          displayName: actors.displayName,
+          roleLevel: actors.roleLevel,
+          actorType: actors.actorType,
+        })
+        .from(actors)
+        .where(eq(actors.id, sessionRow.actorId))
         .limit(1);
 
-      const row = rows[0];
-      if (!row) return null;
-
-      await deps.db
-        .update(sessions)
-        .set({ lastSeenAt: rightNow })
-        .where(eq(sessions.id, row.sessionId));
+      const actorRow = actorRows[0];
+      if (!actorRow) return null;
 
       return {
         session: {
-          id: row.sessionId,
-          actorId: row.sessionActorId,
-          workspaceId: row.sessionWorkspaceId,
+          id: sessionRow.id,
+          actorId: sessionRow.actorId,
+          workspaceId: sessionRow.workspaceId,
         },
         actor: {
-          id: row.actorId,
-          workspaceId: row.actorWorkspaceId,
-          externalId: row.externalId,
-          email: row.email,
-          displayName: row.displayName,
-          roleLevel: row.roleLevel,
-          actorType: row.actorType,
+          id: actorRow.id,
+          workspaceId: actorRow.workspaceId,
+          externalId: actorRow.externalId,
+          email: actorRow.email,
+          displayName: actorRow.displayName,
+          roleLevel: actorRow.roleLevel,
+          actorType: actorRow.actorType,
         },
       };
     },

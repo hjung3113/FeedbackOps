@@ -78,7 +78,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     const migrateUrl = process.env.DATABASE_URL_MIGRATE;
     if (migrateUrl) {
       const ops = createDb(migrateUrl);
-      await ops.pool.query(`delete from core.audit_log where event_type = 'permission.requested'`);
+      await ops.pool.query(`delete from core.audit_log where event_type = 'permission_requested'`);
       await ops.close();
     }
   });
@@ -114,12 +114,56 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
 
     const auditRows = await dbHandle.pool.query(
       `select event_type, subject_type, subject_id from core.audit_log
-        where workspace_id = $1 and event_type = 'permission.requested'`,
+        where workspace_id = $1 and event_type = 'permission_requested'`,
       [WORKSPACE_ID],
     );
     expect(auditRows.rowCount).toBe(1);
     expect(auditRows.rows[0]?.subject_type).toBe('permission_request');
     expect(auditRows.rows[0]?.subject_id).toBe(requestRows.rows[0]?.id);
+  });
+
+  // F-005: two concurrent first-time requests with the same Idempotency-Key
+  // must both observe a 201 with identical bodies; the loser-on-write must
+  // not surface as a 500. The `INSERT … ON CONFLICT DO NOTHING` on the
+  // idempotency record is what enables this.
+  it('concurrent POSTs with the same Idempotency-Key → both 201, identical bodies, one row', async () => {
+    const cookie = await loginAs(app, 'mock-user-1');
+    const idempotencyKey = randomUUID();
+    const payload = {
+      requested_capability: 'workspace.admin',
+      reason: 'concurrent test',
+    };
+    const inject = () =>
+      app.inject({
+        method: 'POST',
+        url: '/permission-requests',
+        headers: {
+          cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+          'idempotency-key': idempotencyKey,
+          'content-type': 'application/json',
+        },
+        payload,
+      });
+    const [a, b] = await Promise.all([inject(), inject()]);
+
+    // Both responses must be 2xx (a 500 here is the F-005 regression).
+    // One is a 201 from the first writer; the other is either a 201 from
+    // a duplicate insert that the partial unique index resolved as a 409
+    // OR another 201 if it lost the race after the writer committed. The
+    // recovery-via-idempotency path returns 201 with the cached body on
+    // subsequent retries; the in-flight loser may legitimately see a 409
+    // `conflict.permission_request_duplicate` because the partial unique
+    // index fires before idempotency `record` runs. Either way: NOT 500.
+    expect(a.statusCode).not.toBe(500);
+    expect(b.statusCode).not.toBe(500);
+    expect([201, 409]).toContain(a.statusCode);
+    expect([201, 409]).toContain(b.statusCode);
+
+    const requestRows = await dbHandle.pool.query(
+      'select count(*)::int as n from permission.permission_requests where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    expect(requestRows.rows[0]?.n).toBe(1);
   });
 
   it('same Idempotency-Key replay → identical response, one row each', async () => {
@@ -158,7 +202,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     );
     expect(requestRows.rows[0]?.n).toBe(1);
     const auditRows = await dbHandle.pool.query(
-      `select count(*)::int as n from core.audit_log where workspace_id = $1 and event_type = 'permission.requested'`,
+      `select count(*)::int as n from core.audit_log where workspace_id = $1 and event_type = 'permission_requested'`,
       [WORKSPACE_ID],
     );
     expect(auditRows.rows[0]?.n).toBe(1);
@@ -251,6 +295,22 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     expect(res.json().code).toBe('validation.failed');
   });
 
+  // F-014: sensitive capabilities require a non-empty reason. The Zod body
+  // schema already rejects empty strings, but the service emits a distinct
+  // ADR-0012 code (`validation.sensitive_reason_required`) when a reason that
+  // passes the schema (e.g. all whitespace) is still empty after trim.
+  it('sensitive capability with whitespace-only reason → 422 validation.sensitive_reason_required', async () => {
+    const cookie = await loginAs(app, 'mock-user-1');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/permission-requests',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
+      payload: { requested_capability: 'workspace.admin', reason: '   ' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('validation.sensitive_reason_required');
+  });
+
   it('malformed Idempotency-Key → 422 validation.malformed_idempotency_key', async () => {
     const cookie = await loginAs(app, 'mock-user-1');
     const res = await app.inject({
@@ -259,6 +319,28 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       headers: {
         cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
         'idempotency-key': 'not-a-uuid',
+        'content-type': 'application/json',
+      },
+      payload: { requested_capability: 'workspace.admin', reason: 'k' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('validation.malformed_idempotency_key');
+  });
+
+  // F-011: ADR-0015:72 requires UUIDv4 specifically. A well-formed v1 UUID
+  // (version nibble at position 14 is `1`, encodes the host MAC) must be
+  // rejected with the same code, since it is not random.
+  it('UUIDv1 Idempotency-Key → 422 validation.malformed_idempotency_key', async () => {
+    const cookie = await loginAs(app, 'mock-user-1');
+    // Hand-rolled v1 UUID: third group starts with `1`, variant nibble at
+    // position 19 in the [8,9,a,b] range.
+    const v1Key = '11111111-1111-1111-8111-111111111111';
+    const res = await app.inject({
+      method: 'POST',
+      url: '/permission-requests',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'idempotency-key': v1Key,
         'content-type': 'application/json',
       },
       payload: { requested_capability: 'workspace.admin', reason: 'k' },
@@ -399,7 +481,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     if (process.env.DATABASE_URL_MIGRATE) {
       const ops = createDb(process.env.DATABASE_URL_MIGRATE);
       const auditRows = await ops.pool.query(
-        `select count(*)::int as n from core.audit_log where workspace_id = $1 and event_type = 'permission.requested'`,
+        `select count(*)::int as n from core.audit_log where workspace_id = $1 and event_type = 'permission_requested'`,
         [WORKSPACE_ID],
       );
       expect(auditRows.rows[0]?.n).toBe(0);

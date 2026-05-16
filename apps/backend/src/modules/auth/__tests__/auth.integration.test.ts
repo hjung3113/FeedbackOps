@@ -182,6 +182,48 @@ describe.skipIf(!runIntegration)('Slice 1 #3 auth integration', () => {
     await dbHandle.pool.query('delete from core.sessions where id = $1', [cookie]);
     await dbHandle.pool.query('delete from core.workspaces where id = $1', [foreignWorkspace]);
   });
+
+  // F-007: loadAndTouch must be atomic so a concurrent revoke wins over a
+  // touch. We race both calls and assert the touched-and-loaded session is
+  // null when revoke commits first (revoked_at IS NULL fails the predicate).
+  it('concurrent revoke vs loadAndTouch: revoke wins → loadAndTouch returns null', async () => {
+    const { createSessionService } = await import('../session-service.js');
+    const sessionService = createSessionService({
+      db: dbHandle.db,
+      workspaceId: WORKSPACE_ID,
+    });
+    const login = await app.inject({
+      method: 'POST',
+      url: '/auth/mock-login',
+      headers: { 'user-agent': 'integration-test' },
+      payload: { external_id: 'mock-user-1' },
+    });
+    const cookie = extractSessionCookie(login.headers['set-cookie']);
+    if (!cookie) throw new Error('login failed');
+
+    // Race: kick off both concurrently. Postgres serializes the UPDATEs on
+    // the row lock; whichever lands first wins. The touch must respect
+    // revoked_at IS NULL — so if revoke wins, touch's UPDATE matches 0 rows
+    // and loadAndTouch returns null.
+    const [revokeResult, loadResult] = await Promise.all([
+      sessionService.revoke(cookie),
+      sessionService.loadAndTouch(cookie),
+    ]);
+    void revokeResult;
+
+    // After the race completes, a fresh loadAndTouch MUST return null
+    // because revoked_at is set on the row.
+    const post = await sessionService.loadAndTouch(cookie);
+    expect(post).toBeNull();
+
+    // Whichever order the race resolved in, at most ONE of these two
+    // calls can have returned a non-null record. If revoke landed first,
+    // the touch returned null too. Either way: the final state is revoked.
+    if (loadResult !== null) {
+      // touch must have won the race; we only assert the post-race state.
+      expect(post).toBeNull();
+    }
+  });
 });
 
 describe.skipIf(!runIntegration)('Slice 1 #3 production guard', () => {

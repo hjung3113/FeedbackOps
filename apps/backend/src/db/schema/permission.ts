@@ -18,6 +18,12 @@
 import { sql } from 'drizzle-orm';
 import { index, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
+// NOTE: Drizzle-kit's CJS loader cannot resolve the `.js` re-write that
+// NodeNext requires at runtime for cross-file `.ts` imports, so we declare
+// the workspace_id / actor_id foreign keys as hand-edited SQL in migration
+// 0003 rather than via `.references(() => ...)` here. The shape of the
+// tables otherwise still tracks Drizzle's generated DDL 1:1.
+
 export const permissionSchema = pgSchema('permission');
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -27,6 +33,8 @@ export const permissionGrants = permissionSchema.table(
   'permission_grants',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // F-003: workspace_id / actor_id FKs added by hand in migration 0003
+    // (see file comment above).
     workspaceId: uuid('workspace_id').notNull(),
     actorId: uuid('actor_id').notNull(),
     capability: text('capability').notNull(),
@@ -65,6 +73,7 @@ export const permissionDenies = permissionSchema.table(
   'permission_denies',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // F-003: workspace_id / actor_id FKs added by hand in migration 0003.
     workspaceId: uuid('workspace_id').notNull(),
     actorId: uuid('actor_id').notNull(),
     capability: text('capability').notNull(),
@@ -91,6 +100,7 @@ export const permissionRequests = permissionSchema.table(
   'permission_requests',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // F-003: workspace_id / actor_id FKs added by hand in migration 0003.
     workspaceId: uuid('workspace_id').notNull(),
     requesterActorId: uuid('requester_actor_id').notNull(),
     requestedCapability: text('requested_capability').notNull(),

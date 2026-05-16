@@ -5,15 +5,10 @@
 //
 // Sensitive marker: certain capabilities require a reason on request per
 // docs/implementation/05-permission-policy.md:62-76 ("Sensitive Permissions").
-// Slice 1 ships zero sensitive capabilities (`workspace.admin` is workspace-
-// scoped administrative access but NOT in the sensitive list — see grill Q11
-// and issue #4 locked decisions).
-//
-// TODO(S1.4 — permission requests): the sensitive marker mechanism is exposed
-// as a map keyed by Capability so future slices can flip `sensitive: true` on
-// an existing entry without changing the surface of `CAPABILITIES` or the
-// `Capability` type. The check service consumes only `isSensitiveCapability`
-// so adding sensitive caps doesn't require call-site sweeps.
+// `workspace.admin` is the concrete Slice 1 implementation of the policy
+// doc's "Admin permission" entry and is therefore Sensitive — a request for
+// it must carry a non-empty reason and the audit detail must mark it
+// `sensitive: true`. See F-014 in `.review/SLICE-1-REVIEW.md`.
 
 export const CAPABILITIES = ['workspace.read', 'workspace.admin'] as const;
 
@@ -32,7 +27,7 @@ export interface CapabilityMeta {
  */
 export const CAPABILITY_META: Readonly<Record<Capability, CapabilityMeta>> = {
   'workspace.read': { sensitive: false },
-  'workspace.admin': { sensitive: false },
+  'workspace.admin': { sensitive: true },
 };
 
 export function isCapability(value: string): value is Capability {

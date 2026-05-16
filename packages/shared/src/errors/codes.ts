@@ -26,6 +26,7 @@ export const ERROR_CODES = [
   'conflict.permission_request_duplicate',
   // validation.* → 422 (continued)
   'validation.malformed_idempotency_key',
+  'validation.sensitive_reason_required',
   // not_found.* → 404
   'not_found.record',
   // internal.* → 500

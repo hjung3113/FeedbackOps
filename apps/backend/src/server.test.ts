@@ -37,3 +37,32 @@ describe.skipIf(!runIntegration)('GET /health', () => {
     expect(res.headers['x-content-type-options']).toBe('nosniff');
   });
 });
+
+// F-006: AUTH_PROVIDER switch in buildServer. Mock is the only supported
+// provider in Slice 1; oidc must throw a clear error rather than silently
+// serve mock.
+describe.skipIf(!runIntegration)('buildServer AUTH_PROVIDER switch', () => {
+  test('AUTH_PROVIDER=mock boots cleanly', async () => {
+    process.env.NODE_ENV = 'test';
+    const dbHandle = createDb(APP_URL);
+    try {
+      const cfg = { ...loadConfig(), AUTH_PROVIDER: 'mock' as const };
+      const app = await buildServer({ config: cfg, dbHandle });
+      await app.ready();
+      await app.close();
+    } finally {
+      await dbHandle.close();
+    }
+  });
+
+  test('AUTH_PROVIDER=oidc throws Error mentioning ADR-0006', async () => {
+    process.env.NODE_ENV = 'test';
+    const dbHandle = createDb(APP_URL);
+    try {
+      const cfg = { ...loadConfig(), AUTH_PROVIDER: 'oidc' as const };
+      await expect(buildServer({ config: cfg, dbHandle })).rejects.toThrow(/ADR-0006/);
+    } finally {
+      await dbHandle.close();
+    }
+  });
+});

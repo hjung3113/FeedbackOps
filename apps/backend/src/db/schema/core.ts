@@ -113,7 +113,12 @@ export const auditLog = coreSchema.table(
   'audit_log',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    workspaceId: uuid('workspace_id').notNull(),
+    // F-003: ADR-0015:55-61 mandates referential integrity on every
+    // workspace_id / actor_id. Without the FK an orphaned audit row is
+    // unreviewable.
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
     actorId: uuid('actor_id')
       .notNull()
       .references(() => actors.id),

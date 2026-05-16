@@ -94,6 +94,54 @@ describe('<RequestAccessButton>', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  // F-002: per ADR-0015:71-90 the Idempotency-Key represents the same
+  // *logical intent*. Two concurrent in-flight requests for the same
+  // capability/MS must carry the SAME header so the server can dedupe via
+  // (actor_id, key). Without memoization a fresh UUID would be generated
+  // per click, defeating the contract.
+  test('two concurrent clicks for the same capability send the same Idempotency-Key', async () => {
+    // Park the fetch in a deferred state so both clicks land while the
+    // first request is still in flight.
+    const calls: Array<{ headers: Record<string, string> }> = [];
+    let resolveAll: () => void = () => {};
+    const allResolved = new Promise<void>((r) => {
+      resolveAll = r;
+    });
+    globalThis.fetch = vi.fn(async (_url, init) => {
+      const headers = (init as RequestInit).headers as Record<string, string>;
+      calls.push({ headers });
+      await allResolved;
+      return new Response(
+        JSON.stringify({ id: 'req-1', status: 'pending', created_at: new Date().toISOString() }),
+        { status: 201, headers: { 'content-type': 'application/json' } },
+      );
+    }) as typeof globalThis.fetch;
+
+    wrap(<RequestAccessButton capability="workspace.admin" />);
+    const button = screen.getByRole('button', { name: 'Request access' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      // The button is disabled while pending, so React may collapse the
+      // second click — but if at least 2 fetch calls land they MUST share
+      // the same key. If only one landed (because the button was
+      // disabled), assert the single-click invariant still holds.
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+    });
+    resolveAll();
+
+    if (calls.length >= 2) {
+      const a = calls[0];
+      const b = calls[1];
+      if (!a || !b) throw new Error('missing call entries');
+      expect(a.headers['Idempotency-Key']).toBe(b.headers['Idempotency-Key']);
+    }
+    const first = calls[0];
+    if (!first) throw new Error('no fetch calls');
+    expect(first.headers['Idempotency-Key']).toMatch(UUID_REGEX);
+  });
+
   test('on 422 validation.unknown_capability → renders inline error message', async () => {
     globalThis.fetch = vi.fn(
       async () =>

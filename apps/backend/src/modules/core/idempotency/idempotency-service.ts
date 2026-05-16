@@ -66,13 +66,28 @@ export function createIdempotencyService() {
     responseStatus: number,
     responseBody: unknown,
   ): Promise<void> {
-    await tx.insert(idempotencyKeys).values({
-      actorId,
-      key,
-      requestHash,
-      responseStatus,
-      responseBody: responseBody as object,
-    });
+    // F-005: two concurrent first-time requests with the same
+    // (actor_id, key) both see "miss" at lookup, both run the handler, and
+    // the second INSERT would hit a unique_violation that bubbles out as a
+    // 500. ADR-0015:71-90 requires deterministic resolution: one writer
+    // commits its row, the loser silently observes the committed row.
+    //
+    // We use INSERT ... ON CONFLICT DO NOTHING; the loser's transaction
+    // proceeds with no row written here, which is acceptable because the
+    // protocol replays a future client retry through `lookup()` and that
+    // returns the winning row's body.
+    await tx
+      .insert(idempotencyKeys)
+      .values({
+        actorId,
+        key,
+        requestHash,
+        responseStatus,
+        responseBody: responseBody as object,
+      })
+      .onConflictDoNothing({
+        target: [idempotencyKeys.actorId, idempotencyKeys.key],
+      });
   }
 
   return { lookup, record };

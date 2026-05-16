@@ -3,7 +3,7 @@
 // jobs are: parse + validate query params, look up the actor's role_level,
 // call the service, and shape the response envelope.
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -28,8 +28,10 @@ export interface PermissionsRoutesOptions {
   };
 }
 
+// ADR-0015:72 — UUIDv4 client-generated. The version nibble at position 14
+// is `4` and the variant nibble at position 19 is one of [8,9,a,b].
 const IDEMPOTENCY_KEY_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
 const createRequestBodySchema = z.object({
   requested_capability: z.string().min(1),
@@ -120,9 +122,16 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       );
 
       // Look up the actor's currently-open request (pending|needs_more_info)
-      // for this capability, if any, so the state mapper can pick between
-      // request_access and pending_request. We ignore MS scope in Slice 1
-      // (zero MS-scoped grants seeded); S1.2 will tighten this match.
+      // for this capability AND the same managed-system scope so the state
+      // mapper picks `pending_request` only for the matching scope tuple.
+      // Matches the scope predicate of the partial unique index
+      // `permission_requests_active_uq` (workspace, requester, capability,
+      // COALESCE(managed_system_id, sentinel)). A null query MS hits null
+      // rows; a concrete MS UUID hits exactly its own rows.
+      const msFilter =
+        q.managed_system_id !== undefined
+          ? eq(permissionRequests.requestedManagedSystemId, q.managed_system_id)
+          : isNull(permissionRequests.requestedManagedSystemId);
       const openReqRows = await app.db
         .select({ status: permissionRequests.status })
         .from(permissionRequests)
@@ -131,6 +140,8 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
             eq(permissionRequests.workspaceId, sess.workspace_id),
             eq(permissionRequests.requesterActorId, sess.actor_id),
             eq(permissionRequests.requestedCapability, capability),
+            msFilter,
+            sql`${permissionRequests.status} in ('pending','needs_more_info')`,
           ),
         )
         .limit(1);

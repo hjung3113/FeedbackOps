@@ -54,12 +54,18 @@ export async function registerIdempotencyPurge(
   boss: PgBoss,
   deps: { db: Db; log?: { info: (msg: string, meta?: unknown) => void } },
 ): Promise<void> {
-  await boss.createQueue(IDEMPOTENCY_PURGE_QUEUE, {
-    policy: 'standard',
-    retryLimit: 5,
-    retryDelay: 30,
-    retryBackoff: true,
-  });
+  // F-010: fops_app no longer holds EXECUTE on `pgboss.create_queue` (per
+  // migration 0003) because that function performs DDL (CREATE TABLE,
+  // ATTACH PARTITION). Slice 1's single queue (`core.idempotency_purge`)
+  // is pre-created in migration 0003 itself, so this boot path only has
+  // to verify it exists. Future queues land via new migrations; the
+  // running app never DDLs.
+  const queues = await boss.getQueues([IDEMPOTENCY_PURGE_QUEUE]);
+  if (queues.length === 0) {
+    throw new Error(
+      `pg-boss queue '${IDEMPOTENCY_PURGE_QUEUE}' is not pre-created. Run migrations (ADR-0008 + F-010).`,
+    );
+  }
 
   await boss.work<IdempotencyPurgePayload>(
     IDEMPOTENCY_PURGE_QUEUE,

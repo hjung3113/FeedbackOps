@@ -54,6 +54,14 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       // ADR-0013: logs-first observability via stdout JSON.
     },
     disableRequestLogging: config.NODE_ENV === 'test',
+    // F-009: ADR-0015:7-14 rate-limit tiers key on `req.ip` for anonymous
+    // traffic. Behind any production ingress (k8s service, Nginx, ALB) the
+    // connecting peer is the load balancer, so without `trustProxy` every
+    // anon request collapses onto one bucket. Enable parsing of the
+    // X-Forwarded-For chain; deployment is expected to terminate TLS at a
+    // single trusted hop. If we ever need a stricter allow-list this is the
+    // knob to tighten — keep it tied to ADR-0015.
+    trustProxy: true,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
@@ -177,7 +185,22 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     handler: async () => ({ status: 'ok' as const, ts: new Date().toISOString() }),
   });
 
-  const authProvider = createMockAuthProvider({ db: dbHandle.db, workspaceId });
+  // ADR-0006:16 — the two providers are swapped by the AUTH_PROVIDER env
+  // var. Slice 1 ships only the mock provider; `oidc` is reserved for the
+  // slice that lands real OIDC. We refuse to boot rather than silently
+  // serve mock when the operator asked for oidc.
+  let authProvider: ReturnType<typeof createMockAuthProvider>;
+  switch (config.AUTH_PROVIDER) {
+    case 'mock':
+      authProvider = createMockAuthProvider({ db: dbHandle.db, workspaceId });
+      break;
+    case 'oidc':
+      throw new Error(
+        'OidcAuthProvider not yet implemented (ADR-0006). Set AUTH_PROVIDER=mock or wait for the OIDC slice.',
+      );
+    default:
+      throw new Error(`Unknown AUTH_PROVIDER value: ${String(config.AUTH_PROVIDER)}`);
+  }
   await app.register(authRoutes, {
     authProvider,
     sessionService,

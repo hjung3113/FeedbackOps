@@ -10,7 +10,7 @@
 //   2. Re-run checkCapability; if allow → 409 capability_already_granted.
 //   3. INSERT permission_requests row with status='pending'. On the partial
 //      unique index violation → 409 permission_request_duplicate.
-//   4. Audit `permission.requested` in the same tx.
+//   4. Audit `permission_requested` in the same tx.
 //   5. Reserve the idempotency row with the 201 response body so retries
 //      replay verbatim.
 //
@@ -24,7 +24,12 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { DatabaseError } from 'pg';
 
-import { type AuditEventType, type Capability, isCapability } from '@fops/shared';
+import {
+  type AuditEventType,
+  type Capability,
+  isCapability,
+  isSensitiveCapability,
+} from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import { permissionRequests } from '../../db/schema/permission.js';
@@ -70,7 +75,7 @@ export interface RequestServiceDeps {
 
 export type RequestService = ReturnType<typeof createRequestService>;
 
-const PERMISSION_REQUESTED: AuditEventType = 'permission.requested';
+const PERMISSION_REQUESTED: AuditEventType = 'permission_requested';
 
 const ACTIVE_STATUSES = ['pending', 'needs_more_info'] as const;
 
@@ -88,6 +93,18 @@ export function createRequestService(deps: RequestServiceDeps) {
       });
     }
     const capability: Capability = body.requested_capability;
+    const sensitive = isSensitiveCapability(capability);
+    // Sensitive capabilities (docs/implementation/05-permission-policy.md:62-76)
+    // require a non-empty `reason`. The route Zod schema already requires
+    // `reason.min(1)`, but we re-check here so the service emits a distinct
+    // ADR-0012 code that downstream UIs can surface specifically.
+    if (sensitive && body.reason.trim().length === 0) {
+      throw new HttpError(
+        'validation.sensitive_reason_required',
+        'a non-empty reason is required for sensitive capabilities',
+        { capability },
+      );
+    }
     const requestHash = hashRequestBody(body);
 
     return await db.transaction(async (tx) => {
@@ -183,6 +200,7 @@ export function createRequestService(deps: RequestServiceDeps) {
           capability,
           managed_system_id: body.requested_managed_system_id ?? null,
           reason: body.reason,
+          sensitive,
           source_object_type: body.source_object_type ?? null,
           source_object_id: body.source_object_id ?? null,
           source_action_id: body.source_action_id ?? null,
