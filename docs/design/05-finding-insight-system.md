@@ -98,6 +98,29 @@ VOC Cluster
 → optional Task Request
 ```
 
+## Finding Creation Decision Rule
+
+Finding is optional. Create a Finding only when synthesis is needed before
+execution.
+
+```text
+Create Finding when:
+- multiple VOCs, Survey results, Evidence Highlights, or manual notes must be summarized together.
+- a VOC Cluster needs root-cause, scope, impact, severity, or confidence judgment.
+- High Severity VOC needs evidence, scope, or confidence clarified before execution.
+- stakeholders need a durable evidence-to-execution explanation before Task Request review.
+
+Bypass Finding and create Task Request when:
+- a single VOC has a clear follow-up action.
+- the request is a straightforward bug, small fix, or operational task.
+- the execution candidate is already clear and does not need synthesis.
+- the authorized actor records no-follow-up-needed instead of execution.
+```
+
+Missing Finding alone is not a gap. It becomes actionable only when workspace
+policy, Managed System policy, severity rules, cluster state, or explicit
+workflow configuration requires synthesis.
+
 ### WF-FIND-002: Survey Evidence To Finding
 
 ```text

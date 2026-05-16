@@ -74,6 +74,17 @@ Sensitive permission requests require a reason:
 - Task Request self-approval
 ```
 
+Scoped Developer permission requests should include a requested expiration. If
+the requester omits one, the API applies a default expiration such as 30 days.
+Admins may approve a longer or permanent grant when policy allows. Workspace
+Admin-level grants should not be offered through ordinary blocked-action request
+flows in MVP; they require an explicit Admin governance path.
+
+When a permission grant expires, previously opened objects or actions that
+depended on that grant must stop executing privileged actions. Open panels should
+move to a permission-lost or stale state and offer request-access when policy
+allows.
+
 Task Request self-approval is not included in the default Developer scoped
 review permission. A Developer may approve their own Task Request only when a
 grant includes task_request_self_approval for the same managed_system_id. The
@@ -84,8 +95,53 @@ reason, source_entity, and managed_system_id.
 
 ```text
 pending
+-> needs_more_info -> pending
 -> approved | rejected | expired | revoked
 ```
+
+`needs_more_info` keeps the same Permission Request identity. Requester
+supplementation moves the same request back to `pending`; it must not create a
+new request for the same source object, source action, and requested scope.
+
+Permission requests may originate from blocked linked objects, blocked
+`next_actions`, or explicit Admin request flows. Requests created from blocked
+UI must persist source context when available:
+
+```text
+source_object_type optional
+source_object_id optional
+source_action_id optional
+requested_scope
+reason
+requested_expiration optional
+more_info_request optional
+return_route_intent optional
+```
+
+For `blocked_requestable` actions, the backend must provide the minimum
+requestable scope candidates. Frontend clients may render and submit only those
+API-provided candidates; they must not invent broader workspace, all-managed-
+system, or Admin scopes from local status, role, or route context.
+
+Admin review responses must include requester identity, current role/scope,
+requested capability, requested scope, safe source summary when available,
+reason, risk indicators, requested expiration, explicit deny state, and allowed
+decision actions.
+
+Rejected Permission Requests must not be immediately resubmitted for the same
+source object, source action, and requested scope unless the rejection response
+allows appeal, requests more information, or provides `retry_after`. This keeps
+Admin review queues from becoming repeated-denial loops while still allowing
+corrected or supplemented requests.
+
+After approval, the API response should provide enough route intent for the
+frontend to return the requester to the originally blocked object or action
+when possible.
+
+Approval must not automatically execute the originally blocked domain action.
+Permission approval and domain mutation are separate audited actions; after
+approval, the requester returns to the original object or action and explicitly
+runs it again.
 
 Audit events:
 
@@ -93,6 +149,8 @@ Audit events:
 permission_requested
 permission_approved
 permission_rejected
+permission_more_info_requested
+permission_more_info_submitted
 permission_revoked
 permission_expired
 ```
@@ -100,6 +158,14 @@ permission_expired
 ## Summary-Visible Contract
 
 When entity link visibility is `summary_visible`, the target module returns a safe summary.
+
+Dashboard recovery visibility may be summary-safe even when the underlying
+source object is not fully visible. Gap visibility, source-object visibility,
+source jump visibility, and action visibility are separate backend decisions.
+If the source object is hidden, the response may expose only a safe recovery
+category and domain-safe summary fields; it must not expose raw titles,
+descriptions, reporter identity, personal Survey response detail, or private
+linked-object content.
 
 Task summary visible to Reporter:
 

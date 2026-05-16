@@ -18,6 +18,14 @@ Detailed endpoint schemas may later move into OpenAPI, but this document remains
 - APIs must not expose Survey Response -> Create VOC.
 - APIs must not expose generated_voc relation_type.
 - List endpoints for Tasks, Task Requests, Findings, VOC triage, Surveys, and Dashboard queues must accept managed_system_id filters where scoped data can appear.
+- Dashboard, Home, and Integration recovery queue endpoints that expose the same workflow gap must return a stable `recovery_item_id` or equivalent source/action identity.
+- Recovery queue inclusion and resolution are backend/domain-service decisions. Frontend clients must not infer that a recovery item is resolved from linked-object presence alone.
+- Dashboard recovery queue endpoints may expose user-level snooze or mute state, but that state must not change the recovery item's domain resolution state.
+- Dashboard recovery item detail responses must include `recovery_item_id`, recovery reason, source identity, safe affected-object summaries, permission-filtered `next_actions`, presentation state such as snooze or mute, and route intents for source-object jumps.
+- Recovery detail responses must distinguish gap visibility from source-object visibility. A response may include a summary-safe recovery item while hiding source titles, source route intents, or blocked actions according to backend visibility decisions.
+- Dashboard recovery queue responses must include backend-computed priority, severity, and reason codes when the UI needs ordering or emphasis. Clients may sort or group provided values but must not compute operational priority independently.
+- Dashboard recovery queue responses may include `responsible_actor_hint`, derived from the source object's owner, reviewer, assignee, permission reviewer, or workflow policy. Recovery items must not expose independent owner mutation.
+- Dashboard metric responses must include `computed_at` when values may be stale. Active recovery queues should prioritize current workflow state over metric cache freshness. Resolved recovery items are removed from active queues but remain available in Dashboard activity/history for three months. History responses expose safe summaries and resolution metadata only; source-object jumps require current permission checks.
 - Backend responses must exclude objects outside the actor's effective Managed System Permission Scopes.
 - managed_system_id=all means the actor's effective Managed System scope union. Only workspace Admin receives true workspace-wide results.
 - Managed System scope is the MVP filter, defaulting, and Developer permission context; APIs must not create separate per-Managed-System VOC, Survey, Task, or Integration route trees.
@@ -39,6 +47,9 @@ invalid_transition
 link_visibility_denied
 link_creation_failed
 audit_write_failed
+stale_object_version
+action_no_longer_available
+recovery_item_resolved
 ```
 
 ## Endpoint Contract Template
@@ -54,11 +65,18 @@ Each endpoint must define:
 - validation errors
 - side effects
 - audit events
-- entity_links created or updated
+- entity_links created, updated, detached, or revoked
 - dashboard queues affected
 - managed_system scope and default owner/reviewer resolution when applicable
 - idempotency behavior
 ```
+
+Audit-sensitive mutation endpoints must require an optimistic concurrency token
+such as `expected_version` or `last_seen_at`. On mismatch, APIs must return a
+conflict-style response with the current object version and must not auto-merge
+or apply the stale action. This applies to reporter-facing status changes,
+Public Update send, Task Request approval, Permission approval or rejection, and
+Survey evidence attachment to VOC.
 
 ## Default Owner / Reviewer Resolution
 
@@ -106,6 +124,11 @@ triage begins, additional Reporter input must be captured through Reporter
 Reply, not by mutating the original description.
 MVP has no affected_user field; proxy-report context is captured in the VOC
 description.
+Any AD-authenticated Actor may call `POST /vocs` to create their own VOC
+without a Permission Request. Permission checks still validate workspace
+membership and that the selected Managed System is available for VOC submission,
+but Task, Finding, Developer, or Admin permissions are not required to submit
+VOC.
 
 VOC conversation endpoints:
 
@@ -137,6 +160,24 @@ behavior may generate a candidate only; applying it creates separate Public
 Update records for selected VOCs and does not automatically change
 reporter_facing_status.
 
+Reporter-facing VOC Status may be changed only by workspace Admin or Developer
+within the same Managed System Permission Scope, through an explicit Public
+Update flow or reporter-status review action. Task Done, Task Released,
+Reporter Reply, and cluster bulk update candidates must not automatically
+change reporter_facing_status. Status changes are per-VOC audited decisions and
+should return whether a Public Update was created, skipped with reason, or still
+recommended.
+
+MVP APIs must not expose a direct bulk reporter_facing_status mutation. Bulk or
+cluster endpoints may return status update candidates and shared draft content,
+but apply requests must resolve into separate per-VOC status decisions, Public
+Update records or skip reasons, and audit events.
+
+Status-change requests that omit Public Update creation must include
+`skip_public_update: true` and a non-empty `skip_reason`. The audit event must
+record `public_update_created` or `skipped_with_reason`, the previous and next
+reporter_facing_status, actor id, managed_system_id, and source action id.
+
 ## Reporter Summary Contract
 
 Reporter-visible linked-work summaries must return only:
@@ -153,6 +194,114 @@ public_update_excerpt
 Reporter Summary must not expose raw task status, backlog priority, internal
 comments, individual Developer names, internal due dates, root-cause detail,
 severity, confidence, or private notes.
+
+## Next Action Contract
+
+Backend responses for work-object detail and queue rows must provide
+permission-filtered `next_actions` when an object has actionable workflow steps.
+The frontend renders and invokes these actions; it must not infer action
+eligibility from status fields, Role Level labels, or linked-object presence.
+
+`next_actions` are derived by application services from permissions, Managed
+System scope, workflow state, reporter-facing status, linked entities, policy
+configuration, default owner/reviewer rules, and special capabilities such as
+Task Request self-approval.
+
+Survey Result and Survey Response endpoints use the same `next_actions`
+contract for follow-up actions. Poor outcome recommendations must be returned as
+API-provided priority or `recommended_action_id`, not inferred by the frontend
+from score thresholds alone. Recommendation reasons must use domain-safe summary
+text and must not expose hidden response detail.
+
+`attach_evidence_to_existing_voc` may be returned only when eligible target VOCs
+exist in the actor's effective Managed System scope, the actor may see
+summary-visible VOC context, Survey evidence attachment is policy-allowed, and
+anonymous or identity-protected response data can be represented with safe
+summary fields. The action must not offer a create-new-VOC fallback.
+Linked surfaces must not receive raw anonymous or identity-protected Survey
+response text or respondent identity unless the actor has explicit personal
+response viewing permission for the Survey source route.
+Survey safe summaries for linked surfaces are produced by backend application
+services using deterministic templates, aggregate counts, configured labels,
+score bands, selected tags, and redacted approved highlight excerpts. LLM output
+must not be the default mechanism for enforcing anonymity or permission-safe
+summaries.
+Safe summaries may be localized to workspace default language or viewer UI
+locale, but raw free-text responses and approved excerpts remain in source
+language unless a later assistive translation draft is explicitly requested.
+Survey result filters must enforce the configured anonymity threshold, default
+5 responses, by hiding aggregates or merging buckets for actors without personal
+response viewing permission. Workspace Admin does not bypass the threshold
+without explicit personal response viewing permission.
+Free-text Evidence Highlights require user selection or approval before they
+are attached to another object. Automatic candidates may be returned only as
+draft suggestions and must pass redaction and permission checks first.
+When Survey evidence is attached to a Closed VOC, the attachment must not
+automatically reopen the VOC or change reporter_facing_status. If communication
+may be needed, the response should include `review_reporter_status` or
+`write_public_update` as follow-up `next_actions`.
+Survey evidence attachment to an existing VOC must not resolve poor Outcome
+Survey follow-up recovery by itself; resolution requires Finding, Task Request,
+linked execution work, or an explicit no-follow-up-needed decision.
+No-follow-up-needed actions require Admin or same Managed System Developer
+workflow capability, a non-empty reason, managed_system_id, source object,
+previous recovery state, and affected recovery item ids. Reversal uses a
+separate audited reopen-follow-up action that supersedes the decision and
+triggers recovery item re-evaluation.
+Undoing Survey evidence attachment detaches or revokes the entity_link through a
+separate audited action. It must not hard-delete the Evidence Highlight or erase
+canonical link history.
+
+Common VOC `next_actions` include:
+
+```text
+assign_owner
+request_reporter_info
+write_public_update
+create_finding
+request_task
+mark_no_follow_up
+review_reporter_status
+```
+
+Each action item should include an action id, label, target endpoint or route
+intent, disabled or blocked reason when applicable, and confirmation metadata
+for irreversible or audit-sensitive actions.
+
+Audit-sensitive actions must include backend-provided confirmation metadata.
+This includes reporter-facing status changes, Public Update send actions,
+Permission Request approval or rejection, Task Request approval, and protected
+Survey evidence attachment to VOC. Clients must render the provided confirmation
+title, body, risk level, required reason flags, and audit event intent instead
+of inventing generic confirmation copy.
+
+Action visibility states:
+
+```text
+available: actor can execute the action now.
+blocked_requestable: actor cannot execute now, but may request permission or missing prerequisites.
+blocked_not_requestable: actor may know the action exists, but cannot request or execute it in the current context.
+hidden: actor must not know the action exists for this object.
+```
+
+The backend decides the visibility state. The frontend must not downgrade
+`hidden` into a disabled control or upgrade blocked actions into visible
+permission requests without an API-provided state and reason.
+
+When an action is `blocked_requestable`, the response must include the allowed
+permission request scope candidates or prerequisite request intent. Clients must
+submit one of those candidates and must not synthesize broader scopes.
+
+Failed `next_actions` executions must return a structured action failure
+payload, not only a generic error. Include `action_id`, `failure_code`,
+domain-safe message, `retryable`, requestable permission candidates when
+applicable, and `current_object_version` when stale state caused the failure.
+Use `action_no_longer_available` when workflow state changed and
+`recovery_item_resolved` when the underlying recovery item was already resolved.
+Resolved recovery item responses should include resolution metadata such as
+`resolved_by_action_id`, `resolved_at`, `resolution_source_type`,
+`resolution_source_id`, and `resolved_by_actor_id` when actor visibility allows.
+When actor identity is not visible, return a safe actor label or omit the actor.
 
 ## Scoped Create Requirements
 
@@ -171,6 +320,13 @@ Survey
 Standalone `POST /tasks` creates internal work from the Tasks surface. VOC and
 Finding follow-up must create Task Request first; approved Task Requests are
 then converted to Tasks.
+
+Task Request stores the source link, evidence summary, requested outcome,
+Primary Managed System, requester, reviewer decision, and review notes.
+Execution fields such as Task title, assignee, priority, due date, optional
+Milestone, optional Analytics Area, and execution notes are finalized during
+Convert to Task. APIs may suggest defaults from the source object or Task
+Request, but conversion must explicitly persist the final Task fields.
 
 ## Cross-System Endpoint Decisions
 
@@ -201,6 +357,12 @@ the same Managed System Permission Scope. MVP allows a Developer to approve
 their own Task Request only when they have explicit task_request_self_approval
 capability within that scope. Self-approval requires a reason and must audit
 self_approved, reason, source_entity, and managed_system_id metadata.
+Approval and conversion are separate domain events. The API may expose an
+approve-and-convert convenience flow, but it must record both
+`task_request_approved` and `task_created_from_request` or
+`task_request_linked_existing_task` as separate audit/side-effect events.
+Approved Task Requests may remain in `approved` state until converted or linked
+to an existing Task.
 Converted Tasks start in Backlog by default. Backlog Tasks may have assignees,
 but execution has not started until the Task moves to Todo or Doing.
 

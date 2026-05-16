@@ -75,6 +75,19 @@ Right Detail Panel:
 10. Navigation is persona-aware; backend permission checks remain authoritative.
 ```
 
+Layout exception rules:
+
+```text
+- List-first + Right Detail Panel is the default for operational objects, not a universal layout mandate.
+- Use another primary layout only when the user's main task is not scanning records and acting on one selected object.
+- Builder-first is allowed for complex creation flows such as Survey Builder.
+- Board-first is allowed for execution management surfaces such as Tasks board view.
+- Action queue-first is allowed for Home, Dashboard, and Integration recovery queues.
+- Result summary-first is allowed for Survey result summaries and coverage summaries.
+- Settings/form-first is allowed for Admin configuration, Managed System Registry, Analytics Areas, workspace settings, and policy configuration.
+- Even when an exception applies, the screen must preserve clear object identity, source context, permission state, and the next action.
+```
+
 Rich Content Editor rules:
 
 ```text
@@ -121,7 +134,9 @@ Survey:
 ```text
 - simple builder
 - readable result summary
+- Survey Result is result summary-first, not action queue-first
 - Create Finding / Link Finding / Request Task CTAs
+- Poor Outcome Survey or configured follow-up may highlight next action near the top without replacing result interpretation
 ```
 
 Dashboard:
@@ -156,6 +171,25 @@ Forbidden UI action:
 
 ```text
 Survey Response → Create VOC
+```
+
+Allowed Survey Result / Response follow-up actions:
+
+```text
+- Add Evidence Highlight
+- Create Finding
+- Link Finding
+- Request Task
+- Attach to Existing VOC when attaching evidence to an already existing VOC is useful and permitted
+```
+
+Survey evidence attachment action naming:
+
+```text
+- Action id: attach_evidence_to_existing_voc
+- English label: Attach to Existing VOC
+- Korean label: 기존 VOC에 근거 연결
+- Forbidden labels: Create VOC, Convert to VOC, Generate VOC from Response, Link Existing VOC
 ```
 
 ## MVP UI Anti-Patterns

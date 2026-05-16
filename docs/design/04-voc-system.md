@@ -84,9 +84,39 @@ Task Done은 고객 문제가 해결되었다는 뜻이 아니다.
 Released 또는 고객 노출 확인 이후에만 해결됨으로 볼 수 있다.
 ```
 
+Reporter-facing VOC Status changes:
+
+```text
+- Only workspace Admin or Developer within the same Managed System Permission Scope can change Reporter-facing VOC Status.
+- Status changes happen through an explicit Public Update flow or an explicit reporter-status review action.
+- Task Done, Task Released, Reporter Reply, and cluster bulk update candidates must not automatically change Reporter-facing VOC Status.
+- Changing Reporter-facing VOC Status should prompt review of whether a Public Update is needed.
+- The default status-change UI opens Public Update composition.
+- Changing status without Public Update is allowed only with an explicit skip reason, such as correcting an accidental status or avoiding duplicate communication after a recent Public Update.
+- Every Reporter-facing VOC Status change is a per-VOC decision and must be audited.
+- MVP does not allow direct bulk Reporter-facing VOC Status update. Bulk or
+  cluster flows may generate candidates and copy draft message content, but each
+  selected VOC must still be reviewed and applied as a separate audited decision.
+- New Survey evidence may be attached to a VOC whose Reporter-facing VOC Status
+  is Closed, when policy and permissions allow it. Attachment must not
+  automatically reopen or change Reporter-facing VOC Status; the API should
+  provide `review_reporter_status` or `write_public_update` as follow-up
+  candidates when communication may be needed.
+```
+
 ## Triage And Ownership
 
 VOC Triage is a primary VOC workspace, not only an Inbox filter.
+
+VOC Inbox and VOC Triage are separate workspace views under the same VOC route
+family:
+
+```text
+- VOC Inbox is for open-processing work: newly submitted VOCs, recently updated VOCs, Reporter Replies, waiting reporter follow-up, and other items that need quick handling.
+- VOC Triage is for structured decisions: owner, severity, category, Analytics Area, similar VOC, follow-up path, public update, and no-follow-up decisions.
+- Both views use list-first scanning and VOC Detail inspection.
+- Triage must not be reduced to an Inbox filter because it owns decisions that change classification, ownership, routing, and follow-up state.
+```
 
 VOC triage state:
 
@@ -143,6 +173,13 @@ VOC
 → optional Reporter-facing Update
 ```
 
+VOC may bypass Finding when the follow-up action is clear from a single VOC.
+Create Finding first when multiple evidence sources, VOC Clusters, Survey
+results, or explicit analysis must be summarized before execution. High
+Severity alone does not force Finding, but High Severity plus unclear scope,
+impact, confidence, or root cause should prompt Finding synthesis before Task
+Request.
+
 ### WF-VOC-003: Similar VOC Recommendation
 
 ```text
@@ -162,6 +199,7 @@ Acceptance Criteria:
 
 ```text
 - Reporter can create VOC without Task access.
+- Any AD-authenticated Actor can create their own VOC without a Permission Request.
 - Admin, Developer, and User can all create VOC.
 - VOC requires one Primary Managed System.
 - Reporter may optionally select Analytics Area only under the chosen Primary Managed System.
@@ -235,6 +273,21 @@ Acceptance Criteria:
 ```
 
 ## UI / UX Requirements
+
+### VOC Row Status Signals
+
+VOC list rows may show multiple state signals at the same time, but they must
+not imply that all states are one workflow.
+
+```text
+- Reporter-facing VOC Status: public progress visible to the Reporter.
+- VOC Triage State: internal processing state for classification, follow-up, and review.
+- Ownership State: whether the VOC is unassigned, user-assigned, or team-assigned.
+- Linked Execution Signal: whether the VOC has linked Finding, Task Request, Task, or an explicit no-follow-up-needed decision.
+```
+
+Reporter-facing VOC Status and VOC Triage State must be visually separated.
+Reporter-facing status is public progress; triage state is internal workflow.
 
 ### VOC Triage
 

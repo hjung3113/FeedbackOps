@@ -81,6 +81,40 @@ VOC / VOC Cluster / Survey Finding
 → approved conversion to Backlog Task
 ```
 
+UI language must keep Task Request and Task separate:
+
+```text
+- Use "Request Task" when creating an execution candidate from VOC, VOC Cluster, Finding, or Survey-derived Finding.
+- Use "Convert to Task" when an approved Task Request becomes a Backlog Task.
+- Use "Create Task" only for standalone internal Tasks created from the Tasks surface.
+- Do not label VOC, Finding, or Survey follow-up actions as "Create Task".
+- Task Request screens are review/intake surfaces; Task screens are execution backlog, board, and detail surfaces.
+```
+
+Field responsibility:
+
+```text
+Task Request owns:
+- source object and entity link intent
+- evidence summary
+- requested outcome
+- Primary Managed System
+- requester
+- reviewer decision and review notes
+
+Convert to Task owns final execution fields:
+- Task title
+- assignee
+- priority
+- due date
+- Milestone optional
+- Analytics Area optional
+- execution notes
+```
+
+Task fields may be suggested from the Task Request or source object, but they
+are finalized during Convert to Task.
+
 ## Key Workflows
 
 ### WF-TASK-001: VOC Follow-Up To Task Request
@@ -126,6 +160,11 @@ Acceptance Criteria:
 
 ```text
 - Workspace Admin or Developer within the same Managed System scope can approve, reject, request more evidence, convert to Task, or link existing Task.
+- Approval and conversion are separate domain decisions: approval accepts the execution candidate; conversion creates a Backlog Task.
+- The UI may offer Approve and Convert as one fast path, but audit events and application service behavior must still record approval and task creation separately.
+- Approved Task Requests may remain approved until a reviewer converts them to Task or links an existing Task.
+- Conversion is where title, assignee, priority, due date, Milestone, and evidence summary are finalized for Task execution.
+- Link Existing Task is the alternative to creating a new Task when suitable work already exists.
 - Self-approval by the same scoped Developer requires explicit Task Request self-approval capability, reason, and audit metadata.
 - Decision is audited.
 - Converted Task starts in Backlog and preserves source Finding and Evidence links.
@@ -153,6 +192,8 @@ Acceptance Criteria:
 - Milestone can be created from Finding.
 - Milestone can group Tasks.
 - Milestone Detail shows Why this milestone exists, source, Analytics Area, evidence count, and linked objects.
+- Milestone lists show compact schedule risk with a mini timeline.
+- Milestone Detail includes a Timeline section with a child Task Gantt chart.
 ```
 
 ## UI / UX Requirements
@@ -183,6 +224,22 @@ Actions:
 
 Task UI should follow Linear's fast, compact issue style.
 
+Task Board cards show only execution-scanning fields and linked-context
+indicators. Detailed source context belongs in Task Detail or the source
+object's route.
+
+Task Board card:
+
+```text
+- title
+- Task status
+- assignee
+- priority
+- due date
+- Primary Managed System
+- linked-context indicator when source VOC, Finding, Survey, Evidence, or Task Request exists
+```
+
 Always show:
 
 ```text
@@ -199,6 +256,33 @@ Show when linked context exists:
 - Reporter-facing Status
 - Reporter Summary / Public Update candidate
 ```
+
+### Milestone List And Detail
+
+Milestone UI should preserve the dense, list-first Task experience. The
+Milestones view shows each Milestone as a compact row with source context,
+Managed System, Analytics Area, owner, status, due date, progress, and a mini
+timeline for schedule risk scanning.
+
+Selecting a Milestone opens RightDetailPanel as the Milestone Detail. The detail
+panel is the source of truth for milestone context; the Gantt chart is a
+Timeline section inside the detail panel, not a replacement for the detail view.
+
+Milestone Detail sections:
+
+```text
+- Header: title, Primary Managed System, Analytics Area, owner, status, due date, actions
+- Overview: Why this milestone exists, source Finding / VOC / Survey context, reporter-safe summary candidate
+- Timeline: child Task Gantt by date and internal Task status
+- Tasks: child Task list with status, assignee, priority, and due date
+- Evidence: linked Evidence Highlights and source objects
+- Activity: decisions, audit events, and updates
+```
+
+The Milestone list may show a mini timeline, but detailed scheduling belongs in
+the Timeline section of Milestone Detail. Reporter-facing summaries must not
+expose raw internal Task status, backlog priority, internal due dates, or
+Developer discussion from the Gantt.
 
 ## Permissions
 

@@ -98,6 +98,8 @@ Rules:
 - ManagedSystemScopeSwitcher appears on scoped operational views when the actor has access to more than one Managed System.
 - Switching Managed System scope updates URL state and list queries; it must not navigate to a duplicated per-Managed-System app tree.
 - `All` in ManagedSystemScopeSwitcher means the actor's effective Managed System scope union; only Admin sees true workspace-wide all.
+- Do not show `All` on User own-work views or Survey respondent surfaces.
+- For Developers, show `All` only when the actor has more than one Managed System scope.
 ```
 
 ### Responsive Behavior
@@ -242,6 +244,7 @@ Rules:
 - Managed System cannot be changed by the reporter after creation.
 - Analytics Area can be corrected during triage by an authorized Developer or Admin.
 - When Source Context is Proxy Report, the description prompt should ask who or which team the Reporter is reporting for and the situation observed.
+- Analytics Area appears as secondary metadata under Primary Managed System, not as a primary identity or permission indicator.
 ```
 
 VOC next action examples:
@@ -254,6 +257,10 @@ VOC next action examples:
 - Request Task
 - Write Public Update
 ```
+
+VOC next actions must be rendered from backend-provided `next_actions`.
+Frontend components must not infer whether actions are allowed by combining
+status badges, Role Level labels, or linked-object indicators.
 
 ### DataTable
 
@@ -350,6 +357,7 @@ Rules:
 - Each node has object type, title, status, and jump action.
 - Missing expected link is shown as a dashed placeholder with CTA only when policy or workflow configuration expects it.
 - Permission-hidden node uses summary-visible contract when available.
+- Compact surfaces use LinkedEntityTrail as preview only; full linked-object details belong in the linked object's DetailPanel or route.
 ```
 
 Example:
@@ -624,6 +632,10 @@ Rules:
 ```text
 - Never show blank space where restricted linked content exists.
 - Do not leak internal details in the blocked-state copy.
+- Render request access CTA only when the backend marks the state request_access or blocked_requestable.
+- If the backend marks linked content hidden, render nothing and do not show a placeholder.
+- If the backend marks linked content denied, show non-requestable restricted copy unless policy allows appeal.
+- Summary-visible linked content must use backend-provided safe summary fields only.
 ```
 
 ### CommandMenu
@@ -889,6 +901,14 @@ Task Request Queue:
 ObjectList + ActionQueueRow pattern + DetailPanel + StatusBadge + ActionToolbar
 ```
 
+Task Request UI labels:
+
+```text
+- Source follow-up CTA: Request Task.
+- Review conversion CTA: Convert to Task.
+- Do not use Create Task for VOC, Finding, or Survey follow-up.
+```
+
 Task Board:
 
 ```text
@@ -899,6 +919,7 @@ Rule:
 
 ```text
 Task Board is execution work only. VOC owner assignment is not Task assignee/kanban assignment.
+Task Board cards show title, status, assignee, priority, due date, Managed System, and linked-context indicators only. Source VOC, Finding, Survey, Evidence, Reporter Summary, and Public Update candidates belong in Task Detail or the source object's route.
 ```
 
 Task Detail:
@@ -923,6 +944,27 @@ Permission Requests:
 
 ```text
 ObjectList + DetailPanel + PermissionBlockedPanel + StatusBadge + ActionToolbar
+```
+
+Permission Request surfaces:
+
+```text
+Requester form:
+- requested permission or capability
+- requested scope
+- blocked source object/action safe summary when available
+- reason
+- requested expiration or duration when supported
+
+Admin review detail:
+- requester identity and current role/scope
+- requested capability and requested scope
+- source object/action and safe source summary
+- reason
+- risk indicators
+- requested expiration
+- explicit deny state
+- decision actions
 ```
 
 ## Implementation Guidance

@@ -30,6 +30,12 @@ Frontend docs translate product intent into implementable UI contracts.
 route behavior, workflow states, accessibility behavior, or frontend source
 paths.
 
+External design prompts, generated HTML files, screenshots, and prototype
+references are visual references only. They may inform density, spacing, layout
+feel, interaction inspiration, and visual polish, but they must not override
+domain terminology, route contracts, workflow states, permission rules, API
+contracts, accessibility behavior, or component behavior contracts.
+
 ## Domain Terminology
 
 Frontend documentation should use `Managed System` for MVP scope, filters, and

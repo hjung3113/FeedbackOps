@@ -45,6 +45,7 @@ VOC:
 Survey:
 
 ```text
+- survey_evidence_for_existing_voc
 - generated_finding
 - survey_evidence_for_task
 - survey_evidence_for_milestone
@@ -66,6 +67,11 @@ Explicitly excluded:
 ```text
 - generated_voc
 ```
+
+`survey_evidence_for_existing_voc` links Survey evidence to an already existing
+VOC only. It must respect Managed System scope, target visibility, policy, and
+anonymous response protections. It must not imply Survey Response to VOC
+conversion.
 
 ## Visibility
 
@@ -104,6 +110,20 @@ Acceptance Criteria:
 - Link creation is audited for sensitive relations.
 ```
 
+### FR-LINK-001A: Detach Entity Link
+
+Priority: SHOULD
+
+Acceptance Criteria:
+
+```text
+- Authorized users can detach a supported link when policy allows.
+- Detach does not hard-delete canonical history.
+- The entity_link is marked inactive, detached, or revoked with actor, reason,
+  and timestamp.
+- Sensitive detach actions are audited.
+```
+
 ### FR-LINK-002: Enforce Visibility
 
 Priority: MUST
@@ -115,6 +135,8 @@ Acceptance Criteria:
 - summary_visible exposes only the target system's summary contract.
 - admin_only is restricted to Admin.
 - Source and target permissions are both respected.
+- Linked-object UI visibility is backend-decided as allowed, hidden, summary_visible, request_access, or denied.
+- Frontend must not synthesize linked-object summaries from raw data that the actor cannot otherwise read.
 ```
 
 ### FR-LINK-003: Support Dashboard Missing-Link Queries

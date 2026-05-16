@@ -47,7 +47,7 @@ Role Level order is Admin > Developer > User. Reporter is not a role; it is the 
 ## Default User Can
 
 ```text
-- VOC 작성
+- VOC 작성 without a permission request
 - 본인 VOC 상태 확인
 - 본인에게 할당된 Survey 응답
 - 공개 또는 허용된 Dashboard 일부 조회 optional
@@ -81,7 +81,7 @@ The backend returns effective navigation and capability states for the current w
 
 | Capability | User | Developer | Admin |
 | --- | --- | --- | --- |
-| Create own VOC | yes | yes | yes |
+| Create own VOC | yes, no permission request | yes, no permission request | yes, no permission request |
 | Read own VOC public status | yes | yes | yes |
 | Add Reporter Reply on own VOC | yes | yes | yes |
 | Write Public Update | no | same Managed System scope | yes |
@@ -145,9 +145,14 @@ Permission Request
 - requester_id
 - requested_permission
 - requested_scope
+- source_object_type optional
+- source_object_id optional
+- source_action_id optional
+- return_route_intent optional
 - reason
 - approver_id
-- status: pending / approved / rejected / expired / revoked
+- status: pending / needs_more_info / approved / rejected / expired / revoked
+- more_info_request optional
 - expires_at optional
 - created_at
 - decided_at
@@ -163,8 +168,21 @@ Acceptance Criteria:
 
 ```text
 - User can request Task access, specific Managed System access, Survey creation, Survey personal response access, Export, or Admin permission.
+- Permission requests can start from blocked linked objects, blocked next actions, or explicit Admin request flows.
+- Inline blocked-state requests must include the blocked object or action, requested scope, reason, and return route intent when available.
 - Sensitive permission requests require reason.
 - Request can include scope and expiration.
+- After approval, the UI should return the requester to the originally blocked object or action when possible.
+```
+
+Requester form fields:
+
+```text
+- requested permission or capability, prefilled from blocked object/action when possible
+- requested scope, prefilled from blocked object/action when possible
+- blocked source object/action safe summary when available
+- reason, required for sensitive permissions
+- requested expiration or duration when supported
 ```
 
 ### FR-PERM-002: Decide Permission Request
@@ -175,6 +193,10 @@ Acceptance Criteria:
 
 ```text
 - Admin can approve, reject, revoke, or let permission expire.
+- Admin review detail shows requester identity, current role/scope, requested capability, requested scope, source object/action, safe source summary, reason, risk indicators, requested expiration, and explicit deny state.
+- Admin can approve as requested, approve narrower scope, approve with expiration, reject, request more info, or revoke existing grants.
+- Request more info moves the request to needs_more_info with an Admin question or requested clarification.
+- Requester can update reason, requested scope, or requested expiration and resubmit to pending.
 - Decision is recorded in Audit Log.
 - Approved permissions are scoped when scope is provided.
 ```
@@ -196,7 +218,8 @@ Acceptance Criteria:
 ```text
 - Permission Request UI should be a simple request form and admin review queue.
 - The user should see why access is blocked and what permission can be requested.
-- Admin review should show requester, scope, reason, risk, and expiration.
+- Blocked linked objects and blocked actions may open inline Permission Request creation when the backend marks the state requestable.
+- Requester form and Admin review detail are separate surfaces: requester sees what they are asking for and why; Admin sees the request plus risk, existing access, source context, and decision controls.
 - Permission Request is normally an Admin surface or inline blocked-state action, not default navigation for general users.
 ```
 

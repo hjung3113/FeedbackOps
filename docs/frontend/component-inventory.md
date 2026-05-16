@@ -74,6 +74,13 @@ AuditTimeline
 ## Status And Signal Catalog
 
 ```text
+VOC Row Status Signals:
+- Reporter-facing VOC Status: public progress shown to Reporter.
+- VOC Triage State: internal workflow state for classification and follow-up decisions.
+- Ownership State: unassigned, assigned user, or assigned team.
+- Linked Execution Signal: linked Finding, Task Request, Task, or explicit no-follow-up-needed decision.
+- These signals may appear in one row, but Reporter-facing VOC Status and VOC Triage State must be visually distinct and must not collapse into one generic status badge.
+
 Reporter-facing VOC Status:
 - 접수됨
 - 검토 중
@@ -100,6 +107,20 @@ Task Request Status:
 - needs_more_evidence
 - converted
 
+Milestone Detail:
+- Header with title, Primary Managed System, Analytics Area, owner, status, due date, and actions
+- Overview section for why the milestone exists and source context
+- Timeline section with child Task Gantt chart
+- Tasks section with child Task list
+- Evidence section with linked Evidence Highlights and source objects
+- Activity section with decisions, audit events, and updates
+
+Milestone List Row:
+- Title and source context
+- Managed System and Analytics Area
+- Owner, status, due date, and progress
+- Mini timeline for schedule risk scanning
+
 Finding Status:
 - draft
 - active
@@ -109,6 +130,7 @@ Finding Status:
 
 Permission Request Status:
 - pending
+- needs_more_info
 - approved
 - rejected
 - expired

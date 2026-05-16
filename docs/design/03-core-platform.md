@@ -82,6 +82,8 @@ Analytics Area rules:
 - Analytics Area belongs to exactly one Managed System.
 - VOC Analytics Area is optional and selectable only under the chosen Primary Managed System.
 - Analytics Area is not an MVP permission boundary.
+- Analytics Area is a secondary classification, filter, and dashboard grouping below Managed System.
+- Analytics Area must not appear as top-level navigation or as a duplicated route tree.
 ```
 
 ## Managed System Scope
@@ -213,6 +215,9 @@ Acceptance Criteria:
 - Managed System management should expose default owners/reviewers and scoped Developers.
 - Analytics Area management should use a grouped catalog list and a compact detail panel.
 - Analytics Area selection should be searchable from all major object forms after Managed System selection.
+- VOC, Finding, Task, and Survey lists may show Analytics Area as a filter or column.
+- Detail views show Analytics Area as secondary metadata under Primary Managed System.
+- Dashboard breakdowns may group by Analytics Area only within or under Managed System context.
 - Archived Analytics Areas remain visible on historical records with archived labeling.
 ```
 
