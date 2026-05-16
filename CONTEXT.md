@@ -4,6 +4,10 @@ FeedbackOps is an internal AD-gated operating system for connecting submitted VO
 
 ## Language
 
+**Workspace**:
+The outermost tenant boundary in FeedbackOps. Every domain record belongs to exactly one **Workspace**, and no cross-**Workspace** links exist in MVP.
+_Avoid_: Tenant, Organization, Account, Instance
+
 **Actor**:
 An AD-authenticated internal person whose permissions are evaluated inside a workspace.
 _Avoid_: External user, anonymous user
@@ -45,8 +49,16 @@ The decision to approve, reject, request more evidence for, convert, or link a *
 _Avoid_: Admin-only approval, automatic task creation
 
 **Task Request Self-Approval**:
-A sensitive permission allowing a **Developer** to approve a **Task Request** they created within the same **Managed System Permission Scope**.
+A **Sensitive Permission** allowing a **Developer** to approve a **Task Request** they created within the same **Managed System Permission Scope**.
 _Avoid_: default developer approval, unaudited shortcut
+
+**Permission Request**:
+A request to grant or modify an **Actor**'s **Managed System Permission Scope** or **Role Level**. Decided by an **Admin**; all decisions are audited.
+_Avoid_: Access ticket, permission grant, role change request
+
+**Sensitive Permission**:
+A permission whose grant or use requires a written reason and explicit audit metadata, not granted by default. Includes **Task Request Self-Approval**.
+_Avoid_: Restricted action, locked feature
 
 **Task**:
 Internal execution work for one **Managed System**.
@@ -145,8 +157,12 @@ The internal operational state used to process and classify a **VOC**.
 _Avoid_: Reporter-facing status, task status
 
 **Severity**:
-The operational impact level assigned during VOC triage.
-_Avoid_: User-submitted urgency, reporter emotion
+The operational impact level assigned to a **VOC** during triage. Describes how serious the problem is, not the order in which work is done. Canonical enum in `docs/design/15-data-contracts.md`, locked by ADR-0004.
+_Avoid_: Priority, urgency, P0/P1, user-submitted urgency, reporter emotion
+
+**Priority**:
+The execution-order signal carried by **Finding** and **Task** during planning. Decided after triage, distinct from **Severity**. Not exposed to **Reporters**.
+_Avoid_: Severity, impact, importance, business value
 
 **Reporter-Facing VOC Status**:
 The public progress state shown to the **Reporter** of a **VOC**.
@@ -164,8 +180,31 @@ _Avoid_: Per-system custom workflow
 A future per-**Managed System** customization of status configuration managed by Admins.
 _Avoid_: MVP workflow, ad hoc status
 
+**Entity Link**:
+A typed loose-coupling relation between two domain records (source and target) within one **Workspace**, used for cross-system context without forcing direct ownership. Carries `relation_type` and `visibility`.
+_Avoid_: Foreign key, parent-child relation, hard reference, related record
+
+**Relation Type**:
+The named kind of an **Entity Link**, drawn from a controlled vocabulary (e.g. `related_to`, `evidence_of`, `follow_up_for`, `clustered_into`).
+_Avoid_: Tag, category, free-form label
+
+**Dashboard**:
+An action-queue surface that groups outstanding **VOC**, **Task Request**, **Task**, **Survey**, and **Finding** work needing an **Actor**'s attention within their **Managed System Permission Scope**. Not a chart-only reporting page.
+_Avoid_: Chart page, BI report, analytics view, KPI tile board
+
+**VOC Cluster**:
+A manually curated grouping of related **VOC** records used by **Developer** and **Admin** for internal triage and bulk operations. **VOC** records remain independent and are not merged. Not visible to **Reporters** in MVP.
+_Avoid_: VOC merge, deduplication, duplicate group, parent VOC
+
+**Cluster Candidate**:
+A **VOC** selected as a target of a cluster-scoped bulk action; bulk actions apply individually to each candidate rather than to the cluster as a single record.
+_Avoid_: Cluster member as a single bulk target, merged record
+
 ## Relationships
 
+- A **Workspace** contains many **Managed Systems** via its **Managed System Registry**.
+- **VOC**, **Finding**, **Task Request**, **Task**, **Survey**, **Analytics Area**, Permission Request, and Entity Link all carry exactly one **Workspace** in MVP.
+- Cross-**Workspace** entity links are forbidden in MVP.
 - An **Actor** may submit many **VOC** records.
 - A **VOC** has exactly one **Reporter** in MVP.
 - A **Reporter** is always an **Actor** in MVP.
@@ -236,7 +275,7 @@ _Avoid_: MVP workflow, ad hoc status
 - **Reporter Summary** must not expose **Finding** detail, **Task** internal comments, backlog priority, or Developer discussion.
 - **Reporter Summary** may include public title, reporter-facing status, owning team public name, expected resolution date, last public update time, and a public update excerpt.
 - **Reporter Summary** must not include internal priority, individual Developer names, internal due dates, root-cause analysis detail, severity, confidence, or private notes.
-- **Reporter Summary** must not expose raw **Task Status** values such as Backlog, Todo, Doing, Review, Done, or Released.
+- **Reporter Summary** must not expose raw **Task Status** values; the canonical enum is defined in `docs/design/06-task-project-system.md` and locked by ADR-0003.
 - Internal **Task Status** may inform public-safe **Reporter-Facing VOC Status**, but only through VOC-owned review/update behavior.
 - **Public Update** may be written by workspace **Admin** or by **Developer** within the same **Managed System Permission Scope**.
 - **User** cannot write **Public Updates**.
@@ -254,10 +293,23 @@ _Avoid_: MVP workflow, ad hoc status
 - **VOC Cluster** does not merge **VOC** records; each **VOC** remains independent.
 - MVP **VOC Cluster** supports manual create, add/remove membership, and confirm; cluster merge/split is a later feature.
 - Cluster bulk update behavior is candidate-only; selected **VOC** records receive individual **Public Updates**.
-- **VOC Triage State**, **Reporter-Facing VOC Status**, and **Task Status** are separate state machines.
+- **VOC Triage State**, **Reporter-Facing VOC Status**, and **Task Status** are separate state machines with no automatic cross-mapping; canonical enums in `docs/design/15-data-contracts.md`, locked by ADR-0005.
 - **Task Status** reaching Released may create a reporter-facing status review candidate; it does not automatically resolve the **VOC**.
 - MVP uses one shared **Workflow Template** across all **Managed Systems**.
 - **Managed System Workflow** customization is a future extension, not an MVP feature.
+- An **Entity Link** connects two records of any combination of **VOC**, **Finding**, **Task Request**, **Task**, **Survey**, Dashboard, or Permission record within one **Workspace**.
+- **Entity Link** carries one **Relation Type** from the controlled vocabulary; ad hoc strings are not allowed.
+- Cross-system history is canonical through **Entity Link**, not via convenience columns on each table.
+- **Entity Link** does not grant write ownership; the source-shaped route does not own the target.
+- **Dashboard** surfaces actionable records; it does not aggregate chart metrics as its primary purpose in MVP.
+- **Dashboard** is scoped by **Managed System Permission Scope** and is not duplicated per **Analytics Area** in MVP.
+- **My Work** is filtered by assignee = the current **Actor**; **Dashboard** is filtered by **Managed System Permission Scope** regardless of assignee.
+- A record may appear in both **My Work** (because it is assigned to me) and **Dashboard** (because it is in my scope); these are independent views, not different storage.
+- **My Work** never widens beyond the current **Actor**; **Dashboard** never narrows to one assignee by default.
+- A **Permission Request** is created by the requesting **Actor** and decided by an **Admin** within the same **Workspace**.
+- A **Permission Request** decision may be `approved`, `rejected`, or `needs_more_info`; `needs_more_info` preserves identity for resubmission.
+- **Sensitive Permission** grants and uses require a reason and are audited.
+- Rejected **Permission Requests** must not be immediately resubmitted for the same scope without new justification.
 
 ## Example Dialogue
 
