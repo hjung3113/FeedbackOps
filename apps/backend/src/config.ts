@@ -18,6 +18,14 @@ const envSchema = z.object({
   // Slice 1 seed scope: 'core' inserts workspace + 3 baseline actors only.
   SEED_MODE: z.enum(['core']).default('core'),
   PUBLIC_ATTACHMENT_ORIGIN: z.string().default("'self'"),
+  // Review HTTP-H-2: `trustProxy: true` is unconditional and lets clients
+  // spoof `X-Forwarded-For` to reset anon rate-limit buckets and audit IPs
+  // when no ingress is in front. Hop count restricts Fastify to trusting
+  // only the rightmost N entries of the X-Forwarded-For chain. Set to the
+  // number of trusted proxies between the client and Fastify (1 for a
+  // single ingress; 0 disables trust, identical to `false`). Defaults to
+  // 0 outside production so dev/test/CI cannot spoof.
+  TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

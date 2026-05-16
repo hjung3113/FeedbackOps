@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import { and, eq } from 'drizzle-orm';
 import { actors } from '../../db/schema/core.js';
-import { HttpError, sendError } from '../../lib/errors.js';
+import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -123,7 +123,7 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
       const parsed = updateBodySchema.safeParse(rawBody);
       if (!parsed.success) {
         return sendError(reply, 'validation.failed', 'invalid update body', {
-          issues: parsed.error.issues,
+          fields: fieldsFromZodIssues(parsed.error.issues),
         });
       }
       const idempotencyKey = parseIdempotencyKey(req.headers as Record<string, unknown>);

@@ -226,43 +226,17 @@ describe.skipIf(!runIntegration)('Slice 1 #3 auth integration', () => {
   });
 });
 
-describe.skipIf(!runIntegration)('Slice 1 #3 production guard', () => {
-  let dbHandle: DbHandle;
-  let app: FastifyInstance;
-
-  beforeAll(async () => {
-    // The production guard is read inside buildServer; we have to spin a
-    // fresh app instance with NODE_ENV=production for this test.
-    const prev = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-    dbHandle = createDb(APP_URL);
-    app = await buildServer({ config: loadConfig(), dbHandle });
-    await app.ready();
-    process.env.NODE_ENV = prev ?? 'test';
-  });
-
-  beforeEach(async () => {
-    await dbHandle.pool.query(`delete from core.rate_limits`);
-  });
-
-  afterAll(async () => {
-    await app?.close();
-    await dbHandle?.close();
-  });
-
-  it('GET /auth/mock-login returns 404 in production', async () => {
-    const res = await app.inject({ method: 'GET', url: '/auth/mock-login' });
-    expect(res.statusCode).toBe(404);
-    expect(res.json().code).toBe('not_found.record');
-  });
-
-  it('POST /auth/mock-login returns 404 in production', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/mock-login',
-      payload: { external_id: 'mock-admin-1' },
-    });
-    expect(res.statusCode).toBe(404);
-    expect(res.json().code).toBe('not_found.record');
+describe.skipIf(!runIntegration)('Slice 1 #3 production guard (now boot-level per HTTP-H-1)', () => {
+  // Review HTTP-H-1 promoted the route-level 404 to a boot-time refusal.
+  // The original two route tests (GET/POST /auth/mock-login → 404 in prod)
+  // are no longer reachable because buildServer refuses to instantiate
+  // with NODE_ENV=production + AUTH_PROVIDER=mock. The boot-refusal
+  // assertion lives in `src/server.test.ts` (`AUTH_PROVIDER switch >
+  // NODE_ENV=production + AUTH_PROVIDER=mock refuses to boot`). The
+  // route-level 404 stays in `auth/routes.ts:36,52` as defense-in-depth
+  // for the case where the boot guard is removed; testing it requires
+  // bypassing the guard, which we deliberately do not do.
+  it('boot-level refusal asserted in src/server.test.ts', () => {
+    expect(true).toBe(true);
   });
 });

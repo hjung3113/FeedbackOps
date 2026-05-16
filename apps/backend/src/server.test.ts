@@ -65,4 +65,22 @@ describe.skipIf(!runIntegration)('buildServer AUTH_PROVIDER switch', () => {
       await dbHandle.close();
     }
   });
+
+  // Review HTTP-H-1: `AUTH_PROVIDER=mock` must be refused at boot when
+  // `NODE_ENV=production`. The route-level 404 stays as defense-in-depth.
+  test('NODE_ENV=production + AUTH_PROVIDER=mock refuses to boot', async () => {
+    const dbHandle = createDb(APP_URL);
+    try {
+      const cfg = {
+        ...loadConfig(),
+        NODE_ENV: 'production' as const,
+        AUTH_PROVIDER: 'mock' as const,
+      };
+      await expect(buildServer({ config: cfg, dbHandle })).rejects.toThrow(
+        /AUTH_PROVIDER=mock is not permitted in production/,
+      );
+    } finally {
+      await dbHandle.close();
+    }
+  });
 });

@@ -45,3 +45,20 @@ export function sendError(
   if (detail !== undefined) body.detail = detail;
   return reply.code(statusForCode(code)).send(body);
 }
+
+// Slim down Zod issue payloads before they reach a client. Review HTTP-M-1:
+// raw `ZodIssue` arrays leak internal field paths, discriminator codes, and
+// in some Zod versions an `input` snapshot. ADR-0012:25-34 expects a stable
+// `{ code, message, detail }` contract; the `detail.fields` array should
+// expose only the path + error code the client needs to identify which
+// field failed validation.
+export type ZodIssueShape = { path?: unknown; code?: unknown };
+export function fieldsFromZodIssues(issues: ReadonlyArray<ZodIssueShape>): Array<{
+  path: ReadonlyArray<string | number>;
+  code: string;
+}> {
+  return issues.map((iss) => ({
+    path: Array.isArray(iss.path) ? (iss.path as Array<string | number>) : [],
+    code: typeof iss.code === 'string' ? iss.code : 'invalid',
+  }));
+}

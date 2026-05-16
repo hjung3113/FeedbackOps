@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
-import { statusForCode } from './lib/errors.js';
+import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import {
   analyticsAreasRoutes,
@@ -55,22 +55,46 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       'WORKSPACE_ID env var is required to build the server (ADR-0006 single seeded workspace).',
     );
   }
+  // Review HTTP-H-1: refuse to boot the mock provider in production. The
+  // route-level `/auth/mock-login` 404 gate stays as defense-in-depth, but
+  // the boot-time refusal is the primary contract — an operator who forgets
+  // to flip `AUTH_PROVIDER=oidc` gets a loud failure at startup instead of
+  // a silent auth-bypass surface (CWE-489).
+  if (config.NODE_ENV === 'production' && config.AUTH_PROVIDER === 'mock') {
+    throw new Error(
+      'AUTH_PROVIDER=mock is not permitted in production (ADR-0006). Set AUTH_PROVIDER=oidc.',
+    );
+  }
   const workspaceId = config.WORKSPACE_ID;
 
   const app = Fastify({
     logger: {
       level: config.NODE_ENV === 'test' ? 'silent' : 'info',
       // ADR-0013: logs-first observability via stdout JSON.
+      // Review HTTP-M-3: redact request-header lines that carry secrets
+      // (cookie holds the session id; idempotency-key correlates a single
+      // actor's retries). Without this, anyone with log access can lift a
+      // live session out of stdout (CWE-532).
+      redact: {
+        paths: [
+          'req.headers.cookie',
+          'req.headers["set-cookie"]',
+          'req.headers.authorization',
+          'req.headers["idempotency-key"]',
+        ],
+        remove: true,
+      },
     },
     disableRequestLogging: config.NODE_ENV === 'test',
-    // F-009: ADR-0015:7-14 rate-limit tiers key on `req.ip` for anonymous
-    // traffic. Behind any production ingress (k8s service, Nginx, ALB) the
-    // connecting peer is the load balancer, so without `trustProxy` every
-    // anon request collapses onto one bucket. Enable parsing of the
-    // X-Forwarded-For chain; deployment is expected to terminate TLS at a
-    // single trusted hop. If we ever need a stricter allow-list this is the
-    // knob to tighten — keep it tied to ADR-0015.
-    trustProxy: true,
+    // F-009 + Review HTTP-H-2: `trustProxy: true` is too permissive — it
+    // trusts the entire X-Forwarded-For chain, so any client can spoof
+    // `req.ip` and reset their anon rate-limit bucket (and the IP recorded
+    // in session/audit rows). ADR-0015:7-14 keys on `req.ip` so trust must
+    // be bounded to the operator-configured hop count. Default 0 outside
+    // prod (identical to `trustProxy: false`); prod operators set
+    // `TRUSTED_PROXY_HOPS=1` when a single ingress terminates TLS.
+    trustProxy:
+      config.NODE_ENV === 'production' ? Math.max(config.TRUSTED_PROXY_HOPS, 0) : false,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
@@ -175,12 +199,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       }
     }
     // Zod validation errors surface via fastify-type-provider-zod with
-    // statusCode 400; remap to ADR-0012 envelope.
-    if ((err as { validation?: unknown }).validation) {
+    // statusCode 400; remap to ADR-0012 envelope. Review HTTP-M-1:
+    // fastify-type-provider-zod returns the raw ZodIssue array in
+    // `err.validation`. Slim each entry to `{path, code}` so internal
+    // field paths and discriminator codes are not exposed (CWE-209).
+    const validation = (err as { validation?: unknown }).validation;
+    if (validation) {
+      const issues = Array.isArray(validation) ? (validation as ZodIssueShape[]) : [];
       return reply.code(422).send({
         code: 'validation.failed',
         message: err.message,
-        detail: { fields: (err as { validation?: unknown }).validation },
+        detail: { fields: fieldsFromZodIssues(issues) },
       });
     }
     req.log.error({ err }, 'unhandled error');
