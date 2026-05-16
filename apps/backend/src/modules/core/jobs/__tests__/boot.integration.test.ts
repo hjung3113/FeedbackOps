@@ -15,7 +15,13 @@ import { loadConfig } from '../../../../config.js';
 import { type DbHandle, createDb } from '../../../../db/client.js';
 import { initBoss, shutdownBoss } from '../../../../lib/jobs.js';
 import { buildServer } from '../../../../server.js';
-import { IDEMPOTENCY_PURGE_CRON, IDEMPOTENCY_PURGE_QUEUE, registerCoreJobs } from '../index.js';
+import {
+  IDEMPOTENCY_PURGE_CRON,
+  IDEMPOTENCY_PURGE_QUEUE,
+  RATE_LIMITS_PURGE_CRON,
+  RATE_LIMITS_PURGE_QUEUE,
+  registerCoreJobs,
+} from '../index.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
@@ -54,6 +60,30 @@ describe.skipIf(!runIntegration)('pg-boss boot wiring', () => {
          from pgboss.queue
          where name = $1`,
       [IDEMPOTENCY_PURGE_QUEUE],
+    );
+    expect(row.rowCount).toBe(1);
+    expect(row.rows[0]?.retry_limit).toBe(5);
+    expect(row.rows[0]?.retry_delay).toBe(30);
+    expect(row.rows[0]?.retry_backoff).toBe(true);
+  });
+
+  it('registers the hourly rate-limits-purge cron in pgboss.schedule', async () => {
+    const schedules = await boss.getSchedules(RATE_LIMITS_PURGE_QUEUE);
+    const ours = schedules.find((s: { name: string }) => s.name === RATE_LIMITS_PURGE_QUEUE);
+    expect(ours).toBeDefined();
+    expect(ours?.cron).toBe(RATE_LIMITS_PURGE_CRON);
+  });
+
+  it('records the rate-limits queue in pgboss.queue with ADR-0009 retry config', async () => {
+    const row = await dbHandle.pool.query<{
+      retry_limit: number;
+      retry_delay: number;
+      retry_backoff: boolean;
+    }>(
+      `select retry_limit, retry_delay, retry_backoff
+         from pgboss.queue
+         where name = $1`,
+      [RATE_LIMITS_PURGE_QUEUE],
     );
     expect(row.rowCount).toBe(1);
     expect(row.rows[0]?.retry_limit).toBe(5);

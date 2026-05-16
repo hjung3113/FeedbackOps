@@ -8,10 +8,16 @@
 // (2) parsing that HTML on the client adds zero value over duplicating two
 // strings, and (3) it keeps the frontend test runnable without spinning
 // the backend.
+//
+// F-015 prod guard: the backend `/auth/mock-login` 404s in production
+// (`isProd || authProvider.name !== 'mock'`). This page therefore must
+// disappear in prod so it cannot leak seed external_ids or invite
+// probing. Detection: Vite's `import.meta.env.PROD` (true in `vite build`
+// production bundle; false in `vite dev` and during vitest runs).
 
 import { Button } from '@fops/ui';
 import { useMutation } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { Navigate, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { mockLogin } from '../lib/api.js';
 
 export const Route = createFileRoute('/login')({
@@ -34,6 +40,13 @@ const SEED_ACTORS = [
 ];
 
 export function LoginPage() {
+  if (import.meta.env.PROD) {
+    return <Navigate to="/" />;
+  }
+  return <MockLoginPicker />;
+}
+
+function MockLoginPicker() {
   const navigate = useNavigate();
   const mutation = useMutation({
     mutationFn: mockLogin,
@@ -59,7 +72,7 @@ export function LoginPage() {
         ))}
       </ul>
       {mutation.isError && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="text-accent-danger">
           Login failed. Check the backend is running.
         </p>
       )}

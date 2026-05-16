@@ -21,13 +21,14 @@ describe('migrations directory', () => {
     // rate-limit backing table. Slice 1 #6 pre-installs the pg-boss schema
     // (ADR-0009). Migration 0003 (F-003 + F-010 remediation) adds
     // referential-integrity FKs, narrows pg-boss role surface, and
-    // pre-creates the idempotency-purge queue. New slices should bump this
+    // pre-creates the idempotency-purge queue. Migration 0004 (F-018)
+    // pre-creates the rate_limits purge queue. New slices should bump this
     // expectation in the same PR that adds the migration so a stray
     // drizzle-kit generate run is caught.
     const files = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith('.sql'))
       .sort();
-    expect(files).toHaveLength(4);
+    expect(files).toHaveLength(5);
   });
 
   it('Slice 1 migration encodes audit_log role grants per ADR-0008', () => {
