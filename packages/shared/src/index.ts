@@ -3,4 +3,5 @@
 // in core.Workspace, core.Actor, core.RoleLevel, core.PermissionScope.
 export * from './enums/index.js';
 export * from './enums/capabilities.js';
+export * from './enums/audit-events.js';
 export * from './errors/codes.js';

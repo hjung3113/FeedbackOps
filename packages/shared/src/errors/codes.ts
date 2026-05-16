@@ -20,6 +20,12 @@ export const ERROR_CODES = [
   'validation.failed',
   'validation.malformed_request',
   'validation.unknown_capability',
+  // conflict.* → 409
+  'conflict.idempotency_key_reuse',
+  'conflict.capability_already_granted',
+  'conflict.permission_request_duplicate',
+  // validation.* → 422 (continued)
+  'validation.malformed_idempotency_key',
   // not_found.* → 404
   'not_found.record',
   // internal.* → 500
