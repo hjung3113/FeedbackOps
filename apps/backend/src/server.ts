@@ -17,7 +17,13 @@ import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createSessionService } from './modules/auth/session-service.js';
-import { createCheckService, permissionsRoutes } from './modules/permissions/index.js';
+import { createAuditService } from './modules/core/audit/index.js';
+import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
+import {
+  createCheckService,
+  createRequestService,
+  permissionsRoutes,
+} from './modules/permissions/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -182,10 +188,22 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // ── Permissions module — slice 1 issue #4 ───────────────────────────────
   // Registered AFTER auth so requireSession is available on its routes.
   const checkService = createCheckService({ db: dbHandle.db });
+  const auditService = createAuditService();
+  const idempotencyService = createIdempotencyService();
+  const requestService = createRequestService({
+    db: dbHandle.db,
+    checkService,
+    auditService,
+    idempotencyService,
+  });
   await app.register(permissionsRoutes, {
     sessionService,
     checkService,
+    requestService,
     workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+    },
   });
 
   return app;

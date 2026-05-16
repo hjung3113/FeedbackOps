@@ -7,7 +7,7 @@
 //   4. apps/frontend MUST NOT import from apps/backend.
 //   5. apps/backend MUST NOT import from apps/frontend or packages/ui.
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname;

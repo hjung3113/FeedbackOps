@@ -56,6 +56,10 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
     await dbHandle.pool.query(
       `delete from core.sessions where created_user_agent_summary = 'integration-test'`,
     );
+    await dbHandle.pool.query(`delete from core.rate_limits`);
+    // Earlier suites may have left pending permission_requests rows that
+    // flip this suite's `request_access` expectation to `pending_request`.
+    await dbHandle.pool.query(`delete from permission.permission_requests`);
   });
 
   it('admin + workspace.admin → state=approved', async () => {

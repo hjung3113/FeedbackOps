@@ -18,3 +18,9 @@ export {
   type OpenRequestStatus,
 } from './state-mapper.js';
 export { permissionsRoutes, type PermissionsRoutesOptions } from './routes.js';
+export {
+  createRequestService,
+  type RequestService,
+  type CreatePermissionRequestBody,
+  type CreatePermissionRequestResult,
+} from './request-service.js';

@@ -55,6 +55,7 @@ describe.skipIf(!runIntegration)('Slice 1 #3 auth integration', () => {
     await dbHandle.pool.query(
       `delete from core.sessions where created_user_agent_summary = 'integration-test'`,
     );
+    await dbHandle.pool.query(`delete from core.rate_limits`);
   });
 
   it('round-trip: login → /me → logout → /me 401', async () => {
@@ -196,6 +197,10 @@ describe.skipIf(!runIntegration)('Slice 1 #3 production guard', () => {
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
     process.env.NODE_ENV = prev ?? 'test';
+  });
+
+  beforeEach(async () => {
+    await dbHandle.pool.query(`delete from core.rate_limits`);
   });
 
   afterAll(async () => {
