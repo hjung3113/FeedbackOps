@@ -105,3 +105,17 @@ For any new Codex task:
 5. Keep changes limited to files required by the user request.
 
 When asked to review a pull request, prioritize product invariant violations, ownership boundary violations, missing verification, accidental source code at the repository root, mismatches between docs and nested agent guides, and frontend changes that break the dense list-first operational UI model.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub issues on `hjung3113/FeedbackOps` via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context. Start at `CONTEXT-MAP.md`, then read the relevant per-context `CONTEXT.md`. See `docs/agents/domain.md`.
