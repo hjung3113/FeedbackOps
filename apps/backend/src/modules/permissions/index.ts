@@ -1,0 +1,20 @@
+// Permissions module barrel. External consumers (server.ts wiring, future
+// modules that need to assert capability gates) import from here.
+
+export {
+  createCheckService,
+  type CheckService,
+  type CheckServiceDeps,
+  type Decision,
+  type DenyReason,
+  type RequestableScope,
+  type ActorContext,
+  type CheckScope,
+} from './check-service.js';
+export {
+  toFrontendState,
+  type FrontendState,
+  type OpenRequestSummary,
+  type OpenRequestStatus,
+} from './state-mapper.js';
+export { permissionsRoutes, type PermissionsRoutesOptions } from './routes.js';

@@ -17,6 +17,7 @@ import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createSessionService } from './modules/auth/session-service.js';
+import { createCheckService, permissionsRoutes } from './modules/permissions/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -176,6 +177,15 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     workspaceId,
     nodeEnv: config.NODE_ENV,
+  });
+
+  // ── Permissions module — slice 1 issue #4 ───────────────────────────────
+  // Registered AFTER auth so requireSession is available on its routes.
+  const checkService = createCheckService({ db: dbHandle.db });
+  await app.register(permissionsRoutes, {
+    sessionService,
+    checkService,
+    workspaceId,
   });
 
   return app;

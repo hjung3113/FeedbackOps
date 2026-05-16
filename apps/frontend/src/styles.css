@@ -1,5 +1,5 @@
-@import '@fops/ui/styles/tokens.css';
-@import '@fops/ui/styles/semantic.css';
+@import "@fops/ui/styles/tokens.css";
+@import "@fops/ui/styles/semantic.css";
 
 @tailwind base;
 @tailwind components;

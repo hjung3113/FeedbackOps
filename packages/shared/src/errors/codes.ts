@@ -19,6 +19,7 @@ export const ERROR_CODES = [
   // validation.* → 422
   'validation.failed',
   'validation.malformed_request',
+  'validation.unknown_capability',
   // not_found.* → 404
   'not_found.record',
   // internal.* → 500
