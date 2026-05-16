@@ -1,0 +1,39 @@
+# Local Postgres for FeedbackOps development and integration tests.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   export DATABASE_URL_MIGRATE='postgres://fops_migrate:fops_migrate@localhost:5434/feedbackops'
+#   export DATABASE_URL='postgres://fops_app:fops_app@localhost:5434/feedbackops'
+#   pnpm --filter @fops/backend db:migrate
+#   pnpm --filter @fops/backend db:seed
+#
+# Why two roles: ADR-0008 requires that the application role cannot UPDATE or
+# DELETE rows in core.audit_log. The container initialises both roles up front;
+# per-table GRANT/REVOKE is owned by the migration SQL.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: feedbackops-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # We deliberately do NOT set POSTGRES_DB; the init script creates the
+      # `feedbackops` database owned by fops_migrate so the migration role
+      # has DDL on its own DB without piggybacking on the superuser.
+    ports:
+      # Host 5434 -> container 5432 avoids clashing with a system-installed
+      # local Postgres on the default port. Both DATABASE_URL and
+      # DATABASE_URL_MIGRATE in docs should reference :5434.
+      - '5434:5432'
+    volumes:
+      - ./scripts/db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      - feedbackops-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+volumes:
+  feedbackops-db-data:

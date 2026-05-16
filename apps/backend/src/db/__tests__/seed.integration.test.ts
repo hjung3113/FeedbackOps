@@ -1,0 +1,81 @@
+// Integration test for the Slice 1 seed.
+//
+// Requires Postgres up + Slice 1 migration applied. The previous seed run via
+// `pnpm db:seed` already populated the baseline rows; this suite asserts that
+// invoking runSeed() again inserts zero new rows.
+
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import { runSeed } from '../../seed/index.js';
+import { type DbHandle, createDb } from '../client.js';
+
+const APP_URL = process.env.DATABASE_URL ?? '';
+const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
+const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+
+describe.skipIf(!runIntegration)('seed idempotency', () => {
+  let handle: DbHandle;
+
+  beforeAll(() => {
+    handle = createDb(APP_URL);
+  });
+  afterAll(async () => {
+    await handle?.close();
+  });
+
+  it('second runSeed() invocation inserts zero rows', async () => {
+    // Pre-condition: the workspace + three baseline actors are present from
+    // the `pnpm db:seed` run that happens before integration tests.
+    const before = await handle.pool.query<{ count: string }>(
+      'select count(*)::text as count from core.actors where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    expect(Number(before.rows[0]?.count)).toBeGreaterThanOrEqual(3);
+
+    const result = await runSeed(handle);
+    expect(result.workspaceInserted).toBe(false);
+    expect(result.actorsInserted).toBe(0);
+
+    const after = await handle.pool.query<{ count: string }>(
+      'select count(*)::text as count from core.actors where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
+  });
+
+  it('seeds the three CONTEXT.md baseline actors with locked role/type combo', async () => {
+    const { rows } = await handle.pool.query<{
+      external_id: string;
+      role_level: string;
+      actor_type: string;
+      email: string;
+    }>(
+      `select external_id, role_level, actor_type, email
+         from core.actors
+        where workspace_id = $1
+        order by external_id`,
+      [WORKSPACE_ID],
+    );
+
+    const byId = Object.fromEntries(rows.map((r) => [r.external_id, r]));
+
+    expect(byId['mock-admin-1']).toEqual({
+      external_id: 'mock-admin-1',
+      role_level: 'admin',
+      actor_type: 'internal_member',
+      email: 'admin@feedbackops.local',
+    });
+    expect(byId['mock-user-1']).toEqual({
+      external_id: 'mock-user-1',
+      role_level: 'user',
+      actor_type: 'internal_member',
+      email: 'user@feedbackops.local',
+    });
+    expect(byId.system).toEqual({
+      external_id: 'system',
+      role_level: 'admin',
+      actor_type: 'system',
+      email: 'system@feedbackops.local',
+    });
+  });
+});

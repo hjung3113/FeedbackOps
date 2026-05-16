@@ -1,12 +1,22 @@
 import { defineConfig } from 'drizzle-kit';
 
 // Per ADR-0015: hand-reviewed SQL files; no `drizzle-kit push` outside local dev.
+// Drizzle CLI must connect as fops_migrate (full DDL/DML), never as fops_app.
+// DATABASE_URL_MIGRATE is the migration-only connection; DATABASE_URL is the
+// runtime app connection (fops_app) and is intentionally NOT consulted here.
+const migrateUrl =
+  process.env.DATABASE_URL_MIGRATE ??
+  'postgres://fops_migrate:fops_migrate@localhost:5432/feedbackops';
+
 export default defineConfig({
-  schema: './src/db/schema/index.ts',
+  // Point at the per-namespace files directly so drizzle-kit's CJS loader
+  // doesn't hit ESM .js suffixes used by NodeNext at runtime.
+  schema: ['./src/db/schema/core.ts', './src/db/schema/permission.ts'],
   out: './migrations',
   dialect: 'postgresql',
+  schemaFilter: ['core', 'permission'],
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? 'postgres://localhost:5432/feedbackops',
+    url: migrateUrl,
   },
   strict: true,
   verbose: true,
