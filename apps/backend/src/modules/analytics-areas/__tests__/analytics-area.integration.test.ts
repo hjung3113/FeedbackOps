@@ -1,5 +1,7 @@
 // Analytics Area write path (Slice 2 #11) + MS archive cascade activation.
 
+import { randomUUID } from 'node:crypto';
+
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -76,6 +78,23 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
   });
 
   afterAll(async () => {
+    // See managed-system afterAll — prevents `it-*` rows leaking into
+    // the seed-idempotency suite under parallel runs.
+    await dbHandle.pool.query(
+      `delete from core.analytics_areas
+        where managed_system_id in (
+          select id from core.managed_systems where slug like 'it-%'
+        )`,
+    );
+    await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-%'`);
+    await dbHandle.pool.query('delete from core.idempotency_keys');
+    if (MIGRATE_URL) {
+      const ops = createDb(MIGRATE_URL);
+      await ops.pool.query(
+        `delete from core.audit_log where event_type in ('managed_system_registered','managed_system_updated','managed_system_archived','analytics_area_registered','analytics_area_updated','analytics_area_archived')`,
+      );
+      await ops.close();
+    }
     await app?.close();
     await dbHandle?.close();
   });
@@ -396,5 +415,97 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
     expect(incArch.json().total).toBe(2);
+
+    // Review L3: belt-and-suspenders — assert ms2's rows are absent from
+    // the ms1 filter (no cross-MS leak). Tenant isolation across MSs.
+    const items = onlyMs1.json().items as Array<{ managed_system_id: string }>;
+    expect(items.every((i) => i.managed_system_id === ms1)).toBe(true);
+  });
+
+  // ── review-followup tests ───────────────────────────────────────────
+
+  it('Idempotency-Key reuse with different body → 409 conflict.idempotency_key_reuse (review C2)', async () => {
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, cookie, 'it-aaidem-ms', 'IdemHost');
+    const key = randomUUID();
+    const first = await app.inject({
+      method: 'POST',
+      url: '/analytics-areas',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': key,
+      },
+      payload: { managed_system_id: msId, slug: 'it-aaidem', name: 'first' },
+    });
+    expect(first.statusCode).toBe(201);
+    const second = await app.inject({
+      method: 'POST',
+      url: '/analytics-areas',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': key,
+      },
+      payload: { managed_system_id: msId, slug: 'it-aaidem', name: 'different body' },
+    });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().code).toBe('conflict.idempotency_key_reuse');
+  });
+
+  it('archive of non-existent AA → 404 not_found.record (review H1)', async () => {
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/analytics-areas/${randomUUID()}/archive`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('not_found.record');
+  });
+
+  it('PATCH of non-existent AA → 404 not_found.record (review H1)', async () => {
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/analytics-areas/${randomUUID()}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
+      payload: { name: 'whatever' },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('not_found.record');
+  });
+
+  it('non-admin POST → 403 permission.denied; no AA row, no audit row, no idempotency key (review H5)', async () => {
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, cookie, 'it-h5-ms', 'H5');
+    const userCookie = await loginAs(app, 'mock-user-1');
+    const key = randomUUID();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/analytics-areas',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${userCookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': key,
+      },
+      payload: { managed_system_id: msId, slug: 'it-h5-aa', name: 'denied' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('permission.denied');
+    const aaCount = await dbHandle.pool.query(
+      `select count(*)::int as n from core.analytics_areas where slug = 'it-h5-aa'`,
+    );
+    expect(aaCount.rows[0]?.n).toBe(0);
+    const audit = await dbHandle.pool.query(
+      `select count(*)::int as n from core.audit_log where event_type = 'analytics_area_registered' and workspace_id = $1`,
+      [WORKSPACE_ID],
+    );
+    expect(audit.rows[0]?.n).toBe(0);
+    const idem = await dbHandle.pool.query(
+      `select count(*)::int as n from core.idempotency_keys where key = $1`,
+      [key],
+    );
+    expect(idem.rows[0]?.n).toBe(0);
   });
 });
