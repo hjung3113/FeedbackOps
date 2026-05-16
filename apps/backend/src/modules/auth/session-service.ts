@@ -8,7 +8,7 @@
 // First-login auto-provisioning follows ADR-0006:42-52.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { actors, sessions } from '../../db/schema/core.js';
@@ -286,7 +286,3 @@ export function createSessionService(deps: SessionServiceDeps) {
 }
 
 export type SessionService = ReturnType<typeof createSessionService>;
-
-// Re-export the sql helper users may want to drop into tests. Kept here so
-// the auth module remains the single import surface for session shape.
-export { sql };

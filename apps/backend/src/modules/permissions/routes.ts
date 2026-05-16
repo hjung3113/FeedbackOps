@@ -94,15 +94,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       }
       const capability: Capability = q.capability;
 
-      // Look up the actor's role_level. We could put a helper on the auth
-      // module, but the read is trivial and adding a public API there for
-      // one consumer would inflate the auth surface — see AGENTS.md:66.
-      const actorRows = await app.db
-        .select({ id: actors.id, roleLevel: actors.roleLevel })
-        .from(actors)
-        .where(and(eq(actors.id, sess.actor_id), eq(actors.workspaceId, sess.workspace_id)))
-        .limit(1);
-      const actorRow = actorRows[0];
+      const actorRow = await loadActorContext(sess);
       if (!actorRow) {
         // Actor row vanished mid-session — treat as session invalid.
         return sendError(reply, 'auth.session_invalid', 'actor not found for session');

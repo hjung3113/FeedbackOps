@@ -1,6 +1,7 @@
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import { errorCodeSchema } from '@fops/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   type ZodTypeProvider,
@@ -149,13 +150,19 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── Error handler ─ ADR-0012 envelope ────────────────────────────────
   app.setErrorHandler((err, req, reply) => {
-    // HttpError instances carry an ADR-0012 code.
-    const code = (err as { code?: string }).code;
-    if (typeof code === 'string' && /^[a-z_]+\.[a-z_]+$/.test(code)) {
-      const status = statusForCode(code as never);
-      return reply
-        .code(status)
-        .send({ code, message: err.message, detail: (err as { detail?: unknown }).detail });
+    // HttpError instances carry an ADR-0012 code. Use the zod enum schema
+    // (closed ErrorCode union from @fops/shared) so an unknown code like
+    // `internal.something_new` falls through to the generic 500 branch
+    // below instead of being silently widened by a regex+`as never` cast.
+    const rawCode = (err as { code?: string }).code;
+    if (typeof rawCode === 'string') {
+      const parsed = errorCodeSchema.safeParse(rawCode);
+      if (parsed.success) {
+        const status = statusForCode(parsed.data);
+        return reply
+          .code(status)
+          .send({ code: parsed.data, message: err.message, detail: (err as { detail?: unknown }).detail });
+      }
     }
     // Zod validation errors surface via fastify-type-provider-zod with
     // statusCode 400; remap to ADR-0012 envelope.

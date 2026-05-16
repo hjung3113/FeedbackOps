@@ -12,7 +12,6 @@ import { SESSION_COOKIE_NAME, requireSession } from '../../middleware/require-se
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { AuthProvider } from './auth-provider.js';
 import type { SessionService } from './session-service.js';
-import { SESSION_TTL_MS } from './session-service.js';
 
 export interface AuthRoutesOptions {
   authProvider: AuthProvider;
@@ -25,7 +24,6 @@ export interface AuthRoutesOptions {
 export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opts) => {
   const { authProvider, sessionService, workspaceId, nodeEnv } = opts;
   const isProd = nodeEnv === 'production';
-  const ttlSeconds = Math.floor(SESSION_TTL_MS / 1000);
 
   // ── GET /auth/mock-login ──────────────────────────────────────────────
   // Dev-only picker. Production returns 404 (the route still exists but the
@@ -131,5 +129,4 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
       };
     },
   });
-  void ttlSeconds; // reserved for future Max-Age usage if we move off `expires`.
 };

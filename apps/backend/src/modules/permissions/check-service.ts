@@ -151,9 +151,11 @@ export function createCheckService(deps: CheckServiceDeps) {
     }
 
     // (5) managed-system scope — Slice 1 has zero MS scopes seeded; branch
-    // kept wired so S1.2 plugs in without a service rewrite.
-    // TODO(S1.2): consult MS-scoped grants when scope.managed_system_id is
-    // null but the capability is MS-eligible.
+    // kept wired so Slice 2 plugs in without a service rewrite. The MS-scoped
+    // grant lookup (when scope.managed_system_id is null but the capability
+    // is MS-eligible) is owned by Slice 2 Managed System Registry — see
+    // docs/implementation/08-mvp-slice-plan.md:61-80 and the Slice 1
+    // follow-ups issue (#7, F-017).
 
     // If we saw a revoked or expired grant earlier and nothing else allowed,
     // surface that distinct reason. Revoked takes precedence over expired
