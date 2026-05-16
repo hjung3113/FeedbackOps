@@ -16,13 +16,21 @@ import { describe, expect, it } from 'vitest';
 const MIGRATIONS_DIR = join(__dirname, '..', '..', '..', 'migrations');
 
 describe('migrations directory', () => {
-  it('has exactly one .sql migration in Slice 1', () => {
-    const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql'));
-    expect(files).toHaveLength(1);
+  it('has the expected number of .sql migrations after Slice 1 #3', () => {
+    // Slice 1 baseline (#2) shipped the first migration. Slice 1 #3 adds the
+    // rate-limit backing table. New slices should bump this expectation in
+    // the same PR that adds the migration so a stray drizzle-kit generate
+    // run is caught.
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    expect(files).toHaveLength(2);
   });
 
   it('Slice 1 migration encodes audit_log role grants per ADR-0008', () => {
-    const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql'));
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
     const firstFile = files[0];
     expect(firstFile).toBeDefined();
     if (!firstFile) return;
@@ -58,7 +66,9 @@ describe('migrations directory', () => {
   });
 
   it('Slice 1 migration encodes partial unique indexes per grill Q5/Q7', () => {
-    const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql'));
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
     const firstFile = files[0];
     expect(firstFile).toBeDefined();
     if (!firstFile) return;
@@ -82,6 +92,24 @@ describe('migrations directory', () => {
     // source tuple, scoped to pending/needs_more_info.
     expect(sql).toMatch(
       /CREATE UNIQUE INDEX "permission_requests_active_uq"[\s\S]*coalesce\("source_object_type"[\s\S]*WHERE "status" in \('pending','needs_more_info'\)/,
+    );
+  });
+
+  it('Slice 1 #3 migration adds rate_limits with fops_app grant', () => {
+    // The rate-limit backing table (ADR-0015:7-8) must be writable by the
+    // app role — the plugin upserts per request. fops_migrate already has
+    // ALL via the schema-level grant in migration 0000, so only the app
+    // grant needs to be hand-added in 0001.
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    const second = files[1];
+    expect(second).toBeDefined();
+    if (!second) return;
+    const sql = readFileSync(join(MIGRATIONS_DIR, second), 'utf8');
+    expect(sql).toMatch(/CREATE TABLE "core"\."rate_limits"/);
+    expect(sql).toMatch(
+      /GRANT\s+SELECT,\s*INSERT,\s*UPDATE,\s*DELETE\s+ON\s+"core"\."rate_limits"\s+TO\s+fops_app/i,
     );
   });
 });

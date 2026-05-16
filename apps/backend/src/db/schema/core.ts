@@ -153,6 +153,29 @@ export const auditLog = coreSchema.table(
 // core.idempotency_keys — ADR-0015:80-87. Composite PK (actor_id, key).
 // 24-hour TTL purge runs as a pg-boss job (Slice 1 S1.5, not here).
 // ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// core.rate_limits — ADR-0015:9-14. Backing store for @fastify/rate-limit.
+// One row per (key, route_group); counter holds requests in the current
+// window, expires_at is the window boundary. Rows are upserted atomically
+// per request; an expired row is reset on the next hit.
+//
+// Not workspace-scoped: rate-limit keys are anon-IP or per-Actor (Actor
+// IDs are globally unique within the MVP single-tenant deployment).
+// ─────────────────────────────────────────────────────────────────────────
+export const rateLimits = coreSchema.table(
+  'rate_limits',
+  {
+    key: text('key').notNull(),
+    routeGroup: text('route_group').notNull(),
+    counter: integer('counter').notNull().default(0),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.key, t.routeGroup] }),
+    expiresAtIdx: index('rate_limits_expires_at_idx').on(t.expiresAt),
+  }),
+);
+
 export const idempotencyKeys = coreSchema.table(
   'idempotency_keys',
   {

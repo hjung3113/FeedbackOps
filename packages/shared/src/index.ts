@@ -2,3 +2,4 @@
 // Apps consume from @fops/shared. Slice 0 is intentionally empty; Slice 1 fills
 // in core.Workspace, core.Actor, core.RoleLevel, core.PermissionScope.
 export * from './enums/index.js';
+export * from './errors/codes.js';
