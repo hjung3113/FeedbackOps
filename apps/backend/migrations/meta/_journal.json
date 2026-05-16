@@ -57,6 +57,13 @@
       "when": 1779540000000,
       "tag": "0007_pgboss_create_queue_shim",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779640000000,
+      "tag": "0008_slice2_review_followups",
+      "breakpoints": true
     }
   ]
 }

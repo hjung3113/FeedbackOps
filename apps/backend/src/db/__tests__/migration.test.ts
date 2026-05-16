@@ -16,14 +16,17 @@ import { describe, expect, it } from 'vitest';
 const MIGRATIONS_DIR = join(__dirname, '..', '..', '..', 'migrations');
 
 describe('migrations directory', () => {
-  it('has the expected number of .sql migrations after Slice 2 #8', () => {
-    // Slice 1 shipped 0000..0004. Slice 2 #9 adds 0005 + 0006. Issue #8
-    // (F-010 follow-up) adds 0007 (SECURITY DEFINER shim around
-    // pgboss.create_queue).
+  it('has at least the Slice 2 migrations applied (0000..0008)', () => {
+    // The exact count grows with every Slice; pin only the floor so this
+    // assertion does not block future migrations (test review H7). Per-file
+    // content checks below are the load-bearing assertions.
     const files = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith('.sql'))
       .sort();
-    expect(files).toHaveLength(8);
+    expect(files.length).toBeGreaterThanOrEqual(9);
+    expect(files[0]).toMatch(/^0000_/);
+    expect(files[7]).toMatch(/^0007_pgboss_create_queue_shim/);
+    expect(files[8]).toMatch(/^0008_slice2_review_followups/);
   });
 
   it('Slice 1 migration encodes audit_log role grants per ADR-0008', () => {
@@ -212,6 +215,52 @@ describe('migrations directory', () => {
     );
     expect(sql).toMatch(/options->>'partition' = 'true'[\s\S]*RAISE EXCEPTION/);
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION pgboss\.create_queue\(text, jsonb\) TO fops_app/);
+  });
+
+  it('Slice 2 #8 review-followup migration 0008 adds FK indexes + symmetric grants + owner pin + strict shim guard', () => {
+    // Review findings DB-001/002/004/005/006.
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    const eighth = files[8];
+    expect(eighth).toBeDefined();
+    if (!eighth) return;
+    const sql = readFileSync(join(MIGRATIONS_DIR, eighth), 'utf8');
+
+    // DB-001 FK indexes on managed_systems / analytics_areas / teams.
+    for (const idx of [
+      'managed_systems_workspace_default_owner_actor_idx',
+      'managed_systems_workspace_default_owner_team_idx',
+      'managed_systems_workspace_archived_by_idx',
+      'analytics_areas_workspace_owner_team_idx',
+      'analytics_areas_workspace_archived_by_idx',
+      'teams_workspace_archived_by_idx',
+    ]) {
+      expect(sql).toMatch(new RegExp(`CREATE INDEX "${idx}"`));
+    }
+
+    // DB-002 FK indexes on permission tables → managed_systems.
+    for (const idx of [
+      'permission_grants_workspace_managed_system_idx',
+      'permission_denies_workspace_managed_system_idx',
+      'permission_requests_workspace_requested_managed_system_idx',
+    ]) {
+      expect(sql).toMatch(new RegExp(`CREATE INDEX "${idx}"`));
+    }
+
+    // DB-005 symmetric migrate grant on rate_limits.
+    expect(sql).toMatch(/GRANT ALL ON "core"\."rate_limits" TO fops_migrate/);
+
+    // DB-004 explicit ownership on the SECURITY DEFINER wrapper + raw fn.
+    expect(sql).toMatch(/ALTER FUNCTION pgboss\.create_queue\(text, jsonb\) OWNER TO fops_migrate/);
+    expect(sql).toMatch(
+      /ALTER FUNCTION pgboss\._create_queue_unsafe\(text, jsonb\) OWNER TO fops_migrate/,
+    );
+
+    // DB-006 strict partition guard via lower() + IN.
+    expect(sql).toMatch(/CREATE OR REPLACE FUNCTION pgboss\.create_queue/);
+    expect(sql).toMatch(/lower\(options->>'partition'\)/);
+    expect(sql).toMatch(/IN \('true', 't', '1'\)/);
   });
 
   it('Slice 2 #9 migration 0006 adds permission → managed_systems FKs', () => {

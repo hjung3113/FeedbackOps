@@ -138,10 +138,84 @@ describe.skipIf(!runIntegration)('ADR-0008 role separation', () => {
     ).rejects.toMatchObject({ code: '42501' });
   });
 
-  // Partition=false happy-path is exercised end-to-end by
-  // `pg-boss boot wiring` integration tests (every boss.start() invokes
-  // pgboss.create_queue for the internal `__pgboss__send-it` queue with
-  // partition=false defaults). No duplicate assertion needed here.
+  it('pgboss.create_queue rejects adjacent truthy partition variants (review C3 + DB-006)', async () => {
+    // The 0008 strict-guard rewrite normalizes via lower() and matches
+    // any of {'true','t','1'}. These three payloads must all reject; the
+    // case-folded key variant passes through (no partition matched) and
+    // is handled by the regular boot path with policy validation.
+    for (const payload of [
+      '{"partition":"True"}', // upper-case T
+      '{"partition":"TRUE"}', // all caps
+      '{"partition":1}', // numeric truthy
+    ]) {
+      await expect(
+        appHandle.pool.query(
+          `select pgboss.create_queue($1, '${payload}'::jsonb)`,
+          [`__f010_test_variant_${payload}__`],
+        ),
+      ).rejects.toMatchObject({ code: '42501' });
+    }
+  });
+
+  it('pgboss.create_queue accepts a valid partition=false call (review L1 happy-path direct)', async () => {
+    // Boot integration tests exercise this transitively, but a direct
+    // call catches an EXECUTE grant regression in milliseconds. Use
+    // fops_migrate to clean up since pgboss.delete_queue EXECUTE was
+    // revoked from fops_app in migration 0003.
+    const queueName = `__f010_test_ok_${Date.now()}__`;
+    await appHandle.pool.query(
+      `select pgboss.create_queue($1, '{"partition":false,"policy":"standard"}'::jsonb)`,
+      [queueName],
+    );
+    await migrateHandle.pool.query('delete from pgboss.queue where name = $1', [queueName]);
+  });
+
+  it('Slice 2 review DB-001/002: FK columns on Slice 2 tables have supporting indexes', async () => {
+    // Every FK column added by Slice 2 #9 + 0006 needs its own index per
+    // ADR-0015:57 unless a covering composite already exists. The
+    // existing `analytics_areas_workspace_managed_system_idx` (0005:135)
+    // covers `analytics_areas.managed_system_id`; the rest are explicit
+    // in 0008. Assert each named index exists.
+    const expected = [
+      'managed_systems_workspace_default_owner_actor_idx',
+      'managed_systems_workspace_default_owner_team_idx',
+      'managed_systems_workspace_archived_by_idx',
+      'analytics_areas_workspace_owner_team_idx',
+      'analytics_areas_workspace_archived_by_idx',
+      'teams_workspace_archived_by_idx',
+      'permission_grants_workspace_managed_system_idx',
+      'permission_denies_workspace_managed_system_idx',
+      'permission_requests_workspace_requested_managed_system_idx',
+    ];
+    const { rows } = await migrateHandle.pool.query<{ indexname: string }>(
+      `select indexname from pg_indexes where indexname = ANY($1::text[])`,
+      [expected],
+    );
+    const got = new Set(rows.map((r) => r.indexname));
+    for (const name of expected) {
+      expect(got.has(name), `index ${name} missing`).toBe(true);
+    }
+  });
+
+  it('Slice 2 review DB-004: pg-boss create_queue functions owned by fops_migrate', async () => {
+    // SECURITY DEFINER on pgboss.create_queue runs with the owner's
+    // privileges. ADR-0008 requires the DDL-capable owner; pin it.
+    const { rows } = await migrateHandle.pool.query<{
+      proname: string;
+      rolname: string;
+    }>(
+      `select p.proname, r.rolname
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+         join pg_roles r on r.oid = p.proowner
+        where n.nspname = 'pgboss'
+          and p.proname in ('create_queue', '_create_queue_unsafe')`,
+    );
+    expect(rows.length).toBe(2);
+    for (const r of rows) {
+      expect(r.rolname).toBe('fops_migrate');
+    }
+  });
 
   it('fops_migrate retains UPDATE on core.audit_log (operator escape hatch)', async () => {
     const result = await migrateHandle.pool.query(
