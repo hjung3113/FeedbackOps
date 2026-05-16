@@ -15,6 +15,10 @@ import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { statusForCode } from './lib/errors.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
+import {
+  analyticsAreasRoutes,
+  createAnalyticsAreaService,
+} from './modules/analytics-areas/index.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createSessionService } from './modules/auth/session-service.js';
@@ -163,13 +167,11 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       const parsed = errorCodeSchema.safeParse(rawCode);
       if (parsed.success) {
         const status = statusForCode(parsed.data);
-        return reply
-          .code(status)
-          .send({
-            code: parsed.data,
-            message: err.message,
-            detail: (err as { detail?: unknown }).detail,
-          });
+        return reply.code(status).send({
+          code: parsed.data,
+          message: err.message,
+          detail: (err as { detail?: unknown }).detail,
+        });
       }
     }
     // Zod validation errors surface via fastify-type-provider-zod with
@@ -254,6 +256,22 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   await app.register(managedSystemsRoutes, {
     sessionService,
     managedSystemService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+    },
+  });
+
+  // ── Analytics Areas module — Slice 2 issue #11 ──────────────────────────
+  const analyticsAreaService = createAnalyticsAreaService({
+    db: dbHandle.db,
+    checkService,
+    auditService,
+    idempotencyService,
+  });
+  await app.register(analyticsAreasRoutes, {
+    sessionService,
+    analyticsAreaService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,

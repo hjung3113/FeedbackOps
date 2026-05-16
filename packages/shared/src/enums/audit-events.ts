@@ -21,6 +21,10 @@ export const AUDIT_EVENT_TYPES = [
   'managed_system_registered',
   'managed_system_updated',
   'managed_system_archived',
+  // Slice 2 #11: Analytics Area write path + cascade tracking.
+  'analytics_area_registered',
+  'analytics_area_updated',
+  'analytics_area_archived',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -79,9 +83,41 @@ export const managedSystemArchivedDetailSchema = z.object({
 });
 export type ManagedSystemArchivedDetail = z.infer<typeof managedSystemArchivedDetailSchema>;
 
+// ──────────────────────────────────────────────────────────────────────
+// Analytics Area audit events (ADR-0017 audit-detail section, Slice 2 #11).
+// `_archived` carries `cascade_source_managed_system_id` so a single BI
+// query can join from either direction (MS archive → child AAs, or AA
+// row → parent cascade event).
+// ──────────────────────────────────────────────────────────────────────
+export const analyticsAreaRegisteredDetailSchema = z.object({
+  workspace_id: z.string().uuid(),
+  managed_system_id: z.string().uuid(),
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  owner_team_id: z.string().uuid().nullable(),
+});
+export type AnalyticsAreaRegisteredDetail = z.infer<typeof analyticsAreaRegisteredDetailSchema>;
+
+export const analyticsAreaUpdatedDetailSchema = z.object({
+  analytics_area_id: z.string().uuid(),
+  changes: z.record(z.string(), changeEntrySchema).refine((c) => Object.keys(c).length > 0, {
+    message: 'changes must include at least one field',
+  }),
+});
+export type AnalyticsAreaUpdatedDetail = z.infer<typeof analyticsAreaUpdatedDetailSchema>;
+
+export const analyticsAreaArchivedDetailSchema = z.object({
+  analytics_area_id: z.string().uuid(),
+  cascade_source_managed_system_id: z.string().uuid().nullable(),
+});
+export type AnalyticsAreaArchivedDetail = z.infer<typeof analyticsAreaArchivedDetailSchema>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
   managed_system_updated: managedSystemUpdatedDetailSchema,
   managed_system_archived: managedSystemArchivedDetailSchema,
+  analytics_area_registered: analyticsAreaRegisteredDetailSchema,
+  analytics_area_updated: analyticsAreaUpdatedDetailSchema,
+  analytics_area_archived: analyticsAreaArchivedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

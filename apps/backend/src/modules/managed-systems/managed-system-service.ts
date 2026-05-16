@@ -24,8 +24,9 @@ import type { DatabaseError } from 'pg';
 import type { AuditEventType } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import { analyticsAreas, managedSystems } from '../../db/schema/core.js';
+import { managedSystems } from '../../db/schema/core.js';
 import { HttpError } from '../../lib/errors.js';
+import { cascadeArchiveActiveChildren } from '../analytics-areas/analytics-area-service.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
@@ -446,20 +447,17 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         throw new HttpError('internal.unexpected', 'managed_systems archive returned no row');
       }
 
-      // Cascade walk over child Analytics Areas. The AA write path lands
-      // in Slice 2 #11; until then this set is empty.
-      const childRows = await tx
-        .update(analyticsAreas)
-        .set({ archivedAt: now, archivedByActorId: actor.actor_id, updatedAt: now })
-        .where(
-          and(
-            eq(analyticsAreas.workspaceId, actor.workspace_id),
-            eq(analyticsAreas.managedSystemId, id),
-            isNull(analyticsAreas.archivedAt),
-          ),
-        )
-        .returning({ id: analyticsAreas.id });
-      const cascadedIds = childRows.map((r) => r.id);
+      // Cascade walk over child Analytics Areas (Slice 2 #11 activation).
+      // Each archived child gets its own `analytics_area_archived` audit
+      // row with `cascade_source_managed_system_id = id` so a single
+      // BI query can pivot from either direction. A failure in any child
+      // aborts the whole transaction.
+      const cascadedIds = await cascadeArchiveActiveChildren(tx as unknown as Db, auditService, {
+        workspaceId: actor.workspace_id,
+        actorId: actor.actor_id,
+        managedSystemId: id,
+        now,
+      });
 
       await auditService.record(tx as unknown as Db, {
         workspace_id: actor.workspace_id,
