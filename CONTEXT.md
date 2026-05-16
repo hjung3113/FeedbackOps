@@ -188,6 +188,14 @@ _Avoid_: Foreign key, parent-child relation, hard reference, related record
 The named kind of an **Entity Link**, drawn from a controlled vocabulary (e.g. `related_to`, `evidence_of`, `follow_up_for`, `clustered_into`).
 _Avoid_: Tag, category, free-form label
 
+**Visibility**:
+The stored audience policy carried by an **Entity Link** (and by other visibility-controlled records). Canonical enum in `docs/design/15-data-contracts.md`: `internal_only | summary_visible | visible_to_reporter | admin_only`. Enforced on every read path.
+_Avoid_: Access level, role, permission scope
+
+**UI Visibility Decision**:
+The backend-decided per-request rendering verdict for a linked object: `allowed | hidden | summary_visible | request_access | denied`. Derived from **Visibility** plus the requesting **Actor**'s scope and **Sensitive Permission** state. Not stored.
+_Avoid_: Visibility, permission, frontend filter
+
 **Dashboard**:
 An action-queue surface that groups outstanding **VOC**, **Task Request**, **Task**, **Survey**, and **Finding** work needing an **Actor**'s attention within their **Managed System Permission Scope**. Not a chart-only reporting page.
 _Avoid_: Chart page, BI report, analytics view, KPI tile board
