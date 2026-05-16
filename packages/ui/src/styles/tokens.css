@@ -1,0 +1,20 @@
+/* Raw color tokens per ADR-0016 + DESIGN.md.
+ * Components MUST NOT reference --color-* directly; consume semantic tokens in semantic.css.
+ * Values stored as `R G B` triples for Tailwind alpha-value composition.
+ */
+:root {
+  --color-pitch-black: 8 9 10;
+  --color-graphite: 26 27 30;
+  --color-coal: 35 37 41;
+  --color-iron: 53 56 61;
+  --color-storm-cloud: 138 143 152;
+  --color-cement: 187 191 197;
+  --color-porcelain: 240 241 243;
+  --color-white: 255 255 255;
+
+  --color-neon-lime: 228 242 34;
+  --color-electric-blue: 90 161 255;
+  --color-warn-amber: 245 173 66;
+  --color-danger-crimson: 232 76 76;
+  --color-success-jade: 80 200 140;
+}

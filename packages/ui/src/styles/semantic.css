@@ -1,0 +1,43 @@
+/* Semantic tokens per ADR-0016. Components consume ONLY these names.
+ * shadcn/ui stock CSS vars are remapped here so wrapped primitives render our palette.
+ */
+:root {
+  /* Surfaces */
+  --surface-canvas: var(--color-pitch-black);
+  --surface-raised: var(--color-graphite);
+  --surface-overlay: var(--color-coal);
+
+  /* Text */
+  --text-primary: var(--color-porcelain);
+  --text-muted: var(--color-cement);
+  --text-subtle: var(--color-storm-cloud);
+  --text-inverse: var(--color-pitch-black);
+
+  /* Borders */
+  --border-default: var(--color-iron);
+  --border-strong: var(--color-storm-cloud);
+
+  /* Accent */
+  --accent-primary: var(--color-neon-lime);
+  --accent-info: var(--color-electric-blue);
+  --accent-warn: var(--color-warn-amber);
+  --accent-danger: var(--color-danger-crimson);
+  --accent-success: var(--color-success-jade);
+
+  /* shadcn/ui remap */
+  --background: var(--surface-canvas);
+  --foreground: var(--text-primary);
+  --card: var(--surface-raised);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-overlay);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-primary);
+  --primary-foreground: var(--text-inverse);
+  --muted: var(--surface-raised);
+  --muted-foreground: var(--text-muted);
+  --border: var(--border-default);
+  --input: var(--border-default);
+  --ring: var(--accent-primary);
+  --destructive: var(--accent-danger);
+  --destructive-foreground: var(--text-primary);
+}

@@ -1,0 +1,41 @@
+{
+  "name": "@fops/frontend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fops/shared": "workspace:*",
+    "@fops/ui": "workspace:*",
+    "@hookform/resolvers": "3.9.1",
+    "@tanstack/react-query": "5.62.7",
+    "@tanstack/react-router": "1.170.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-hook-form": "7.54.2",
+    "zod": "3.25.67",
+    "zustand": "5.0.2"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "1.168.2",
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.1.0",
+    "@types/react": "19.0.2",
+    "@types/react-dom": "19.0.2",
+    "@vitejs/plugin-react": "4.3.4",
+    "autoprefixer": "10.4.20",
+    "jsdom": "25.0.1",
+    "postcss": "8.4.49",
+    "tailwindcss": "3.4.17",
+    "typescript": "5.7.2",
+    "vite": "5.4.21",
+    "vitest": "2.1.8"
+  }
+}

@@ -1,0 +1,15 @@
+node_modules
+dist
+build
+.turbo
+coverage
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vite
+# TanStack Router generated route tree
+apps/frontend/src/routeTree.gen.ts
+playwright-report
+test-results
