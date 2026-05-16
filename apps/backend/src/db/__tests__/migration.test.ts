@@ -16,19 +16,14 @@ import { describe, expect, it } from 'vitest';
 const MIGRATIONS_DIR = join(__dirname, '..', '..', '..', 'migrations');
 
 describe('migrations directory', () => {
-  it('has the expected number of .sql migrations after Slice 1 #6', () => {
-    // Slice 1 baseline (#2) shipped the first migration. Slice 1 #3 adds the
-    // rate-limit backing table. Slice 1 #6 pre-installs the pg-boss schema
-    // (ADR-0009). Migration 0003 (F-003 + F-010 remediation) adds
-    // referential-integrity FKs, narrows pg-boss role surface, and
-    // pre-creates the idempotency-purge queue. Migration 0004 (F-018)
-    // pre-creates the rate_limits purge queue. New slices should bump this
-    // expectation in the same PR that adds the migration so a stray
-    // drizzle-kit generate run is caught.
+  it('has the expected number of .sql migrations after Slice 2 #9', () => {
+    // Slice 1 shipped 0000..0004. Slice 2 #9 adds 0005 (managed_systems +
+    // analytics_areas + teams + role grants + partial unique + CHECK) and
+    // 0006 (FKs from permission_grants/denies/requests to managed_systems).
     const files = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith('.sql'))
       .sort();
-    expect(files).toHaveLength(5);
+    expect(files).toHaveLength(7);
   });
 
   it('Slice 1 migration encodes audit_log role grants per ADR-0008', () => {
@@ -138,6 +133,73 @@ describe('migrations directory', () => {
     expect(sql).toMatch(/CREATE TABLE "core"\."rate_limits"/);
     expect(sql).toMatch(
       /GRANT\s+SELECT,\s*INSERT,\s*UPDATE,\s*DELETE\s+ON\s+"core"\."rate_limits"\s+TO\s+fops_app/i,
+    );
+  });
+
+  it('Slice 2 #9 migration 0005 creates managed_systems + analytics_areas + teams', () => {
+    // ADR-0017 + ADR-0018 lock the shape. Verify the load-bearing DDL is
+    // present in the generated SQL so a careless rewrite cannot drop it
+    // without the suite failing.
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    const fifth = files[5];
+    expect(fifth).toBeDefined();
+    if (!fifth) return;
+    const sql = readFileSync(join(MIGRATIONS_DIR, fifth), 'utf8');
+
+    expect(sql).toMatch(/CREATE TABLE "core"\."managed_systems"/);
+    expect(sql).toMatch(/CREATE TABLE "core"\."analytics_areas"/);
+    expect(sql).toMatch(/CREATE TABLE "core"\."teams"/);
+
+    // ADR-0018 default-owner XOR-or-both-null CHECK.
+    expect(sql).toMatch(
+      /CONSTRAINT "managed_systems_default_owner_xor_check"[\s\S]*"default_owner_actor_id" is null[\s\S]*"default_owner_team_id" is null/i,
+    );
+
+    // Partial unique indexes per ADR-0017 / ADR-0018.
+    expect(sql).toMatch(
+      /CREATE UNIQUE INDEX "managed_systems_workspace_slug_active_uq"[\s\S]*\("workspace_id","slug"\)[\s\S]*WHERE "archived_at" is null/,
+    );
+    expect(sql).toMatch(
+      /CREATE UNIQUE INDEX "analytics_areas_workspace_ms_slug_active_uq"[\s\S]*\("workspace_id","managed_system_id","slug"\)[\s\S]*WHERE "archived_at" is null/,
+    );
+    expect(sql).toMatch(
+      /CREATE UNIQUE INDEX "teams_workspace_name_active_uq"[\s\S]*\("workspace_id","name"\)[\s\S]*WHERE "archived_at" is null/,
+    );
+
+    // FK targets: analytics_areas.managed_system_id → core.managed_systems(id).
+    expect(sql).toMatch(
+      /analytics_areas[\s\S]*FOREIGN KEY \("managed_system_id"\) REFERENCES "core"\."managed_systems"\("id"\)/,
+    );
+
+    // Role grants per ADR-0008 for all three new tables.
+    for (const tbl of ['"core"."managed_systems"', '"core"."analytics_areas"', '"core"."teams"']) {
+      const re = new RegExp(
+        `GRANT\\s+SELECT,\\s*INSERT,\\s*UPDATE,\\s*DELETE\\s+ON\\s+${tbl.replace(/\./g, '\\.').replace(/"/g, '"')}\\s+TO\\s+fops_app`,
+        'i',
+      );
+      expect(sql).toMatch(re);
+    }
+  });
+
+  it('Slice 2 #9 migration 0006 adds permission → managed_systems FKs', () => {
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    const sixth = files[6];
+    expect(sixth).toBeDefined();
+    if (!sixth) return;
+    const sql = readFileSync(join(MIGRATIONS_DIR, sixth), 'utf8');
+
+    expect(sql).toMatch(
+      /"permission"\."permission_grants"[\s\S]*FOREIGN KEY \("managed_system_id"\) REFERENCES "core"\."managed_systems"\("id"\)/,
+    );
+    expect(sql).toMatch(
+      /"permission"\."permission_denies"[\s\S]*FOREIGN KEY \("managed_system_id"\) REFERENCES "core"\."managed_systems"\("id"\)/,
+    );
+    expect(sql).toMatch(
+      /"permission"\."permission_requests"[\s\S]*FOREIGN KEY \("requested_managed_system_id"\) REFERENCES "core"\."managed_systems"\("id"\)/,
     );
   });
 });

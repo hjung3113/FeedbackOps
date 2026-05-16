@@ -35,12 +35,64 @@ describe.skipIf(!runIntegration)('seed idempotency', () => {
     const result = await runSeed(handle);
     expect(result.workspaceInserted).toBe(false);
     expect(result.actorsInserted).toBe(0);
+    expect(result.managedSystemsInserted).toBe(0);
+    expect(result.analyticsAreasInserted).toBe(0);
 
     const after = await handle.pool.query<{ count: string }>(
       'select count(*)::text as count from core.actors where workspace_id = $1',
       [WORKSPACE_ID],
     );
     expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
+  });
+
+  it('seeds Slice 2 managed_systems + analytics_areas per ADR-0017', async () => {
+    const ms = await handle.pool.query<{ slug: string; name: string }>(
+      `select slug, name from core.managed_systems
+         where workspace_id = $1 and archived_at is null
+         order by slug`,
+      [WORKSPACE_ID],
+    );
+    expect(ms.rows).toEqual([
+      { slug: 'power-bi', name: 'Power BI' },
+      { slug: 'tableau', name: 'Tableau' },
+    ]);
+
+    const aa = await handle.pool.query<{ ms_slug: string; aa_slug: string }>(
+      `select m.slug as ms_slug, a.slug as aa_slug
+         from core.analytics_areas a
+         join core.managed_systems m on m.id = a.managed_system_id
+        where a.workspace_id = $1 and a.archived_at is null
+        order by m.slug, a.slug`,
+      [WORKSPACE_ID],
+    );
+    expect(aa.rows).toEqual([
+      { ms_slug: 'power-bi', aa_slug: 'permission-management' },
+      { ms_slug: 'power-bi', aa_slug: 'usage-analytics' },
+      { ms_slug: 'tableau', aa_slug: 'dashboard-catalog' },
+      { ms_slug: 'tableau', aa_slug: 'permission-management' },
+      { ms_slug: 'tableau', aa_slug: 'usage-analytics' },
+    ]);
+
+    // ADR-0018 / grill Q9: default_owner_actor_id points at mock-admin-1 on
+    // both MS seed rows; no team rows seeded.
+    const { rows: ownerRows } = await handle.pool.query<{
+      slug: string;
+      external_id: string | null;
+    }>(
+      `select m.slug, a.external_id
+         from core.managed_systems m
+         left join core.actors a on a.id = m.default_owner_actor_id
+        where m.workspace_id = $1 and m.archived_at is null
+        order by m.slug`,
+      [WORKSPACE_ID],
+    );
+    expect(ownerRows.every((r) => r.external_id === 'mock-admin-1')).toBe(true);
+
+    const { rows: teamRows } = await handle.pool.query<{ count: string }>(
+      'select count(*)::text as count from core.teams where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    expect(teamRows[0]?.count).toBe('0');
   });
 
   it('seeds the three CONTEXT.md baseline actors with locked role/type combo', async () => {

@@ -91,6 +91,24 @@ describe.skipIf(!runIntegration)('ADR-0008 role separation', () => {
     ]);
   });
 
+  it('fops_app has full DML on Slice 2 new tables (managed_systems, analytics_areas, teams)', async () => {
+    // ADR-0008 + ADR-0017/0018 role grants: app role can SELECT/INSERT/
+    // UPDATE/DELETE the new registry + placeholder tables. teams is grant-
+    // symmetric even though no Slice 2 service writes to it.
+    for (const fq of ['core.managed_systems', 'core.analytics_areas', 'core.teams']) {
+      const [schema, table] = fq.split('.');
+      const { rows } = await appHandle.pool.query<{ privilege_type: string }>(
+        `select privilege_type from information_schema.role_table_grants
+          where grantee = 'fops_app' and table_schema = $1 and table_name = $2`,
+        [schema, table],
+      );
+      const got = new Set(rows.map((r) => r.privilege_type));
+      for (const p of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
+        expect(got.has(p), `${fq} missing ${p} for fops_app`).toBe(true);
+      }
+    }
+  });
+
   it('fops_migrate retains UPDATE on core.audit_log (operator escape hatch)', async () => {
     const result = await migrateHandle.pool.query(
       `update core.audit_log set summary = summary where event_type = 'test.app_insert'`,

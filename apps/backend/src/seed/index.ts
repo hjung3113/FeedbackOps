@@ -1,23 +1,28 @@
-// Slice 1 seed — invoked by `pnpm --filter @fops/backend db:seed`.
+// Seed — invoked by `pnpm --filter @fops/backend db:seed`.
 //
-// Decisions locked by Slice 1 grilling session (Q2, Q4, Q11):
-//   * Seed is a SEPARATE command, not embedded in a migration. Migrations are
-//     for schema; seed is for canonical baseline data so the app boots on a
-//     freshly migrated database.
-//   * The seed runs as the fops_app role via DATABASE_URL — proving the app
-//     role can write to non-audit tables. The seed never touches core.audit_log.
-//   * Three baseline actors per CONTEXT.md vocabulary:
-//       - mock-admin-1 / admin@feedbackops.local  / role_level=admin     / actor_type=internal_member
-//       - mock-user-1  / user@feedbackops.local   / role_level=user      / actor_type=internal_member
-//       - system       / system@feedbackops.local / role_level=admin     / actor_type=system
-//     (system has admin role so it can perform workspace-wide writes when
-//     used by background jobs; ADR-0006 is silent on this so the decision
-//     lives in the grill transcript.)
+// Decisions locked by Slice 1 grilling session (Q2, Q4, Q11) and extended
+// by Slice 2 grill Q9 (ADR-0017 / ADR-0018):
+//   * Seed is a SEPARATE command, not embedded in a migration. Migrations
+//     are for schema; seed is for canonical baseline data so the app boots
+//     on a freshly migrated database.
+//   * Runs as the fops_app role via DATABASE_URL — proves the app role can
+//     write to non-audit tables. Never touches core.audit_log.
+//   * Three baseline actors per CONTEXT.md vocabulary (Slice 1):
+//       - mock-admin-1 / admin@feedbackops.local  / admin / internal_member
+//       - mock-user-1  / user@feedbackops.local   / user  / internal_member
+//       - system       / system@feedbackops.local / admin / system
+//   * Slice 2 (#9) extends seed with the Managed System Registry baseline
+//     per ADR-0017 / grill Q9:
+//       - managed_systems: tableau, power-bi (default_owner = mock-admin-1).
+//       - analytics_areas: 5 rows under those two MSs.
+//       - teams: zero rows (ADR-0018 placeholder).
 //   * Idempotent. Re-running the seed inserts zero new rows.
+
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { loadConfig } from '../config.js';
 import { type DbHandle, createDb } from '../db/client.js';
-import { actors, workspaces } from '../db/schema/core.js';
+import { actors, analyticsAreas, managedSystems, workspaces } from '../db/schema/core.js';
 
 const SEED_ACTORS = [
   {
@@ -43,10 +48,32 @@ const SEED_ACTORS = [
   },
 ] as const;
 
+// Slice 2 #9 baseline (ADR-0017 + grill Q9). Two managed systems whose
+// default owner is the seeded mock-admin-1 actor; five analytics areas
+// across them. teams seeded with zero rows per ADR-0018.
+const SEED_MANAGED_SYSTEMS = [
+  { slug: 'tableau', name: 'Tableau' },
+  { slug: 'power-bi', name: 'Power BI' },
+] as const;
+
+const SEED_ANALYTICS_AREAS: ReadonlyArray<{
+  msSlug: 'tableau' | 'power-bi';
+  slug: string;
+  name: string;
+}> = [
+  { msSlug: 'tableau', slug: 'permission-management', name: 'Permission Management' },
+  { msSlug: 'tableau', slug: 'usage-analytics', name: 'Usage Analytics' },
+  { msSlug: 'tableau', slug: 'dashboard-catalog', name: 'Dashboard Catalog' },
+  { msSlug: 'power-bi', slug: 'permission-management', name: 'Permission Management' },
+  { msSlug: 'power-bi', slug: 'usage-analytics', name: 'Usage Analytics' },
+];
+
 export interface SeedResult {
   workspaceId: string;
   workspaceInserted: boolean;
   actorsInserted: number;
+  managedSystemsInserted: number;
+  analyticsAreasInserted: number;
 }
 
 export async function runSeed(handle: DbHandle): Promise<SeedResult> {
@@ -72,9 +99,6 @@ export async function runSeed(handle: DbHandle): Promise<SeedResult> {
   const workspaceInserted = wsRows.length > 0;
 
   // ── Actor upsert ────────────────────────────────────────────────────
-  // Per Q5 unique index on (workspace_id, external_id) we conflict on that
-  // tuple; the unique-index ON CONFLICT path requires the actual index
-  // expression in Drizzle 0.38. Using onConflictDoNothing with a SQL target.
   let actorsInserted = 0;
   for (const a of SEED_ACTORS) {
     const rows = await db
@@ -87,18 +111,94 @@ export async function runSeed(handle: DbHandle): Promise<SeedResult> {
         roleLevel: a.roleLevel,
         actorType: a.actorType,
       })
-      .onConflictDoNothing({
-        target: [actors.workspaceId, actors.externalId],
-      })
+      .onConflictDoNothing({ target: [actors.workspaceId, actors.externalId] })
       .returning({ id: actors.id });
     if (rows.length > 0) actorsInserted += 1;
   }
 
-  return { workspaceId, workspaceInserted, actorsInserted };
+  // ── Resolve mock-admin-1 for default_owner_actor_id ─────────────────
+  const adminRows = await db
+    .select({ id: actors.id })
+    .from(actors)
+    .where(and(eq(actors.workspaceId, workspaceId), eq(actors.externalId, 'mock-admin-1')));
+  const adminActorId = adminRows[0]?.id;
+  if (!adminActorId) {
+    throw new Error('Seed expected mock-admin-1 actor to exist after actor upsert.');
+  }
+
+  // ── Managed Systems upsert (ADR-0017) ───────────────────────────────
+  // Idempotency: partial unique on (workspace_id, slug) WHERE archived_at
+  // IS NULL forbids duplicate active rows. We pre-check existence rather
+  // than rely on onConflictDoNothing because the index is partial.
+  let managedSystemsInserted = 0;
+  const msIdBySlug = new Map<string, string>();
+  for (const m of SEED_MANAGED_SYSTEMS) {
+    const existing = await db
+      .select({ id: managedSystems.id })
+      .from(managedSystems)
+      .where(
+        and(
+          eq(managedSystems.workspaceId, workspaceId),
+          eq(managedSystems.slug, m.slug),
+          isNull(managedSystems.archivedAt),
+        ),
+      );
+    let id = existing[0]?.id;
+    if (!id) {
+      const inserted = await db
+        .insert(managedSystems)
+        .values({
+          workspaceId,
+          slug: m.slug,
+          name: m.name,
+          defaultOwnerActorId: adminActorId,
+        })
+        .returning({ id: managedSystems.id });
+      id = inserted[0]?.id;
+      if (id) {
+        managedSystemsInserted += 1;
+      }
+    }
+    if (id) msIdBySlug.set(m.slug, id);
+  }
+
+  // ── Analytics Areas upsert (ADR-0017, grill Q9) ─────────────────────
+  let analyticsAreasInserted = 0;
+  for (const a of SEED_ANALYTICS_AREAS) {
+    const msId = msIdBySlug.get(a.msSlug);
+    if (!msId) continue;
+    const existing = await db
+      .select({ id: analyticsAreas.id })
+      .from(analyticsAreas)
+      .where(
+        and(
+          eq(analyticsAreas.workspaceId, workspaceId),
+          eq(analyticsAreas.managedSystemId, msId),
+          eq(analyticsAreas.slug, a.slug),
+          isNull(analyticsAreas.archivedAt),
+        ),
+      );
+    if (existing.length === 0) {
+      await db.insert(analyticsAreas).values({
+        workspaceId,
+        managedSystemId: msId,
+        slug: a.slug,
+        name: a.name,
+      });
+      analyticsAreasInserted += 1;
+    }
+  }
+
+  return {
+    workspaceId,
+    workspaceInserted,
+    actorsInserted,
+    managedSystemsInserted,
+    analyticsAreasInserted,
+  };
 }
 
 // ── CLI entry ─────────────────────────────────────────────────────────
-// Skip the auto-run when this module is imported (e.g. by tests).
 const isMain = import.meta.url === `file://${process.argv[1]}`;
 if (isMain) {
   const config = loadConfig();

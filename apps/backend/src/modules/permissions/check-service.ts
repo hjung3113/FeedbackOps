@@ -150,12 +150,15 @@ export function createCheckService(deps: CheckServiceDeps) {
       return { allow: true, via: 'role' };
     }
 
-    // (5) managed-system scope — Slice 1 has zero MS scopes seeded; branch
-    // kept wired so Slice 2 plugs in without a service rewrite. The MS-scoped
-    // grant lookup (when scope.managed_system_id is null but the capability
-    // is MS-eligible) is owned by Slice 2 Managed System Registry — see
-    // docs/implementation/08-mvp-slice-plan.md:61-80 and the Slice 1
-    // follow-ups issue (#7, F-017).
+    // (5) managed-system scope — Slice 2 #9 lands the Managed System
+    // Registry tables and adds the FK on permission_grants.managed_system_id
+    // → core.managed_systems(id), but per the Slice 2 grill Q5 lock this
+    // step stays no-op. MS-scope grant satisfaction (the lookup that runs
+    // when scope.managed_system_id is set, or when the capability is
+    // MS-eligible and a workspace-only grant should fall through to
+    // MS-scoped) is owned by Slice 3 — see
+    // docs/implementation/08-mvp-slice-plan.md (Slice 3 section) and
+    // ADR-0017 ("step 5 activation deferred").
 
     // If we saw a revoked or expired grant earlier and nothing else allowed,
     // surface that distinct reason. Revoked takes precedence over expired

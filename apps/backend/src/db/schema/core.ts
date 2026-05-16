@@ -181,6 +181,105 @@ export const rateLimits = coreSchema.table(
   }),
 );
 
+// ─────────────────────────────────────────────────────────────────────────
+// core.teams — ADR-0018 placeholder. Slice 2 ships schema + FK target only.
+// No CRUD endpoints, no admin UI, no seed rows. Future product slice that
+// first needs operator-managed teams adds the management surface without a
+// second schema migration.
+// ─────────────────────────────────────────────────────────────────────────
+export const teams = coreSchema.table(
+  'teams',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    name: text('name').notNull(),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    archivedByActorId: uuid('archived_by_actor_id').references(() => actors.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceIdx: index('teams_workspace_idx').on(t.workspaceId),
+    workspaceNameActiveUq: uniqueIndex('teams_workspace_name_active_uq')
+      .on(t.workspaceId, t.name)
+      .where(sql`${t.archivedAt} is null`),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// core.managed_systems — ADR-0017. UUID PK + workspace-scoped immutable
+// slug + mutable name + optional external_key (metadata only). Archive
+// via timestamp + actor; slug reusable after archive via partial unique.
+// default_owner XOR-or-both-null CHECK per ADR-0018: at most one of
+// (default_owner_actor_id, default_owner_team_id) is non-null.
+// ─────────────────────────────────────────────────────────────────────────
+export const managedSystems = coreSchema.table(
+  'managed_systems',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    externalKey: text('external_key'),
+    defaultOwnerActorId: uuid('default_owner_actor_id').references(() => actors.id),
+    defaultOwnerTeamId: uuid('default_owner_team_id').references(() => teams.id),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    archivedByActorId: uuid('archived_by_actor_id').references(() => actors.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceIdx: index('managed_systems_workspace_idx').on(t.workspaceId),
+    workspaceSlugActiveUq: uniqueIndex('managed_systems_workspace_slug_active_uq')
+      .on(t.workspaceId, t.slug)
+      .where(sql`${t.archivedAt} is null`),
+    defaultOwnerXorCheck: check(
+      'managed_systems_default_owner_xor_check',
+      sql`${t.defaultOwnerActorId} is null or ${t.defaultOwnerTeamId} is null`,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// core.analytics_areas — ADR-0017. Flat under exactly one Managed System;
+// no parent_analytics_area_id per Slice 2 grill Q2. Two MSs may carry the
+// same AA slug. Partial unique on (workspace_id, managed_system_id, slug)
+// where archived_at IS NULL so slugs are reclaimable after archive.
+// ─────────────────────────────────────────────────────────────────────────
+export const analyticsAreas = coreSchema.table(
+  'analytics_areas',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    managedSystemId: uuid('managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    ownerTeamId: uuid('owner_team_id').references(() => teams.id),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    archivedByActorId: uuid('archived_by_actor_id').references(() => actors.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceIdx: index('analytics_areas_workspace_idx').on(t.workspaceId),
+    workspaceManagedSystemIdx: index('analytics_areas_workspace_managed_system_idx').on(
+      t.workspaceId,
+      t.managedSystemId,
+    ),
+    workspaceMsSlugActiveUq: uniqueIndex('analytics_areas_workspace_ms_slug_active_uq')
+      .on(t.workspaceId, t.managedSystemId, t.slug)
+      .where(sql`${t.archivedAt} is null`),
+  }),
+);
+
 export const idempotencyKeys = coreSchema.table(
   'idempotency_keys',
   {

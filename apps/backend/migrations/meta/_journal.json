@@ -36,6 +36,20 @@
       "when": 1779240000000,
       "tag": "0004_rate_limits_purge_queue",
       "breakpoints": false
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779340000000,
+      "tag": "0005_slice2_registry",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779440000000,
+      "tag": "0006_permission_managed_system_fks",
+      "breakpoints": true
     }
   ]
 }
