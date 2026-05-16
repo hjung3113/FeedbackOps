@@ -16,14 +16,14 @@ import { describe, expect, it } from 'vitest';
 const MIGRATIONS_DIR = join(__dirname, '..', '..', '..', 'migrations');
 
 describe('migrations directory', () => {
-  it('has the expected number of .sql migrations after Slice 2 #9', () => {
-    // Slice 1 shipped 0000..0004. Slice 2 #9 adds 0005 (managed_systems +
-    // analytics_areas + teams + role grants + partial unique + CHECK) and
-    // 0006 (FKs from permission_grants/denies/requests to managed_systems).
+  it('has the expected number of .sql migrations after Slice 2 #8', () => {
+    // Slice 1 shipped 0000..0004. Slice 2 #9 adds 0005 + 0006. Issue #8
+    // (F-010 follow-up) adds 0007 (SECURITY DEFINER shim around
+    // pgboss.create_queue).
     const files = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith('.sql'))
       .sort();
-    expect(files).toHaveLength(7);
+    expect(files).toHaveLength(8);
   });
 
   it('Slice 1 migration encodes audit_log role grants per ADR-0008', () => {
@@ -181,6 +181,37 @@ describe('migrations directory', () => {
       );
       expect(sql).toMatch(re);
     }
+  });
+
+  it('Slice 2 #8 migration 0007 installs SECURITY DEFINER shim for pgboss.create_queue', () => {
+    // F-010 follow-up: the raw pg-boss create_queue function DDLs partition
+    // tables when partition=true. The shim renames the original to
+    // `_create_queue_unsafe`, revokes EXECUTE from fops_app + PUBLIC, and
+    // re-creates `pgboss.create_queue` as a SECURITY DEFINER wrapper that
+    // hard-rejects partition=true. fops_app gets EXECUTE on the wrapper
+    // only.
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    const seventh = files[7];
+    expect(seventh).toBeDefined();
+    if (!seventh) return;
+    const sql = readFileSync(join(MIGRATIONS_DIR, seventh), 'utf8');
+
+    expect(sql).toMatch(
+      /ALTER FUNCTION pgboss\.create_queue\(text, jsonb\)[\s\S]*RENAME TO _create_queue_unsafe/,
+    );
+    expect(sql).toMatch(
+      /REVOKE EXECUTE ON FUNCTION pgboss\._create_queue_unsafe\(text, jsonb\) FROM fops_app/,
+    );
+    expect(sql).toMatch(
+      /REVOKE EXECUTE ON FUNCTION pgboss\._create_queue_unsafe\(text, jsonb\) FROM PUBLIC/,
+    );
+    expect(sql).toMatch(
+      /CREATE FUNCTION pgboss\.create_queue\(queue_name text, options jsonb\)[\s\S]*SECURITY DEFINER/,
+    );
+    expect(sql).toMatch(/options->>'partition' = 'true'[\s\S]*RAISE EXCEPTION/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION pgboss\.create_queue\(text, jsonb\) TO fops_app/);
   });
 
   it('Slice 2 #9 migration 0006 adds permission → managed_systems FKs', () => {

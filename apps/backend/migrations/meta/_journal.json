@@ -50,6 +50,13 @@
       "when": 1779440000000,
       "tag": "0006_permission_managed_system_fks",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779540000000,
+      "tag": "0007_pgboss_create_queue_shim",
+      "breakpoints": true
     }
   ]
 }

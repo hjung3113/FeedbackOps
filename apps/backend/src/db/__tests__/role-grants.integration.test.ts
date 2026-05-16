@@ -109,6 +109,40 @@ describe.skipIf(!runIntegration)('ADR-0008 role separation', () => {
     }
   });
 
+  it('fops_app must NOT EXECUTE pgboss._create_queue_unsafe (raw DDL-capable function)', async () => {
+    // F-010 follow-up: migration 0007 renamed the raw function to
+    // `_create_queue_unsafe` and revoked EXECUTE from fops_app + PUBLIC.
+    // Only fops_migrate (owner) can call it directly.
+    const { rows } = await appHandle.pool.query<{ has: boolean }>(
+      "select has_function_privilege('fops_app', 'pgboss._create_queue_unsafe(text, jsonb)', 'execute') as has",
+    );
+    expect(rows[0]?.has).toBe(false);
+  });
+
+  it('fops_app may EXECUTE the pgboss.create_queue SECURITY DEFINER shim', async () => {
+    const { rows } = await appHandle.pool.query<{ has: boolean }>(
+      "select has_function_privilege('fops_app', 'pgboss.create_queue(text, jsonb)', 'execute') as has",
+    );
+    expect(rows[0]?.has).toBe(true);
+  });
+
+  it('pgboss.create_queue rejects partition := true when called from fops_app', async () => {
+    // The shim hard-rejects partition-true requests so a future pg-boss
+    // upgrade (or app-side mistake) cannot trigger DDL through fops_app's
+    // SECURITY DEFINER elevation.
+    await expect(
+      appHandle.pool.query(
+        "select pgboss.create_queue($1, '{\"partition\":true}'::jsonb)",
+        ['__f010_test_partitioned__'],
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+  });
+
+  // Partition=false happy-path is exercised end-to-end by
+  // `pg-boss boot wiring` integration tests (every boss.start() invokes
+  // pgboss.create_queue for the internal `__pgboss__send-it` queue with
+  // partition=false defaults). No duplicate assertion needed here.
+
   it('fops_migrate retains UPDATE on core.audit_log (operator escape hatch)', async () => {
     const result = await migrateHandle.pool.query(
       `update core.audit_log set summary = summary where event_type = 'test.app_insert'`,
