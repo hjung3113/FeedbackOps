@@ -21,6 +21,10 @@ import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
 import {
+  createManagedSystemService,
+  managedSystemsRoutes,
+} from './modules/managed-systems/index.js';
+import {
   createCheckService,
   createRequestService,
   permissionsRoutes,
@@ -161,7 +165,11 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
         const status = statusForCode(parsed.data);
         return reply
           .code(status)
-          .send({ code: parsed.data, message: err.message, detail: (err as { detail?: unknown }).detail });
+          .send({
+            code: parsed.data,
+            message: err.message,
+            detail: (err as { detail?: unknown }).detail,
+          });
       }
     }
     // Zod validation errors surface via fastify-type-provider-zod with
@@ -230,6 +238,22 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     checkService,
     requestService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+    },
+  });
+
+  // ── Managed Systems module — Slice 2 issue #10 ──────────────────────────
+  const managedSystemService = createManagedSystemService({
+    db: dbHandle.db,
+    checkService,
+    auditService,
+    idempotencyService,
+  });
+  await app.register(managedSystemsRoutes, {
+    sessionService,
+    managedSystemService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,

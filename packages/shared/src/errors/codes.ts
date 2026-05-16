@@ -27,6 +27,9 @@ export const ERROR_CODES = [
   // validation.* → 422 (continued)
   'validation.malformed_idempotency_key',
   'validation.sensitive_reason_required',
+  'validation.immutable_field',
+  // conflict.* → 409 (Slice 2 #10)
+  'conflict.duplicate_slug',
   // not_found.* → 404
   'not_found.record',
   // internal.* → 500
