@@ -16,15 +16,15 @@ import { describe, expect, it } from 'vitest';
 const MIGRATIONS_DIR = join(__dirname, '..', '..', '..', 'migrations');
 
 describe('migrations directory', () => {
-  it('has the expected number of .sql migrations after Slice 1 #3', () => {
+  it('has the expected number of .sql migrations after Slice 1 #6', () => {
     // Slice 1 baseline (#2) shipped the first migration. Slice 1 #3 adds the
-    // rate-limit backing table. New slices should bump this expectation in
-    // the same PR that adds the migration so a stray drizzle-kit generate
-    // run is caught.
+    // rate-limit backing table. Slice 1 #6 pre-installs the pg-boss schema
+    // (ADR-0009). New slices should bump this expectation in the same PR
+    // that adds the migration so a stray drizzle-kit generate run is caught.
     const files = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith('.sql'))
       .sort();
-    expect(files).toHaveLength(2);
+    expect(files).toHaveLength(3);
   });
 
   it('Slice 1 migration encodes audit_log role grants per ADR-0008', () => {
@@ -93,6 +93,30 @@ describe('migrations directory', () => {
     expect(sql).toMatch(
       /CREATE UNIQUE INDEX "permission_requests_active_uq"[\s\S]*coalesce\("source_object_type"[\s\S]*WHERE "status" in \('pending','needs_more_info'\)/,
     );
+  });
+
+  it('Slice 1 #6 migration installs pg-boss schema with fops_app DML grant only', () => {
+    // ADR-0009 + spec choice (A): the running app role must never DDL the
+    // pgboss schema. Migration 0002 owns the install; fops_app gets DML +
+    // EXECUTE on functions, fops_migrate gets everything.
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    const third = files[2];
+    expect(third).toBeDefined();
+    if (!third) return;
+    const sql = readFileSync(join(MIGRATIONS_DIR, third), 'utf8');
+    expect(sql).toMatch(/CREATE SCHEMA IF NOT EXISTS pgboss/);
+    expect(sql).toMatch(/CREATE TABLE pgboss\.version/);
+    expect(sql).toMatch(/CREATE TABLE pgboss\.queue/);
+    expect(sql).toMatch(/CREATE TABLE pgboss\.schedule/);
+    expect(sql).toMatch(/CREATE TABLE pgboss\.job\b/);
+    expect(sql).toMatch(/GRANT USAGE ON SCHEMA pgboss TO fops_app/);
+    expect(sql).toMatch(
+      /GRANT\s+SELECT,\s*INSERT,\s*UPDATE,\s*DELETE\s+ON\s+ALL TABLES IN SCHEMA pgboss\s+TO\s+fops_app/i,
+    );
+    expect(sql).toMatch(/GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO fops_app/);
+    expect(sql).toMatch(/GRANT ALL ON SCHEMA pgboss TO fops_migrate/);
   });
 
   it('Slice 1 #3 migration adds rate_limits with fops_app grant', () => {
