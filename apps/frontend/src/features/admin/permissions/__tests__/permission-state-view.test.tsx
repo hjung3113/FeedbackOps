@@ -2,10 +2,19 @@
 // four Slice 1 active states. The other states are also exercised to pin
 // the dead-state copy so S1.2 producers don't surprise the UI.
 
-import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render as rtlRender, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, expect, test } from 'vitest';
 
 import { PermissionStateView } from '../permission-state-view.js';
+
+// Slice 1 #5: RequestAccessButton now uses useQueryClient, so anything that
+// transitively renders it needs a QueryClientProvider in the test harness.
+function render(node: ReactNode) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={qc}>{node}</QueryClientProvider>);
+}
 
 describe('<PermissionStateView>', () => {
   test('approved → "Access granted"', () => {

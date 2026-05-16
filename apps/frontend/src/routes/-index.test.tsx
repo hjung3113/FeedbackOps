@@ -119,4 +119,97 @@ describe('home route auth gate', () => {
       expect(screen.getByText(/Logged in as Mock Admin/)).toBeInTheDocument();
     });
   });
+
+  test('renders Open requests list when /permission-requests/mine returns rows', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.endsWith('/me')) {
+        return new Response(
+          JSON.stringify({
+            actor: {
+              id: 'a-1',
+              external_id: 'mock-user-1',
+              email: 'user@feedbackops.local',
+              display_name: 'Mock User',
+              role_level: 'user',
+            },
+            workspace_id: 'ws',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/permission-requests/mine')) {
+        return new Response(
+          JSON.stringify({
+            requests: [
+              {
+                id: 'req-1',
+                requested_capability: 'workspace.admin',
+                requested_managed_system_id: null,
+                reason: 'r',
+                requested_object_type: null,
+                requested_object_id: null,
+                source_object_type: null,
+                source_object_id: null,
+                source_action_id: null,
+                status: 'pending',
+                created_at: '2026-05-16T10:00:00.000Z',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response('not mocked', { status: 500 });
+    }) as typeof globalThis.fetch;
+
+    const { router, qc } = buildHarness({ initialPath: '/' });
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('open-requests-list')).toBeInTheDocument();
+    });
+    expect(screen.getByText('workspace.admin')).toBeInTheDocument();
+  });
+
+  test('renders empty state when /permission-requests/mine returns zero rows', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.endsWith('/me')) {
+        return new Response(
+          JSON.stringify({
+            actor: {
+              id: 'a-1',
+              external_id: 'mock-user-1',
+              email: 'user@feedbackops.local',
+              display_name: 'Mock User',
+              role_level: 'user',
+            },
+            workspace_id: 'ws',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/permission-requests/mine')) {
+        return new Response(JSON.stringify({ requests: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response('not mocked', { status: 500 });
+    }) as typeof globalThis.fetch;
+
+    const { router, qc } = buildHarness({ initialPath: '/' });
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('No open requests.')).toBeInTheDocument();
+    });
+  });
 });

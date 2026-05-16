@@ -73,6 +73,96 @@ export interface PermissionCheckResponse {
   decision: PermissionDecision;
 }
 
+// ── Permission requests (issue #5) ──────────────────────────────────────
+
+export interface CreatePermissionRequestBody {
+  requested_capability: string;
+  requested_managed_system_id?: string;
+  requested_object_type?: string;
+  requested_object_id?: string;
+  reason: string;
+  requested_expiration?: string;
+  source_object_type?: string;
+  source_object_id?: string;
+  source_action_id?: string;
+  return_route_intent?: string;
+}
+
+export interface CreatePermissionRequestSuccess {
+  id: string;
+  status: 'pending';
+  created_at: string;
+}
+
+export interface ApiErrorEnvelope {
+  code: string;
+  message: string;
+  detail?: Record<string, unknown>;
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly envelope: ApiErrorEnvelope;
+  constructor(status: number, envelope: ApiErrorEnvelope) {
+    super(envelope.message);
+    this.status = status;
+    this.envelope = envelope;
+  }
+}
+
+export async function createPermissionRequest(
+  body: CreatePermissionRequestBody,
+  options: { idempotencyKey: string; signal?: AbortSignal },
+): Promise<CreatePermissionRequestSuccess> {
+  const init: RequestInit = {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'content-type': 'application/json',
+      'Idempotency-Key': options.idempotencyKey,
+    },
+    body: JSON.stringify(body),
+  };
+  if (options.signal) init.signal = options.signal;
+  const res = await fetch('/permission-requests', init);
+  if (res.status === 401) throw new UnauthenticatedError();
+  if (res.status >= 200 && res.status < 300) {
+    return (await res.json()) as CreatePermissionRequestSuccess;
+  }
+  let envelope: ApiErrorEnvelope = { code: 'internal.unexpected', message: 'request failed' };
+  try {
+    envelope = (await res.json()) as ApiErrorEnvelope;
+  } catch {
+    // body wasn't JSON; keep default envelope
+  }
+  throw new ApiError(res.status, envelope);
+}
+
+export interface MinePermissionRequestRow {
+  id: string;
+  requested_capability: string;
+  requested_managed_system_id: string | null;
+  reason: string;
+  requested_object_type: string | null;
+  requested_object_id: string | null;
+  source_object_type: string | null;
+  source_object_id: string | null;
+  source_action_id: string | null;
+  status: 'pending' | 'needs_more_info';
+  created_at: string;
+}
+
+export async function fetchPermissionRequestsMine(
+  signal?: AbortSignal,
+): Promise<{ requests: MinePermissionRequestRow[] }> {
+  const init: RequestInit = { credentials: 'same-origin' };
+  if (signal) init.signal = signal;
+  const res = await fetch('/permission-requests/mine', init);
+  if (res.status === 401) throw new UnauthenticatedError();
+  if (!res.ok) throw new Error(`/permission-requests/mine failed: ${res.status}`);
+  return (await res.json()) as { requests: MinePermissionRequestRow[] };
+}
+
 export async function fetchPermissionCheck(
   capability: string,
   options?: { managedSystemId?: string; signal?: AbortSignal },
