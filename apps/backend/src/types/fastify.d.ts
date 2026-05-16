@@ -3,6 +3,7 @@
 // (fops_app role) wired in `buildServer`.
 
 import 'fastify';
+import type { PgBoss } from 'pg-boss';
 import type { Db } from '../db/client.js';
 
 declare module 'fastify' {
@@ -15,6 +16,13 @@ declare module 'fastify' {
   }
   interface FastifyInstance {
     db: Db;
+    /**
+     * Present when the runtime entrypoint passed a pg-boss handle to
+     * buildServer (ADR-0009). Slice 1 has no in-request consumers, so it
+     * stays optional; future modules typing this field will tighten the
+     * contract as they need it.
+     */
+    boss?: PgBoss;
     rateLimitConfig: {
       mutation: Record<string, unknown>;
       sensitive: Record<string, unknown>;

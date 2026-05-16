@@ -7,6 +7,7 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod';
+import type { PgBoss } from 'pg-boss';
 import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
@@ -20,10 +21,18 @@ import { createSessionService } from './modules/auth/session-service.js';
 export interface BuildServerOptions {
   config: AppConfig;
   dbHandle: DbHandle;
+  /**
+   * Optional pg-boss handle. The runtime entrypoint starts pg-boss before
+   * buildServer (ADR-0009:22-27 boot order) and threads it through so future
+   * modules can attach request-time enqueue helpers without a second pg-boss
+   * instance. Slice 1 has no in-request consumers; tests that don't need
+   * background jobs may omit it.
+   */
+  boss?: PgBoss;
 }
 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
-  const { config, dbHandle } = opts;
+  const { config, dbHandle, boss } = opts;
 
   if (!config.WORKSPACE_ID) {
     throw new Error(
@@ -43,6 +52,11 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   app.decorate('db', dbHandle.db);
+  if (boss) {
+    // Future request handlers that need to enqueue work pull this off the
+    // app decorator instead of importing a module-level singleton.
+    app.decorate('boss', boss);
+  }
 
   // ── @fastify/helmet ─ ADR-0015:21-37 ─────────────────────────────────
   await app.register(helmet, {
