@@ -1,0 +1,134 @@
+# API error code contract
+
+`docs/implementation/01-coding-conventions.md` requires that API errors use **stable codes**, that validation errors **identify field paths**, and that permission errors **include a requestable permission when safe**. This ADR locks the shape so backend handlers, the frontend `apiClient`, and i18n catalogs can all rely on one structure.
+
+## Response envelope
+
+Every non-2xx response carries this body:
+
+```jsonc
+{
+  "code": "permission.denied",
+  "message": "Internal English message — frontend may ignore, primarily for logs.",
+  "detail": { /* code-specific, optional */ },
+  "requestable_permission": { /* present only when code permits, see below */ }
+}
+```
+
+- `code` — stable, dotted, lowercase. Lives in `packages/shared/src/errors/codes.ts` as a Zod enum. Both backend and frontend import it; adding a new code is a single PR that updates the enum and the i18n catalog together.
+- `message` — internal English string for logs, audit summary lines, and developer-facing error overlays. Frontend uses the `code` for user-visible copy via i18next, **not** this string.
+- `detail` — code-specific structured payload. Schema for each `code` is defined alongside the enum so the frontend can narrow types.
+- `requestable_permission` — present only on permission-family errors when surfacing it is safe (see "Permission errors" below).
+
+HTTP status comes from a table mapping `code` family → status:
+
+```text
+auth.*            → 401
+permission.*      → 403
+not_found.*       → 404
+conflict.*        → 409
+validation.*      → 422
+rate_limited.*    → 429
+internal.*        → 500
+upstream.*        → 502 / 503 / 504
+```
+
+A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler runs) maps to `validation.malformed_request` rather than a bare 400.
+
+## Code naming
+
+`<subject>.<verb-or-state>` lowercase dotted. Subjects align with `subject_type` in `core.audit_log` so audit rows can carry the same identifier:
+
+```text
+auth.session_required
+auth.session_expired
+permission.denied
+permission.scope_required
+permission.sensitive_reason_required
+voc.managed_system_required
+voc.severity_not_user_settable
+voc.cannot_edit_after_triage
+task_request.self_approval_requires_reason
+task_request.scope_mismatch
+attachment.too_large
+attachment.unsupported_type
+rich_content.external_image_forbidden
+entity_link.cross_workspace_forbidden
+entity_link.relation_type_unknown
+reporter_facing_status.invalid_transition
+validation.failed
+validation.malformed_request
+not_found.record
+conflict.stale_write
+rate_limited.actor
+internal.unexpected
+upstream.idp_unavailable
+upstream.storage_unavailable
+```
+
+The complete list lives in code, not in this ADR; this is the shape it must follow.
+
+## Validation errors
+
+`code = 'validation.failed'` carries field-path detail so the frontend can attach messages to specific form inputs:
+
+```jsonc
+{
+  "code": "validation.failed",
+  "message": "Validation failed for create_voc",
+  "detail": {
+    "fields": [
+      { "path": "title",            "code": "required",        "message": "title is required" },
+      { "path": "description.body", "code": "max_length",      "message": "description body exceeds 10000 characters" },
+      { "path": "analytics_area_id","code": "out_of_scope",    "message": "Analytics Area must belong to the selected Managed System" }
+    ]
+  }
+}
+```
+
+`path` is a dotted path matching the Zod schema in `packages/shared`. `code` is a smaller, validation-only enum (`required | invalid_type | invalid_format | min_length | max_length | min_value | max_value | unknown_enum | out_of_scope | custom`). React Hook Form maps `path` to its field state.
+
+RFC 7807 Problem Details was rejected because it has no native `code` field, no native validation-fields shape, and would have us inventing custom `urn:` types to recover what we already get from a domain-named code.
+
+## Permission errors
+
+When the backend can safely tell the Actor what permission would unblock the action, the response includes:
+
+```jsonc
+{
+  "code": "permission.denied",
+  "message": "...",
+  "requestable_permission": {
+    "permission": "managed_system.developer",
+    "managed_system_id": "uuid-here",
+    "reason_required": true
+  }
+}
+```
+
+The presence of `requestable_permission` is **conditional**. We include it when:
+
+- The denial is due to missing **Managed System Permission Scope** that the Actor could legitimately request.
+- Surfacing the permission name and target does not leak the existence of a resource the Actor should not know about.
+
+We omit it when:
+
+- The denial relates to a **Sensitive Permission** whose existence is itself privileged (e.g. specific Internal Comment visibility).
+- The Actor is asking about a record that should appear as "not found" rather than "denied" (record existence is itself the secret).
+
+This mirrors `docs/design/11-entity-linking.md`: "Linked-object UI visibility is backend-decided as allowed, hidden, summary_visible, request_access, or denied." Frontend renders a "Request access" affordance only when `requestable_permission` is present.
+
+## Audit alignment
+
+Domain errors that happen during an audited action emit an audit row with `event_type = '<subject>.error'` and `detail.error_code = <code>` so failed Sensitive Permission attempts and rejected mutations are queryable from the same surface as successful actions.
+
+## What this ADR locks
+
+- One envelope shape across the entire API.
+- `code` enum lives in `packages/shared` and is imported by both apps; adding a code is a single PR touching enum, i18n catalog, and (for permission codes) the requestable-permission table.
+- `detail.fields` is the only validation error shape.
+- `requestable_permission` is conditional, never automatic.
+
+## Reopening
+
+Switching to RFC 7807, restructuring the validation shape, or making `requestable_permission` mandatory each warrants a new ADR with a migration plan for existing handlers and frontend error pipelines.
