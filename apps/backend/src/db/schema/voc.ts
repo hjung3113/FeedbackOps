@@ -20,6 +20,7 @@ import {
   index,
   jsonb,
   pgSchema,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -225,5 +226,25 @@ export const vocAttachments = vocSchema.table(
       sql`(${t.commentId} is null and ${t.commentKind} is null)
         or (${t.commentId} is not null and ${t.commentKind} in ('public_update','reporter_reply','internal_comment'))`,
     ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// voc.reporter_facing_status_transitions — seed table for the status
+// transition matrix per docs/frontend/specs/voc.md §4.5.
+// nextReporterStates(currentStatus, tx) reads this table; service code
+// MUST NOT hard-code transitions.
+// fops_app gets SELECT only (data is seeded at migration time).
+// ─────────────────────────────────────────────────────────────────────────
+export const reporterFacingStatusTransitions = vocSchema.table(
+  'reporter_facing_status_transitions',
+  {
+    fromStatus: text('from_status').notNull(),
+    toStatus: text('to_status').notNull(),
+    allowed: boolean('allowed').notNull(),
+    forbiddenReason: text('forbidden_reason'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.fromStatus, t.toStatus] }),
   }),
 );

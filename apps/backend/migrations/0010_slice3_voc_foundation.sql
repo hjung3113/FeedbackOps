@@ -179,8 +179,11 @@ CREATE TRIGGER "vocs_touch_updated_at_trg"
 --> statement-breakpoint
 
 -- ─── Role grants per ADR-0008 + ADR-0019 ────────────────────────────────
+-- fops_app needs USAGE on the voc schema before it can reach any table.
 -- fops_app gets full DML on vocs (archive workflows are app-driven).
 -- Conversation tables added in Tasks 4+ get tighter SELECT/INSERT-only grants.
+GRANT USAGE ON SCHEMA "voc" TO fops_app;
+--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON "voc"."vocs" TO fops_app;
 GRANT USAGE ON SEQUENCE "voc"."voc_display_seq" TO fops_app;
 GRANT EXECUTE ON FUNCTION "voc"."next_voc_display_id"(uuid) TO fops_app;
@@ -314,3 +317,61 @@ CREATE INDEX "voc_attachments_comment_idx"
   ON "voc"."voc_attachments" ("comment_id", "comment_kind") WHERE "comment_id" IS NOT NULL;
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON "voc"."voc_attachments" TO fops_app;
+
+--> statement-breakpoint
+-- ───── voc.reporter_facing_status_transitions ─────────────────────────
+-- Single source of truth for the reporter-facing status matrix per
+-- docs/frontend/specs/voc.md §4.5. Backend nextReporterStates(current)
+-- reads this table; service code MUST NOT hard-code transitions.
+CREATE TABLE "voc"."reporter_facing_status_transitions" (
+  "from_status" text NOT NULL,
+  "to_status"   text NOT NULL,
+  "allowed"     boolean NOT NULL,
+  "forbidden_reason" text,
+  PRIMARY KEY ("from_status", "to_status"),
+  CONSTRAINT "rfst_from_enum" CHECK ("from_status" IN
+    ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')),
+  CONSTRAINT "rfst_to_enum" CHECK ("to_status" IN
+    ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')),
+  CONSTRAINT "rfst_allowed_no_reason" CHECK ("allowed" = false OR "forbidden_reason" IS NULL),
+  CONSTRAINT "rfst_disallowed_has_reason" CHECK ("allowed" = true OR ("forbidden_reason" IS NOT NULL AND length("forbidden_reason") > 0))
+);
+--> statement-breakpoint
+GRANT SELECT ON "voc"."reporter_facing_status_transitions" TO fops_app;
+--> statement-breakpoint
+INSERT INTO "voc"."reporter_facing_status_transitions" ("from_status","to_status","allowed","forbidden_reason") VALUES
+  -- received
+  ('received','reviewing',true, NULL),
+  ('received','closed',   true, NULL),
+  ('received','resolved', false,'결과 확인 전에 해결됨으로 바꿀 수 없습니다.'),
+  ('received','prep',     false,'먼저 검토를 시작해야 합니다.'),
+  -- reviewing
+  ('reviewing','assigned',true, NULL),
+  ('reviewing','progress',true, NULL),
+  ('reviewing','closed',  true, NULL),
+  ('reviewing','resolved',false,'담당자 배정 이후에 가능합니다.'),
+  -- assigned
+  ('assigned','progress', true, NULL),
+  ('assigned','closed',   true, NULL),
+  ('assigned','resolved', false,'처리가 완료되면 가능합니다.'),
+  ('assigned','received', false,'다시 접수 상태로 돌릴 수 없습니다.'),
+  -- progress
+  ('progress','prep',     true, NULL),
+  ('progress','resolved', true, NULL),
+  ('progress','closed',   true, NULL),
+  ('progress','received', false,'다시 접수 상태로 돌릴 수 없습니다.'),
+  -- prep
+  ('prep','resolved',     true, NULL),
+  ('prep','progress',     true, NULL),
+  ('prep','closed',       true, NULL),
+  ('prep','received',     false,'다시 접수 상태로 돌릴 수 없습니다.'),
+  -- resolved
+  ('resolved','closed',   true, NULL),
+  ('resolved','reopened', true, NULL),
+  -- reopened
+  ('reopened','progress', true, NULL),
+  ('reopened','resolved', true, NULL),
+  ('reopened','closed',   true, NULL),
+  -- closed
+  ('closed','reopened',   true, NULL),
+  ('closed','resolved',   false,'이미 종료된 건입니다. 다시 해결됨으로 되돌리려면 먼저 다시 처리 중으로 전환하세요.');
