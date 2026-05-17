@@ -281,3 +281,20 @@ When the manual QA above passes:
 - No `gh issue create` for the deferred Section 1 findings. If you want
   any of them as standalone issues for Slice 3 grooming, say so and I
   can draft the bodies in the next session.
+
+## Resolved 2026-05-17 (Slice 3 prologue, commits 5c31a26..b40c608)
+
+| ID | Plan task | Commit | Summary |
+|---|---|---|---|
+| S-006 | T1 | `5c31a26` | `Tx = Db \| DrizzleTx` union; 26 casts removed |
+| S-002 | T2 | `2ab5d1f` | tx-scoped `checkCapability(..., { tx })` threading + new integration test |
+| S-001 | T3 | `9917b2c` | `pg_advisory_xact_lock(hashtext(actor), hashtext(key))` at MS/AA/request register paths + ADR-0015 narrative amendment |
+| S-008 | T4 | `814be51` | `canonicalizeJson` sentinel-encodes `undefined` (distinguishes absent vs explicit-undefined) |
+| HTTP L-1 | T5 | `c8ee24f` | `role_level` in `req.session` via CTE+JOIN in `loadAndTouch`; dropped three `loadActorContext` helpers |
+| C1 | T6 | `57057ed` | `seedSecondWorkspace` test helper |
+| H3 | T7 | `376cbcc` | service-level pin for foreign-workspace AA parent rejection (HTTP-layer pre-empted by `requireWorkspace` env gate in MVP single-tenant mode; pinned at the AA service `not_found.record` branch instead) |
+| C4 | T8 | `249cc86` | `cascadeArchiveActiveChildren` rollback-on-audit-failure regression test |
+| H6 | T9 | `a9366d5` | extracted `__purgeHandler` factory + unit test pinning pg-boss error-propagation contract |
+| M2 | T10 | `cb7f2ad` | concurrent `idempotencyService.record` `onConflictDoNothing` integration test (sequenced two-conn pattern; `Promise.all` would deadlock on row-lock wait in real transactions) |
+
+Items in §1.5 (HTTP M-2, L-2, L-3, S-007, S-009, S-010, DB-007, C3 extension, M1, M3, M4/M5, M6, M7, M8, L4, L5) were explicitly out of scope for this prologue per plan §"Out of scope (explicit non-goals)" and will be re-evaluated when Slice 3 product surface lands on top of any of them.
