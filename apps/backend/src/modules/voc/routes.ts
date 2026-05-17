@@ -67,7 +67,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       // 1. severity present → dedicated code (spec §8.1).
       if ('severity' in rawBody) {
         return sendError(reply, 'voc.severity_not_user_settable', 'severity is set during triage', {
-          field: 'severity',
+          fields: [{ path: ['severity'], code: 'unexpected_field' }],
         });
       }
 
@@ -76,7 +76,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         if (f === 'severity') continue;
         if (f in rawBody) {
           return sendError(reply, 'validation.unexpected_field', `${f} is server-resolved`, {
-            field: f,
+            fields: [{ path: [f], code: 'unexpected_field' }],
           });
         }
       }

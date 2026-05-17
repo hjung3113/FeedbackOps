@@ -62,7 +62,7 @@ export function createVocService(deps: VocServiceDeps) {
     if (!ms) throw new HttpError('not_found.record', 'managed system not found');
     if (ms.archived_at) {
       throw new HttpError('conflict.parent_archived', 'managed system archived', {
-        field: 'primary_managed_system_id',
+        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
       });
     }
 
@@ -72,12 +72,12 @@ export function createVocService(deps: VocServiceDeps) {
       if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
       if (aa.managed_system_id !== ms.id) {
         throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
-          field: 'analytics_area_id',
+          fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
         });
       }
       if (aa.archived_at) {
         throw new HttpError('conflict.parent_archived', 'analytics area archived', {
-          field: 'analytics_area_id',
+          fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
         });
       }
     }

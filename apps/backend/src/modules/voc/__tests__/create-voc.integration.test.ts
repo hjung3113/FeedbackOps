@@ -345,7 +345,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     const res = await postVoc(app, reporter, body, randomUUID());
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.unexpected_field');
-    expect(res.json().detail?.field).toBe(field);
+    expect(res.json().detail?.fields).toEqual([{ path: [field], code: 'unexpected_field' }]);
   });
 
   // ── 7. severity in body → dedicated code ──────────────────────────────
@@ -366,6 +366,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     );
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('voc.severity_not_user_settable');
+    expect(res.json().detail?.fields).toEqual([{ path: ['severity'], code: 'unexpected_field' }]);
   });
 
   // ── 8. MS id from random/other workspace → 404 ────────────────────────
@@ -415,6 +416,9 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     );
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('conflict.parent_archived');
+    expect(res.json().detail?.fields).toEqual([
+      { path: ['primary_managed_system_id'], code: 'parent_archived' },
+    ]);
   });
 
   // ── 10. AA not in MS → 422 ───────────────────────────────────────────
@@ -441,7 +445,9 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     );
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('validation.failed');
-    expect(res.json().detail?.field).toBe('analytics_area_id');
+    expect(res.json().detail?.fields).toEqual([
+      { path: ['analytics_area_id'], code: 'out_of_scope' },
+    ]);
   });
 
   // ── 11. Archived AA → 409 ────────────────────────────────────────────
@@ -479,6 +485,9 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     );
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('conflict.parent_archived');
+    expect(res.json().detail?.fields).toEqual([
+      { path: ['analytics_area_id'], code: 'parent_archived' },
+    ]);
   });
 
   // ── 12. Sanitizer rejections ──────────────────────────────────────────
