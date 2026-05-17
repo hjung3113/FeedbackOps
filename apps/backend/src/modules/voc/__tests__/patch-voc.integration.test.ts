@@ -860,6 +860,59 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(body2.detail.fields[0].code).toBe('invalid_state');
   });
 
+  // ── 10c. triage_state_review_postponed_at cleared on subsequent triage (C5) ──
+  // A VOC that was postponed then triaged must have postponed_at = NULL.
+  // Without C5 the column keeps a stale timestamp; downstream readers would
+  // incorrectly interpret the row as currently postponed.
+  it('postpone then PATCH triage_state=triaged → triage_state_review_postponed_at IS NULL', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-postpone-clear', 'Postpone Clear MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+
+    // First PATCH: postpone the VOC.
+    const res1 = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: true },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    expect(res1.statusCode).toBe(200);
+
+    // Confirm postponed_at is set.
+    const afterPostpone = await dbHandle.pool.query<{ postponed_at: string | null }>(
+      `select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1`,
+      [voc.id],
+    );
+    expect(afterPostpone.rows[0]?.postponed_at).not.toBeNull();
+
+    const afterPostponeAt = (res1.json() as { updated_at: string }).updated_at;
+
+    // Second PATCH: triage the VOC (moving away from untriaged).
+    const res2 = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { triage_state: 'triaged', severity: 'low', owner_user_id: adminActorId },
+      { idempotencyKey: randomUUID(), ifMatch: afterPostponeAt },
+    );
+    expect(res2.statusCode).toBe(200);
+    expect((res2.json() as { triage_state: string }).triage_state).toBe('triaged');
+
+    // Assert postponed_at is cleared in the DB (C5).
+    const afterTriage = await dbHandle.pool.query<{ postponed_at: string | null }>(
+      `select triage_state_review_postponed_at as postponed_at from voc.vocs where id = $1`,
+      [voc.id],
+    );
+    expect(afterTriage.rows[0]?.postponed_at).toBeNull();
+  });
+
   // ── 11. Owner mutex: both owner_user_id + owner_team_id → 422 ──────────
   it('PATCH both owner_user_id and owner_team_id → 422 validation.failed', async () => {
     const admin = await loginAs(app, 'mock-admin-1');

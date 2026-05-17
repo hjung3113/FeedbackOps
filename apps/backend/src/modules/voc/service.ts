@@ -436,6 +436,7 @@ export function createVocService(deps: VocServiceDeps) {
       ownerTeamId?: string | null;
       analyticsAreaId?: string | null;
       triageState?: 'untriaged' | 'triaged' | 'needs_more_information' | 'dismissed_not_actionable';
+      triageStateReviewPostponedAt?: null;
     };
     const patch: VocPatch = {};
     let severityChanged = false;
@@ -474,6 +475,14 @@ export function createVocService(deps: VocServiceDeps) {
     if (input.triage_state !== undefined && input.triage_state !== row.triageState) {
       patch.triageState = input.triage_state;
       triageStateChanged = true;
+      // C5: when transitioning AWAY from untriaged, clear the postponed_at
+      // timestamp so the column doesn't carry a stale "postponed since X" value
+      // on a row that is now triaged/dismissed/NMI. Future readers (BI, audit
+      // reconstruction) would otherwise incorrectly interpret the row as
+      // currently postponed.
+      if (input.triage_state !== 'untriaged') {
+        patch.triageStateReviewPostponedAt = null;
+      }
     }
 
     // 8. Empty diff — return current state without any writes.
