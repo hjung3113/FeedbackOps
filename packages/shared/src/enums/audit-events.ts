@@ -15,6 +15,19 @@
 
 import { z } from 'zod';
 
+import {
+  vocCreatedDetailSchema,
+  vocTriageCommittedDetailSchema,
+  vocSeveritySetDetailSchema,
+  vocOwnerAssignedDetailSchema,
+  vocAnalyticsAreaLinkedDetailSchema,
+  vocClusterDecisionRecordedDetailSchema,
+  publicUpdateCreatedDetailSchema,
+  reporterFacingStatusChangedDetailSchema,
+  reporterReplyCreatedDetailSchema,
+  internalCommentCreatedDetailSchema,
+} from '../audit/voc.js';
+
 export const AUDIT_EVENT_TYPES = [
   'permission_requested',
   // Slice 2 #10: Managed System Registry write path (ADR-0017 audit detail).
@@ -25,6 +38,17 @@ export const AUDIT_EVENT_TYPES = [
   'analytics_area_registered',
   'analytics_area_updated',
   'analytics_area_archived',
+  // Slice 3 #12: VOC domain events (ADR-0017 audit detail).
+  'voc_created',
+  'voc_triage_committed',
+  'voc_severity_set',
+  'voc_owner_assigned',
+  'voc_analytics_area_linked',
+  'voc_cluster_decision_recorded',
+  'public_update_created',
+  'reporter_facing_status_changed',
+  'reporter_reply_created',
+  'internal_comment_created',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -120,4 +144,15 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   analytics_area_registered: analyticsAreaRegisteredDetailSchema,
   analytics_area_updated: analyticsAreaUpdatedDetailSchema,
   analytics_area_archived: analyticsAreaArchivedDetailSchema,
+  // Slice 3 #12: VOC domain events.
+  voc_created: vocCreatedDetailSchema,
+  voc_triage_committed: vocTriageCommittedDetailSchema,
+  voc_severity_set: vocSeveritySetDetailSchema,
+  voc_owner_assigned: vocOwnerAssignedDetailSchema,
+  voc_analytics_area_linked: vocAnalyticsAreaLinkedDetailSchema,
+  voc_cluster_decision_recorded: vocClusterDecisionRecordedDetailSchema,
+  public_update_created: publicUpdateCreatedDetailSchema,
+  reporter_facing_status_changed: reporterFacingStatusChangedDetailSchema,
+  reporter_reply_created: reporterReplyCreatedDetailSchema,
+  internal_comment_created: internalCommentCreatedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;
