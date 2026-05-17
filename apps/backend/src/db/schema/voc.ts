@@ -77,9 +77,9 @@ export const vocs = vocSchema.table(
     inboxIdx: index('vocs_inbox_idx').on(
       t.workspaceId,
       t.primaryManagedSystemId,
-      t.createdAt,
+      t.createdAt.desc(),
     ),
-    myVocsIdx: index('vocs_my_vocs_idx').on(t.workspaceId, t.reporterId, t.createdAt),
+    myVocsIdx: index('vocs_my_vocs_idx').on(t.workspaceId, t.reporterId, t.createdAt.desc()),
     triageQueueIdx: index('vocs_triage_queue_idx')
       .on(t.workspaceId, t.triageState)
       .where(sql`${t.triageState} = 'untriaged'`),
@@ -215,8 +215,8 @@ export const vocAttachments = vocSchema.table(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    vocIdx: index('voc_attachments_voc_idx').on(t.vocId),
-    commentIdx: index('voc_attachments_comment_idx').on(t.commentId, t.commentKind),
+    vocIdx: index('voc_attachments_voc_idx').on(t.vocId).where(sql`${t.vocId} IS NOT NULL`),
+    commentIdx: index('voc_attachments_comment_idx').on(t.commentId, t.commentKind).where(sql`${t.commentId} IS NOT NULL`),
     subjectXor: check(
       'voc_attachments_subject_xor',
       sql`(${t.vocId} is not null)::int + (${t.commentId} is not null)::int = 1`,
@@ -261,5 +261,21 @@ export const reporterFacingStatusTransitions = vocSchema.table(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fromStatus, t.toStatus] }),
+    rfstFromEnum: check(
+      'rfst_from_enum',
+      sql`${t.fromStatus} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
+    ),
+    rfstToEnum: check(
+      'rfst_to_enum',
+      sql`${t.toStatus} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
+    ),
+    rfstAllowedNoReason: check(
+      'rfst_allowed_no_reason',
+      sql`${t.allowed} = false OR ${t.forbiddenReason} IS NULL`,
+    ),
+    rfstDisallowedHasReason: check(
+      'rfst_disallowed_has_reason',
+      sql`${t.allowed} = true OR (${t.forbiddenReason} IS NOT NULL AND length(${t.forbiddenReason}) > 0)`,
+    ),
   }),
 );
