@@ -102,12 +102,13 @@ describe('patchVocRequestSchema', () => {
     expect(result.postpone_review).toBe(false);
   });
 
-  it('strips unknown fields (zod default passthrough-or-strip behavior)', () => {
-    // Default zod .object() strips unknown keys — the controller layer is the
-    // gate for forbidden-field rejection, so schema silently drops unknowns.
-    const result = patchVocRequestSchema.parse({ severity: 'low', unknownField: 'x' });
-    expect(result).not.toHaveProperty('unknownField');
-    expect(result.severity).toBe('low');
+  it('rejects unknown fields with unrecognized_keys error (.strict() mode)', () => {
+    // .strict() is set on the schema so unknown keys throw ZodError with
+    // code 'unrecognized_keys' — mistyped or unsupported fields are rejected
+    // rather than silently stripped, surfacing as validation.failed upstream.
+    expect(() =>
+      patchVocRequestSchema.parse({ severity: 'low', unknownField: 'x' }),
+    ).toThrow();
   });
 });
 

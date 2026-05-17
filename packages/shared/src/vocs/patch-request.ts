@@ -51,6 +51,9 @@ export const patchVocRequestSchema = z
     triage_state: triageStateSchema.optional(),
     postpone_review: z.boolean().optional(),
   })
+  // Unknown keys are rejected so mistyped or unsupported fields surface
+  // as `unrecognized_keys` rather than being silently stripped.
+  .strict()
   // Owner XOR: both fields non-null simultaneously is invalid.
   .refine(
     (d) => !(d.owner_user_id != null && d.owner_team_id != null),
