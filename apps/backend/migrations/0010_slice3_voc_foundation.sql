@@ -1,0 +1,186 @@
+-- Slice 3 #12: VOC foundation. This task (Task 3) lands the vocs core table,
+-- next_voc_display_id() helper, and AA→primary_MS integrity trigger.
+-- Later tasks (4–7) will append conversation tables, voc_attachments stub,
+-- reporter_facing_status_transitions, and Slice 3 seed rows to this file.
+--
+-- ADR alignment:
+--   ADR-0008 — least-privilege grants; fops_app DML on vocs, SELECT/INSERT-only
+--              will apply to append-only conversation tables (Tasks 4+).
+--   ADR-0011 — rich content stored as jsonb, server-sanitised at service layer.
+--   ADR-0015 — uuid v4 PKs, timestamptz, idempotency conventions.
+--   ADR-0017 — audit detail vocab; audit_log rows emitted by service layer.
+--   ADR-0019 — role grants pattern continued from migration 0009.
+--
+-- Resolved spec questions:
+--   Q-DISPLAYID → backend owns display_id via next_voc_display_id(workspace_id).
+--   Q1          → voc_attachments stub ships in Task 5; storage endpoint deferred.
+--   Q6          → seed extended in apps/backend/src/seed/voc-fixtures.ts (Task 7).
+
+CREATE SCHEMA IF NOT EXISTS "voc";
+--> statement-breakpoint
+
+-- ─── voc.voc_display_seq ──────────────────────────────────────────────────
+-- Global sequence for human-readable VOC IDs. Per-workspace uniqueness is
+-- enforced by the UNIQUE index on vocs.(workspace_id, display_id).
+-- The helper still accepts workspace_id so a future migration can swap to
+-- per-workspace sequences without changing callers.
+CREATE SEQUENCE "voc"."voc_display_seq" START 1000;
+--> statement-breakpoint
+
+-- ─── voc.next_voc_display_id(uuid) ────────────────────────────────────────
+CREATE OR REPLACE FUNCTION "voc"."next_voc_display_id"(p_workspace_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_seq bigint;
+BEGIN
+  -- workspace_id reserved for future per-workspace sequence variants.
+  PERFORM p_workspace_id;
+  v_seq := nextval('voc.voc_display_seq');
+  RETURN 'VOC-' || v_seq::text;
+END;
+$$;
+--> statement-breakpoint
+
+-- ─── voc.vocs ─────────────────────────────────────────────────────────────
+-- Canonical VOC record. display_id is assigned at INSERT via
+-- next_voc_display_id(workspace_id). severity / analytics_area_id / owner
+-- columns are nullable until triage. cluster_id column reserved for future
+-- use (no FK per spec — cluster service is out of scope for Slice 3).
+CREATE TABLE "voc"."vocs" (
+  "id"                              uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "workspace_id"                    uuid NOT NULL,
+  "display_id"                      text NOT NULL,
+  "primary_managed_system_id"       uuid NOT NULL,
+  "analytics_area_id"               uuid,
+  "reporter_id"                     uuid NOT NULL,
+  "title"                           text NOT NULL,
+  "description_rich_content"        jsonb NOT NULL,
+  "severity"                        text,
+  "reporter_facing_status"          text NOT NULL DEFAULT 'received',
+  "triage_state"                    text NOT NULL DEFAULT 'untriaged',
+  "triage_state_review_postponed_at" timestamp with time zone,
+  "owner_user_id"                   uuid,
+  "owner_team_id"                   uuid,
+  "source_context"                  text NOT NULL,
+  "cluster_id"                      uuid,
+  "archived_at"                     timestamp with time zone,
+  "archived_by_actor_id"            uuid,
+  "created_at"                      timestamp with time zone DEFAULT now() NOT NULL,
+  "updated_at"                      timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "vocs_severity_enum"
+    CHECK ("severity" IS NULL OR "severity" IN ('low','medium','high','critical')),
+  CONSTRAINT "vocs_reporter_facing_status_enum"
+    CHECK ("reporter_facing_status" IN
+      ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')),
+  CONSTRAINT "vocs_triage_state_enum"
+    CHECK ("triage_state" IN
+      ('untriaged','triaged','needs_more_information','dismissed_not_actionable')),
+  CONSTRAINT "vocs_source_context_enum"
+    CHECK ("source_context" IN
+      ('direct_use','proxy_report','operational_discovery','stakeholder_request')),
+  CONSTRAINT "vocs_owner_xor"
+    CHECK ("owner_user_id" IS NULL OR "owner_team_id" IS NULL)
+);
+--> statement-breakpoint
+ALTER TABLE "voc"."vocs"
+  ADD CONSTRAINT "vocs_workspace_id_workspaces_id_fk"
+  FOREIGN KEY ("workspace_id") REFERENCES "core"."workspaces"("id") ON DELETE no action;
+--> statement-breakpoint
+ALTER TABLE "voc"."vocs"
+  ADD CONSTRAINT "vocs_primary_managed_system_id_fk"
+  FOREIGN KEY ("primary_managed_system_id") REFERENCES "core"."managed_systems"("id") ON DELETE no action;
+--> statement-breakpoint
+ALTER TABLE "voc"."vocs"
+  ADD CONSTRAINT "vocs_analytics_area_id_fk"
+  FOREIGN KEY ("analytics_area_id") REFERENCES "core"."analytics_areas"("id") ON DELETE no action;
+--> statement-breakpoint
+ALTER TABLE "voc"."vocs"
+  ADD CONSTRAINT "vocs_reporter_id_fk"
+  FOREIGN KEY ("reporter_id") REFERENCES "core"."actors"("id") ON DELETE no action;
+--> statement-breakpoint
+ALTER TABLE "voc"."vocs"
+  ADD CONSTRAINT "vocs_owner_user_id_fk"
+  FOREIGN KEY ("owner_user_id") REFERENCES "core"."actors"("id") ON DELETE no action;
+--> statement-breakpoint
+ALTER TABLE "voc"."vocs"
+  ADD CONSTRAINT "vocs_owner_team_id_fk"
+  FOREIGN KEY ("owner_team_id") REFERENCES "core"."teams"("id") ON DELETE no action;
+--> statement-breakpoint
+ALTER TABLE "voc"."vocs"
+  ADD CONSTRAINT "vocs_archived_by_actor_id_fk"
+  FOREIGN KEY ("archived_by_actor_id") REFERENCES "core"."actors"("id") ON DELETE no action;
+--> statement-breakpoint
+CREATE UNIQUE INDEX "vocs_workspace_display_id_uq"
+  ON "voc"."vocs" ("workspace_id", "display_id");
+--> statement-breakpoint
+CREATE INDEX "vocs_inbox_idx"
+  ON "voc"."vocs" ("workspace_id", "primary_managed_system_id", "created_at" DESC);
+--> statement-breakpoint
+CREATE INDEX "vocs_my_vocs_idx"
+  ON "voc"."vocs" ("workspace_id", "reporter_id", "created_at" DESC);
+--> statement-breakpoint
+CREATE INDEX "vocs_triage_queue_idx"
+  ON "voc"."vocs" ("workspace_id", "triage_state")
+  WHERE "triage_state" = 'untriaged';
+--> statement-breakpoint
+CREATE INDEX "vocs_active_idx"
+  ON "voc"."vocs" ("workspace_id")
+  WHERE "archived_at" IS NULL;
+--> statement-breakpoint
+
+-- ─── voc.vocs_analytics_area_integrity trigger ───────────────────────────
+-- If analytics_area_id is set, its managed_system_id must equal
+-- vocs.primary_managed_system_id (AA is flat under exactly one MS,
+-- per Slice 2 exit criteria). Raises ERRCODE check_violation so the
+-- application layer maps it to validation.failed.
+CREATE OR REPLACE FUNCTION "voc"."vocs_analytics_area_integrity"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_aa_ms_id uuid;
+BEGIN
+  IF NEW.analytics_area_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+  SELECT managed_system_id INTO v_aa_ms_id
+    FROM core.analytics_areas
+   WHERE id = NEW.analytics_area_id;
+  IF v_aa_ms_id IS NULL OR v_aa_ms_id <> NEW.primary_managed_system_id THEN
+    RAISE EXCEPTION 'analytics_area_managed_system_mismatch'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER "vocs_analytics_area_integrity_trg"
+  BEFORE INSERT OR UPDATE OF analytics_area_id, primary_managed_system_id
+  ON "voc"."vocs"
+  FOR EACH ROW EXECUTE FUNCTION "voc"."vocs_analytics_area_integrity"();
+--> statement-breakpoint
+
+-- ─── voc.touch_updated_at trigger (matches Slice 2 #9 pattern) ──────────
+CREATE OR REPLACE FUNCTION "voc"."touch_updated_at"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER "vocs_touch_updated_at_trg"
+  BEFORE UPDATE ON "voc"."vocs"
+  FOR EACH ROW EXECUTE FUNCTION "voc"."touch_updated_at"();
+--> statement-breakpoint
+
+-- ─── Role grants per ADR-0008 + ADR-0019 ────────────────────────────────
+-- fops_app gets full DML on vocs (archive workflows are app-driven).
+-- Conversation tables added in Tasks 4+ get tighter SELECT/INSERT-only grants.
+GRANT SELECT, INSERT, UPDATE, DELETE ON "voc"."vocs" TO fops_app;
+GRANT USAGE ON SEQUENCE "voc"."voc_display_seq" TO fops_app;
+GRANT EXECUTE ON FUNCTION "voc"."next_voc_display_id"(uuid) TO fops_app;

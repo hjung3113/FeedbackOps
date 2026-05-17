@@ -7,3 +7,4 @@
 
 export * from './core.js';
 export * from './permission.js';
+export * from './voc.js';
