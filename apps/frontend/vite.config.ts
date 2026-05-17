@@ -11,13 +11,13 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3010,
     proxy: {
-      '/api': 'http://localhost:3001',
-      '/health': 'http://localhost:3001',
+      '/api': 'http://127.0.0.1:3011',
+      '/health': 'http://127.0.0.1:3011',
       // Slice 1 #3: auth endpoints + the /me identity probe live at root.
-      '/auth': 'http://localhost:3001',
-      '/me': 'http://localhost:3001',
+      '/auth': 'http://127.0.0.1:3011',
+      '/me': 'http://127.0.0.1:3011',
     },
   },
 });
