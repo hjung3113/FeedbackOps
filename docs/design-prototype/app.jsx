@@ -7,7 +7,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "vocView": "inbox",
   "taskView": "board",
   "scope": "all",
-  "accent": "#e4f222",
+  "accent": "#1428a0",
   "panelOpen": true,
   "role": "admin"
 }/*EDITMODE-END*/;
@@ -503,7 +503,7 @@ function TweaksPanel({ route, view, scopeId, accent, role, onChange, onClose }) 
     { id: 'surveys', label: 'Surveys' },
     { id: 'admin', label: 'Admin' },
   ];
-  const accents = ['#e4f222', '#5e6ad2', '#02b8cc', '#8b5cf6', '#27a644'];
+  const accents = ['#1428a0', '#0b57d0', '#2189ff', '#00a9e0', '#18a86b'];
   const roles = [
     { id: 'admin', label: 'Admin' },
     { id: 'dev',   label: 'Developer' },

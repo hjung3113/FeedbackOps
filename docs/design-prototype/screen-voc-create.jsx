@@ -39,9 +39,7 @@ function CreateVocScreen({ onNavigate, scope }) {
   return (
     <PageShell
       back={
-        <button className="btn btn-subtle btn-sm" onClick={() => onNavigate('voc')}>
-          <Icon name="chevronLeft" size={11} />Inbox
-        </button>
+        <PageShellBackButton onClick={() => onNavigate('voc')}>Inbox</PageShellBackButton>
       }
       eyebrow={
         <span className="badge" style={{ background: 'rgba(94,106,210,0.15)', color: 'var(--color-aether-blue)' }}>
@@ -164,7 +162,7 @@ function CreateVocScreen({ onNavigate, scope }) {
                   gap: 10,
                   padding: '10px 14px',
                   border: `1px dashed ${dragOver ? 'var(--color-neon-lime)' : 'var(--border-subtle)'}`,
-                  background: dragOver ? 'rgba(228,242,34,0.06)' : 'transparent',
+                  background: dragOver ? 'rgba(20, 40, 160,0.06)' : 'transparent',
                   borderRadius: 6,
                   transition: 'background 100ms ease, border-color 100ms ease',
                 }}>
@@ -398,6 +396,7 @@ function TriagePanel({ voc, onAct }) {
   const [owner, setOwner] = useState(voc.owner);
   const [area, setArea] = useState(voc.analyticsArea);
   const [clusterAction, setClusterAction] = useState(null);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     setSeverity(voc.severity);
@@ -409,6 +408,15 @@ function TriagePanel({ voc, onAct }) {
   const areas = window.AnalyticsAreas.filter(a => a.managedSystem === voc.managedSystem);
   const teamCandidates = window.Users.slice(0, 5);
   const dirty = severity !== voc.severity || owner !== voc.owner || area !== voc.analyticsArea;
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'body', label: 'Body' },
+    { id: 'severity', label: 'Severity' },
+    { id: 'owner', label: 'Owner' },
+    { id: 'area', label: 'Area' },
+    voc.similarCount > 0 && { id: 'cluster', label: 'Cluster', count: voc.similarCount },
+    { id: 'summary', label: 'Summary' },
+  ].filter(Boolean);
 
   return (
     <aside className="detail-panel">
@@ -417,20 +425,24 @@ function TriagePanel({ voc, onAct }) {
         <Button variant="ghost" size="sm" icon="more" />
       </>} />
 
-      <div className="panel-scroll">
-        <PanelTitleBlock title={voc.title}>
-          <ReporterStatusBadge status={voc.reporterStatus} />
-          <span className="text-xs muted">· {reporter.name} · {voc.createdAt}</span>
-        </PanelTitleBlock>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+
+      <div className="panel-scroll" ref={scrollRef}>
+        <div data-anchor="overview">
+          <PanelTitleBlock title={voc.title}>
+            <ReporterStatusBadge status={voc.reporterStatus} />
+            <span className="text-xs muted">· {reporter.name} · {voc.createdAt}</span>
+          </PanelTitleBlock>
+        </div>
 
         {/* Body preview */}
-        <div className="panel-section">
+        <div data-anchor="body" className="panel-section">
           <PanelSectionTitle>Body</PanelSectionTitle>
           <NestedTextBlock padding={14}>{voc.description}</NestedTextBlock>
         </div>
 
         {/* Severity selector */}
-        <div className="panel-section">
+        <div data-anchor="severity" className="panel-section">
           <PanelSectionTitle>Severity 결정</PanelSectionTitle>
           <div className="severity-grid">
             {['low', 'medium', 'high', 'critical'].map(s => {
@@ -452,7 +464,7 @@ function TriagePanel({ voc, onAct }) {
         </div>
 
         {/* Assign owner */}
-        <div className="panel-section">
+        <div data-anchor="owner" className="panel-section">
           <PanelSectionTitle>Owner 배정</PanelSectionTitle>
           <div className="vstack" style={{ gap: 6 }}>
             {teamCandidates.map(u => (
@@ -460,7 +472,7 @@ function TriagePanel({ voc, onAct }) {
                 className="entity-node"
                 data-active={owner === u.id}
                 onClick={() => setOwner(u.id)}
-                style={owner === u.id ? { background: 'rgba(228,242,34,0.06)', boxShadow: 'rgba(228,242,34,0.4) 0px 0px 0px 1px inset' } : {}}>
+                style={owner === u.id ? { background: 'rgba(20, 40, 160,0.06)', boxShadow: 'rgba(20, 40, 160,0.4) 0px 0px 0px 1px inset' } : {}}>
                 <Avatar user={u} size="sm" />
                 <div className="entity-node-body">
                   <div className="entity-node-title">{u.name}</div>
@@ -479,7 +491,7 @@ function TriagePanel({ voc, onAct }) {
         </div>
 
         {/* Analytics area */}
-        <div className="panel-section">
+        <div data-anchor="area" className="panel-section">
           <PanelSectionTitle>Analytics Area 연결</PanelSectionTitle>
           <div className="hstack" style={{ gap: 6, flexWrap: 'wrap' }}>
             <button className="ms-chip" data-active={!area} onClick={() => setArea(null)}>
@@ -499,7 +511,7 @@ function TriagePanel({ voc, onAct }) {
 
         {/* Cluster suggestion */}
         {voc.similarCount > 0 && (
-          <div className="panel-section">
+          <div data-anchor="cluster" className="panel-section">
             <PanelSectionTitle action={
               <span className="badge" style={{ background: 'rgba(94,106,210,0.12)', color: 'var(--color-aether-blue)' }}>
                 <Icon name="sparkles" size={9} />Similarity {voc.similarCount}
@@ -529,7 +541,7 @@ function TriagePanel({ voc, onAct }) {
         )}
 
         {/* Decision summary */}
-        <div className="panel-section">
+        <div data-anchor="summary" className="panel-section">
           <PanelSectionTitle>Triage 결과 미리보기</PanelSectionTitle>
           <div className="card-nested vstack" style={{ gap: 10 }}>
             <FieldRow label="Severity">
@@ -631,11 +643,10 @@ function TriageScreen({ scope, onNavigate }) {
 
   return (
     <>
-      <div className="main-region">
-        <div className="toolbar">
-          <div className="hstack" style={{ gap: 10 }}>
-            <Icon name="flag" size={14} style={{ color: 'var(--color-amber)' }} />
-            <span className="text-sm" style={{ fontWeight: 500 }}>Triage queue</span>
+      <WorkbenchShell
+        toolbar={
+          <>
+            <ShellTitle icon="flag" iconColor="var(--color-amber)" title="Triage queue">
             <OutlineBadge>{liveQueue.length} VOC</OutlineBadge>
             <span className="text-xs muted">정렬: 미배정 → severity</span>
             {Object.keys(triagedIds).length > 0 && (
@@ -643,13 +654,15 @@ function TriageScreen({ scope, onNavigate }) {
                 · {Object.keys(triagedIds).length}건 처리됨
               </span>
             )}
-          </div>
-          <div className="toolbar-spacer" />
-          <SearchInput placeholder="VOC 검색…" />
-          <button className="btn btn-subtle btn-sm"><Icon name="filter" size={12} />Filter</button>
-          <Button variant="secondary" size="sm">Skip to unassigned</Button>
-        </div>
-        <div className="main-scroll" style={{ padding: 0 }}>
+            </ShellTitle>
+            <div className="toolbar-spacer" />
+            <SearchInput placeholder="VOC 검색…" />
+            <button className="btn btn-subtle btn-sm"><Icon name="filter" size={12} />Filter</button>
+            <Button variant="secondary" size="sm">Skip to unassigned</Button>
+          </>
+        }
+        bodyClassName="workbench-body-scroll"
+        detail={selected && <TriagePanel voc={selected} onAct={handleAct} />}>
           {/* Permission-limited peek — when the backend signals that some
               VOCs in the actor's effective scope union were filtered out
               of this triage view (e.g. high-severity in a restricted MS),
@@ -682,9 +695,7 @@ function TriageScreen({ scope, onNavigate }) {
               <span className="text-xs muted">모든 VOC를 triage 처리했습니다. 새 VOC가 들어오면 자동으로 추가됩니다.</span>
             </div>
           )}
-        </div>
-      </div>
-      {selected && <TriagePanel voc={selected} onAct={handleAct} />}
+      </WorkbenchShell>
       {toast && (
         <div style={{
           position: 'fixed',

@@ -5,7 +5,7 @@
 > Pair with [`HANDOFF.md`](./HANDOFF.md) (overview, working rules, changelog).
 > Maintain alongside every Pack so production handoff stays unambiguous.
 
-**Last updated:** 2026-05-17 (Pack 16 — Handoff hardening: visual baselines + reproduction acceptance; mobile/tablet deferred)
+**Last updated:** 2026-05-17 (Pack 17 — Samsung-light palette + shared detail section nav)
 
 ---
 
@@ -71,27 +71,42 @@ Spec column references — short names map onto files:
 
 ## 2. Final visual baselines
 
-These are the curated screenshots to give another agent as visual acceptance references. The folder contains many iteration images; do not treat every PNG as canonical.
+These are the canonical screenshot targets for visual acceptance. The current canonical PNG set lives in `screenshots/final-baselines/`, with capture metadata in `screenshots/final-baselines/manifest.json`.
 
 | Baseline | Route / state | Screenshot | What must survive |
 |---|---|---|---|
-| Home / Action Dashboard | `#route=home` or `#route=my-work` | `screenshots/07-pack10-home.png` | KPI strip, action queues, live-count posture, desktop shell density |
-| VOC list + detail | `#route=voc&view=inbox` | `screenshots/pack11-voc.png` | Reporter/public status vs internal task status split, entity trail action panel, detail column rhythm |
-| Finding detail | `#route=findings` | `screenshots/pack11-final-finding.png` | Evidence-first hierarchy, execution CTA, linked entity rows |
-| VOC cluster detail | `#route=voc-clusters` | `screenshots/pack11-cluster.png` | Cluster confidence, member rows, confirmation/admin affordance |
-| Survey list cards | `#route=surveys` | `screenshots/02-pack11-surveys-card.png` | ObjectCard consumer pattern and survey follow-up CTA framing |
-| Survey result follow-up | `#route=survey-result` | `screenshots/survey-cta-v2.png` | Five allowed follow-up actions, anonymity threshold language, draft-panel entry points |
-| Admin managed systems | `#route=admin` | `screenshots/pack3-01-admin-managed.png` | Managed-system registry density and permission teaser placement |
-| Permission self-approval audit | `#route=admin-permissions` | `screenshots/pack8-self-approval-audit.png` | Reviewer console states, audit capture, self-approval warning semantics |
-| Workspace policy warning | `#route=admin-settings` | `screenshots/pack8-crossms-retro-warning.png` | Dirty save bar, locked SR→VOC row, retroactive/non-retroactive policy impact copy |
-| Milestones list/detail | `#route=tasks&view=milestones` | `screenshots/milestones-list.png` | Mini-timeline, detail tabs, task/evidence relationship density |
-| Command palette | open `⌘K` on any route | `screenshots/probe-cmdk.png` | Verb/object search language and local navigation behavior |
-| Rail / scope behavior | role/scope toggles in shell | `screenshots/probe-rail.png` | Role-level rail filtering and bounded-scope chip semantics |
+| Home / Action Dashboard | `#route=home` | `screenshots/final-baselines/home-action-dashboard.png` | KPI strip, action queues, live-count posture, desktop shell density |
+| My Work | `#route=my-work` | `screenshots/final-baselines/my-work.png` | Same action-queue shell as Home with assignment-focused content |
+| VOC list + detail | `#route=voc&view=inbox` | `screenshots/final-baselines/voc-inbox-detail.png` | Reporter/public status vs internal task status split, entity trail action panel, detail column rhythm |
+| VOC triage console | `#route=voc&view=triage` | `screenshots/final-baselines/voc-triage-console.png` | WorkbenchShell title/header rhythm, queue list, triage panel, optimistic-action affordance |
+| New VOC | `#route=voc-new` | `screenshots/final-baselines/voc-new.png` | PageShell form layout, Inbox back affordance, rich editor and attachment dropzone |
+| VOC cluster detail | `#route=voc-clusters` | `screenshots/final-baselines/voc-clusters.png` | Cluster confidence, member rows, confirmation/admin affordance |
+| Finding detail | `#route=findings` | `screenshots/final-baselines/findings-detail.png` | Evidence-first hierarchy, execution CTA, linked entity rows |
+| Tasks board | `#route=tasks&view=board` | `screenshots/final-baselines/tasks-board.png` | WorkbenchShell title/header rhythm aligned with triage, group controls, Kanban density |
+| Task requests | `#route=tasks&view=requests` | `screenshots/final-baselines/tasks-requests.png` | ListShell toolbar/body split, capability gating, self-approval semantics |
+| Task backlog | `#route=tasks&view=backlog` | `screenshots/final-baselines/tasks-backlog.png` | ListShell extension with backlog health strip and awaiting-execution language |
+| Task inbox | `#route=tasks&view=inbox` | `screenshots/final-baselines/tasks-inbox.png` | Assignment-scoped activity list with shared ListShell header/body line |
+| My Tasks | `#route=tasks&view=my` | `screenshots/final-baselines/tasks-my.png` | Grouped personal task list and shared ListShell detail rhythm |
+| Milestones list/detail | `#route=tasks&view=milestones` | `screenshots/final-baselines/tasks-milestones.png` | Mini-timeline, detail tabs, task/evidence relationship density |
+| Tasks roadmap | `#route=tasks&view=roadmap` | `screenshots/final-baselines/tasks-roadmap.png` | PageShell roadmap body, compact padding, Milestones back affordance, shared-axis Gantt |
+| Integration Action Dashboard | `#route=integration` | `screenshots/final-baselines/integration-action-dashboard.png` | Action dashboard counts, PageShell section rhythm, live-count posture |
+| Evidence highlights | `#route=integration-evidence` | `screenshots/final-baselines/integration-evidence.png` | ListShell list/detail layout, long evidence content, linked execution and trail action panel |
+| Coverage signals | `#route=integration-coverage` | `screenshots/final-baselines/integration-coverage.png` | PageShell coverage cards, missing-link queries, threshold modal entry points |
+| Entity links | `#route=integration-links` | `screenshots/final-baselines/integration-links.png` | ListShell list/detail layout, bulk-detach, freshness timestamp |
+| Survey list cards | `#route=surveys` | `screenshots/final-baselines/surveys-list.png` | ObjectCard consumer pattern and survey follow-up CTA framing |
+| Survey builder | `#route=survey-builder` | `screenshots/final-baselines/survey-builder.png` | WorkbenchShell builder layout, outline drag-reorder, preview drawer header baseline |
+| Survey result follow-up | `#route=survey-result` | `screenshots/final-baselines/survey-result.png` | Five allowed follow-up actions, anonymity threshold language, draft-panel entry points |
+| Admin managed systems | `#route=admin` | `screenshots/final-baselines/admin-managed-systems.png` | Managed-system registry density and permission teaser placement |
+| Analytics areas | `#route=admin-areas` | `screenshots/final-baselines/admin-analytics-areas.png` | PageShell analytics-area catalog and slide-over entry affordance |
+| Permission self-approval audit | `#route=admin-permissions` | `screenshots/final-baselines/admin-permissions.png` | Reviewer console states, audit capture, self-approval warning semantics |
+| Workspace policy warning | `#route=admin-settings` | `screenshots/final-baselines/admin-settings.png` | Dirty save bar, locked SR->VOC row, retroactive/non-retroactive policy impact copy |
+| Command palette | `#route=home` | `screenshots/final-baselines/probe-cmdk.png` | Verb/object search language and local navigation behavior |
+| Rail / scope behavior | `#route=home&scope=all` | `screenshots/final-baselines/probe-rail-scope.png` | Role-level rail filtering and bounded-scope chip semantics |
 
 Acceptance use:
 - For a continuation task, compare against these screenshots plus the live prototype.
 - For a clean-room implementation, compare against these screenshots only after the source docs and route contract are implemented.
-- If a screenshot is missing for a route, prefer the live prototype and route table over older unlisted PNGs.
+- Treat older PNGs directly under `screenshots/` as working evidence unless a later handoff promotes them into `screenshots/final-baselines/`.
 
 ---
 
@@ -109,7 +124,7 @@ Acceptance use:
 | `SeverityBadge`, `ConfidenceBadge`, `FindingStatusBadge`, `TaskRequestBadge`, `ManagedSystemPill` | Session 1 | — | 04/05/06 |
 | `ClusterStatusBadge`, `SurveyStatusBadge`, `HelpTip` | Session 2 | — | 04/07 |
 | `EntityNode`, `LinkedEntityTrail` | Session 1 | Pack 13 keyboard/selection pass | 11 linking |
-| `DetailPanelHeader`, `PanelTitleBlock`, `NestedTextBlock`, `Callout`, `UserChip`, `OutlineBadge`, `ListToolbar`, `EntityIconBadge`, `priorityToSeverity` | Session 2 | — | ui-ds |
+| `DetailPanelHeader`, `DetailPanelSectionNav`, `PanelTitleBlock`, `NestedTextBlock`, `Callout`, `UserChip`, `OutlineBadge`, `ListToolbar`, `EntityIconBadge`, `priorityToSeverity` | Session 2 / Pack 17 | Pack 17 | ui-ds · inter §Anchored sections |
 | `PermissionBlockedPanel` | Session 4 | — | 09 permission · inter |
 | `SourceTypeIcon` 🏷️ | Session 3 (`screen-evidence`) | Pack 10 | 05 finding · ui-ds |
 | `SentimentChip` 🏷️ | Session 3 (`screen-evidence`) | Pack 10 | 05 finding |
@@ -183,7 +198,11 @@ A flat reverse-index so production engineers can find every consumer of a primit
 | Atom | Consumers (file) |
 |---|---|
 | `PageShell` | home · voc-create (Create) · integration · surveys · admin · admin-areas · admin-settings · survey-result · tasks-roadmap |
+| `ListShell` | tasks requests · tasks backlog · my tasks · task inbox · evidence · entity-links |
+| `WorkbenchShell` | tasks board · voc triage · survey builder · survey result |
+| `ShellTitle` | tasks board · voc triage |
 | `DetailPanelHeader` | voc · clusters · findings · tasks · evidence · entity-links · milestones · permissions |
+| `DetailPanelSectionNav` 🏷️ | voc · triage · clusters · findings · tasks · task requests · evidence · entity-links · surveys · admin-areas · milestones · permissions |
 | `PanelTitleBlock` | All detail panels |
 | `Callout` | clusters · findings · evidence · milestones · surveys (forbidden) · survey-builder · entity-links · permissions · settings · areas (slide-over) |
 | `ListToolbar` | voc · clusters · findings · tasks · evidence · entity-links · milestones · permissions |
@@ -322,6 +341,24 @@ Note: mobile/tablet support is now explicitly lowest priority. Keep the basic dr
 | Reproduction acceptance contract | `HANDOFF.md` — P0/P1 criteria, known non-goals, and adversarial review notes | handoff QA |
 | Admin Settings drift fix | `HANDOFF.md`, `DESIGN-MAP.md` — `admin-settings` consistently maps to `screen-admin-settings.jsx` | routes |
 
+### Pack 17 — Samsung-light palette + shared detail section nav
+
+| Deliverable | Touched | Spec link |
+|---|---|---|
+| Samsung-light palette rebound | `styles.css`, `app.jsx`, direct JSX color remnants — cool blue-white canvas, near-white surfaces, soft blue borders, Samsung Blue `#1428a0` primary/focus | ui-ds visual tokens |
+| `DetailPanelSectionNav` promotion | `components.jsx`, `styles.css` — shared anchored section jump bar with active-section tracking | inter §Anchored sections |
+| Long drawer migration | `screen-voc.jsx`, `screen-voc-create.jsx`, `screen-clusters.jsx`, `screen-findings.jsx`, `screen-tasks.jsx`, `screen-evidence.jsx`, `screen-entity-links.jsx`, `screen-other.jsx`, `screen-milestones.jsx`, `screen-permissions.jsx` | ui-ds detail panels |
+
+### Pack 18 — route pattern shells + aligned headers
+
+| Deliverable | Touched | Spec link |
+|---|---|---|
+| Three route layout shells | `components.jsx`, `styles.css` — `PageShell` for page-body screens, `ListShell` for filter/list/detail routes, `WorkbenchShell` for board/builder/triage work surfaces | ui-ds layout patterns |
+| ListShell migration | `screen-tasks.jsx`, `screen-evidence.jsx`, `screen-entity-links.jsx` — requests/backlog/my/inbox/evidence/entity-links use the shared filter + list + detail shell | routes · ui-ds lists |
+| WorkbenchShell migration | `screen-tasks.jsx`, `screen-voc-create.jsx`, `screen-survey-builder.jsx`, `screen-survey-result.jsx` — Tasks board, Triage, Survey Builder, and Survey Result use the shared workbench frame | routes · ui-ds workbench |
+| Header height alignment | `styles.css`, `components.jsx` — sidebar system header, ListShell/WorkbenchShell toolbar, panel drawer header, and survey preview drawer header align to the same 50px header baseline | ui-ds layout tokens |
+| Shared title treatment | `components.jsx`, `screen-tasks.jsx`, `screen-voc-create.jsx` — Tasks board and Triage use `ShellTitle` icon + title + badges so title position and rhythm match | ui-ds headings |
+
 ---
 
 ## 9. Known follow-up (carry into next pack)
@@ -334,10 +371,9 @@ These items finished the recent prototype passes but leave intentional next-pack
 2. **`EntityRelationRow` reach** — six consumers today (entity-links, cluster members, AA slide-over related findings, VOC detail Linked execution, Finding detail Linked execution, plus the source→target stem inside EntityLinkRow).  Still natural targets: Task detail's source-VOC card, Survey result's allowed follow-up rows (currently a custom `SurveyFollowupAction` — different shape, not a hard convert).
 3. **`LiveCount` source-of-truth** — prototype drives counts off a synthetic timer.  Production should wire to the SSE/long-poll endpoint that powers the Action Dashboard; the `LiveTimestamp` should display server-issued `last_refreshed_at`, not local clock time.
 4. **Roadmap milestone state in URL** — Pack 11 opens the Milestone detail as a slide-over over the Roadmap.  Selected milestone state is local; production should put it in URL (`#route=tasks&view=roadmap&milestone=M-21`) so back-button closes the panel and links are deep.
-5. **Scroll-spy on other long detail panels** — same pattern as Milestone Detail (anchored sections) applies to VOC Detail (Compose tabs), Task Detail (Activity), Permission Request Detail.  Lift `useScrollSpy` into `components.jsx` once a second consumer is built.
-6. **Permission Request → originally-blocked action return-route** — Pack 8 added the unified envelope but didn't yet wire `return_route_intent` so approval lands the requester back on the originally blocked card.  Per spec FR-PERM-001.
-7. **`scope.members` deep-link** — URL hash currently encodes a single `scope` id.  Multi-MS picks (e.g. a developer explicitly comparing two of their granted systems) need a `scope=tableau,powerbi` form.
-8. **Mobile/tablet polish** — Explicitly deferred. Basic shell drawer exists, but tablet bottom sheets, phone-first detail flows, and deeper touch tuning should wait until desktop flows stop moving.
+5. **Permission Request → originally-blocked action return-route** — Pack 8 added the unified envelope but didn't yet wire `return_route_intent` so approval lands the requester back on the originally blocked card.  Per spec FR-PERM-001.
+6. **`scope.members` deep-link** — URL hash currently encodes a single `scope` id.  Multi-MS picks (e.g. a developer explicitly comparing two of their granted systems) need a `scope=tableau,powerbi` form.
+7. **Mobile/tablet polish** — Explicitly deferred. Basic shell drawer exists, but tablet bottom sheets, phone-first detail flows, and deeper touch tuning should wait until desktop flows stop moving.
 
 ---
 

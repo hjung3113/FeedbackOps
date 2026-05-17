@@ -9,13 +9,13 @@ const { useState, useEffect, useMemo, useRef, useCallback, Fragment } = React;
 // ============================================================
 function PageShell({ title, subtitle, eyebrow, actions, back, children, fluid = false }) {
   return (
-    <div className="main-scroll">
+    <div className={`main-scroll page-shell ${fluid ? 'page-shell--fluid' : 'page-shell--constrained'}`}>
       <div className={`main-padded ${fluid ? '' : 'constrained'}`}>
         {(title || actions || back) && (
-          <div className="page-header hstack" style={{ justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
-            <div className="vstack" style={{ gap: 6, minWidth: 0 }}>
+          <div className="page-header hstack">
+            <div className="page-header-copy vstack">
               {(eyebrow || back) && (
-                <div className="hstack" style={{ gap: 8 }}>
+                <div className="page-kicker hstack">
                   {back}
                   {eyebrow}
                 </div>
@@ -23,12 +23,20 @@ function PageShell({ title, subtitle, eyebrow, actions, back, children, fluid = 
               {title && <h1 className="page-title">{title}</h1>}
               {subtitle && <p className="page-subtitle">{subtitle}</p>}
             </div>
-            {actions && <div className="hstack" style={{ gap: 8, flexShrink: 0 }}>{actions}</div>}
+            {actions && <div className="page-actions hstack">{actions}</div>}
           </div>
         )}
         {children}
       </div>
     </div>
+  );
+}
+
+function PageShellBackButton({ children, onClick, variant = 'subtle' }) {
+  return (
+    <Button variant={variant} size="sm" icon="chevronLeft" onClick={onClick}>
+      {children}
+    </Button>
   );
 }
 
@@ -177,7 +185,7 @@ function FindingStatusBadge({ status }) {
   const info = window.FindingStatusLabels[status];
   if (!info) return <span className="badge">{status}</span>;
   const colorMap = {
-    lime: { color: 'var(--color-neon-lime)', bg: 'rgba(228,242,34,0.1)' },
+    lime: { color: 'var(--color-neon-lime)', bg: 'rgba(20, 40, 160,0.1)' },
     cyan: { color: 'var(--color-cyan-spark)', bg: 'rgba(2,184,204,0.1)' },
     muted: { color: 'var(--text-muted)', bg: 'rgba(138,143,152,0.1)' },
   };
@@ -293,6 +301,91 @@ function PanelSectionTitle({ children, action }) {
   );
 }
 
+function DetailPanelSectionNav({ sections, scrollRef }) {
+  const firstSection = sections?.[0]?.id || '';
+  const [activeSection, setActiveSection] = useState(firstSection);
+  const programmaticRef = useRef(false);
+  const sectionKey = (sections || []).map(s => s.id).join('|');
+
+  useEffect(() => {
+    setActiveSection(firstSection);
+  }, [firstSection, sectionKey]);
+
+  useEffect(() => {
+    const root = scrollRef?.current;
+    if (!root || !sections?.length) return;
+    const anchors = sections
+      .map(s => root.querySelector(`[data-anchor="${s.id}"]`))
+      .filter(Boolean);
+    if (!anchors.length) return;
+
+    if (typeof IntersectionObserver === 'undefined') {
+      const updateActiveSection = () => {
+        if (programmaticRef.current) return;
+        const rootRect = root.getBoundingClientRect();
+        const active = anchors
+          .map(a => ({
+            id: a.getAttribute('data-anchor'),
+            top: Math.abs(a.getBoundingClientRect().top - rootRect.top),
+          }))
+          .sort((a, b) => a.top - b.top)[0];
+        if (active?.id) setActiveSection(active.id);
+      };
+      root.addEventListener('scroll', updateActiveSection, { passive: true });
+      updateActiveSection();
+      return () => root.removeEventListener('scroll', updateActiveSection);
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (programmaticRef.current) return;
+      const visible = entries
+        .filter(e => e.isIntersecting)
+        .map(e => ({ id: e.target.getAttribute('data-anchor'), top: e.boundingClientRect.top }))
+        .sort((a, b) => a.top - b.top);
+      if (visible.length > 0) setActiveSection(visible[0].id);
+    }, {
+      root,
+      rootMargin: '0px 0px -66% 0px',
+      threshold: 0,
+    });
+    anchors.forEach(a => observer.observe(a));
+    return () => observer.disconnect();
+  }, [scrollRef, sectionKey]);
+
+  const scrollTo = (id) => {
+    const root = scrollRef?.current;
+    const el = root?.querySelector(`[data-anchor="${id}"]`);
+    if (!root || !el) return;
+    programmaticRef.current = true;
+    setActiveSection(id);
+    const rootRect = root.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    root.scrollTo({
+      top: root.scrollTop + elRect.top - rootRect.top,
+      behavior: 'smooth',
+    });
+    setTimeout(() => { programmaticRef.current = false; }, 700);
+  };
+
+  if (!sections?.length) return null;
+  return (
+    <div className="panel-section-nav">
+      {sections.map(s => (
+        <button
+          key={s.id}
+          type="button"
+          onClick={() => scrollTo(s.id)}
+          className={`panel-section-nav-button ${activeSection === s.id ? 'active' : ''}`}>
+          {s.label}
+          {s.count !== undefined && (
+            <span className="panel-section-nav-count mono">{s.count}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ============================================================
 // Linked Entity Trail
 // ============================================================
@@ -366,7 +459,7 @@ function SeverityIndicator({ severity }) {
 const DETAIL_PANEL_KINDS = {
   voc:       { label: 'VOC',          color: 'var(--color-aether-blue)',  bg: 'rgba(94,106,210,0.15)' },
   cluster:   { label: 'Cluster',      color: 'var(--color-aether-blue)',  bg: 'rgba(94,106,210,0.15)' },
-  finding:   { label: 'Finding',      color: 'var(--color-neon-lime)',    bg: 'rgba(228,242,34,0.15)' },
+  finding:   { label: 'Finding',      color: 'var(--color-neon-lime)',    bg: 'rgba(20, 40, 160,0.15)' },
   task:      { label: 'Task',         color: 'var(--color-emerald)',      bg: 'rgba(39,166,68,0.15)' },
   request:   { label: 'Task Request', color: 'var(--color-amber)',        bg: 'rgba(242,196,109,0.15)' },
   triage:    { label: 'Triage',       color: 'var(--color-amber)',        bg: 'rgba(242,196,109,0.15)' },
@@ -521,6 +614,47 @@ function ListToolbar({ tabs, activeTab, onTabChange, action, children }) {
       <div className="toolbar-spacer" />
       {children}
       {action && <div className="toolbar-action">{action}</div>}
+    </div>
+  );
+}
+
+function ListShell({ toolbar, beforeList, afterList, children, detail, scrollClassName = '', scrollStyle }) {
+  return (
+    <>
+      <div className="main-region list-shell">
+        {toolbar}
+        {beforeList}
+        <div className={`main-scroll list-shell-scroll ${scrollClassName}`} style={{ padding: 0, ...scrollStyle }}>
+          {children}
+        </div>
+        {afterList}
+      </div>
+      {detail}
+    </>
+  );
+}
+
+function WorkbenchShell({ toolbar, belowToolbar, children, detail, bodyClassName = '', bodyStyle }) {
+  return (
+    <>
+      <div className="main-region workbench-shell">
+        {toolbar && <div className="workbench-toolbar">{toolbar}</div>}
+        {belowToolbar}
+        <div className={`workbench-body ${bodyClassName}`} style={bodyStyle}>
+          {children}
+        </div>
+      </div>
+      {detail}
+    </>
+  );
+}
+
+function ShellTitle({ icon, title, iconColor, children }) {
+  return (
+    <div className="shell-title">
+      {icon && <Icon name={icon} size={14} style={{ color: iconColor || 'var(--text-muted)' }} />}
+      <span className="shell-title-text">{title}</span>
+      {children}
     </div>
   );
 }
@@ -929,14 +1063,14 @@ function PermissionBlockedPanel({
 
 // Expose
 Object.assign(window, {
-  Icon, Avatar, Button, PageShell,
+  Icon, Avatar, Button, PageShell, PageShellBackButton,
   ReporterStatusBadge, InternalTaskBadge, SeverityBadge, ConfidenceBadge,
   FindingStatusBadge, TaskRequestBadge, ManagedSystemPill,
   ClusterStatusBadge, SurveyStatusBadge,
-  CoverageBar, SearchInput, FieldRow, PanelSectionTitle,
+  CoverageBar, SearchInput, FieldRow, PanelSectionTitle, DetailPanelSectionNav,
   EntityNode, LinkedEntityTrail, SeverityIndicator,
   DetailPanelHeader, PanelTitleBlock, NestedTextBlock,
-  UserChip, OutlineBadge, Callout, ListToolbar,
+  UserChip, OutlineBadge, Callout, ListToolbar, ListShell, WorkbenchShell, ShellTitle,
   EntityIconBadge, priorityToSeverity, HelpTip,
   DETAIL_PANEL_KINDS, ENTITY_ICON_MAP,
   PermissionBlockedPanel,

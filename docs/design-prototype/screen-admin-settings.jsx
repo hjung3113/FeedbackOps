@@ -367,14 +367,14 @@ function SettingsControlledRow({
       gap: 16, padding: '14px 16px',
       borderBottom: isLast ? 'none' : '1px solid var(--border-subtle)',
       alignItems: 'flex-start',
-      background: dirty ? 'rgba(228,242,34,0.04)' : 'transparent',
+      background: dirty ? 'rgba(20, 40, 160,0.04)' : 'transparent',
     }}>
       <div className="vstack" style={{ gap: 4, minWidth: 0 }}>
         <div className="hstack" style={{ gap: 6 }}>
           <span className="text-sm" style={{ fontWeight: 500 }}>{label}</span>
           {dirty && (
             <span className="badge" style={{
-              background: 'rgba(228,242,34,0.18)',
+              background: 'rgba(20, 40, 160,0.18)',
               color: 'var(--color-neon-lime)',
               fontSize: 10,
             }}>Unsaved</span>

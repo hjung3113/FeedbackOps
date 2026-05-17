@@ -371,7 +371,7 @@ function PreviewModal({ open, onClose, title, children }) {
   return (
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 250,
-      background: 'rgba(8,9,10,0.7)',
+      background: 'rgba(20,40,160,0.18)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 24,
     }}>

@@ -74,7 +74,7 @@ function TaskCard({ task, onSelect, selected, onDragStart, onDragEnd, isDragging
       }}
       onDragEnd={() => onDragEnd && onDragEnd()}
       style={{
-        ...(selected ? { boxShadow: 'rgba(228,242,34,0.4) 0px 0px 0px 1.5px inset' } : {}),
+        ...(selected ? { boxShadow: 'rgba(20, 40, 160,0.4) 0px 0px 0px 1.5px inset' } : {}),
         opacity: isDragging ? 0.35 : 1,
         cursor: 'grab',
       }}>
@@ -84,7 +84,7 @@ function TaskCard({ task, onSelect, selected, onDragStart, onDragEnd, isDragging
           {task.priority}
         </span>
         {task.findingId && (
-          <span className="badge" style={{ background: 'rgba(228,242,34,0.08)', color: 'var(--color-neon-lime)' }}>
+          <span className="badge" style={{ background: 'rgba(20, 40, 160,0.08)', color: 'var(--color-neon-lime)' }}>
             ↔ {task.findingId}
           </span>
         )}
@@ -111,6 +111,15 @@ function TaskDetailPanel({ task, onClose, view }) {
   const finding = task.findingId ? window.findingById(task.findingId) : null;
   const linkedVoc = window.Vocs.find(v => v.linkedTaskId === task.id);
   const sev = priorityToSeverity(task.priority);
+  const scrollRef = useRef(null);
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'properties', label: 'Properties' },
+    finding && { id: 'source', label: 'Source' },
+    { id: 'context', label: 'Context' },
+    task.status === 'released' && linkedVoc && linkedVoc.reporterStatus !== 'resolved' &&
+      { id: 'status', label: 'Status' },
+  ].filter(Boolean);
 
   return (
     <aside className="detail-panel">
@@ -118,20 +127,23 @@ function TaskDetailPanel({ task, onClose, view }) {
         <DetailPanelHeaderActions entityKind="Task" entityId={task.id}
           copyHash={`#route=tasks&view=board&param=${task.id}`} />
       } />
-      <div className="panel-scroll">
-        <PanelTitleBlock title={task.title}>
-          <InternalTaskBadge status={task.status} />
-          <SeverityBadge severity={sev} />
-          {linkedVoc && (
-            <>
-              <span className="text-xs muted">·</span>
-              <span className="text-xs muted">Reporter status:</span>
-              <ReporterStatusBadge status={linkedVoc.reporterStatus} />
-            </>
-          )}
-        </PanelTitleBlock>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+      <div className="panel-scroll" ref={scrollRef}>
+        <div data-anchor="overview">
+          <PanelTitleBlock title={task.title}>
+            <InternalTaskBadge status={task.status} />
+            <SeverityBadge severity={sev} />
+            {linkedVoc && (
+              <>
+                <span className="text-xs muted">·</span>
+                <span className="text-xs muted">Reporter status:</span>
+                <ReporterStatusBadge status={linkedVoc.reporterStatus} />
+              </>
+            )}
+          </PanelTitleBlock>
+        </div>
 
-        <div className="panel-section">
+        <div data-anchor="properties" className="panel-section">
           <PanelSectionTitle>Properties</PanelSectionTitle>
           <FieldRow label="Status"><InternalTaskBadge status={task.status} /></FieldRow>
           <FieldRow label="Priority"><SeverityBadge severity={sev} /></FieldRow>
@@ -146,7 +158,7 @@ function TaskDetailPanel({ task, onClose, view }) {
         </div>
 
         {finding && (
-          <div className="panel-section">
+          <div data-anchor="source" className="panel-section">
             <PanelSectionTitle>Source evidence</PanelSectionTitle>
             <div className="card-nested vstack" style={{ gap: 6 }}>
               <span className="text-xs muted">From finding</span>
@@ -162,7 +174,7 @@ function TaskDetailPanel({ task, onClose, view }) {
           </div>
         )}
 
-        <div className="panel-section">
+        <div data-anchor="context" className="panel-section">
           <PanelSectionTitle>Linked context</PanelSectionTitle>
           {(() => {
             const vocDecision = window.getPermissionDecision(task, 'linkedVoc');
@@ -197,7 +209,7 @@ function TaskDetailPanel({ task, onClose, view }) {
         </div>
 
         {task.status === 'released' && linkedVoc && linkedVoc.reporterStatus !== 'resolved' && (
-          <div className="panel-section">
+          <div data-anchor="status" className="panel-section">
             <Callout tone="amber" title="Reporter-facing status 미해결"
               action={
                 <Button variant="primary" size="sm">
@@ -307,11 +319,12 @@ function TaskBoardView({ scope, selectedParam }) {
   };
 
   return (
-    <>
-      <div className="main-region">
-        <div className="toolbar">
-          <span className="text-sm" style={{ fontWeight: 500 }}>Board</span>
-          <OutlineBadge>{filtered.length} tasks</OutlineBadge>
+    <WorkbenchShell
+      toolbar={
+        <>
+          <ShellTitle icon="layers" iconColor="var(--color-aether-blue)" title="Board">
+            <OutlineBadge>{filtered.length} tasks</OutlineBadge>
+          </ShellTitle>
           <div className="toolbar-spacer" />
           <ListFilterButton categories={filterCategories}
             applied={filters} onChange={toggleFilter} onClear={clearFilters} />
@@ -319,8 +332,9 @@ function TaskBoardView({ scope, selectedParam }) {
             onChange={(v) => setGroupBy(v.split(':')[0])}
             label="Group by" icon="layers" />
           <Button variant="primary" size="sm" icon="plus">New task</Button>
-        </div>
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+        </>
+      }
+      detail={selected && <TaskDetailPanel task={selected} onClose={() => setSelectedId(null)} />}>
           <div className="board">
             {groupColumns.map(col => {
               const tasks = filtered.filter(t => taskGroupValue(t, groupBy) === col.key);
@@ -342,7 +356,7 @@ function TaskBoardView({ scope, selectedParam }) {
                   }}
                   onDrop={() => handleDropOnColumn(col.key)}
                   style={{
-                    background: isOver ? 'rgba(228,242,34,0.06)' : undefined,
+                    background: isOver ? 'rgba(20, 40, 160,0.06)' : undefined,
                     boxShadow: isOver ? 'inset 0 0 0 1px var(--color-neon-lime)' : undefined,
                     borderRadius: 6,
                     transition: 'background 100ms ease, box-shadow 100ms ease',
@@ -379,10 +393,7 @@ function TaskBoardView({ scope, selectedParam }) {
               );
             })}
           </div>
-        </div>
-      </div>
-      {selected && <TaskDetailPanel task={selected} onClose={() => setSelectedId(null)} />}
-    </>
+    </WorkbenchShell>
   );
 }
 
@@ -480,8 +491,8 @@ function TaskBacklogView({ scope }) {
   const promotable = backlog.filter(t => t.assignee && t.status === 'backlog').length;
 
   return (
-    <>
-      <div className="main-region">
+    <ListShell
+      toolbar={
         <ListToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
           <SearchInput placeholder="Backlog 검색…" />
           <div className="hstack" style={{ gap: 4 }}>
@@ -496,11 +507,8 @@ function TaskBacklogView({ scope }) {
           </div>
           <Button variant="primary" size="sm" icon="plus">New task</Button>
         </ListToolbar>
-
-        {/* Strip — backlog health signals.
-            Per docs/design/06-task-project-system.md, backlog is the queue
-            between Triage and Execution; Unassigned and Promotable are the
-            two signals worth surfacing at a glance. */}
+      }
+      beforeList={
         <div className="hstack" style={{
           gap: 18, padding: '10px 20px',
           borderBottom: '1px solid var(--border-subtle)',
@@ -529,21 +537,18 @@ function TaskBacklogView({ scope }) {
             Backlog 는 list-first 입니다. Execution 은 Todo 또는 Doing 에서 시작됩니다.
           </span>
         </div>
-
-        <div className="main-scroll" style={{ padding: 0 }}>
-          {shown.length === 0 ? (
-            <div className="text-sm muted" style={{ padding: 40, textAlign: 'center' }}>표시할 task 가 없습니다.</div>
-          ) : (
-            <div className="object-list">
-              {shown.map(t => (
-                <TaskBacklogRow key={t.id} task={t} selected={selected?.id === t.id} onSelect={(x) => setSelectedId(x.id)} />
-              ))}
-            </div>
-          )}
+      }
+      detail={selected && <TaskDetailPanel task={selected} onClose={() => setSelectedId(null)} view="backlog" />}>
+      {shown.length === 0 ? (
+        <div className="text-sm muted" style={{ padding: 40, textAlign: 'center' }}>표시할 task 가 없습니다.</div>
+      ) : (
+        <div className="object-list">
+          {shown.map(t => (
+            <TaskBacklogRow key={t.id} task={t} selected={selected?.id === t.id} onSelect={(x) => setSelectedId(x.id)} />
+          ))}
         </div>
-      </div>
-      {selected && <TaskDetailPanel task={selected} onClose={() => setSelectedId(null)} view="backlog" />}
-    </>
+      )}
+    </ListShell>
   );
 }
 // ============================================================
@@ -585,21 +590,32 @@ function TaskRequestRow({ r, selected, onSelect }) {
 function TaskRequestPanel({ r, onClose }) {
   const requester = window.userById(r.requestedBy);
   const finding = r.findingId ? window.findingById(r.findingId) : null;
+  const scrollRef = useRef(null);
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'decision', label: 'Decision' },
+    finding && { id: 'source', label: 'Source' },
+    { id: 'properties', label: 'Properties' },
+    { id: 'audit', label: 'Audit' },
+  ].filter(Boolean);
   return (
     <aside className="detail-panel">
       <DetailPanelHeader kind="request" id={r.id} onClose={onClose} extras={
         <DetailPanelHeaderActions entityKind="Task Request" entityId={r.id}
           copyHash={`#route=tasks&view=requests&param=${r.id}`} />
       } />
-      <div className="panel-scroll">
-        <PanelTitleBlock title={r.title}>
-          <TaskRequestBadge status={r.status} />
-          <span className="text-xs muted">· Requested by <strong style={{ color: 'var(--text-secondary)' }}>{requester.name}</strong></span>
-          <span className="text-xs muted">· {r.createdAt}</span>
-        </PanelTitleBlock>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+      <div className="panel-scroll" ref={scrollRef}>
+        <div data-anchor="overview">
+          <PanelTitleBlock title={r.title}>
+            <TaskRequestBadge status={r.status} />
+            <span className="text-xs muted">· Requested by <strong style={{ color: 'var(--text-secondary)' }}>{requester.name}</strong></span>
+            <span className="text-xs muted">· {r.createdAt}</span>
+          </PanelTitleBlock>
+        </div>
 
         {/* Review decision — primary action above the fold */}
-        <div className="panel-section">
+        <div data-anchor="decision" className="panel-section">
           <PanelSectionTitle>Review decision</PanelSectionTitle>
           <div className="vstack" style={{ gap: 8 }}>
             <Button variant="primary" className="btn-block">
@@ -618,7 +634,7 @@ function TaskRequestPanel({ r, onClose }) {
         </div>
 
         {finding && (
-          <div className="panel-section">
+          <div data-anchor="source" className="panel-section">
             <PanelSectionTitle>Source finding</PanelSectionTitle>
             <div className="card-nested vstack" style={{ gap: 6 }}>
               <div className="hstack" style={{ justifyContent: 'space-between' }}>
@@ -638,7 +654,7 @@ function TaskRequestPanel({ r, onClose }) {
           </div>
         )}
 
-        <div className="panel-section">
+        <div data-anchor="properties" className="panel-section">
           <PanelSectionTitle>Properties</PanelSectionTitle>
           <FieldRow label="Managed System"><ManagedSystemPill id={r.managedSystem} /></FieldRow>
           <FieldRow label="Impact"><SeverityBadge severity={priorityToSeverity(r.impact)} /></FieldRow>
@@ -651,7 +667,7 @@ function TaskRequestPanel({ r, onClose }) {
           </FieldRow>
         </div>
 
-        <div className="panel-section">
+        <div data-anchor="audit" className="panel-section">
           <PanelSectionTitle>Audit</PanelSectionTitle>
           <div className="timeline">
             <div className="timeline-item">
@@ -688,20 +704,18 @@ function TaskRequestView({ scope, selectedParam }) {
   const selected = selectedId ? (shown.find(r => r.id === selectedId) || filtered.find(r => r.id === selectedId)) : null;
 
   return (
-    <>
-      <div className="main-region">
+    <ListShell
+      toolbar={
         <ListToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
           <SearchInput placeholder="Request 검색…" />
           <Button variant="subtle" size="sm">Bulk assign reviewer</Button>
         </ListToolbar>
-        <div className="main-scroll" style={{ padding: 0 }}>
-          {shown.map(r => (
-            <TaskRequestRow key={r.id} r={r} selected={selected?.id === r.id} onSelect={(x) => setSelectedId(x.id)} />
-          ))}
-        </div>
-      </div>
-      {selected && <TaskRequestPanel r={selected} onClose={() => setSelectedId(null)} />}
-    </>
+      }
+      detail={selected && <TaskRequestPanel r={selected} onClose={() => setSelectedId(null)} />}>
+      {shown.map(r => (
+        <TaskRequestRow key={r.id} r={r} selected={selected?.id === r.id} onSelect={(x) => setSelectedId(x.id)} />
+      ))}
+    </ListShell>
   );
 }
 
@@ -745,8 +759,8 @@ function TaskMyView({ scope, currentActorId = 'u-1' }) {
   const blocked  = mine.filter(t => t.blocked).length;
 
   return (
-    <>
-      <div className="main-region">
+    <ListShell
+      toolbar={
         <ListToolbar
           tabs={tabsWithCount}
           activeTab={activeTab}
@@ -755,7 +769,8 @@ function TaskMyView({ scope, currentActorId = 'u-1' }) {
           <SearchInput placeholder="내 task 검색…" />
           <button className="btn btn-subtle btn-sm"><Icon name="sort" size={12} />Priority</button>
         </ListToolbar>
-
+      }
+      beforeList={
         <div className="hstack" style={{
           gap: 18, padding: '10px 20px',
           borderBottom: '1px solid var(--border-subtle)',
@@ -782,23 +797,20 @@ function TaskMyView({ scope, currentActorId = 'u-1' }) {
             나({window.userById(currentActorId).name})에게 할당된 task만 표시
           </span>
         </div>
-
-        <div className="main-scroll" style={{ padding: 0 }}>
-          {shown.length === 0 ? (
-            <div className="text-sm muted" style={{ padding: 40, textAlign: 'center' }}>
-              표시할 task 가 없습니다.
-            </div>
-          ) : (
-            <div className="object-list">
-              {shown.map(t => (
-                <TaskBacklogRow key={t.id} task={t} selected={selected?.id === t.id} onSelect={(x) => setSelectedId(x.id)} />
-              ))}
-            </div>
-          )}
+      }
+      detail={selected && <TaskDetailPanel task={selected} onClose={() => setSelectedId(null)} />}>
+      {shown.length === 0 ? (
+        <div className="text-sm muted" style={{ padding: 40, textAlign: 'center' }}>
+          표시할 task 가 없습니다.
         </div>
-      </div>
-      {selected && <TaskDetailPanel task={selected} onClose={() => setSelectedId(null)} />}
-    </>
+      ) : (
+        <div className="object-list">
+          {shown.map(t => (
+            <TaskBacklogRow key={t.id} task={t} selected={selected?.id === t.id} onSelect={(x) => setSelectedId(x.id)} />
+          ))}
+        </div>
+      )}
+    </ListShell>
   );
 }
 
@@ -910,8 +922,8 @@ function TaskInboxView({ scope, currentActorId = 'u-1' }) {
   const selected = selectedEvent?.task;
 
   return (
-    <>
-      <div className="main-region">
+    <ListShell
+      toolbar={
         <ListToolbar
           tabs={tabs}
           activeTab={activeTab}
@@ -920,27 +932,24 @@ function TaskInboxView({ scope, currentActorId = 'u-1' }) {
           <SearchInput placeholder="Inbox 검색…" />
           <button className="btn btn-subtle btn-sm"><Icon name="filter" size={12} />Filter</button>
         </ListToolbar>
-
-        <div className="main-scroll" style={{ padding: 0 }}>
-          {shown.length === 0 ? (
-            <div className="text-sm muted" style={{ padding: 40, textAlign: 'center' }}>
-              표시할 알림이 없습니다.
-            </div>
-          ) : (
-            <div className="object-list">
-              {shown.map(e => (
-                <TaskInboxRow
-                  key={`${e.kind}-${e.task.id}`}
-                  event={e}
-                  selected={selected?.id === e.task.id}
-                  onSelect={(x) => setSelectedId(x.task.id)} />
-              ))}
-            </div>
-          )}
+      }
+      detail={selected && <TaskDetailPanel task={selected} onClose={() => setSelectedId(null)} />}>
+      {shown.length === 0 ? (
+        <div className="text-sm muted" style={{ padding: 40, textAlign: 'center' }}>
+          표시할 알림이 없습니다.
         </div>
-      </div>
-      {selected && <TaskDetailPanel task={selected} onClose={() => setSelectedId(null)} />}
-    </>
+      ) : (
+        <div className="object-list">
+          {shown.map(e => (
+            <TaskInboxRow
+              key={`${e.kind}-${e.task.id}`}
+              event={e}
+              selected={selected?.id === e.task.id}
+              onSelect={(x) => setSelectedId(x.task.id)} />
+          ))}
+        </div>
+      )}
+    </ListShell>
   );
 }
 

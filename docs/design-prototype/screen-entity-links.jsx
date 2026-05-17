@@ -188,6 +188,14 @@ function EntityLinkRow({ link, selected, onSelect, checked, onToggleCheck }) {
 function EntityLinkDetailPanel({ link, onClose }) {
   const createdBy = window.userById(link.createdBy);
   const actor = link.actor ? window.userById(link.actor) : null;
+  const scrollRef = useRef(null);
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'endpoints', label: 'Endpoints' },
+    (link.status === 'stale' || link.status === 'detached' || link.status === 'revoked') &&
+      { id: 'status', label: 'Status' },
+    { id: 'properties', label: 'Properties' },
+  ].filter(Boolean);
   return (
     <aside className="detail-panel">
       <DetailPanelHeader kind="evidence" id={link.id} onClose={onClose} extras={
@@ -195,15 +203,19 @@ function EntityLinkDetailPanel({ link, onClose }) {
           copyHash={`#route=integration-links&param=${link.id}`} />
       } />
 
-      <div className="panel-scroll">
-        <PanelTitleBlock title={`${link.source.type} → ${link.target.type}`}>
-          <OutlineBadge>{REL_TYPE_LABEL[link.relType] || link.relType}</OutlineBadge>
-          <LinkStatusBadge status={link.status} />
-          <ManagedSystemPill id={link.managedSystem} />
-        </PanelTitleBlock>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+
+      <div className="panel-scroll" ref={scrollRef}>
+        <div data-anchor="overview">
+          <PanelTitleBlock title={`${link.source.type} → ${link.target.type}`}>
+            <OutlineBadge>{REL_TYPE_LABEL[link.relType] || link.relType}</OutlineBadge>
+            <LinkStatusBadge status={link.status} />
+            <ManagedSystemPill id={link.managedSystem} />
+          </PanelTitleBlock>
+        </div>
 
         {/* Endpoints */}
-        <div className="panel-section">
+        <div data-anchor="endpoints" className="panel-section">
           <PanelSectionTitle>Endpoints</PanelSectionTitle>
           <div className="vstack" style={{ gap: 8 }}>
             <div className="entity-node">
@@ -231,7 +243,7 @@ function EntityLinkDetailPanel({ link, onClose }) {
 
         {/* Status copy */}
         {link.status === 'stale' && (
-          <div className="panel-section">
+          <div data-anchor="status" className="panel-section">
             <Callout tone="amber" icon="alert" title="Stale link"
               action={<Button variant="primary" size="sm">Refresh</Button>}>
               {link.staleReason}
@@ -239,7 +251,7 @@ function EntityLinkDetailPanel({ link, onClose }) {
           </div>
         )}
         {(link.status === 'detached' || link.status === 'revoked') && (
-          <div className="panel-section">
+          <div data-anchor="status" className="panel-section">
             <Callout tone="red" icon="shield" title={link.status === 'detached' ? 'Detached' : 'Revoked'}>
               {link.detachReason}{actor && ` · by ${actor.name}`}.
               Canonical history 는 유지되며 hard-delete 되지 않습니다 (FR-LINK-001A).
@@ -248,7 +260,7 @@ function EntityLinkDetailPanel({ link, onClose }) {
         )}
 
         {/* Properties */}
-        <div className="panel-section">
+        <div data-anchor="properties" className="panel-section">
           <PanelSectionTitle>Properties</PanelSectionTitle>
           <FieldRow label="Relation"><OutlineBadge>{REL_TYPE_LABEL[link.relType] || link.relType}</OutlineBadge></FieldRow>
           <FieldRow label="Managed System"><ManagedSystemPill id={link.managedSystem} /></FieldRow>
@@ -337,8 +349,8 @@ function EntityLinksScreen({ scope, onNavigate }) {
   };
 
   return (
-    <>
-      <div className="main-region">
+    <ListShell
+      toolbar={
         <ListToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
           <label className="hstack" style={{ gap: 6, cursor: 'pointer', paddingLeft: 4 }}>
             <input type="checkbox"
@@ -360,24 +372,8 @@ function EntityLinksScreen({ scope, onNavigate }) {
             <Icon name="sort" size={12} />Sort
           </button>
         </ListToolbar>
-        <div className="main-scroll" style={{ padding: 0 }}>
-          {shown.length === 0 ? (
-            <div className="text-sm muted" style={{ padding: 24, textAlign: 'center' }}>
-              해당 상태의 entity_link 가 없습니다.
-            </div>
-          ) : shown.map(l => (
-            <EntityLinkRow key={l.id} link={l}
-              selected={selectedId === l.id}
-              onSelect={(x) => setSelectedId(x.id)}
-              checked={!!checked[l.id]}
-              onToggleCheck={toggleOne} />
-          ))}
-        </div>
-
-        {/* Bulk action bar — sticky bottom of the main region.
-            Per docs/design/11-entity-linking.md FR-LINK-001A, detach is
-            audited and never hard-deletes. */}
-        {checkedCount > 0 && (
+      }
+      afterList={checkedCount > 0 && (
           <div className="hstack" style={{
             padding: '10px 16px',
             background: 'var(--surface-popover)',
@@ -388,7 +384,7 @@ function EntityLinksScreen({ scope, onNavigate }) {
           }}>
             <span className="hstack" style={{
               width: 24, height: 24, borderRadius: 6,
-              background: 'rgba(228,242,34,0.18)', color: 'var(--color-neon-lime)',
+              background: 'rgba(20, 40, 160,0.18)', color: 'var(--color-neon-lime)',
               justifyContent: 'center', fontWeight: 600, fontSize: 11,
             }}>{checkedCount}</span>
             <span className="text-sm">
@@ -405,9 +401,19 @@ function EntityLinksScreen({ scope, onNavigate }) {
             <Button variant="ghost" size="sm" onClick={clearSelection}>Clear</Button>
           </div>
         )}
-      </div>
-      {selected && <EntityLinkDetailPanel link={selected} onClose={() => setSelectedId(null)} />}
-    </>
+      detail={selected && <EntityLinkDetailPanel link={selected} onClose={() => setSelectedId(null)} />}>
+      {shown.length === 0 ? (
+        <div className="text-sm muted" style={{ padding: 24, textAlign: 'center' }}>
+          해당 상태의 entity_link 가 없습니다.
+        </div>
+      ) : shown.map(l => (
+        <EntityLinkRow key={l.id} link={l}
+          selected={selectedId === l.id}
+          onSelect={(x) => setSelectedId(x.id)}
+          checked={!!checked[l.id]}
+          onToggleCheck={toggleOne} />
+      ))}
+    </ListShell>
   );
 }
 

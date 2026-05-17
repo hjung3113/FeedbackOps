@@ -1,0 +1,200 @@
+{
+  "generatedAt": "2026-05-17T12:40:14.075Z",
+  "viewport": {
+    "width": 1440,
+    "height": 960
+  },
+  "entry": "FeedbackOps.html",
+  "count": 27,
+  "captured": [
+    {
+      "baseline": "Home / Action Dashboard",
+      "route": "#route=home",
+      "screenshot": "screenshots/final-baselines/home-action-dashboard.png",
+      "mustSurvive": "KPI strip, action queues, live-count posture, desktop shell density",
+      "skipped": true
+    },
+    {
+      "baseline": "My Work",
+      "route": "#route=my-work",
+      "screenshot": "screenshots/final-baselines/my-work.png",
+      "mustSurvive": "Same action-queue shell as Home with assignment-focused content",
+      "skipped": true
+    },
+    {
+      "baseline": "VOC list + detail",
+      "route": "#route=voc&view=inbox",
+      "screenshot": "screenshots/final-baselines/voc-inbox-detail.png",
+      "mustSurvive": "Reporter/public status vs internal task status split, entity trail action panel, detail column rhythm",
+      "skipped": true
+    },
+    {
+      "baseline": "VOC triage console",
+      "route": "#route=voc&view=triage",
+      "screenshot": "screenshots/final-baselines/voc-triage-console.png",
+      "mustSurvive": "WorkbenchShell title/header rhythm, queue list, triage panel, optimistic-action affordance",
+      "skipped": true
+    },
+    {
+      "baseline": "New VOC",
+      "route": "#route=voc-new",
+      "screenshot": "screenshots/final-baselines/voc-new.png",
+      "mustSurvive": "PageShell form layout, Inbox back affordance, rich editor and attachment dropzone",
+      "skipped": true
+    },
+    {
+      "baseline": "VOC cluster detail",
+      "route": "#route=voc-clusters",
+      "screenshot": "screenshots/final-baselines/voc-clusters.png",
+      "mustSurvive": "Cluster confidence, member rows, confirmation/admin affordance",
+      "skipped": true
+    },
+    {
+      "baseline": "Finding detail",
+      "route": "#route=findings",
+      "screenshot": "screenshots/final-baselines/findings-detail.png",
+      "mustSurvive": "Evidence-first hierarchy, execution CTA, linked entity rows",
+      "skipped": true
+    },
+    {
+      "baseline": "Tasks board",
+      "route": "#route=tasks&view=board",
+      "screenshot": "screenshots/final-baselines/tasks-board.png",
+      "mustSurvive": "WorkbenchShell title/header rhythm aligned with triage, group controls, Kanban density",
+      "skipped": true
+    },
+    {
+      "baseline": "Task requests",
+      "route": "#route=tasks&view=requests",
+      "screenshot": "screenshots/final-baselines/tasks-requests.png",
+      "mustSurvive": "ListShell toolbar/body split, capability gating, self-approval semantics",
+      "skipped": true
+    },
+    {
+      "baseline": "Task backlog",
+      "route": "#route=tasks&view=backlog",
+      "screenshot": "screenshots/final-baselines/tasks-backlog.png",
+      "mustSurvive": "ListShell extension with backlog health strip and awaiting-execution language",
+      "skipped": true
+    },
+    {
+      "baseline": "Task inbox",
+      "route": "#route=tasks&view=inbox",
+      "screenshot": "screenshots/final-baselines/tasks-inbox.png",
+      "mustSurvive": "Assignment-scoped activity list with shared ListShell header/body line",
+      "skipped": true
+    },
+    {
+      "baseline": "My Tasks",
+      "route": "#route=tasks&view=my",
+      "screenshot": "screenshots/final-baselines/tasks-my.png",
+      "mustSurvive": "Grouped personal task list and shared ListShell detail rhythm",
+      "skipped": true
+    },
+    {
+      "baseline": "Milestones list/detail",
+      "route": "#route=tasks&view=milestones",
+      "screenshot": "screenshots/final-baselines/tasks-milestones.png",
+      "mustSurvive": "Mini-timeline, detail tabs, task/evidence relationship density",
+      "skipped": true
+    },
+    {
+      "baseline": "Tasks roadmap",
+      "route": "#route=tasks&view=roadmap",
+      "screenshot": "screenshots/final-baselines/tasks-roadmap.png",
+      "mustSurvive": "PageShell roadmap body, compact padding, Milestones back affordance, shared-axis Gantt",
+      "skipped": true
+    },
+    {
+      "baseline": "Integration Action Dashboard",
+      "route": "#route=integration",
+      "screenshot": "screenshots/final-baselines/integration-action-dashboard.png",
+      "mustSurvive": "Action dashboard counts, PageShell section rhythm, live-count posture",
+      "skipped": true
+    },
+    {
+      "baseline": "Evidence highlights",
+      "route": "#route=integration-evidence",
+      "screenshot": "screenshots/final-baselines/integration-evidence.png",
+      "mustSurvive": "ListShell list/detail layout, long evidence content, linked execution and trail action panel",
+      "skipped": true
+    },
+    {
+      "baseline": "Coverage signals",
+      "route": "#route=integration-coverage",
+      "screenshot": "screenshots/final-baselines/integration-coverage.png",
+      "mustSurvive": "PageShell coverage cards, missing-link queries, threshold modal entry points",
+      "skipped": true
+    },
+    {
+      "baseline": "Entity links",
+      "route": "#route=integration-links",
+      "screenshot": "screenshots/final-baselines/integration-links.png",
+      "mustSurvive": "ListShell list/detail layout, bulk-detach, freshness timestamp",
+      "skipped": true
+    },
+    {
+      "baseline": "Survey list cards",
+      "route": "#route=surveys",
+      "screenshot": "screenshots/final-baselines/surveys-list.png",
+      "mustSurvive": "ObjectCard consumer pattern and survey follow-up CTA framing",
+      "skipped": true
+    },
+    {
+      "baseline": "Survey builder",
+      "route": "#route=survey-builder",
+      "screenshot": "screenshots/final-baselines/survey-builder.png",
+      "mustSurvive": "WorkbenchShell builder layout, outline drag-reorder, preview drawer header baseline",
+      "skipped": true
+    },
+    {
+      "baseline": "Survey result follow-up",
+      "route": "#route=survey-result",
+      "screenshot": "screenshots/final-baselines/survey-result.png",
+      "mustSurvive": "Five allowed follow-up actions, anonymity threshold language, draft-panel entry points",
+      "skipped": true
+    },
+    {
+      "baseline": "Admin managed systems",
+      "route": "#route=admin",
+      "screenshot": "screenshots/final-baselines/admin-managed-systems.png",
+      "mustSurvive": "Managed-system registry density and permission teaser placement",
+      "skipped": true
+    },
+    {
+      "baseline": "Analytics areas",
+      "route": "#route=admin-areas",
+      "screenshot": "screenshots/final-baselines/admin-analytics-areas.png",
+      "mustSurvive": "PageShell analytics-area catalog and slide-over entry affordance",
+      "skipped": true
+    },
+    {
+      "baseline": "Permission self-approval audit",
+      "route": "#route=admin-permissions",
+      "screenshot": "screenshots/final-baselines/admin-permissions.png",
+      "mustSurvive": "Reviewer console states, audit capture, self-approval warning semantics",
+      "skipped": true
+    },
+    {
+      "baseline": "Workspace policy warning",
+      "route": "#route=admin-settings",
+      "screenshot": "screenshots/final-baselines/admin-settings.png",
+      "mustSurvive": "Dirty save bar, locked SR->VOC row, retroactive/non-retroactive policy impact copy",
+      "skipped": true
+    },
+    {
+      "baseline": "Command palette",
+      "route": "#route=home",
+      "screenshot": "screenshots/final-baselines/probe-cmdk.png",
+      "mustSurvive": "Verb/object search language and local navigation behavior",
+      "skipped": true
+    },
+    {
+      "baseline": "Rail / scope behavior",
+      "route": "#route=home&scope=all",
+      "screenshot": "screenshots/final-baselines/probe-rail-scope.png",
+      "mustSurvive": "Role-level rail filtering and bounded-scope chip semantics"
+    }
+  ],
+  "errors": []
+}

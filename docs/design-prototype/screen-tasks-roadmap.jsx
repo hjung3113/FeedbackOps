@@ -283,7 +283,7 @@ function TasksRoadmapScreen({ scope, onNavigate }) {
     <PageShell
       title="Roadmap"
       subtitle="모든 Milestone 의 Task 일정을 한 축으로 비교합니다. Milestone Detail 의 Timeline 과 같은 시각 어휘를 쓰며, 가로 scroll 없이 cross-MS 일정 충돌을 스캔할 수 있어야 합니다."
-      back={<Button variant="ghost" size="sm" icon="chevronLeft" onClick={() => onNavigate('tasks', 'milestones')}>Milestones</Button>}
+      back={<PageShellBackButton variant="ghost" onClick={() => onNavigate('tasks', 'milestones')}>Milestones</PageShellBackButton>}
       actions={<>
         <Button variant="subtle" size="sm" icon="filter">Filter</Button>
         <Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate('tasks', 'milestones')}>
@@ -484,7 +484,7 @@ function MilestoneRoadmapSlideOver({ milestone, onClose, onNavigate }) {
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(8,9,10,0.6)',
+        background: 'rgba(20,40,160,0.16)',
         backdropFilter: 'blur(4px)',
         zIndex: 400,
         display: 'grid',

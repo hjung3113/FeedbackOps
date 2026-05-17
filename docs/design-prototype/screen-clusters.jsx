@@ -120,6 +120,14 @@ function ClusterRow({ c, selected, onSelect }) {
 function ClusterDetailPanel({ c, onClose, onNavigate }) {
   const owner = c.owner ? window.userById(c.owner) : null;
   const finding = c.linkedFindingId ? window.findingById(c.linkedFindingId) : null;
+  const scrollRef = useRef(null);
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'rationale', label: 'Why' },
+    { id: 'execution', label: 'Execution' },
+    { id: 'members', label: 'Members', count: c.vocCount },
+    { id: 'properties', label: 'Properties' },
+  ];
 
   return (
     <aside className="detail-panel">
@@ -127,15 +135,18 @@ function ClusterDetailPanel({ c, onClose, onNavigate }) {
         <DetailPanelHeaderActions entityKind="Cluster" entityId={c.id}
           copyHash={`#route=voc-clusters&param=${c.id}`} />
       } />
-      <div className="panel-scroll">
-        <PanelTitleBlock title={c.title}>
-          <ClusterStatusBadge status={c.status} />
-          <SeverityBadge severity={c.severity} />
-          <ConfidenceBadge confidence={c.confidence} />
-          <span className="text-xs muted">· {c.vocCount} VOCs · {c.updatedAt}</span>
-        </PanelTitleBlock>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+      <div className="panel-scroll" ref={scrollRef}>
+        <div data-anchor="overview">
+          <PanelTitleBlock title={c.title}>
+            <ClusterStatusBadge status={c.status} />
+            <SeverityBadge severity={c.severity} />
+            <ConfidenceBadge confidence={c.confidence} />
+            <span className="text-xs muted">· {c.vocCount} VOCs · {c.updatedAt}</span>
+          </PanelTitleBlock>
+        </div>
 
-        <div className="panel-section">
+        <div data-anchor="rationale" className="panel-section">
           <PanelSectionTitle>Why grouped</PanelSectionTitle>
           <NestedTextBlock padding={14}>{c.rationale}</NestedTextBlock>
           {c.status === 'suggested' && (
@@ -147,7 +158,7 @@ function ClusterDetailPanel({ c, onClose, onNavigate }) {
           )}
         </div>
 
-        <div className="panel-section">
+        <div data-anchor="execution" className="panel-section">
           <PanelSectionTitle>Execution</PanelSectionTitle>
           {finding ? (
             <div className="card-nested vstack" style={{ gap: 8 }}>
@@ -173,7 +184,7 @@ function ClusterDetailPanel({ c, onClose, onNavigate }) {
           )}
         </div>
 
-        <div className="panel-section">
+        <div data-anchor="members" className="panel-section">
           <PanelSectionTitle action={<button className="btn btn-subtle btn-sm">Bulk public update</button>}>
             Member VOCs · {c.vocCount}
           </PanelSectionTitle>
@@ -225,7 +236,7 @@ function ClusterDetailPanel({ c, onClose, onNavigate }) {
           </div>
         </div>
 
-        <div className="panel-section">
+        <div data-anchor="properties" className="panel-section">
           <PanelSectionTitle>Properties</PanelSectionTitle>
           <FieldRow label="Managed System"><ManagedSystemPill id={c.managedSystem} /></FieldRow>
           <FieldRow label="Owner">

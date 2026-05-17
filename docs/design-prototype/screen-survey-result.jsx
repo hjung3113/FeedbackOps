@@ -395,14 +395,9 @@ function SurveyResultScreen({ surveyId, onNavigate, scope }) {
   const highlightedText = result.questions.find(q => q.kind === 'text')?.highlights?.[0]?.quote || survey.title;
 
   return (
-    <div className="main-region">
-      {/* Sticky topbar with back nav + meta */}
-      <div className="hstack" style={{
-        padding: '12px 24px', gap: 12,
-        borderBottom: '1px solid var(--border-subtle)',
-        background: 'var(--surface-canvas)',
-        flexShrink: 0,
-      }}>
+    <WorkbenchShell
+      toolbar={
+        <>
         <Button variant="ghost" size="sm" icon="arrowLeft" onClick={() => onNavigate('surveys')}>Surveys</Button>
         <span className="text-xs muted">/</span>
         <span className="row-id">{survey.id}</span>
@@ -412,17 +407,17 @@ function SurveyResultScreen({ surveyId, onNavigate, scope }) {
         <ManagedSystemPill id={survey.managedSystem} />
         <div style={{ flex: 1 }} />
         <Button variant="subtle" size="sm"><Icon name="more" size={12} />Options</Button>
-      </div>
-
-      <ResultFilterBar
+        </>
+      }
+      belowToolbar={<ResultFilterBar
         segments={result.segments}
         activeSegment={segment}
         onSegmentChange={setSegment}
         areaFilter={area}
         onAreaFilter={setArea}
-        scope={scope} />
-
-      <div className="main-scroll" style={{ padding: '24px 32px 48px' }}>
+        scope={scope} />}
+      bodyClassName="main-scroll"
+      bodyStyle={{ padding: '24px 32px 48px' }}>
         {/* Poor outcome callout near the top — per spec, recommended action
             highlighted near the result, BUT result interpretation stays
             primary. We surface it as an annotation, not a recovery queue. */}
@@ -552,8 +547,7 @@ function SurveyResultScreen({ surveyId, onNavigate, scope }) {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </WorkbenchShell>
   );
 }
 

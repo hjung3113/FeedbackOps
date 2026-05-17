@@ -287,7 +287,7 @@ function EvidenceRow({ e, selected, onSelect }) {
         <Avatar user={creator} size="sm" />
         <div className="hstack" style={{ gap: 6 }}>
           {e.linkedFindingId && (
-            <span className="badge" style={{ background: 'rgba(228,242,34,0.08)', color: 'var(--color-neon-lime)' }}>
+            <span className="badge" style={{ background: 'rgba(20, 40, 160,0.08)', color: 'var(--color-neon-lime)' }}>
               <Icon name="finding" size={10} />{e.linkedFindingId}
             </span>
           )}
@@ -319,6 +319,7 @@ function EvidenceDetailPanel({ e, onClose, onNavigate }) {
   const [trailAction, setTrailAction] = useState(null);
   const [trailStatus, setTrailStatus] = useState('');
   const [activeDraftFlow, setActiveDraftFlow] = useState(null);
+  const scrollRef = useRef(null);
   useEffect(() => {
     setTrailAction(null);
     setTrailStatus('');
@@ -362,6 +363,13 @@ function EvidenceDetailPanel({ e, onClose, onNavigate }) {
     trailAction?.type === 'finding' ? 'finding-draft' :
     trailAction?.type === 'task' ? 'task-request' :
     'attach-voc';
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'source', label: 'Source' },
+    { id: 'execution', label: 'Execution' },
+    { id: 'properties', label: 'Properties' },
+    { id: 'trail', label: 'Trail' },
+  ];
 
   return (
     <aside className="detail-panel">
@@ -376,19 +384,23 @@ function EvidenceDetailPanel({ e, onClose, onNavigate }) {
           <Button variant="ghost" size="sm" icon="close" onClick={handleClose} title="Close panel" />
         </div>
       </div>
-      <div className="panel-scroll">
-        <PanelTitleBlock title={e.isQuote ? `"${e.quote}"` : e.summary}>
-          <OutlineBadge>{m.label} evidence</OutlineBadge>
-          {e.sentiment && <SentimentChip sentiment={e.sentiment} />}
-          {e.importance && <ImportanceChip importance={e.importance} />}
-        </PanelTitleBlock>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+
+      <div className="panel-scroll" ref={scrollRef}>
+        <div data-anchor="overview">
+          <PanelTitleBlock title={e.isQuote ? `"${e.quote}"` : e.summary}>
+            <OutlineBadge>{m.label} evidence</OutlineBadge>
+            {e.sentiment && <SentimentChip sentiment={e.sentiment} />}
+            {e.importance && <ImportanceChip importance={e.importance} />}
+          </PanelTitleBlock>
+        </div>
 
         {/* Source — must be visible per spec. If the backend marks
             the source record as permission-limited, render
             PermissionBlockedPanel above the evidence body. The
             evidence body itself stays visible because the
             highlight is the surfacable subset (FR-LINK-002). */}
-        <div className="panel-section">
+        <div data-anchor="source" className="panel-section">
           <PanelSectionTitle action={
             sourceVoc && !sourceDecision ? (
               <button className="btn btn-subtle btn-sm" onClick={() => onNavigate('voc', 'inbox', sourceVoc.id)}>
@@ -448,7 +460,7 @@ function EvidenceDetailPanel({ e, onClose, onNavigate }) {
         </div>
 
         {/* Linked execution — Findings / Tasks */}
-        <div className="panel-section">
+        <div data-anchor="execution" className="panel-section">
           <PanelSectionTitle action={
             <button className="btn btn-subtle btn-sm" onClick={() => setActiveDraftFlow('attach-voc')}><Icon name="link" size={11} />Attach to…</button>
           }>Linked execution</PanelSectionTitle>
@@ -514,7 +526,7 @@ function EvidenceDetailPanel({ e, onClose, onNavigate }) {
         </div>
 
         {/* Properties */}
-        <div className="panel-section">
+        <div data-anchor="properties" className="panel-section">
           <PanelSectionTitle>Properties</PanelSectionTitle>
           <FieldRow label="Managed System"><ManagedSystemPill id={e.managedSystem} /></FieldRow>
           <FieldRow label="Analytics Area">
@@ -536,7 +548,7 @@ function EvidenceDetailPanel({ e, onClose, onNavigate }) {
         </div>
 
         {/* Trail */}
-        <div className="panel-section">
+        <div data-anchor="trail" className="panel-section">
           <PanelSectionTitle>Trail</PanelSectionTitle>
           <LinkedEntityTrail
             nodes={trailNodes}
@@ -617,8 +629,8 @@ function EvidenceScreen({ scope, selectedParam, onNavigate }) {
   const coverageStatus = coverage > 70 ? 'good' : coverage > 40 ? 'warn' : 'bad';
 
   return (
-    <>
-      <div className="main-region">
+    <ListShell
+      toolbar={
         <ListToolbar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
           <div className="hstack" style={{ gap: 10, paddingRight: 4 }}>
             <span className="text-xs muted">Linked to execution</span>
@@ -633,17 +645,15 @@ function EvidenceScreen({ scope, selectedParam, onNavigate }) {
           <button className="btn btn-subtle btn-sm"><Icon name="filter" size={12} />Filter</button>
           <Button variant="primary" size="sm" icon="plus">Add highlight</Button>
         </ListToolbar>
-        <div className="main-scroll" style={{ padding: 0 }}>
-          {shown.length === 0 && (
-            <div className="text-sm muted" style={{ padding: 40, textAlign: 'center' }}>표시할 evidence 가 없습니다.</div>
-          )}
-          {shown.map(e => (
-            <EvidenceRow key={e.id} e={e} selected={selected?.id === e.id} onSelect={(x) => setSelectedId(x.id)} />
-          ))}
-        </div>
-      </div>
-      {selected && <EvidenceDetailPanel e={selected} onClose={() => setSelectedId(null)} onNavigate={onNavigate} />}
-    </>
+      }
+      detail={selected && <EvidenceDetailPanel e={selected} onClose={() => setSelectedId(null)} onNavigate={onNavigate} />}>
+      {shown.length === 0 && (
+        <div className="text-sm muted" style={{ padding: 40, textAlign: 'center' }}>표시할 evidence 가 없습니다.</div>
+      )}
+      {shown.map(e => (
+        <EvidenceRow key={e.id} e={e} selected={selected?.id === e.id} onSelect={(x) => setSelectedId(x.id)} />
+      ))}
+    </ListShell>
   );
 }
 

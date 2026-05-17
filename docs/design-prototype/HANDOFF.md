@@ -3,7 +3,7 @@
 > Hi-fi interactive prototype for the FeedbackOps Suite internal operating platform.
 > Bridge between design exploration (here) and production implementation.
 
-**Last updated:** 2026-05-17 (session 15 — Pack 16: handoff hardening + visual baselines; mobile/tablet deferred)
+**Last updated:** 2026-05-17 (session 16 — Pack 17: Samsung-light palette + shared detail section nav)
 **Author:** Design (Claude session)
 **Entry point:** [`FeedbackOps.html`](./FeedbackOps.html)
 **Page · Component · Spec map:** [`DESIGN-MAP.md`](./DESIGN-MAP.md)
@@ -22,7 +22,7 @@ Before implementing anything new:
 2. Search for similar inline patterns in `screen-*.jsx`.
 3. If the same pattern appears in **2 or more places** and no shared component exists, **extract it first**, then build on top.
 
-This is why we have `DetailPanelHeader`, `PanelTitleBlock`, `NestedTextBlock`, `Callout`, `UserChip`, `OutlineBadge`, `ListToolbar`, `EntityIconBadge`, `ClusterStatusBadge`, `SurveyStatusBadge`, `priorityToSeverity`, `EntityHoverPreview`, `RichEditor`, `CommandMenu`, `ListFilterButton`, `ListSortButton`, `MoreButton`, `DetailPanelHeaderActions`, `PreviewModal`, `ToastHost`. Keep applying it.
+This is why we have `DetailPanelHeader`, `DetailPanelSectionNav`, `PanelTitleBlock`, `NestedTextBlock`, `Callout`, `UserChip`, `OutlineBadge`, `ListToolbar`, `EntityIconBadge`, `ClusterStatusBadge`, `SurveyStatusBadge`, `priorityToSeverity`, `EntityHoverPreview`, `RichEditor`, `CommandMenu`, `ListFilterButton`, `ListSortButton`, `MoreButton`, `DetailPanelHeaderActions`, `PreviewModal`, `ToastHost`. Keep applying it.
 
 ### 🔒 Rule 2 — File split budget
 
@@ -138,8 +138,9 @@ If another agent must continue or recreate the prototype, give it this whole bun
 - every `screen-*.jsx` file in the project root
 
 **Required visual evidence**
-- Use the curated screenshot list in `DESIGN-MAP.md` §2 as the baseline set.
-- Treat any unlisted files in `screenshots/` as working evidence, not canonical references, unless a later handoff promotes them.
+- Use the current canonical PNG set in `screenshots/final-baselines/`, with `screenshots/final-baselines/manifest.json` as capture metadata.
+- Use `DESIGN-MAP.md` §2 as the baseline target list.
+- Treat older files directly under `screenshots/` as working evidence, not canonical references, unless a later handoff promotes them.
 
 **Rebuild instruction**
 - Start from the existing prototype files when the goal is visual parity. Start from the source docs only when the goal is a production implementation; in that case use the prototype as acceptance evidence, not as architecture.
@@ -164,7 +165,7 @@ Use this when handing the Open Design prototype back to the linked `FeedbackOps`
 - Component mapping: prototype component or surface -> shadcn/ui primitive/custom component -> required props -> state variants.
 - Data mapping: prototype mock entity fields -> production DTO/schema fields -> unresolved gaps.
 - Interaction contract: filters, tabs, modals, command palette, dirty-save bar, drag/drop, launch validation, linked-flow creation, permission requests.
-- Visual contract: Tailwind tokens for surfaces, text, borders, status colors, radii, density, row heights, and focus states; Neon Lime remains primary-action/focus only.
+- Visual contract: Tailwind tokens for surfaces, text, borders, status colors, radii, density, row heights, and focus states; current prototype palette is Samsung-light blue (`#f3f7fe` canvas, `#1428a0` primary/focus).
 - Acceptance evidence: each implemented route must be compared against the curated screenshot baseline and the P0/P1 reproduction contract below.
 
 **Do not let the implementation agent infer these from screenshots alone**
@@ -182,14 +183,14 @@ All raw color tokens declared as `--color-*` on `:root` in `styles.css`. Example
 
 | DESIGN.md name | CSS var | Hex |
 |---|---|---|
-| Pitch Black | `--color-pitch-black` | `#08090a` |
-| Graphite | `--color-graphite` | `#0f1011` |
-| Deep Slate | `--color-deep-slate` | `#161718` |
-| Charcoal Grey | `--color-charcoal-grey` | `#23252a` |
-| Porcelain | `--color-porcelain` | `#f7f8f8` |
-| Storm Cloud | `--color-storm-cloud` | `#8a8f98` |
-| Neon Lime | `--color-neon-lime` | `#e4f222` (primary action only) |
-| Aether Blue | `--color-aether-blue` | `#5e6ad2` |
+| Pitch Black | `--color-pitch-black` | `#f3f7fe` |
+| Graphite | `--color-graphite` | `#fbfdff` |
+| Deep Slate | `--color-deep-slate` | `#edf3fb` |
+| Charcoal Grey | `--color-charcoal-grey` | `#cbd6e6` |
+| Porcelain | `--color-porcelain` | `#101828` |
+| Storm Cloud | `--color-storm-cloud` | `#687386` |
+| Neon Lime | `--color-neon-lime` | `#1428a0` (legacy var name; Samsung Blue primary/focus) |
+| Aether Blue | `--color-aether-blue` | `#1428a0` |
 
 ### Semantic tokens
 
@@ -213,13 +214,15 @@ When porting to production, copy these semantic tokens verbatim and re-bind to t
 
 ### Visual rules from DESIGN.md enforced here
 
-- Neon Lime reserved for primary action + active/focus emphasis only (never status badges)
+- Samsung Blue (`#1428a0`) reserved for primary action + active/focus emphasis only (never status badges)
 - Reporter-facing status = pill, Internal task status = squared (different shape per spec)
-- Surface layering Pitch Black → Graphite → Deep Slate → Charcoal
-- Subtle inset shadows (`box-shadow: rgb(35,37,42) 0 0 0 1px inset`); no diffuse drop shadows
+- Surface layering now uses light cool-blue neutrals: canvas `#f3f7fe` → card `#fbfdff` → elevated `#edf3fb`
+- Subtle blue-grey inset shadows (`--shadow-subtle: rgb(213,224,244) 0 0 0 1px inset`); no heavy diffuse drop shadows
 - Critical / blocked states use icon + label, never color alone (a11y)
 - 6px border radius for buttons/cards/inputs; 2px for tags
 - Row density via tokens — `.object-row`, `.compact` (44px), `.expanded` (96px). Triage queue uses `expanded`; all other lists use default 60px. Don't override with inline `minHeight`.
+- Header density token — sidebar system header, route shell toolbar, and drawer panel headers now align to the same 50px baseline. Do not reintroduce one-off taller board/triage/drawer headers.
+- Route layout taxonomy — use `PageShell` for page-body routes, `ListShell` for filter/list/detail routes, and `WorkbenchShell` for board/builder/triage work surfaces. Backlog and Survey are extension cases on top of those shells, not separate layout families.
 
 ## 5. Routes & screens
 
@@ -268,7 +271,7 @@ Use this when asking another agent to reproduce or continue the work. A pass mea
 
 **P1 — should match**
 - Visual density remains desktop-first: compact rows, tabular numerics, restrained color, 6px radii, no marketing-card treatment.
-- Detail panels preserve tabs/section anchors/header actions where implemented.
+- Detail panels preserve header actions and the shared `DetailPanelSectionNav` anchored-section bar on long panels.
 - Card/list toggles, filters, modals, command palette, drag/drop, dirty-save bar, and launch validation remain interactive.
 - Curated screenshots in `DESIGN-MAP.md` §2 can be regenerated without major layout drift.
 
@@ -297,9 +300,13 @@ Aligned with `docs/frontend/component-inventory.md`. Source locations:
 - `<CoverageBar>` — progress bar, status good/warn/bad
 - `<SeverityIndicator>` — 3px×16px left bar
 - `<PageShell>` — unified layout wrapper for non-list pages (`title`, `subtitle`, `eyebrow`, `actions`, `back`, `fluid`)
+- `<ListShell>` — unified route wrapper for filter/list/detail routes. Owns the toolbar slot, optional `beforeList` extension row, scroll body, and optional detail panel.
+- `<WorkbenchShell>` — unified route wrapper for work surfaces whose body is not a simple object list: Tasks board, Triage, Survey Builder, Survey Result. Owns the toolbar slot, optional below-toolbar content, body, and optional detail panel.
+- `<ShellTitle>` — shared icon + title + badge block for workbench/list headers. Tasks board and Triage currently use this so the title position and rhythm match.
 
 ### Detail panel scaffolding (`components.jsx`)
 - `<DetailPanelHeader kind id onClose extras>` — colored kind-badge + id + close + custom extras. `kind` ∈ {voc, finding, task, request, cluster, triage, survey, evidence, milestone, permission}; colors from `DETAIL_PANEL_KINDS`.
+- `<DetailPanelSectionNav sections scrollRef>` — sticky horizontal section jump bar for long drawer/detail panels. Tracks active anchors through `IntersectionObserver`, falls back to scroll math, and uses `data-anchor="<id>"` blocks inside `.panel-scroll`.
 - `<PanelTitleBlock title>{badges}</PanelTitleBlock>` — h2 + flex-wrap badge row.
 - `<NestedTextBlock padding>{text}</NestedTextBlock>` — pitch-black-bg padded text card.
 - `<Callout tone icon title action>{body}</Callout>` — tinted alert box (tones: amber / red / blue / cyan / emerald).
@@ -449,6 +456,21 @@ Identified spec gaps that didn't make it into sessions 6-7. Priorities are relat
   - Added reproduction acceptance criteria and adversarial review notes to separate desktop visual parity from production architecture and mobile/tablet non-goals.
   - Promoted curated screenshots into `DESIGN-MAP.md` as the canonical visual baseline set.
 
+- **Pack 17 — Samsung-light palette + shared detail section nav** ✅ (Session 16)
+  - Rebound the legacy raw color variables to a Samsung-light palette: cool blue-white canvas (`#f3f7fe`), near-white surfaces, soft blue borders, and Samsung Blue (`#1428a0`) for primary/focus/accent states.
+  - Preserved the existing token names for low-risk prototype continuity; treat `--color-neon-lime` as a legacy alias for Samsung Blue in this artifact.
+  - Promoted the Milestone drawer's anchored section-jump pattern into `components.jsx · DetailPanelSectionNav`.
+  - Applied the shared section bar to long detail panels across VOC, Triage, Finding, Task, Task Request, Cluster, Evidence, Entity Link, Survey, Analytics Area, Milestone, and Permission Request surfaces.
+
+- **Pack 18 — Route pattern shells + aligned headers** ✅ (Session 17)
+  - Confirmed the product has three route layout families: `PageShell` page-body screens, `ListShell` filter/list/detail screens, and `WorkbenchShell` board/builder/triage work surfaces.
+  - Added `components.jsx · ListShell`, `WorkbenchShell`, and `ShellTitle`.
+  - Migrated Tasks requests/backlog/my/inbox, Evidence, and Entity Links onto `ListShell`. Evidence and Entity Links may look taller because their row contents are vertically richer, but they are still the same list pattern.
+  - Migrated Tasks board, VOC Triage, Survey Builder, and Survey Result onto `WorkbenchShell`. Backlog and Survey should be treated as extension cases of the shared shells, not new layout families.
+  - Aligned Tasks board and Triage header title treatment to the Triage icon/title pattern via `ShellTitle`.
+  - Reduced the sidebar system header by roughly 10% and aligned sidebar system header, ListShell/WorkbenchShell toolbar, drawer panel header, and Survey preview drawer header to a shared 50px baseline.
+  - Browser screenshot refresh is still pending. The Open Design/browser capture calls were cancelled in-session; use the live prototype as source of truth before promoting new PNGs into `DESIGN-MAP.md` §2.
+
 - **Pack 8 — Permission & Scope completion** ✅ (Session 10)
   - Effective Managed System scope union landed — `Actors` registry + `effectiveScopeFor(role)` + role-aware `scope.members` in `app.jsx`. Sidebar surfaces the bounded-`all` hint + out-of-grants flag.
   - Reporter-facing Status 변경 규칙 + Reporter preview surface in `<VocDetailPanel>` (`screen-voc.jsx · ReporterStatusChangeBlock`). Drives off `REPORTER_STATUS_TRANSITIONS` + `reporterStatusGate(next, voc, task)`.
@@ -470,6 +492,19 @@ Identified spec gaps that didn't make it into sessions 6-7. Priorities are relat
 ---
 
 ## 12. Session changelog (latest first)
+
+### Session 16 — 2026-05-17 — Pack 17 (Samsung-light palette + shared detail section nav)
+
+Color pass only, followed by drawer-pattern standardization.
+
+**Samsung-light palette**
+- `styles.css` now presents the prototype as a light cool-blue product UI: canvas `#f3f7fe`, surfaces `#fbfdff` / `#edf3fb`, blue-tinted row states, and Samsung Blue `#1428a0` for primary action, focus, and selected states.
+- `app.jsx` accent defaults and direct JSX color remnants were aligned to the same Samsung Blue family. Legacy raw token names remain for continuity, but the visual contract is no longer Neon Lime / dark command center.
+
+**Detail drawer section nav**
+- `components.jsx · DetailPanelSectionNav` centralizes the Milestone-style anchored section bar with active-section tracking, smooth scroll, and `IntersectionObserver` fallback behavior.
+- Long drawers now use the same top section-jump bar and `data-anchor` rhythm: VOC, Triage, Finding, Task, Task Request, Cluster, Evidence, Entity Link, Survey, Analytics Area, Milestone, and Permission Request.
+- `styles.css` owns the shared `.panel-section-nav*` styling so future panels should add sections rather than recreate custom drawer navigation.
 
 ### Session 11 — 2026-05-17 — Pack 12 (Shared interaction affordances)
 

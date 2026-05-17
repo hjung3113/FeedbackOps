@@ -246,16 +246,6 @@ function MilestoneDetailPanel({ m, onClose, onNavigate }) {
   const progStatus = prog.percent >= 80 ? 'good' : prog.percent >= 40 ? 'warn' : 'bad';
   const taskRows = milestoneTaskRows(m);
   const scrollRef = useRef(null);
-  const [activeSection, setActiveSection] = useState('overview');
-  // Pack 10 — true scroll-spy via IntersectionObserver.  Previously the
-  // active section only updated on click; now passive scrolling syncs
-  // the nav.  We refresh the observer whenever the selected milestone
-  // changes so anchors keyed by data-anchor under the new panel are
-  // observed.
-
-  // ref to mark programmatic scroll-induced changes so the observer
-  // doesn't fight the click handler during smooth-scroll.
-  const programmaticRef = useRef(false);
 
   // Anchored-section nav (per spec — "tabs or anchored sections for
   // Overview / Timeline / Tasks / Evidence / Activity")
@@ -266,68 +256,6 @@ function MilestoneDetailPanel({ m, onClose, onNavigate }) {
     { id: 'evidence', label: 'Evidence', count: m.evidenceCount },
     { id: 'activity', label: 'Activity' },
   ];
-
-  useEffect(() => {
-    const root = scrollRef.current;
-    if (!root) return;
-    const anchors = SECTIONS
-      .map(s => root.querySelector(`[data-anchor="${s.id}"]`))
-      .filter(Boolean);
-    if (anchors.length === 0) return;
-
-    if (typeof IntersectionObserver === 'undefined') {
-      const updateActiveSection = () => {
-        if (programmaticRef.current) return;
-        const rootRect = root.getBoundingClientRect();
-        const active = anchors
-          .map(a => ({
-            id: a.getAttribute('data-anchor'),
-            top: Math.abs(a.getBoundingClientRect().top - rootRect.top),
-          }))
-          .sort((a, b) => a.top - b.top)[0];
-        if (active?.id) setActiveSection(active.id);
-      };
-      root.addEventListener('scroll', updateActiveSection, { passive: true });
-      updateActiveSection();
-      return () => root.removeEventListener('scroll', updateActiveSection);
-    }
-
-    const observer = new IntersectionObserver((entries) => {
-      if (programmaticRef.current) return;
-      // Pick the topmost section currently intersecting the upper-third
-      // of the scroll container.  Sort by their bounding-rect top within
-      // the root so the visually-highest active section wins.
-      const visible = entries
-        .filter(e => e.isIntersecting)
-        .map(e => ({ id: e.target.getAttribute('data-anchor'), top: e.boundingClientRect.top }))
-        .sort((a, b) => a.top - b.top);
-      if (visible.length === 0) return;
-      setActiveSection(visible[0].id);
-    }, {
-      root,
-      // upper-third band: anchor activates once it crosses the top 33% line
-      rootMargin: '0px 0px -66% 0px',
-      threshold: 0,
-    });
-    anchors.forEach(a => observer.observe(a));
-    return () => observer.disconnect();
-  }, [m.id]);
-
-  const scrollTo = (id) => {
-    const el = scrollRef.current?.querySelector(`[data-anchor="${id}"]`);
-    const root = scrollRef.current;
-    if (!el || !root) return;
-    programmaticRef.current = true;
-    setActiveSection(id);
-    const rootRect = root.getBoundingClientRect();
-    const elRect = el.getBoundingClientRect();
-    root.scrollTo({
-      top: root.scrollTop + elRect.top - rootRect.top,
-      behavior: 'smooth',
-    });
-    // re-enable observer once smooth scroll likely finished
-    setTimeout(() => { programmaticRef.current = false; }, 700);
-  };
 
   // Mock evidence excerpts attached to this milestone — in production these
   // come from entity_links filtered by source type.
@@ -357,40 +285,7 @@ function MilestoneDetailPanel({ m, onClose, onNavigate }) {
           copyHash={`#route=tasks&view=milestones&param=${m.id}`} />
       } />
 
-      {/* Section nav — anchored sections (per spec) */}
-      <div className="hstack" style={{
-        position: 'sticky', top: 0, zIndex: 2,
-        background: 'var(--surface-detail)',
-        padding: '6px 24px 8px',
-        gap: 0,
-        borderBottom: '1px solid var(--border-subtle)',
-        overflowX: 'auto',
-      }}>
-        {SECTIONS.map(s => (
-          <button key={s.id}
-            onClick={() => scrollTo(s.id)}
-            className="hstack"
-            style={{
-              padding: '6px 10px', gap: 6,
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              borderBottom: activeSection === s.id
-                ? '2px solid var(--color-neon-lime)'
-                : '2px solid transparent',
-              color: activeSection === s.id ? 'var(--text-primary)' : 'var(--text-muted)',
-              fontSize: 'var(--text-xs)', fontWeight: 500,
-              whiteSpace: 'nowrap',
-            }}>
-            {s.label}
-            {s.count !== undefined && (
-              <span className="mono" style={{
-                fontSize: 10, color: 'var(--text-muted)',
-                background: 'var(--color-pitch-black)',
-                padding: '1px 5px', borderRadius: 10,
-              }}>{s.count}</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
 
       <div className="panel-scroll" ref={scrollRef}>
         {/* ============================================================

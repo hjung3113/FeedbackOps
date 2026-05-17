@@ -42,6 +42,7 @@ function FindingDetailPanel({ f, onClose, onNavigate }) {
   const [trailAction, setTrailAction] = useState(null);
   const [trailStatus, setTrailStatus] = useState('');
   const [activeDraftFlow, setActiveDraftFlow] = useState(null);
+  const scrollRef = useRef(null);
   useEffect(() => {
     setTrailAction(null);
     setTrailStatus('');
@@ -72,6 +73,14 @@ function FindingDetailPanel({ f, onClose, onNavigate }) {
     setActiveDraftFlow(flowType);
     setTrailStatus(`${label} · intent ready`);
   };
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'summary', label: 'Summary' },
+    { id: 'execution', label: 'Execution' },
+    { id: 'evidence', label: 'Evidence', count: f.evidenceCount },
+    { id: 'trail', label: 'Trail' },
+    { id: 'properties', label: 'Properties' },
+  ];
 
   return (
     <aside className="detail-panel">
@@ -80,15 +89,19 @@ function FindingDetailPanel({ f, onClose, onNavigate }) {
           copyHash={`#route=findings&param=${f.id}`} />
       } />
 
-      <div className="panel-scroll">
-        <PanelTitleBlock title={f.title}>
-          <FindingStatusBadge status={f.status} />
-          <ConfidenceBadge confidence={f.confidence} />
-          <OutlineBadge>Impact · <strong style={{ color: 'var(--text-primary)' }}>{f.impact}</strong></OutlineBadge>
-          <span className="text-xs muted">· Owned by <strong style={{ color: 'var(--text-secondary)' }}>{owner.name}</strong></span>
-        </PanelTitleBlock>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
 
-        <div className="panel-section">
+      <div className="panel-scroll" ref={scrollRef}>
+        <div data-anchor="overview">
+          <PanelTitleBlock title={f.title}>
+            <FindingStatusBadge status={f.status} />
+            <ConfidenceBadge confidence={f.confidence} />
+            <OutlineBadge>Impact · <strong style={{ color: 'var(--text-primary)' }}>{f.impact}</strong></OutlineBadge>
+            <span className="text-xs muted">· Owned by <strong style={{ color: 'var(--text-secondary)' }}>{owner.name}</strong></span>
+          </PanelTitleBlock>
+        </div>
+
+        <div data-anchor="summary" className="panel-section">
           <PanelSectionTitle>Summary</PanelSectionTitle>
           <NestedTextBlock>{f.summary}</NestedTextBlock>
         </div>
@@ -98,7 +111,7 @@ function FindingDetailPanel({ f, onClose, onNavigate }) {
             render PermissionBlockedPanel instead of the linked task card OR
             the request-task CTA. (docs/frontend/interaction-patterns.md
             §Permission-Limited Linked Objects) */}
-        <div className="panel-section">
+        <div data-anchor="execution" className="panel-section">
           <PanelSectionTitle>Execution</PanelSectionTitle>
           {(() => {
             const executionDecision = window.getPermissionDecision(f, 'execution');
@@ -165,7 +178,7 @@ function FindingDetailPanel({ f, onClose, onNavigate }) {
         </div>
 
         {/* Evidence highlights */}
-        <div className="panel-section">
+        <div data-anchor="evidence" className="panel-section">
           <PanelSectionTitle action={<button className="btn btn-subtle btn-sm"><Icon name="plus" size={11} />Add evidence</button>}>
             Evidence highlights · {f.evidenceCount}
           </PanelSectionTitle>
@@ -189,7 +202,7 @@ function FindingDetailPanel({ f, onClose, onNavigate }) {
         </div>
 
         {/* Linked entity trail */}
-        <div className="panel-section">
+        <div data-anchor="trail" className="panel-section">
           <PanelSectionTitle>Linked entity trail</PanelSectionTitle>
           <LinkedEntityTrail
             nodes={trailNodes}
@@ -237,7 +250,7 @@ function FindingDetailPanel({ f, onClose, onNavigate }) {
         </div>
 
         {/* Fields */}
-        <div className="panel-section">
+        <div data-anchor="properties" className="panel-section">
           <PanelSectionTitle>Properties</PanelSectionTitle>
           <FieldRow label="Managed System"><ManagedSystemPill id={f.managedSystem} /></FieldRow>
           <FieldRow label="Owner"><UserChip user={owner} /></FieldRow>

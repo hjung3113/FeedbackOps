@@ -691,15 +691,9 @@ function SurveyBuilderScreen({ surveyId, onNavigate }) {
   };
 
   return (
-    <div className="main-region" style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Builder topbar */}
-      <div className="hstack" style={{
-        padding: '12px 20px',
-        gap: 14, alignItems: 'center',
-        background: 'var(--surface-canvas)',
-        borderBottom: '1px solid var(--border-subtle)',
-        flexShrink: 0,
-      }}>
+    <WorkbenchShell
+      toolbar={
+        <>
         <Button variant="subtle" size="sm" icon="chevronLeft" onClick={() => onNavigate && onNavigate('surveys')}>
           Back
         </Button>
@@ -725,10 +719,11 @@ function SurveyBuilderScreen({ surveyId, onNavigate }) {
         <Button variant="primary" size="sm" onClick={() => setLaunchOpen(true)}>
           <Icon name="megaphone" size={11} />Launch
         </Button>
-      </div>
+        </>
+      }
+      bodyStyle={{ display: 'grid', gridTemplateColumns: '280px 1fr 300px' }}>
 
       {/* Three columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 300px', flex: 1, minHeight: 0 }}>
         {/* Outline */}
         <div className="vstack" style={{
           padding: 12,
@@ -792,7 +787,6 @@ function SurveyBuilderScreen({ surveyId, onNavigate }) {
         }}>
           <BuilderSettingsPane draft={draft} onPatch={patchDraft} />
         </div>
-      </div>
 
       {previewOpen && (
         <SurveyPreviewPane draft={draft} onClose={() => setPreviewOpen(false)} />
@@ -808,7 +802,7 @@ function SurveyBuilderScreen({ surveyId, onNavigate }) {
           onJumpToQuestion={(qid) => { setSelectedId(qid); setLaunchOpen(false); }}
         />
       )}
-    </div>
+    </WorkbenchShell>
   );
 }
 
@@ -845,7 +839,7 @@ function SurveyPreviewPane({ draft, onClose }) {
     <div
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(8,9,10,0.72)',
+        background: 'rgba(20,40,160,0.18)',
         backdropFilter: 'blur(4px)',
         zIndex: 500,
         display: 'grid',
@@ -863,11 +857,7 @@ function SurveyPreviewPane({ draft, onClose }) {
           flexDirection: 'column',
           animation: 'cmdk-rise 140ms ease-out',
         }}>
-        <div className="hstack" style={{
-          padding: '12px 16px',
-          borderBottom: '1px solid var(--border-subtle)',
-          gap: 10,
-        }}>
+        <div className="drawer-header">
           <Icon name="survey" size={14} style={{ color: 'var(--color-amber)' }} />
           <strong className="text-sm">Respondent preview</strong>
           <OutlineBadge style={{ textTransform: 'capitalize' }}>{draft.type}</OutlineBadge>
@@ -955,7 +945,7 @@ function PreviewQuestionRender({ q, index, value, onChange }) {
                 <label key={opt.id} className="hstack" style={{
                   gap: 10, padding: '8px 10px',
                   border: `1px solid ${checked ? 'var(--color-neon-lime)' : 'var(--border-subtle)'}`,
-                  background: checked ? 'rgba(228,242,34,0.08)' : 'transparent',
+                  background: checked ? 'rgba(20, 40, 160,0.08)' : 'transparent',
                   borderRadius: 6,
                   cursor: 'pointer',
                 }}>
@@ -1037,7 +1027,7 @@ function LaunchValidationModal({ draft, issues, canLaunch, onClose, onLaunch, on
     <div
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(8,9,10,0.72)',
+        background: 'rgba(20,40,160,0.18)',
         backdropFilter: 'blur(4px)',
         zIndex: 500,
         display: 'grid',

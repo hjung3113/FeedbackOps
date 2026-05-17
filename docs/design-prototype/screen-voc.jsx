@@ -126,6 +126,7 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
   const [trailAction, setTrailAction] = useState(null);
   const [trailStatus, setTrailStatus] = useState('');
   const [activeDraftFlow, setActiveDraftFlow] = useState(null);
+  const scrollRef = useRef(null);
   useEffect(() => {
     setNextReporterStatus(voc.reporterStatus);
     setPublicDraft('');
@@ -168,6 +169,17 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
     trailAction?.type === 'finding' ? 'finding-draft' :
     trailAction?.type === 'request' || trailAction?.type === 'task' ? 'task-request' :
     'task-request';
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'triage', label: 'Triage' },
+    { id: 'description', label: 'Description' },
+    findingDecision && { id: 'finding', label: 'Finding' },
+    (finding || task) && !findingDecision && { id: 'execution', label: 'Execution' },
+    { id: 'trail', label: 'Trail' },
+    { id: 'public', label: 'Public' },
+    { id: 'internal', label: 'Internal' },
+    { id: 'compose', label: 'Compose' },
+  ].filter(Boolean);
 
   return (
     <aside className="detail-panel">
@@ -176,17 +188,21 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
           copyHash={`#route=voc&view=inbox&param=${voc.id}`} />
       } />
 
-      <div className="panel-scroll">
-        <PanelTitleBlock title={voc.title}>
-          <ReporterStatusBadge status={voc.reporterStatus} />
-          <SeverityBadge severity={voc.severity} />
-          <span className="text-xs muted">·</span>
-          <span className="text-xs muted">Reported by <strong style={{ color: 'var(--text-secondary)' }}>{reporter.name}</strong></span>
-          <span className="text-xs muted">· {voc.createdAt}</span>
-        </PanelTitleBlock>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+
+      <div className="panel-scroll" ref={scrollRef}>
+        <div data-anchor="overview">
+          <PanelTitleBlock title={voc.title}>
+            <ReporterStatusBadge status={voc.reporterStatus} />
+            <SeverityBadge severity={voc.severity} />
+            <span className="text-xs muted">·</span>
+            <span className="text-xs muted">Reported by <strong style={{ color: 'var(--text-secondary)' }}>{reporter.name}</strong></span>
+            <span className="text-xs muted">· {voc.createdAt}</span>
+          </PanelTitleBlock>
+        </div>
 
         {/* Identity / triage fields */}
-        <div className="panel-section">
+        <div data-anchor="triage" className="panel-section">
           <PanelSectionTitle>Triage</PanelSectionTitle>
           <FieldRow label="Owner">
             {owner ? <UserChip user={owner} /> :
@@ -222,7 +238,7 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
         </div>
 
         {/* Description */}
-        <div className="panel-section">
+        <div data-anchor="description" className="panel-section">
           <PanelSectionTitle>Description</PanelSectionTitle>
           <NestedTextBlock>{voc.description}</NestedTextBlock>
         </div>
@@ -233,7 +249,7 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
             placeholder so the chain stays readable.
             Pack 8 — reads from unified permissionDecisions envelope. */}
         {findingDecision && (
-          <div className="panel-section">
+          <div data-anchor="finding" className="panel-section">
             <PanelSectionTitle>Linked Finding</PanelSectionTitle>
             <PermissionBlockedPanel
               state={findingDecision.state}
@@ -253,7 +269,7 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
             Task linked to this VOC.  Pack 11.  Sits above the abstract
             "Linked entity trail" so users land on actionable cards first.
             Trail below keeps the placeholder chain narrative readable. */}
-        {(finding || task) && !findingDecision && (          <div className="panel-section">
+        {(finding || task) && !findingDecision && (          <div data-anchor="execution" className="panel-section">
             <PanelSectionTitle>Linked execution</PanelSectionTitle>
             <div className="vstack" style={{ gap: 6 }}>
               {finding && (
@@ -279,7 +295,7 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
         )}
 
         {/* Linked Entity Trail */}
-        <div className="panel-section">
+        <div data-anchor="trail" className="panel-section">
           <PanelSectionTitle action={<button className="btn btn-subtle btn-sm">상세보기</button>}>
             Linked entity trail
           </PanelSectionTitle>
@@ -331,7 +347,7 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
         </div>
 
         {/* Public conversation timeline (reporter-visible) */}
-        <div className="panel-section">
+        <div data-anchor="public" className="panel-section">
           <PanelSectionTitle action={<span className="badge badge-public"><Icon name="megaphone" size={9} />Public timeline</span>}>
             Reporter-visible conversation
           </PanelSectionTitle>
@@ -364,7 +380,7 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
         </div>
 
         {/* Internal-only timeline */}
-        <div className="panel-section">
+        <div data-anchor="internal" className="panel-section">
           <PanelSectionTitle action={<span className="badge badge-internal-only"><Icon name="user" size={9} />Internal only</span>}>
             Internal discussion
           </PanelSectionTitle>
@@ -382,7 +398,7 @@ function VocDetailPanel({ voc, onClose, onNavigate }) {
         </div>
 
         {/* Conversation composer */}
-        <div className="panel-section">
+        <div data-anchor="compose" className="panel-section">
           <PanelSectionTitle>Compose</PanelSectionTitle>
           <div className="composer">
             <div className="composer-tabs">
@@ -522,9 +538,9 @@ function ReporterStatusChangeBlock({ voc, task, nextStatus, onChangeStatus, draf
     <div style={{
       marginTop: 10,
       padding: 12,
-      background: 'rgba(228,242,34,0.04)',
+      background: 'rgba(20, 40, 160,0.04)',
       borderRadius: 6,
-      boxShadow: 'inset 0 0 0 1px rgba(228,242,34,0.18)',
+      boxShadow: 'inset 0 0 0 1px rgba(20, 40, 160,0.18)',
     }}>
       <div className="hstack" style={{ gap: 8, marginBottom: 10, alignItems: 'center' }}>
         <Icon name="megaphone" size={11} style={{ color: 'var(--color-neon-lime)' }} />
@@ -563,7 +579,7 @@ function ReporterStatusChangeBlock({ voc, task, nextStatus, onChangeStatus, draf
           })}
         </select>
         {isStaged && !linkedTaskGate && (
-          <span className="badge" style={{ background: 'rgba(228,242,34,0.16)', color: 'var(--color-neon-lime)' }}>
+          <span className="badge" style={{ background: 'rgba(20, 40, 160,0.16)', color: 'var(--color-neon-lime)' }}>
             <Icon name="check" size={9} />변경 예정
           </span>
         )}
@@ -603,7 +619,7 @@ function ReporterStatusChangeBlock({ voc, task, nextStatus, onChangeStatus, draf
             <span className="row-id">{voc.id}</span>
             <ReporterStatusBadge status={nextStatus} />
             {isStaged && (
-              <span className="badge" style={{ background: 'rgba(228,242,34,0.18)', color: 'var(--color-neon-lime)', fontSize: 10 }}>
+              <span className="badge" style={{ background: 'rgba(20, 40, 160,0.18)', color: 'var(--color-neon-lime)', fontSize: 10 }}>
                 업데이트
               </span>
             )}
@@ -659,7 +675,7 @@ function ComposerPublicPreview({ voc, owner, nextStatus, draftHtml }) {
           <span className="row-id">{voc.id}</span>
           <ReporterStatusBadge status={nextStatus} />
           {nextStatus !== voc.reporterStatus && (
-            <span className="badge" style={{ background: 'rgba(228,242,34,0.18)', color: 'var(--color-neon-lime)', fontSize: 10 }}>업데이트</span>
+            <span className="badge" style={{ background: 'rgba(20, 40, 160,0.18)', color: 'var(--color-neon-lime)', fontSize: 10 }}>업데이트</span>
           )}
         </div>
         <div className="text-md" style={{ fontWeight: 600, marginBottom: 12 }}>{voc.title}</div>

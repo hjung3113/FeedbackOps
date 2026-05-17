@@ -164,7 +164,7 @@ function SurveyFollowupAction({ icon, tone, title, desc, actionId, onRun }) {
     }}>
       <span className="hstack" style={{
         width: 26, height: 26, borderRadius: 6,
-        background: tone === 'primary' ? 'rgba(228,242,34,0.15)' : 'rgba(138,143,152,0.1)',
+        background: tone === 'primary' ? 'rgba(20, 40, 160,0.15)' : 'rgba(138,143,152,0.1)',
         color: tone === 'primary' ? 'var(--color-neon-lime)' : 'var(--text-secondary)',
         justifyContent: 'center', flexShrink: 0,
       }}>
@@ -231,6 +231,7 @@ function SurveysScreen({ scope, selectedParam, onNavigate }) {
   // <ObjectCard>; ViewModeToggle is shared with Findings.
   const [viewMode, setViewMode] = useState('list');
   const [activeFollowupFlow, setActiveFollowupFlow] = useState(null);
+  const surveyScrollRef = useRef(null);
   useEffect(() => setActiveFollowupFlow(null), [selectedId]);
   useEffect(() => {
     if (selectedParam) setSelectedId(selectedParam);
@@ -242,6 +243,14 @@ function SurveysScreen({ scope, selectedParam, onNavigate }) {
     add_evidence_highlight: 'evidence-draft',
     attach_evidence_to_existing_voc: 'attach-voc',
   };
+  const surveySections = selected ? [
+    { id: 'overview', label: 'Overview' },
+    (selected.status === 'draft' || selected.status === 'live') && { id: 'builder', label: 'Builder' },
+    { id: 'results', label: 'Results' },
+    { id: 'followup', label: 'Follow-up' },
+    { id: 'guardrail', label: 'Guardrail' },
+    { id: 'privacy', label: 'Privacy' },
+  ].filter(Boolean) : [];
 
   return (
     <>
@@ -309,17 +318,20 @@ function SurveysScreen({ scope, selectedParam, onNavigate }) {
             <DetailPanelHeaderActions entityKind="Survey" entityId={selected.id}
               copyHash={`#route=surveys&param=${selected.id}`} />
           </>} />
-          <div className="panel-scroll">
-            <PanelTitleBlock title={selected.title}>
-              <OutlineBadge>{selected.type}</OutlineBadge>
-              <SurveyStatusBadge status={selected.status} />
-              <ManagedSystemPill id={selected.managedSystem} />
-            </PanelTitleBlock>
+          <DetailPanelSectionNav sections={surveySections} scrollRef={surveyScrollRef} />
+          <div className="panel-scroll" ref={surveyScrollRef}>
+            <div data-anchor="overview">
+              <PanelTitleBlock title={selected.title}>
+                <OutlineBadge>{selected.type}</OutlineBadge>
+                <SurveyStatusBadge status={selected.status} />
+                <ManagedSystemPill id={selected.managedSystem} />
+              </PanelTitleBlock>
+            </div>
 
             {/* Builder entry — full-page surface for draft surveys.
                 Spec: /surveys/:surveyId (routes-and-layout.md). */}
             {(selected.status === 'draft' || selected.status === 'live') && (
-              <div className="panel-section">
+              <div data-anchor="builder" className="panel-section">
                 <PanelSectionTitle>Builder</PanelSectionTitle>
                 <div className="hstack" style={{ gap: 8 }}>
                   <Button variant={selected.status === 'draft' ? 'primary' : 'secondary'}
@@ -339,7 +351,7 @@ function SurveysScreen({ scope, selectedParam, onNavigate }) {
 
             {/* Result summary — links to the full Result Summary surface
                 ( /surveys/:id/results — built as a separate screen ) */}
-            <div className="panel-section">
+            <div data-anchor="results" className="panel-section">
               <PanelSectionTitle action={
                 onNavigate && (
                   <button className="btn btn-subtle btn-sm" onClick={() => onNavigate('survey-result', selected.id)}>
@@ -374,7 +386,7 @@ function SurveysScreen({ scope, selectedParam, onNavigate }) {
 
             {/* Allowed follow-up actions — per 07-survey-system.md FR-SURVEY-005.
                 Survey Result/Response 의 허용된 4가지 CTA. Create VOC 는 금지. */}
-            <div className="panel-section">
+            <div data-anchor="followup" className="panel-section">
               <PanelSectionTitle>Follow-up actions</PanelSectionTitle>
               <div className="vstack" style={{ gap: 6 }}>
                 <SurveyFollowupAction
@@ -419,7 +431,7 @@ function SurveysScreen({ scope, selectedParam, onNavigate }) {
             </div>
 
             {/* Forbidden — kept as an inline reminder right next to the actions */}
-            <div className="panel-section">
+            <div data-anchor="guardrail" className="panel-section">
               <Callout tone="red" icon="alert" title="허용되지 않는 액션">
                 Survey Response → Create VOC 는 금지됩니다. "Create VOC / Convert to VOC /
                 Generate VOC from Response / Link Existing VOC" 라벨 사용 금지. 응답은 위 5가지
@@ -429,7 +441,7 @@ function SurveysScreen({ scope, selectedParam, onNavigate }) {
 
             {/* Anonymity hint — surfaces the MVP-default threshold rule from
                 07-survey-system.md when filtering response detail. */}
-            <div className="panel-section">
+            <div data-anchor="privacy" className="panel-section">
               <Callout tone="blue" icon="shield" title="익명 임계값 5">
                 Managed System · Segment · Analytics Area 필터로 가시 응답이 5명 미만으로 줄어들면
                 Result Summary 가 자동으로 버킷을 머지하거나 가리도록 동작합니다. 익명·식별보호
@@ -629,19 +641,28 @@ function AdminAreasScreen({ onNavigate }) {
 function AnalyticsAreaSlideOver({ area, onClose }) {
   const ms = window.msById(area.managedSystem);
   const lead = window.userById('u-1');
+  const scrollRef = useRef(null);
   // Mock related entities — production should query by analyticsArea.
   const relatedFindings = (window.Findings || []).filter(f =>
     (window.EvidenceHighlights || []).some(e => e.linkedFindingId === f.id && e.analyticsArea === area.id)
   ).slice(0, 4);
   const evidenceCount = (window.EvidenceHighlights || [])
     .filter(e => e.analyticsArea === area.id).length;
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'guardrail', label: 'Guardrail' },
+    { id: 'definition', label: 'Definition' },
+    { id: 'workload', label: 'Workload' },
+    relatedFindings.length > 0 && { id: 'findings', label: 'Findings', count: relatedFindings.length },
+    { id: 'used-by', label: 'Used by' },
+  ].filter(Boolean);
 
   return (
     <div
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(8,9,10,0.6)',
+        background: 'rgba(20,40,160,0.16)',
         backdropFilter: 'blur(4px)',
         zIndex: 400,
         display: 'grid',
@@ -670,13 +691,17 @@ function AnalyticsAreaSlideOver({ area, onClose }) {
           </div>
         </div>
 
-        <div className="panel-scroll">
-          <PanelTitleBlock title={area.name}>
-            <ManagedSystemPill id={area.managedSystem} />
-            <OutlineBadge>Filter dimension</OutlineBadge>
-          </PanelTitleBlock>
+        <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
 
-          <div className="panel-section">
+        <div className="panel-scroll" ref={scrollRef}>
+          <div data-anchor="overview">
+            <PanelTitleBlock title={area.name}>
+              <ManagedSystemPill id={area.managedSystem} />
+              <OutlineBadge>Filter dimension</OutlineBadge>
+            </PanelTitleBlock>
+          </div>
+
+          <div data-anchor="guardrail" className="panel-section">
             <Callout tone="blue" icon="shield" title="Not a permission boundary">
               AA 는 권한 경계가 아닌 분류·집계 단위입니다. Triage filter, dashboard tab,
               survey targeting 같은 surface 에서만 사용되며 backend permission check 에는
@@ -684,7 +709,7 @@ function AnalyticsAreaSlideOver({ area, onClose }) {
             </Callout>
           </div>
 
-          <div className="panel-section">
+          <div data-anchor="definition" className="panel-section">
             <PanelSectionTitle>Definition</PanelSectionTitle>
             <FieldRow label="Managed System">
               <span className="hstack" style={{ gap: 6 }}>
@@ -700,7 +725,7 @@ function AnalyticsAreaSlideOver({ area, onClose }) {
             </FieldRow>
           </div>
 
-          <div className="panel-section">
+          <div data-anchor="workload" className="panel-section">
             <PanelSectionTitle>Workload signal</PanelSectionTitle>
             <div className="grid-2" style={{ marginBottom: 10 }}>
               <div className="card-nested vstack" style={{ gap: 4, padding: 12 }}>
@@ -717,7 +742,7 @@ function AnalyticsAreaSlideOver({ area, onClose }) {
           </div>
 
           {relatedFindings.length > 0 && (
-            <div className="panel-section">
+            <div data-anchor="findings" className="panel-section">
               <PanelSectionTitle>Recent findings</PanelSectionTitle>
               <div className="vstack" style={{ gap: 6 }}>
                 {relatedFindings.map(f => (
@@ -733,7 +758,7 @@ function AnalyticsAreaSlideOver({ area, onClose }) {
             </div>
           )}
 
-          <div className="panel-section">
+          <div data-anchor="used-by" className="panel-section">
             <PanelSectionTitle>Used by</PanelSectionTitle>
             <div className="vstack" style={{ gap: 6 }}>
               <div className="hstack" style={{ gap: 8, padding: '8px 10px', background: 'var(--color-pitch-black)', borderRadius: 6 }}>

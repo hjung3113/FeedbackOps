@@ -257,7 +257,7 @@ function PermissionRequestRow({ r, selected, onSelect }) {
       </div>
       <div className="row-trailing">
         {r.status === 'pending' || r.status === 'needs_more_info' ? (
-          <span className="badge" style={{ background: 'rgba(228,242,34,0.12)', color: 'var(--color-neon-lime)' }}>
+          <span className="badge" style={{ background: 'rgba(20, 40, 160,0.12)', color: 'var(--color-neon-lime)' }}>
             Action required
           </span>
         ) : null}
@@ -293,6 +293,19 @@ function PermissionRequestPanel({ r, onClose, onNavigate }) {
   // Risk-driven reason requirement.
   const reasonRequired = r.risk === 'high' || r.selfApproval || pendingAction === 'reject' || pendingAction === 'deny';
   const canSubmit = (!reasonRequired || reason.trim().length >= 8) && selfApprovalReady;
+  const scrollRef = useRef(null);
+  const SECTIONS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'lifecycle', label: 'Lifecycle' },
+    isDecidable && { id: 'decision', label: 'Decision' },
+    { id: 'requester', label: 'Requester' },
+    { id: 'capability', label: 'Capability' },
+    r.targetObject && { id: 'source', label: 'Source' },
+    { id: 'reason', label: 'Reason' },
+    r.status === 'needs_more_info' && r.auditQuestion && { id: 'question', label: 'Question' },
+    { id: 'audit', label: 'Audit' },
+    { id: 'policy', label: 'Policy' },
+  ].filter(Boolean);
 
   return (
     <aside className="detail-panel">
@@ -301,27 +314,31 @@ function PermissionRequestPanel({ r, onClose, onNavigate }) {
           copyHash={`#route=admin-permissions&param=${r.id}`} />
       } />
 
-      <div className="panel-scroll">
-        <PanelTitleBlock title={r.capabilityLabel}>
-          <PermissionStatusBadge status={r.status} />
-          <RiskChip level={r.risk} />
-          {r.selfApproval && (
-            <span className="badge" style={{ background: 'rgba(139,92,246,0.12)', color: 'var(--color-amethyst)' }}>
-              <Icon name="shield" size={10} />Self-approval
-            </span>
-          )}
-          <span className="text-xs muted">· {r.createdAt}</span>
-        </PanelTitleBlock>
+      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+
+      <div className="panel-scroll" ref={scrollRef}>
+        <div data-anchor="overview">
+          <PanelTitleBlock title={r.capabilityLabel}>
+            <PermissionStatusBadge status={r.status} />
+            <RiskChip level={r.risk} />
+            {r.selfApproval && (
+              <span className="badge" style={{ background: 'rgba(139,92,246,0.12)', color: 'var(--color-amethyst)' }}>
+                <Icon name="shield" size={10} />Self-approval
+              </span>
+            )}
+            <span className="text-xs muted">· {r.createdAt}</span>
+          </PanelTitleBlock>
+        </div>
 
         {/* State machine strip */}
-        <div className="panel-section">
+        <div data-anchor="lifecycle" className="panel-section">
           <PanelSectionTitle>Lifecycle</PanelSectionTitle>
           <PermissionStateFlow status={r.status} />
         </div>
 
         {/* Decision — primary action above the fold for decidable states */}
         {isDecidable && (
-          <div className="panel-section">
+          <div data-anchor="decision" className="panel-section">
             <PanelSectionTitle>Decision</PanelSectionTitle>
             <div className="card-nested vstack" style={{ gap: 10, padding: 14 }}>
 
@@ -485,7 +502,7 @@ function PermissionRequestPanel({ r, onClose, onNavigate }) {
         )}
 
         {/* Requester identity */}
-        <div className="panel-section">
+        <div data-anchor="requester" className="panel-section">
           <PanelSectionTitle>Requester</PanelSectionTitle>
           <div className="card-nested hstack" style={{ gap: 12, padding: 12 }}>
             <Avatar user={u} size="md" />
@@ -498,7 +515,7 @@ function PermissionRequestPanel({ r, onClose, onNavigate }) {
         </div>
 
         {/* What is being requested */}
-        <div className="panel-section">
+        <div data-anchor="capability" className="panel-section">
           <PanelSectionTitle>Requested capability</PanelSectionTitle>
           <FieldRow label="Capability">
             <span className="mono text-xs" style={{
@@ -530,7 +547,7 @@ function PermissionRequestPanel({ r, onClose, onNavigate }) {
 
         {/* Source object — safe summary only */}
         {r.targetObject && (
-          <div className="panel-section">
+          <div data-anchor="source" className="panel-section">
             <PanelSectionTitle action={
               <button className="btn btn-subtle btn-sm">
                 <Icon name="arrowRight" size={11} />Open source
@@ -556,14 +573,14 @@ function PermissionRequestPanel({ r, onClose, onNavigate }) {
         )}
 
         {/* Requester reason */}
-        <div className="panel-section">
+        <div data-anchor="reason" className="panel-section">
           <PanelSectionTitle>Reason given</PanelSectionTitle>
           <NestedTextBlock>{r.reason}</NestedTextBlock>
         </div>
 
         {/* Outstanding question on needs_more_info */}
         {r.status === 'needs_more_info' && r.auditQuestion && (
-          <div className="panel-section">
+          <div data-anchor="question" className="panel-section">
             <Callout tone="amber" icon="alert" title="Outstanding question">
               {r.auditQuestion}
             </Callout>
@@ -571,7 +588,7 @@ function PermissionRequestPanel({ r, onClose, onNavigate }) {
         )}
 
         {/* Audit log */}
-        <div className="panel-section">
+        <div data-anchor="audit" className="panel-section">
           <PanelSectionTitle action={r.selfApproval ? (
             <span className="badge" style={{ background: 'rgba(139,92,246,0.16)', color: 'var(--color-amethyst)' }}>
               <Icon name="shield" size={10} />SELF_APPROVAL · 고가시
@@ -608,7 +625,7 @@ function PermissionRequestPanel({ r, onClose, onNavigate }) {
         </div>
 
         {/* Policy notes */}
-        <div className="panel-section">
+        <div data-anchor="policy" className="panel-section">
           <PanelSectionTitle>Policy notes</PanelSectionTitle>
           <ul className="vstack" style={{ gap: 6, padding: 0, margin: 0, listStyle: 'none' }}>
             <li className="text-xs muted hstack" style={{ gap: 6 }}>
