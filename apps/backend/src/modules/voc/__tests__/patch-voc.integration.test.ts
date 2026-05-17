@@ -670,6 +670,44 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(res.json().code).toBe('validation.failed');
   });
 
+  // ── 10b. postpone_review on already-triaged VOC → 422 invalid_state ──────
+  it('PATCH { postpone_review: true } on triaged VOC → 422 validation.failed invalid_state', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-postpone-triaged', 'Postpone Triaged MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+
+    // First: triage the VOC.
+    const res1 = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { triage_state: 'triaged', severity: 'low' },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    expect(res1.statusCode).toBe(200);
+    const triaged = res1.json() as { updated_at: string };
+
+    // Second: attempt postpone on an already-triaged VOC.
+    const res2 = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { postpone_review: true },
+      { idempotencyKey: randomUUID(), ifMatch: triaged.updated_at },
+    );
+    expect(res2.statusCode).toBe(422);
+    const body2 = res2.json();
+    expect(body2.code).toBe('validation.failed');
+    expect(body2.detail.fields[0].path).toEqual(['postpone_review']);
+    expect(body2.detail.fields[0].code).toBe('invalid_state');
+  });
+
   // ── 11. Owner mutex: both owner_user_id + owner_team_id → 422 ──────────
   it('PATCH both owner_user_id and owner_team_id → 422 validation.failed', async () => {
     const admin = await loginAs(app, 'mock-admin-1');

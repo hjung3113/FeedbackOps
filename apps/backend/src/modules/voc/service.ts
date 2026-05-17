@@ -282,6 +282,17 @@ export function createVocService(deps: VocServiceDeps) {
     //     Other mutable fields (severity, owner, AA) may still change alongside;
     //     they emit their own audit rows below in the standard diff path.
     if (input.postpone_review === true) {
+      // F7: postpone is semantically "delay a pending triage decision". Applying
+      // it to a row that is already triaged (or dismissed) is invalid — the
+      // triage_state_review_postponed_at column is only meaningful for untriaged
+      // VOCs. Guard here so the audit log stays clean.
+      if (row.triageState !== 'untriaged') {
+        throw new HttpError(
+          'validation.failed',
+          'postpone_review only applies to untriaged VOCs',
+          { fields: [{ path: ['postpone_review'], code: 'invalid_state' }] },
+        );
+      }
       // Build the diff for any accompanying field changes.
       type VocPostponePatch = {
         triageStateReviewPostponedAt: ReturnType<typeof sql>;
