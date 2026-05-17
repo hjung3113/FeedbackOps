@@ -66,7 +66,9 @@ interface VocSeedRow {
   decision?: {
     kind: 'linkedFinding';
     state: 'request_access' | 'summary_visible';
+    category: string;
     reason: string;
+    required_scope?: string[];
   };
 }
 
@@ -94,12 +96,12 @@ const SEED_ROWS: VocSeedRow[] = [
   // 11. progress / triaged / high / direct_use / user + request_access linkedFinding
   {
     label: 'voc-11', displayNum: '11', status: 'progress',  triage: 'triaged',                  severity: 'high',     source: 'direct_use',            owner: 'user',
-    decision: { kind: 'linkedFinding', state: 'request_access', reason: 'developer_outside_managed_system_scope' },
+    decision: { kind: 'linkedFinding', state: 'request_access', category: 'Linked Finding · scope outside Managed System', reason: 'developer_outside_managed_system_scope', required_scope: ['tableau'] },
   },
   // 12. resolved / triaged / medium / direct_use / user + summary_visible linkedFinding
   {
     label: 'voc-12', displayNum: '12', status: 'resolved',  triage: 'triaged',                  severity: 'medium',   source: 'direct_use',            owner: 'user',
-    decision: { kind: 'linkedFinding', state: 'summary_visible', reason: 'restricted_finding_same_managed_system' },
+    decision: { kind: 'linkedFinding', state: 'summary_visible', category: 'Linked Finding · safe summary only', reason: 'restricted_finding_same_managed_system' },
   },
 ];
 
@@ -227,14 +229,17 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
 
       // ── Insert permission decision fixture (voc-11, voc-12 only) ────────
       if (row.decision) {
-        const envelope = {
-          linkedFinding: {
-            decision_id: stableUuid(`${row.label}:decision:linkedFinding`),
-            state: row.decision.state,
-            evaluated_at: SEED_EVALUATED_AT,
-            reason: row.decision.reason,
-          },
+        const linkedFinding: Record<string, unknown> = {
+          decision_id: stableUuid(`${row.label}:decision:linkedFinding`),
+          state: row.decision.state,
+          category: row.decision.category,
+          evaluated_at: SEED_EVALUATED_AT,
+          reason: row.decision.reason,
         };
+        if (row.decision.required_scope) {
+          linkedFinding.required_scope = row.decision.required_scope;
+        }
+        const envelope = { linkedFinding };
         await tx.execute(
           sql`
             INSERT INTO voc.voc_permission_decisions_seed_fixture (voc_id, envelope)
