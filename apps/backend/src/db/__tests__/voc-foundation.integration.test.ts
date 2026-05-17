@@ -186,3 +186,168 @@ describe.skipIf(!runIntegration)('Slice 3 vocs table', () => {
     ).rejects.toMatchObject({ message: expect.stringContaining('vocs_severity_enum') });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slice 3 conversation tables (Task 4): voc_public_updates, voc_reporter_replies,
+// voc_internal_comments — append-only with role-separated grants.
+// ─────────────────────────────────────────────────────────────────────────────
+describe.skipIf(!runIntegration)('Slice 3 conversation tables', () => {
+  let migrateHandle: DbHandle;
+  let appHandle: DbHandle;
+  let workspaceId: string;
+  let msId: string;
+  let reporterId: string;
+  let nonReporterId: string;
+  let vocId: string;
+
+  beforeAll(async () => {
+    migrateHandle = createDb(MIGRATE_URL);
+    appHandle = createDb(process.env.DATABASE_URL ?? '');
+
+    // Resolve workspace.
+    workspaceId = WORKSPACE_ID;
+    expect(workspaceId).not.toBe('');
+
+    const ms = await migrateHandle.pool.query<{ id: string }>(
+      `select id from core.managed_systems where workspace_id = $1 order by created_at limit 1`,
+      [workspaceId],
+    );
+    msId = ms.rows[0]?.id ?? '';
+    expect(msId).not.toBe('');
+
+    // Pick two distinct actors: one will be reporter, the other will be the non-reporter.
+    const actors = await migrateHandle.pool.query<{ id: string }>(
+      `select id from core.actors where workspace_id = $1 order by created_at limit 2`,
+      [workspaceId],
+    );
+    reporterId = actors.rows[0]?.id ?? '';
+    nonReporterId = actors.rows[1]?.id ?? actors.rows[0]?.id ?? '';
+    expect(reporterId).not.toBe('');
+
+    // Insert a shared VOC for this suite.
+    const voc = await migrateHandle.pool.query<{ id: string }>(
+      `insert into voc.vocs (
+         workspace_id, display_id, primary_managed_system_id, reporter_id,
+         title, description_rich_content, source_context
+       ) values (
+         $1, voc.next_voc_display_id($1), $2, $3,
+         'test-voc-foundation-conversations',
+         '{"type":"doc","content":[]}'::jsonb,
+         'direct_use'
+       ) returning id`,
+      [workspaceId, msId, reporterId],
+    );
+    vocId = voc.rows[0]?.id ?? '';
+    expect(vocId).not.toBe('');
+  });
+
+  afterAll(async () => {
+    await migrateHandle.pool.query(
+      `delete from voc.vocs where title = 'test-voc-foundation-conversations'`,
+    );
+    await migrateHandle.close();
+    await appHandle.close();
+  });
+
+  it('public_update with status pair inserts OK', async () => {
+    const result = await migrateHandle.pool.query<{ id: string }>(
+      `insert into voc.voc_public_updates (
+         voc_id, actor_id, body_rich_content,
+         reporter_facing_status_before, reporter_facing_status_after,
+         skip_public_update
+       ) values (
+         $1, $2, '{"type":"doc","content":[]}'::jsonb,
+         'received', 'reviewing', false
+       ) returning id`,
+      [vocId, reporterId],
+    );
+    expect(result.rows[0]?.id).toBeDefined();
+  });
+
+  it('rejects skip_public_update=true with skip_reason shorter than 8 chars (voc_public_updates_skip_reason_min_length)', async () => {
+    await expect(
+      migrateHandle.pool.query(
+        `insert into voc.voc_public_updates (
+           voc_id, actor_id, body_rich_content,
+           reporter_facing_status_before, reporter_facing_status_after,
+           skip_public_update, skip_reason
+         ) values (
+           $1, $2, '{"type":"doc","content":[]}'::jsonb,
+           'received', 'reviewing', true, 'short'
+         )`,
+        [vocId, reporterId],
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('voc_public_updates_skip_reason_min_length'),
+    });
+  });
+
+  it('reporter_reply trigger rejects non-reporter actor (voc_reporter_reply_actor_must_be_reporter)', async () => {
+    // Use a different actor than the reporter.
+    const otherActor = await migrateHandle.pool.query<{ id: string }>(
+      `select id from core.actors where id <> $1 and workspace_id = $2 limit 1`,
+      [reporterId, workspaceId],
+    );
+    const otherId = otherActor.rows[0]?.id ?? nonReporterId;
+    // If there's genuinely only one actor, skip gracefully.
+    if (otherId === reporterId) {
+      console.warn('reporter_reply non-reporter test skipped: only one actor in workspace');
+      return;
+    }
+
+    await expect(
+      migrateHandle.pool.query(
+        `insert into voc.voc_reporter_replies (
+           voc_id, actor_id, body_rich_content
+         ) values (
+           $1, $2, '{"type":"doc","content":[]}'::jsonb
+         )`,
+        [vocId, otherId],
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('voc_reporter_reply_actor_must_be_reporter'),
+    });
+  });
+
+  it('reporter_reply accepts the reporter', async () => {
+    const result = await migrateHandle.pool.query<{ id: string }>(
+      `insert into voc.voc_reporter_replies (
+         voc_id, actor_id, body_rich_content
+       ) values (
+         $1, $2, '{"type":"doc","content":[]}'::jsonb
+       ) returning id`,
+      [vocId, reporterId],
+    );
+    expect(result.rows[0]?.id).toBeDefined();
+  });
+
+  it('internal_comment accepts any actor', async () => {
+    const result = await migrateHandle.pool.query<{ id: string }>(
+      `insert into voc.voc_internal_comments (
+         voc_id, actor_id, body_rich_content
+       ) values (
+         $1, $2, '{"type":"doc","content":[]}'::jsonb
+       ) returning id`,
+      [vocId, reporterId],
+    );
+    expect(result.rows[0]?.id).toBeDefined();
+  });
+
+  it('fops_app cannot UPDATE voc_public_updates (permission denied)', async () => {
+    await expect(
+      appHandle.pool.query(
+        `update voc.voc_public_updates set skip_public_update = false where voc_id = $1`,
+        [vocId],
+      ),
+    ).rejects.toMatchObject({ message: expect.stringMatching(/permission denied/i) });
+  });
+
+  it('fops_app cannot DELETE voc_internal_comments (permission denied)', async () => {
+    await expect(
+      appHandle.pool.query(
+        `delete from voc.voc_internal_comments where voc_id = $1`,
+        [vocId],
+      ),
+    ).rejects.toMatchObject({ message: expect.stringMatching(/permission denied/i) });
+  });
+});

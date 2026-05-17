@@ -184,3 +184,92 @@ CREATE TRIGGER "vocs_touch_updated_at_trg"
 GRANT SELECT, INSERT, UPDATE, DELETE ON "voc"."vocs" TO fops_app;
 GRANT USAGE ON SEQUENCE "voc"."voc_display_seq" TO fops_app;
 GRANT EXECUTE ON FUNCTION "voc"."next_voc_display_id"(uuid) TO fops_app;
+
+-- ───── Conversation tables (append-only) ─────────────────────────────────────
+
+--> statement-breakpoint
+CREATE TABLE "voc"."voc_public_updates" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "voc_id" uuid NOT NULL,
+  "actor_id" uuid NOT NULL,
+  "body_rich_content" jsonb NOT NULL,
+  "reporter_facing_status_before" text NOT NULL,
+  "reporter_facing_status_after"  text NOT NULL,
+  "skip_public_update" boolean NOT NULL DEFAULT false,
+  "skip_reason" text,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "voc_public_updates_status_before_enum" CHECK ("reporter_facing_status_before" IN
+    ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')),
+  CONSTRAINT "voc_public_updates_status_after_enum"  CHECK ("reporter_facing_status_after" IN
+    ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')),
+  CONSTRAINT "voc_public_updates_skip_reason_min_length"
+    CHECK ("skip_public_update" = false OR (length(coalesce("skip_reason", '')) >= 8))
+);
+--> statement-breakpoint
+ALTER TABLE "voc"."voc_public_updates" ADD CONSTRAINT "voc_public_updates_voc_id_fk"
+  FOREIGN KEY ("voc_id") REFERENCES "voc"."vocs"("id") ON DELETE cascade;
+--> statement-breakpoint
+ALTER TABLE "voc"."voc_public_updates" ADD CONSTRAINT "voc_public_updates_actor_id_fk"
+  FOREIGN KEY ("actor_id") REFERENCES "core"."actors"("id") ON DELETE no action;
+--> statement-breakpoint
+CREATE INDEX "voc_public_updates_voc_created_idx" ON "voc"."voc_public_updates" ("voc_id", "created_at");
+
+--> statement-breakpoint
+CREATE TABLE "voc"."voc_reporter_replies" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "voc_id" uuid NOT NULL,
+  "actor_id" uuid NOT NULL,
+  "body_rich_content" jsonb NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "voc"."voc_reporter_replies" ADD CONSTRAINT "voc_reporter_replies_voc_id_fk"
+  FOREIGN KEY ("voc_id") REFERENCES "voc"."vocs"("id") ON DELETE cascade;
+--> statement-breakpoint
+ALTER TABLE "voc"."voc_reporter_replies" ADD CONSTRAINT "voc_reporter_replies_actor_id_fk"
+  FOREIGN KEY ("actor_id") REFERENCES "core"."actors"("id") ON DELETE no action;
+--> statement-breakpoint
+CREATE INDEX "voc_reporter_replies_voc_created_idx" ON "voc"."voc_reporter_replies" ("voc_id", "created_at");
+
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "voc"."voc_reporter_reply_actor_check"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE v_reporter uuid;
+BEGIN
+  SELECT reporter_id INTO v_reporter FROM voc.vocs WHERE id = NEW.voc_id;
+  IF v_reporter IS NULL OR v_reporter <> NEW.actor_id THEN
+    RAISE EXCEPTION 'voc_reporter_reply_actor_must_be_reporter'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER "voc_reporter_reply_actor_check_trg"
+  BEFORE INSERT ON "voc"."voc_reporter_replies"
+  FOR EACH ROW EXECUTE FUNCTION "voc"."voc_reporter_reply_actor_check"();
+
+--> statement-breakpoint
+CREATE TABLE "voc"."voc_internal_comments" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "voc_id" uuid NOT NULL,
+  "actor_id" uuid NOT NULL,
+  "body_rich_content" jsonb NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "voc"."voc_internal_comments" ADD CONSTRAINT "voc_internal_comments_voc_id_fk"
+  FOREIGN KEY ("voc_id") REFERENCES "voc"."vocs"("id") ON DELETE cascade;
+--> statement-breakpoint
+ALTER TABLE "voc"."voc_internal_comments" ADD CONSTRAINT "voc_internal_comments_actor_id_fk"
+  FOREIGN KEY ("actor_id") REFERENCES "core"."actors"("id") ON DELETE no action;
+--> statement-breakpoint
+CREATE INDEX "voc_internal_comments_voc_created_idx" ON "voc"."voc_internal_comments" ("voc_id", "created_at");
+
+--> statement-breakpoint
+-- ───── Append-only grants (ADR-0019 pattern): fops_app SELECT + INSERT only.
+GRANT SELECT, INSERT ON "voc"."voc_public_updates"    TO fops_app;
+--> statement-breakpoint
+GRANT SELECT, INSERT ON "voc"."voc_reporter_replies"  TO fops_app;
+--> statement-breakpoint
+GRANT SELECT, INSERT ON "voc"."voc_internal_comments" TO fops_app;

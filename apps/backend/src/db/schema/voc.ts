@@ -14,6 +14,7 @@
 
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   jsonb,
@@ -103,5 +104,89 @@ export const vocs = vocSchema.table(
       'vocs_owner_xor',
       sql`${t.ownerUserId} IS NULL OR ${t.ownerTeamId} IS NULL`,
     ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// voc.voc_public_updates — append-only public status update records.
+// fops_app gets SELECT + INSERT only (no UPDATE/DELETE) per ADR-0019.
+// ─────────────────────────────────────────────────────────────────────────
+export const vocPublicUpdates = vocSchema.table(
+  'voc_public_updates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    vocId: uuid('voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    bodyRichContent: jsonb('body_rich_content').notNull(),
+    reporterFacingStatusBefore: text('reporter_facing_status_before').notNull(),
+    reporterFacingStatusAfter: text('reporter_facing_status_after').notNull(),
+    skipPublicUpdate: boolean('skip_public_update').notNull().default(false),
+    skipReason: text('skip_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    vocCreatedIdx: index('voc_public_updates_voc_created_idx').on(t.vocId, t.createdAt),
+    statusBeforeEnum: check(
+      'voc_public_updates_status_before_enum',
+      sql`${t.reporterFacingStatusBefore} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
+    ),
+    statusAfterEnum: check(
+      'voc_public_updates_status_after_enum',
+      sql`${t.reporterFacingStatusAfter} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
+    ),
+    skipReasonMinLength: check(
+      'voc_public_updates_skip_reason_min_length',
+      sql`${t.skipPublicUpdate} = false OR (length(coalesce(${t.skipReason}, '')) >= 8)`,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// voc.voc_reporter_replies — append-only replies from the reporter.
+// actor_id must equal vocs.reporter_id — enforced by DB trigger.
+// fops_app gets SELECT + INSERT only per ADR-0019.
+// ─────────────────────────────────────────────────────────────────────────
+export const vocReporterReplies = vocSchema.table(
+  'voc_reporter_replies',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    vocId: uuid('voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    bodyRichContent: jsonb('body_rich_content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    vocCreatedIdx: index('voc_reporter_replies_voc_created_idx').on(t.vocId, t.createdAt),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// voc.voc_internal_comments — append-only internal staff comments.
+// Any authenticated actor in the workspace may insert.
+// fops_app gets SELECT + INSERT only per ADR-0019.
+// ─────────────────────────────────────────────────────────────────────────
+export const vocInternalComments = vocSchema.table(
+  'voc_internal_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    vocId: uuid('voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    bodyRichContent: jsonb('body_rich_content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    vocCreatedIdx: index('voc_internal_comments_voc_created_idx').on(t.vocId, t.createdAt),
   }),
 );
