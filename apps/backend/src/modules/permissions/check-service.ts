@@ -30,6 +30,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import type { Capability } from '@fops/shared';
 import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
 import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -82,7 +83,14 @@ export function createCheckService(deps: CheckServiceDeps) {
     actor: ActorContext,
     capability: Capability,
     scope: CheckScope,
+    options: { tx?: Tx } = {},
   ): Promise<Decision> {
+    // When invoked inside a mutation transaction, callers pass `tx` so steps
+    // 2/3/5 observe writes the same tx just performed (S-002, ADR-0019
+    // Section D). Without it, we fall back to the pool-bound handle for
+    // read-only callers like the route-level pre-check at routes.ts.
+    const db: Tx = options.tx ?? deps.db;
+
     // (1) workspace context — actor must be acting inside their own workspace.
     if (actor.workspace_id !== scope.workspace_id) {
       return { allow: false, reason: 'workspace_mismatch', requestable: null };
@@ -90,7 +98,7 @@ export function createCheckService(deps: CheckServiceDeps) {
 
     // (2) explicit deny — any active deny row (revoked_at IS NULL) blocks
     // before any grant or role check. 05-policy:33.
-    const denyRows = await deps.db
+    const denyRows = await db
       .select({ id: permissionDenies.id })
       .from(permissionDenies)
       .where(
@@ -110,7 +118,7 @@ export function createCheckService(deps: CheckServiceDeps) {
     // OR expires_at > now()). We fetch all rows for (actor, capability) and
     // classify rather than filtering in SQL so we can distinguish
     // grant_expired / grant_revoked from no_grant in a single round-trip.
-    const grantRows = await deps.db
+    const grantRows = await db
       .select({
         id: permissionGrants.id,
         revokedAt: permissionGrants.revokedAt,

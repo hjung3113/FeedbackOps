@@ -131,12 +131,20 @@ export function createRequestService(deps: RequestServiceDeps) {
       }
 
       // (2) Re-check capability — fail fast if the actor already has it.
-      const decision = await checkService.checkCapability(actor, capability, {
-        workspace_id: actor.workspace_id,
-        ...(body.requested_managed_system_id !== undefined
-          ? { managed_system_id: body.requested_managed_system_id }
-          : {}),
-      });
+      // S-002: thread the open tx so this re-check observes any grant a
+      // concurrent admin commit may have just made visible (and reads the
+      // same snapshot the subsequent insert will).
+      const decision = await checkService.checkCapability(
+        actor,
+        capability,
+        {
+          workspace_id: actor.workspace_id,
+          ...(body.requested_managed_system_id !== undefined
+            ? { managed_system_id: body.requested_managed_system_id }
+            : {}),
+        },
+        { tx },
+      );
       if (decision.allow === true) {
         throw new HttpError(
           'conflict.capability_already_granted',

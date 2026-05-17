@@ -109,10 +109,17 @@ function toDto(row: Row): AnalyticsAreaDto {
 async function requireWorkspaceAdmin(
   checkService: CheckService,
   actor: ActorContext,
+  tx: Tx,
 ): Promise<void> {
-  const decision = await checkService.checkCapability(actor, 'workspace.admin', {
-    workspace_id: actor.workspace_id,
-  });
+  // S-002: thread the open mutation tx so the capability check sees writes
+  // performed earlier in the same transaction (e.g. a freshly inserted
+  // grant) and serialises against concurrent revokes.
+  const decision = await checkService.checkCapability(
+    actor,
+    'workspace.admin',
+    { workspace_id: actor.workspace_id },
+    { tx },
+  );
   if (decision.allow !== true) {
     throw new HttpError('permission.denied', 'workspace.admin required');
   }
@@ -234,7 +241,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         }
       }
 
-      await requireWorkspaceAdmin(checkService, actor);
+      await requireWorkspaceAdmin(checkService, actor, tx);
 
       // Parent MS must exist, share the workspace, and not be archived.
       // ADR-0019 Section E: lock the parent MS row inside this tx so a
@@ -350,7 +357,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         }
       }
 
-      await requireWorkspaceAdmin(checkService, actor);
+      await requireWorkspaceAdmin(checkService, actor, tx);
 
       const existingRows = await tx
         .select()
@@ -491,7 +498,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         }
       }
 
-      await requireWorkspaceAdmin(checkService, actor);
+      await requireWorkspaceAdmin(checkService, actor, tx);
 
       const existingRows = await tx
         .select()

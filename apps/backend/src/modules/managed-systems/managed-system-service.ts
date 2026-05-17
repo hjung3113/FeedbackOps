@@ -24,6 +24,7 @@ import type { DatabaseError } from 'pg';
 import type { AuditEventType } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
 import { managedSystems } from '../../db/schema/core.js';
 import { HttpError } from '../../lib/errors.js';
 import { cascadeArchiveActiveChildren } from '../analytics-areas/analytics-area-service.js';
@@ -117,10 +118,17 @@ function toDto(row: Row): ManagedSystemDto {
 async function requireWorkspaceAdmin(
   checkService: CheckService,
   actor: ActorContext,
+  tx: Tx,
 ): Promise<void> {
-  const decision = await checkService.checkCapability(actor, 'workspace.admin', {
-    workspace_id: actor.workspace_id,
-  });
+  // S-002: thread the open mutation tx so the capability check sees writes
+  // performed earlier in the same transaction (e.g. a freshly inserted
+  // grant) and serialises against concurrent revokes.
+  const decision = await checkService.checkCapability(
+    actor,
+    'workspace.admin',
+    { workspace_id: actor.workspace_id },
+    { tx },
+  );
   if (decision.allow !== true) {
     throw new HttpError('permission.denied', 'workspace.admin required');
   }
@@ -168,7 +176,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         }
       }
 
-      await requireWorkspaceAdmin(checkService, actor);
+      await requireWorkspaceAdmin(checkService, actor, tx);
 
       let inserted: Row;
       try {
@@ -256,7 +264,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         }
       }
 
-      await requireWorkspaceAdmin(checkService, actor);
+      await requireWorkspaceAdmin(checkService, actor, tx);
 
       const existingRows = await tx
         .select()
@@ -418,7 +426,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         }
       }
 
-      await requireWorkspaceAdmin(checkService, actor);
+      await requireWorkspaceAdmin(checkService, actor, tx);
 
       const existingRows = await tx
         .select()
