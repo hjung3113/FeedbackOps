@@ -503,6 +503,35 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     expect(res.json().code).toBe('validation.failed');
   });
 
+  it('PATCH on an archived MS → 409 conflict.record_archived (ADR-0019 Section A)', async () => {
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const created = await app.inject({
+      method: 'POST',
+      url: '/managed-systems',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
+      payload: { slug: 'it-arch-patch', name: 'Archived target' },
+    });
+    const id = created.json().id;
+    await app.inject({
+      method: 'POST',
+      url: `/managed-systems/${id}/archive`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/managed-systems/${id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
+      payload: { name: 'renamed after archive' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('conflict.record_archived');
+    const audit = await dbHandle.pool.query(
+      `select count(*)::int as n from core.audit_log where event_type = 'managed_system_updated' and subject_id = $1`,
+      [id],
+    );
+    expect(audit.rows[0]?.n).toBe(0);
+  });
+
   it('slug reuse after archive succeeds via service path (review L2)', async () => {
     // ADR-0017:63 "Slug reuse after archive is permitted". The partial
     // unique index already proves this at the DB layer; this test covers

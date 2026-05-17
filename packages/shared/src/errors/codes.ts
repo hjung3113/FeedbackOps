@@ -31,6 +31,10 @@ export const ERROR_CODES = [
   // conflict.* → 409 (Slice 2 #10/#11)
   'conflict.duplicate_slug',
   'conflict.parent_archived',
+  // conflict.* → 409 (ADR-0019 Section A — archived row is itself
+  // immutable; distinct from `conflict.parent_archived` which rejects
+  // because the referenced parent is archived).
+  'conflict.record_archived',
   // not_found.* → 404
   'not_found.record',
   // internal.* → 500

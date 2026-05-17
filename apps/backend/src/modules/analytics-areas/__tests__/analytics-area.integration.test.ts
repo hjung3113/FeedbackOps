@@ -476,6 +476,97 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
     expect(res.json().code).toBe('not_found.record');
   });
 
+  it('PATCH on an archived AA → 409 conflict.record_archived (ADR-0019 Section A)', async () => {
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, cookie, 'it-aaarch-host', 'host');
+    const aa = await createAa(app, cookie, {
+      managed_system_id: msId,
+      slug: 'it-aaarch-target',
+      name: 'archived AA',
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/analytics-areas/${aa.json().id}/archive`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/analytics-areas/${aa.json().id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
+      payload: { name: 'renamed after archive' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('conflict.record_archived');
+  });
+
+  it('PATCH on an active AA under an archived parent MS → 409 conflict.parent_archived (ADR-0019 Section B Q1)', async () => {
+    // Race-induced state: AA active, parent MS archived. Cannot happen
+    // via the normal cascade path post-Section E lock, but the policy
+    // covers manual SQL and future bypass paths. We synthesise the
+    // state via the migrate role.
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, cookie, 'it-q1-host', 'host');
+    const aa = await createAa(app, cookie, {
+      managed_system_id: msId,
+      slug: 'it-q1-target',
+      name: 'active under archived',
+    });
+    if (!MIGRATE_URL) return;
+    const ops = createDb(MIGRATE_URL);
+    try {
+      // Archive only the MS, leaving the AA active — bypassing the
+      // service-layer cascade.
+      await ops.pool.query(
+        `update core.managed_systems set archived_at = now(), archived_by_actor_id = (
+           select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $2
+         ) where id = $1`,
+        [msId, WORKSPACE_ID],
+      );
+    } finally {
+      await ops.close();
+    }
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/analytics-areas/${aa.json().id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
+      payload: { name: 'attempt patch' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('conflict.parent_archived');
+  });
+
+  it('standalone archive on an active AA under an archived parent MS → 200 (ADR-0019 Section B Q2)', async () => {
+    // Same race-induced state as above. Standalone archive is the only
+    // first-class cleanup path — refusing it would leave the row
+    // reachable only via direct SQL.
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, cookie, 'it-q2-host', 'host');
+    const aa = await createAa(app, cookie, {
+      managed_system_id: msId,
+      slug: 'it-q2-target',
+      name: 'cleanup me',
+    });
+    if (!MIGRATE_URL) return;
+    const ops = createDb(MIGRATE_URL);
+    try {
+      await ops.pool.query(
+        `update core.managed_systems set archived_at = now(), archived_by_actor_id = (
+           select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $2
+         ) where id = $1`,
+        [msId, WORKSPACE_ID],
+      );
+    } finally {
+      await ops.close();
+    }
+    const res = await app.inject({
+      method: 'POST',
+      url: `/analytics-areas/${aa.json().id}/archive`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().archived_at).not.toBeNull();
+  });
+
   it('non-admin POST → 403 permission.denied; no AA row, no audit row, no idempotency key (review H5)', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, cookie, 'it-h5-ms', 'H5');

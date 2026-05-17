@@ -354,6 +354,37 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         throw new HttpError('not_found.record', 'analytics_area not found');
       }
 
+      // ADR-0019 Section A: archived AA is itself immutable.
+      if (existing.archivedAt !== null) {
+        throw new HttpError(
+          'conflict.record_archived',
+          'analytics_area is archived and cannot be updated',
+        );
+      }
+
+      // ADR-0019 Section B Q1: active AA under an archived parent MS
+      // (produced by the cascade race S-004 documents, by manual SQL,
+      // or by a future bypass) is treated as a frozen historical
+      // record — PATCH rejected. Operators clean it up via the
+      // standalone archive path (Section B Q2).
+      const parentRows = await tx
+        .select({ archivedAt: managedSystems.archivedAt })
+        .from(managedSystems)
+        .where(
+          and(
+            eq(managedSystems.workspaceId, actor.workspace_id),
+            eq(managedSystems.id, existing.managedSystemId),
+          ),
+        )
+        .limit(1);
+      const parent = parentRows[0];
+      if (parent && parent.archivedAt !== null) {
+        throw new HttpError(
+          'conflict.parent_archived',
+          'parent managed_system is archived; analytics_area cannot be updated (ADR-0019 Section B Q1)',
+        );
+      }
+
       const changes: Record<string, { from: string | null; to: string | null }> = {};
       const patch: Partial<{ name: string; ownerTeamId: string | null }> = {};
 

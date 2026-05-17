@@ -268,6 +268,17 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         throw new HttpError('not_found.record', 'managed_system not found');
       }
 
+      // ADR-0019 Section A: archived rows are immutable. Re-registration
+      // via slug reuse (ADR-0017:63) is the only path to "edit a retired
+      // registry entry" — the audit/historical record on the original row
+      // stays frozen.
+      if (existing.archivedAt !== null) {
+        throw new HttpError(
+          'conflict.record_archived',
+          'managed_system is archived and cannot be updated',
+        );
+      }
+
       // Build change diff. Slug is intentionally not in the body type;
       // immutability is enforced at the route boundary (422).
       const changes: Record<string, { from: string | null; to: string | null }> = {};
