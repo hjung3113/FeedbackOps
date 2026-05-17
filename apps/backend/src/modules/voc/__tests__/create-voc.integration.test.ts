@@ -566,6 +566,12 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     );
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe(expectedCode);
+    expect(res.json().detail?.fields?.[0]?.path).toEqual(['description_rich_content']);
+    expect(res.json().detail?.fields?.[0]?.code).toBe(
+      expectedCode === 'rich_content.external_image_forbidden'
+        ? 'external_image_forbidden'
+        : 'disallowed_node',
+    );
   });
 
   // ── 13. attachments: [] accepted ──────────────────────────────────────
@@ -613,6 +619,8 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     );
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('attachment.unsupported_pending_storage_slice');
+    expect(res.json().detail?.fields?.[0]?.path).toEqual(['attachments']);
+    expect(res.json().detail?.fields?.[0]?.code).toBe('unsupported');
   });
 
   // ── 15. Audit row written on success ──────────────────────────────────

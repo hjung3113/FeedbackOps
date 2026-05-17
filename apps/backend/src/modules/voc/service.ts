@@ -89,7 +89,15 @@ export function createVocService(deps: VocServiceDeps) {
     });
     if (!sanitized.ok) {
       throw new HttpError(sanitized.error.code, sanitized.error.reason, {
-        path: sanitized.error.path,
+        fields: [
+          {
+            path: ['description_rich_content'],
+            code: sanitized.error.code === 'rich_content.external_image_forbidden'
+              ? 'external_image_forbidden'
+              : 'disallowed_node',
+          },
+        ],
+        hint: sanitized.error.path,
       });
     }
 
@@ -98,6 +106,9 @@ export function createVocService(deps: VocServiceDeps) {
       throw new HttpError(
         'attachment.unsupported_pending_storage_slice',
         'attachments are not supported until the storage slice ships (#22)',
+        {
+          fields: [{ path: ['attachments'], code: 'unsupported' }],
+        },
       );
     }
 
