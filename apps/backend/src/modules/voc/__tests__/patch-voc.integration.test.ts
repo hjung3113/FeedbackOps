@@ -205,6 +205,22 @@ async function getAuditTypes(vocId: string): Promise<string[]> {
   }
 }
 
+// Returns the `detail` JSON for the first audit row matching event_type for
+// the given subject_id. Returns null if MIGRATE_URL is absent or no row found.
+async function getAuditDetail(vocId: string, eventType: string): Promise<Record<string, unknown> | null> {
+  if (!MIGRATE_URL) return null;
+  const ops = createDb(MIGRATE_URL);
+  try {
+    const rows = await ops.pool.query<{ detail: Record<string, unknown> }>(
+      `select detail from core.audit_log where subject_id = $1 and event_type = $2 order by created_at asc limit 1`,
+      [vocId, eventType],
+    );
+    return rows.rows[0]?.detail ?? null;
+  } finally {
+    await ops.close();
+  }
+}
+
 describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
   let dbHandle: DbHandle;
   let app: FastifyInstance;
@@ -344,6 +360,16 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
         'voc_analytics_area_linked',
         'voc_triage_committed',
       ]);
+
+      // F20: assert voc_triage_committed detail snapshot is populated from
+      // POST-UPDATE state (newSev, newOwnerUser2, newAa) not PRE-UPDATE values.
+      const detail = await getAuditDetail(voc.id, 'voc_triage_committed');
+      expect(detail).toMatchObject({
+        severity: 'high',
+        owner_user_id: adminActorId,
+        analytics_area_id: aaId,
+        cluster_decision: null,
+      });
     }
   });
 
