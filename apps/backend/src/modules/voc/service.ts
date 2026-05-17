@@ -266,7 +266,124 @@ export function createVocService(deps: VocServiceDeps) {
       });
     }
 
-    // 7. Diff — build patch + changes map.
+    // 7a. postpone_review path — set postponed_at and emit a single audit row.
+    //     Other mutable fields (severity, owner, AA) may still change alongside;
+    //     they emit their own audit rows below in the standard diff path.
+    if (input.postpone_review === true) {
+      // Build the diff for any accompanying field changes.
+      type VocPostponePatch = {
+        triageStateReviewPostponedAt: ReturnType<typeof sql>;
+        severity?: 'low' | 'medium' | 'high' | 'critical' | null;
+        ownerUserId?: string | null;
+        ownerTeamId?: string | null;
+        analyticsAreaId?: string | null;
+      };
+      const postponePatch: VocPostponePatch = {
+        triageStateReviewPostponedAt: sql`NOW()`,
+      };
+      let pSeverityChanged = false;
+      let pOwnerChanged = false;
+      let pAaChanged = false;
+
+      if (input.severity !== undefined && input.severity !== row.severity) {
+        postponePatch.severity = input.severity;
+        pSeverityChanged = true;
+      }
+      const pNewOwnerUser = input.owner_user_id !== undefined ? (input.owner_user_id ?? null) : row.ownerUserId;
+      const pNewOwnerTeam = input.owner_team_id !== undefined ? (input.owner_team_id ?? null) : row.ownerTeamId;
+      if (pNewOwnerUser !== row.ownerUserId || pNewOwnerTeam !== row.ownerTeamId) {
+        postponePatch.ownerUserId = pNewOwnerUser;
+        postponePatch.ownerTeamId = pNewOwnerTeam;
+        pOwnerChanged = true;
+      }
+      if (input.analytics_area_id !== undefined && input.analytics_area_id !== row.analyticsAreaId) {
+        postponePatch.analyticsAreaId = input.analytics_area_id ?? null;
+        pAaChanged = true;
+      }
+
+      const pUpdatedRows = await tx
+        .update(vocs)
+        .set({ ...postponePatch, updatedAt: sql`NOW()` })
+        .where(and(eq(vocs.id, vocId), eq(vocs.workspaceId, workspaceId)))
+        .returning();
+      const pUpdated = pUpdatedRows[0];
+      if (!pUpdated) throw new HttpError('internal.unexpected', 'voc UPDATE returned no row');
+
+      const pNewSev = pUpdated.severity as VocEnvelope['severity'];
+
+      // Emit postpone audit first, then any accompanying field audits in order.
+      await deps.auditService.record(tx, {
+        workspace_id: workspaceId,
+        actor_id: actor.actor_id,
+        event_type: 'voc_triage_postponed',
+        subject_type: 'voc',
+        subject_id: vocId,
+        summary: `VOC ${pUpdated.displayId} triage review postponed`,
+        detail: { voc_id: vocId, actor_id: actor.actor_id },
+      });
+      if (pSeverityChanged && pNewSev !== null) {
+        await deps.auditService.record(tx, {
+          workspace_id: workspaceId,
+          actor_id: actor.actor_id,
+          event_type: 'voc_severity_set',
+          subject_type: 'voc',
+          subject_id: vocId,
+          summary: `VOC ${pUpdated.displayId} severity set to ${pNewSev}`,
+          detail: { voc_id: vocId, from: row.severity, to: pNewSev },
+        });
+      }
+      if (pOwnerChanged) {
+        await deps.auditService.record(tx, {
+          workspace_id: workspaceId,
+          actor_id: actor.actor_id,
+          event_type: 'voc_owner_assigned',
+          subject_type: 'voc',
+          subject_id: vocId,
+          summary: `VOC ${pUpdated.displayId} owner assigned`,
+          detail: {
+            voc_id: vocId,
+            from: { user_id: row.ownerUserId, team_id: row.ownerTeamId },
+            to: { user_id: pUpdated.ownerUserId, team_id: pUpdated.ownerTeamId },
+          },
+        });
+      }
+      if (pAaChanged) {
+        await deps.auditService.record(tx, {
+          workspace_id: workspaceId,
+          actor_id: actor.actor_id,
+          event_type: 'voc_analytics_area_linked',
+          subject_type: 'voc',
+          subject_id: vocId,
+          summary: `VOC ${pUpdated.displayId} analytics area linked`,
+          detail: { voc_id: vocId, from: row.analyticsAreaId, to: pUpdated.analyticsAreaId },
+        });
+      }
+
+      const pLockedVoc = {
+        id: pUpdated.id,
+        workspaceId: pUpdated.workspaceId,
+        primaryManagedSystemId: pUpdated.primaryManagedSystemId,
+        analyticsAreaId: pUpdated.analyticsAreaId,
+        reporterId: pUpdated.reporterId,
+        displayId: pUpdated.displayId,
+        title: pUpdated.title,
+        descriptionRichContent: pUpdated.descriptionRichContent,
+        severity: pNewSev,
+        reporterFacingStatus: pUpdated.reporterFacingStatus,
+        triageState: pUpdated.triageState as VocEnvelope['triage_state'],
+        triageStateReviewPostponedAt: pUpdated.triageStateReviewPostponedAt,
+        ownerUserId: pUpdated.ownerUserId,
+        ownerTeamId: pUpdated.ownerTeamId,
+        sourceContext: pUpdated.sourceContext,
+        archivedAt: pUpdated.archivedAt,
+        createdAt: pUpdated.createdAt,
+        updatedAt: pUpdated.updatedAt,
+      };
+      const pNextStates = await nextReporterStates(pUpdated.reporterFacingStatus as ReporterFacingStatus, tx);
+      return composeEnvelope(pLockedVoc, pNextStates);
+    }
+
+    // 7b. Standard diff path (no postpone_review).
     type VocPatch = {
       severity?: 'low' | 'medium' | 'high' | 'critical' | null;
       ownerUserId?: string | null;
@@ -389,9 +506,7 @@ export function createVocService(deps: VocServiceDeps) {
       });
     }
 
-    // 11. voc_triage_postponed — deferred to C3 (postpone_review path not exercised in C2).
-
-    // 12. Compose and return envelope with new row state.
+    // 11. Compose and return envelope with new row state (standard diff path).
     const updatedLockedVoc = {
       id: updated.id,
       workspaceId: updated.workspaceId,
