@@ -31,3 +31,5 @@ export function createDb(url: string): DbHandle {
     close: () => pool.end(),
   };
 }
+
+export type { DrizzleTx, Tx } from './tx.js';

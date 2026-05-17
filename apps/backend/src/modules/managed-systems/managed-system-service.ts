@@ -152,7 +152,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
     return await db.transaction(async (tx) => {
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -198,7 +198,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         throw err;
       }
 
-      await auditService.record(tx as unknown as Db, {
+      await auditService.record(tx, {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
         event_type: REGISTERED,
@@ -217,7 +217,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
       const dto = toDto(inserted);
       if (options.idempotencyKey) {
         await idempotencyService.record(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -240,7 +240,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
     return await db.transaction(async (tx) => {
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -322,7 +322,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         const dto = toDto(existing);
         if (options.idempotencyKey) {
           await idempotencyService.record(
-            tx as unknown as Db,
+            tx,
             actor.actor_id,
             options.idempotencyKey,
             requestHash,
@@ -362,7 +362,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         throw new HttpError('internal.unexpected', 'managed_systems update returned no row');
       }
 
-      await auditService.record(tx as unknown as Db, {
+      await auditService.record(tx, {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
         event_type: UPDATED,
@@ -375,7 +375,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
       const dto = toDto(updated);
       if (options.idempotencyKey) {
         await idempotencyService.record(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -399,7 +399,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
     return await db.transaction(async (tx) => {
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -436,7 +436,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         const body = { ...toDto(existing), cascaded_analytics_area_ids: [] as string[] };
         if (options.idempotencyKey) {
           await idempotencyService.record(
-            tx as unknown as Db,
+            tx,
             actor.actor_id,
             options.idempotencyKey,
             requestHash,
@@ -463,14 +463,14 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
       // row with `cascade_source_managed_system_id = id` so a single
       // BI query can pivot from either direction. A failure in any child
       // aborts the whole transaction.
-      const cascadedIds = await cascadeArchiveActiveChildren(tx as unknown as Db, auditService, {
+      const cascadedIds = await cascadeArchiveActiveChildren(tx, auditService, {
         workspaceId: actor.workspace_id,
         actorId: actor.actor_id,
         managedSystemId: id,
         now,
       });
 
-      await auditService.record(tx as unknown as Db, {
+      await auditService.record(tx, {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
         event_type: ARCHIVED,
@@ -483,7 +483,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
       const body = { ...toDto(archived), cascaded_analytics_area_ids: cascadedIds };
       if (options.idempotencyKey) {
         await idempotencyService.record(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,

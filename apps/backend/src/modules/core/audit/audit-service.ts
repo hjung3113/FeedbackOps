@@ -19,10 +19,10 @@ import {
   auditEventTypeSchema,
 } from '@fops/shared';
 
-import type { Db } from '../../../db/client.js';
+import type { Tx } from '../../../db/tx.js';
 import { auditLog } from '../../../db/schema/core.js';
 
-export type Tx = Db;
+export type { Tx };
 
 export interface AuditRecordInput {
   workspace_id: string;

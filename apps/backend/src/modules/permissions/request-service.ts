@@ -111,7 +111,7 @@ export function createRequestService(deps: RequestServiceDeps) {
       // (1) Idempotency lookup.
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -189,7 +189,7 @@ export function createRequestService(deps: RequestServiceDeps) {
       }
 
       // (4) Audit row, same transaction.
-      await auditService.record(tx as unknown as Db, {
+      await auditService.record(tx, {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
         event_type: PERMISSION_REQUESTED,
@@ -216,7 +216,7 @@ export function createRequestService(deps: RequestServiceDeps) {
       // (5) Reserve the idempotency row.
       if (options.idempotencyKey) {
         await idempotencyService.record(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,

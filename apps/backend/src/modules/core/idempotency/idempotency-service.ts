@@ -23,13 +23,10 @@
 
 import { and, eq } from 'drizzle-orm';
 
-import type { Db } from '../../../db/client.js';
+import type { Tx } from '../../../db/tx.js';
 import { idempotencyKeys } from '../../../db/schema/core.js';
 
-// Drizzle transaction handle accepted by the service. Using the same type as
-// Db avoids a generics ramp; node-postgres drizzle's `.transaction(cb)`
-// hands the callback a value assignable to NodePgDatabase<typeof schema>.
-export type Tx = Db;
+export type { Tx };
 
 export type IdempotencyLookupResult =
   | { kind: 'miss' }

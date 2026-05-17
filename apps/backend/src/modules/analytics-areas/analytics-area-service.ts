@@ -21,6 +21,7 @@ import type { DatabaseError } from 'pg';
 import type { AuditEventType } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
 import { analyticsAreas, managedSystems } from '../../db/schema/core.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
@@ -122,7 +123,7 @@ async function requireWorkspaceAdmin(
 // Returns the archived row's id (or null when the row was already
 // archived — caller decides whether that is an error or a no-op).
 export async function archiveAnalyticsAreaInTx(
-  tx: Db,
+  tx: Tx,
   auditService: AuditService,
   args: {
     workspaceId: string;
@@ -165,7 +166,7 @@ export async function archiveAnalyticsAreaInTx(
 // AA ids so the caller can populate `cascaded_analytics_area_ids` in the
 // MS archive audit detail.
 export async function cascadeArchiveActiveChildren(
-  tx: Db,
+  tx: Tx,
   auditService: AuditService,
   args: {
     workspaceId: string;
@@ -217,7 +218,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
     return await db.transaction(async (tx) => {
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -292,7 +293,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         throw err;
       }
 
-      await auditService.record(tx as unknown as Db, {
+      await auditService.record(tx, {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
         event_type: REGISTERED,
@@ -311,7 +312,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
       const dto = toDto(inserted);
       if (options.idempotencyKey) {
         await idempotencyService.record(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -333,7 +334,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
     return await db.transaction(async (tx) => {
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -419,7 +420,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         const dto = toDto(existing);
         if (options.idempotencyKey) {
           await idempotencyService.record(
-            tx as unknown as Db,
+            tx,
             actor.actor_id,
             options.idempotencyKey,
             requestHash,
@@ -440,7 +441,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         throw new HttpError('internal.unexpected', 'analytics_areas update returned no row');
       }
 
-      await auditService.record(tx as unknown as Db, {
+      await auditService.record(tx, {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
         event_type: UPDATED,
@@ -453,7 +454,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
       const dto = toDto(updated);
       if (options.idempotencyKey) {
         await idempotencyService.record(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -474,7 +475,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
     return await db.transaction(async (tx) => {
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
@@ -525,7 +526,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         const dto = toDto(existing);
         if (options.idempotencyKey) {
           await idempotencyService.record(
-            tx as unknown as Db,
+            tx,
             actor.actor_id,
             options.idempotencyKey,
             requestHash,
@@ -537,7 +538,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
       }
 
       const now = new Date();
-      await archiveAnalyticsAreaInTx(tx as unknown as Db, auditService, {
+      await archiveAnalyticsAreaInTx(tx, auditService, {
         workspaceId: actor.workspace_id,
         actorId: actor.actor_id,
         analyticsAreaId: id,
@@ -557,7 +558,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
       const dto = toDto(row);
       if (options.idempotencyKey) {
         await idempotencyService.record(
-          tx as unknown as Db,
+          tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,

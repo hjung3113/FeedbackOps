@@ -17,6 +17,7 @@
 - Repositories access tables owned by their module only.
 - Read models may compose approved projections but must not become mutation paths.
 - Core owns Managed System Registry, Product Areas, Actor, Role Level, audit, shared attachment governance, and default owner/reviewer resolution inputs; Task owns Task Request, Task, future Work Initiative / Project grouping, Milestone, and execution views.
+- Mutation services accept the transaction union `Tx` from `db/tx.ts`, never `Db` (the pool). The compiler enforces this — do not re-introduce a `Tx = Db` alias.
 
 ## Cross-System Commands
 
