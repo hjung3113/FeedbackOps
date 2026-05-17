@@ -321,6 +321,25 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     expect(body.detail?.fields?.[0]?.path).toEqual(['headers', 'idempotency-key']);
   });
 
+  // ── 5b. Malformed Idempotency-Key (present but not UUIDv4) ───────────
+  it('malformed Idempotency-Key (not UUIDv4) → 422 validation.malformed_idempotency_key', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-voc-malformed', 'Malformed MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const res = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'x',
+        description_rich_content: paragraphDoc('a'),
+      },
+      'not-a-uuid',
+    );
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('validation.malformed_idempotency_key');
+  });
+
   // ── 6. Forbidden fields (6 fields) — severity tested separately ───────
   it.each([
     'reporter_id',
