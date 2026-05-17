@@ -45,6 +45,31 @@ export async function purgeExpiredIdempotencyKeys(deps: {
 }
 
 /**
+ * Test-only surface (H6, slice3-prologue): the inline `boss.work` callback
+ * extracted as a named factory so a unit test can pin its error-propagation
+ * contract without booting pg-boss. Errors thrown here MUST propagate so
+ * pg-boss's retry config (ADR-0009:35) takes effect. Do not wrap in a
+ * try/catch that swallows errors (e.g. "log and continue") — that would
+ * silently defeat the retry contract.
+ */
+export function __purgeHandler(deps: {
+  db: Db;
+  log?: { info: (msg: string, meta?: unknown) => void };
+}) {
+  return async (jobs: Array<{ id: string; data: IdempotencyPurgePayload }>) => {
+    for (const job of jobs) {
+      const correlationId = job.data?.correlation_id ?? job.id;
+      const { deleted } = await purgeExpiredIdempotencyKeys({ db: deps.db });
+      deps.log?.info('core.idempotency_purge complete', {
+        correlation_id: correlationId,
+        deleted,
+        job_id: job.id,
+      });
+    }
+  };
+}
+
+/**
  * Wire the handler + hourly cron into pg-boss. Idempotent — re-running
  * registerCoreJobs on a fresh process must converge on the same set of
  * queues, workers, and schedules. ADR-0009:35 retry config is applied at
@@ -67,20 +92,7 @@ export async function registerIdempotencyPurge(
     );
   }
 
-  await boss.work<IdempotencyPurgePayload>(
-    IDEMPOTENCY_PURGE_QUEUE,
-    async (jobs: Array<{ id: string; data: IdempotencyPurgePayload }>) => {
-      for (const job of jobs) {
-        const correlationId = job.data?.correlation_id ?? job.id;
-        const { deleted } = await purgeExpiredIdempotencyKeys({ db: deps.db });
-        deps.log?.info('core.idempotency_purge complete', {
-          correlation_id: correlationId,
-          deleted,
-          job_id: job.id,
-        });
-      }
-    },
-  );
+  await boss.work<IdempotencyPurgePayload>(IDEMPOTENCY_PURGE_QUEUE, __purgeHandler(deps));
 
   // Schedule the hourly run. pg-boss `schedule` is idempotent on (name, key)
   // — calling it on every boot is safe and converges to the same row in
