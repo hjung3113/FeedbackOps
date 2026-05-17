@@ -10,6 +10,20 @@
 - For multi-step work, define success criteria and verify them before claiming completion.
 - If domain rules conflict with generic framework habits, follow the domain rules.
 
+## Git Workflow
+
+- **Per-issue feature branch.** New work starts on `feature/<issue-number>-<slug>` (e.g. `feature/14-patch-vocs-triage`) branched from `develop`. Never commit directly to `develop` or `main`.
+- **Issue complete → merge to `develop`.** When all task ACs pass and adversarial review clears, open a PR `feature/<n>-<slug>` → `develop`. After PR review the user merges (squash or merge, user's call). Delete the feature branch on merge.
+- **Slice complete → PR `develop` → `main`.** When every issue in a Slice milestone closes and Slice exit criteria (per `docs/implementation/08-mvp-slice-plan.md`) are met, open a PR `develop` → `main`. The user merges to release.
+- **No agent push to `main`.** Even after Slice completion, the user owns the final `develop` → `main` merge and any tag/release.
+- **Branch naming.** `feature/<issue>-<short-kebab>` for issues, `fix/<issue>-<slug>` for hot-fixes on `develop`, `chore/<slug>` for branch-less housekeeping (lint, gitignore) that may target `develop` directly via small PR.
+- **Exception — pre-existing direct-to-main commits.** Slices 1–3 shipped directly to `main` (before this rule landed). From the next issue onward, follow the workflow above.
+- **Pre-push hook enforces main protection locally.** `.githooks/pre-push` blocks any direct push to `main` that touches files other than `README*`. Enable once per clone:
+  ```bash
+  git config core.hooksPath .githooks
+  ```
+  Limitations: client-side, bypassable with `git push --no-verify`. Server-side enforcement via GitHub branch protection rules is the real gate — configure under repo Settings → Branches → `main` → "Require a pull request before merging".
+
 ## Monorepo Boundaries
 
 Do not place source code at the repository root. Keep cross-app code in `packages/*` only when both apps need it.

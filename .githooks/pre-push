@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# .githooks/pre-push
+#
+# Block direct pushes to `main` unless the push is README-only.
+# Per AGENTS.md §"Git Workflow": main is reserved for `develop` → `main` PR merges
+# at slice completion; README updates are the only allowed direct push.
+#
+# Limitations:
+#   - Client-side hook. Bypassable with `git push --no-verify`.
+#   - Defense-in-depth only. Branch protection rules on GitHub are the real gate.
+#   - Each developer must enable: `git config core.hooksPath .githooks`
+#     (or run `pnpm run install:hooks` if/when that script is added).
+
+set -euo pipefail
+
+protected_branch="main"
+zero="0000000000000000000000000000000000000000"
+
+# Allowed file patterns for direct push to main (basic regex, anchored).
+# README, README.md, README.ko.md, etc.
+allowed_pattern='^README(\.[A-Za-z0-9.-]+)?$'
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" != "refs/heads/$protected_branch" ]]; then
+    continue
+  fi
+
+  # Deletion of main — block.
+  if [[ "$local_sha" == "$zero" ]]; then
+    echo "pre-push: refusing to delete '$protected_branch'." >&2
+    exit 1
+  fi
+
+  # Determine commit range to inspect.
+  if [[ "$remote_sha" == "$zero" ]]; then
+    # First push of this branch (very unlikely for main). Inspect all commits.
+    range="$local_sha"
+    files=$(git diff-tree --no-commit-id --name-only -r "$local_sha")
+  else
+    range="$remote_sha..$local_sha"
+    files=$(git diff --name-only "$range")
+  fi
+
+  # Nothing changed? Nothing to block.
+  if [[ -z "$files" ]]; then
+    continue
+  fi
+
+  # Reject if any changed file is outside the allowed pattern.
+  bad=$(printf '%s\n' "$files" | grep -Ev "$allowed_pattern" || true)
+  if [[ -n "$bad" ]]; then
+    {
+      echo ""
+      echo "pre-push: refusing direct push to '$protected_branch'."
+      echo ""
+      echo "Per AGENTS.md §Git Workflow, only README updates may push directly to main."
+      echo "Slice completion → open a PR 'develop' → 'main' instead."
+      echo ""
+      echo "Files blocking push (range: $range):"
+      printf '%s\n' "$bad" | sed 's/^/  - /'
+      echo ""
+      echo "Bypass (use sparingly, e.g. emergency hot-fix authorised by repo owner):"
+      echo "  git push --no-verify"
+      echo ""
+    } >&2
+    exit 1
+  fi
+done
+
+exit 0
