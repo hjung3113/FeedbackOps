@@ -672,6 +672,54 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     }
   });
 
+  // ── 9b. postpone + multi-field: combined audit order (F13) ────────────────
+  // Spec §8.4: voc_triage_postponed must be first; subsequent field changes
+  // (severity, owner, AA) emit their rows in deterministic order after.
+  it('PATCH { postpone_review, severity, owner_user_id, analytics_area_id } → 200, audit order: [postponed,severity_set,owner_assigned,aa_linked]', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-postpone-multi', 'Postpone Multi MS');
+    const aaId = await createAa(app, admin, { managed_system_id: msId, slug: 'aa-pm', name: 'AA Postpone Multi' });
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+
+    const res = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      {
+        postpone_review: true,
+        severity: 'high',
+        owner_user_id: adminActorId,
+        analytics_area_id: aaId,
+      },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.triage_state).toBe('untriaged');
+    expect(body.severity).toBe('high');
+    expect(body.owner_user_id).toBe(adminActorId);
+    expect(body.analytics_area_id).toBe(aaId);
+
+    if (MIGRATE_URL) {
+      const types = await getAuditTypes(voc.id);
+      // voc_created is the first row; then our four from this PATCH.
+      const patchTypes = types.filter((t) => t !== 'voc_created');
+      expect(patchTypes).toEqual([
+        'voc_triage_postponed',
+        'voc_severity_set',
+        'voc_owner_assigned',
+        'voc_analytics_area_linked',
+      ]);
+    }
+  });
+
   // ── 10. postpone_review + triage_state mutex → 422 ────────────────────
   it('PATCH { postpone_review: true, triage_state: triaged } → 422 validation.failed', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
