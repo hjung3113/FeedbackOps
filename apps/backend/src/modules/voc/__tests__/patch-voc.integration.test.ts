@@ -935,6 +935,15 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     );
 
     expect(res.statusCode).toBe(200);
+    // F5: assert updated_at is unchanged (no UPDATE was issued) and full
+    // envelope matches the original VOC state.
+    const body = res.json() as { updated_at: string; severity: unknown; triage_state: string };
+    expect(body.updated_at).toBe(voc.updated_at);
+    expect(body).toMatchObject({
+      id: voc.id,
+      severity: null,
+      triage_state: 'untriaged',
+    });
 
     if (MIGRATE_URL) {
       const typesAfter = await getAuditTypes(voc.id);
@@ -999,6 +1008,9 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
 
     // Both responses have the same body (idempotent).
     expect(res1.json()).toEqual(res2.json());
+    // F8: explicitly assert updated_at is identical across both responses —
+    // proves exactly one DB UPDATE was issued (no second write on replay).
+    expect(res1.json().updated_at).toBe(res2.json().updated_at);
 
     if (MIGRATE_URL) {
       const types = await getAuditTypes(voc.id);
