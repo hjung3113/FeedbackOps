@@ -141,6 +141,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
   });
 
   // PATCH /vocs/:id — Slice 3 #14 triage-commit route.
+  // TODO(#14 follow-up): triage rate-limit bucket per spec (60/min vs shared mutation 10/min)
   app.route({
     method: 'PATCH',
     url: '/vocs/:id',

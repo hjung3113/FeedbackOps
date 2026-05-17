@@ -824,6 +824,11 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
   });
 
   // ── 12. AA cross-MS scope violation → 422 ──────────────────────────────
+  // F9: The service-level guard at service.ts:244-247 fires before any UPDATE
+  // that would invoke the DB trigger. The test asserts the field-level hint
+  // is present (out_of_scope code on analytics_area_id); this is conclusive
+  // evidence the service-level check ran because the trigger would produce a
+  // different error shape (raw pg exception, not the ADR-0012 envelope).
   it('PATCH analytics_area_id from different MS → 422 validation.failed out_of_scope', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msAId = await createMs(app, admin, 'it-patch-cross-ms-a', 'Cross MS-A');

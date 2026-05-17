@@ -325,6 +325,10 @@ export function createVocService(deps: VocServiceDeps) {
         pAaChanged = true;
       }
 
+      // WHY: The UPDATE is unconditional in the postpone path — no empty-diff
+      // short-circuit. Each `postpone_review: true` call IS a distinct triage
+      // deferral event; a second click by the user deserves its own audit row
+      // and a fresh `triage_state_review_postponed_at`. (F14)
       const pUpdatedRows = await tx
         .update(vocs)
         .set({ ...postponePatch, updatedAt: sql`NOW()` })
@@ -513,6 +517,10 @@ export function createVocService(deps: VocServiceDeps) {
     }
 
     // d. voc_triage_committed — only when transitioning untriaged → triaged.
+    // WHY: The spec reads "initial triage commit" — NMI → triaged and
+    // dismissed_not_actionable → triaged do NOT re-fire this event. If spec
+    // later clarifies re-triage must emit commit, add `|| row.triageState ===
+    // 'needs_more_information'` here. (F19)
     if (triageStateChanged && row.triageState === 'untriaged' && newTriageState === 'triaged') {
       await deps.auditService.record(tx, {
         workspace_id: workspaceId,
