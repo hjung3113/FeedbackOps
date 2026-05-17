@@ -1238,6 +1238,19 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(statuses).toEqual([200, 409]);
     const loser = res1.statusCode === 409 ? res1 : res2;
     expect(loser.json().code).toBe('conflict.stale_write');
+
+    // C6: assert the winner's body has the expected shape.
+    const winner = res1.statusCode === 200 ? res1 : res2;
+    expect(['low', 'medium']).toContain(winner.json().severity);
+    // updated_at must have advanced beyond the original If-Match value.
+    expect(winner.json().updated_at).not.toBe(sharedIfMatch);
+
+    // C6: exactly one voc_severity_set audit row must exist for the VOC
+    // (the loser never committed).
+    if (MIGRATE_URL) {
+      const types = await getAuditTypes(voc.id);
+      expect(types.filter((t) => t === 'voc_severity_set').length).toBe(1);
+    }
   });
 
   // ── 19. Idempotency replay: same key + body → 200×2, one audit row ─────
