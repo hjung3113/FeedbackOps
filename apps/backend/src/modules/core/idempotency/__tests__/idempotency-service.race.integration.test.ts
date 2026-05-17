@@ -48,6 +48,7 @@ describe.skipIf(!runIntegration)('idempotencyService.record concurrent same-key 
     `);
     const actorId = (actorRows as unknown as { rows: { id: string }[] }).rows[0]?.id;
     expect(actorId).toBeTruthy();
+    if (!actorId) throw new Error('unreachable: actor id missing despite expect.toBeTruthy');
 
     const key = randomUUID();
     const hash = 'hash-m2-test';
