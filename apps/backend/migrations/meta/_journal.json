@@ -78,6 +78,13 @@
       "when": 1779840000000,
       "tag": "0010_slice3_voc_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779940000000,
+      "tag": "0011_slice3_voc_integrity_followups",
+      "breakpoints": true
     }
   ]
 }

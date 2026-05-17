@@ -473,3 +473,245 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
     expect(result.rows[0]?.id).toBeDefined();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slice 3 #12 integrity followups (migration 0011)
+// CR-02, IM-03, IM-04, IM-05 — workspace tenancy, trim-aware CHECKs,
+// polymorphic FK trigger, and archive-over-delete on voc_attachments.
+// ─────────────────────────────────────────────────────────────────────────────
+describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 0011)', () => {
+  let migrateHandle: DbHandle;
+  let appHandle: DbHandle;
+  let workspaceId: string;
+  let msId: string;
+  let actorId: string;
+  let vocId: string;
+  let secondWorkspaceId: string;
+
+  beforeAll(async () => {
+    migrateHandle = createDb(MIGRATE_URL);
+    appHandle = createDb(process.env.DATABASE_URL ?? '');
+
+    workspaceId = WORKSPACE_ID;
+    expect(workspaceId).not.toBe('');
+
+    const ms = await migrateHandle.pool.query<{ id: string }>(
+      `select id from core.managed_systems where workspace_id = $1 order by created_at limit 1`,
+      [workspaceId],
+    );
+    msId = ms.rows[0]?.id ?? '';
+    expect(msId).not.toBe('');
+
+    const actor = await migrateHandle.pool.query<{ id: string }>(
+      `select id from core.actors where workspace_id = $1 limit 1`,
+      [workspaceId],
+    );
+    actorId = actor.rows[0]?.id ?? '';
+    expect(actorId).not.toBe('');
+
+    // Insert a VOC for use across tests in this suite.
+    const voc = await migrateHandle.pool.query<{ id: string }>(
+      `insert into voc.vocs (
+         workspace_id, display_id, primary_managed_system_id, reporter_id,
+         title, description_rich_content, source_context
+       ) values (
+         $1, voc.next_voc_display_id($1), $2, $3,
+         'test-voc-foundation-0011',
+         '{"type":"doc","content":[]}'::jsonb,
+         'direct_use'
+       ) returning id`,
+      [workspaceId, msId, actorId],
+    );
+    vocId = voc.rows[0]?.id ?? '';
+    expect(vocId).not.toBe('');
+
+    // Ensure a second workspace exists for CR-02 cross-workspace test.
+    secondWorkspaceId = '22222222-2222-2222-2222-222222222222';
+    await migrateHandle.pool.query(
+      `insert into core.workspaces (id, name) values ($1, 'Workspace Two')
+       on conflict (id) do nothing`,
+      [secondWorkspaceId],
+    );
+  });
+
+  afterAll(async () => {
+    await migrateHandle.pool.query(
+      `delete from voc.vocs where title = 'test-voc-foundation-0011'`,
+    );
+    await migrateHandle.close();
+    await appHandle.close();
+  });
+
+  // CR-02: AA integrity trigger must also assert workspace tenancy.
+  it('rejects AA from different workspace (analytics_area_workspace_mismatch)', async () => {
+    // Ensure the second workspace has a managed_system so we can create an AA in it.
+    const ms2Result = await migrateHandle.pool.query<{ id: string }>(
+      `insert into core.managed_systems (workspace_id, name, slug)
+       values ($1, 'WS2 System', 'ws2-system')
+       on conflict do nothing
+       returning id`,
+      [secondWorkspaceId],
+    );
+    // If INSERT returned nothing (conflict), look it up.
+    const ms2Id = ms2Result.rows[0]?.id ?? (
+      await migrateHandle.pool.query<{ id: string }>(
+        `select id from core.managed_systems where workspace_id = $1 limit 1`,
+        [secondWorkspaceId],
+      )
+    ).rows[0]?.id ?? '';
+    expect(ms2Id).not.toBe('');
+
+    // Insert an AA that belongs to the second workspace / second managed system.
+    const aa2Result = await migrateHandle.pool.query<{ id: string }>(
+      `insert into core.analytics_areas (workspace_id, managed_system_id, name, slug)
+       values ($1, $2, 'WS2 Area', 'ws2-area')
+       on conflict do nothing
+       returning id`,
+      [secondWorkspaceId, ms2Id],
+    );
+    const aa2Id = aa2Result.rows[0]?.id ?? (
+      await migrateHandle.pool.query<{ id: string }>(
+        `select id from core.analytics_areas where workspace_id = $1 and managed_system_id = $2 limit 1`,
+        [secondWorkspaceId, ms2Id],
+      )
+    ).rows[0]?.id ?? '';
+    expect(aa2Id).not.toBe('');
+
+    // Attempt to attach an AA from workspace-2 to a VOC in workspace-1.
+    await expect(
+      migrateHandle.pool.query(
+        `insert into voc.vocs (
+           workspace_id, display_id, primary_managed_system_id, analytics_area_id,
+           reporter_id, title, description_rich_content, source_context
+         ) values (
+           $1, voc.next_voc_display_id($1), $2, $3,
+           $4, 'test-voc-foundation-0011-ws-mismatch',
+           '{"type":"doc","content":[]}'::jsonb,
+           'direct_use'
+         )`,
+        [workspaceId, msId, aa2Id, actorId],
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('analytics_area_workspace_mismatch'),
+    });
+  });
+
+  // IM-05: trim-aware skip_reason min-length.
+  it('rejects skip_reason = 8-spaces (trim aware, voc_public_updates_skip_reason_min_length)', async () => {
+    await expect(
+      migrateHandle.pool.query(
+        `insert into voc.voc_public_updates (
+           voc_id, actor_id, body_rich_content,
+           reporter_facing_status_before, reporter_facing_status_after,
+           skip_public_update, skip_reason
+         ) values (
+           $1, $2, '{"type":"doc","content":[]}'::jsonb,
+           'received', 'reviewing', true, '        '
+         )`,
+        [vocId, actorId],
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('voc_public_updates_skip_reason_min_length'),
+    });
+  });
+
+  // IM-04: comment_id BEFORE INSERT trigger — non-existent row.
+  it('rejects comment_id referencing non-existent row (voc_attachments_comment_not_found)', async () => {
+    const fakeCommentId = '00000000-dead-beef-dead-000000000001';
+    await expect(
+      migrateHandle.pool.query(
+        `insert into voc.voc_attachments (
+           comment_id, comment_kind,
+           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         ) values (
+           $1, 'internal_comment',
+           'ghost.pdf', 512, 'application/pdf',
+           's3://test-0011/ghost.pdf', $2
+         )`,
+        [fakeCommentId, actorId],
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('voc_attachments_comment_not_found'),
+    });
+  });
+
+  // IM-04: comment_kind / table mismatch — comment exists in public_updates but kind says internal_comment.
+  it('rejects comment_kind mismatch (real public_update id with kind=internal_comment)', async () => {
+    // Create a real public_update row.
+    const pu = await migrateHandle.pool.query<{ id: string }>(
+      `insert into voc.voc_public_updates (
+         voc_id, actor_id, body_rich_content,
+         reporter_facing_status_before, reporter_facing_status_after,
+         skip_public_update
+       ) values (
+         $1, $2, '{"type":"doc","content":[]}'::jsonb,
+         'received', 'reviewing', false
+       ) returning id`,
+      [vocId, actorId],
+    );
+    const puId = pu.rows[0]?.id ?? '';
+    expect(puId).not.toBe('');
+
+    // Attach with comment_kind='internal_comment' — that row does NOT exist
+    // in voc_internal_comments, so the trigger must reject it.
+    await expect(
+      migrateHandle.pool.query(
+        `insert into voc.voc_attachments (
+           comment_id, comment_kind,
+           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         ) values (
+           $1, 'internal_comment',
+           'mismatch.pdf', 512, 'application/pdf',
+           's3://test-0011/mismatch.pdf', $2
+         )`,
+        [puId, actorId],
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('voc_attachments_comment_not_found'),
+    });
+  });
+
+  // IM-03: archive-over-delete — UPDATE archived_at works; fops_app DELETE is rejected.
+  it('voc_attachments archive write succeeds; fops_app DELETE is rejected', async () => {
+    // Insert an attachment via migrate role.
+    const att = await migrateHandle.pool.query<{ id: string }>(
+      `insert into voc.voc_attachments (
+         voc_id, name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+       ) values (
+         $1, 'archive-test.pdf', 1024, 'application/pdf',
+         's3://test-0011/archive-test.pdf', $2
+       ) returning id`,
+      [vocId, actorId],
+    );
+    const attId = att.rows[0]?.id ?? '';
+    expect(attId).not.toBe('');
+
+    // Archiving via UPDATE archived_at must succeed (migrate role can UPDATE).
+    await expect(
+      migrateHandle.pool.query(
+        `update voc.voc_attachments set archived_at = now(), archived_by_actor_id = $1 where id = $2`,
+        [actorId, attId],
+      ),
+    ).resolves.toBeDefined();
+
+    // fops_app must not be able to DELETE from voc_attachments.
+    const att2 = await migrateHandle.pool.query<{ id: string }>(
+      `insert into voc.voc_attachments (
+         voc_id, name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+       ) values (
+         $1, 'delete-test.pdf', 512, 'application/pdf',
+         's3://test-0011/delete-test.pdf', $2
+       ) returning id`,
+      [vocId, actorId],
+    );
+    const att2Id = att2.rows[0]?.id ?? '';
+    expect(att2Id).not.toBe('');
+
+    await expect(
+      appHandle.pool.query(
+        `delete from voc.voc_attachments where id = $1`,
+        [att2Id],
+      ),
+    ).rejects.toMatchObject({ message: expect.stringMatching(/permission denied/i) });
+  });
+});

@@ -142,7 +142,7 @@ export const vocPublicUpdates = vocSchema.table(
     ),
     skipReasonMinLength: check(
       'voc_public_updates_skip_reason_min_length',
-      sql`${t.skipPublicUpdate} = false OR (length(coalesce(${t.skipReason}, '')) >= 8)`,
+      sql`${t.skipPublicUpdate} = false OR (length(trim(coalesce(${t.skipReason}, ''))) >= 8)`,
     ),
   }),
 );
@@ -198,7 +198,9 @@ export const vocInternalComments = vocSchema.table(
 // Polymorphic reference: exactly one of voc_id / comment_id must be set
 // (XOR CHECK). comment_kind discriminates which conversation table holds
 // the comment_id; no SQL-level FK on comment_id (spans three tables).
-// fops_app gets full DML per ADR-0008 (attachment lifecycle is app-driven).
+// A BEFORE INSERT trigger (IM-04) asserts comment_id resolves in the named
+// table. Archive-over-delete: archived_at / archived_by_actor_id added per
+// IM-03 / AGENTS.md; fops_app DELETE revoked.
 // ─────────────────────────────────────────────────────────────────────────
 export const vocAttachments = vocSchema.table(
   'voc_attachments',
@@ -213,10 +215,17 @@ export const vocAttachments = vocSchema.table(
     storageUri: text('storage_uri').notNull(),
     uploadedByActorId: uuid('uploaded_by_actor_id').notNull().references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // IM-03: archive-over-delete columns (migration 0011).
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    archivedByActorId: uuid('archived_by_actor_id').references(() => actors.id),
   },
   (t) => ({
     vocIdx: index('voc_attachments_voc_idx').on(t.vocId).where(sql`${t.vocId} IS NOT NULL`),
     commentIdx: index('voc_attachments_comment_idx').on(t.commentId, t.commentKind).where(sql`${t.commentId} IS NOT NULL`),
+    // IM-03: active-only partial index for attachment queries (migration 0011).
+    activeIdx: index('voc_attachments_active_idx')
+      .on(t.vocId)
+      .where(sql`${t.archivedAt} IS NULL AND ${t.vocId} IS NOT NULL`),
     subjectXor: check(
       'voc_attachments_subject_xor',
       sql`(${t.vocId} is not null)::int + (${t.commentId} is not null)::int = 1`,
@@ -275,7 +284,7 @@ export const reporterFacingStatusTransitions = vocSchema.table(
     ),
     rfstDisallowedHasReason: check(
       'rfst_disallowed_has_reason',
-      sql`${t.allowed} = true OR (${t.forbiddenReason} IS NOT NULL AND length(${t.forbiddenReason}) > 0)`,
+      sql`${t.allowed} = true OR (${t.forbiddenReason} IS NOT NULL AND length(trim(${t.forbiddenReason})) > 0)`,
     ),
   }),
 );
