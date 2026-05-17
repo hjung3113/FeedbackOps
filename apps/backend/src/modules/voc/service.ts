@@ -5,14 +5,18 @@
 // API accepts a `Tx` so the controller's idempotency frame can own the
 // transaction.
 
+import { and, eq, sql } from 'drizzle-orm';
+
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+import { vocs } from '../../db/schema/voc.js';
 import { HttpError } from '../../lib/errors.js';
 import { sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
 import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
-import { insertVoc, lockAnalyticsArea, lockManagedSystem } from './repo.js';
+import { insertVoc, lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from './repo.js';
 import type { AuditService } from '../core/audit/audit-service.js';
-import type { CreateVocRequest } from '@fops/shared';
+import type { CheckService } from '../permissions/check-service.js';
+import type { CreateVocRequest, PatchVocRequest } from '@fops/shared';
 
 export interface CreateVocActor {
   actor_id: string;
@@ -28,11 +32,11 @@ export interface VocEnvelope {
   reporter_id: string;
   title: string;
   description_rich_content: unknown;
-  severity: null;
+  severity: 'low' | 'medium' | 'high' | 'critical' | null;
   reporter_facing_status: ReporterFacingStatus;
-  triage_state: 'untriaged';
-  owner_user_id: null;
-  owner_team_id: null;
+  triage_state: 'untriaged' | 'triaged' | 'needs_more_information' | 'dismissed_not_actionable';
+  owner_user_id: string | null;
+  owner_team_id: string | null;
   source_context: string;
   created_at: string;
   updated_at: string;
@@ -47,6 +51,7 @@ export interface VocEnvelope {
 export interface VocServiceDeps {
   db: Db;
   auditService: AuditService;
+  checkService: CheckService;
 }
 
 export function createVocService(deps: VocServiceDeps) {
@@ -175,7 +180,290 @@ export function createVocService(deps: VocServiceDeps) {
     };
   }
 
-  return { createVoc };
+  async function updateVoc(args: {
+    tx: Tx;
+    actor: { actor_id: string; workspace_id: string; role_level: string };
+    vocId: string;
+    ifMatch: string;
+    input: PatchVocRequest;
+  }): Promise<VocEnvelope> {
+    const { tx, actor, vocId, ifMatch, input } = args;
+    const workspaceId = actor.workspace_id;
+
+    // 1. FOR UPDATE lock on the VOC row.
+    const row = await selectVocForUpdate(tx, workspaceId, vocId);
+    if (!row) throw new HttpError('not_found.record', 'voc not found');
+    if (row.archivedAt !== null) throw new HttpError('conflict.record_archived', 'voc is archived');
+
+    // 2. Optimistic concurrency check.
+    if (row.updatedAt.toISOString() !== ifMatch) {
+      throw new HttpError('conflict.stale_write', 'voc updated_at does not match If-Match', {
+        current_updated_at: row.updatedAt.toISOString(),
+      });
+    }
+
+    // 3. FOR UPDATE lock on parent Managed System.
+    const ms = await lockManagedSystem(tx, workspaceId, row.primaryManagedSystemId);
+    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
+    if (ms.archived_at !== null) {
+      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
+        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
+      });
+    }
+
+    // 4. Permission re-check inside the tx (ADR-0019 Section D).
+    const decision = await deps.checkService.checkCapability(
+      { actor_id: actor.actor_id, workspace_id: workspaceId, role_level: actor.role_level },
+      'voc.triage',
+      { workspace_id: workspaceId, managed_system_id: row.primaryManagedSystemId },
+      { tx },
+    );
+    if (decision.allow !== true) {
+      throw new HttpError(
+        'permission.scope_required',
+        'voc.triage capability required; developer needs MS-scoped grant',
+        {
+          requiredScope: [row.primaryManagedSystemId],
+          requestable_permission: {
+            permission: 'voc.triage',
+            managed_system_id: row.primaryManagedSystemId,
+            reason_required: false,
+          },
+        },
+      );
+    }
+
+    // 5. Analytics area cross-scope guard (only when supplied and non-null and changed).
+    if (
+      input.analytics_area_id !== undefined &&
+      input.analytics_area_id !== null &&
+      input.analytics_area_id !== row.analyticsAreaId
+    ) {
+      const aa = await lockAnalyticsArea(tx, workspaceId, input.analytics_area_id);
+      if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
+      if (aa.managed_system_id !== row.primaryManagedSystemId) {
+        throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
+          fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
+        });
+      }
+      if (aa.archived_at !== null) {
+        throw new HttpError('conflict.parent_archived', 'analytics area archived', {
+          fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
+        });
+      }
+    }
+
+    // 6. Mutex: both owner fields non-null simultaneously (belt-and-suspenders;
+    //    patchVocRequestSchema refine already catches this in the route layer).
+    if (input.owner_user_id != null && input.owner_team_id != null) {
+      throw new HttpError('validation.failed', 'owner_user_id and owner_team_id are mutually exclusive', {
+        fields: [{ path: ['owner_team_id'], code: 'invalid' }],
+      });
+    }
+    if (input.postpone_review === true && input.triage_state !== undefined) {
+      throw new HttpError('validation.failed', 'postpone_review and triage_state cannot be set together', {
+        fields: [{ path: ['postpone_review'], code: 'invalid' }],
+      });
+    }
+
+    // 7. Diff — build patch + changes map.
+    type VocPatch = {
+      severity?: 'low' | 'medium' | 'high' | 'critical' | null;
+      ownerUserId?: string | null;
+      ownerTeamId?: string | null;
+      analyticsAreaId?: string | null;
+      triageState?: 'untriaged' | 'triaged' | 'needs_more_information' | 'dismissed_not_actionable';
+    };
+    const patch: VocPatch = {};
+    let severityChanged = false;
+    let ownerChanged = false;
+    let aaChanged = false;
+    let triageStateChanged = false;
+
+    if (input.severity !== undefined && input.severity !== row.severity) {
+      patch.severity = input.severity;
+      severityChanged = true;
+    }
+
+    // Owner fields treated as a unit.
+    const newOwnerUser = input.owner_user_id !== undefined ? (input.owner_user_id ?? null) : row.ownerUserId;
+    const newOwnerTeam = input.owner_team_id !== undefined ? (input.owner_team_id ?? null) : row.ownerTeamId;
+    if (newOwnerUser !== row.ownerUserId || newOwnerTeam !== row.ownerTeamId) {
+      patch.ownerUserId = newOwnerUser;
+      patch.ownerTeamId = newOwnerTeam;
+      ownerChanged = true;
+    }
+
+    if (input.analytics_area_id !== undefined && input.analytics_area_id !== row.analyticsAreaId) {
+      patch.analyticsAreaId = input.analytics_area_id ?? null;
+      aaChanged = true;
+    }
+
+    if (input.triage_state !== undefined && input.triage_state !== row.triageState) {
+      patch.triageState = input.triage_state;
+      triageStateChanged = true;
+    }
+
+    // 8. Empty diff — return current state without any writes.
+    if (!severityChanged && !ownerChanged && !aaChanged && !triageStateChanged) {
+      const nextStates = await nextReporterStates(row.reporterFacingStatus as ReporterFacingStatus, tx);
+      return composeEnvelope(row, nextStates);
+    }
+
+    // 9. UPDATE the voc row.
+    const updatedRows = await tx
+      .update(vocs)
+      .set({ ...patch, updatedAt: sql`NOW()` })
+      .where(and(eq(vocs.id, vocId), eq(vocs.workspaceId, workspaceId)))
+      .returning();
+    const updated = updatedRows[0];
+    if (!updated) throw new HttpError('internal.unexpected', 'voc UPDATE returned no row');
+
+    const newSev = updated.severity as VocEnvelope['severity'];
+    const newOwnerUser2 = updated.ownerUserId;
+    const newOwnerTeam2 = updated.ownerTeamId;
+    const newAa = updated.analyticsAreaId;
+    const newTriageState = updated.triageState as VocEnvelope['triage_state'];
+
+    // 10. Emit audit events in deterministic order (same tx).
+    // a. voc_severity_set — only emit when new value is non-null (TODO(#14 C3): handle severity-clear audit shape — schema currently rejects null to).
+    if (severityChanged && newSev !== null) {
+      await deps.auditService.record(tx, {
+        workspace_id: workspaceId,
+        actor_id: actor.actor_id,
+        event_type: 'voc_severity_set',
+        subject_type: 'voc',
+        subject_id: vocId,
+        summary: `VOC ${updated.displayId} severity set to ${newSev}`,
+        detail: { voc_id: vocId, from: row.severity, to: newSev },
+      });
+    }
+
+    // b. voc_owner_assigned
+    if (ownerChanged) {
+      await deps.auditService.record(tx, {
+        workspace_id: workspaceId,
+        actor_id: actor.actor_id,
+        event_type: 'voc_owner_assigned',
+        subject_type: 'voc',
+        subject_id: vocId,
+        summary: `VOC ${updated.displayId} owner assigned`,
+        detail: {
+          voc_id: vocId,
+          from: { user_id: row.ownerUserId, team_id: row.ownerTeamId },
+          to: { user_id: newOwnerUser2, team_id: newOwnerTeam2 },
+        },
+      });
+    }
+
+    // c. voc_analytics_area_linked
+    if (aaChanged) {
+      await deps.auditService.record(tx, {
+        workspace_id: workspaceId,
+        actor_id: actor.actor_id,
+        event_type: 'voc_analytics_area_linked',
+        subject_type: 'voc',
+        subject_id: vocId,
+        summary: `VOC ${updated.displayId} analytics area linked`,
+        detail: { voc_id: vocId, from: row.analyticsAreaId, to: newAa },
+      });
+    }
+
+    // d. voc_triage_committed — only when transitioning untriaged → triaged.
+    if (triageStateChanged && row.triageState === 'untriaged' && newTriageState === 'triaged') {
+      await deps.auditService.record(tx, {
+        workspace_id: workspaceId,
+        actor_id: actor.actor_id,
+        event_type: 'voc_triage_committed',
+        subject_type: 'voc',
+        subject_id: vocId,
+        summary: `VOC ${updated.displayId} triage committed`,
+        detail: {
+          voc_id: vocId,
+          severity: newSev,
+          owner_user_id: newOwnerUser2,
+          owner_team_id: newOwnerTeam2,
+          analytics_area_id: newAa,
+          cluster_decision: null,
+        },
+      });
+    }
+
+    // 11. voc_triage_postponed — deferred to C3 (postpone_review path not exercised in C2).
+
+    // 12. Compose and return envelope with new row state.
+    const updatedLockedVoc = {
+      id: updated.id,
+      workspaceId: updated.workspaceId,
+      primaryManagedSystemId: updated.primaryManagedSystemId,
+      analyticsAreaId: updated.analyticsAreaId,
+      reporterId: updated.reporterId,
+      displayId: updated.displayId,
+      title: updated.title,
+      descriptionRichContent: updated.descriptionRichContent,
+      severity: newSev,
+      reporterFacingStatus: updated.reporterFacingStatus,
+      triageState: newTriageState,
+      triageStateReviewPostponedAt: updated.triageStateReviewPostponedAt,
+      ownerUserId: newOwnerUser2,
+      ownerTeamId: newOwnerTeam2,
+      sourceContext: updated.sourceContext,
+      archivedAt: updated.archivedAt,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    };
+    const nextStates = await nextReporterStates(
+      updated.reporterFacingStatus as ReporterFacingStatus,
+      tx,
+    );
+    return composeEnvelope(updatedLockedVoc, nextStates);
+  }
+
+  function composeEnvelope(
+    row: {
+      id: string;
+      displayId: string;
+      workspaceId: string;
+      primaryManagedSystemId: string;
+      analyticsAreaId: string | null;
+      reporterId: string;
+      title: string;
+      descriptionRichContent: unknown;
+      severity: VocEnvelope['severity'];
+      reporterFacingStatus: string;
+      triageState: VocEnvelope['triage_state'];
+      ownerUserId: string | null;
+      ownerTeamId: string | null;
+      sourceContext: string;
+      createdAt: Date;
+      updatedAt: Date;
+    },
+    nextStates: { allowed: ReporterFacingStatus[]; forbidden: Partial<Record<ReporterFacingStatus, string>> },
+  ): VocEnvelope {
+    return {
+      id: row.id,
+      display_id: row.displayId,
+      workspace_id: row.workspaceId,
+      primary_managed_system_id: row.primaryManagedSystemId,
+      analytics_area_id: row.analyticsAreaId,
+      reporter_id: row.reporterId,
+      title: row.title,
+      description_rich_content: row.descriptionRichContent,
+      severity: row.severity,
+      reporter_facing_status: row.reporterFacingStatus as ReporterFacingStatus,
+      triage_state: row.triageState,
+      owner_user_id: row.ownerUserId,
+      owner_team_id: row.ownerTeamId,
+      source_context: row.sourceContext,
+      created_at: row.createdAt.toISOString(),
+      updated_at: row.updatedAt.toISOString(),
+      next_actions: [],
+      next_reporter_states: nextStates,
+      permission_decisions: {},
+    };
+  }
+
+  return { createVoc, updateVoc };
 }
 
 export type VocService = ReturnType<typeof createVocService>;
