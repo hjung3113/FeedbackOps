@@ -265,6 +265,10 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     if (!MIGRATE_URL) return;
     const ops = createDb(MIGRATE_URL);
     try {
+      // F11: scope the delete to subject_ids that belong to our test fixtures
+      // (VOCs under managed systems with slug like 'it-patch-%') so parallel
+      // test files don't wipe each other's audit rows. Covers all VOC and
+      // parent-entity event types emitted by this suite.
       await ops.pool.query(
         `delete from core.audit_log
           where event_type in (
@@ -272,6 +276,19 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
             'analytics_area_registered','analytics_area_updated','analytics_area_archived',
             'voc_created','voc_triage_committed','voc_severity_set','voc_owner_assigned',
             'voc_analytics_area_linked','voc_triage_postponed'
+          )
+          and subject_id in (
+            select id from voc.vocs
+             where primary_managed_system_id in (
+               select id from core.managed_systems where slug like 'it-patch-%'
+             )
+            union
+            select id from core.managed_systems where slug like 'it-patch-%'
+            union
+            select id from core.analytics_areas
+             where managed_system_id in (
+               select id from core.managed_systems where slug like 'it-patch-%'
+             )
           )`,
       );
     } finally {
