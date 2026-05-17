@@ -13,3 +13,6 @@ coverage
 apps/frontend/src/routeTree.gen.ts
 playwright-report
 test-results
+
+# Local Claude Code harness settings — per-developer
+.claude/settings.json
