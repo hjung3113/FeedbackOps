@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FeedbackOps Suite</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root">
+    <div class="boot-fallback">
+      <strong>FeedbackOps 로딩 중</strong>
+      <span>화면이 계속 비어 있으면 런타임 오류가 이 영역에 표시됩니다.</span>
+    </div>
+  </div>
+
+  <script>
+    window.__feedbackOpsBootErrors = [];
+    window.__feedbackOpsShowBootError = function(error) {
+      var message = error && (error.stack || error.message) ? (error.stack || error.message) : String(error);
+      window.__feedbackOpsBootErrors.push(message);
+      if (window.__feedbackOpsReactOwner) {
+        var overlay = document.getElementById('feedbackops-runtime-overlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'feedbackops-runtime-overlay';
+          overlay.className = 'runtime-fallback runtime-fallback--overlay';
+          overlay.setAttribute('role', 'alert');
+          overlay.innerHTML =
+            '<div class="runtime-fallback__eyebrow">FeedbackOps runtime error</div>' +
+            '<h1>화면을 렌더링하지 못했습니다</h1>' +
+            '<p>React 루트는 유지한 채 런타임 오류를 별도 패널에 표시합니다.</p>' +
+            '<pre></pre>';
+          document.body.appendChild(overlay);
+        }
+        overlay.querySelector('pre').textContent = message;
+        return;
+      }
+      var root = document.getElementById('root');
+      if (!root) return;
+      root.innerHTML =
+        '<div class="runtime-fallback" role="alert">' +
+          '<div class="runtime-fallback__eyebrow">FeedbackOps runtime error</div>' +
+          '<h1>화면을 렌더링하지 못했습니다</h1>' +
+          '<p>검은 화면 대신 실제 오류를 표시하도록 안전 부트스트랩이 잡았습니다.</p>' +
+          '<pre></pre>' +
+        '</div>';
+      root.querySelector('pre').textContent = message;
+    };
+    window.addEventListener('error', function(event) {
+      window.__feedbackOpsShowBootError(event.error || event.message);
+    });
+    window.addEventListener('unhandledrejection', function(event) {
+      window.__feedbackOpsShowBootError(event.reason || 'Unhandled promise rejection');
+    });
+  </script>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script>
+    Object.assign(window, {
+      useState: React.useState,
+      useEffect: React.useEffect,
+      useMemo: React.useMemo,
+      useRef: React.useRef,
+      useCallback: React.useCallback,
+      Fragment: React.Fragment
+    });
+  </script>
+
+  <script src="data.js"></script>
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="flow-drafts.jsx"></script>
+  <script type="text/babel" src="affordances.jsx"></script>
+  <script type="text/babel" src="entity-preview.jsx"></script>
+  <script type="text/babel" src="rich-editor.jsx"></script>
+  <script type="text/babel" src="shell.jsx"></script>
+  <script type="text/babel" src="screen-home.jsx"></script>
+  <script type="text/babel" src="screen-voc.jsx"></script>
+  <script type="text/babel" src="screen-voc-create.jsx"></script>
+  <script type="text/babel" src="screen-findings.jsx"></script>
+  <script type="text/babel" src="screen-tasks.jsx"></script>
+  <script type="text/babel" src="screen-clusters.jsx"></script>
+  <script type="text/babel" src="screen-evidence.jsx"></script>
+  <script type="text/babel" src="screen-coverage.jsx"></script>
+  <script type="text/babel" src="screen-entity-links.jsx"></script>
+  <script type="text/babel" src="screen-milestone-gantt.jsx"></script>
+  <script type="text/babel" src="screen-milestones.jsx"></script>
+  <script type="text/babel" src="screen-tasks-roadmap.jsx"></script>
+  <script type="text/babel" src="screen-other.jsx"></script>
+  <script type="text/babel" src="screen-survey-result.jsx"></script>
+  <script type="text/babel" src="screen-survey-builder.jsx"></script>
+  <script type="text/babel" src="screen-permissions.jsx"></script>
+  <script type="text/babel" src="screen-admin-settings.jsx"></script>
+  <script type="text/babel" src="cmdk.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
