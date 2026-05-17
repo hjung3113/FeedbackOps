@@ -33,6 +33,7 @@ import {
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
+import { createVocService, vocRoutes } from './modules/voc/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -301,6 +302,22 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   await app.register(analyticsAreasRoutes, {
     sessionService,
     analyticsAreaService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+    },
+  });
+
+  // ── VOC module — Slice 3 issue #13 ──────────────────────────────────────
+  const vocService = createVocService({
+    db: dbHandle.db,
+    auditService,
+  });
+  await app.register(vocRoutes, {
+    db: dbHandle.db,
+    sessionService,
+    vocService,
+    idempotencyService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
