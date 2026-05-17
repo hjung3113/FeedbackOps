@@ -37,6 +37,13 @@ A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler r
 
 **ADR-0019 Section A adds `conflict.record_archived` to the closed enum (review S-003).**
 
+**Slice 3 #13 adds five codes to the closed enum:**
+- `voc.severity_not_user_settable` (422) — request body contained `severity`; severity is set during triage only.
+- `validation.unexpected_field` (422) — request body contained a forbidden server-resolved field (`reporter_id`, `reporter_facing_status`, `triage_state`, `owner_user_id`, `owner_team_id`, `display_id`). `detail.field` carries the offending path.
+- `rich_content.disallowed_node` (422) — sanitizer rejected a node, mark, or `link.href` scheme outside the per-surface allowlist.
+- `rich_content.external_image_forbidden` (422) — sanitizer rejected an `image` node (Slice 3 prohibits external images on every surface).
+- `attachment.unsupported_pending_storage_slice` (422) — request supplied non-empty `attachments[]`; the attachment upload endpoint ships in a later slice (#22).
+
 ## Code naming
 
 `<subject>.<verb-or-state>` lowercase dotted. Subjects align with `subject_type` in `core.audit_log` so audit rows can carry the same identifier:

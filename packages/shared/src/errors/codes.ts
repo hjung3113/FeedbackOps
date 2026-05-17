@@ -39,6 +39,12 @@ export const ERROR_CODES = [
   'not_found.record',
   // internal.* → 500
   'internal.unexpected',
+  // validation.* / voc.* / rich_content.* / attachment.* → 422 (Slice 3 #13)
+  'voc.severity_not_user_settable',
+  'validation.unexpected_field',
+  'rich_content.disallowed_node',
+  'rich_content.external_image_forbidden',
+  'attachment.unsupported_pending_storage_slice',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES);
