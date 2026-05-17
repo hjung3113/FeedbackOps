@@ -106,8 +106,8 @@ committed row, and replays the stored response.
 
 This amendment does not change the locked decisions in this ADR; it
 documents the race surface that those decisions implicitly required and the
-lock pattern that closes it. Applies to all register / create paths listed
-under "Idempotency carriers".
+lock pattern that closes it. Applies to `registerManagedSystem` (managed-systems module), `registerAnalyticsArea`
+(analytics-areas module), and `createRequest` (permissions module).
 
 ## What this ADR locks
 
