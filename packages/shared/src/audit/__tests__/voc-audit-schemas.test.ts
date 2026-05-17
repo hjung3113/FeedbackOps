@@ -20,6 +20,7 @@ const U = '01919b8c-0000-7000-8000-000000000001';
 describe('vocCreatedDetailSchema', () => {
   it('accepts required shape', () => {
     const parsed = vocCreatedDetailSchema.parse({
+      voc_id: U,
       workspace_id: U,
       primary_managed_system_id: U,
       analytics_area_id: null,
@@ -32,6 +33,7 @@ describe('vocCreatedDetailSchema', () => {
   it('rejects bad source_context', () => {
     expect(() =>
       vocCreatedDetailSchema.parse({
+        voc_id: U,
         workspace_id: U,
         primary_managed_system_id: U,
         analytics_area_id: null,
@@ -109,7 +111,6 @@ describe('vocClusterDecisionRecordedDetailSchema', () => {
     const parsed = vocClusterDecisionRecordedDetailSchema.parse({
       voc_id: U,
       decision: 'confirm',
-      cluster_id: null,
     });
     expect(parsed.decision).toBe('confirm');
   });
@@ -119,7 +120,6 @@ describe('vocClusterDecisionRecordedDetailSchema', () => {
       vocClusterDecisionRecordedDetailSchema.parse({
         voc_id: U,
         decision: 'maybe',
-        cluster_id: null,
       }),
     ).toThrow(z.ZodError);
   });
@@ -130,6 +130,7 @@ describe('publicUpdateCreatedDetailSchema', () => {
     const parsed = publicUpdateCreatedDetailSchema.parse({
       voc_id: U,
       public_update_id: null,
+      actor_id: U,
       skip_public_update: true,
       skip_reason: 'too long to explain briefly',
     });
@@ -141,8 +142,21 @@ describe('publicUpdateCreatedDetailSchema', () => {
       publicUpdateCreatedDetailSchema.parse({
         voc_id: U,
         public_update_id: null,
+        actor_id: U,
         skip_public_update: true,
         skip_reason: 'short',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects skip=true with null skip_reason', () => {
+    expect(() =>
+      publicUpdateCreatedDetailSchema.parse({
+        voc_id: U,
+        public_update_id: null,
+        actor_id: U,
+        skip_public_update: true,
+        skip_reason: null,
       }),
     ).toThrow();
   });
@@ -174,10 +188,10 @@ describe('reporterReplyCreatedDetailSchema', () => {
   it('accepts required shape', () => {
     const parsed = reporterReplyCreatedDetailSchema.parse({
       voc_id: U,
-      reply_id: U,
-      author_id: U,
+      reporter_reply_id: U,
+      actor_id: U,
     });
-    expect(parsed.reply_id).toBe(U);
+    expect(parsed.reporter_reply_id).toBe(U);
   });
 });
 
@@ -185,8 +199,8 @@ describe('internalCommentCreatedDetailSchema', () => {
   it('accepts mentions array of UUIDs', () => {
     const parsed = internalCommentCreatedDetailSchema.parse({
       voc_id: U,
-      comment_id: U,
-      author_id: U,
+      internal_comment_id: U,
+      actor_id: U,
       mentions: [U],
     });
     expect(parsed.mentions).toHaveLength(1);
@@ -196,8 +210,8 @@ describe('internalCommentCreatedDetailSchema', () => {
     expect(() =>
       internalCommentCreatedDetailSchema.parse({
         voc_id: U,
-        comment_id: U,
-        author_id: U,
+        internal_comment_id: U,
+        actor_id: U,
         mentions: ['not-a-uuid'],
       }),
     ).toThrow(z.ZodError);

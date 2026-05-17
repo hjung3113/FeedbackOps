@@ -29,6 +29,7 @@ const sourceContextSchema = z.enum([
 
 // ── voc_created ────────────────────────────────────────────────────────────
 export const vocCreatedDetailSchema = z.object({
+  voc_id: uuid(),
   workspace_id: uuid(),
   primary_managed_system_id: uuid(),
   analytics_area_id: uuid().nullable(),
@@ -84,7 +85,6 @@ export type VocAnalyticsAreaLinkedDetail = z.infer<typeof vocAnalyticsAreaLinked
 export const vocClusterDecisionRecordedDetailSchema = z.object({
   voc_id: uuid(),
   decision: z.enum(['confirm', 'dismiss']),
-  cluster_id: uuid().nullable(),
 });
 export type VocClusterDecisionRecordedDetail = z.infer<
   typeof vocClusterDecisionRecordedDetailSchema
@@ -96,8 +96,9 @@ export const publicUpdateCreatedDetailSchema = z
   .object({
     voc_id: uuid(),
     public_update_id: uuid().nullable(),
+    actor_id: uuid(),
     skip_public_update: z.boolean(),
-    skip_reason: z.string().nullable().optional(),
+    skip_reason: z.string().nullable(),
   })
   .refine(
     (data) => {
@@ -124,16 +125,16 @@ export type ReporterFacingStatusChangedDetail = z.infer<
 // ── reporter_reply_created ─────────────────────────────────────────────────
 export const reporterReplyCreatedDetailSchema = z.object({
   voc_id: uuid(),
-  reply_id: uuid(),
-  author_id: uuid(),
+  reporter_reply_id: uuid(),
+  actor_id: uuid(),
 });
 export type ReporterReplyCreatedDetail = z.infer<typeof reporterReplyCreatedDetailSchema>;
 
 // ── internal_comment_created ───────────────────────────────────────────────
 export const internalCommentCreatedDetailSchema = z.object({
   voc_id: uuid(),
-  comment_id: uuid(),
-  author_id: uuid(),
+  internal_comment_id: uuid(),
+  actor_id: uuid(),
   mentions: z.array(uuid()),
 });
 export type InternalCommentCreatedDetail = z.infer<typeof internalCommentCreatedDetailSchema>;
