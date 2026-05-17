@@ -758,10 +758,89 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   });
 
   // ── 18. Concurrent archive race ───────────────────────────────────────
-  // TODO: FOR UPDATE race — see plan T10.9. Driving the parallel POST
-  // against an open BEGIN transaction in another connection deterministically
-  // from inside the same vitest worker (which itself holds the app's pool)
-  // is error-prone and risks flakes. The race is already covered indirectly
-  // by case #9 (archived-row branch of lockManagedSystem). Skipping here.
-  it.skip('concurrent archive race → 409 (deferred — see plan T10.9)', () => {});
+  // Drives the SELECT … FOR UPDATE race in voc/repo.ts:lockManagedSystem
+  // deterministically: a dedicated pg client opens a transaction and UPDATEs
+  // the managed_systems row (acquiring FOR NO KEY UPDATE), then we issue
+  // POST /vocs in parallel — the create handler reaches lockManagedSystem
+  // and BLOCKS on the conflicting row lock. We wait for the handler to
+  // park at the lock, then COMMIT the archive; the unblocked SELECT FOR
+  // UPDATE sees archived_at populated and the service throws
+  // conflict.parent_archived. Without this test a regression that drops
+  // FOR UPDATE from lockManagedSystem would be undetectable in CI; case
+  // #9 only exercises the post-archive read path, not the locking semantics.
+  // Findings: adversarial review API-C-1, DB-B-4.
+  it.skipIf(!MIGRATE_URL)(
+    'concurrent archive race → 409 conflict.parent_archived (FOR UPDATE)',
+    async () => {
+      const admin = await loginAs(app, 'mock-admin-1');
+      const msId = await createMs(app, admin, 'it-voc-race', 'Race MS');
+      const reporter = await loginAs(app, 'mock-user-1');
+
+      // Resolve admin actor_id for archived_by_actor_id FK.
+      const adminRow = await dbHandle.pool.query<{ id: string }>(
+        `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
+        [WORKSPACE_ID],
+      );
+      const adminActorId = adminRow.rows[0]?.id;
+      if (!adminActorId) throw new Error('admin actor not found');
+
+      const racer = await dbHandle.pool.connect();
+      try {
+        await racer.query('BEGIN');
+        // Take a row-level lock (FOR NO KEY UPDATE) on the MS row but do
+        // NOT commit yet. The POST handler's SELECT … FOR UPDATE in
+        // lockManagedSystem will block on this lock.
+        await racer.query(
+          `update core.managed_systems
+             set archived_at = now(), archived_by_actor_id = $1
+           where id = $2`,
+          [adminActorId, msId],
+        );
+
+        // Fire the POST /vocs in parallel — it will park inside the
+        // service transaction at lockManagedSystem's FOR UPDATE.
+        const postPromise = postVoc(
+          app,
+          reporter,
+          {
+            primary_managed_system_id: msId,
+            title: 'race',
+            description_rich_content: paragraphDoc('a'),
+          },
+          randomUUID(),
+        );
+
+        // Give the POST handler time to reach lockManagedSystem and block
+        // on the row lock. 200ms is generous on a local pg; we cannot
+        // observe the wait directly, but if it has not parked yet the
+        // subsequent COMMIT simply makes the row already-archived which
+        // still yields conflict.parent_archived — the assertion below
+        // remains correct either way.
+        await new Promise((r) => setTimeout(r, 200));
+
+        // Release the lock; the parked SELECT FOR UPDATE now proceeds,
+        // sees archived_at populated, and the service rejects with
+        // conflict.parent_archived.
+        await racer.query('COMMIT');
+
+        const res = await postPromise;
+        expect(res.statusCode).toBe(409);
+        expect(res.json().code).toBe('conflict.parent_archived');
+        expect(res.json().detail?.fields).toEqual([
+          { path: ['primary_managed_system_id'], code: 'parent_archived' },
+        ]);
+      } catch (err) {
+        // Best-effort rollback if assertion above never ran or COMMIT
+        // failed; release() in finally returns the connection to the pool.
+        try {
+          await racer.query('ROLLBACK');
+        } catch {
+          /* ignore */
+        }
+        throw err;
+      } finally {
+        racer.release();
+      }
+    },
+  );
 });
