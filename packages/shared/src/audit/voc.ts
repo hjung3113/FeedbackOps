@@ -95,19 +95,16 @@ export type VocClusterDecisionRecordedDetail = z.infer<
 export const publicUpdateCreatedDetailSchema = z
   .object({
     voc_id: uuid(),
-    public_update_id: uuid().nullable(),
+    public_update_id: uuid(),
     actor_id: uuid(),
     skip_public_update: z.boolean(),
     skip_reason: z.string().nullable(),
   })
   .refine(
-    (data) => {
-      if (data.skip_public_update) {
-        return typeof data.skip_reason === 'string' && data.skip_reason.length >= 8;
-      }
-      return true;
-    },
-    { message: 'skip_reason must be a string with length >= 8 when skip_public_update is true' },
+    (d) => d.skip_public_update
+      ? typeof d.skip_reason === 'string' && d.skip_reason.length >= 8
+      : d.skip_reason === null,
+    { message: 'skip_reason must be null when skip=false, >=8 chars when skip=true' },
   );
 export type PublicUpdateCreatedDetail = z.infer<typeof publicUpdateCreatedDetailSchema>;
 

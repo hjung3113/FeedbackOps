@@ -129,7 +129,7 @@ describe('publicUpdateCreatedDetailSchema', () => {
   it('accepts skip=true with skip_reason >= 8 chars', () => {
     const parsed = publicUpdateCreatedDetailSchema.parse({
       voc_id: U,
-      public_update_id: null,
+      public_update_id: U,
       actor_id: U,
       skip_public_update: true,
       skip_reason: 'too long to explain briefly',
@@ -137,11 +137,47 @@ describe('publicUpdateCreatedDetailSchema', () => {
     expect(parsed.skip_public_update).toBe(true);
   });
 
-  it('rejects skip=true with skip_reason too short', () => {
+  it('accepts skip=false with null skip_reason', () => {
+    const parsed = publicUpdateCreatedDetailSchema.parse({
+      voc_id: U,
+      public_update_id: U,
+      actor_id: U,
+      skip_public_update: false,
+      skip_reason: null,
+    });
+    expect(parsed.skip_public_update).toBe(false);
+    expect(parsed.skip_reason).toBeNull();
+  });
+
+  it('rejects null public_update_id', () => {
     expect(() =>
       publicUpdateCreatedDetailSchema.parse({
         voc_id: U,
         public_update_id: null,
+        actor_id: U,
+        skip_public_update: false,
+        skip_reason: null,
+      }),
+    ).toThrow(z.ZodError);
+  });
+
+  it('rejects skip=false with non-null skip_reason', () => {
+    expect(() =>
+      publicUpdateCreatedDetailSchema.parse({
+        voc_id: U,
+        public_update_id: U,
+        actor_id: U,
+        skip_public_update: false,
+        skip_reason: 'some reason here',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects skip=true with skip_reason too short', () => {
+    expect(() =>
+      publicUpdateCreatedDetailSchema.parse({
+        voc_id: U,
+        public_update_id: U,
         actor_id: U,
         skip_public_update: true,
         skip_reason: 'short',
@@ -153,7 +189,7 @@ describe('publicUpdateCreatedDetailSchema', () => {
     expect(() =>
       publicUpdateCreatedDetailSchema.parse({
         voc_id: U,
-        public_update_id: null,
+        public_update_id: U,
         actor_id: U,
         skip_public_update: true,
         skip_reason: null,
