@@ -5,6 +5,7 @@
 import 'fastify';
 import type { PgBoss } from 'pg-boss';
 import type { Db } from '../db/client.js';
+import type { RoleLevel } from '../modules/auth/session-service.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -12,6 +13,7 @@ declare module 'fastify' {
       session_id: string;
       actor_id: string;
       workspace_id: string;
+      role_level: RoleLevel;
     };
   }
   interface FastifyInstance {

@@ -8,12 +8,15 @@
 // First-login auto-provisioning follows ADR-0006:42-52.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { actors, sessions } from '../../db/schema/core.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuthClaims } from './auth-provider.js';
+
+/** Role vocab — matches `core.actors.role_level` CHECK constraint. */
+export type RoleLevel = 'admin' | 'developer' | 'user';
 
 export interface ActorRecord {
   id: string;
@@ -29,6 +32,10 @@ export interface SessionRecord {
   id: string;
   actorId: string;
   workspaceId: string;
+  /** Mirrors `core.actors.role_level` for the actor that owns this session.
+   * Joined in by `loadAndTouch` so HTTP-tier callers don't need a second
+   * SELECT. See ADR-0019 Section E / Slice 3 prologue Task 5. */
+  roleLevel: RoleLevel;
 }
 
 /** ADR-0006:23-26 — 12h TTL on issue. `last_seen_at` updated per request. */
@@ -196,7 +203,12 @@ export function createSessionService(deps: SessionServiceDeps) {
         });
 
         return {
-          session: { id: sessionId, actorId: actor.id, workspaceId: deps.workspaceId },
+          session: {
+            id: sessionId,
+            actorId: actor.id,
+            workspaceId: deps.workspaceId,
+            roleLevel: actor.roleLevel as RoleLevel,
+          },
           actor,
           expiresAt,
         };
@@ -220,56 +232,62 @@ export function createSessionService(deps: SessionServiceDeps) {
       sessionId: string,
     ): Promise<{ session: SessionRecord; actor: ActorRecord } | null> {
       const rightNow = now();
-      const updated = await deps.db
-        .update(sessions)
-        .set({ lastSeenAt: rightNow })
-        .where(
-          and(
-            eq(sessions.id, sessionId),
-            isNull(sessions.revokedAt),
-            gt(sessions.expiresAt, rightNow),
-          ),
+      // Single round-trip: UPDATE the session row (predicate evaluated in the
+      // same statement per F-007) inside a CTE, then JOIN the actor row in
+      // one go. Avoids the load amplification of a follow-up SELECT and the
+      // per-route `loadActorContext` helper that lived in three modules
+      // before Slice 3 prologue Task 5.
+      const result = await deps.db.execute<{
+        session_id: string;
+        actor_id: string;
+        session_workspace_id: string;
+        actor_workspace_id: string;
+        external_id: string;
+        email: string;
+        display_name: string;
+        role_level: RoleLevel;
+        actor_type: string;
+      }>(sql`
+        WITH touched AS (
+          UPDATE core.sessions
+             SET last_seen_at = ${rightNow}
+           WHERE id = ${sessionId}
+             AND revoked_at IS NULL
+             AND expires_at > ${rightNow}
+        RETURNING id, actor_id, workspace_id
         )
-        .returning({
-          id: sessions.id,
-          actorId: sessions.actorId,
-          workspaceId: sessions.workspaceId,
-        });
+        SELECT t.id AS session_id,
+               t.actor_id,
+               t.workspace_id AS session_workspace_id,
+               a.workspace_id AS actor_workspace_id,
+               a.external_id,
+               a.email,
+               a.display_name,
+               a.role_level,
+               a.actor_type
+          FROM touched t
+          JOIN core.actors a
+            ON a.id = t.actor_id
+      `);
 
-      const sessionRow = updated[0];
-      if (!sessionRow) return null;
-
-      const actorRows = await deps.db
-        .select({
-          id: actors.id,
-          workspaceId: actors.workspaceId,
-          externalId: actors.externalId,
-          email: actors.email,
-          displayName: actors.displayName,
-          roleLevel: actors.roleLevel,
-          actorType: actors.actorType,
-        })
-        .from(actors)
-        .where(eq(actors.id, sessionRow.actorId))
-        .limit(1);
-
-      const actorRow = actorRows[0];
-      if (!actorRow) return null;
+      const row = result.rows[0];
+      if (!row) return null;
 
       return {
         session: {
-          id: sessionRow.id,
-          actorId: sessionRow.actorId,
-          workspaceId: sessionRow.workspaceId,
+          id: row.session_id,
+          actorId: row.actor_id,
+          workspaceId: row.session_workspace_id,
+          roleLevel: row.role_level,
         },
         actor: {
-          id: actorRow.id,
-          workspaceId: actorRow.workspaceId,
-          externalId: actorRow.externalId,
-          email: actorRow.email,
-          displayName: actorRow.displayName,
-          roleLevel: actorRow.roleLevel,
-          actorType: actorRow.actorType,
+          id: row.actor_id,
+          workspaceId: row.actor_workspace_id,
+          externalId: row.external_id,
+          email: row.email,
+          displayName: row.display_name,
+          roleLevel: row.role_level,
+          actorType: row.actor_type,
         },
       };
     },

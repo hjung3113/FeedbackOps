@@ -31,6 +31,7 @@ export function requireSession(sessionService: SessionService): preHandlerHookHa
       session_id: loaded.session.id,
       actor_id: loaded.session.actorId,
       workspace_id: loaded.session.workspaceId,
+      role_level: loaded.session.roleLevel,
     };
   };
 }

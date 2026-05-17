@@ -1,14 +1,13 @@
 // Analytics Areas routes (Slice 2 #11). Thin controllers per AGENTS.md.
 
-import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
-import { actors } from '../../db/schema/core.js';
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
+import type { ActorContext } from '../permissions/check-service.js';
 import type { AnalyticsAreaService } from './analytics-area-service.js';
 
 const IDEMPOTENCY_KEY_REGEX =
@@ -51,15 +50,6 @@ export const analyticsAreasRoutes: FastifyPluginAsync<AnalyticsAreasRoutesOption
 ) => {
   const { sessionService, analyticsAreaService, workspaceId, rateLimitConfig } = opts;
 
-  async function loadActorContext(sess: { actor_id: string; workspace_id: string }) {
-    const rows = await app.db
-      .select({ id: actors.id, roleLevel: actors.roleLevel })
-      .from(actors)
-      .where(and(eq(actors.id, sess.actor_id), eq(actors.workspaceId, sess.workspace_id)))
-      .limit(1);
-    return rows[0] ?? null;
-  }
-
   function parseIdempotencyKey(headers: Record<string, unknown>): string | undefined {
     const raw = headers['idempotency-key'];
     const headerKey = Array.isArray(raw) ? raw[0] : raw;
@@ -83,13 +73,14 @@ export const analyticsAreasRoutes: FastifyPluginAsync<AnalyticsAreasRoutesOption
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
       const idempotencyKey = parseIdempotencyKey(req.headers as Record<string, unknown>);
-      const actorRow = await loadActorContext(sess);
-      if (!actorRow) {
-        return sendError(reply, 'auth.session_invalid', 'actor not found for session');
-      }
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
       const body = req.body as z.infer<typeof createBodySchema>;
       const result = await analyticsAreaService.registerAnalyticsArea(
-        { actor_id: actorRow.id, workspace_id: sess.workspace_id, role_level: actorRow.roleLevel },
+        actor,
         body,
         idempotencyKey !== undefined ? { idempotencyKey } : {},
       );
@@ -124,13 +115,14 @@ export const analyticsAreasRoutes: FastifyPluginAsync<AnalyticsAreasRoutesOption
         });
       }
       const idempotencyKey = parseIdempotencyKey(req.headers as Record<string, unknown>);
-      const actorRow = await loadActorContext(sess);
-      if (!actorRow) {
-        return sendError(reply, 'auth.session_invalid', 'actor not found for session');
-      }
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
       const { id } = req.params as { id: string };
       const result = await analyticsAreaService.updateAnalyticsArea(
-        { actor_id: actorRow.id, workspace_id: sess.workspace_id, role_level: actorRow.roleLevel },
+        actor,
         id,
         parsed.data,
         idempotencyKey !== undefined ? { idempotencyKey } : {},
@@ -149,13 +141,14 @@ export const analyticsAreasRoutes: FastifyPluginAsync<AnalyticsAreasRoutesOption
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
       const idempotencyKey = parseIdempotencyKey(req.headers as Record<string, unknown>);
-      const actorRow = await loadActorContext(sess);
-      if (!actorRow) {
-        return sendError(reply, 'auth.session_invalid', 'actor not found for session');
-      }
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
       const { id } = req.params as { id: string };
       const result = await analyticsAreaService.archiveAnalyticsArea(
-        { actor_id: actorRow.id, workspace_id: sess.workspace_id, role_level: actorRow.roleLevel },
+        actor,
         id,
         idempotencyKey !== undefined ? { idempotencyKey } : {},
       );
@@ -171,13 +164,14 @@ export const analyticsAreasRoutes: FastifyPluginAsync<AnalyticsAreasRoutesOption
     handler: async (req, reply) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-      const actorRow = await loadActorContext(sess);
-      if (!actorRow) {
-        return sendError(reply, 'auth.session_invalid', 'actor not found for session');
-      }
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
       const q = req.query as z.infer<typeof listQuerySchema>;
       const result = await analyticsAreaService.listAnalyticsAreas(
-        { actor_id: actorRow.id, workspace_id: sess.workspace_id, role_level: actorRow.roleLevel },
+        actor,
         {
           include_archived: q.include_archived === 'true',
           ...(q.managed_system_id !== undefined ? { managed_system_id: q.managed_system_id } : {}),

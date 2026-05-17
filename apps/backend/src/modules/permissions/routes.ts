@@ -8,13 +8,12 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { type Capability, isCapability } from '@fops/shared';
-import { actors } from '../../db/schema/core.js';
 import { permissionRequests } from '../../db/schema/permission.js';
 import { HttpError, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
-import type { CheckService, Decision } from './check-service.js';
+import type { ActorContext, CheckService, Decision } from './check-service.js';
 import type { RequestService } from './request-service.js';
 import { type FrontendState, toFrontendState } from './state-mapper.js';
 
@@ -52,20 +51,6 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
 ) => {
   const { sessionService, checkService, requestService, workspaceId, rateLimitConfig } = opts;
 
-  // Helper: load the actor row to discover role_level. Same trick as
-  // /me/permissions/check below — avoids inflating the auth module surface.
-  async function loadActorContext(sess: {
-    actor_id: string;
-    workspace_id: string;
-  }) {
-    const rows = await app.db
-      .select({ id: actors.id, roleLevel: actors.roleLevel })
-      .from(actors)
-      .where(and(eq(actors.id, sess.actor_id), eq(actors.workspaceId, sess.workspace_id)))
-      .limit(1);
-    return rows[0] ?? null;
-  }
-
   // ── GET /me/permissions/check ───────────────────────────────────────────
   // Query: capability=<cap>&managed_system_id=<uuid?>
   // Returns: { state, decision }
@@ -94,18 +79,14 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       }
       const capability: Capability = q.capability;
 
-      const actorRow = await loadActorContext(sess);
-      if (!actorRow) {
-        // Actor row vanished mid-session — treat as session invalid.
-        return sendError(reply, 'auth.session_invalid', 'actor not found for session');
-      }
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
 
       const decision: Decision = await checkService.checkCapability(
-        {
-          actor_id: actorRow.id,
-          workspace_id: sess.workspace_id,
-          role_level: actorRow.roleLevel,
-        },
+        actor,
         capability,
         {
           workspace_id: sess.workspace_id,
@@ -189,17 +170,14 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
         });
       }
 
-      const actorRow = await loadActorContext(sess);
-      if (!actorRow) {
-        return sendError(reply, 'auth.session_invalid', 'actor not found for session');
-      }
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
 
       const result = await requestService.createRequest(
-        {
-          actor_id: actorRow.id,
-          workspace_id: sess.workspace_id,
-          role_level: actorRow.roleLevel,
-        },
+        actor,
         body,
         idempotencyKey !== undefined ? { idempotencyKey } : {},
       );
@@ -218,16 +196,13 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
 
-      const actorRow = await loadActorContext(sess);
-      if (!actorRow) {
-        return sendError(reply, 'auth.session_invalid', 'actor not found for session');
-      }
-
-      const requests = await requestService.listMine({
-        actor_id: actorRow.id,
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
         workspace_id: sess.workspace_id,
-        role_level: actorRow.roleLevel,
-      });
+        role_level: sess.role_level,
+      };
+
+      const requests = await requestService.listMine(actor);
       return { requests };
     },
   });
