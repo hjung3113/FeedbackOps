@@ -54,11 +54,14 @@ export const vocTriageCommittedDetailSchema = z.object({
 export type VocTriageCommittedDetail = z.infer<typeof vocTriageCommittedDetailSchema>;
 
 // ── voc_severity_set ───────────────────────────────────────────────────────
+// `to` is nullable to support the severity-clear ("de-triage") path where
+// severity is explicitly set back to null. The refine still enforces an
+// actual change (from !== to).
 export const vocSeveritySetDetailSchema = z
   .object({
     voc_id: uuid(),
     from: severitySchema.nullable(),
-    to: severitySchema,
+    to: severitySchema.nullable(),
   })
   .refine((d) => d.from !== d.to, { message: 'severity_set must record an actual change' });
 export type VocSeveritySetDetail = z.infer<typeof vocSeveritySetDetailSchema>;

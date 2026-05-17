@@ -95,12 +95,33 @@ describe('vocSeveritySetDetailSchema', () => {
     expect(parsed.to).toBe('critical');
   });
 
-  it('rejects no-op severity_set (from === to)', () => {
+  it('accepts from=high to=null (severity-clear / de-triage path)', () => {
+    const parsed = vocSeveritySetDetailSchema.parse({
+      voc_id: U,
+      from: 'high',
+      to: null,
+    });
+    expect(parsed.from).toBe('high');
+    expect(parsed.to).toBeNull();
+  });
+
+  it('rejects no-op severity_set (from === to, both non-null)', () => {
     expect(() =>
       vocSeveritySetDetailSchema.parse({
         voc_id: U,
         from: 'high',
         to: 'high',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects no-op severity_set (from === to, both null)', () => {
+    // from=null, to=null means no change — must be rejected by the refine.
+    expect(() =>
+      vocSeveritySetDetailSchema.parse({
+        voc_id: U,
+        from: null,
+        to: null,
       }),
     ).toThrow();
   });
