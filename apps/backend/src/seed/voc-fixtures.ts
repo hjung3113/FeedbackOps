@@ -54,11 +54,14 @@ const NAMESPACE = 'fops-slice3-voc';
 
 /**
  * Returns a deterministic UUID v5-style value by SHA-1 hashing the given
- * label. Version nibble (13th hex char) is forced to '5'; variant nibble
- * (17th hex char) is forced to '8' (variant 1, RFC 4122 §4.1.1).
+ * label scoped to workspaceId. Version nibble (13th hex char) is forced to
+ * '5'; variant nibble (17th hex char) is forced to '8' (variant 1,
+ * RFC 4122 §4.1.1). Workspace scoping prevents cross-workspace primary-key
+ * collisions when the same DB hosts multiple seeded workspaces (e.g. the
+ * test-support second workspace).
  */
-function stableUuid(label: string): string {
-  const h = createHash('sha1').update(`${NAMESPACE}:${label}`).digest('hex');
+function stableUuid(workspaceId: string, label: string): string {
+  const h = createHash('sha1').update(`${NAMESPACE}:${workspaceId}:${label}`).digest('hex');
   const chars = h.split('');
   // Set version = 5
   chars[12] = '5';
@@ -223,7 +226,7 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
     let fixtureRows = 0;
 
     for (const row of SEED_ROWS) {
-      const vocId = stableUuid(row.label);
+      const vocId = stableUuid(workspaceId, row.label);
 
       // ── Insert VOC ──────────────────────────────────────────────────────
       await tx.insert(vocs).values({
@@ -253,7 +256,7 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
       // because there is no prior state.
       const before = PRIOR_STATUS[row.status] ?? row.status;
       await tx.insert(vocPublicUpdates).values({
-        id: stableUuid(`${row.label}:public-update-1`),
+        id: stableUuid(workspaceId, `${row.label}:public-update-1`),
         vocId,
         actorId: reporter.id,
         bodyRichContent: RICH_EMPTY,
@@ -265,14 +268,14 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
       // voc_reporter_reply_actor_must_be_reporter. Refactors that swap the
       // actor source will fail the trigger at insert time.
       await tx.insert(vocReporterReplies).values({
-        id: stableUuid(`${row.label}:reporter-reply-1`),
+        id: stableUuid(workspaceId, `${row.label}:reporter-reply-1`),
         vocId,
         actorId: reporter.id,
         bodyRichContent: RICH_EMPTY,
       });
       // internal_comment (any actor)
       await tx.insert(vocInternalComments).values({
-        id: stableUuid(`${row.label}:internal-comment-1`),
+        id: stableUuid(workspaceId, `${row.label}:internal-comment-1`),
         vocId,
         actorId: reporter.id,
         bodyRichContent: RICH_EMPTY,
@@ -282,7 +285,7 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
       // ── Insert permission decision fixture (voc-11, voc-12 only) ────────
       if (row.decision) {
         const linkedFinding: Record<string, unknown> = {
-          decision_id: stableUuid(`${row.label}:decision:linkedFinding`),
+          decision_id: stableUuid(workspaceId, `${row.label}:decision:linkedFinding`),
           state: row.decision.state,
           category: row.decision.category,
           evaluated_at: SEED_EVALUATED_AT,
