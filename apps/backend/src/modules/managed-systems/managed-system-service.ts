@@ -253,6 +253,8 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
     const requestHash = hashRequestBody({ id, ...body });
 
     return await db.transaction(async (tx) => {
+      // S-001 advisory lock omitted: id-scoped update, no slug-uniqueness
+      // race surface to guard (the register path is the only carrier).
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
           tx,
@@ -412,6 +414,8 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
     const requestHash = hashRequestBody({ id, op: 'archive' });
 
     return await db.transaction(async (tx) => {
+      // S-001 advisory lock omitted: id-scoped archive, no slug-uniqueness
+      // race surface to guard.
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
           tx,

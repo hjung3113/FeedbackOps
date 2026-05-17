@@ -297,4 +297,4 @@ When the manual QA above passes:
 | H6 | T9 | `a9366d5` | extracted `__purgeHandler` factory + unit test pinning pg-boss error-propagation contract |
 | M2 | T10 | `cb7f2ad` | concurrent `idempotencyService.record` `onConflictDoNothing` integration test (sequenced two-conn pattern; `Promise.all` would deadlock on row-lock wait in real transactions) |
 
-Items in §1.5 (HTTP M-2, L-2, L-3, S-007, S-009, S-010, DB-007, C3 extension, M1, M3, M4/M5, M6, M7, M8, L4, L5) were explicitly out of scope for this prologue per plan §"Out of scope (explicit non-goals)" and will be re-evaluated when Slice 3 product surface lands on top of any of them.
+Items in §1.5 (HTTP M-2, L-2, L-3, S-007, S-009, S-010, DB-007, C3 extension, M1, M3, M4/M5, M6, M7, M8, L4, L5) were explicitly out of scope for this prologue per plan §"Out of scope (explicit non-goals)" and will be re-evaluated when Slice 3 product surface lands on top of any of them. See §1.5 (line 83) for the original per-item deferral rationale; nothing in it has been overridden by this resolution.

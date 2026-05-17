@@ -346,6 +346,9 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
   ): Promise<ServiceResult<AnalyticsAreaDto>> {
     const requestHash = hashRequestBody({ id, ...body });
     return await db.transaction(async (tx) => {
+      // S-001 advisory lock omitted: this path is id-scoped (no slug-uniqueness
+      // race surface) so concurrent retries cannot hit the duplicate-slug 409
+      // that the lock guards on the register path.
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
           tx,
@@ -487,6 +490,9 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
   ): Promise<ServiceResult<AnalyticsAreaDto>> {
     const requestHash = hashRequestBody({ id, op: 'archive' });
     return await db.transaction(async (tx) => {
+      // S-001 advisory lock omitted: id-scoped archive, no slug-uniqueness
+      // race surface to guard. The cascade serialisation against MS archive
+      // is owned by ADR-0019 Section E (SELECT FOR UPDATE on parent MS).
       if (options.idempotencyKey) {
         const hit = await idempotencyService.lookup(
           tx,

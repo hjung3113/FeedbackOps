@@ -53,21 +53,30 @@ async function loginAs(app: FastifyInstance, externalId: string): Promise<string
 describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retry (S-001)', () => {
   let dbHandle: DbHandle;
   let app: FastifyInstance;
+  // Capture the suite's start timestamp so cleanup deletes only rows this
+  // suite wrote, never another parallel suite's idempotency rows
+  // (vitest runs test files in parallel by default).
+  let suiteStartAt: Date;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
+    suiteStartAt = new Date();
   });
 
   afterAll(async () => {
     await dbHandle.pool.query(`delete from core.managed_systems where slug like 'race-ms-%'`);
-    await dbHandle.pool.query('delete from core.idempotency_keys');
+    await dbHandle.pool.query(
+      `delete from core.idempotency_keys where created_at >= $1`,
+      [suiteStartAt],
+    );
     if (MIGRATE_URL) {
       const ops = createDb(MIGRATE_URL);
       await ops.pool.query(
-        `delete from core.audit_log where event_type = 'managed_system_registered'`,
+        `delete from core.audit_log where event_type = 'managed_system_registered' and created_at >= $1`,
+        [suiteStartAt],
       );
       await ops.close();
     }
@@ -80,12 +89,16 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
       `delete from core.sessions where created_user_agent_summary = 'integration-test'`,
     );
     await dbHandle.pool.query(`delete from core.managed_systems where slug like 'race-ms-%'`);
-    await dbHandle.pool.query('delete from core.idempotency_keys');
+    await dbHandle.pool.query(
+      `delete from core.idempotency_keys where created_at >= $1`,
+      [suiteStartAt],
+    );
     await dbHandle.pool.query('delete from core.rate_limits');
     if (MIGRATE_URL) {
       const ops = createDb(MIGRATE_URL);
       await ops.pool.query(
-        `delete from core.audit_log where event_type = 'managed_system_registered'`,
+        `delete from core.audit_log where event_type = 'managed_system_registered' and created_at >= $1`,
+        [suiteStartAt],
       );
       await ops.close();
     }
@@ -123,8 +136,10 @@ describe.skipIf(!runIntegration)('registerManagedSystem concurrent same-key retr
 
     const audit = await dbHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from core.audit_log
-        where event_type = 'managed_system_registered' and workspace_id = $1`,
-      [WORKSPACE_ID],
+        where event_type = 'managed_system_registered'
+          and workspace_id = $1
+          and subject_id = $2`,
+      [WORKSPACE_ID, firstBody.id],
     );
     expect(audit.rows[0]?.n).toBe(1);
   });
