@@ -179,7 +179,10 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       }
 
       // 5. Idempotency frame (same pattern as POST /vocs).
-      const hash = hashRequestBody({ vocId, ...rawBody });
+      // F6: include ifMatch in the hash so that a retry after a client-side
+      // refetch (new If-Match value) is NOT deduplicated against the original
+      // request — different If-Match semantically represents a different intent.
+      const hash = hashRequestBody({ vocId, ifMatch, ...rawBody });
       const result = await db.transaction(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
