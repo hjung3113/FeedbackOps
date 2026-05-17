@@ -943,11 +943,16 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     }
   });
 
-  // ── 18. Concurrent PATCH stale_write (sequential simulation) ─────────
-  // Both PATCHes use the SAME If-Match. Because SELECT FOR UPDATE serialises
-  // them, the first wins and the second sees a stale updated_at.
-  // This is the realistic shape inside a single Fastify process.
-  it('two PATCHes with same If-Match: first 200, second 409 conflict.stale_write', async () => {
+  // ── 18. Concurrent PATCH stale_write (real lock contention via Promise.all) ──
+  // Both PATCHes are fired concurrently with the same If-Match. SELECT FOR
+  // UPDATE serialises them at the DB level: one wins the row lock and commits
+  // first; the second then reads the updated row, sees the If-Match no longer
+  // matches, and returns 409. This exercises the FOR UPDATE clause directly —
+  // if it were removed from selectVocForUpdate (repo.ts) the second PATCH
+  // could still return 409 from the If-Match check, but lock contention would
+  // no longer be verified. Promise.all guarantees both handlers are in-flight
+  // simultaneously (F4).
+  it('two concurrent PATCHes with same If-Match: one 200, one 409 conflict.stale_write', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-patch-concurrent', 'Concurrent MS');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -959,24 +964,16 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     );
     const sharedIfMatch = voc.updated_at;
 
-    const res1 = await patchVoc(
-      app,
-      admin,
-      voc.id,
-      { severity: 'low' },
-      { idempotencyKey: randomUUID(), ifMatch: sharedIfMatch },
-    );
-    expect(res1.statusCode).toBe(200);
+    // Fire both requests concurrently — exercises SELECT FOR UPDATE contention.
+    const [res1, res2] = await Promise.all([
+      patchVoc(app, admin, voc.id, { severity: 'low' }, { idempotencyKey: randomUUID(), ifMatch: sharedIfMatch }),
+      patchVoc(app, admin, voc.id, { severity: 'medium' }, { idempotencyKey: randomUUID(), ifMatch: sharedIfMatch }),
+    ]);
 
-    const res2 = await patchVoc(
-      app,
-      admin,
-      voc.id,
-      { severity: 'medium' },
-      { idempotencyKey: randomUUID(), ifMatch: sharedIfMatch },
-    );
-    expect(res2.statusCode).toBe(409);
-    expect(res2.json().code).toBe('conflict.stale_write');
+    const statuses = [res1.statusCode, res2.statusCode].sort();
+    expect(statuses).toEqual([200, 409]);
+    const loser = res1.statusCode === 409 ? res1 : res2;
+    expect(loser.json().code).toBe('conflict.stale_write');
   });
 
   // ── 19. Idempotency replay: same key + body → 200×2, one audit row ─────
