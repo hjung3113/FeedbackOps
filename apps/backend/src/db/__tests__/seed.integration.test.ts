@@ -98,14 +98,24 @@ describe.skipIf(!runIntegration)('seed idempotency', () => {
     );
     expect(ownerRows.every((r) => r.external_id === 'mock-admin-1')).toBe(true);
 
-    // ADR-0018 placeholder — zero non-seed teams; Slice 3 seed inserts exactly
-    // one '[seed] VOC owner team' for VOC fixture coverage.
+    // ADR-0018 placeholder — zero non-seed teams; ensureSeedTeam inserts
+    // exactly one '[seed] VOC owner team' for VOC fixture coverage (created via
+    // fops_migrate role, not fops_app — ADR-0019 preserved).
     const { rows: teamRows } = await handle.pool.query<{ count: string }>(
       `select count(*)::text as count from core.teams
         where workspace_id = $1 and name not like '[seed]%'`,
       [WORKSPACE_ID],
     );
     expect(teamRows[0]?.count).toBe('0');
+
+    // Idempotency: a second runSeed() must not insert a duplicate seed team.
+    await runSeed(handle);
+    const { rows: seedTeamRows } = await handle.pool.query<{ count: string }>(
+      `select count(*)::text as count from core.teams
+        where workspace_id = $1 and name = '[seed] VOC owner team' and archived_at is null`,
+      [WORKSPACE_ID],
+    );
+    expect(seedTeamRows[0]?.count).toBe('1');
   });
 
   it('seeds the three CONTEXT.md baseline actors with locked role/type combo', async () => {

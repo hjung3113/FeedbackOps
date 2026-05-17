@@ -14,11 +14,39 @@
 
 import { createHash } from 'node:crypto';
 
+import pg from 'pg';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { DbHandle } from '../db/client.js';
 import { vocPublicUpdates, vocReporterReplies, vocInternalComments, vocs } from '../db/schema/voc.js';
 import { actors, analyticsAreas, managedSystems, teams } from '../db/schema/core.js';
+
+// ── Seed team fixture helper ───────────────────────────────────────────────
+/**
+ * Ensures the '[seed] VOC owner team' fixture exists in the workspace.
+ *
+ * Uses the fops_migrate role (DATABASE_URL_MIGRATE) so fops_app never needs
+ * INSERT on core.teams — ADR-0019 preserved. Idempotent via WHERE NOT EXISTS.
+ *
+ * Must be called BEFORE seedSlice3Vocs so the team row is present when the
+ * VOC fixtures resolve it via SELECT.
+ */
+export async function ensureSeedTeam(workspaceId: string, migrateUrl: string): Promise<void> {
+  const pool = new pg.Pool({ connectionString: migrateUrl });
+  try {
+    await pool.query(
+      `INSERT INTO "core"."teams" ("workspace_id", "name")
+       SELECT $1, '[seed] VOC owner team'
+       WHERE NOT EXISTS (
+         SELECT 1 FROM "core"."teams"
+         WHERE workspace_id = $1 AND name = '[seed] VOC owner team' AND archived_at IS NULL
+       )`,
+      [workspaceId],
+    );
+  } finally {
+    await pool.end();
+  }
+}
 
 // ── Stable UUID helper ─────────────────────────────────────────────────────
 const NAMESPACE = 'fops-slice3-voc';
@@ -156,10 +184,10 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
       .limit(1);
     if (!reporter) throw new Error('seedSlice3Vocs: no actors row for workspace');
 
-    // ── Resolve seed team (inserted by migration 0010 as fops_migrate) ──────
-    // ADR-0019: fops_app has no INSERT on core.teams until the Slice that ships
-    // team CRUD. The '[seed] VOC owner team' row is a migration-time fixture;
-    // the seed CLI only needs SELECT here.
+    // ── Resolve seed team (created by ensureSeedTeam via fops_migrate) ───────
+    // ADR-0019: fops_app has no INSERT on core.teams. The '[seed] VOC owner
+    // team' row is created by ensureSeedTeam (called from seed/index.ts before
+    // this function) using DATABASE_URL_MIGRATE. Only SELECT needed here.
     const SEED_TEAM_NAME = '[seed] VOC owner team';
     const [existingTeam] = await tx
       .select({ id: teams.id })
@@ -169,7 +197,7 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
     if (!existingTeam) {
       throw new Error(
         `seed: missing [seed] VOC owner team for workspace ${workspaceId}. ` +
-        `Migration 0010 should have inserted it; check migration ran.`,
+        `ensureSeedTeam should have created it; check DATABASE_URL_MIGRATE is set.`,
       );
     }
     const seedTeamId = existingTeam.id;

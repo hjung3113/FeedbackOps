@@ -23,7 +23,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { loadConfig } from '../config.js';
 import { type DbHandle, createDb } from '../db/client.js';
 import { actors, analyticsAreas, managedSystems, workspaces } from '../db/schema/core.js';
-import { seedSlice3Vocs } from './voc-fixtures.js';
+import { ensureSeedTeam, seedSlice3Vocs } from './voc-fixtures.js';
 
 const SEED_ACTORS = [
   {
@@ -194,6 +194,17 @@ export async function runSeed(handle: DbHandle): Promise<SeedResult> {
   }
 
   // ── Slice 3 VOC fixtures ────────────────────────────────────────────────
+  // ensureSeedTeam must run BEFORE seedSlice3Vocs so the '[seed] VOC owner
+  // team' row exists for VOC fixtures that use a team owner. Uses
+  // fops_migrate role (DATABASE_URL_MIGRATE) because fops_app cannot INSERT
+  // on core.teams per ADR-0019.
+  if (!config.DATABASE_URL_MIGRATE) {
+    throw new Error(
+      'DATABASE_URL_MIGRATE is required for the Slice 3 seed (creates the ' +
+      'fixture team that fops_app cannot insert per ADR-0019).',
+    );
+  }
+  await ensureSeedTeam(workspaceId, config.DATABASE_URL_MIGRATE);
   const slice3 = await seedSlice3Vocs(handle, workspaceId);
 
   return {
