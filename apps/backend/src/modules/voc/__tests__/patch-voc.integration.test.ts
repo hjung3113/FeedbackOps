@@ -590,6 +590,45 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     }
   });
 
+  // ── 4c. Severity null → null is no-op, no audit row emitted (C7) ───────
+  // The service's severityChanged guard prevents reaching the audit service when
+  // the incoming severity equals the stored severity. For a freshly created VOC
+  // whose severity is null, PATCHing { severity: null } must be a no-op: 200,
+  // zero voc_severity_set rows. This validates the guard doesn't drift and
+  // accidentally emit a (null → null) audit row that would fail Zod's
+  // from === to refine (vocSeveritySetDetailSchema, F18).
+  it('PATCH { severity: null } on null-severity VOC → 200, no voc_severity_set audit row (C7)', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-sev-noop', 'Sev Noop MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+    // Fresh VOC: severity is null by default.
+
+    const res = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { severity: null },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+
+    expect(res.statusCode).toBe(200);
+    // updated_at unchanged — no UPDATE was issued (empty diff path).
+    expect((res.json() as { updated_at: string }).updated_at).toBe(voc.updated_at);
+    expect((res.json() as { severity: unknown }).severity).toBeNull();
+
+    if (MIGRATE_URL) {
+      const types = await getAuditTypes(voc.id);
+      // Only voc_created from POST — no voc_severity_set for the no-op PATCH.
+      expect(types.filter((t) => t === 'voc_severity_set').length).toBe(0);
+    }
+  });
+
   // ── 5. Forbidden field: reporter_facing_status → 422 ──────────────────
   it('PATCH reporter_facing_status → 422 voc.reporter_status_via_public_update_only', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
