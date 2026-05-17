@@ -700,21 +700,18 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
 
   // ── 17. Rate limit ────────────────────────────────────────────────────
   it('exceeding mutation tier → 429 rate_limited.actor with retry-after', async () => {
-    // Mutation tier: max=10 / 60s (server.ts:168-174). The
-    // @fastify/rate-limit `onRequest` hook fires before our requireSession
-    // preHandler, so `req.session` is undefined at keyGenerator time and the
-    // key falls back to `req.ip`. That ip-keyed bucket is shared with the
-    // earlier POST /managed-systems call in this same test (and any other
-    // mutation requests in this test's beforeEach window). We therefore
-    // assert the *boundary* — issue calls until we hit 429 — rather than a
-    // strict count, and assert that 429 is reachable within 12 attempts.
+    // Mutation tier: max=10 / 60s (server.ts mutationKeyGenerator). After
+    // adversarial review fix API-C-2 the keyGenerator resolves actor_id
+    // from the session cookie BEFORE requireSession runs, so the bucket
+    // is reliably per-Actor. We can now assert the strict contract:
+    //   - exactly 10 successes from the reporter cookie, then 429 on #11
+    //   - 429 envelope is `rate_limited.actor` with `retry-after` header
+    //   - a SECOND actor (admin) is not throttled by reporter's bucket
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-voc-rate', 'Rate MS');
     const reporter = await loginAs(app, 'mock-user-1');
 
-    let limited: Awaited<ReturnType<typeof postVoc>> | null = null;
-    let successes = 0;
-    for (let i = 0; i < 15 && !limited; i++) {
+    for (let i = 0; i < 10; i++) {
       const r = await postVoc(
         app,
         reporter,
@@ -725,14 +722,39 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         },
         randomUUID(),
       );
-      if (r.statusCode === 429) limited = r;
-      else if (r.statusCode === 201) successes += 1;
-      else throw new Error(`unexpected status ${r.statusCode}: ${r.body}`);
+      if (r.statusCode !== 201) {
+        throw new Error(`expected 201 at i=${i}, got ${r.statusCode}: ${r.body}`);
+      }
     }
-    expect(limited).not.toBeNull();
-    expect(successes).toBeGreaterThan(0);
-    expect(limited!.json().code).toBe('rate_limited.actor');
-    expect(limited!.headers['retry-after']).toBeDefined();
+
+    const limited = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'rate 11',
+        description_rich_content: paragraphDoc('a'),
+      },
+      randomUUID(),
+    );
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().code).toBe('rate_limited.actor');
+    expect(limited.headers['retry-after']).toBeDefined();
+
+    // Per-actor isolation: a second actor (admin) hitting the same route
+    // immediately after must NOT be throttled by the reporter's bucket.
+    // Proves keying is per actor_id, not per IP.
+    const adminVoc = await postVoc(
+      app,
+      admin,
+      {
+        primary_managed_system_id: msId,
+        title: 'admin slips through',
+        description_rich_content: paragraphDoc('a'),
+      },
+      randomUUID(),
+    );
+    expect(adminVoc.statusCode).toBe(201);
   });
 
   // ── 18. Concurrent archive race ───────────────────────────────────────

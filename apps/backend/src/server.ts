@@ -15,6 +15,7 @@ import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
+import { SESSION_COOKIE_NAME } from './middleware/require-session.js';
 import {
   analyticsAreasRoutes,
   createAnalyticsAreaService,
@@ -164,19 +165,38 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // mutation handlers will attach in later slices. Slice 1 #3 has no
   // consumer of the sensitive tier — the plumbing is in place so #4/#5
   // pick it up without touching server.ts again.
+  //
+  // Adversarial review API-C-2: `@fastify/rate-limit` runs as an
+  // `onRequest` hook, which fires BEFORE the `requireSession` preHandler
+  // that populates `req.session`. The prior keyGenerator therefore always
+  // observed `undefined` and fell back to `req.ip`, collapsing all users
+  // behind a shared NAT into one bucket. We resolve the session cookie
+  // inline (one DB lookup per mutation) so the per-actor bucket is the
+  // actor's actor_id when a valid session cookie is present, and `req.ip`
+  // only for unauthenticated traffic.
+  const mutationKeyGenerator = async (req: {
+    cookies?: Record<string, string | undefined>;
+    ip: string;
+  }): Promise<string> => {
+    const token = req.cookies?.[SESSION_COOKIE_NAME];
+    if (token) {
+      const actorId = await sessionService.lookupActorIdByToken(token);
+      if (actorId) return actorId;
+    }
+    return req.ip;
+  };
+
   app.decorate('rateLimitConfig', {
     mutation: {
       max: 10,
       timeWindow: '1 minute',
-      keyGenerator: (req: { session?: { actor_id?: string }; ip: string }) =>
-        req.session?.actor_id ?? req.ip,
+      keyGenerator: mutationKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'mutation') as never,
     },
     sensitive: {
       max: 5,
       timeWindow: '1 minute',
-      keyGenerator: (req: { session?: { actor_id?: string }; ip: string }) =>
-        req.session?.actor_id ?? req.ip,
+      keyGenerator: mutationKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'sensitive') as never,
     },
   });

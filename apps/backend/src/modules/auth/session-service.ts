@@ -292,6 +292,29 @@ export function createSessionService(deps: SessionServiceDeps) {
       };
     },
 
+    /**
+     * Read-only lookup of the actor_id for an active session token. Does NOT
+     * touch `last_seen_at`. Intended for the `@fastify/rate-limit`
+     * keyGenerator which runs in the `onRequest` hook (before the
+     * `requireSession` preHandler) and needs the actor identity without
+     * paying for a second `loadAndTouch` write. Returns null when the row
+     * is missing, revoked, or expired — the keyGenerator falls back to IP.
+     *
+     * Adversarial review API-C-2.
+     */
+    async lookupActorIdByToken(sessionId: string): Promise<string | null> {
+      const rightNow = now();
+      const result = await deps.db.execute<{ actor_id: string }>(sql`
+        SELECT actor_id
+          FROM core.sessions
+         WHERE id = ${sessionId}
+           AND revoked_at IS NULL
+           AND expires_at > ${rightNow}
+         LIMIT 1
+      `);
+      return result.rows[0]?.actor_id ?? null;
+    },
+
     /** Revoke immediately. Idempotent: revoking an already-revoked row is a no-op. */
     async revoke(sessionId: string): Promise<void> {
       const rightNow = now();
