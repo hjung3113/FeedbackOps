@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import {
   permissionDecisionSchema,
@@ -34,6 +35,17 @@ describe('PermissionDecision', () => {
         state: 'bogus',
         evaluated_at: '2026-05-17T10:00:00.000Z',
         reason: 'x',
+      }),
+    ).toThrow(z.ZodError);
+  });
+
+  it('rejects evaluated_at with a non-UTC offset (ADR-0015)', () => {
+    expect(() =>
+      permissionDecisionSchema.parse({
+        decision_id: '01919b8c-0000-7000-8000-000000000005',
+        state: 'allow',
+        evaluated_at: '2026-05-17T10:00:00.000+09:00',
+        reason: 'utc_only',
       }),
     ).toThrow();
   });

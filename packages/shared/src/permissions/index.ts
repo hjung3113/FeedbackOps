@@ -17,13 +17,14 @@ export type PermissionDecisionState = (typeof PERMISSION_DECISION_STATES)[number
 export const permissionDecisionSchema = z.object({
   decision_id: z.string().uuid(),
   state: z.enum(PERMISSION_DECISION_STATES),
-  evaluated_at: z.string().datetime(),
+  // UTC-only per ADR-0015; offset:false rejects '...+09:00' style strings.
+  evaluated_at: z.string().datetime({ offset: false }),
   reason: z.string().min(1),
 });
 export type PermissionDecision = z.infer<typeof permissionDecisionSchema>;
 
-// Envelope: keys are decision purposes (`linkedFinding`, `linkedTask`, …).
-// Slice 3 VOC consumes `linkedFinding`. Other keys may land additively
-// without schema migration; unknown keys are preserved.
+// Envelope keys are decision purposes (linkedFinding, linkedTask, ...). Values must match
+// permissionDecisionSchema; unknown-shaped values are rejected.
+// Slice 3 VOC consumes `linkedFinding`. Other keys may land additively without schema migration.
 export const permissionDecisionsEnvelopeSchema = z.record(z.string(), permissionDecisionSchema);
 export type PermissionDecisionsEnvelope = Record<string, PermissionDecision>;
