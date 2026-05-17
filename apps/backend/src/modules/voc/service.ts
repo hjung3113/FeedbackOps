@@ -196,23 +196,14 @@ export function createVocService(deps: VocServiceDeps) {
     if (!row) throw new HttpError('not_found.record', 'voc not found');
     if (row.archivedAt !== null) throw new HttpError('conflict.record_archived', 'voc is archived');
 
-    // 2. Optimistic concurrency check.
-    if (row.updatedAt.toISOString() !== ifMatch) {
-      throw new HttpError('conflict.stale_write', 'voc updated_at does not match If-Match', {
-        current_updated_at: row.updatedAt.toISOString(),
-      });
-    }
-
-    // 3. FOR UPDATE lock on parent Managed System.
-    const ms = await lockManagedSystem(tx, workspaceId, row.primaryManagedSystemId);
-    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
-    if (ms.archived_at !== null) {
-      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
-        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
-      });
-    }
-
-    // 4. Permission re-check inside the tx (ADR-0019 Section D).
+    // 2. Permission re-check inside the tx (ADR-0019 Section D).
+    // C3: permission check MUST fire before the If-Match comparison. The
+    // previous ordering (stale_write before permission deny) leaked
+    // `current_updated_at` of any in-workspace VOC to actors without
+    // `voc.triage` grant — an activity-frequency probe vector. The check
+    // only needs `row.primaryManagedSystemId`, which is available after the
+    // FOR UPDATE above. Moving it here ensures unauthorised actors receive
+    // 403 regardless of the If-Match value they supply.
     const decision = await deps.checkService.checkCapability(
       { actor_id: actor.actor_id, workspace_id: workspaceId, role_level: actor.role_level },
       'voc.triage',
@@ -244,6 +235,23 @@ export function createVocService(deps: VocServiceDeps) {
         `voc.triage denied: ${decision.reason}`,
         { reason: decision.reason },
       );
+    }
+
+    // 3. Optimistic concurrency check (after permission — C3: no current_updated_at
+    // leak to unauthorised actors; only authorised actors see 409 stale_write detail).
+    if (row.updatedAt.toISOString() !== ifMatch) {
+      throw new HttpError('conflict.stale_write', 'voc updated_at does not match If-Match', {
+        current_updated_at: row.updatedAt.toISOString(),
+      });
+    }
+
+    // 4. FOR UPDATE lock on parent Managed System.
+    const ms = await lockManagedSystem(tx, workspaceId, row.primaryManagedSystemId);
+    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
+    if (ms.archived_at !== null) {
+      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
+        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
+      });
     }
 
     // 5. Analytics area cross-scope guard (only when supplied and non-null and changed).

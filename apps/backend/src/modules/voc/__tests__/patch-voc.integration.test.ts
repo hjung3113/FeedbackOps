@@ -436,7 +436,10 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
   });
 
   // ── 3. If-Match mismatch → 409 conflict.stale_write ───────────────────
-  it('PATCH with stale If-Match → 409 conflict.stale_write + current_updated_at', async () => {
+  // C3: uses admin so the permission check passes and only the stale_write
+  // fires. The companion test (3b) proves a developer without grant gets 403
+  // regardless of If-Match value — no current_updated_at leak.
+  it('admin PATCH with stale If-Match → 409 conflict.stale_write + current_updated_at', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-patch-stale', 'Stale MS');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -463,6 +466,41 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(() => new Date(cur)).not.toThrow();
     expect(new Date(cur).getFullYear()).toBeGreaterThan(1970);
     expect(cur).not.toBe(bogusMatch);
+  });
+
+  // ── 3b. Developer without grant + bogus If-Match → 403, NOT 409 (C3) ───
+  // Permission check fires BEFORE If-Match comparison (C3 reorder). An actor
+  // without voc.triage must not receive current_updated_at in any form — that
+  // would enable activity-frequency probing on VOCs they cannot mutate.
+  it('developer without grant + bogus If-Match → 403 permission.scope_required, no current_updated_at', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-c3-order', 'C3 Order MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+
+    const { externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, `14-c3-${randomUUID().slice(0, 8)}`);
+    const devCookie = await loginAs(app, externalId);
+    const bogusMatch = '1970-01-01T00:00:00.000Z';
+
+    const res = await patchVoc(
+      app,
+      devCookie,
+      voc.id,
+      { severity: 'low' },
+      { idempotencyKey: randomUUID(), ifMatch: bogusMatch },
+    );
+
+    // Must be 403 from permission check — NOT 409 from stale_write.
+    expect(res.statusCode).toBe(403);
+    const body = res.json();
+    expect(body.code).toBe('permission.scope_required');
+    // No current_updated_at leak in any part of the response.
+    expect(JSON.stringify(body)).not.toContain('current_updated_at');
   });
 
   // ── 4. Severity retriage: two PATCHes with different severities ────────
