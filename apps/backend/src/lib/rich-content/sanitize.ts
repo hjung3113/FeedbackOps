@@ -66,7 +66,7 @@ export function sanitizeTipTap(args: {
         if (mark.type === 'link') {
           const href = typeof mark.attrs?.href === 'string' ? mark.attrs.href : '';
           const schemeMatch = href.match(/^([a-z][a-z0-9+.-]*):/i);
-          const scheme = schemeMatch ? `${schemeMatch[1].toLowerCase()}:` : '';
+          const scheme = schemeMatch?.[1] ? `${schemeMatch[1].toLowerCase()}:` : '';
           if (!scheme || !allow.allowedLinkSchemes.has(scheme)) {
             return {
               code: 'rich_content.disallowed_node',

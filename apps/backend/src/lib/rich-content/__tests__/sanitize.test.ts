@@ -4,7 +4,7 @@ import { sanitizeTipTap } from '../sanitize.js';
 const surface = 'voc-description' as const;
 
 function doc(...children: unknown[]) {
-  return { type: 'doc', content: children };
+  return { type: 'doc' as const, content: children };
 }
 function p(text: string, marks?: unknown[]) {
   return {
