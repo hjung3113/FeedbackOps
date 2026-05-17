@@ -333,14 +333,14 @@ export function createVocService(deps: VocServiceDeps) {
         summary: `VOC ${pUpdated.displayId} triage review postponed`,
         detail: { voc_id: vocId, actor_id: actor.actor_id },
       });
-      if (pSeverityChanged && pNewSev !== null) {
+      if (pSeverityChanged) {
         await deps.auditService.record(tx, {
           workspace_id: workspaceId,
           actor_id: actor.actor_id,
           event_type: 'voc_severity_set',
           subject_type: 'voc',
           subject_id: vocId,
-          summary: `VOC ${pUpdated.displayId} severity set to ${pNewSev}`,
+          summary: `VOC ${pUpdated.displayId} severity set to ${String(pNewSev)}`,
           detail: { voc_id: vocId, from: row.severity, to: pNewSev },
         });
       }
@@ -455,15 +455,17 @@ export function createVocService(deps: VocServiceDeps) {
     const newTriageState = updated.triageState as VocEnvelope['triage_state'];
 
     // 10. Emit audit events in deterministic order (same tx).
-    // a. voc_severity_set — only emit when new value is non-null (TODO(#14 C3): handle severity-clear audit shape — schema currently rejects null to).
-    if (severityChanged && newSev !== null) {
+    // a. voc_severity_set — emitted for any severity change including null
+    //    (de-triage / severity-clear). Schema now accepts nullable `to`
+    //    (F2 — vocSeveritySetDetailSchema widened).
+    if (severityChanged) {
       await deps.auditService.record(tx, {
         workspace_id: workspaceId,
         actor_id: actor.actor_id,
         event_type: 'voc_severity_set',
         subject_type: 'voc',
         subject_id: vocId,
-        summary: `VOC ${updated.displayId} severity set to ${newSev}`,
+        summary: `VOC ${updated.displayId} severity set to ${String(newSev)}`,
         detail: { voc_id: vocId, from: row.severity, to: newSev },
       });
     }

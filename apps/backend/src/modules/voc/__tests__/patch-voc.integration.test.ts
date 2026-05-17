@@ -444,6 +444,48 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     }
   });
 
+  // ── 4b. Severity-clear: severity=null → 200, voc_severity_set audit with to=null ──
+  it('PATCH { severity: null } on high-severity VOC → 200, voc_severity_set(from=high,to=null)', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-sev-clear', 'Sev Clear MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+
+    // First PATCH: set severity=high.
+    const res1 = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { severity: 'high' },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    expect(res1.statusCode).toBe(200);
+    const body1 = res1.json() as { updated_at: string };
+    expect((res1.json() as { severity: string }).severity).toBe('high');
+
+    // Second PATCH: clear severity back to null.
+    const res2 = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { severity: null },
+      { idempotencyKey: randomUUID(), ifMatch: body1.updated_at },
+    );
+    expect(res2.statusCode).toBe(200);
+    expect((res2.json() as { severity: unknown }).severity).toBeNull();
+
+    if (MIGRATE_URL) {
+      const types = await getAuditTypes(voc.id);
+      // Two voc_severity_set rows: high set and high clear.
+      expect(types.filter((t) => t === 'voc_severity_set').length).toBe(2);
+    }
+  });
+
   // ── 5. Forbidden field: reporter_facing_status → 422 ──────────────────
   it('PATCH reporter_facing_status → 422 voc.reporter_status_via_public_update_only', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
