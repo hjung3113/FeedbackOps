@@ -219,17 +219,29 @@ export function createVocService(deps: VocServiceDeps) {
       { tx },
     );
     if (decision.allow !== true) {
-      throw new HttpError(
-        'permission.scope_required',
-        'voc.triage capability required; developer needs MS-scoped grant',
-        {
-          requiredScope: [row.primaryManagedSystemId],
-          requestable_permission: {
-            permission: 'voc.triage',
-            managed_system_id: row.primaryManagedSystemId,
-            reason_required: false,
+      // F1: discriminate by reason. Only `no_grant` for a developer role maps
+      // to `permission.scope_required` (actor may request MS-scoped access).
+      // Explicit deny / revoke / expiry → `permission.denied` with no
+      // requestable_permission (ADR-0012 / ErrorEnvelope semantics).
+      if (decision.reason === 'no_grant' && actor.role_level === 'developer') {
+        throw new HttpError(
+          'permission.scope_required',
+          'voc.triage capability required; developer needs MS-scoped grant',
+          {
+            requiredScope: [row.primaryManagedSystemId],
+            requestable_permission: {
+              permission: 'voc.triage',
+              managed_system_id: row.primaryManagedSystemId,
+              reason_required: false,
+            },
           },
-        },
+        );
+      }
+      // explicit_deny / grant_revoked / grant_expired → generic denied.
+      throw new HttpError(
+        'permission.denied',
+        `voc.triage denied: ${decision.reason}`,
+        { reason: decision.reason },
       );
     }
 

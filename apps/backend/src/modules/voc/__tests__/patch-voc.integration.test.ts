@@ -777,7 +777,16 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
   });
 
   // ── 16. Permission revocation race: grant revoked mid-session → 403 ────
-  it('revoked grant → second PATCH returns 403 permission.scope_required', async () => {
+  // WHY tx-binding is proven: the grant-revoke commits before the second
+  // handler opens its tx. `checkCapability` is called with `{ tx }`, so the
+  // read runs inside the same snapshot as the VOC SELECT FOR UPDATE. A
+  // pool-bound read would also see the committed revoke, but the test still
+  // proves the recheck fires (ADR-0019 §D), because a service that skipped
+  // the permission recheck entirely would return 200 here. The revoked-grant
+  // path returns `permission.denied` (reason: grant_revoked), not
+  // `permission.scope_required` (which is reserved for the no_grant case
+  // where the developer may request access).
+  it('revoked grant → second PATCH returns 403 permission.denied (reason: grant_revoked)', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-patch-dev-revoke', 'Dev Revoke MS');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -806,7 +815,9 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     // Revoke the grant — next tx will see it revoked.
     await revokeGrant(dbHandle, grantId, adminActorId);
 
-    // Second PATCH: grant is revoked → 403.
+    // Second PATCH: grant is revoked → 403 permission.denied.
+    // F1: revoked grant → permission.denied (not scope_required, which
+    // would imply the actor can request the capability back).
     const res2 = await patchVoc(
       app,
       devCookie,
@@ -815,7 +826,8 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
       { idempotencyKey: randomUUID(), ifMatch: afterPatch1 },
     );
     expect(res2.statusCode).toBe(403);
-    expect(res2.json().code).toBe('permission.scope_required');
+    expect(res2.json().code).toBe('permission.denied');
+    expect(res2.json().detail.reason).toBe('grant_revoked');
   });
 
   // ── 17. Empty diff: body {} → 200, no audit rows written ────────────────
