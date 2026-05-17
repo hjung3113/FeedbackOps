@@ -330,10 +330,11 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  // ── VOC module — Slice 3 issue #13 ──────────────────────────────────────
+  // ── VOC module — Slice 3 issue #13 / #14 ───────────────────────────────
   const vocService = createVocService({
     db: dbHandle.db,
     auditService,
+    checkService,
   });
   await app.register(vocRoutes, {
     db: dbHandle.db,
