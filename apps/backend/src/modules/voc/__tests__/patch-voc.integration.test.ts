@@ -312,15 +312,38 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
   });
 
   afterAll(async () => {
-    await cleanupProductTables();
+    // C1: audit rows must be deleted BEFORE product-table rows, because
+    // cleanupAuditLog scopes by subject_id via a subquery over voc.vocs and
+    // core.managed_systems. If product tables are deleted first the subquery
+    // returns empty and no audit rows are removed — leaving orphaned rows and
+    // causing FK violations on the actor delete in the next beforeEach run.
     await cleanupAuditLog();
+    await cleanupProductTables();
+
+    // C1 regression assertion: after both cleanups no orphaned audit rows
+    // with voc_* event types should reference missing voc rows.
+    if (MIGRATE_URL) {
+      const ops = createDb(MIGRATE_URL);
+      try {
+        const result = await ops.pool.query<{ n: number }>(
+          `select count(*)::int as n from core.audit_log
+            where event_type like 'voc_%'
+              and subject_id not in (select id from voc.vocs)`,
+        );
+        expect(result.rows[0]?.n).toBe(0);
+      } finally {
+        await ops.close();
+      }
+    }
+
     await app?.close();
     await dbHandle?.close();
   });
 
   beforeEach(async () => {
-    await cleanupProductTables();
+    // C1: audit before product tables — same reasoning as afterAll above.
     await cleanupAuditLog();
+    await cleanupProductTables();
   });
 
   // ── 1. Happy path: full triage commit in one PATCH ──────────────────────
