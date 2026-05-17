@@ -7,3 +7,4 @@ export * from './enums/audit-events.js';
 export * from './errors/codes.js';
 export * from './permissions/index.js';
 export * from './audit/voc.js';
+export * from './vocs/index.js';
