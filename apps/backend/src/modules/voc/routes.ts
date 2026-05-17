@@ -3,6 +3,7 @@
 // service owns business rules + audit + transactions.
 
 import type { FastifyPluginAsync } from 'fastify';
+import { sql } from 'drizzle-orm';
 
 import {
   FORBIDDEN_CREATE_FIELDS,
@@ -92,6 +93,17 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       // 4. Idempotency + service in one transaction (ADR-0015 protocol).
       const hash = hashRequestBody(rawBody);
       const result = await db.transaction(async (tx) => {
+        // S-001 / ADR-0015 "Race surface" amendment: serialise concurrent
+        // first-time retries with the same (actor_id, key) so the loser
+        // blocks until the winner commits and then replays the stored
+        // response. Without this lock, two concurrent same-key requests
+        // both see `miss` at lookup, both run createVoc, and both produce
+        // a VOC row + audit row (the loser's idempotency INSERT is
+        // swallowed by ON CONFLICT DO NOTHING). Mirrors the AA service
+        // pattern (analytics-area-service.ts:230-233).
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
+        );
         const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
         if (hit.kind === 'match') {
           return { status: hit.status, body: hit.body };
