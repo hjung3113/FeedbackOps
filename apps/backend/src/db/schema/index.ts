@@ -1,9 +1,10 @@
-// Drizzle schema entry. Slice 1 foundation (issue #2):
-// - core: workspaces, actors, sessions, audit_log, idempotency_keys
+// Drizzle schema entry-point. Re-exports all three schema namespaces:
+// - core: workspaces, actors, sessions, audit_log, idempotency_keys,
+//         managed_systems, analytics_areas, teams
 // - permission: permission_grants, permission_denies, permission_requests
-//
-// No application code consumes these tables yet — they exist so migrations
-// can land and downstream slices (S1.2+) can wire repositories on top.
+// - voc: vocs, voc_public_updates, voc_reporter_replies,
+//        voc_internal_comments, voc_attachments,
+//        reporter_facing_status_transitions
 
 export * from './core.js';
 export * from './permission.js';

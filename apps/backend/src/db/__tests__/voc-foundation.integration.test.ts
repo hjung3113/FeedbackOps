@@ -10,9 +10,17 @@ import { sql } from 'drizzle-orm';
 
 import { type DbHandle, createDb } from '../client.js';
 
+const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(MIGRATE_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
+
+if (!runIntegration) {
+  // Visible in vitest output when env is missing — prevents CI silent-green.
+  console.warn(
+    '[voc-foundation] skipping integration suite — set DATABASE_URL, DATABASE_URL_MIGRATE, WORKSPACE_ID to run.',
+  );
+}
 
 describe.skipIf(!runIntegration)('Slice 3 vocs table', () => {
   let handle: DbHandle;
@@ -202,7 +210,7 @@ describe.skipIf(!runIntegration)('Slice 3 conversation tables', () => {
 
   beforeAll(async () => {
     migrateHandle = createDb(MIGRATE_URL);
-    appHandle = createDb(process.env.DATABASE_URL ?? '');
+    appHandle = createDb(APP_URL);
 
     // Resolve workspace.
     workspaceId = WORKSPACE_ID;

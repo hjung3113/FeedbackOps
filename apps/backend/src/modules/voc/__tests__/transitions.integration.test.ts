@@ -14,6 +14,13 @@ import { nextReporterStates } from '../transitions.js';
 const DB_URL = process.env.DATABASE_URL ?? '';
 const runIntegration = Boolean(DB_URL);
 
+if (!runIntegration) {
+  // Visible in vitest output when env is missing — prevents CI silent-green.
+  console.warn(
+    '[transitions] skipping integration suite — set DATABASE_URL to run.',
+  );
+}
+
 describe.skipIf(!runIntegration)('nextReporterStates()', () => {
   let handle: DbHandle;
 
@@ -22,7 +29,7 @@ describe.skipIf(!runIntegration)('nextReporterStates()', () => {
   });
 
   afterAll(async () => {
-    await handle.close();
+    if (handle) await handle.close();
   });
 
   it('received → allowed=[reviewing,closed] sorted, forbidden has resolved+prep', async () => {

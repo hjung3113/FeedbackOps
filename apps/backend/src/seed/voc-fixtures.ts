@@ -6,8 +6,9 @@
 // carry a linkedFinding permission decision in voc_permission_decisions_seed_fixture.
 //
 // Idempotency: delete-and-recreate all seed rows scoped by workspace +
-// title prefix '[seed]' on each invocation. ON DELETE cascade from vocs
-// clears conversation + fixture rows automatically.
+// display_id LIKE 'VOC-SEED-%' on each invocation. ON DELETE cascade from
+// vocs clears conversation + fixture rows automatically. display_id is
+// server-generated so user input can never produce the 'VOC-SEED-' prefix.
 //
 // Stable UUIDs: sha1('fops-slice3-voc:<label>') → UUID v5-style (bits set
 // per RFC 4122 §4.3 — version nibble = 5, variant bits = 10xx).
@@ -75,6 +76,20 @@ function stableUuid(label: string): string {
 const SEED_EVALUATED_AT = '2026-05-17T10:00:00.000Z';
 const RICH_EMPTY = { type: 'doc', content: [] } as const;
 
+// Natural predecessor for each status, used to seed realistic transitions.
+// 'received' maps to itself (no prior state). Sourced from
+// docs/design-prototype/data.js · REPORTER_STATUS_TRANSITIONS.
+const PRIOR_STATUS: Record<string, string> = {
+  received: 'received',
+  reviewing: 'received',
+  assigned: 'reviewing',
+  progress: 'assigned',
+  prep: 'progress',
+  resolved: 'progress',
+  reopened: 'resolved',
+  closed: 'resolved',
+};
+
 interface VocSeedRow {
   label: string;
   displayNum: string; // zero-padded 2-digit number e.g. '01'
@@ -141,12 +156,14 @@ export interface VocSeedResult {
 
 export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Promise<VocSeedResult> {
   return handle.db.transaction(async (tx) => {
-    // ── Idempotency: delete seed rows by title prefix ─────────────────────
+    // ── Idempotency: delete seed rows by display_id prefix ───────────────
+    // display_id is server-generated ('VOC-SEED-NN'); user input cannot
+    // reproduce this prefix. Filtering by title would risk wiping real VOCs.
     // ON DELETE cascade clears voc_public_updates, voc_reporter_replies,
     // voc_internal_comments, voc_attachments, and voc_permission_decisions_seed_fixture.
-    await tx.delete(vocs).where(
-      and(eq(vocs.workspaceId, workspaceId), sql`${vocs.title} LIKE '[seed]%'`),
-    );
+    await tx
+      .delete(vocs)
+      .where(and(eq(vocs.workspaceId, workspaceId), sql`${vocs.displayId} like 'VOC-SEED-%'`));
 
     // ── Resolve first managed system ──────────────────────────────────────
     const [ms] = await tx
@@ -158,7 +175,7 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
           sql`${managedSystems.archivedAt} IS NULL`,
         ),
       )
-      .orderBy(managedSystems.createdAt)
+      .orderBy(managedSystems.createdAt, managedSystems.id)
       .limit(1);
     if (!ms) throw new Error('seedSlice3Vocs: no managed_systems row for workspace');
 
@@ -180,7 +197,7 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
       .select({ id: actors.id })
       .from(actors)
       .where(eq(actors.workspaceId, workspaceId))
-      .orderBy(actors.createdAt)
+      .orderBy(actors.createdAt, actors.externalId)
       .limit(1);
     if (!reporter) throw new Error('seedSlice3Vocs: no actors row for workspace');
 
@@ -230,16 +247,23 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
       });
 
       // ── Insert three conversation rows ──────────────────────────────────
-      // public_update (any actor)
+      // public_update (any actor) — use the natural predecessor as statusBefore
+      // so the seed exercises real transitions (e.g. received → reviewing for
+      // voc-02). voc-01 (received) keeps the degenerate received → received
+      // because there is no prior state.
+      const before = PRIOR_STATUS[row.status] ?? row.status;
       await tx.insert(vocPublicUpdates).values({
         id: stableUuid(`${row.label}:public-update-1`),
         vocId,
         actorId: reporter.id,
         bodyRichContent: RICH_EMPTY,
-        reporterFacingStatusBefore: row.status,
+        reporterFacingStatusBefore: before,
         reporterFacingStatusAfter: row.status,
       });
       // reporter_reply (trigger enforces actor = reporter)
+      // MUST equal vocs.reporter_id — enforced by trigger
+      // voc_reporter_reply_actor_must_be_reporter. Refactors that swap the
+      // actor source will fail the trigger at insert time.
       await tx.insert(vocReporterReplies).values({
         id: stableUuid(`${row.label}:reporter-reply-1`),
         vocId,
