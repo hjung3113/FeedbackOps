@@ -92,6 +92,23 @@ AGENTS.md already states "application services own transactions, permissions, au
 
 DB-constraint-only idempotency was rejected: it surfaces as `409 conflict.duplicate_key` to clients that legitimately retry on network timeout, forcing each client to re-handle the conflict differently per endpoint.
 
+### Race surface (S-001 amendment, 2026-05-17)
+
+Two concurrent first-time retries with the same `(actor_id, key)` originally
+raced on the domain table's unique constraint, surfacing 409 `conflict.duplicate_slug`
+or sibling errors to the loser instead of replaying the winner's response.
+
+Mitigation: every register / create path that consumes an idempotency key
+takes `pg_advisory_xact_lock(hashtext(actor_id), hashtext(key))` inside the
+open transaction BEFORE its first `idempotencyService.lookup` call. The
+loser blocks until the winner commits, then re-runs `lookup`, observes the
+committed row, and replays the stored response.
+
+This amendment does not change the locked decisions in this ADR; it
+documents the race surface that those decisions implicitly required and the
+lock pattern that closes it. Applies to all register / create paths listed
+under "Idempotency carriers".
+
 ## What this ADR locks
 
 - One rate-limit plugin, Postgres-backed, four tiers (anon-IP, authenticated, mutation, Sensitive Permission). Limit responses use the ADR-0012 envelope.

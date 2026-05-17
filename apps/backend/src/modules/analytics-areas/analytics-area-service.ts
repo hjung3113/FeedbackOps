@@ -15,7 +15,7 @@
 // check + idempotency lookup because the outer service already performed
 // both for the parent operation.
 
-import { and, asc, count, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import type { DatabaseError } from 'pg';
 
 import type { AuditEventType } from '@fops/shared';
@@ -224,6 +224,13 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
 
     return await db.transaction(async (tx) => {
       if (options.idempotencyKey) {
+        // S-001: serialise concurrent first-time retries with the same
+        // (actor_id, key) so the loser blocks until the winner commits and
+        // then replays the stored response instead of colliding on the
+        // domain unique constraint. See ADR-0015 "Race surface" amendment.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${actor.actor_id}), hashtext(${options.idempotencyKey}))`,
+        );
         const hit = await idempotencyService.lookup(
           tx,
           actor.actor_id,
