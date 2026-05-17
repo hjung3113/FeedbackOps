@@ -16,6 +16,7 @@ import { nextReporterStates, type ReporterFacingStatus } from './transitions.js'
 import { insertVoc, lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from './repo.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { CheckService } from '../permissions/check-service.js';
+import type { RoleLevel } from '../auth/session-service.js';
 import type { CreateVocRequest, PatchVocRequest } from '@fops/shared';
 
 export interface CreateVocActor {
@@ -182,7 +183,7 @@ export function createVocService(deps: VocServiceDeps) {
 
   async function updateVoc(args: {
     tx: Tx;
-    actor: { actor_id: string; workspace_id: string; role_level: string };
+    actor: { actor_id: string; workspace_id: string; role_level: RoleLevel };
     vocId: string;
     ifMatch: string;
     input: PatchVocRequest;
