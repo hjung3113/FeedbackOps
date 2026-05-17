@@ -2,7 +2,7 @@
 
 ## Context
 
-Pack 18 of the Open Design hi-fi prototype (`docs/design-prototype/`, commit `0241471`, 2026-05-17) locked the route-layout vocabulary. Earlier packs let each screen invent its own toolbar / detail-panel / header geometry, which produced visible drift between Tasks board, VOC Triage, Survey builder, Evidence list, and Entity Links — every "list-ish" page had a slightly different toolbar height and header rhythm.
+Pack 18 of the Open Design hi-fi prototype (`docs/design-prototype/`, 2026-05-17, refreshed through Pack 20) locked the route-layout vocabulary. Earlier packs let each screen invent its own toolbar / detail-panel / header geometry, which produced visible drift between Tasks board, VOC Triage, Survey builder, Evidence list, and Entity Links — every "list-ish" page had a slightly different toolbar height and header rhythm.
 
 The design pass that landed alongside the Samsung-light palette refresh consolidates every route into one of three layout families and aligns every cross-route header — sidebar system header, list/workbench toolbar, drawer panel header, and Survey preview drawer header — onto a single 50px baseline.
 
@@ -34,7 +34,7 @@ The following surfaces MUST share a single 50px height baseline:
 
 ### 3. Source of truth: baseline screenshots + manifest
 
-`docs/design-prototype/screenshots/final-baselines/` (28 PNGs + `manifest.json`) is the canonical visual acceptance set. The `mustSurvive` field in `manifest.json` records the contract per route — that text is the acceptance test, not the screenshot pixels.
+`docs/design-prototype/screenshots/final-baselines/` (28 PNGs + `manifest.json`, last refreshed Pack 20) is the canonical visual acceptance set. The `mustSurvive` field in `manifest.json` records the contract per route — that text is the acceptance test, not the screenshot pixels.
 
 When porting a screen into production:
 
@@ -59,7 +59,7 @@ When porting a screen into production:
 
 ## Related
 
-- `docs/design-prototype/HANDOFF.md` §"Pack 18 — Route pattern shells + aligned headers" (Session 17 changelog).
+- `docs/design-prototype/HANDOFF.md` §"Pack 18 — Route pattern shells + aligned headers" (Session 17 changelog); §"Pack 20 — Baseline QA + nested-button polish" (Session 19) confirms post-Pack-19-split visual stability.
 - `docs/design-prototype/DESIGN-MAP.md` §2 (route → screen → baseline mapping).
 - `docs/design-prototype/components.jsx` (`PageShell`, `ListShell`, `WorkbenchShell`, `ShellTitle` source-of-truth implementations — port these, do not re-derive).
 - ADR-0016 (UI foundation: dark-only MVP, WCAG AA, CSS-var tokens, full shadcn wrap).

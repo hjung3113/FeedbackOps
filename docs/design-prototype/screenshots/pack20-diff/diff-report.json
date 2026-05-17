@@ -1,0 +1,158 @@
+[
+  {
+    "name": "probe-rail-scope.png",
+    "status": "DIFF",
+    "diffPx": 3933,
+    "pct": 0.285
+  },
+  {
+    "name": "surveys-list.png",
+    "status": "DIFF",
+    "diffPx": 1119,
+    "pct": 0.081
+  },
+  {
+    "name": "home-action-dashboard.png",
+    "status": "DIFF",
+    "diffPx": 88,
+    "pct": 0.006
+  },
+  {
+    "name": "admin-analytics-areas.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "admin-managed-systems.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "admin-permissions.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "admin-settings.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "findings-detail.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "integration-action-dashboard.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "integration-coverage.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "integration-evidence.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "integration-links.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "my-work.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "survey-builder.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "survey-result.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "tasks-backlog.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "tasks-board.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "tasks-inbox.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "tasks-milestones.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "tasks-my.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "tasks-requests.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "tasks-roadmap.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "voc-clusters.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "voc-inbox-detail.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "voc-new.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  },
+  {
+    "name": "voc-triage-console.png",
+    "status": "IDENTICAL",
+    "diffPx": 0,
+    "pct": 0
+  }
+]

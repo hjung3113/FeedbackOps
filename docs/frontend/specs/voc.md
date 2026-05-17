@@ -43,7 +43,7 @@
 | Rich editor + attachment storage | `docs/adr/0002-use-wysiwyg-first-rich-content-editor.md`, `docs/adr/0011-rich-content-editor-and-attachment-storage.md` |
 | Slice 2 locked decisions | `docs/adr/0019-slice2-review-followups.md` Sections A/B/D/E |
 | Prototype operating rules | `docs/design-prototype/HANDOFF.md`, `docs/design-prototype/DESIGN-MAP.md` |
-| Prototype visual baseline | `docs/design-prototype/screenshots/pack11-voc.png` |
+| Prototype visual baselines | `docs/design-prototype/screenshots/final-baselines/voc-inbox-detail.png`, `voc-triage-console.png`, `voc-new.png`, `voc-clusters.png` (+ `manifest.json` for `mustSurvive` contract) |
 | Frontend module guide | `apps/frontend/AGENTS.md`, `apps/frontend/src/features/voc/AGENTS.md` (TBD — write at S3-006 prologue) |
 | Backend layer rules | `apps/backend/AGENTS.md` (Tx union, tx-not-pool for mutations, snake_case at HTTP / camelCase in services) |
 
@@ -670,9 +670,9 @@ Per HANDOFF §5 P0/P1 reproduction criteria.
 
 | Route | Curated screenshot | P0 (must match) | P1 (should match) |
 |---|---|---|---|
-| `/vocs?view=inbox&selected=<id>` | `docs/design-prototype/screenshots/pack11-voc.png` | Reporter pill vs internal squared badge separation; 60px default row height; sticky `+ New VOC` action in toolbar; 3-tab composer; sticky next-action footer; entity trail action panel | Detail panel rhythm matches screenshot; Linked execution section sits above abstract trail; Compose tabs are visually distinct (megaphone icon for public) |
-| `/vocs?view=triage&selected=<id>` | **GAP — no curated screenshot.** Use the live prototype as evidence; flag to design to capture `pack11-voc-triage.png` before S3-007 closes | Expanded 96px rows; severity color bar; "Owner 없음" / "Area 미지정" red/amber meta tags; out-of-scope summary peek banner; 4-second undo toast bottom-center; "큐가 비었습니다" empty state | Severity picker uses 4 chips with helper tooltips; Triage 결과 미리보기 card mirrors the screenshot's labels |
-| `/vocs?action=create` | **GAP — no curated screenshot.** Use the live prototype as evidence; flag to design to capture `pack11-voc-create.png` | Two-column form (1fr + 320px sidebar); compact `<FieldLabel>` style; MS chip strip; AA chips disabled when MS unselected; HTML5 dropzone with 25 MB hint; bottom action bar with "VOC 제출" disabled until valid | Reporter card + Similar VOC card + severity-disclaimer card in sidebar; Source segmented control; Proxy Report expands proxy_for + observed_situation row |
+| `/vocs?view=inbox&selected=<id>` | `docs/design-prototype/screenshots/final-baselines/voc-inbox-detail.png` (full-page: `voc-inbox-detail-full.png`) | Reporter pill vs internal squared badge separation; 60px default row height; sticky `+ New VOC` action in toolbar; 3-tab composer; sticky next-action footer; entity trail action panel | Detail panel rhythm matches screenshot; Linked execution section sits above abstract trail; Compose tabs are visually distinct (megaphone icon for public) |
+| `/vocs?view=triage&selected=<id>` | `docs/design-prototype/screenshots/final-baselines/voc-triage-console.png` | Expanded 96px rows; severity color bar; "Owner 없음" / "Area 미지정" red/amber meta tags; out-of-scope summary peek banner; 4-second undo toast bottom-center; "큐가 비었습니다" empty state | Severity picker uses 4 chips with helper tooltips; Triage 결과 미리보기 card mirrors the screenshot's labels |
+| `/vocs?action=create` | `docs/design-prototype/screenshots/final-baselines/voc-new.png` | Two-column form (1fr + 320px sidebar); compact `<FieldLabel>` style; MS chip strip; AA chips disabled when MS unselected; HTML5 dropzone with 25 MB hint; bottom action bar with "VOC 제출" disabled until valid | Reporter card + Similar VOC card + severity-disclaimer card in sidebar; Source segmented control; Proxy Report expands proxy_for + observed_situation row |
 | `/vocs?view=my&selected=<id>` | reuse inbox baseline | Same as inbox but with `reporter_id=me` filter applied | Empty state copy differs ("내가 제출한 VOC가 없습니다") |
 
 **Acceptance use** (per HANDOFF §5): for clean-room implementation, compare against the screenshots only after the source docs are followed; never let the implementation regress from the contract because the screenshot is missing.

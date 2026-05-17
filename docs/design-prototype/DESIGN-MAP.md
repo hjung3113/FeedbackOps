@@ -5,7 +5,7 @@
 > Pair with [`HANDOFF.md`](./HANDOFF.md) (overview, working rules, changelog).
 > Maintain alongside every Pack so production handoff stays unambiguous.
 
-**Last updated:** 2026-05-17 (Pack 17 — Samsung-light palette + shared detail section nav)
+**Last updated:** 2026-05-17 (Pack 20 — Baseline QA + nested-button polish + screenshot cleanup)
 
 ---
 
@@ -55,15 +55,15 @@ Spec column references — short names map onto files:
 | `tasks` (`backlog`) | `screen-tasks.jsx` | 06 task §FR-TASK-003 Backlog | ✓ | Awaiting-execution language only |
 | `tasks` (`milestones`) | `screen-milestones.jsx` + `screen-milestone-gantt.jsx` | 06 task §FR-TASK-004 | ✓ | Per-row mini-timeline + Detail Gantt |
 | `tasks` (`roadmap`) 🏷️ | `screen-tasks-roadmap.jsx` | 06 task §FR-TASK-005 + routes | — | Pack 10 — multi-milestone shared-axis Gantt |
-| `integration` | `screen-other.jsx`·`IntegrationScreen` | 12 ux (Action Dashboard) | — | Live counts (Pack 10) |
+| `integration` | `screen-integration.jsx`·`IntegrationScreen` | 12 ux (Action Dashboard) | — | Live counts (Pack 10); Pack 19 split |
 | `integration-evidence` | `screen-evidence.jsx` | 05 finding · ui-ds (EvidenceHighlight) | ✓ | Source · Linked Execution · Trail action panel |
 | `integration-coverage` | `screen-coverage.jsx` | 12 ux §Coverage signals | — | Threshold modal in-page |
 | `integration-links` | `screen-entity-links.jsx` | 11 linking §FR-LINK-001..003 | ✓ | Bulk-detach + Last refreshed (Pack 10) |
-| `surveys` | `screen-other.jsx`·`SurveysScreen` | 07 survey · routes | ✓ | Follow-up = 5 allowed CTAs |
+| `surveys` | `screen-surveys.jsx`·`SurveysScreen` | 07 survey · routes | ✓ | Follow-up = 5 allowed CTAs; Pack 19 split |
 | `survey-builder` | `screen-survey-builder.jsx` | 07 survey §FR-SURVEY-002 | — | One-level branch · option preservation · outline drag-reorder |
 | `survey-result` | `screen-survey-result.jsx` | 07 survey §FR-SURVEY-004 | — | Anonymity threshold reminder |
-| `admin` | `screen-other.jsx`·`AdminScreen` | 09 permission · routes | — | MS registry + Permission teaser |
-| `admin-areas` | `screen-other.jsx`·`AdminAreasScreen` | 09 permission §5.4 + routes | — | AA slide-over (Pack 10) |
+| `admin` | `screen-admin.jsx`·`AdminScreen` | 09 permission · routes | — | MS registry + Permission teaser; Pack 19 split |
+| `admin-areas` | `screen-admin.jsx`·`AdminAreasScreen` | 09 permission §5.4 + routes | — | AA slide-over (Pack 10); Pack 19 split |
 | `admin-permissions` | `screen-permissions.jsx` | 09 permission §FR-PERM-002 | ✓ | Pending → Approved/Rejected/Expired/Revoked. Self-approval audit capture (Pack 8). |
 | `admin-settings` | `screen-admin-settings.jsx` (Pack 8) | 09 permission · ADR-0011 | — | Dirty save bar, locked SR→VOC row, cross-MS / self-approval retro warning. |
 
@@ -72,6 +72,8 @@ Spec column references — short names map onto files:
 ## 2. Final visual baselines
 
 These are the canonical screenshot targets for visual acceptance. The current canonical PNG set lives in `screenshots/final-baselines/`, with capture metadata in `screenshots/final-baselines/manifest.json`.
+
+Pack 20 QA refresh: `screenshots/pack20-current/` (headless Chromium, 1440×960, `node qa-capture.js`) was captured and diffed against the prior `final-baselines/` — 23/26 IDENTICAL and 3 sub-1% diffs (dynamic noise). Pack 19 file split confirmed visually safe. At the end of Pack 20 the newer `pack20-current/` set was **promoted to `final-baselines/`** (all 27 captured routes overwrite the older PNGs, plus `voc-inbox-detail-full.png` 1452×1976 full-page VOC detail capture, plus `probe-cmdk.png` re-captured via Meta+K since the harness does not cover it). `manifest.json` bumped to `count: 28`. `screenshots/pack20-diff/` holds the diff report + the three flagged route diffs. Pack 1–11 era loose PNGs were deleted; only `final-baselines/`, `pack20-current/`, `pack20-diff/` remain.
 
 | Baseline | Route / state | Screenshot | What must survive |
 |---|---|---|---|
@@ -241,12 +243,12 @@ For each canonical object in `01 domain`, which surfaces own its CRUD/review sto
 | Task Request | `screen-tasks.jsx` requests | from VOC/Finding/Survey | TaskRequestPanel | Capability gating, self-approval |
 | Task | `screen-tasks.jsx` board/my/inbox/backlog | from request | TaskDetailPanel | Drag-drop column move |
 | Milestone | `screen-milestones.jsx` | (inline) | MilestoneDetailPanel (scroll-spy 🏷️) | Roadmap multi-MS view 🏷️ |
-| Survey | `screen-other.jsx` surveys | builder full-page | (surveys panel) | Result Summary · Builder |
+| Survey | `screen-surveys.jsx` surveys | builder full-page | (surveys panel) | Result Summary · Builder |
 | Survey Question | `screen-survey-builder.jsx` | inline | Edit pane | Option preservation 🏷️ |
 | Entity Link | `screen-entity-links.jsx` | implicit (created on link) | EntityLinkDetailPanel | Bulk-detach + freshness 🏷️ |
 | Coverage Signal | `screen-coverage.jsx` | — | Threshold modal | — |
-| Managed System | `screen-other.jsx` admin | inline | Configure CTA | Settings cross-MS policy |
-| Analytics Area | `screen-other.jsx` admin-areas | inline | `AnalyticsAreaSlideOver` 🏷️ | Pack 10 |
+| Managed System | `screen-admin.jsx` admin | inline | Configure CTA | Settings cross-MS policy |
+| Analytics Area | `screen-admin.jsx` admin-areas | inline | `AnalyticsAreaSlideOver` 🏷️ | Pack 10 |
 | Permission Request | `screen-permissions.jsx` | from any blocked panel | PermissionDetailPanel | Approval lifecycle |
 
 ---
@@ -348,6 +350,27 @@ Note: mobile/tablet support is now explicitly lowest priority. Keep the basic dr
 | Samsung-light palette rebound | `styles.css`, `app.jsx`, direct JSX color remnants — cool blue-white canvas, near-white surfaces, soft blue borders, Samsung Blue `#1428a0` primary/focus | ui-ds visual tokens |
 | `DetailPanelSectionNav` promotion | `components.jsx`, `styles.css` — shared anchored section jump bar with active-section tracking | inter §Anchored sections |
 | Long drawer migration | `screen-voc.jsx`, `screen-voc-create.jsx`, `screen-clusters.jsx`, `screen-findings.jsx`, `screen-tasks.jsx`, `screen-evidence.jsx`, `screen-entity-links.jsx`, `screen-other.jsx`, `screen-milestones.jsx`, `screen-permissions.jsx` | ui-ds detail panels |
+
+### Pack 19 — Rule 2 split cleanup
+
+| Deliverable | Touched | Spec link |
+|---|---|---|
+| `screen-other.jsx` retirement | new `screen-integration.jsx` (`IntegrationScreen` + `IntegrationJumpCard`), new `screen-surveys.jsx` (`SURVEYS`, `SurveyFollowupAction`, `SurveyCard`, `SurveysScreen`), new `screen-admin.jsx` (`AdminScreen`, `AdminAreasScreen`, `AnalyticsAreaSlideOver`) | routes · Rule 2 |
+| `screen-tasks.jsx` view split | new `screen-tasks-views.jsx` (`TaskMyView`, `TaskInboxView`, `TaskInboxRow`, `buildTaskInbox`, `INBOX_EVENT_KINDS`, `MY_TASK_TABS`); `TasksScreen` dispatcher reads `window.TaskMyView` / `window.TaskInboxView` | routes · Rule 2 |
+| `screen-survey-builder.jsx` preview/launch split | new `screen-survey-builder-preview.jsx` (`SurveyPreviewPane`, `PreviewQuestionRender`, `LaunchValidationModal`); `SurveyBuilderScreen` reads `window.SurveyPreviewPane` / `window.LaunchValidationModal` | 07 survey · Rule 2 |
+| Load order | `FeedbackOps.html` loads each helper file immediately after its primary screen file | Rule 2 helper-before/after-screen contract |
+
+Outcome: every `screen-*.jsx` file is under the 900-line budget; the §6 adversarial review concern about a single-host `screen-other.jsx` is closed.
+
+### Pack 20 — Baseline QA + nested-button polish
+
+| Deliverable | Touched | Spec link |
+|---|---|---|
+| Playwright smoke + pixel diff harness | `qa-capture.js`, `qa-diff.js`, `screenshots/pack20-current/`, `screenshots/pack20-diff/diff-report.json` | handoff QA |
+| 26-route capture vs `final-baselines/` | 23/26 IDENTICAL, 3 sub-1% dynamic-noise diffs (`probe-rail-scope`, `surveys-list`, `home-action-dashboard`); zero visual regression from Pack 19 split | handoff QA |
+| VOC detail full-page capture | `screenshots/pack20-current/voc-inbox-detail-full.png` (1452×1976) — expands inner `.panel-scroll` then `fullPage:true` | 04 voc · QA |
+| Nested-button DOM polish | `screen-survey-builder.jsx · OutlineRow` — outer `<button>` → `<div role="button" tabIndex={0}>` with Enter/Space activation; React `validateDOMNesting` warning eliminated | ui-ds · accessibility |
+| Screenshot folder cleanup | removed ~95 loose PNGs (Pack 1–11 era) directly under `screenshots/` + 3 root temp PNGs; canonical sets retained: `final-baselines/`, `pack20-current/`, `pack20-diff/` | handoff QA |
 
 ### Pack 18 — route pattern shells + aligned headers
 

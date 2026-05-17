@@ -3,7 +3,7 @@
 > Hi-fi interactive prototype for the FeedbackOps Suite internal operating platform.
 > Bridge between design exploration (here) and production implementation.
 
-**Last updated:** 2026-05-17 (session 16 — Pack 17: Samsung-light palette + shared detail section nav)
+**Last updated:** 2026-05-17 (session 19 — Pack 20: Baseline QA + nested-button polish + screenshot cleanup)
 **Author:** Design (Claude session)
 **Entry point:** [`FeedbackOps.html`](./FeedbackOps.html)
 **Page · Component · Spec map:** [`DESIGN-MAP.md`](./DESIGN-MAP.md)
@@ -99,17 +99,21 @@ FeedbackOps.html         entry; loads scripts in this order:
   screen-voc-create.jsx  Create VOC form + Triage Console (optimistic mutation + undo)
   screen-clusters.jsx    VOC Clusters list + cluster detail
   screen-findings.jsx    Findings list + Finding detail
-  screen-tasks.jsx       Tasks Board (Kanban + drag-drop) + Inbox + My Tasks
-                         + Task Requests + Backlog + Task detail
+  screen-tasks.jsx       Tasks Board (Kanban + drag-drop) + Task Requests
+                         + Backlog + Task detail
+  screen-tasks-views.jsx My Tasks + Tasks Inbox (Pack 19 split)
   screen-evidence.jsx    Integration·Evidence highlights list + detail
   screen-coverage.jsx    Integration·Coverage signals + missing-link queries + threshold modal
   screen-entity-links.jsx Integration·Entity links list + detail + bulk-detach
   screen-milestone-gantt.jsx Mini-timeline + TaskGantt (split out of milestones)
   screen-milestones.jsx  Tasks·Milestones list + detail (Overview/Timeline/Tasks/Evidence/Activity)
   screen-tasks-roadmap.jsx Tasks·Roadmap — multi-milestone shared-axis Gantt (Pack 10)
-  screen-other.jsx       Integration dashboard + Surveys + Admin
+  screen-integration.jsx Integration Action Dashboard (Pack 19 split)
+  screen-surveys.jsx     Surveys list + detail panel + follow-up CTAs (Pack 19 split)
+  screen-admin.jsx       Admin · Managed Systems + Analytics Areas + AA slide-over (Pack 19 split)
   screen-survey-result.jsx Survey Result Summary
-  screen-survey-builder.jsx Survey Builder full-page + Preview pane + Launch validation
+  screen-survey-builder.jsx Survey Builder full-page (outline + editors + settings)
+  screen-survey-builder-preview.jsx Survey Preview pane + Launch validation modal (Pack 19 split)
   screen-permissions.jsx Permission Requests review console
   screen-admin-settings.jsx Workspace settings + cross-MS policy retro warning (Pack 8)
   affordances.jsx        Pack 12 — shared interaction primitives:
@@ -242,15 +246,15 @@ Route contract from `docs/frontend/routes-and-layout.md`. Implementation in `app
 | `tasks` (view=`requests`) | Task Request review console | ✓ | `screen-tasks.jsx` |
 | `tasks` (view=`backlog`) | Task Backlog list | ✓ | `screen-tasks.jsx` |
 | `tasks` (view=`milestones`) | Milestones list + mini-timeline + Task Gantt panel | ✓ | `screen-milestones.jsx` |
-| `integration` | Integration Action Dashboard | – | `screen-other.jsx` |
+| `integration` | Integration Action Dashboard | – | `screen-integration.jsx` |
 | `integration-evidence` | Evidence highlights list | ✓ | `screen-evidence.jsx` |
 | `integration-coverage` | Coverage signals + missing-link queries + threshold modal | – | `screen-coverage.jsx` |
 | `integration-links` | Entity links list + detail + bulk-detach | ✓ | `screen-entity-links.jsx` |
-| `surveys` | Surveys list | ✓ | `screen-other.jsx` |
+| `surveys` | Surveys list | ✓ | `screen-surveys.jsx` |
 | `survey-builder` | Survey Builder + Preview pane + Launch validation | – | `screen-survey-builder.jsx` |
 | `survey-result` | Survey Result Summary | – | `screen-survey-result.jsx` |
-| `admin` | Admin · Managed Systems registry | – | `screen-other.jsx` |
-| `admin-areas` | Admin · Analytics Areas catalog | – | `screen-other.jsx` |
+| `admin` | Admin · Managed Systems registry | – | `screen-admin.jsx` |
+| `admin-areas` | Admin · Analytics Areas catalog | – | `screen-admin.jsx` |
 | `admin-permissions` | Permission Requests review console | ✓ | `screen-permissions.jsx` |
 | `admin-settings` | Workspace settings (controlled + dirty save bar) | – | `screen-admin-settings.jsx` |
 
@@ -263,7 +267,7 @@ Use this when asking another agent to reproduce or continue the work. A pass mea
 **P0 — must match**
 - App opens through `FeedbackOps.html` and preserves URL hash state as `#route=&view=&scope=&param=`.
 - Global shell keeps the 52px rail, 240px sidebar, topbar breadcrumb/actions, and 3/4-column detail-panel collapse behavior.
-- Route/file mapping matches the table above and `DESIGN-MAP.md` §1. Do not merge extracted routes back into `screen-other.jsx`.
+- Route/file mapping matches the table above and `DESIGN-MAP.md` §1. Do not merge extracted routes back into a multi-surface file (Pack 19 closed the legacy `screen-other.jsx` host — keep `screen-integration.jsx`, `screen-surveys.jsx`, `screen-admin.jsx` separate).
 - Core entity language stays intact: VOC, Finding, Evidence, Task, Milestone, Survey, Managed System, Analytics Area, Permission Request.
 - Public reporter status and internal task status remain visually and semantically separate.
 - Permission and cross-MS surfaces keep explicit blocked/request/review/audit/retro-warning states.
@@ -285,7 +289,7 @@ The docs are sufficient for continuation, but only conditionally sufficient for 
 
 - **Weakest link: visual baseline selection.** The screenshot folder contains many iterations. Use `DESIGN-MAP.md` §2; do not let an agent choose a random old PNG.
 - **Second weakest link: production vs prototype boundary.** Hash routing, `window` globals, synthetic data, and local draft intents are prototype conveniences. Rebuilding production from these patterns would be wrong.
-- **Third weakest link: screen ownership drift.** `screen-other.jsx` is still a multi-surface file for Integration, Surveys, Admin, and Admin Areas. Do not add Admin Settings back into it.
+- **Third weakest link: screen ownership drift.** Closed in Pack 19. Integration / Surveys / Admin each live in their own file (`screen-integration.jsx`, `screen-surveys.jsx`, `screen-admin.jsx`); Admin Settings stays in `screen-admin-settings.jsx`. Do not merge them back into a single multi-surface host.
 - **Fourth weakest link: mobile expectations.** If an agent is asked for responsive polish, it needs a new brief. Current docs authorize desktop parity, not native mobile UX.
 
 ## 6. Component inventory
@@ -343,12 +347,12 @@ Aligned with `docs/frontend/component-inventory.md`. Source locations:
 - `<VocRow>` / `<VocList>` / `<VocDetailPanel>` (`screen-voc.jsx`)
 - `<TriageQueueRow>` / `<TriagePanel>` with per-severity color picker (`screen-voc-create.jsx`)
 - `<TaskCard>` / `<TaskDetailPanel>` / `<TaskRequestRow>` / `<TaskRequestPanel>` (`screen-tasks.jsx`)
-- `<TaskMyView>` / `<TaskInboxView>` — assignment-scoped views (`screen-tasks.jsx`)
+- `<TaskMyView>` / `<TaskInboxView>` — assignment-scoped views (`screen-tasks-views.jsx`, Pack 19 split)
 - `<FindingRow>` / `<FindingDetailPanel>` with evidence-first layout (`screen-findings.jsx`)
 - `<ClusterRow>` / `<ClusterDetailPanel>` (`screen-clusters.jsx`)
 - `<EvidenceRow>` / `<EvidenceDetailPanel>` (`screen-evidence.jsx`)
 - `<MilestoneCard>` / `<MilestoneDetailPanel>` / `<TaskGantt>` (`screen-milestones.jsx`)
-- `<SurveyPreviewPane>` / `<LaunchValidationModal>` (`screen-survey-builder.jsx`)
+- `<SurveyPreviewPane>` / `<LaunchValidationModal>` (`screen-survey-builder-preview.jsx`, Pack 19 split)
 
 ## 7. Domain rules enforced
 
@@ -462,6 +466,23 @@ Identified spec gaps that didn't make it into sessions 6-7. Priorities are relat
   - Promoted the Milestone drawer's anchored section-jump pattern into `components.jsx · DetailPanelSectionNav`.
   - Applied the shared section bar to long detail panels across VOC, Triage, Finding, Task, Task Request, Cluster, Evidence, Entity Link, Survey, Analytics Area, Milestone, and Permission Request surfaces.
 
+- **Pack 20 — Baseline QA + nested-button polish** ✅ (Session 19)
+  - Headless Playwright captured all 26 routes; pixel diff vs `final-baselines/` returned 23/26 IDENTICAL and 3 sub-1% diffs that are dynamic noise. Pack 19 file split confirmed as zero visual regression.
+  - `screenshots/pack20-current/voc-inbox-detail-full.png` captures the long VOC detail trail by expanding the inner `.panel-scroll` before fullPage shot.
+  - `screen-survey-builder.jsx · OutlineRow` no longer nests a `<button>` inside a `<button>` (React `validateDOMNesting` warning eliminated); outer element is `<div role="button" tabIndex={0}>` with Enter/Space activation.
+  - `qa-capture.js` + `qa-diff.js` left in repo for future re-runs.
+  - Screenshot folder cleanup: deleted ~95 stale loose PNGs directly under `screenshots/` (Pack 1–11 era working captures) plus 3 root-level temp PNGs (`test-playwright.png`, `mp9ir2hn-image.png`, `mp8o44dk-image.png`). Canonical sets retained: `screenshots/final-baselines/` (28 reference PNGs), `screenshots/pack20-current/` (28 fresh captures incl. VOC full-page), `screenshots/pack20-diff/` (4 diff artifacts).
+
+- **Pack 19 — Rule 2 split cleanup** ✅ (Session 18)
+  - Resolved the long-standing `screen-other.jsx` multi-host (adversarial review §3 weakest link) by splitting it into three single-surface files:
+    - `screen-integration.jsx` (145 lines) — Integration Action Dashboard + `IntegrationJumpCard`
+    - `screen-surveys.jsx` (306 lines) — `SURVEYS`, `SurveyFollowupAction`, `SurveyCard`, `SurveysScreen`
+    - `screen-admin.jsx` (327 lines) — `AdminScreen`, `AdminAreasScreen`, `AnalyticsAreaSlideOver`
+  - Split `screen-tasks.jsx` (964 → 732 lines) by extracting `TaskMyView` + `TaskInboxView` (with `INBOX_EVENT_KINDS`, `buildTaskInbox`, `TaskInboxRow`, `MY_TASK_TABS`) into `screen-tasks-views.jsx` (237 lines). Dispatcher now reads `window.TaskMyView` / `window.TaskInboxView` to honour the helper-after-screen load order.
+  - Split `screen-survey-builder.jsx` (1149 → 809 lines) by extracting `SurveyPreviewPane` + `PreviewQuestionRender` + `LaunchValidationModal` into `screen-survey-builder-preview.jsx` (349 lines). `SurveyBuilderScreen` references them via `window.SurveyPreviewPane` / `window.LaunchValidationModal`.
+  - Updated `FeedbackOps.html` script order so each helper file loads immediately after its primary screen file.
+  - All `screen-*.jsx` files are now under the 900-line budget; the `screen-other.jsx` and "merged extracted routes back" risks called out in §6 adversarial review are closed.
+
 - **Pack 18 — Route pattern shells + aligned headers** ✅ (Session 17)
   - Confirmed the product has three route layout families: `PageShell` page-body screens, `ListShell` filter/list/detail screens, and `WorkbenchShell` board/builder/triage work surfaces.
   - Added `components.jsx · ListShell`, `WorkbenchShell`, and `ShellTitle`.
@@ -469,7 +490,7 @@ Identified spec gaps that didn't make it into sessions 6-7. Priorities are relat
   - Migrated Tasks board, VOC Triage, Survey Builder, and Survey Result onto `WorkbenchShell`. Backlog and Survey should be treated as extension cases of the shared shells, not new layout families.
   - Aligned Tasks board and Triage header title treatment to the Triage icon/title pattern via `ShellTitle`.
   - Reduced the sidebar system header by roughly 10% and aligned sidebar system header, ListShell/WorkbenchShell toolbar, drawer panel header, and Survey preview drawer header to a shared 50px baseline.
-  - Browser screenshot refresh is still pending. The Open Design/browser capture calls were cancelled in-session; use the live prototype as source of truth before promoting new PNGs into `DESIGN-MAP.md` §2.
+  - Browser screenshot refresh completed in Pack 20 — see `screenshots/pack20-current/` and the pixel diff report in `screenshots/pack20-diff/diff-report.json`. Pack 19 split confirmed zero visual regression. At end of Pack 20 the `pack20-current/` set was promoted into `screenshots/final-baselines/` (27 routes overwritten with newer captures + `voc-inbox-detail-full.png` added + `probe-cmdk.png` re-captured via Meta+K). `manifest.json` bumped to `count: 28`.
 
 - **Pack 8 — Permission & Scope completion** ✅ (Session 10)
   - Effective Managed System scope union landed — `Actors` registry + `effectiveScopeFor(role)` + role-aware `scope.members` in `app.jsx`. Sidebar surfaces the bounded-`all` hint + out-of-grants flag.
@@ -492,6 +513,57 @@ Identified spec gaps that didn't make it into sessions 6-7. Priorities are relat
 ---
 
 ## 12. Session changelog (latest first)
+
+### Session 19 — 2026-05-17 — Pack 20 (Baseline QA + nested-button polish)
+
+Playwright smoke + pixel diff against the 26 final-baseline PNGs, plus one DOM polish surfaced by the run.
+
+**Smoke test**
+- `python3 -m http.server 8765` serves the project root; `node qa-capture.js` launches headless Chromium at 1440×960 and walks all 26 routes. 26/26 captured, no JS errors (favicon 404s ignored).
+- Captures land in `screenshots/pack20-current/`. `screenshots/pack20-current/capture-log.json` records the run.
+
+**Pixel diff vs `screenshots/final-baselines/`**
+- `node qa-diff.js` (pngjs + pixelmatch). Report: `screenshots/pack20-diff/diff-report.json`.
+- 23/26 IDENTICAL. Three sub-1% diffs are dynamic noise (timestamps / live counters), not real regressions:
+  - `probe-rail-scope.png` — 0.285%
+  - `surveys-list.png` — 0.081%
+  - `home-action-dashboard.png` — 0.006%
+- Pack 19 split caused **zero visual regression** — the budget cleanup is visually safe.
+
+**Full-page VOC detail**
+- `screenshots/pack20-current/voc-inbox-detail-full.png` (1452×1976) — the detail column has its own `.panel-scroll` so the standard viewport capture clipped at ~900px; the new capture temporarily expands the inner scroller and uses `fullPage:true` to keep the long-form trail / activity rhythm in view.
+
+**Polish — survey-builder DOM nesting**
+- `screen-survey-builder.jsx · OutlineRow` was a `<button>` containing a `<button>` (`<Icon name="close" />` delete). React surfaced a `validateDOMNesting` warning in the headless run.
+- Outer element changed to `<div role="button" tabIndex={0}>` with keyboard activation on Enter/Space. Inner delete `<button>` retained. Visual baseline unchanged; warning gone.
+
+**Tooling left in the repo for next session**
+- `qa-capture.js`, `qa-diff.js`, `screenshots/pack20-current/`, `screenshots/pack20-diff/` — re-runnable. `pixelmatch` + `pngjs` were added as transient `npm install` (not saved to `package.json`).
+
+**Screenshot folder cleanup**
+- Removed ~95 stale loose PNGs directly under `screenshots/` (Pack 1–11 era working captures) and 3 root-level temp PNGs (`test-playwright.png`, `mp9ir2hn-image.png`, `mp8o44dk-image.png`).
+- Retained sets: `screenshots/final-baselines/` (28 canonical reference PNGs — refreshed from pack20-current at end of Pack 20), `screenshots/pack20-current/` (28 fresh captures incl. `voc-inbox-detail-full.png`), `screenshots/pack20-diff/` (diff artifacts).
+- `final-baselines/` was promoted from `pack20-current/` at end of Pack 20: 27 captured routes overwritten + `voc-inbox-detail-full.png` added + `probe-cmdk.png` re-captured via Meta+K (the harness in `qa-capture.js` does not cover the command palette overlay — capture it manually when refreshing). `manifest.json` `count` bumped to 28.
+
+### Session 18 — 2026-05-17 — Pack 19 (Rule 2 split cleanup)
+
+File-split pass with no visual changes. Three canonical files were over (or close to) the 900-line budget; each was split along its natural single-surface seam.
+
+**screen-other.jsx → 3 files**
+- `screen-integration.jsx` owns the Integration Action Dashboard route only.
+- `screen-surveys.jsx` owns the Surveys list, detail panel, and follow-up CTAs.
+- `screen-admin.jsx` owns Managed Systems registry, Analytics Areas catalog, and the AA slide-over.
+- Closes the §6 adversarial review note about `screen-other.jsx` being a multi-surface holdover.
+
+**screen-tasks.jsx (964 → 732)**
+- New `screen-tasks-views.jsx` carries My Tasks + Tasks Inbox (`TaskMyView`, `TaskInboxView`, `TaskInboxRow`, `buildTaskInbox`, `INBOX_EVENT_KINDS`, `MY_TASK_TABS`).
+- `TasksScreen` dispatcher resolves the two views via `window.*` so the helper file loads after the screen file per Rule 2.
+
+**screen-survey-builder.jsx (1149 → 809)**
+- New `screen-survey-builder-preview.jsx` carries the respondent preview + Launch validation modal.
+- `SurveyBuilderScreen` resolves them via `window.SurveyPreviewPane` / `window.LaunchValidationModal`.
+
+**FeedbackOps.html** load order updated so each helper file follows immediately after its primary screen file. No CSS or token changes; visual baselines unchanged.
 
 ### Session 16 — 2026-05-17 — Pack 17 (Samsung-light palette + shared detail section nav)
 

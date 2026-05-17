@@ -1,0 +1,140 @@
+{
+  "log": [
+    {
+      "name": "home-action-dashboard",
+      "ok": true,
+      "file": "screenshots/pack20-current/home-action-dashboard.png"
+    },
+    {
+      "name": "my-work",
+      "ok": true,
+      "file": "screenshots/pack20-current/my-work.png"
+    },
+    {
+      "name": "voc-inbox-detail",
+      "ok": true,
+      "file": "screenshots/pack20-current/voc-inbox-detail.png"
+    },
+    {
+      "name": "voc-triage-console",
+      "ok": true,
+      "file": "screenshots/pack20-current/voc-triage-console.png"
+    },
+    {
+      "name": "voc-new",
+      "ok": true,
+      "file": "screenshots/pack20-current/voc-new.png"
+    },
+    {
+      "name": "voc-clusters",
+      "ok": true,
+      "file": "screenshots/pack20-current/voc-clusters.png"
+    },
+    {
+      "name": "findings-detail",
+      "ok": true,
+      "file": "screenshots/pack20-current/findings-detail.png"
+    },
+    {
+      "name": "tasks-board",
+      "ok": true,
+      "file": "screenshots/pack20-current/tasks-board.png"
+    },
+    {
+      "name": "tasks-requests",
+      "ok": true,
+      "file": "screenshots/pack20-current/tasks-requests.png"
+    },
+    {
+      "name": "tasks-backlog",
+      "ok": true,
+      "file": "screenshots/pack20-current/tasks-backlog.png"
+    },
+    {
+      "name": "tasks-inbox",
+      "ok": true,
+      "file": "screenshots/pack20-current/tasks-inbox.png"
+    },
+    {
+      "name": "tasks-my",
+      "ok": true,
+      "file": "screenshots/pack20-current/tasks-my.png"
+    },
+    {
+      "name": "tasks-milestones",
+      "ok": true,
+      "file": "screenshots/pack20-current/tasks-milestones.png"
+    },
+    {
+      "name": "tasks-roadmap",
+      "ok": true,
+      "file": "screenshots/pack20-current/tasks-roadmap.png"
+    },
+    {
+      "name": "integration-action-dashboard",
+      "ok": true,
+      "file": "screenshots/pack20-current/integration-action-dashboard.png"
+    },
+    {
+      "name": "integration-evidence",
+      "ok": true,
+      "file": "screenshots/pack20-current/integration-evidence.png"
+    },
+    {
+      "name": "integration-coverage",
+      "ok": true,
+      "file": "screenshots/pack20-current/integration-coverage.png"
+    },
+    {
+      "name": "integration-links",
+      "ok": true,
+      "file": "screenshots/pack20-current/integration-links.png"
+    },
+    {
+      "name": "surveys-list",
+      "ok": true,
+      "file": "screenshots/pack20-current/surveys-list.png"
+    },
+    {
+      "name": "survey-builder",
+      "ok": true,
+      "file": "screenshots/pack20-current/survey-builder.png"
+    },
+    {
+      "name": "survey-result",
+      "ok": true,
+      "file": "screenshots/pack20-current/survey-result.png"
+    },
+    {
+      "name": "admin-managed-systems",
+      "ok": true,
+      "file": "screenshots/pack20-current/admin-managed-systems.png"
+    },
+    {
+      "name": "admin-analytics-areas",
+      "ok": true,
+      "file": "screenshots/pack20-current/admin-analytics-areas.png"
+    },
+    {
+      "name": "admin-permissions",
+      "ok": true,
+      "file": "screenshots/pack20-current/admin-permissions.png"
+    },
+    {
+      "name": "admin-settings",
+      "ok": true,
+      "file": "screenshots/pack20-current/admin-settings.png"
+    },
+    {
+      "name": "probe-rail-scope",
+      "ok": true,
+      "file": "screenshots/pack20-current/probe-rail-scope.png"
+    }
+  ],
+  "errors": [
+    {
+      "where": "console",
+      "msg": "Warning: validateDOMNesting(...): %s cannot appear as a descendant of <%s>.%s <button> button \n    at button\n    at button\n    at OutlineRow (<anonymous>:166:16)\n    at div\n    at div\n    at div\n    at WorkbenchShell (<anonymous>:989:24)\n    at SurveyBuilderScreen (<anonymous>:990:24)\n    at div\n    at App (<anonymous>:192:22)\n    at FeedbackOpsErrorBoundary (<anonymous>:151:5)"
+    }
+  ]
+}

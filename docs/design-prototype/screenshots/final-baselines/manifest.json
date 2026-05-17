@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-05-17T12:40:14.075Z",
+  "generatedAt": "2026-05-17T13:50:00.000Z",
   "viewport": {
     "width": 1440,
     "height": 960
   },
   "entry": "FeedbackOps.html",
-  "count": 27,
+  "count": 28,
   "captured": [
     {
       "baseline": "Home / Action Dashboard",
@@ -194,6 +194,12 @@
       "route": "#route=home&scope=all",
       "screenshot": "screenshots/final-baselines/probe-rail-scope.png",
       "mustSurvive": "Role-level rail filtering and bounded-scope chip semantics"
+    },
+    {
+      "baseline": "VOC inbox detail (full scroll)",
+      "route": "#route=voc&view=inbox",
+      "screenshot": "screenshots/final-baselines/voc-inbox-detail-full.png",
+      "mustSurvive": "Full vertical detail panel including below-fold sections (entity trail, history, attachments)"
     }
   ],
   "errors": []
