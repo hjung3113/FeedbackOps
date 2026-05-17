@@ -35,6 +35,8 @@ upstream.*        → 502 / 503 / 504
 
 A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler runs) maps to `validation.malformed_request` rather than a bare 400.
 
+**ADR-0019 Section A adds `conflict.record_archived` to the closed enum (review S-003).**
+
 ## Code naming
 
 `<subject>.<verb-or-state>` lowercase dotted. Subjects align with `subject_type` in `core.audit_log` so audit rows can carry the same identifier:

@@ -23,10 +23,11 @@ describe('migrations directory', () => {
     const files = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith('.sql'))
       .sort();
-    expect(files.length).toBeGreaterThanOrEqual(9);
+    expect(files.length).toBeGreaterThanOrEqual(10);
     expect(files[0]).toMatch(/^0000_/);
     expect(files[7]).toMatch(/^0007_pgboss_create_queue_shim/);
     expect(files[8]).toMatch(/^0008_slice2_review_followups/);
+    expect(files[9]).toMatch(/^0009_teams_grants_tighten/);
   });
 
   it('Slice 1 migration encodes audit_log role grants per ADR-0008', () => {

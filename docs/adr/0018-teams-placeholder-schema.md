@@ -1,5 +1,7 @@
 # Teams placeholder schema: lay the table in Slice 2, defer CRUD
 
+**ADR-0019 Section C tightens the `core.teams` role grant from SELECT/INSERT/UPDATE/DELETE to SELECT only for `fops_app` (review DB-003 resolved an internal contradiction between line 23 and line 39 below). The placeholder narrative below remains in force; consult ADR-0019 for the active grant.**
+
 `docs/implementation/04-database-and-migrations.md:36` lists `core.teams` as one of the core tables. Line 109 locks `analytics_areas.owner_team_id` as a routing/defaulting hint and assumes the FK target exists. `CONTEXT.md:103-104` defines **Default Owner** as "the Actor or team prefilled as responsible for a Managed System." But `docs/implementation/08-mvp-slice-plan.md` never names a slice that introduces teams — Slice 2 lists only managed_systems and analytics_areas, and later slices target product domains (VOC, Finding, Task, Survey).
 
 This ADR resolves the gap by binding the teams table to Slice 2 as a **placeholder** — schema + FKs only, no management API, no admin UI, no seed rows. The product slice that first needs operator-managed teams may add the management surface without a second schema migration.

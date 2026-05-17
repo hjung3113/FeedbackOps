@@ -64,6 +64,13 @@
       "when": 1779640000000,
       "tag": "0008_slice2_review_followups",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779740000000,
+      "tag": "0009_teams_grants_tighten",
+      "breakpoints": true
     }
   ]
 }
