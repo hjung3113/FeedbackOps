@@ -771,9 +771,11 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(res.statusCode).toBe(403);
     const body = res.json();
     expect(body.code).toBe('permission.scope_required');
+    // F3: requestable_permission is hoisted to top-level envelope per ADR-0012
+    // ErrorEnvelope contract; requiredScope stays in detail.
     expect(body.detail.requiredScope).toEqual([msId]);
-    expect(body.detail.requestable_permission.permission).toBe('voc.triage');
-    expect(body.detail.requestable_permission.managed_system_id).toBe(msId);
+    expect(body.requestable_permission.permission).toBe('voc.triage');
+    expect(body.requestable_permission.managed_system_id).toBe(msId);
   });
 
   // ── 16. Permission revocation race: grant revoked mid-session → 403 ────
