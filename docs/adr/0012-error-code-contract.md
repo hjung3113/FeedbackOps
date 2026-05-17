@@ -44,6 +44,12 @@ A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler r
 - `rich_content.external_image_forbidden` (422) — sanitizer rejected an `image` node (Slice 3 prohibits external images on every surface).
 - `attachment.unsupported_pending_storage_slice` (422) — request supplied non-empty `attachments[]`; the attachment upload endpoint ships in a later slice (#22).
 
+**Slice 3 #13 also extends the inner `detail.fields[].code` enum:**
+- `unexpected_field` — paired with `validation.unexpected_field` / `voc.severity_not_user_settable` when a server-resolved field appears in the request body.
+- `parent_archived` — paired with `conflict.parent_archived` when the referenced parent (MS or AA) is archived; carries the offending field path so the frontend can bind the message to the picker input.
+- `external_image_forbidden` and `disallowed_node` — paired with the rich-content sanitizer rejections (Slice 3 #13 — `rich_content.*`).
+- `unsupported` — paired with `attachment.unsupported_pending_storage_slice` (Slice 3 #13 — `attachment.*`).
+
 ## Code naming
 
 `<subject>.<verb-or-state>` lowercase dotted. Subjects align with `subject_type` in `core.audit_log` so audit rows can carry the same identifier:
