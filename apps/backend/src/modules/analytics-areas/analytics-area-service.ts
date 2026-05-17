@@ -236,6 +236,12 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
       await requireWorkspaceAdmin(checkService, actor);
 
       // Parent MS must exist, share the workspace, and not be archived.
+      // ADR-0019 Section E: lock the parent MS row inside this tx so a
+      // concurrent `archiveManagedSystem` (which also UPDATEs this row
+      // and runs the cascade) serialises against us. Without the lock,
+      // `READ COMMITTED` lets the archive tx commit between our parent
+      // read and our AA INSERT, leaving an active AA under an archived
+      // parent — the exact state Section B Q1/Q2 has to clean up.
       const msRows = await tx
         .select({
           id: managedSystems.id,
@@ -244,6 +250,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         })
         .from(managedSystems)
         .where(eq(managedSystems.id, body.managed_system_id))
+        .for('update')
         .limit(1);
       const ms = msRows[0];
       if (!ms || ms.workspaceId !== actor.workspace_id) {
@@ -367,6 +374,10 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
       // or by a future bypass) is treated as a frozen historical
       // record — PATCH rejected. Operators clean it up via the
       // standalone archive path (Section B Q2).
+      //
+      // ADR-0019 Section E: lock the parent MS row so a concurrent
+      // archive-MS tx cannot flip parent.archived_at between our read
+      // and our AA UPDATE.
       const parentRows = await tx
         .select({ archivedAt: managedSystems.archivedAt })
         .from(managedSystems)
@@ -376,6 +387,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
             eq(managedSystems.id, existing.managedSystemId),
           ),
         )
+        .for('update')
         .limit(1);
       const parent = parentRows[0];
       if (parent && parent.archivedAt !== null) {
@@ -489,6 +501,26 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
       if (!existing) {
         throw new HttpError('not_found.record', 'analytics_area not found');
       }
+
+      // ADR-0019 Section E: lock the parent MS row so a concurrent
+      // MS-archive cascade serialises against this AA archive. The lock
+      // does not change semantics — the archive UPDATE below uses an
+      // `isNull(archivedAt)` predicate so the already-cascade-archived
+      // path still short-circuits — but it pins the ordering for the
+      // audit-row narrative (cascade vs. standalone) and prevents the
+      // S-004 race from producing inconsistent intermediate states.
+      await tx
+        .select({ id: managedSystems.id })
+        .from(managedSystems)
+        .where(
+          and(
+            eq(managedSystems.workspaceId, actor.workspace_id),
+            eq(managedSystems.id, existing.managedSystemId),
+          ),
+        )
+        .for('update')
+        .limit(1);
+
       if (existing.archivedAt !== null) {
         const dto = toDto(existing);
         if (options.idempotencyKey) {
