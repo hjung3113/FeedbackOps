@@ -9,9 +9,10 @@ import type { PgTransaction } from 'drizzle-orm/pg-core';
 
 import * as core from './schema/core.js';
 import * as permission from './schema/permission.js';
+import * as voc from './schema/voc.js';
 import type { Db } from './client.js';
 
-const schema = { ...core, ...permission };
+const schema = { ...core, ...permission, ...voc };
 
 type Schema = typeof schema;
 type TablesWithRelations = ExtractTablesWithRelations<Schema>;
