@@ -230,6 +230,21 @@ export const vocAttachments = vocSchema.table(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
+// voc.voc_permission_decisions_seed_fixture — seed-only fixture table.
+// NOT a production permission cache. Holds deterministic envelopes for
+// two specific VOC fixtures so FE snapshot tests (S3-008) can pin stable
+// decision_ids and evaluated_at without re-running the live permission
+// service. Production resolves envelopes per request.
+// ─────────────────────────────────────────────────────────────────────────
+export const vocPermissionDecisionsSeedFixture = vocSchema.table(
+  'voc_permission_decisions_seed_fixture',
+  {
+    vocId: uuid('voc_id').primaryKey().references(() => vocs.id, { onDelete: 'cascade' }),
+    envelope: jsonb('envelope').notNull(),
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────
 // voc.reporter_facing_status_transitions — seed table for the status
 // transition matrix per docs/frontend/specs/voc.md §4.5.
 // nextReporterStates(currentStatus, tx) reads this table; service code

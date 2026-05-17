@@ -23,6 +23,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { loadConfig } from '../config.js';
 import { type DbHandle, createDb } from '../db/client.js';
 import { actors, analyticsAreas, managedSystems, workspaces } from '../db/schema/core.js';
+import { seedSlice3Vocs } from './voc-fixtures.js';
 
 const SEED_ACTORS = [
   {
@@ -74,6 +75,9 @@ export interface SeedResult {
   actorsInserted: number;
   managedSystemsInserted: number;
   analyticsAreasInserted: number;
+  vocsInserted: number;
+  conversationRowsInserted: number;
+  permissionFixturesInserted: number;
 }
 
 export async function runSeed(handle: DbHandle): Promise<SeedResult> {
@@ -189,12 +193,18 @@ export async function runSeed(handle: DbHandle): Promise<SeedResult> {
     }
   }
 
+  // ── Slice 3 VOC fixtures ────────────────────────────────────────────────
+  const slice3 = await seedSlice3Vocs(handle, workspaceId);
+
   return {
     workspaceId,
     workspaceInserted,
     actorsInserted,
     managedSystemsInserted,
     analyticsAreasInserted,
+    vocsInserted: slice3.vocsInserted,
+    conversationRowsInserted: slice3.conversationRowsInserted,
+    permissionFixturesInserted: slice3.permissionFixturesInserted,
   };
 }
 

@@ -23,7 +23,7 @@ describe.skipIf(!runIntegration)('seed idempotency', () => {
     await handle?.close();
   });
 
-  it('second runSeed() invocation inserts zero rows', async () => {
+  it('second runSeed() invocation inserts zero Slice 1/2 rows; Slice 3 always delete-and-recreates', async () => {
     // Pre-condition: the workspace + three baseline actors are present from
     // the `pnpm db:seed` run that happens before integration tests.
     const before = await handle.pool.query<{ count: string }>(
@@ -33,10 +33,20 @@ describe.skipIf(!runIntegration)('seed idempotency', () => {
     expect(Number(before.rows[0]?.count)).toBeGreaterThanOrEqual(3);
 
     const result = await runSeed(handle);
+
+    // Slice 1/2 baseline: zero new rows on re-run (truly idempotent).
     expect(result.workspaceInserted).toBe(false);
     expect(result.actorsInserted).toBe(0);
     expect(result.managedSystemsInserted).toBe(0);
     expect(result.analyticsAreasInserted).toBe(0);
+
+    // Slice 3 uses delete-and-recreate idempotency: counts are always 12/36/2
+    // because every run deletes seed rows then reinserts them. Determinism is
+    // verified by stable UUIDs (see voc-seed.integration.test.ts), not by
+    // zero-insertion counting.
+    expect(result.vocsInserted).toBe(12);
+    expect(result.conversationRowsInserted).toBe(36);
+    expect(result.permissionFixturesInserted).toBe(2);
 
     const after = await handle.pool.query<{ count: string }>(
       'select count(*)::text as count from core.actors where workspace_id = $1',
@@ -88,8 +98,11 @@ describe.skipIf(!runIntegration)('seed idempotency', () => {
     );
     expect(ownerRows.every((r) => r.external_id === 'mock-admin-1')).toBe(true);
 
+    // ADR-0018 placeholder — zero non-seed teams; Slice 3 seed inserts exactly
+    // one '[seed] VOC owner team' for VOC fixture coverage.
     const { rows: teamRows } = await handle.pool.query<{ count: string }>(
-      'select count(*)::text as count from core.teams where workspace_id = $1',
+      `select count(*)::text as count from core.teams
+        where workspace_id = $1 and name not like '[seed]%'`,
       [WORKSPACE_ID],
     );
     expect(teamRows[0]?.count).toBe('0');

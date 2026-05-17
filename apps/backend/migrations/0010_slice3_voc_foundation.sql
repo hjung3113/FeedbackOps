@@ -375,3 +375,23 @@ INSERT INTO "voc"."reporter_facing_status_transitions" ("from_status","to_status
   -- closed
   ('closed','reopened',   true, NULL),
   ('closed','resolved',   false,'이미 종료된 건입니다. 다시 해결됨으로 되돌리려면 먼저 다시 처리 중으로 전환하세요.');
+--> statement-breakpoint
+
+-- ───── voc.voc_permission_decisions_seed_fixture ──────────────────────
+-- Seed-only fixture table. Holds the deterministic permission_decisions
+-- envelopes the seed writes for two specific VOC fixtures (per #12
+-- acceptance criterion). Production permission resolution does NOT use
+-- this table — the real permission service computes envelopes per request
+-- against permission_grants / permission_denies. This table exists so FE
+-- snapshot tests can pin stable decision_ids and evaluated_at values
+-- without re-running the live permission service.
+CREATE TABLE "voc"."voc_permission_decisions_seed_fixture" (
+  "voc_id" uuid PRIMARY KEY,
+  "envelope" jsonb NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "voc"."voc_permission_decisions_seed_fixture"
+  ADD CONSTRAINT "vpd_seed_voc_id_fk"
+  FOREIGN KEY ("voc_id") REFERENCES "voc"."vocs"("id") ON DELETE cascade;
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "voc"."voc_permission_decisions_seed_fixture" TO fops_app;
