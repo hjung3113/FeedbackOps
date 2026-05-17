@@ -162,6 +162,13 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       const rawBody = (req.body ?? {}) as Record<string, unknown>;
 
       // 3. Strip forbidden fields before Zod parse.
+      // C10 (case-insensitivity note): the check uses `f in rawBody` which is
+      // case-sensitive. A client sending e.g. `Cluster_Decision` bypasses this
+      // guard but is then rejected by patchVocRequestSchema.strict() as an
+      // unrecognized_keys error → validation.failed (generic), rather than the
+      // precise validation.unexpected_field per-field error produced here.
+      // This is acceptable — fuzzy casing is a client bug, not a spec contract.
+      // The .strict() fallback ensures the field is still rejected.
       for (const f of FORBIDDEN_PATCH_FIELDS) {
         if (f in rawBody) {
           const code = FORBIDDEN_PATCH_FIELD_ERROR_CODES[f];
@@ -183,6 +190,19 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       // F6: include ifMatch in the hash so that a retry after a client-side
       // refetch (new If-Match value) is NOT deduplicated against the original
       // request — different If-Match semantically represents a different intent.
+      //
+      // C4 (hash-semantic note): Including ifMatch in the hash shifts the
+      // idempotency contract: a client that retries the same intent with a
+      // fresh If-Match (e.g. after a 409 stale_write → refetch → retry)
+      // produces a different hash → 409 conflict.idempotency_key_reuse instead
+      // of a cache replay. The client must therefore generate a fresh
+      // Idempotency-Key for each distinct If-Match value. ADR-0015 is silent
+      // on whether If-Match is "part of the body" for hashing purposes; this
+      // is a #14-local decision. If a real client trips on the 409, revisit
+      // with a body-only secondary hash that emits a distinct hint field
+      // (e.g. detail.hint: 'if_match_changed') so the client can distinguish
+      // "reused key for different intent" from "same intent, new concurrency
+      // token". Filed as a follow-up concern; no action needed until then.
       const hash = hashRequestBody({ vocId, ifMatch, ...rawBody });
       const result = await db.transaction(async (tx) => {
         await tx.execute(
