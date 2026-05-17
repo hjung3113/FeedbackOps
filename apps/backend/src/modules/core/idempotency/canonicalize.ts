@@ -8,7 +8,10 @@
 
 import { createHash } from 'node:crypto';
 
+const UNDEFINED_SENTINEL = '__fops_undefined__' as const;
+
 export function canonicalizeJson(value: unknown): unknown {
+  if (value === undefined) return UNDEFINED_SENTINEL;
   if (value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map(canonicalizeJson);
   const out: Record<string, unknown> = {};
