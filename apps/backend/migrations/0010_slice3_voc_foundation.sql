@@ -273,3 +273,44 @@ GRANT SELECT, INSERT ON "voc"."voc_public_updates"    TO fops_app;
 GRANT SELECT, INSERT ON "voc"."voc_reporter_replies"  TO fops_app;
 --> statement-breakpoint
 GRANT SELECT, INSERT ON "voc"."voc_internal_comments" TO fops_app;
+
+--> statement-breakpoint
+-- ───── voc.voc_attachments (schema stub; storage endpoint deferred) ───
+-- Polymorphic reference: either voc_id is set (attachment scoped to a VOC
+-- directly) or comment_id is set (attachment scoped to a single
+-- conversation entry) — never both. comment_kind discriminates which
+-- conversation table the comment_id lives in. No SQL-level FK on
+-- comment_id because it spans three tables; service code enforces
+-- the target row exists. A future migration may add per-kind partial FKs.
+
+CREATE TABLE "voc"."voc_attachments" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "voc_id" uuid,
+  "comment_id" uuid,
+  "comment_kind" text,
+  "name" text NOT NULL,
+  "size_bytes" bigint NOT NULL,
+  "mime_type" text NOT NULL,
+  "storage_uri" text NOT NULL,
+  "uploaded_by_actor_id" uuid NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "voc_attachments_subject_xor"
+    CHECK (("voc_id" IS NOT NULL)::int + ("comment_id" IS NOT NULL)::int = 1),
+  CONSTRAINT "voc_attachments_comment_kind_pair"
+    CHECK (("comment_id" IS NULL AND "comment_kind" IS NULL)
+        OR ("comment_id" IS NOT NULL AND "comment_kind" IN ('public_update','reporter_reply','internal_comment')))
+);
+--> statement-breakpoint
+ALTER TABLE "voc"."voc_attachments" ADD CONSTRAINT "voc_attachments_voc_id_fk"
+  FOREIGN KEY ("voc_id") REFERENCES "voc"."vocs"("id") ON DELETE cascade;
+--> statement-breakpoint
+ALTER TABLE "voc"."voc_attachments" ADD CONSTRAINT "voc_attachments_uploaded_by_actor_id_fk"
+  FOREIGN KEY ("uploaded_by_actor_id") REFERENCES "core"."actors"("id") ON DELETE no action;
+--> statement-breakpoint
+CREATE INDEX "voc_attachments_voc_idx"
+  ON "voc"."voc_attachments" ("voc_id") WHERE "voc_id" IS NOT NULL;
+--> statement-breakpoint
+CREATE INDEX "voc_attachments_comment_idx"
+  ON "voc"."voc_attachments" ("comment_id", "comment_kind") WHERE "comment_id" IS NOT NULL;
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "voc"."voc_attachments" TO fops_app;

@@ -14,6 +14,7 @@
 
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -188,5 +189,41 @@ export const vocInternalComments = vocSchema.table(
   },
   (t) => ({
     vocCreatedIdx: index('voc_internal_comments_voc_created_idx').on(t.vocId, t.createdAt),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// voc.voc_attachments — schema stub; storage upload endpoint deferred.
+// Polymorphic reference: exactly one of voc_id / comment_id must be set
+// (XOR CHECK). comment_kind discriminates which conversation table holds
+// the comment_id; no SQL-level FK on comment_id (spans three tables).
+// fops_app gets full DML per ADR-0008 (attachment lifecycle is app-driven).
+// ─────────────────────────────────────────────────────────────────────────
+export const vocAttachments = vocSchema.table(
+  'voc_attachments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    vocId: uuid('voc_id').references(() => vocs.id, { onDelete: 'cascade' }),
+    commentId: uuid('comment_id'),
+    commentKind: text('comment_kind'),
+    name: text('name').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    mimeType: text('mime_type').notNull(),
+    storageUri: text('storage_uri').notNull(),
+    uploadedByActorId: uuid('uploaded_by_actor_id').notNull().references(() => actors.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    vocIdx: index('voc_attachments_voc_idx').on(t.vocId),
+    commentIdx: index('voc_attachments_comment_idx').on(t.commentId, t.commentKind),
+    subjectXor: check(
+      'voc_attachments_subject_xor',
+      sql`(${t.vocId} is not null)::int + (${t.commentId} is not null)::int = 1`,
+    ),
+    commentKindPair: check(
+      'voc_attachments_comment_kind_pair',
+      sql`(${t.commentId} is null and ${t.commentKind} is null)
+        or (${t.commentId} is not null and ${t.commentKind} in ('public_update','reporter_reply','internal_comment'))`,
+    ),
   }),
 );

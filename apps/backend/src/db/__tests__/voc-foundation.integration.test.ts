@@ -351,3 +351,125 @@ describe.skipIf(!runIntegration)('Slice 3 conversation tables', () => {
     ).rejects.toMatchObject({ message: expect.stringMatching(/permission denied/i) });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slice 3 voc_attachments stub (Task 5): polymorphic FK with XOR CHECK.
+// Exactly one of voc_id / comment_id must be non-null. comment_kind is
+// required and restricted when comment_id is set, and must be null otherwise.
+// ─────────────────────────────────────────────────────────────────────────────
+describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
+  let handle: DbHandle;
+  let workspaceId: string;
+  let msId: string;
+  let actorId: string;
+  let vocId: string;
+  let commentId: string;
+
+  beforeAll(async () => {
+    handle = createDb(MIGRATE_URL);
+
+    workspaceId = WORKSPACE_ID;
+    expect(workspaceId).not.toBe('');
+
+    const ms = await handle.pool.query<{ id: string }>(
+      `select id from core.managed_systems where workspace_id = $1 order by created_at limit 1`,
+      [workspaceId],
+    );
+    msId = ms.rows[0]?.id ?? '';
+    expect(msId).not.toBe('');
+
+    const actor = await handle.pool.query<{ id: string }>(
+      `select id from core.actors where workspace_id = $1 limit 1`,
+      [workspaceId],
+    );
+    actorId = actor.rows[0]?.id ?? '';
+    expect(actorId).not.toBe('');
+
+    // Insert a VOC for use across tests.
+    const voc = await handle.pool.query<{ id: string }>(
+      `insert into voc.vocs (
+         workspace_id, display_id, primary_managed_system_id, reporter_id,
+         title, description_rich_content, source_context
+       ) values (
+         $1, voc.next_voc_display_id($1), $2, $3,
+         'test-voc-foundation-attachments',
+         '{"type":"doc","content":[]}'::jsonb,
+         'direct_use'
+       ) returning id`,
+      [workspaceId, msId, actorId],
+    );
+    vocId = voc.rows[0]?.id ?? '';
+    expect(vocId).not.toBe('');
+
+    // Insert an internal_comment for use in XOR tests.
+    const comment = await handle.pool.query<{ id: string }>(
+      `insert into voc.voc_internal_comments (
+         voc_id, actor_id, body_rich_content
+       ) values (
+         $1, $2, '{"type":"doc","content":[]}'::jsonb
+       ) returning id`,
+      [vocId, actorId],
+    );
+    commentId = comment.rows[0]?.id ?? '';
+    expect(commentId).not.toBe('');
+  });
+
+  afterAll(async () => {
+    await handle.pool.query(
+      `delete from voc.voc_attachments where storage_uri like 's3://test-task5/%'`,
+    );
+    await handle.pool.query(
+      `delete from voc.vocs where title = 'test-voc-foundation-attachments'`,
+    );
+    await handle.close();
+  });
+
+  it('rejects both voc_id and comment_id populated (voc_attachments_subject_xor)', async () => {
+    await expect(
+      handle.pool.query(
+        `insert into voc.voc_attachments (
+           voc_id, comment_id, comment_kind,
+           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         ) values (
+           $1, $2, 'internal_comment',
+           'test.pdf', 1024, 'application/pdf',
+           's3://test-task5/both-xor.pdf', $3
+         )`,
+        [vocId, commentId, actorId],
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('voc_attachments_subject_xor'),
+    });
+  });
+
+  it('rejects voc_id with comment_kind populated but no comment_id (voc_attachments_comment_kind_pair)', async () => {
+    await expect(
+      handle.pool.query(
+        `insert into voc.voc_attachments (
+           voc_id, comment_kind,
+           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         ) values (
+           $1, 'public_update',
+           'test.pdf', 1024, 'application/pdf',
+           's3://test-task5/kind-no-comment.pdf', $2
+         )`,
+        [vocId, actorId],
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('voc_attachments_comment_kind_pair'),
+    });
+  });
+
+  it('accepts voc-scoped attachment (voc_id only, no comment_id/kind)', async () => {
+    const result = await handle.pool.query<{ id: string }>(
+      `insert into voc.voc_attachments (
+         voc_id, name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+       ) values (
+         $1, 'attachment.pdf', 2048, 'application/pdf',
+         's3://test-task5/voc-scoped.pdf', $2
+       ) returning id`,
+      [vocId, actorId],
+    );
+    expect(result.rows[0]?.id).toBeDefined();
+  });
+});
