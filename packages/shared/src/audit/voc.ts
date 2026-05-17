@@ -150,3 +150,13 @@ export const internalCommentCreatedDetailSchema = z.object({
   mentions: z.array(uuid()).min(1),
 });
 export type InternalCommentCreatedDetail = z.infer<typeof internalCommentCreatedDetailSchema>;
+
+// ── voc_triage_postponed ───────────────────────────────────────────────────
+// Emitted when `postpone_review: true` is sent in PATCH /vocs/:id (Slice 3
+// #14). triage_state remains 'untriaged'; `triage_state_review_postponed_at`
+// is set to now(). No `postponed_until` in Slice 3 (deferred scheduling).
+export const vocTriagePostponedDetailSchema = z.object({
+  voc_id: uuid(),
+  actor_id: uuid(),
+});
+export type VocTriagePostponedDetail = z.infer<typeof vocTriagePostponedDetailSchema>;
