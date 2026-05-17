@@ -577,7 +577,7 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 | Property | Value |
 |---|---|
 | Method / Path | `POST /vocs` |
-| Headers | `Content-Type: application/json`, `Idempotency-Key: <uuidv4>` (required from frontend — prevents double-submit on Create), `Authorization: Bearer <session>` |
+| Headers | `Content-Type: application/json`, `Idempotency-Key: <uuidv4>` (required from frontend — prevents double-submit on Create), session cookie (`fops_session`, HttpOnly + SameSite=Lax — set by `POST /auth/mock-login` or production OIDC handler) |
 | Request body | `{ primary_managed_system_id, title, description_rich_content: TipTapDoc, analytics_area_id?, source_context?, attachments?: AttachmentRef[] }` |
 | Forbidden fields | `reporter_id`, `severity`, `reporter_facing_status`, `task_status` (per `docs/implementation/03-api-contracts.md:111-118`) — client validation drops them before send |
 | Success response | `201 Created` with full VOC envelope including server-resolved `reporter_id`, `triage_state: 'untriaged'`, `reporter_facing_status: 'received'`, `next_actions`, `permission_decisions` |
