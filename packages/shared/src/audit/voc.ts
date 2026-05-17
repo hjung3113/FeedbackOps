@@ -39,12 +39,13 @@ export const vocCreatedDetailSchema = z.object({
 export type VocCreatedDetail = z.infer<typeof vocCreatedDetailSchema>;
 
 // ── voc_triage_committed ───────────────────────────────────────────────────
-// severity is non-nullable — a triage commit requires a severity decision.
+// severity is nullable: the dismissal path (triage_state='dismissed_not_actionable')
+// commits triage without assigning severity. The `triaged` path always sets it.
 // owner_user_id, owner_team_id, analytics_area_id, and cluster_decision
 // may still be null if not yet determined at commit time.
 export const vocTriageCommittedDetailSchema = z.object({
   voc_id: uuid(),
-  severity: severitySchema,
+  severity: severitySchema.nullable(),
   owner_user_id: uuid().nullable(),
   owner_team_id: uuid().nullable(),
   analytics_area_id: uuid().nullable(),
@@ -53,32 +54,46 @@ export const vocTriageCommittedDetailSchema = z.object({
 export type VocTriageCommittedDetail = z.infer<typeof vocTriageCommittedDetailSchema>;
 
 // ── voc_severity_set ───────────────────────────────────────────────────────
-export const vocSeveritySetDetailSchema = z.object({
-  voc_id: uuid(),
-  from: severitySchema.nullable(),
-  to: severitySchema,
-});
+export const vocSeveritySetDetailSchema = z
+  .object({
+    voc_id: uuid(),
+    from: severitySchema.nullable(),
+    to: severitySchema,
+  })
+  .refine((d) => d.from !== d.to, { message: 'severity_set must record an actual change' });
 export type VocSeveritySetDetail = z.infer<typeof vocSeveritySetDetailSchema>;
 
 // ── voc_owner_assigned ─────────────────────────────────────────────────────
-const ownerRefSchema = z.object({
-  user_id: uuid().nullable(),
-  team_id: uuid().nullable(),
-});
+const ownerRefSchema = z
+  .object({
+    user_id: uuid().nullable(),
+    team_id: uuid().nullable(),
+  })
+  .refine(
+    (r) => !(r.user_id && r.team_id),
+    { message: 'owner XOR: user_id and team_id cannot both be set' },
+  );
 
-export const vocOwnerAssignedDetailSchema = z.object({
-  voc_id: uuid(),
-  from: ownerRefSchema,
-  to: ownerRefSchema,
-});
+export const vocOwnerAssignedDetailSchema = z
+  .object({
+    voc_id: uuid(),
+    from: ownerRefSchema,
+    to: ownerRefSchema,
+  })
+  .refine(
+    (d) => !(d.from.user_id === d.to.user_id && d.from.team_id === d.to.team_id),
+    { message: 'owner assignment must change at least one of user_id / team_id' },
+  );
 export type VocOwnerAssignedDetail = z.infer<typeof vocOwnerAssignedDetailSchema>;
 
 // ── voc_analytics_area_linked ──────────────────────────────────────────────
-export const vocAnalyticsAreaLinkedDetailSchema = z.object({
-  voc_id: uuid(),
-  from: uuid().nullable(),
-  to: uuid().nullable(),
-});
+export const vocAnalyticsAreaLinkedDetailSchema = z
+  .object({
+    voc_id: uuid(),
+    from: uuid().nullable(),
+    to: uuid().nullable(),
+  })
+  .refine((d) => d.from !== d.to, { message: 'analytics_area_linked must record an actual change' });
 export type VocAnalyticsAreaLinkedDetail = z.infer<typeof vocAnalyticsAreaLinkedDetailSchema>;
 
 // ── voc_cluster_decision_recorded ─────────────────────────────────────────
@@ -132,6 +147,6 @@ export const internalCommentCreatedDetailSchema = z.object({
   voc_id: uuid(),
   internal_comment_id: uuid(),
   actor_id: uuid(),
-  mentions: z.array(uuid()),
+  mentions: z.array(uuid()).min(1),
 });
 export type InternalCommentCreatedDetail = z.infer<typeof internalCommentCreatedDetailSchema>;

@@ -30,7 +30,8 @@ export const permissionDecisionSchema = z.object({
   reason: z.string().min(1).optional(),
   required_scope: z.array(z.string().min(1)).optional(),
   summary: safeSummarySchema.optional(),
-  // UTC-only per ADR-0015; offset:false rejects '...+09:00' style strings.
+  // UTC-only per ADR-0015; rejects any explicit numeric offset
+  // (`+09:00`, `-05:00`) and bare offsetless strings. Accepts only the `Z` suffix.
   evaluated_at: z.string().datetime({ offset: false }),
 });
 export type PermissionDecision = z.infer<typeof permissionDecisionSchema>;

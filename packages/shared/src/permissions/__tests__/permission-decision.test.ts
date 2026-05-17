@@ -108,6 +108,28 @@ describe('PermissionDecision', () => {
     ).toThrow();
   });
 
+  it('accepts an evaluated_at with explicit Z (UTC) suffix', () => {
+    expect(() =>
+      permissionDecisionSchema.parse({
+        decision_id: '01919b8c-0000-7000-8000-000000000010',
+        state: 'denied',
+        category: 'utc test',
+        evaluated_at: '2026-05-17T10:00:00.000Z',
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects an evaluated_at without offset suffix (bare ISO)', () => {
+    expect(() =>
+      permissionDecisionSchema.parse({
+        decision_id: '01919b8c-0000-7000-8000-000000000011',
+        state: 'denied',
+        category: 'no offset',
+        evaluated_at: '2026-05-17T10:00:00.000',
+      }),
+    ).toThrow();
+  });
+
   it('rejects an unknown decision state (bogus)', () => {
     expect(() =>
       permissionDecisionSchema.parse({

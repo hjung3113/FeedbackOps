@@ -58,17 +58,29 @@ describe('vocTriageCommittedDetailSchema', () => {
     expect(parsed.cluster_decision).toBe('confirm');
   });
 
-  it('rejects null severity (severity is non-null at triage commit)', () => {
-    expect(() =>
-      vocTriageCommittedDetailSchema.parse({
-        voc_id: U,
-        severity: null,
-        owner_user_id: U,
-        owner_team_id: null,
-        analytics_area_id: null,
-        cluster_decision: 'confirm',
-      }),
-    ).toThrow(z.ZodError);
+  it('accepts null severity (dismissal path)', () => {
+    const parsed = vocTriageCommittedDetailSchema.parse({
+      voc_id: U,
+      severity: null,
+      owner_user_id: null,
+      owner_team_id: null,
+      analytics_area_id: null,
+      cluster_decision: 'dismiss',
+    });
+    expect(parsed.severity).toBeNull();
+    expect(parsed.cluster_decision).toBe('dismiss');
+  });
+
+  it('triaged with non-null severity', () => {
+    const parsed = vocTriageCommittedDetailSchema.parse({
+      voc_id: U,
+      severity: 'critical',
+      owner_user_id: U,
+      owner_team_id: null,
+      analytics_area_id: U,
+      cluster_decision: null,
+    });
+    expect(parsed.severity).toBe('critical');
   });
 });
 
@@ -80,6 +92,16 @@ describe('vocSeveritySetDetailSchema', () => {
       to: 'critical',
     });
     expect(parsed.to).toBe('critical');
+  });
+
+  it('rejects no-op severity_set (from === to)', () => {
+    expect(() =>
+      vocSeveritySetDetailSchema.parse({
+        voc_id: U,
+        from: 'high',
+        to: 'high',
+      }),
+    ).toThrow();
   });
 });
 
@@ -93,6 +115,36 @@ describe('vocOwnerAssignedDetailSchema', () => {
     expect(parsed.from.user_id).toBe(U);
     expect(parsed.to.team_id).toBe(U);
   });
+
+  it('rejects no-op owner assignment (from === to)', () => {
+    expect(() =>
+      vocOwnerAssignedDetailSchema.parse({
+        voc_id: U,
+        from: { user_id: U, team_id: null },
+        to: { user_id: U, team_id: null },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects both-populated from (XOR violation)', () => {
+    expect(() =>
+      vocOwnerAssignedDetailSchema.parse({
+        voc_id: U,
+        from: { user_id: U, team_id: U },
+        to: { user_id: null, team_id: U },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects both-populated to (XOR violation)', () => {
+    expect(() =>
+      vocOwnerAssignedDetailSchema.parse({
+        voc_id: U,
+        from: { user_id: U, team_id: null },
+        to: { user_id: U, team_id: U },
+      }),
+    ).toThrow();
+  });
 });
 
 describe('vocAnalyticsAreaLinkedDetailSchema', () => {
@@ -103,6 +155,16 @@ describe('vocAnalyticsAreaLinkedDetailSchema', () => {
       to: U,
     });
     expect(parsed.to).toBe(U);
+  });
+
+  it('rejects no-op analytics_area_linked (from === to)', () => {
+    expect(() =>
+      vocAnalyticsAreaLinkedDetailSchema.parse({
+        voc_id: U,
+        from: U,
+        to: U,
+      }),
+    ).toThrow();
   });
 });
 
@@ -251,6 +313,17 @@ describe('internalCommentCreatedDetailSchema', () => {
         mentions: ['not-a-uuid'],
       }),
     ).toThrow(z.ZodError);
+  });
+
+  it('rejects empty mentions array (min(1) required)', () => {
+    expect(() =>
+      internalCommentCreatedDetailSchema.parse({
+        voc_id: U,
+        internal_comment_id: U,
+        actor_id: U,
+        mentions: [],
+      }),
+    ).toThrow();
   });
 });
 
