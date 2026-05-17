@@ -212,6 +212,71 @@ describe.skipIf(!runIntegration)('checkCapability', () => {
     });
   });
 
+  it('MS-scoped grant satisfies a scoped check → via managed_system_scope (ADR-0019 Section D)', async () => {
+    // Plant an MS-scoped grant on a non-role-derived capability. The
+    // check supplies `scope.managed_system_id` matching the grant's
+    // `managed_system_id`. Expected attribution: `via: 'managed_system_scope'`.
+    const tempActor: ActorContext = {
+      actor_id: tempActorId,
+      workspace_id: WORKSPACE_ID,
+      role_level: 'user',
+    };
+    const msRow = await handle.pool.query<{ id: string }>(
+      `select id from core.managed_systems where workspace_id = $1 and archived_at is null order by slug limit 1`,
+      [WORKSPACE_ID],
+    );
+    expect(msRow.rowCount).toBe(1);
+    const msId = msRow.rows[0]?.id;
+    if (!msId) return;
+    const inserted = await handle.db
+      .insert(permissionGrants)
+      .values({
+        workspaceId: WORKSPACE_ID,
+        actorId: tempActorId,
+        capability: 'workspace.admin',
+        managedSystemId: msId,
+        grantedByActorId: adminActor.actor_id,
+      })
+      .returning({ id: permissionGrants.id });
+    const d = await svc.checkCapability(tempActor, 'workspace.admin', {
+      workspace_id: WORKSPACE_ID,
+      managed_system_id: msId,
+    });
+    expect(d).toEqual({ allow: true, via: 'managed_system_scope', grant_id: inserted[0]?.id });
+  });
+
+  it('MS-scoped grant does NOT satisfy a workspace-wide check in Slice 2 (Slice 3 deferred)', async () => {
+    // Same grant as above, but the check supplies no scope.managed_system_id.
+    // Section D explicitly defers the fallback direction (MS-scoped grant
+    // satisfies workspace-wide check on MS-eligible capabilities) to
+    // Slice 3. In Slice 2 the workspace-wide check must NOT match the
+    // MS-scoped grant.
+    const tempActor: ActorContext = {
+      actor_id: tempActorId,
+      workspace_id: WORKSPACE_ID,
+      role_level: 'user',
+    };
+    const msRow = await handle.pool.query<{ id: string }>(
+      `select id from core.managed_systems where workspace_id = $1 and archived_at is null order by slug limit 1`,
+      [WORKSPACE_ID],
+    );
+    const msId = msRow.rows[0]?.id;
+    if (!msId) return;
+    await handle.db.insert(permissionGrants).values({
+      workspaceId: WORKSPACE_ID,
+      actorId: tempActorId,
+      capability: 'workspace.admin',
+      managedSystemId: msId,
+      grantedByActorId: adminActor.actor_id,
+    });
+    const d = await svc.checkCapability(tempActor, 'workspace.admin', {
+      workspace_id: WORKSPACE_ID,
+    });
+    expect(d.allow).toBe(false);
+    if (d.allow) return;
+    expect(d.reason).toBe('no_grant');
+  });
+
   it('grant revoked → grant_revoked', async () => {
     const tempActor: ActorContext = {
       actor_id: tempActorId,
