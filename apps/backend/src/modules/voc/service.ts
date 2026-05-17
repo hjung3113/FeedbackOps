@@ -315,6 +315,16 @@ export function createVocService(deps: VocServiceDeps) {
       }
       const pNewOwnerUser = input.owner_user_id !== undefined ? (input.owner_user_id ?? null) : row.ownerUserId;
       const pNewOwnerTeam = input.owner_team_id !== undefined ? (input.owner_team_id ?? null) : row.ownerTeamId;
+      // C2: the input-level mutex (step 6 above) only catches the case where
+      // both owner fields are present in the payload. But if the row already
+      // has one owner set and the client sends only the OTHER owner, the
+      // resolved values end up both non-null → DB CHECK violation → 500.
+      // Check the resolved pair here so the rejection is a clean 422.
+      if (pNewOwnerUser != null && pNewOwnerTeam != null) {
+        throw new HttpError('validation.failed', 'cannot have both owner_user_id and owner_team_id set; explicitly clear the other owner in the same PATCH', {
+          fields: [{ path: ['owner_team_id'], code: 'invalid' }],
+        });
+      }
       if (pNewOwnerUser !== row.ownerUserId || pNewOwnerTeam !== row.ownerTeamId) {
         postponePatch.ownerUserId = pNewOwnerUser;
         postponePatch.ownerTeamId = pNewOwnerTeam;
@@ -433,6 +443,15 @@ export function createVocService(deps: VocServiceDeps) {
     // Owner fields treated as a unit.
     const newOwnerUser = input.owner_user_id !== undefined ? (input.owner_user_id ?? null) : row.ownerUserId;
     const newOwnerTeam = input.owner_team_id !== undefined ? (input.owner_team_id ?? null) : row.ownerTeamId;
+    // C2: resolved-value mutex — catches the case where the row already has
+    // one owner and the client sends only the other without clearing the first.
+    // The input-level mutex (step 6) only fires when both fields appear in the
+    // payload; this guard fires on the resolved (input ?? row) pair.
+    if (newOwnerUser != null && newOwnerTeam != null) {
+      throw new HttpError('validation.failed', 'cannot have both owner_user_id and owner_team_id set; explicitly clear the other owner in the same PATCH', {
+        fields: [{ path: ['owner_team_id'], code: 'invalid' }],
+      });
+    }
     if (newOwnerUser !== row.ownerUserId || newOwnerTeam !== row.ownerTeamId) {
       patch.ownerUserId = newOwnerUser;
       patch.ownerTeamId = newOwnerTeam;

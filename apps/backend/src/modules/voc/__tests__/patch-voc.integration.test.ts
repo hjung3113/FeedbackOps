@@ -846,6 +846,51 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(res.json().code).toBe('validation.failed');
   });
 
+  // ── 11b. Resolved-value owner mutex: row has owner_user_id, PATCH sends only owner_team_id → 422 ──
+  // C2: the input-level mutex catches { owner_user_id, owner_team_id } in the same payload.
+  // This test proves the resolved-value guard fires when the existing row already has one
+  // owner and the client sends only the other without clearing the first.
+  // We use a random UUID for owner_team_id — the service-level guard fires before the
+  // UPDATE/FK check, so no real team row needs to exist.
+  it('row has owner_user_id set, PATCH sends only { owner_team_id } → 422 validation.failed (not 500)', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-patch-owner-resolved', 'Owner Resolved MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const voc = await postVoc(
+      app,
+      reporter,
+      { primary_managed_system_id: msId, title: 'v', description_rich_content: paragraphDoc('x') },
+      randomUUID(),
+    );
+
+    // First PATCH: assign owner_user_id.
+    const res1 = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { owner_user_id: adminActorId },
+      { idempotencyKey: randomUUID(), ifMatch: voc.updated_at },
+    );
+    expect(res1.statusCode).toBe(200);
+    const afterPatch1 = (res1.json() as { updated_at: string }).updated_at;
+
+    // Second PATCH: send only owner_team_id (non-existent UUID) without clearing owner_user_id.
+    // The service-level resolved-value mutex must fire with 422, not 500 from a DB CHECK violation.
+    const res2 = await patchVoc(
+      app,
+      admin,
+      voc.id,
+      { owner_team_id: randomUUID() },
+      { idempotencyKey: randomUUID(), ifMatch: afterPatch1 },
+    );
+    expect(res2.statusCode).toBe(422);
+    const body2 = res2.json();
+    expect(body2.code).toBe('validation.failed');
+    const ownerTeamField = (body2.detail.fields as Array<{ path: string[]; code: string }>)
+      .find((f) => f.path.includes('owner_team_id'));
+    expect(ownerTeamField?.code).toBe('invalid');
+  });
+
   // ── 12. AA cross-MS scope violation → 422 ──────────────────────────────
   // F9: The service-level guard at service.ts:244-247 fires before any UPDATE
   // that would invoke the DB trigger. The test asserts the field-level hint
