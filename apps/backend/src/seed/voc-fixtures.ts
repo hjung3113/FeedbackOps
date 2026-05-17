@@ -154,24 +154,23 @@ export async function seedSlice3Vocs(handle: DbHandle, workspaceId: string): Pro
       .limit(1);
     if (!reporter) throw new Error('seedSlice3Vocs: no actors row for workspace');
 
-    // ── Seed team (idempotent — reuse if already present) ─────────────────
-    let seedTeamId: string;
+    // ── Resolve seed team (inserted by migration 0010 as fops_migrate) ──────
+    // ADR-0019: fops_app has no INSERT on core.teams until the Slice that ships
+    // team CRUD. The '[seed] VOC owner team' row is a migration-time fixture;
+    // the seed CLI only needs SELECT here.
     const SEED_TEAM_NAME = '[seed] VOC owner team';
     const [existingTeam] = await tx
       .select({ id: teams.id })
       .from(teams)
       .where(and(eq(teams.workspaceId, workspaceId), eq(teams.name, SEED_TEAM_NAME)))
       .limit(1);
-    if (existingTeam) {
-      seedTeamId = existingTeam.id;
-    } else {
-      const [inserted] = await tx
-        .insert(teams)
-        .values({ workspaceId, name: SEED_TEAM_NAME })
-        .returning({ id: teams.id });
-      if (!inserted) throw new Error('seedSlice3Vocs: failed to insert seed team');
-      seedTeamId = inserted.id;
+    if (!existingTeam) {
+      throw new Error(
+        `seed: missing [seed] VOC owner team for workspace ${workspaceId}. ` +
+        `Migration 0010 should have inserted it; check migration ran.`,
+      );
     }
+    const seedTeamId = existingTeam.id;
 
     let convRows = 0;
     let fixtureRows = 0;

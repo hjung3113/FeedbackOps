@@ -395,3 +395,18 @@ ALTER TABLE "voc"."voc_permission_decisions_seed_fixture"
   FOREIGN KEY ("voc_id") REFERENCES "voc"."vocs"("id") ON DELETE cascade;
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON "voc"."voc_permission_decisions_seed_fixture" TO fops_app;
+
+-- ───── Slice 3 seed fixture: `[seed] VOC owner team` ──────────────────
+-- Inserted at migration time (fops_migrate role) so the seed CLI can
+-- reference it via SELECT-only and never needs INSERT on core.teams.
+-- ADR-0019 reserves core.teams write grants for the Slice that ships
+-- team CRUD management services; that slice has not shipped yet.
+-- This row is part of the Slice 3 schema fixture set — same status as
+-- the seeded reporter_facing_status_transitions matrix rows above.
+INSERT INTO "core"."teams" ("workspace_id", "name")
+SELECT w.id, '[seed] VOC owner team'
+FROM "core"."workspaces" w
+WHERE NOT EXISTS (
+  SELECT 1 FROM "core"."teams" t
+  WHERE t.workspace_id = w.id AND t.name = '[seed] VOC owner team' AND t.archived_at IS NULL
+);
