@@ -2,7 +2,7 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { errorCodeSchema } from '@fops/shared';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import {
   type ZodTypeProvider,
   serializerCompiler,
@@ -174,14 +174,16 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // inline (one DB lookup per mutation) so the per-actor bucket is the
   // actor's actor_id when a valid session cookie is present, and `req.ip`
   // only for unauthenticated traffic.
-  const mutationKeyGenerator = async (req: {
-    cookies?: Record<string, string | undefined>;
-    ip: string;
-  }): Promise<string> => {
-    const token = req.cookies?.[SESSION_COOKIE_NAME];
+  const mutationKeyGenerator = async (req: FastifyRequest): Promise<string> => {
+    const raw = req.cookies?.[SESSION_COOKIE_NAME];
+    const token = typeof raw === 'string' ? raw : undefined;
     if (token) {
-      const actorId = await sessionService.lookupActorIdByToken(token);
-      if (actorId) return actorId;
+      try {
+        const actorId = await sessionService.lookupActorIdByToken(token);
+        if (actorId) return actorId;
+      } catch (err) {
+        req.log?.warn?.({ err }, 'rate-limit actor lookup failed; falling back to ip');
+      }
     }
     return req.ip;
   };
