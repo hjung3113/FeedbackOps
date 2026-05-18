@@ -303,6 +303,39 @@ export async function insertPermissionDecisionsSeed(
   );
 }
 
+// ── Deny helpers via SQL ─────────────────────────────────────────────────────
+
+export async function denyCapability(
+  dbHandle: DbHandle,
+  workspaceId: string,
+  actorId: string,
+  capability: string,
+  msId: string | null,
+  createdByActorId: string,
+): Promise<string> {
+  const res = await dbHandle.pool.query<{ id: string }>(
+    `insert into permission.permission_denies
+       (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id)
+     values ($1, $2, $3, $4, 'test-deny', $5)
+     returning id`,
+    [workspaceId, actorId, capability, msId, createdByActorId],
+  );
+  const id = res.rows[0]?.id;
+  if (!id) throw new Error(`denyCapability: no id returned for ${capability}`);
+  return id;
+}
+
+export async function revokeDeny(
+  dbHandle: DbHandle,
+  denyId: string,
+  revokedByActorId: string,
+): Promise<void> {
+  await dbHandle.pool.query(
+    `update permission.permission_denies set revoked_at = now(), revoked_by_actor_id = $2 where id = $1`,
+    [denyId, revokedByActorId],
+  );
+}
+
 // ── Cleanup helpers ──────────────────────────────────────────────────────────
 
 /** Cleans all VOC read-test fixtures from product tables. Scopes by MS slug prefix.
@@ -321,9 +354,17 @@ export async function cleanupReadTestTables(
   workspaceId: string,
   msSlugPrefix: string,
 ): Promise<void> {
-  // 1. Clean grants for test dev actors before removing actors.
+  // 1. Clean grants + denies for test dev actors before removing actors.
   await dbHandle.pool.query(
     `delete from permission.permission_grants
+      where workspace_id = $1
+        and actor_id in (
+          select id from core.actors where external_id like 'mock-dev-read-%' and workspace_id = $1
+        )`,
+    [workspaceId],
+  );
+  await dbHandle.pool.query(
+    `delete from permission.permission_denies
       where workspace_id = $1
         and actor_id in (
           select id from core.actors where external_id like 'mock-dev-read-%' and workspace_id = $1

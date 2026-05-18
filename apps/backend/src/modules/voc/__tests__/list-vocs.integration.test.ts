@@ -18,6 +18,7 @@ import { buildServer } from '../../../server.js';
 import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
+  denyCapability,
   grantCapability,
   insertDevActor,
   insertMsDirectly,
@@ -547,13 +548,184 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
   });
 
   // ── AC22: Workspace isolation ─────────────────────────────────────────────
-  // HARNESS GAP: AC22 — creating a second workspace and cross-workspace actor in
-  // the test harness requires direct DB inserts into workspaces + seed actor setup
-  // that duplicates the full mock bootstrap. The workspace filter is exercised
-  // implicitly by every test (all queries scope to WORKSPACE_ID). Direct
-  // cross-workspace test would require a second WORKSPACE_ID env var not supplied
-  // by the harness.
-  it('AC22: workspace isolation — route always scopes to actor workspace (implicit in all tests)', () => {
-    expect(true).toBe(true);
+
+  it('AC22: workspace isolation — VOC in a second workspace is not visible to actor in workspace 1', async () => {
+    // Create a second workspace so FK is satisfied, then insert a VOC and MS under it.
+    const secondWorkspaceId = randomUUID();
+    await dbHandle.pool.query(
+      `insert into core.workspaces (id, name) values ($1, 'Test WS 2 - isolation')`,
+      [secondWorkspaceId],
+    );
+
+    // Insert an MS under the second workspace.
+    const isoMsRes = await dbHandle.pool.query<{ id: string }>(
+      `insert into core.managed_systems (workspace_id, slug, name) values ($1, $2, 'Iso MS') returning id`,
+      [secondWorkspaceId, `iso-ms-${secondWorkspaceId.slice(0, 8)}`],
+    );
+    const isoMsId = isoMsRes.rows[0]?.id;
+    if (!isoMsId) throw new Error('Failed to insert isolation MS');
+
+    // Insert an actor under the second workspace (needed for reporter_id FK).
+    const isoActorRes = await dbHandle.pool.query<{ id: string }>(
+      `insert into core.actors (workspace_id, external_id, email, display_name, role_level, actor_type)
+         values ($1, 'iso-reporter', 'iso@local', 'Iso Reporter', 'user', 'internal_member') returning id`,
+      [secondWorkspaceId],
+    );
+    const isoActorId = isoActorRes.rows[0]?.id;
+    if (!isoActorId) throw new Error('Failed to insert isolation actor');
+
+    // Insert a VOC under the second workspace.
+    const isolatedVocRes = await dbHandle.pool.query<{ id: string }>(
+      `insert into voc.vocs
+         (workspace_id, primary_managed_system_id, reporter_id, display_id, title,
+          description_rich_content, source_context, reporter_facing_status, triage_state)
+       values
+         ($1, $2, $3, voc.next_voc_display_id($1::uuid), 'Cross-Workspace VOC',
+          '{"type":"doc","content":[]}'::jsonb,
+          'direct_use', 'received', 'untriaged')
+       returning id`,
+      [secondWorkspaceId, isoMsId, isoActorId],
+    );
+    const isolatedVocId = isolatedVocRes.rows[0]?.id;
+    if (!isolatedVocId) throw new Error('Failed to insert cross-workspace VOC');
+
+    try {
+      // Admin in WORKSPACE_ID should NOT see the cross-workspace VOC in list.
+      const res = await app.inject({
+        method: 'GET',
+        url: '/vocs?view=inbox',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ items: { id: string }[] }>();
+      const ids = body.items.map((i) => i.id);
+      expect(ids).not.toContain(isolatedVocId);
+
+      // Also: detail endpoint → 404 for cross-workspace VOC.
+      const detailRes = await app.inject({
+        method: 'GET',
+        url: `/vocs/${isolatedVocId}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+      });
+      expect(detailRes.statusCode).toBe(404);
+    } finally {
+      // Cleanup the cross-workspace rows (reverse FK order).
+      await dbHandle.pool.query(`delete from voc.vocs where workspace_id = $1`, [secondWorkspaceId]);
+      await dbHandle.pool.query(`delete from core.actors where workspace_id = $1`, [secondWorkspaceId]);
+      await dbHandle.pool.query(`delete from core.managed_systems where workspace_id = $1`, [secondWorkspaceId]);
+      await dbHandle.pool.query(`delete from core.workspaces where id = $1`, [secondWorkspaceId]);
+    }
+  });
+
+  // ── B1: permission_denies respected in scope resolution ──────────────────
+
+  it('B1a: actor with voc.read grant + active MS-scoped deny → view=inbox returns empty for that MS', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-deny-a`, 'Deny MS-A');
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('b1a'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Denied MS VOC');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${devCookie}` },
+    });
+    // Grant + deny → scope is empty → 403 (no scope) or empty items.
+    // The deny removes the MS from resolved scope, so the actor has no read scope.
+    const body = res.json<{ code?: string; items?: unknown[] }>();
+    if (res.statusCode === 200) {
+      // If scoped read returned 200 with 0 items (empty scope after deny subtraction):
+      expect(body.items).toHaveLength(0);
+    } else {
+      // 403 is also correct (scope collapsed to empty → permission.denied or scope_required).
+      expect([403, 422]).toContain(res.statusCode);
+    }
+  });
+
+  it('B1b: actor with voc.read grant + workspace-wide deny → view=inbox → 403 (scope collapses to empty)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-deny-ws`, 'Deny WS MS');
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('b1b'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+    // Workspace-wide deny (managed_system_id = null) collapses scope to empty.
+    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', null, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'WS Denied VOC');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/vocs?view=inbox',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${devCookie}` },
+    });
+    // Workspace-wide deny → scope empty → 403.
+    if (res.statusCode === 200) {
+      // Acceptable only if items is empty (deny correctly subtracted all grants).
+      expect(res.json<{ items: unknown[] }>().items).toHaveLength(0);
+    } else {
+      expect([403, 422]).toContain(res.statusCode);
+    }
+  });
+
+  // ── M6: severity null ordering ────────────────────────────────────────────
+
+  it('M6a: sort=severity:asc → nulls sort last (after all real severities)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sev-asc`, 'Sev Asc MS');
+
+    const lowVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Sev Low', { severity: 'low' });
+    const critVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Sev Critical', { severity: 'critical' });
+    const null1 = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Sev Null 1');
+    const null2 = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Sev Null 2');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}&sort=severity%3Aasc&limit=10`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: { id: string; severity: string | null }[] }>();
+    const ids = body.items.map((i) => i.id);
+
+    // All 4 VOCs must appear.
+    expect(ids).toContain(lowVoc.id);
+    expect(ids).toContain(critVoc.id);
+    expect(ids).toContain(null1.id);
+    expect(ids).toContain(null2.id);
+
+    // low must come before critical (ASC ordinal 1 < 4).
+    expect(ids.indexOf(lowVoc.id)).toBeLessThan(ids.indexOf(critVoc.id));
+
+    // Both null VOCs must come after both non-null VOCs (nulls last).
+    const lastNonNullIdx = Math.max(ids.indexOf(lowVoc.id), ids.indexOf(critVoc.id));
+    const firstNullIdx = Math.min(ids.indexOf(null1.id), ids.indexOf(null2.id));
+    expect(lastNonNullIdx).toBeLessThan(firstNullIdx);
+  });
+
+  it('M6b: sort=severity:desc → nulls sort last (after all real severities)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sev-desc`, 'Sev Desc MS');
+
+    const lowVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Desc Low', { severity: 'low' });
+    const critVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Desc Critical', { severity: 'critical' });
+    const nullVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Desc Null');
+    const medVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Desc Medium', { severity: 'medium' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}&sort=severity%3Adesc&limit=10`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: { id: string; severity: string | null }[] }>();
+    const ids = body.items.map((i) => i.id);
+
+    // critical must come before medium, medium before low (DESC ordinal).
+    expect(ids.indexOf(critVoc.id)).toBeLessThan(ids.indexOf(medVoc.id));
+    expect(ids.indexOf(medVoc.id)).toBeLessThan(ids.indexOf(lowVoc.id));
+
+    // null VOC must come after all non-null VOCs (nulls last).
+    const lastNonNullIdx = Math.max(ids.indexOf(critVoc.id), ids.indexOf(medVoc.id), ids.indexOf(lowVoc.id));
+    expect(ids.indexOf(nullVoc.id)).toBeGreaterThan(lastNonNullIdx);
   });
 });
