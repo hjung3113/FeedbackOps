@@ -16,6 +16,7 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+import { allManagedSystemIds } from '../core/managed-systems/read-projections.js';
 import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 
 export type Scope = { kind: 'all' } | { kind: 'scoped'; managedSystemIds: string[] };
@@ -34,9 +35,12 @@ export interface ScopeActorContext {
  * (used for actorEffectiveScope).
  *
  * Admin role short-circuits to 'all' regardless of grants.
- * Workspace-wide grant (managed_system_id IS NULL) → 'all', unless a
- *   workspace-wide deny exists for that capability → scope collapses to empty.
- * MS-scoped deny → removes that MS from the resolved grant list.
+ * Workspace-wide grant (managed_system_id IS NULL) resolves as follows:
+ *   - Workspace-wide deny exists → scope collapses to empty (scoped:[]).
+ *   - MS-scoped deny(ies) exist → resolve allManagedSystemIds(workspace) minus
+ *     denied set → {kind:'scoped', managedSystemIds: <all minus denied>}.
+ *   - No denies → {kind:'all'}.
+ *   NOTE: Admin role bypasses this function entirely (short-circuit above).
  * MS-scoped grants → scoped list of MS ids (after deny subtraction).
  * No grants → scoped:[].
  */
@@ -99,21 +103,21 @@ export async function actorScopeForCapability(
     denyRows.map((r) => r.managedSystemId).filter((id): id is string => id !== null),
   );
 
-  // Workspace-wide grant (managed_system_id IS NULL) → 'all' minus denied MS ids.
+  // Workspace-wide grant (managed_system_id IS NULL) → resolve with deny subtraction.
   if (grantRows.some((r) => r.managedSystemId === null)) {
-    // WHY: workspace-wide grant gives all MSs, but MS-scoped denies subtract specific MSs.
-    // We cannot enumerate all MSs here (that requires a DB join to core.managed_systems),
-    // so we return 'all' and let the caller's SQL JOIN pick up the deny exclusion.
-    // The MS-scoped deny subtraction from a workspace-wide grant is enforced via
-    // actorEffectiveScope using voc.read ∪ voc.triage (M1 fix), which narrows by
-    // checking each MS individually. For workspace-wide grants with no workspace-wide deny,
-    // returning 'all' is correct; MS-level denies on workspace-grant holders are rare
-    // and the route-layer checkCapability (in check-service.ts) enforces the per-MS deny.
-    // For list-model filtering (scope-based), 'all' means "use scope; per-MS denies are
-    // enforced at the checkCapability level for mutations, not list reads."
-    // TODO(future): if MS-scoped deny on workspace-grant holder becomes a hard requirement,
-    // extend this to join core.managed_systems and subtract denied MSs.
-    return { kind: 'all' };
+    // WHY (N-MAJ-1 cycle-2 fix): a workspace-wide grant gives access to all MSs,
+    // but MS-scoped denies must carve out specific MSs from that set.
+    // If no MS-scoped denies exist, return 'all' (fast path).
+    // If MS-scoped denies exist, enumerate all workspace MSs and subtract the denied
+    // set — this is the only correct model; returning 'all' silently drops the denies.
+    // Admin actors never reach this branch (short-circuited to 'all' above).
+    if (deniedMsIds.size === 0) {
+      return { kind: 'all' };
+    }
+    // Fetch all non-archived MS ids in the workspace and subtract denied ones.
+    const allMsIds = await allManagedSystemIds(db, actor.workspace_id);
+    const allowed = allMsIds.filter((id) => !deniedMsIds.has(id));
+    return { kind: 'scoped', managedSystemIds: allowed };
   }
 
   // Collect distinct MS ids from grants, subtracting denied ones.
