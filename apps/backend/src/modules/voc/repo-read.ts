@@ -16,15 +16,13 @@ import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import {
-  managedSystems,
-} from '../../db/schema/core.js';
-import {
   vocInternalComments,
   vocPermissionDecisionsSeedFixture,
   vocPublicUpdates,
   vocReporterReplies,
   vocs,
 } from '../../db/schema/voc.js';
+import { allManagedSystemIds } from '../core/managed-systems/read-projections.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 import { actorScopeForCapability } from '../permissions/scope-service.js';
 import { SEVERITY_ORDINAL, SORT_CONFIG } from './cursor.js';
@@ -43,9 +41,13 @@ export interface ActorContextLite {
 // ── Scope resolvers ───────────────────────────────────────────────────────────
 
 /**
- * Effective scope: ANY non-revoked, non-expired grant of ANY capability for
- * the actor in the workspace. MS-scoped grants → list of MS ids;
- * workspace-wide grants → 'all'. Admin role → 'all'.
+ * Effective scope: union of voc.read and voc.triage grants for the actor.
+ * Admin role → 'all'. MS-scoped grants → union of both capability MS lists.
+ *
+ * WHY: using undefined (any capability) let future non-VOC capabilities
+ * widen VOC summary visibility, creating an unintended existence-probe
+ * surface. Restricting to voc.read ∪ voc.triage bounds the effective
+ * scope to capabilities that are semantically relevant to VOC reads (M1).
  *
  * Used for out_of_scope_summary visibility and detail-existence-probe defense.
  */
@@ -53,7 +55,19 @@ export async function actorEffectiveScope(
   db: Db | Tx,
   actor: ActorContextLite,
 ): Promise<Scope> {
-  return actorScopeForCapability(db, actor as ScopeActorContext, undefined);
+  if (actor.role_level === 'admin') {
+    return { kind: 'all' };
+  }
+  const [readScope, triageScope] = await Promise.all([
+    actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read'),
+    actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage'),
+  ]);
+  // Union: if either is 'all', effective scope is 'all'.
+  if (readScope.kind === 'all' || triageScope.kind === 'all') {
+    return { kind: 'all' };
+  }
+  const unionIds = [...new Set([...readScope.managedSystemIds, ...triageScope.managedSystemIds])];
+  return { kind: 'scoped', managedSystemIds: unionIds };
 }
 
 /**
@@ -73,18 +87,6 @@ export async function actorTriageScope(
   actor: ActorContextLite,
 ): Promise<Scope> {
   return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage');
-}
-
-/** All MS ids in workspace (used for diagnostics only — NOT for out_of_scope). */
-export async function allManagedSystemIds(
-  db: Db | Tx,
-  workspaceId: string,
-): Promise<string[]> {
-  const rows = await (db as Db)
-    .select({ id: managedSystems.id })
-    .from(managedSystems)
-    .where(sql`${managedSystems.workspaceId} = ${workspaceId} AND ${managedSystems.archivedAt} IS NULL`);
-  return rows.map((r) => r.id);
 }
 
 // ── SQL array helpers ─────────────────────────────────────────────────────────
@@ -175,15 +177,19 @@ function mapVocRow(row: Record<string, unknown>): VocReadRow {
   };
 }
 
-// Severity ordinal CASE expression for SQL (returns 0 when severity IS NULL
-// so nulls sort last in ASC, first in DESC; ordinal 1..4 for low..critical).
+// Severity ordinal CASE expression for SQL (ordinal 1..4 for low..critical;
+// NULL is excluded from CASE so it evaluates to SQL NULL).
+// WHY: using ELSE 0 made nulls sort first in DESC (0 < any ordinal).
+// Fix (M6): use a separate IS NULL flag so nulls always sort last in both
+// ASC and DESC: ORDER BY (severity IS NULL) ASC, severity_ord ASC|DESC.
+// The IS NULL flag (false=0, true=1) sorts NULLs to the end of any direction.
 const SEVERITY_ORDINAL_CASE = sql<number>`
   CASE severity
     WHEN 'low'      THEN 1
     WHEN 'medium'   THEN 2
     WHEN 'high'     THEN 3
     WHEN 'critical' THEN 4
-    ELSE 0
+    ELSE NULL
   END`;
 
 export async function listVocsForRead(
@@ -257,33 +263,39 @@ export async function listVocsForRead(
   let querySql: ReturnType<typeof sql>;
 
   if (isTriage) {
-    // Triage pinned sort: unassigned_first DESC, severity_ord DESC (nulls last via 0),
+    // Triage pinned sort: unassigned_first DESC, severity_ord DESC (nulls last),
     // created_at ASC, id ASC.
-    // Cursor sv encodes composite as `${unassignedBool}|${sevOrd}|${createdAtIso}`.
+    // Cursor sv encodes composite as `${unassignedBool}|${sevOrd}|${isNull}|${createdAtIso}`.
+    // WHY: null severity must sort after all real severities (M6 fix). We encode
+    // an isNull flag in the cursor so the predicate can correctly handle null rows.
     const whereClause = sql.join(wheres, sql` AND `);
 
     let cursorPredicate = sql`true`;
     if (cursor) {
-      const [unassignedStr, sevOrdStr, createdAtIso] = String(cursor.sv).split('|');
-      const unassignedBool = unassignedStr === '1';
-      const sevOrd = Number(sevOrdStr);
-      const createdAt = createdAtIso;
-      // (unassigned_first, severity_ord, created_at, id) > (cursor_values)
-      // ascending on (unassigned DESC, sev DESC, created_at ASC, id ASC) requires:
-      // ROW comparison in Postgres handles mixed ASC/DESC poorly, so expand:
-      //   unassigned_first < cursor.unassigned (lower unassigned rank = later)
-      //   OR (unassigned_first = cursor.unassigned AND severity_ord < cursor.sevOrd)
-      //   OR (unassigned_first = cursor.unassigned AND severity_ord = cursor.sevOrd AND
-      //       (created_at > cursor.created_at OR (created_at = cursor.created_at AND id > cursor.id)))
+      // Cursor sv format: `${unassigned}|${sevOrd}|${isNull}|${createdAt}`
+      // For backward compat, support old 3-part format too (isNull defaults to '0').
+      const parts = String(cursor.sv).split('|');
+      const unassignedBool = parts[0] === '1';
+      const sevOrd = Number(parts[1]);
+      const isNullBool = parts[2] === '1';
+      const createdAt = parts.length >= 4 ? parts.slice(3).join('|') : parts[2] ?? '';
+      // Triage sort: (unassigned DESC, isNull ASC, sevOrd DESC, createdAt ASC, id ASC).
+      // "after cursor" means the row comes later in this ordering.
       cursorPredicate = sql`(
         (owner_user_id IS NULL AND owner_team_id IS NULL)::int < ${unassignedBool ? 1 : 0}
         OR (
           (owner_user_id IS NULL AND owner_team_id IS NULL)::int = ${unassignedBool ? 1 : 0}
-          AND ${SEVERITY_ORDINAL_CASE} < ${sevOrd}
+          AND (severity IS NULL)::int > ${isNullBool ? 1 : 0}
         )
         OR (
           (owner_user_id IS NULL AND owner_team_id IS NULL)::int = ${unassignedBool ? 1 : 0}
-          AND ${SEVERITY_ORDINAL_CASE} = ${sevOrd}
+          AND (severity IS NULL)::int = ${isNullBool ? 1 : 0}
+          AND (severity IS NOT NULL AND ${SEVERITY_ORDINAL_CASE} < ${sevOrd})
+        )
+        OR (
+          (owner_user_id IS NULL AND owner_team_id IS NULL)::int = ${unassignedBool ? 1 : 0}
+          AND (severity IS NULL)::int = ${isNullBool ? 1 : 0}
+          AND (severity IS NULL OR ${SEVERITY_ORDINAL_CASE} = ${sevOrd})
           AND (
             created_at > ${createdAt}::timestamptz
             OR (created_at = ${createdAt}::timestamptz AND id > ${cursor.id}::uuid)
@@ -307,7 +319,8 @@ export async function listVocsForRead(
       WHERE ${whereClause} AND ${cursorPredicate}
       ORDER BY
         (owner_user_id IS NULL AND owner_team_id IS NULL) DESC,
-        ${SEVERITY_ORDINAL_CASE} DESC,
+        (severity IS NULL) ASC,
+        ${SEVERITY_ORDINAL_CASE} DESC NULLS LAST,
         created_at ASC,
         id ASC
       LIMIT ${fetchLimit}
@@ -321,16 +334,42 @@ export async function listVocsForRead(
     let cursorPredicate = sql`true`;
     if (cursor) {
       if (config.severityOrdinal) {
-        const sevOrd = Number(cursor.sv);
+        // Cursor sv format for severity sort: `${isNull}|${sevOrd}`.
+        // WHY: null severity always sorts last (M6 fix); we need the null flag to
+        // correctly paginate past null-severity rows in both ASC and DESC.
+        const svStr = String(cursor.sv);
+        const [isNullStr, sevOrdStr] = svStr.includes('|') ? svStr.split('|') : ['0', svStr];
+        const isNullBool = isNullStr === '1';
+        const sevOrd = Number(sevOrdStr);
         if (dir === 'asc') {
+          // ORDER: (isNull ASC, sevOrd ASC NULLS LAST, id ASC). "After cursor" rows satisfy:
           cursorPredicate = sql`(
-            ${SEVERITY_ORDINAL_CASE} > ${sevOrd}
-            OR (${SEVERITY_ORDINAL_CASE} = ${sevOrd} AND id > ${cursor.id}::uuid)
+            (severity IS NULL)::int > ${isNullBool ? 1 : 0}
+            OR (
+              (severity IS NULL)::int = ${isNullBool ? 1 : 0}
+              AND severity IS NOT NULL
+              AND ${SEVERITY_ORDINAL_CASE} > ${sevOrd}
+            )
+            OR (
+              (severity IS NULL)::int = ${isNullBool ? 1 : 0}
+              AND (severity IS NULL OR ${SEVERITY_ORDINAL_CASE} = ${sevOrd})
+              AND id > ${cursor.id}::uuid
+            )
           )`;
         } else {
+          // ORDER: (isNull ASC, sevOrd DESC NULLS LAST, id DESC). "After cursor" rows satisfy:
           cursorPredicate = sql`(
-            ${SEVERITY_ORDINAL_CASE} < ${sevOrd}
-            OR (${SEVERITY_ORDINAL_CASE} = ${sevOrd} AND id < ${cursor.id}::uuid)
+            (severity IS NULL)::int > ${isNullBool ? 1 : 0}
+            OR (
+              (severity IS NULL)::int = ${isNullBool ? 1 : 0}
+              AND severity IS NOT NULL
+              AND ${SEVERITY_ORDINAL_CASE} < ${sevOrd}
+            )
+            OR (
+              (severity IS NULL)::int = ${isNullBool ? 1 : 0}
+              AND (severity IS NULL OR ${SEVERITY_ORDINAL_CASE} = ${sevOrd})
+              AND id < ${cursor.id}::uuid
+            )
           )`;
         }
       } else if (config.column === 'created_at') {
@@ -366,11 +405,12 @@ export async function listVocsForRead(
     const whereClause = sql.join(wheres, sql` AND `);
 
     // ORDER BY clause per sort config + direction.
+    // WHY (M6): severity nulls always last — prepend (severity IS NULL) ASC flag.
     let orderBySql: ReturnType<typeof sql>;
     if (config.severityOrdinal) {
       orderBySql = dir === 'asc'
-        ? sql`${SEVERITY_ORDINAL_CASE} ASC, id ASC`
-        : sql`${SEVERITY_ORDINAL_CASE} DESC, id DESC`;
+        ? sql`(severity IS NULL) ASC, ${SEVERITY_ORDINAL_CASE} ASC NULLS LAST, id ASC`
+        : sql`(severity IS NULL) ASC, ${SEVERITY_ORDINAL_CASE} DESC NULLS LAST, id DESC`;
     } else if (config.column === 'created_at') {
       orderBySql = dir === 'asc'
         ? sql`created_at ASC, id ASC`
@@ -418,13 +458,18 @@ export async function listVocsForRead(
 
     if (isTriage) {
       const unassignedInt = lastMapped.ownerUserId === null && lastMapped.ownerTeamId === null ? 1 : 0;
+      const isNullInt = lastMapped.severity === null ? 1 : 0;
       const sevOrd = lastMapped.severity ? (SEVERITY_ORDINAL[lastMapped.severity] ?? 0) : 0;
-      nextCursor = { sv: `${unassignedInt}|${sevOrd}|${rawCreatedAt}`, id: lastId };
+      // Encode: `${unassigned}|${sevOrd}|${isNull}|${createdAt}` (M6: added isNull flag)
+      nextCursor = { sv: `${unassignedInt}|${sevOrd}|${isNullInt}|${rawCreatedAt}`, id: lastId };
     } else {
       const config = SORT_CONFIG[sort as keyof typeof SORT_CONFIG];
       let sv: string | number;
       if (config.severityOrdinal) {
-        sv = lastMapped.severity ? (SEVERITY_ORDINAL[lastMapped.severity] ?? 0) : 0;
+        // Encode: `${isNull}|${sevOrd}` so cursor predicate can handle nulls last (M6)
+        const isNullInt = lastMapped.severity === null ? 1 : 0;
+        const sevOrd = lastMapped.severity ? (SEVERITY_ORDINAL[lastMapped.severity] ?? 0) : 0;
+        sv = `${isNullInt}|${sevOrd}`;
       } else if (config.column === 'created_at') {
         sv = rawCreatedAt;
       } else {
@@ -481,6 +526,7 @@ export interface ConversationRow {
 }
 
 export interface SelectConversationPageArgs {
+  workspaceId: string;    // defense-in-depth: JOIN to voc.vocs v AND v.workspace_id (M2)
   vocId: string;
   actorId: string;        // for reporter_reply visibility filter
   canTriage: boolean;     // gates internal_comment + sees all reporter_replies
@@ -494,78 +540,101 @@ export async function selectConversationPage(
   db: Db | Tx,
   args: SelectConversationPageArgs,
 ): Promise<{ entries: ConversationRow[]; hasMore: boolean; nextCursor: { createdAt: string; id: string } | null }> {
-  const { vocId, actorId, canTriage, isReporter, cursor, limit, kind } = args;
+  const { workspaceId, vocId, actorId, canTriage, isReporter, cursor, limit, kind } = args;
 
   const fetchLimit = limit + 1;
 
-  // Cursor predicate: (created_at, id) < (cursor.createdAt, cursor.id) for DESC.
-  let cursorSql = sql`true`;
-  if (cursor) {
-    cursorSql = sql`(
-      created_at < ${cursor.createdAt}::timestamptz
-      OR (created_at = ${cursor.createdAt}::timestamptz AND id < ${cursor.id}::uuid)
-    )`;
-  }
-
   // Build UNION ALL branches based on visibility flags and optional kind filter.
+  // WHY (M2): each branch JOINs voc.vocs to enforce workspace_id + archived_at
+  // as defense-in-depth even though the service fetches the VOC first.
+  // Cursor predicate is inlined per branch with the table alias to avoid
+  // ambiguous column references (JOIN adds v.id, v.created_at etc.).
   const branches: ReturnType<typeof sql>[] = [];
 
   // public_update branch — always included (everyone with VOC access sees public).
   if (!kind || kind === 'public_update') {
+    const puCursor = cursor
+      ? sql`(pu.created_at < ${cursor.createdAt}::timestamptz OR (pu.created_at = ${cursor.createdAt}::timestamptz AND pu.id < ${cursor.id}::uuid))`
+      : sql`true`;
     branches.push(sql`
       SELECT
-        id, 'public_update'::text AS kind, actor_id,
-        body_rich_content, created_at, created_at::text AS _created_at_raw,
+        pu.id, 'public_update'::text AS kind, pu.actor_id,
+        pu.body_rich_content, pu.created_at, pu.created_at::text AS _created_at_raw,
         'public'::text AS visibility,
-        reporter_facing_status_before,
-        reporter_facing_status_after,
-        skip_public_update,
-        skip_reason
-      FROM ${vocPublicUpdates}
-      WHERE voc_id = ${vocId}
-        AND ${cursorSql}
+        pu.reporter_facing_status_before,
+        pu.reporter_facing_status_after,
+        pu.skip_public_update,
+        pu.skip_reason
+      FROM ${vocPublicUpdates} pu
+      JOIN ${vocs} v ON v.id = pu.voc_id AND v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
+      WHERE pu.voc_id = ${vocId}
+        AND ${puCursor}
     `);
   }
 
-  // reporter_reply branch — visibility depends on role.
+  // reporter_reply branch — visibility depends on role (B2 fix).
+  // canTriage → sees all reporter_replies.
+  // !canTriage && isReporter → sees own replies only (WHERE actor_id = actorId).
+  // !canTriage && !isReporter → omit branch entirely (read-only non-reporter sees public only).
   if (!kind || kind === 'reporter_reply') {
-    // canTriage sees all; isReporter (without triage) sees own only; others see all.
-    // "Others with read access" see all reporter_replies (they are not the reporter
-    // and they can't triage, but they have read access — show all replies).
-    const replyFilter = (!canTriage && isReporter)
-      ? sql`AND actor_id = ${actorId}`
-      : sql``;
+    const rrCursor = cursor
+      ? sql`(rr.created_at < ${cursor.createdAt}::timestamptz OR (rr.created_at = ${cursor.createdAt}::timestamptz AND rr.id < ${cursor.id}::uuid))`
+      : sql`true`;
 
-    branches.push(sql`
-      SELECT
-        id, 'reporter_reply'::text AS kind, actor_id,
-        body_rich_content, created_at, created_at::text AS _created_at_raw,
-        'reporter'::text AS visibility,
-        NULL::text AS reporter_facing_status_before,
-        NULL::text AS reporter_facing_status_after,
-        NULL::boolean AS skip_public_update,
-        NULL::text AS skip_reason
-      FROM ${vocReporterReplies}
-      WHERE voc_id = ${vocId}
-        AND ${cursorSql}
-        ${replyFilter}
-    `);
+    if (canTriage) {
+      branches.push(sql`
+        SELECT
+          rr.id, 'reporter_reply'::text AS kind, rr.actor_id,
+          rr.body_rich_content, rr.created_at, rr.created_at::text AS _created_at_raw,
+          'reporter'::text AS visibility,
+          NULL::text AS reporter_facing_status_before,
+          NULL::text AS reporter_facing_status_after,
+          NULL::boolean AS skip_public_update,
+          NULL::text AS skip_reason
+        FROM ${vocReporterReplies} rr
+        JOIN ${vocs} v ON v.id = rr.voc_id AND v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
+        WHERE rr.voc_id = ${vocId}
+          AND ${rrCursor}
+      `);
+    } else if (isReporter) {
+      branches.push(sql`
+        SELECT
+          rr.id, 'reporter_reply'::text AS kind, rr.actor_id,
+          rr.body_rich_content, rr.created_at, rr.created_at::text AS _created_at_raw,
+          'reporter'::text AS visibility,
+          NULL::text AS reporter_facing_status_before,
+          NULL::text AS reporter_facing_status_after,
+          NULL::boolean AS skip_public_update,
+          NULL::text AS skip_reason
+        FROM ${vocReporterReplies} rr
+        JOIN ${vocs} v ON v.id = rr.voc_id AND v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
+        WHERE rr.voc_id = ${vocId}
+          AND ${rrCursor}
+          AND rr.actor_id = ${actorId}
+      `);
+    }
+    // WHY: !canTriage && !isReporter → omit reporter_replies branch entirely.
+    // Spec: non-triage, non-reporter read actors see public_updates only.
   }
 
   // internal_comment branch — only if canTriage.
   if (canTriage && (!kind || kind === 'internal_comment')) {
+    const icCursor = cursor
+      ? sql`(ic.created_at < ${cursor.createdAt}::timestamptz OR (ic.created_at = ${cursor.createdAt}::timestamptz AND ic.id < ${cursor.id}::uuid))`
+      : sql`true`;
     branches.push(sql`
       SELECT
-        id, 'internal_comment'::text AS kind, actor_id,
-        body_rich_content, created_at, created_at::text AS _created_at_raw,
+        ic.id, 'internal_comment'::text AS kind, ic.actor_id,
+        ic.body_rich_content, ic.created_at, ic.created_at::text AS _created_at_raw,
         'internal'::text AS visibility,
         NULL::text AS reporter_facing_status_before,
         NULL::text AS reporter_facing_status_after,
         NULL::boolean AS skip_public_update,
         NULL::text AS skip_reason
-      FROM ${vocInternalComments}
-      WHERE voc_id = ${vocId}
-        AND ${cursorSql}
+      FROM ${vocInternalComments} ic
+      JOIN ${vocs} v ON v.id = ic.voc_id AND v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
+      WHERE ic.voc_id = ${vocId}
+        AND ${icCursor}
     `);
   }
 
@@ -611,9 +680,11 @@ export async function selectConversationPage(
   let nextCursor: { createdAt: string; id: string } | null = null;
   if (hasMore && sliced.length > 0) {
     const last = sliced[sliced.length - 1]!;
-    // Use full-precision postgres text for the cursor to avoid JS Date millisecond truncation.
-    const rawCreatedAt = (last._created_at_raw as string | undefined) ??
-      toDate(last.created_at as Date | string).toISOString();
+    // WHY: convert to ISO 8601 (with T separator) so the cursor validates with
+    // z.string().datetime(). Postgres text format uses space separator which
+    // zod datetime rejects. Millisecond precision is sufficient for cursor
+    // ordering since the SQL predicate uses timestamptz cast.
+    const rawCreatedAt = toDate(last.created_at as Date | string).toISOString();
     nextCursor = {
       createdAt: rawCreatedAt,
       id: last.id as string,
@@ -694,12 +765,16 @@ export async function outOfScopeSummary(
 
 export async function selectPermissionDecisionsSeed(
   db: Db | Tx,
+  workspaceId: string,
   vocId: string,
 ): Promise<unknown | null> {
+  // WHY (M2): JOIN to voc.vocs enforces workspace_id + archived_at as
+  // defense-in-depth even though the service validated the VOC first.
   const result = await (db as Db).execute<{ envelope: unknown }>(sql`
-    SELECT envelope
-    FROM ${vocPermissionDecisionsSeedFixture}
-    WHERE voc_id = ${vocId}
+    SELECT f.envelope
+    FROM ${vocPermissionDecisionsSeedFixture} f
+    JOIN ${vocs} v ON v.id = f.voc_id AND v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
+    WHERE f.voc_id = ${vocId}
   `);
   return result.rows[0]?.envelope ?? null;
 }

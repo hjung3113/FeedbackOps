@@ -272,9 +272,11 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(kinds.has('internal_comment')).toBe(true);
   });
 
-  // ── AC8: Developer with voc.read only (no triage) ────────────────────────
+  // ── AC8: Developer with voc.read only (no triage) — B2 fix ──────────────
+  // Spec: read-only non-reporter sees public_updates ONLY; no reporter_replies,
+  // no internal_comments. Previous code incorrectly showed all reporter_replies.
 
-  it('AC8: developer with voc.read only → public_updates + reporter_replies; NO internal_comments', async () => {
+  it('AC8: developer with voc.read only (not reporter) → public_updates ONLY; NO reporter_replies, NO internal_comments (B2 fix)', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-dev-read`, 'Dev Read MS');
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac8'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
@@ -296,9 +298,41 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
       conversation_timeline: { kind: string }[];
     }>();
     const kinds = body.conversation_timeline.map((e) => e.kind);
+    // Read-only non-reporter sees public_updates only.
+    expect(kinds).toContain('public_update');
+    expect(kinds).not.toContain('reporter_reply');
+    expect(kinds).not.toContain('internal_comment');
+  });
+
+  // ── AC8b: Reporter visibility — sees own reporter_replies only ───────────
+
+  it('AC8b: reporter (isReporter=true, !canTriage) sees public_updates + own reporter_replies; NO internal', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-rep-only`, 'Rep Only MS');
+    const voc = await insertVoc(msId, 'Rep Only VOC');
+
+    await insertPublicUpdate(dbHandle, voc.id, adminActorId);
+    await insertReporterReply(dbHandle, voc.id, reporterId); // own reply
+    await insertInternalComment(dbHandle, voc.id, adminActorId);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${reporterCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      conversation_timeline: { kind: string; actor_id: string }[];
+    }>();
+    const kinds = body.conversation_timeline.map((e) => e.kind);
     expect(kinds).toContain('public_update');
     expect(kinds).toContain('reporter_reply');
     expect(kinds).not.toContain('internal_comment');
+
+    // All reporter_replies must belong to the reporter.
+    const replies = body.conversation_timeline.filter((e) => e.kind === 'reporter_reply');
+    for (const reply of replies) {
+      expect(reply.actor_id).toBe(reporterId);
+    }
   });
 
   // ── AC9: Cross-MS Developer (no access) → 404 ────────────────────────────
@@ -458,6 +492,51 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ permission_decisions: Record<string, unknown> }>();
     expect(body.permission_decisions.linkedFinding).toEqual(seedEnvelope.linkedFinding);
+  });
+
+  // ── AC13b: If-None-Match multi-value → 304 (M3 fix) ─────────────────────
+
+  it('AC13b: multi-value If-None-Match header containing current etag → 304 + cache-control (M3, M4)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-304-mv`, '304 MV MS');
+    const voc = await insertVoc(msId, '304 MV VOC');
+
+    // First request — get ETag
+    const res1 = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res1.statusCode).toBe(200);
+    const etag = res1.headers['etag'] as string;
+
+    // Multi-value If-None-Match with stale + current ETags.
+    const res2 = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'if-none-match': `"stale-etag", ${etag}`,
+      },
+    });
+    expect(res2.statusCode).toBe(304);
+    expect(res2.headers['cache-control']).toBe('private, no-cache');
+    expect(res2.headers['etag']).toBe(etag);
+  });
+
+  it('AC13c: wildcard If-None-Match (*) → 304 (M3 fix)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-304-wc`, '304 WC MS');
+    const voc = await insertVoc(msId, '304 WC VOC');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'if-none-match': '*',
+      },
+    });
+    expect(res.statusCode).toBe(304);
+    expect(res.headers['cache-control']).toBe('private, no-cache');
   });
 
   // ── AC16: SUMMARY envelope shape ─────────────────────────────────────────
