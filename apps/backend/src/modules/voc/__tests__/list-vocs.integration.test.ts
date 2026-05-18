@@ -645,6 +645,82 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     }
   });
 
+  // B1c/B1d/B1e cover the N-MAJ-1 gap: workspace-wide grant + MS-scoped deny.
+  // These tests were absent in cycle-1 because the TODO(future) left the deny dropped.
+
+  it('B1c: developer with workspace-wide voc.read grant + MS-scoped deny on MS-A → view=inbox excludes MS-A VOCs', async () => {
+    const msAId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-b1c-a`, 'B1c MS-A (denied)');
+    const msBId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-b1c-b`, 'B1c MS-B (allowed)');
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('b1c'));
+    // Workspace-wide grant (managed_system_id = null).
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', null, adminActorId);
+    // MS-scoped deny on MS-A only.
+    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msAId, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msAId, reporterId, 'B1c VOC-A (must be excluded)');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msBId, reporterId, 'B1c VOC-B (must be included)');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/vocs?view=inbox',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${devCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: { primary_managed_system_id: string; title: string }[] }>();
+    const msIds = body.items.map((i) => i.primary_managed_system_id);
+    // MS-A (denied) must not appear; MS-B (allowed) must appear.
+    expect(msIds).not.toContain(msAId);
+    expect(msIds).toContain(msBId);
+  });
+
+  it('B1d: developer with workspace-wide voc.read + MS-scoped deny on MS-A → GET /vocs/:id on MS-A VOC → 404', async () => {
+    const msAId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-b1d-a`, 'B1d MS-A (denied)');
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('b1d'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', null, adminActorId);
+    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msAId, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msAId, reporterId, 'B1d Denied VOC');
+
+    // Existence-probe defense: must return 404 not_found.record (not 200 or 403).
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${devCookie}` },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ code: string }>().code).toBe('not_found.record');
+  });
+
+  it('B1e: developer with workspace-wide voc.triage + workspace-wide voc.read + MS-scoped triage deny on MS-A → view=triage excludes MS-A VOCs', async () => {
+    const msAId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-b1e-a`, 'B1e MS-A (triage denied)');
+    const msBId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-b1e-b`, 'B1e MS-B (triage allowed)');
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('b1e'));
+    // Both voc.read and voc.triage workspace-wide grants. MS-scoped deny on voc.triage for MS-A.
+    // view=triage uses intersect(readScope, triageScope); with the deny applied to triageScope,
+    // MS-A is excluded from triageScope, so the intersection also excludes it.
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', null, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', null, adminActorId);
+    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msAId, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msAId, reporterId, 'B1e Triage VOC-A (denied)');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msBId, reporterId, 'B1e Triage VOC-B (allowed)');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/vocs?view=triage',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${devCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: { primary_managed_system_id: string }[] }>();
+    const msIds = body.items.map((i) => i.primary_managed_system_id);
+    // Denied MS-A must not appear in triage view results.
+    expect(msIds).not.toContain(msAId);
+    expect(msIds).toContain(msBId);
+  });
+
   it('B1b: actor with voc.read grant + workspace-wide deny → view=inbox → 403 (scope collapses to empty)', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-deny-ws`, 'Deny WS MS');
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('b1b'));
