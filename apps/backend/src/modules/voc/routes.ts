@@ -251,6 +251,14 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
   });
 
   // ── GET /vocs — list (Slice 3 #15 C3) ─────────────────────────────────────
+  //
+  // NOTE: pagination with sort=severity:* and sort=reporter_facing_status:* is
+  // eventually consistent. Concurrent edits to the cursor row's sort value (or
+  // rows near the cursor boundary) may cause rows to be skipped or appear twice
+  // across pages. Frontend stale-while-revalidate (TanStack Query) masks this;
+  // integration test coverage is limited to sort=created_at:desc which is
+  // monotonic. Triage view uses a pinned composite sort that is also subject
+  // to this when triage_state / severity / owner mutate mid-pagination.
   app.route({
     method: 'GET',
     url: '/vocs',
