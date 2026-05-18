@@ -28,6 +28,7 @@ declare module 'fastify' {
     rateLimitConfig: {
       mutation: Record<string, unknown>;
       sensitive: Record<string, unknown>;
+      read: Record<string, unknown>;
     };
   }
 }
