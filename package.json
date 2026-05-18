@@ -14,7 +14,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
-    "check:boundaries": "node scripts/check-boundaries.mjs"
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "wiki:regen": "node scripts/wiki-regen.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
