@@ -408,8 +408,29 @@ export async function cleanupReadTestTables(
   );
 
   // 5. Sessions (only dev test actors, not admin/reporter), idempotency, rate limits, actors.
-  await dbHandle.pool.query('delete from core.idempotency_keys');
-  await dbHandle.pool.query('delete from core.rate_limits');
+  // WHY (N-MAJ-3 cycle-2 fix): scope deletes to this test suite's actor cohort so
+  // concurrent PATCH/POST suites sharing the same DB (pool=forks) are not affected.
+  // idempotency_keys: keyed by actor_id → match test-created dev actors only.
+  // rate_limits: keyed by actor_id (authenticated) or req.ip (anonymous fallback, see
+  // rate-limit-pg-store.ts). Dev test actors are identified by external_id prefix
+  // 'mock-dev-read-'; IP fallback rows are scoped by the loopback prefix '127.0.0.'.
+  await dbHandle.pool.query(
+    `delete from core.idempotency_keys
+      where actor_id in (
+        select id from core.actors
+          where external_id like 'mock-dev-read-%' and workspace_id = $1
+      )`,
+    [workspaceId],
+  );
+  await dbHandle.pool.query(
+    `delete from core.rate_limits
+      where key in (
+        select id::text from core.actors
+          where external_id like 'mock-dev-read-%' and workspace_id = $1
+      )
+      or key like '127.0.0.%'`,
+    [workspaceId],
+  );
   // Only delete sessions belonging to test-created dev actors, NOT admin/reporter sessions.
   // Admin and reporter sessions are created in beforeAll and must survive beforeEach cleanup.
   await dbHandle.pool.query(
