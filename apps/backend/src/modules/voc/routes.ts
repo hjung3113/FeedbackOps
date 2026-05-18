@@ -10,6 +10,8 @@ import {
   FORBIDDEN_PATCH_FIELDS,
   FORBIDDEN_PATCH_FIELD_ERROR_CODES,
   createVocRequestSchema,
+  getConversationQuerySchema,
+  listVocsQuerySchema,
   patchVocRequestSchema,
   type CreateVocRequest,
 } from '@fops/shared';
@@ -21,22 +23,30 @@ import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { ReadActorContext, VocReadService } from './read-service.js';
 import type { VocService } from './service.js';
 
 const IDEMPOTENCY_KEY_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
+const UUID_REGEX =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 export interface VocRoutesOptions {
   db: Db;
   sessionService: SessionService;
   vocService: VocService;
+  vocReadService: VocReadService;
   idempotencyService: IdempotencyService;
   workspaceId: string;
-  rateLimitConfig?: { mutation: Record<string, unknown> };
+  rateLimitConfig?: {
+    mutation: Record<string, unknown>;
+    read?: Record<string, unknown>;
+  };
 }
 
 export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts) => {
-  const { db, sessionService, vocService, idempotencyService, workspaceId, rateLimitConfig } = opts;
+  const { db, sessionService, vocService, vocReadService, idempotencyService, workspaceId, rateLimitConfig } = opts;
 
   function requireIfMatch(headers: Record<string, unknown>): string {
     const raw = headers['if-match'];
@@ -237,6 +247,134 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         return { status: 200, body: envelope };
       });
       return reply.code(result.status).send(result.body);
+    },
+  });
+
+  // ── GET /vocs — list (Slice 3 #15 C3) ─────────────────────────────────────
+  //
+  // NOTE: pagination with sort=severity:* and sort=reporter_facing_status:* is
+  // eventually consistent. Concurrent edits to the cursor row's sort value (or
+  // rows near the cursor boundary) may cause rows to be skipped or appear twice
+  // across pages. Frontend stale-while-revalidate (TanStack Query) masks this;
+  // integration test coverage is limited to sort=created_at:desc which is
+  // monotonic. Triage view uses a pinned composite sort that is also subject
+  // to this when triage_state / severity / owner mutate mid-pagination.
+  app.route({
+    method: 'GET',
+    url: '/vocs',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const parsed = listVocsQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      const actor: ReadActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
+
+      const result = await vocReadService.listVocs({ actor, query: parsed.data });
+      return reply
+        .header('cache-control', 'private, no-cache')
+        .code(200)
+        .send(result);
+    },
+  });
+
+  // ── GET /vocs/:id — detail + ETag (Slice 3 #15 C3) ───────────────────────
+  app.route({
+    method: 'GET',
+    url: '/vocs/:id',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const params = req.params as { id: string };
+      const vocId = params.id;
+
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+
+      const actor: ReadActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
+
+      const result = await vocReadService.getVocDetail({ actor, vocId });
+      const { envelope, etag } = result;
+
+      // WHY (M3): RFC 7232 allows multi-value If-None-Match headers
+      // (comma-separated ETags) and wildcard '*'. Exact string compare misses these.
+      const raw = req.headers['if-none-match'];
+      const headerVal = Array.isArray(raw) ? raw[0] : raw;
+      const matches = String(headerVal ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .some((v) => v === '*' || v === etag);
+      if (matches) {
+        // WHY (M4): 304 must include cache-control per RFC 7234 §4.3.4.
+        return reply.code(304).header('etag', etag).header('cache-control', 'private, no-cache').send();
+      }
+
+      return reply
+        .header('etag', etag)
+        .header('cache-control', 'private, no-cache')
+        .code(200)
+        .send(envelope);
+    },
+  });
+
+  // ── GET /vocs/:id/conversation — paginated conversation (Slice 3 #15 C3) ──
+  app.route({
+    method: 'GET',
+    url: '/vocs/:id/conversation',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const params = req.params as { id: string };
+      const vocId = params.id;
+
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+
+      const parsed = getConversationQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      const actor: ReadActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
+
+      const result = await vocReadService.getConversation({ actor, vocId, query: parsed.data });
+      return reply
+        .header('cache-control', 'private, no-cache')
+        .code(200)
+        .send(result);
     },
   });
 };
