@@ -34,7 +34,7 @@ import {
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
-import { createVocService, vocRoutes } from './modules/voc/index.js';
+import { createVocReadService, createVocService, vocRoutes } from './modules/voc/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -201,6 +201,14 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       keyGenerator: mutationKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'sensitive') as never,
     },
+    // TODO(F18 follow-up): add admin bypass for the read tier once the
+    // admin-role detection helper lands (see plan §C3 follow-up F18).
+    read: {
+      max: 300,
+      timeWindow: '1 minute',
+      keyGenerator: mutationKeyGenerator,
+      store: createPgRateLimitStore(dbHandle.pool, 'read') as never,
+    },
   });
 
   // ── Error handler ─ ADR-0012 envelope ────────────────────────────────
@@ -343,20 +351,26 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  // ── VOC module — Slice 3 issue #13 / #14 ───────────────────────────────
+  // ── VOC module — Slice 3 issue #13 / #14 / #15 ─────────────────────────
   const vocService = createVocService({
     db: dbHandle.db,
     auditService,
+    checkService,
+  });
+  const vocReadService = createVocReadService({
+    db: dbHandle.db,
     checkService,
   });
   await app.register(vocRoutes, {
     db: dbHandle.db,
     sessionService,
     vocService,
+    vocReadService,
     idempotencyService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
     },
   });
 
