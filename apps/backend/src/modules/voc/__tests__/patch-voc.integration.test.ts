@@ -249,15 +249,23 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
         )`,
     );
     await dbHandle.pool.query(`delete from core.managed_systems where slug like 'it-patch-%'`);
+    // Tables that reference core.actors must be cleared BEFORE the actor rows
+    // are deleted (FK constraints: sessions.actor_id, idempotency_keys.actor_id,
+    // rate_limits.actor_id). The UA filter alone misses rows if a prior run
+    // died mid-test before reaching the standard cleanup branch.
+    await dbHandle.pool.query('delete from core.idempotency_keys');
+    await dbHandle.pool.query('delete from core.rate_limits');
+    await dbHandle.pool.query(
+      `delete from core.sessions where created_user_agent_summary = 'integration-test'
+         or actor_id in (
+           select id from core.actors where external_id like 'mock-dev-%' and workspace_id = $1
+         )`,
+      [WORKSPACE_ID],
+    );
     // Clean up test dev actors (inserted by insertDevActor).
     await dbHandle.pool.query(
       `delete from core.actors where external_id like 'mock-dev-%' and workspace_id = $1`,
       [WORKSPACE_ID],
-    );
-    await dbHandle.pool.query('delete from core.idempotency_keys');
-    await dbHandle.pool.query('delete from core.rate_limits');
-    await dbHandle.pool.query(
-      `delete from core.sessions where created_user_agent_summary = 'integration-test'`,
     );
   }
 
@@ -393,7 +401,9 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
     expect(body.updated_at).not.toBe(voc.updated_at);
 
     if (MIGRATE_URL) {
-      const types = await getAuditTypes(voc.id);
+      // POST /vocs writes a `voc_created` audit row first; assert PATCH-emitted
+      // events come after it in spec order.
+      const types = (await getAuditTypes(voc.id)).filter((t) => t !== 'voc_created');
       expect(types).toEqual([
         'voc_severity_set',
         'voc_owner_assigned',
@@ -1099,11 +1109,12 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
       randomUUID(),
     );
 
-    // Archive the managed system via the REST endpoint.
+    // Archive the managed system via the REST endpoint. No body — drop the
+    // content-type so Fastify's JSON parser does not reject the empty payload.
     const archRes = await app.inject({
       method: 'POST',
       url: `/managed-systems/${msId}/archive`,
-      headers: { cookie: `${SESSION_COOKIE_NAME}=${admin}`, 'content-type': 'application/json' },
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${admin}` },
     });
     expect(archRes.statusCode).toBe(200);
 

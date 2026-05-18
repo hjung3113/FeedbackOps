@@ -115,13 +115,13 @@ export async function selectVocForUpdate(
     severity: string | null;
     reporter_facing_status: string;
     triage_state: string;
-    triage_state_review_postponed_at: Date | null;
+    triage_state_review_postponed_at: Date | string | null;
     owner_user_id: string | null;
     owner_team_id: string | null;
     source_context: string;
-    archived_at: Date | null;
-    created_at: Date;
-    updated_at: Date;
+    archived_at: Date | string | null;
+    created_at: Date | string;
+    updated_at: Date | string;
   }>(sql`
     select
       id, workspace_id, primary_managed_system_id, analytics_area_id, reporter_id,
@@ -148,14 +148,25 @@ export async function selectVocForUpdate(
     severity: row.severity as LockedVoc['severity'],
     reporterFacingStatus: row.reporter_facing_status,
     triageState: row.triage_state as LockedVoc['triageState'],
-    triageStateReviewPostponedAt: row.triage_state_review_postponed_at,
+    triageStateReviewPostponedAt: toDateOrNull(row.triage_state_review_postponed_at),
     ownerUserId: row.owner_user_id,
     ownerTeamId: row.owner_team_id,
     sourceContext: row.source_context,
-    archivedAt: row.archived_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    archivedAt: toDateOrNull(row.archived_at),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
   };
+}
+
+// node-pg returns timestamptz as a Date by default, but drizzle `tx.execute`
+// raw rows may surface ISO strings depending on type-parser registration.
+// Normalise to Date so callers can call `.toISOString()` without guarding.
+function toDate(v: Date | string): Date {
+  return v instanceof Date ? v : new Date(v);
+}
+function toDateOrNull(v: Date | string | null): Date | null {
+  if (v === null) return null;
+  return v instanceof Date ? v : new Date(v);
 }
 
 export interface InsertVocInput {
