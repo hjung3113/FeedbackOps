@@ -205,11 +205,13 @@ export function createCheckService(deps: CheckServiceDeps) {
 function roleSatisfies(roleLevel: string, capability: Capability): boolean {
   // role_level is stored lower-case (core.actors CHECK constraint).
   if (roleLevel === 'admin') {
-    // admin role implicitly satisfies voc.triage (workspace-wide); developer needs MS-scoped grant.
+    // admin role implicitly satisfies voc.triage and voc.read (workspace-wide);
+    // developer/user need MS-scoped grants for those capabilities.
     return (
       capability === 'workspace.read' ||
       capability === 'workspace.admin' ||
-      capability === 'voc.triage'
+      capability === 'voc.triage' ||
+      capability === 'voc.read'
     );
   }
   if (roleLevel === 'user') {
