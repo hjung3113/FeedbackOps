@@ -16,11 +16,11 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { allManagedSystemIds } from '../../core/managed-systems/read-projections.js';
 import {
   actorEffectiveScope,
   actorReadScope,
   actorTriageScope,
-  allManagedSystemIds,
   listVocsForRead,
   outOfScopeSummary,
   selectConversationPage,
@@ -519,6 +519,7 @@ describe.skipIf(!runIntegration)('repo-read integration (#15 C1)', () => {
     const icId = await insertInternalComment(handle, vocId, triagerId);
 
     const result = await selectConversationPage(handle.db, {
+      workspaceId: WORKSPACE_ID,
       vocId,
       actorId: triagerId,
       canTriage: true,
@@ -547,6 +548,7 @@ describe.skipIf(!runIntegration)('repo-read integration (#15 C1)', () => {
     const icId = await insertInternalComment(handle, vocId, triagerId);
 
     const result = await selectConversationPage(handle.db, {
+      workspaceId: WORKSPACE_ID,
       vocId,
       actorId: reporterId,
       canTriage: false,
@@ -580,6 +582,7 @@ describe.skipIf(!runIntegration)('repo-read integration (#15 C1)', () => {
     await insertInternalComment(handle, vocId, triagerId);
 
     const result = await selectConversationPage(handle.db, {
+      workspaceId: WORKSPACE_ID,
       vocId,
       actorId: triagerId,
       canTriage: true,
@@ -603,6 +606,7 @@ describe.skipIf(!runIntegration)('repo-read integration (#15 C1)', () => {
     }
 
     const page1 = await selectConversationPage(handle.db, {
+      workspaceId: WORKSPACE_ID,
       vocId,
       actorId: triagerId,
       canTriage: true,
@@ -614,6 +618,7 @@ describe.skipIf(!runIntegration)('repo-read integration (#15 C1)', () => {
     expect(page1.nextCursor).not.toBeNull();
 
     const page2 = await selectConversationPage(handle.db, {
+      workspaceId: WORKSPACE_ID,
       vocId,
       actorId: triagerId,
       canTriage: true,
