@@ -7,6 +7,7 @@
 
 import { eq } from 'drizzle-orm';
 
+import type { Db } from '../../db/client.js';
 import { reporterFacingStatusTransitions } from '../../db/schema/voc.js';
 import type { Tx } from '../../db/tx.js';
 
@@ -32,7 +33,7 @@ export interface ReporterStateOptions {
 
 export async function nextReporterStates(
   currentStatus: ReporterFacingStatus,
-  tx: Tx,
+  tx: Db | Tx,
 ): Promise<ReporterStateOptions> {
   const rows = await tx
     .select()
