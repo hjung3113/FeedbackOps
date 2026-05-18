@@ -548,6 +548,36 @@ describe('getConversation', () => {
     ).rejects.toMatchObject({ code: 'validation.failed' });
   });
 
+  it('M5: cursor with valid base64+JSON but wrong field types → 422 invalid_cursor', async () => {
+    const badCursor = Buffer.from(
+      JSON.stringify({ createdAt: 'not-an-iso-date', id: 'not-a-uuid' }),
+      'utf8',
+    ).toString('base64');
+
+    const { svc } = makeService();
+    await expect(
+      svc.getConversation({
+        actor,
+        vocId: baseRow.id,
+        query: { cursor: badCursor, limit: 50 },
+      }),
+    ).rejects.toMatchObject({ code: 'validation.failed' });
+  });
+
+  it('M1: effective_scope is union of voc.read and voc.triage — actor with only triage grant sees summary territory', async () => {
+    // When actor has voc.triage but no voc.read, effectiveScope includes the MS
+    // (via triage grant) but readScope does not → summary path.
+    // The service calls actorEffectiveScope which returns union; mocks simulate this.
+    vi.mocked(repoRead.actorReadScope).mockResolvedValue(scopeEmpty);
+    vi.mocked(repoRead.actorEffectiveScope).mockResolvedValue(scopeFor([msId])); // triage grant union
+    vi.mocked(repoRead.actorTriageScope).mockResolvedValue(scopeFor([msId]));
+
+    const { svc } = makeService(noGrantDecision);
+    const result = await svc.getVocDetail({ actor, vocId: baseRow.id });
+    // In effective scope but not read scope → summary envelope.
+    expect(result.kind).toBe('summary');
+  });
+
   it('next page cursor round-trip', async () => {
     const nextId = randomUUID();
     const convMock = vi.mocked(repoRead.selectConversationPage);

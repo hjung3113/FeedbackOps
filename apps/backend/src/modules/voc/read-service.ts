@@ -13,6 +13,8 @@
 // ETag (Slice 3): weak W/"<voc.updated_at-ISO>". Conversation tables immutable
 // until #16 lands. TODO(#16): compose with max(conv.created_at) once #16 ships.
 
+import { z } from 'zod';
+
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
 import type { CheckService } from '../permissions/check-service.js';
@@ -54,6 +56,13 @@ function encodeConversationCursor(c: ConversationCursor): string {
   return Buffer.from(JSON.stringify(c), 'utf8').toString('base64');
 }
 
+// WHY (M5): zod schema validates cursor field types (not just presence) to
+// prevent malformed UUID/datetime strings from reaching SQL and causing 500s.
+const conversationCursorSchema = z.object({
+  createdAt: z.string().datetime({ message: 'createdAt must be an ISO datetime' }),
+  id: z.string().uuid({ message: 'id must be a UUID' }),
+});
+
 function decodeConversationCursor(raw: string): ConversationCursor {
   const fail = () =>
     new HttpError('validation.failed', 'invalid cursor', {
@@ -71,15 +80,13 @@ function decodeConversationCursor(raw: string): ConversationCursor {
   } catch {
     throw fail();
   }
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    typeof (parsed as Record<string, unknown>).createdAt !== 'string' ||
-    typeof (parsed as Record<string, unknown>).id !== 'string'
-  ) {
+  // WHY (M5): validate field types, not just presence — malformed dates/UUIDs
+  // would reach SQL and cause 500 errors on the timestamptz/uuid casts.
+  const result = conversationCursorSchema.safeParse(parsed);
+  if (!result.success) {
     throw fail();
   }
-  return parsed as ConversationCursor;
+  return result.data;
 }
 
 // ── Row mappers ──────────────────────────────────────────────────────────────
@@ -392,19 +399,19 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     // ── 3. Compute access flags ──────────────────────────────────────────────
     const isReporter = row.reporterId === actor.actor_id;
     const primaryMs = row.primaryManagedSystemId;
-    const msMsInReadScope = msInScope(readScope, primaryMs);
+    const msInReadScope = msInScope(readScope, primaryMs);
     const msInEffectiveScope = msInScope(effectiveScope, primaryMs);
     const canTriage = msInScope(triageScope, primaryMs);
 
     // ── 4. Access matrix ─────────────────────────────────────────────────────
     const etag = `W/"${row.updatedAt.toISOString()}"`;
 
-    if (!msMsInReadScope && !isReporter && !msInEffectiveScope) {
+    if (!msInReadScope && !isReporter && !msInEffectiveScope) {
       // 404 to prevent existence probe.
       throw new HttpError('not_found.record', 'VOC not found');
     }
 
-    if (!msMsInReadScope && !isReporter && msInEffectiveScope) {
+    if (!msInReadScope && !isReporter && msInEffectiveScope) {
       // ── SUMMARY path ────────────────────────────────────────────────────
       const decision = await deps.checkService.checkCapability(
         { actor_id: actor.actor_id, workspace_id: actor.workspace_id, role_level: actor.role_level },
@@ -449,6 +456,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
     // ── 5. Load inline conversation (first 50 entries) ───────────────────────
     const convResult = await repoRead.selectConversationPage(deps.db, {
+      workspaceId: actor.workspace_id,
       vocId,
       actorId: actor.actor_id,
       canTriage,
@@ -469,7 +477,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     );
 
     // ── 7. Permission decisions seed ─────────────────────────────────────────
-    const permissionDecisionsSeed = await repoRead.selectPermissionDecisionsSeed(deps.db, vocId);
+    const permissionDecisionsSeed = await repoRead.selectPermissionDecisionsSeed(deps.db, actor.workspace_id, vocId);
 
     const permissionDecisions: Record<string, unknown> =
       permissionDecisionsSeed !== null && typeof permissionDecisionsSeed === 'object'
@@ -554,6 +562,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
     // ── 6. Fetch conversation page ────────────────────────────────────────────
     const convArgs: repoRead.SelectConversationPageArgs = {
+      workspaceId: actor.workspace_id,
       vocId,
       actorId: actor.actor_id,
       canTriage,
