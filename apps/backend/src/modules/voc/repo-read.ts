@@ -680,11 +680,15 @@ export async function selectConversationPage(
   let nextCursor: { createdAt: string; id: string } | null = null;
   if (hasMore && sliced.length > 0) {
     const last = sliced[sliced.length - 1]!;
-    // WHY: convert to ISO 8601 (with T separator) so the cursor validates with
-    // z.string().datetime(). Postgres text format uses space separator which
-    // zod datetime rejects. Millisecond precision is sufficient for cursor
-    // ordering since the SQL predicate uses timestamptz cast.
-    const rawCreatedAt = toDate(last.created_at as Date | string).toISOString();
+    // WHY: normalize postgres text format to ISO 8601 (replace space with T,
+    // keep microsecond precision) so the cursor: (a) validates with
+    // z.string().datetime() in decodeConversationCursor, and (b) preserves
+    // full microsecond precision for correct tie-breaking in the cursor predicate.
+    // Postgres text format: "2026-05-18 17:19:45.160586+00"
+    // ISO 8601 format:      "2026-05-18T17:19:45.160586+00:00"
+    const rawCreatedAt = (last._created_at_raw as string | undefined)
+      ? String(last._created_at_raw).replace(' ', 'T').replace(/\+00$/, '+00:00')
+      : toDate(last.created_at as Date | string).toISOString();
     nextCursor = {
       createdAt: rawCreatedAt,
       id: last.id as string,

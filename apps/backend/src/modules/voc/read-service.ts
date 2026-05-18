@@ -58,8 +58,10 @@ function encodeConversationCursor(c: ConversationCursor): string {
 
 // WHY (M5): zod schema validates cursor field types (not just presence) to
 // prevent malformed UUID/datetime strings from reaching SQL and causing 500s.
+// offset: true allows both Z and +HH:MM suffixes (postgres text → ISO conversion
+// produces +00:00 which requires this option).
 const conversationCursorSchema = z.object({
-  createdAt: z.string().datetime({ message: 'createdAt must be an ISO datetime' }),
+  createdAt: z.string().datetime({ offset: true, message: 'createdAt must be an ISO datetime' }),
   id: z.string().uuid({ message: 'id must be a UUID' }),
 });
 
