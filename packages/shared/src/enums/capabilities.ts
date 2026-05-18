@@ -10,7 +10,7 @@
 // it must carry a non-empty reason and the audit detail must mark it
 // `sensitive: true`. See F-014 in `.review/SLICE-1-REVIEW.md`.
 
-export const CAPABILITIES = ['workspace.read', 'workspace.admin', 'voc.triage'] as const;
+export const CAPABILITIES = ['workspace.read', 'workspace.admin', 'voc.triage', 'voc.read'] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -30,6 +30,8 @@ export const CAPABILITY_META: Readonly<Record<Capability, CapabilityMeta>> = {
   'workspace.admin': { sensitive: true },
   // voc.triage: NOT sensitive — Developers may request it for a specific MS.
   'voc.triage': { sensitive: false },
+  // voc.read: NOT sensitive — Developers may request it for a specific MS to view VOCs.
+  'voc.read': { sensitive: false },
 };
 
 export function isCapability(value: string): value is Capability {
