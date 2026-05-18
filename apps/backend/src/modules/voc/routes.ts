@@ -7,7 +7,10 @@ import { sql } from 'drizzle-orm';
 
 import {
   FORBIDDEN_CREATE_FIELDS,
+  FORBIDDEN_PATCH_FIELDS,
+  FORBIDDEN_PATCH_FIELD_ERROR_CODES,
   createVocRequestSchema,
+  patchVocRequestSchema,
   type CreateVocRequest,
 } from '@fops/shared';
 
@@ -34,6 +37,17 @@ export interface VocRoutesOptions {
 
 export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts) => {
   const { db, sessionService, vocService, idempotencyService, workspaceId, rateLimitConfig } = opts;
+
+  function requireIfMatch(headers: Record<string, unknown>): string {
+    const raw = headers['if-match'];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new HttpError('validation.failed', 'If-Match header required', {
+        fields: [{ path: ['headers', 'if-match'], code: 'required' }],
+      });
+    }
+    return value;
+  }
 
   function requireIdempotencyKey(headers: Record<string, unknown>): string {
     const raw = headers['idempotency-key'];
@@ -121,6 +135,106 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
         await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
         return { status: 201, body: envelope };
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  // PATCH /vocs/:id — Slice 3 #14 triage-commit route.
+  // TODO(#14 follow-up): triage rate-limit bucket per spec (60/min vs shared mutation 10/min)
+  app.route({
+    method: 'PATCH',
+    url: '/vocs/:id',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      // 1. Idempotency-Key header.
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+
+      // 2. If-Match header (optimistic concurrency).
+      const ifMatch = requireIfMatch(req.headers as Record<string, unknown>);
+
+      const params = req.params as { id: string };
+      const vocId = params.id;
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+
+      // 3. Strip forbidden fields before Zod parse.
+      // C10 (case-insensitivity note): the check uses `f in rawBody` which is
+      // case-sensitive. A client sending e.g. `Cluster_Decision` bypasses this
+      // guard but is then rejected by patchVocRequestSchema.strict() as an
+      // unrecognized_keys error → validation.failed (generic), rather than the
+      // precise validation.unexpected_field per-field error produced here.
+      // This is acceptable — fuzzy casing is a client bug, not a spec contract.
+      // The .strict() fallback ensures the field is still rejected.
+      for (const f of FORBIDDEN_PATCH_FIELDS) {
+        if (f in rawBody) {
+          const code = FORBIDDEN_PATCH_FIELD_ERROR_CODES[f];
+          return sendError(reply, code, `${f} cannot be set via PATCH /vocs/:id`, {
+            fields: [{ path: [f], code: 'unexpected_field' }],
+          });
+        }
+      }
+
+      // 4. Schema validation.
+      const parsed = patchVocRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      // 5. Idempotency frame (same pattern as POST /vocs).
+      // F6: include ifMatch in the hash so that a retry after a client-side
+      // refetch (new If-Match value) is NOT deduplicated against the original
+      // request — different If-Match semantically represents a different intent.
+      //
+      // C4 (hash-semantic note): Including ifMatch in the hash shifts the
+      // idempotency contract: a client that retries the same intent with a
+      // fresh If-Match (e.g. after a 409 stale_write → refetch → retry)
+      // produces a different hash → 409 conflict.idempotency_key_reuse instead
+      // of a cache replay. The client must therefore generate a fresh
+      // Idempotency-Key for each distinct If-Match value. ADR-0015 is silent
+      // on whether If-Match is "part of the body" for hashing purposes; this
+      // is a #14-local decision. If a real client trips on the 409, revisit
+      // with a body-only secondary hash that emits a distinct hint field
+      // (e.g. detail.hint: 'if_match_changed') so the client can distinguish
+      // "reused key for different intent" from "same intent, new concurrency
+      // token". Filed as a follow-up concern; no action needed until then.
+      const hash = hashRequestBody({ vocId, ifMatch, ...rawBody });
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
+        );
+        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
+        if (hit.kind === 'match') {
+          return { status: hit.status, body: hit.body };
+        }
+        if (hit.kind === 'mismatch') {
+          throw new HttpError(
+            'conflict.idempotency_key_reuse',
+            'Idempotency-Key reused with different request body',
+          );
+        }
+
+        // 6. Delegate to service.
+        const envelope = await vocService.updateVoc({
+          tx,
+          actor: {
+            actor_id: sess.actor_id,
+            workspace_id: sess.workspace_id,
+            role_level: sess.role_level,
+          },
+          vocId,
+          ifMatch,
+          input: parsed.data,
+        });
+
+        // 7. Record idempotency result and return 200.
+        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 200, envelope);
+        return { status: 200, body: envelope };
       });
       return reply.code(result.status).send(result.body);
     },

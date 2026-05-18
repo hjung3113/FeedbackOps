@@ -54,11 +54,14 @@ export const vocTriageCommittedDetailSchema = z.object({
 export type VocTriageCommittedDetail = z.infer<typeof vocTriageCommittedDetailSchema>;
 
 // ── voc_severity_set ───────────────────────────────────────────────────────
+// `to` is nullable to support the severity-clear ("de-triage") path where
+// severity is explicitly set back to null. The refine still enforces an
+// actual change (from !== to).
 export const vocSeveritySetDetailSchema = z
   .object({
     voc_id: uuid(),
     from: severitySchema.nullable(),
-    to: severitySchema,
+    to: severitySchema.nullable(),
   })
   .refine((d) => d.from !== d.to, { message: 'severity_set must record an actual change' });
 export type VocSeveritySetDetail = z.infer<typeof vocSeveritySetDetailSchema>;
@@ -150,3 +153,13 @@ export const internalCommentCreatedDetailSchema = z.object({
   mentions: z.array(uuid()).min(1),
 });
 export type InternalCommentCreatedDetail = z.infer<typeof internalCommentCreatedDetailSchema>;
+
+// ── voc_triage_postponed ───────────────────────────────────────────────────
+// Emitted when `postpone_review: true` is sent in PATCH /vocs/:id (Slice 3
+// #14). triage_state remains 'untriaged'; `triage_state_review_postponed_at`
+// is set to now(). No `postponed_until` in Slice 3 (deferred scheduling).
+export const vocTriagePostponedDetailSchema = z.object({
+  voc_id: uuid(),
+  actor_id: uuid(),
+});
+export type VocTriagePostponedDetail = z.infer<typeof vocTriagePostponedDetailSchema>;

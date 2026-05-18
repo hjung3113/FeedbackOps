@@ -12,6 +12,7 @@ import {
   reporterFacingStatusChangedDetailSchema,
   reporterReplyCreatedDetailSchema,
   internalCommentCreatedDetailSchema,
+  vocTriagePostponedDetailSchema,
 } from '../voc.js';
 import { AUDIT_EVENT_TYPES, AUDIT_EVENT_DETAIL_SCHEMAS } from '../../enums/audit-events.js';
 
@@ -94,12 +95,33 @@ describe('vocSeveritySetDetailSchema', () => {
     expect(parsed.to).toBe('critical');
   });
 
-  it('rejects no-op severity_set (from === to)', () => {
+  it('accepts from=high to=null (severity-clear / de-triage path)', () => {
+    const parsed = vocSeveritySetDetailSchema.parse({
+      voc_id: U,
+      from: 'high',
+      to: null,
+    });
+    expect(parsed.from).toBe('high');
+    expect(parsed.to).toBeNull();
+  });
+
+  it('rejects no-op severity_set (from === to, both non-null)', () => {
     expect(() =>
       vocSeveritySetDetailSchema.parse({
         voc_id: U,
         from: 'high',
         to: 'high',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects no-op severity_set (from === to, both null)', () => {
+    // from=null, to=null means no change — must be rejected by the refine.
+    expect(() =>
+      vocSeveritySetDetailSchema.parse({
+        voc_id: U,
+        from: null,
+        to: null,
       }),
     ).toThrow();
   });
@@ -327,6 +349,46 @@ describe('internalCommentCreatedDetailSchema', () => {
   });
 });
 
+describe('vocTriagePostponedDetailSchema', () => {
+  it('accepts valid voc_id and actor_id', () => {
+    const parsed = vocTriagePostponedDetailSchema.parse({
+      voc_id: U,
+      actor_id: U,
+    });
+    expect(parsed.voc_id).toBe(U);
+    expect(parsed.actor_id).toBe(U);
+  });
+
+  it('rejects missing actor_id', () => {
+    expect(() =>
+      vocTriagePostponedDetailSchema.parse({ voc_id: U }),
+    ).toThrow(z.ZodError);
+  });
+
+  it('rejects missing voc_id', () => {
+    expect(() =>
+      vocTriagePostponedDetailSchema.parse({ actor_id: U }),
+    ).toThrow(z.ZodError);
+  });
+
+  it('rejects non-uuid voc_id', () => {
+    expect(() =>
+      vocTriagePostponedDetailSchema.parse({ voc_id: 'not-a-uuid', actor_id: U }),
+    ).toThrow(z.ZodError);
+  });
+
+  it('rejects non-uuid actor_id', () => {
+    expect(() =>
+      vocTriagePostponedDetailSchema.parse({ voc_id: U, actor_id: 'not-a-uuid' }),
+    ).toThrow(z.ZodError);
+  });
+
+  it('is registered in AUDIT_EVENT_DETAIL_SCHEMAS', () => {
+    expect(AUDIT_EVENT_TYPES).toContain('voc_triage_postponed');
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS).toHaveProperty('voc_triage_postponed');
+  });
+});
+
 describe('AUDIT_EVENT_TYPES registry', () => {
   const VOC_EVENTS = [
     'voc_created',
@@ -339,6 +401,7 @@ describe('AUDIT_EVENT_TYPES registry', () => {
     'reporter_facing_status_changed',
     'reporter_reply_created',
     'internal_comment_created',
+    'voc_triage_postponed',
   ] as const;
 
   it.each(VOC_EVENTS)('%s is in AUDIT_EVENT_TYPES and has a detail schema', (event) => {

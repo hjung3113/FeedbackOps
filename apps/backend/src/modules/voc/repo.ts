@@ -72,6 +72,103 @@ export async function lockAnalyticsArea(
     : null;
 }
 
+// ── selectVocForUpdate ─────────────────────────────────────────────────────
+// Acquires a FOR UPDATE row lock on voc.vocs for the PATCH triage flow.
+// Returns null when no matching row exists (caller throws not_found).
+// Mirrors lockManagedSystem / lockAnalyticsArea style.
+
+export interface LockedVoc {
+  id: string;
+  workspaceId: string;
+  primaryManagedSystemId: string;
+  analyticsAreaId: string | null;
+  reporterId: string;
+  displayId: string;
+  title: string;
+  descriptionRichContent: unknown;
+  severity: 'low' | 'medium' | 'high' | 'critical' | null;
+  reporterFacingStatus: string;
+  triageState: 'untriaged' | 'triaged' | 'needs_more_information' | 'dismissed_not_actionable';
+  triageStateReviewPostponedAt: Date | null;
+  ownerUserId: string | null;
+  ownerTeamId: string | null;
+  sourceContext: string;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export async function selectVocForUpdate(
+  tx: Tx,
+  workspaceId: string,
+  vocId: string,
+): Promise<LockedVoc | null> {
+  const rows = await tx.execute<{
+    id: string;
+    workspace_id: string;
+    primary_managed_system_id: string;
+    analytics_area_id: string | null;
+    reporter_id: string;
+    display_id: string;
+    title: string;
+    description_rich_content: unknown;
+    severity: string | null;
+    reporter_facing_status: string;
+    triage_state: string;
+    triage_state_review_postponed_at: Date | string | null;
+    owner_user_id: string | null;
+    owner_team_id: string | null;
+    source_context: string;
+    archived_at: Date | string | null;
+    created_at: Date | string;
+    updated_at: Date | string;
+  }>(sql`
+    select
+      id, workspace_id, primary_managed_system_id, analytics_area_id, reporter_id,
+      display_id, title, description_rich_content, severity, reporter_facing_status,
+      triage_state, triage_state_review_postponed_at,
+      owner_user_id, owner_team_id, source_context,
+      archived_at, created_at, updated_at
+    from ${vocs}
+    where id = ${vocId}
+      and workspace_id = ${workspaceId}
+    for update
+  `);
+  const row = rows.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    primaryManagedSystemId: row.primary_managed_system_id,
+    analyticsAreaId: row.analytics_area_id,
+    reporterId: row.reporter_id,
+    displayId: row.display_id,
+    title: row.title,
+    descriptionRichContent: row.description_rich_content,
+    severity: row.severity as LockedVoc['severity'],
+    reporterFacingStatus: row.reporter_facing_status,
+    triageState: row.triage_state as LockedVoc['triageState'],
+    triageStateReviewPostponedAt: toDateOrNull(row.triage_state_review_postponed_at),
+    ownerUserId: row.owner_user_id,
+    ownerTeamId: row.owner_team_id,
+    sourceContext: row.source_context,
+    archivedAt: toDateOrNull(row.archived_at),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
+}
+
+// node-pg returns timestamptz as a Date by default, but drizzle `tx.execute`
+// raw rows may surface ISO strings depending on type-parser registration.
+// Normalise to Date so callers can call `.toISOString()` without guarding.
+function toDate(v: Date | string): Date {
+  return v instanceof Date ? v : new Date(v);
+}
+function toDateOrNull(v: Date | string | null): Date | null {
+  if (v === null) return null;
+  return v instanceof Date ? v : new Date(v);
+}
+
 export interface InsertVocInput {
   workspaceId: string;
   primaryManagedSystemId: string;
