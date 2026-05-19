@@ -16,6 +16,7 @@
 import { z } from 'zod';
 
 import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type {
@@ -589,7 +590,97 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     return { items, page: convPage };
   }
 
-  return { listVocs, getVocDetail, getConversation };
+  // ── composeDetailEnvelope ─────────────────────────────────────────────────
+  // Post-write envelope refresh used by conversation-service (C3/#16).
+  // Caller owns the transaction and is already authorised to act on the VOC —
+  // access-matrix checks are intentionally skipped here; this path is NOT a
+  // read entry-point for unauthenticated actors.
+  //
+  // Uses the supplied `tx` so the returned envelope reflects writes made in
+  // the same transaction (e.g. status change, new conversation row).
+  //
+  // canTriage is derived from the actor's triage scope inside the tx so the
+  // conversation visibility filter stays accurate post-write.
+
+  async function composeDetailEnvelope(args: {
+    tx: Tx;
+    actor: ReadActorContext;
+    vocId: string;
+  }): Promise<VocDetailEnvelope> {
+    const { tx, actor, vocId } = args;
+
+    // Fetch the (possibly just-updated) VOC row inside the tx.
+    const row = await repoRead.selectVocByIdForRead(tx, actor.workspace_id, vocId);
+    if (!row) throw new HttpError('not_found.record', 'VOC not found after write');
+
+    const primaryMs = row.primaryManagedSystemId;
+    const isReporter = row.reporterId === actor.actor_id;
+
+    // Resolve triage scope inside the tx (permissions may have changed if this
+    // is ever used post-grant; belt-and-suspenders).
+    const triageScope = await repoRead.actorTriageScope(tx, actor);
+    const canTriage = msInScope(triageScope, primaryMs);
+
+    // Inline conversation (first 50 entries).
+    const convResult = await repoRead.selectConversationPage(tx, {
+      workspaceId: actor.workspace_id,
+      vocId,
+      actorId: actor.actor_id,
+      canTriage,
+      isReporter,
+      limit: 50,
+    });
+    const conversationTimeline = convResult.entries.map(mapConversationRow);
+    let convNextCursor: string | undefined;
+    if (convResult.hasMore && convResult.nextCursor) {
+      convNextCursor = encodeConversationCursor(convResult.nextCursor);
+    }
+
+    // Next reporter states.
+    const nextStates = await nextReporterStates(
+      row.reporterFacingStatus as ReporterFacingStatus,
+      tx,
+    );
+
+    // Permission decisions seed.
+    const permissionDecisionsSeed = await repoRead.selectPermissionDecisionsSeed(tx, actor.workspace_id, vocId);
+    const permissionDecisions: Record<string, unknown> =
+      permissionDecisionsSeed !== null && typeof permissionDecisionsSeed === 'object'
+        ? (permissionDecisionsSeed as Record<string, unknown>)
+        : {};
+
+    return {
+      id: row.id,
+      display_id: row.displayId,
+      title: row.title,
+      primary_managed_system_id: primaryMs,
+      analytics_area_id: row.analyticsAreaId,
+      reporter_id: row.reporterId,
+      owner_user_id: row.ownerUserId,
+      owner_team_id: row.ownerTeamId,
+      severity: row.severity,
+      reporter_facing_status: row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
+      triage_state: row.triageState as VocDetailEnvelope['triage_state'],
+      source_context: row.sourceContext as VocDetailEnvelope['source_context'],
+      created_at: row.createdAt.toISOString(),
+      updated_at: row.updatedAt.toISOString(),
+      similar_count: 0,
+      description_rich_content: row.descriptionRichContent,
+      next_actions: [],
+      next_reporter_states: {
+        allowed: nextStates.allowed,
+        forbidden: nextStates.forbidden as Record<VocDetailEnvelope['reporter_facing_status'], string>,
+      },
+      linked_execution: { findingRef: null, taskRef: null },
+      conversation_timeline: conversationTimeline,
+      conversation_page: convNextCursor !== undefined
+        ? { cursor: convNextCursor, has_more: convResult.hasMore }
+        : { has_more: convResult.hasMore },
+      permission_decisions: permissionDecisions,
+    };
+  }
+
+  return { listVocs, getVocDetail, getConversation, composeDetailEnvelope };
 }
 
 export type VocReadService = ReturnType<typeof createVocReadService>;
