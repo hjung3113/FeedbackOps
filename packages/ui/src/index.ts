@@ -34,3 +34,9 @@ export * from './components/shadcn/avatar.js';
 export * from './components/shadcn/badge.js';
 export * from './components/shadcn/dropdown-menu.js';
 export * from './components/shadcn/combobox.js';
+
+// Rich content (Pack 17, ADR-0011)
+export { RichEditor, type RichEditorProps, type TipTapDoc } from './rich-content/RichEditor';
+export { RichContentRenderer, type RichContentRendererProps, type RichContentMode } from './rich-content/RichContentRenderer';
+export { AttachmentRef, type AttachmentRefAttrs } from './rich-content/extensions/attachmentRef';
+export { Mention, type MentionAttrs } from './rich-content/extensions/mention';
