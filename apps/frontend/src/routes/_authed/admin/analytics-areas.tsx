@@ -7,35 +7,24 @@
 
 import { AnalyticsAreaPicker, Button, ManagedSystemPicker, type PickerOption } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 
-import { PermissionGate } from '../../features/admin/permissions/permission-gate.js';
+import { PermissionGate } from '../../../features/admin/permissions/permission-gate.js';
 import {
   type AnalyticsAreaDto,
   ApiError,
   type ManagedSystemDto,
   type RegisterAnalyticsAreaBody,
-  UnauthenticatedError,
   type UpdateAnalyticsAreaBody,
   archiveAnalyticsArea,
   fetchAnalyticsAreas,
   fetchManagedSystems,
-  fetchMe,
   registerAnalyticsArea,
   updateAnalyticsArea,
-} from '../../lib/api.js';
+} from '../../../lib/api.js';
 
-export const Route = createFileRoute('/admin/analytics-areas')({
-  beforeLoad: async () => {
-    try {
-      await fetchMe();
-    } catch (err) {
-      if (err instanceof UnauthenticatedError) {
-        throw redirect({ to: '/login' });
-      }
-    }
-  },
+export const Route = createFileRoute('/_authed/admin/analytics-areas')({
   component: AnalyticsAreasAdminPage,
 });
 
