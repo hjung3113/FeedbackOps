@@ -24,6 +24,20 @@ export type AttrSchema =
 
 // ── SurfaceAllowlist ──────────────────────────────────────────────────────────
 
+// DoS caps — these are hard structural limits, NOT UX allowances.
+// They exist to prevent adversarial payloads from exhausting the V8 call stack
+// (deep nesting) or burning CPU (extremely wide / mark-heavy documents).
+//
+// Depth counts edges from the root doc node (depth 0) to the deepest descendant.
+// A typical rich TipTap document with ~6 list levels and inline structure reaches
+// depth ~12; cap at 32 gives ~2.5× safety margin with zero impact on real content.
+//
+// Node and mark counts are cumulative over the whole document (not per-level).
+// Real internal-comment threads rarely exceed a few hundred nodes; 5 000 / 1 000
+// provide ~10× headroom while hard-capping adversarial fan-out.
+//
+// Per-surface override is reserved for future tuning; all surfaces share these
+// defaults as locked in the cycle-1 plan review for issue #24.
 export interface SurfaceAllowlist {
   nodes: ReadonlySet<string>;
   marks: ReadonlySet<string>;
@@ -37,6 +51,10 @@ export interface SurfaceAllowlist {
   allowedLinkSchemes: ReadonlySet<string>;
   // hard cap on total text content (chars). Spec: 50 KB.
   maxTextBytes: number;
+  // DoS structural caps (see header comment above).
+  maxDepth: number;
+  maxNodes: number;
+  maxMarks: number;
 }
 
 // ── Shared scheme sets ────────────────────────────────────────────────────────
@@ -73,6 +91,9 @@ export const SURFACE_ALLOWLISTS: Readonly<Record<Surface, SurfaceAllowlist>> = {
     },
     allowedLinkSchemes: HTTP_ONLY,
     maxTextBytes: 50 * 1024,
+    maxDepth: 32,
+    maxNodes: 5000,
+    maxMarks: 1000,
   },
 
   // public-update: no links, no attachments, no mentions, no images.
@@ -84,6 +105,9 @@ export const SURFACE_ALLOWLISTS: Readonly<Record<Surface, SurfaceAllowlist>> = {
     markAttrs: {},
     allowedLinkSchemes: new Set<string>(),
     maxTextBytes: 50 * 1024,
+    maxDepth: 32,
+    maxNodes: 5000,
+    maxMarks: 1000,
   },
 
   // reporter-reply: attachmentRef node allowed (value layer rejects non-empty
@@ -103,6 +127,9 @@ export const SURFACE_ALLOWLISTS: Readonly<Record<Surface, SurfaceAllowlist>> = {
     },
     allowedLinkSchemes: HTTP_ONLY,
     maxTextBytes: 50 * 1024,
+    maxDepth: 32,
+    maxNodes: 5000,
+    maxMarks: 1000,
   },
 
   // internal-comment: full feature set — codeBlock, mention, attachmentRef,
@@ -130,5 +157,8 @@ export const SURFACE_ALLOWLISTS: Readonly<Record<Surface, SurfaceAllowlist>> = {
     },
     allowedLinkSchemes: HTTP_ONLY,
     maxTextBytes: 50 * 1024,
+    maxDepth: 32,
+    maxNodes: 5000,
+    maxMarks: 1000,
   },
 };
