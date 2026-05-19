@@ -100,7 +100,7 @@ export function createVocService(deps: VocServiceDeps) {
             path: ['description_rich_content'],
             code: sanitized.error.code === 'rich_content.external_image_forbidden'
               ? 'external_image_forbidden'
-              : 'disallowed_node',
+              : (sanitized.error.fields_code ?? 'disallowed_node'),
           },
         ],
         hint: sanitized.error.path,

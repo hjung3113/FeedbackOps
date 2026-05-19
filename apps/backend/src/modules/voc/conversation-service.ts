@@ -176,7 +176,7 @@ function sanitizeOrThrow(
           path: ['body_rich_content'],
           code: result.error.code === 'rich_content.external_image_forbidden'
             ? 'external_image_forbidden'
-            : 'disallowed_node',
+            : (result.error.fields_code ?? 'disallowed_node'),
         },
       ],
       hint: result.error.path,
