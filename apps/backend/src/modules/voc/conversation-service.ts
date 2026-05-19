@@ -31,6 +31,7 @@ import {
   insertInternalComment,
   insertPublicUpdate,
   insertReporterReply,
+  lockManagedSystem,
   selectVocForUpdate,
   updateVocReporterStatus,
 } from './repo.js';
@@ -202,10 +203,15 @@ export function createConversationService(deps: {
     const row = await selectVocForUpdate(tx, actor.workspace_id, vocId);
     if (!row) throw new HttpError('not_found.record', 'voc not found');
     if (row.archivedAt !== null) throw new HttpError('conflict.record_archived', 'voc is archived');
-    // Parent MS archive is not separately checked here — selectVocForUpdate
-    // already locks the VOC row; the MS archive state is only relevant at
-    // creation / PATCH time (per #14 pattern). Public updates on existing
-    // non-archived VOCs are allowed even if the MS is later archived.
+
+    // 1b. Parent MS archive guard (issue #16 AC — archived parent MS → 409).
+    const ms = await lockManagedSystem(tx, actor.workspace_id, row.primaryManagedSystemId);
+    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
+    if (ms.archived_at !== null) {
+      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
+        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
+      });
+    }
 
     // 2. Permission re-check inside tx (admin bypass via role; developer needs MS grant).
     const decision = await checkTriageCapability(
@@ -359,6 +365,15 @@ export function createConversationService(deps: {
     if (!row) throw new HttpError('not_found.record', 'voc not found');
     if (row.archivedAt !== null) throw new HttpError('conflict.record_archived', 'voc is archived');
 
+    // 1b. Parent MS archive guard.
+    const ms = await lockManagedSystem(tx, actor.workspace_id, row.primaryManagedSystemId);
+    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
+    if (ms.archived_at !== null) {
+      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
+        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
+      });
+    }
+
     // 2. Actor must be the reporter.
     if (actor.actor_id !== row.reporterId) {
       throw new HttpError(
@@ -460,6 +475,15 @@ export function createConversationService(deps: {
     const row = await selectVocForUpdate(tx, actor.workspace_id, vocId);
     if (!row) throw new HttpError('not_found.record', 'voc not found');
     if (row.archivedAt !== null) throw new HttpError('conflict.record_archived', 'voc is archived');
+
+    // 1b. Parent MS archive guard.
+    const ms = await lockManagedSystem(tx, actor.workspace_id, row.primaryManagedSystemId);
+    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
+    if (ms.archived_at !== null) {
+      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
+        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
+      });
+    }
 
     // 2. Permission: Admin OR scoped voc.triage. Reporter identity is NOT a
     //    deny condition (codex cycle-1 BLOCKER fix — a reporter who also holds

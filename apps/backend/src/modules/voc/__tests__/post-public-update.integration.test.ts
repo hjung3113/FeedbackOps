@@ -337,28 +337,22 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   });
 
   // ── skip + body present → zod strips body (discriminated union) ──
-  // The publicUpdateRequestSchema uses z.object (not strict) for the skip shape,
-  // so zod strips unknown keys including body_rich_content. The request succeeds
-  // as a valid skip (shape C) with the body stripped. This is the spec-conforming
-  // behavior: zod discriminated union + z.object passthrough stripping is expected.
+  // Schema is .strict() on both shapes: extra keys (e.g. body on skip shape)
+  // → zod rejects → 422 validation.failed (issue #16 AC).
 
-  it('skip + body_rich_content present → zod strips body, treated as valid skip → 201', async () => {
+  it('skip + body_rich_content present → 422 validation.failed', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-skipbody`, 'Skip Body MS');
     const voc = await insertVoc(msId, 'Skip Body VOC');
 
     const res = await postPublicUpdate(adminCookie, voc.id, {
       skip_public_update: true,
       skip_reason: 'valid skip reason here',
-      body_rich_content: paragraphDoc('conflicting body'), // stripped by zod
+      body_rich_content: paragraphDoc('conflicting body'),
       next_reporter_facing_status: 'reviewing',
     });
 
-    // Zod strips body_rich_content for skip=true shape → treated as valid skip
-    expect(res.statusCode).toBe(201);
-    const resBody = res.json<{ public_update: Record<string, unknown> }>();
-    // body_rich_content on the response row must be null (stripped)
-    expect(resBody.public_update.body_rich_content).toBeNull();
-    expect(resBody.public_update.skip_public_update).toBe(true);
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
 
   // ── non-MS dev → 403 permission.scope_required ──
@@ -537,11 +531,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   });
 
   // ── archived parent MS → 409 conflict.parent_archived ──
-  // NOTE: The service (conversation-service.ts) does NOT check MS archive for
-  // public-updates (by design — comment in code says MS archive is only checked
-  // at creation / PATCH time per #14 pattern). This test documents the gap.
-  // Filed as known deviation; spec says 409 but service skips the check.
-  it.skip('archived parent MS → 409 conflict.parent_archived (DEVIATION: service skips MS archive check for public-updates)', async () => {
+  it('archived parent MS → 409 conflict.parent_archived', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-arcms`, 'Arc Ms MS');
     const voc = await insertVoc(msId, 'Arc Ms VOC');
 
