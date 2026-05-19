@@ -13,6 +13,7 @@ import {
   reporterReplyCreatedDetailSchema,
   internalCommentCreatedDetailSchema,
   vocTriagePostponedDetailSchema,
+  vocDescriptionEditedDetailSchema,
 } from '../voc.js';
 import { AUDIT_EVENT_TYPES, AUDIT_EVENT_DETAIL_SCHEMAS } from '../../enums/audit-events.js';
 
@@ -389,6 +390,78 @@ describe('vocTriagePostponedDetailSchema', () => {
   });
 });
 
+describe('vocDescriptionEditedDetailSchema', () => {
+  const hash64 = 'a'.repeat(64);
+
+  it('accepts title-only changes', () => {
+    const result = vocDescriptionEditedDetailSchema.parse({
+      voc_id: U,
+      changes: { title: { from: 'Old title', to: 'New title' } },
+    });
+    expect(result.changes.title?.to).toBe('New title');
+  });
+
+  it('accepts description_rich_content-only changes', () => {
+    const result = vocDescriptionEditedDetailSchema.parse({
+      voc_id: U,
+      changes: { description_rich_content: { from_hash: hash64, to_hash: hash64 } },
+    });
+    expect(result.changes.description_rich_content?.from_hash).toBe(hash64);
+  });
+
+  it('accepts attachments-only changes', () => {
+    const result = vocDescriptionEditedDetailSchema.parse({
+      voc_id: U,
+      changes: { attachments: { from: [], to: [] } },
+    });
+    expect(result.changes.attachments?.from).toEqual([]);
+  });
+
+  it('accepts all 3 fields in changes', () => {
+    const result = vocDescriptionEditedDetailSchema.parse({
+      voc_id: U,
+      changes: {
+        title: { from: 'A', to: 'B' },
+        description_rich_content: { from_hash: hash64, to_hash: hash64 },
+        attachments: { from: [], to: [] },
+      },
+    });
+    expect(Object.keys(result.changes)).toHaveLength(3);
+  });
+
+  it('rejects empty changes object', () => {
+    expect(() =>
+      vocDescriptionEditedDetailSchema.parse({
+        voc_id: U,
+        changes: {},
+      }),
+    ).toThrow();
+  });
+
+  it('rejects from_hash that is not 64 chars', () => {
+    expect(() =>
+      vocDescriptionEditedDetailSchema.parse({
+        voc_id: U,
+        changes: { description_rich_content: { from_hash: 'short', to_hash: hash64 } },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects to_hash that is not 64 chars', () => {
+    expect(() =>
+      vocDescriptionEditedDetailSchema.parse({
+        voc_id: U,
+        changes: { description_rich_content: { from_hash: hash64, to_hash: 'short' } },
+      }),
+    ).toThrow();
+  });
+
+  it('is registered in AUDIT_EVENT_DETAIL_SCHEMAS', () => {
+    expect(AUDIT_EVENT_TYPES).toContain('voc_description_edited');
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS).toHaveProperty('voc_description_edited');
+  });
+});
+
 describe('AUDIT_EVENT_TYPES registry', () => {
   const VOC_EVENTS = [
     'voc_created',
@@ -402,6 +475,7 @@ describe('AUDIT_EVENT_TYPES registry', () => {
     'reporter_reply_created',
     'internal_comment_created',
     'voc_triage_postponed',
+    'voc_description_edited',
   ] as const;
 
   it.each(VOC_EVENTS)('%s is in AUDIT_EVENT_TYPES and has a detail schema', (event) => {

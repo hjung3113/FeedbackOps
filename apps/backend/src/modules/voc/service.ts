@@ -5,19 +5,22 @@
 // API accepts a `Tx` so the controller's idempotency frame can own the
 // transaction.
 
+import { createHash } from 'node:crypto';
+
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { vocs } from '../../db/schema/voc.js';
 import { HttpError } from '../../lib/errors.js';
+import { stableStringify } from '../../lib/json/stable-stringify.js';
 import { sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
 import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
-import { insertVoc, lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from './repo.js';
+import { insertVoc, lockAnalyticsArea, lockManagedSystem, selectVocForUpdate, updateVocDescriptionFields } from './repo.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { RoleLevel } from '../auth/session-service.js';
-import type { CreateVocRequest, PatchVocRequest } from '@fops/shared';
+import type { CreateVocRequest, EditDescriptionRequest, PatchVocRequest } from '@fops/shared';
 
 export interface CreateVocActor {
   actor_id: string;
@@ -648,7 +651,184 @@ export function createVocService(deps: VocServiceDeps) {
     };
   }
 
-  return { createVoc, updateVoc };
+  // ── editVocDescription ────────────────────────────────────────────────────
+  // PATCH /vocs/:id/description — Reporter-only, pre-triage-only edit.
+  // Service-layer ordering (locked per plan §17):
+  //   1. selectVocForUpdate → 404 / archived
+  //   2. Actor must equal voc.reporter_id → 403 permission.denied
+  //   3. triage_state must be 'untriaged' → 409 conflict.triage_already_committed
+  //   4. If-Match compare → 409 conflict.stale_write
+  //   5. Lock parent MS → archived → 409 conflict.parent_archived
+  //   6. Sanitize description_rich_content
+  //   7. Reject non-empty attachments → 422
+  //   8. Diff computation
+  //   9. Empty diff → return existing envelope, no UPDATE, no audit
+  //  10. Non-empty diff → updateVocDescriptionFields + audit + return envelope
+  async function editVocDescription(args: {
+    tx: Tx;
+    actor: { actor_id: string; workspace_id: string };
+    vocId: string;
+    ifMatch: string;
+    input: EditDescriptionRequest;
+  }): Promise<VocEnvelope> {
+    const { tx, actor, vocId, ifMatch, input } = args;
+    const workspaceId = actor.workspace_id;
+
+    // 1. FOR UPDATE lock on the VOC row.
+    const row = await selectVocForUpdate(tx, workspaceId, vocId);
+    if (!row) throw new HttpError('not_found.record', 'voc not found');
+    if (row.archivedAt !== null) {
+      throw new HttpError('conflict.record_archived', 'voc is archived');
+    }
+
+    // 2. Reporter-only: actor must equal voc.reporter_id — no admin elevation.
+    if (actor.actor_id !== row.reporterId) {
+      throw new HttpError(
+        'permission.denied',
+        'only the original reporter may edit voc description',
+        { fields: [{ path: ['actor_id'], code: 'not_reporter' }] },
+      );
+    }
+
+    // 3. Triage state gate: only untriaged VOCs can have description edited.
+    if (row.triageState !== 'untriaged') {
+      throw new HttpError(
+        'conflict.triage_already_committed',
+        'voc triage has already been committed; description can no longer be edited',
+        { current_triage_state: row.triageState },
+      );
+    }
+
+    // 4. Optimistic concurrency check (after permission and state checks).
+    if (row.updatedAt.toISOString() !== ifMatch) {
+      throw new HttpError('conflict.stale_write', 'voc updated_at does not match If-Match', {
+        current_updated_at: row.updatedAt.toISOString(),
+      });
+    }
+
+    // 5. FOR UPDATE lock on parent Managed System.
+    const ms = await lockManagedSystem(tx, workspaceId, row.primaryManagedSystemId);
+    if (!ms) throw new HttpError('not_found.record', 'managed system not found');
+    if (ms.archived_at !== null) {
+      throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
+        fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
+      });
+    }
+
+    // 6. Sanitize description_rich_content when present.
+    let sanitizedDoc: ReturnType<typeof sanitizeTipTap> | null = null;
+    if (input.description_rich_content !== undefined) {
+      sanitizedDoc = sanitizeTipTap({
+        surface: 'voc-description',
+        doc: input.description_rich_content,
+      });
+      if (!sanitizedDoc.ok) {
+        throw new HttpError(sanitizedDoc.error.code, sanitizedDoc.error.reason, {
+          fields: [
+            {
+              path: ['description_rich_content'],
+              code: sanitizedDoc.error.code === 'rich_content.external_image_forbidden'
+                ? 'external_image_forbidden'
+                : (sanitizedDoc.error.fields_code ?? 'disallowed_node'),
+            },
+          ],
+          hint: sanitizedDoc.error.path,
+        });
+      }
+    }
+
+    // 7. Reject non-empty attachments (storage slice not shipped yet).
+    if (input.attachments && input.attachments.length > 0) {
+      throw new HttpError(
+        'attachment.unsupported_pending_storage_slice',
+        'attachments are not supported until the storage slice ships (#22)',
+        {
+          fields: [{ path: ['attachments'], code: 'unsupported' }],
+        },
+      );
+    }
+
+    // 8. Diff computation.
+    type DescChanges = {
+      title?: { from: string; to: string };
+      description_rich_content?: { from_hash: string; to_hash: string };
+      attachments?: { from: unknown[]; to: unknown[] };
+    };
+    const changes: DescChanges = {};
+
+    // title diff
+    if (input.title !== undefined && input.title !== row.title) {
+      changes.title = { from: row.title, to: input.title };
+    }
+
+    // description_rich_content diff — compare via SHA-256 of stableStringify
+    if (input.description_rich_content !== undefined && sanitizedDoc?.ok) {
+      const fromHash = createHash('sha256')
+        .update(stableStringify(row.descriptionRichContent))
+        .digest('hex');
+      const toHash = createHash('sha256')
+        .update(stableStringify(sanitizedDoc.doc))
+        .digest('hex');
+      if (fromHash !== toHash) {
+        changes.description_rich_content = { from_hash: fromHash, to_hash: toHash };
+      }
+    }
+
+    // attachments diff — in Slice 3 always [] vs [] (non-empty rejected above)
+    if (input.attachments !== undefined) {
+      const fromStr = stableStringify([]); // current always [] in Slice 3
+      const toStr = stableStringify(input.attachments);
+      if (fromStr !== toStr) {
+        changes.attachments = { from: [], to: input.attachments };
+      }
+    }
+
+    // 9. Empty diff — return current envelope without any writes.
+    if (Object.keys(changes).length === 0) {
+      // Breadcrumb: no-op edit, idempotency will cache the result.
+      const nextStates = await nextReporterStates(
+        row.reporterFacingStatus as ReporterFacingStatus,
+        tx,
+      );
+      return composeEnvelope(row, nextStates);
+    }
+
+    // 10. Non-empty diff — UPDATE + audit + return refreshed envelope.
+    // Only pass fields that actually changed to updateVocDescriptionFields.
+    // The repo guard throws if both are undefined, which cannot happen here
+    // because we checked Object.keys(changes).length > 0 above.
+    const updatedRow = await updateVocDescriptionFields({
+      tx,
+      vocId,
+      workspaceId,
+      title: changes.title !== undefined ? changes.title.to : undefined,
+      descriptionRichContent:
+        changes.description_rich_content !== undefined && sanitizedDoc !== null && sanitizedDoc.ok
+          ? sanitizedDoc.doc
+          : undefined,
+    });
+
+    await deps.auditService.record(tx, {
+      workspace_id: workspaceId,
+      actor_id: actor.actor_id,
+      event_type: 'voc_description_edited',
+      subject_type: 'voc',
+      subject_id: vocId,
+      summary: `VOC ${updatedRow.displayId} description edited by reporter`,
+      detail: {
+        voc_id: vocId,
+        changes,
+      },
+    });
+
+    const nextStates = await nextReporterStates(
+      updatedRow.reporterFacingStatus as ReporterFacingStatus,
+      tx,
+    );
+    return composeEnvelope(updatedRow, nextStates);
+  }
+
+  return { createVoc, updateVoc, editVocDescription };
 }
 
 export type VocService = ReturnType<typeof createVocService>;

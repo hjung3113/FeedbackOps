@@ -7,9 +7,12 @@ import { sql } from 'drizzle-orm';
 
 import {
   FORBIDDEN_CREATE_FIELDS,
+  FORBIDDEN_EDIT_DESCRIPTION_FIELDS,
+  FORBIDDEN_EDIT_DESCRIPTION_FIELD_ERROR_CODES,
   FORBIDDEN_PATCH_FIELDS,
   FORBIDDEN_PATCH_FIELD_ERROR_CODES,
   createVocRequestSchema,
+  editDescriptionRequestSchema,
   getConversationQuerySchema,
   internalCommentRequestSchema,
   listVocsQuerySchema,
@@ -47,6 +50,7 @@ export interface VocRoutesOptions {
   rateLimitConfig?: {
     mutation: Record<string, unknown>;
     read?: Record<string, unknown>;
+    reporterEdit?: Record<string, unknown>;
   };
 }
 
@@ -241,6 +245,98 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
             actor_id: sess.actor_id,
             workspace_id: sess.workspace_id,
             role_level: sess.role_level,
+          },
+          vocId,
+          ifMatch,
+          input: parsed.data,
+        });
+
+        // 7. Record idempotency result and return 200.
+        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 200, envelope);
+        return { status: 200, body: envelope };
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  // ── PATCH /vocs/:id/description — Slice 3 #17 Reporter pre-triage edit ───
+  // Reporter-only endpoint. No admin elevation. Requires untriaged VOC.
+  // Rate limit: 30/min per actor (reporterEdit bucket — separate from the
+  // 10/min mutation bucket so a single edit session can fan out several saves
+  // without throttling a triaging admin's separate bucket). Falls back to
+  // shared mutation bucket only if the dedicated bucket isn't configured.
+  app.route({
+    method: 'PATCH',
+    url: '/vocs/:id/description',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig
+      ? { config: { rateLimit: (rateLimitConfig.reporterEdit ?? rateLimitConfig.mutation) as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      // 1. Idempotency-Key header.
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+
+      // 2. If-Match header (optimistic concurrency).
+      const ifMatch = requireIfMatch(req.headers as Record<string, unknown>);
+
+      const params = req.params as { id: string };
+      const vocId = params.id;
+
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+
+      // 3. Strip forbidden fields before Zod parse for precise per-field errors.
+      // See C10 note on PATCH /vocs/:id — case-sensitive; .strict() catches
+      // any case variants as validation.failed (unrecognized_keys).
+      for (const f of FORBIDDEN_EDIT_DESCRIPTION_FIELDS) {
+        if (f in rawBody) {
+          const code = FORBIDDEN_EDIT_DESCRIPTION_FIELD_ERROR_CODES[f];
+          return sendError(reply, code, `${f} cannot be set via PATCH /vocs/:id/description`, {
+            fields: [{ path: [f], code: 'unexpected_field' }],
+          });
+        }
+      }
+
+      // 4. Schema validation.
+      const parsed = editDescriptionRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      // 5. Idempotency frame (same pattern as PATCH /vocs/:id).
+      // ifMatch included in hash — different If-Match = different intent.
+      const hash = hashRequestBody({ vocId, ifMatch, route: 'voc.description_edit', ...rawBody });
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
+        );
+        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
+        if (hit.kind === 'match') {
+          return { status: hit.status, body: hit.body };
+        }
+        if (hit.kind === 'mismatch') {
+          throw new HttpError(
+            'conflict.idempotency_key_reuse',
+            'Idempotency-Key reused with different request body',
+          );
+        }
+
+        // 6. Delegate to service.
+        const envelope = await vocService.editVocDescription({
+          tx,
+          actor: {
+            actor_id: sess.actor_id,
+            workspace_id: sess.workspace_id,
           },
           vocId,
           ifMatch,

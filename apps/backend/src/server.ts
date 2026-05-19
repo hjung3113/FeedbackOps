@@ -214,6 +214,16 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       keyGenerator: mutationKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'read') as never,
     },
+    // Slice 3 #17 — Reporter pre-triage edit (PATCH /vocs/:id/description).
+    // 30/min per actor (more permissive than generic `mutation: 10/min` because
+    // a single edit session can produce several saves; less than read tier).
+    // Plan §spec issue #17.
+    reporterEdit: {
+      max: 30,
+      timeWindow: '1 minute',
+      keyGenerator: mutationKeyGenerator,
+      store: createPgRateLimitStore(dbHandle.pool, 'reporter_edit') as never,
+    },
   });
 
   // ── Error handler ─ ADR-0012 envelope ────────────────────────────────
@@ -382,6 +392,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
+      reporterEdit: app.rateLimitConfig.reporterEdit,
     },
   });
 

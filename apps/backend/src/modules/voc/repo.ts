@@ -286,6 +286,102 @@ export async function updateVocReporterStatus(
   `);
 }
 
+// ── updateVocDescriptionFields ─────────────────────────────────────────────
+// Applies a non-empty set of description field changes to a voc row within
+// the calling transaction. Caller MUST NOT invoke this if all 3 fields are
+// absent (defensive throw enforces the invariant).
+// workspace_id filter is defense-in-depth (cycle-2 B2 — guards cross-ws).
+
+export interface UpdateVocDescriptionFieldsInput {
+  tx: Tx;
+  vocId: string;
+  workspaceId: string;
+  title: string | undefined;
+  descriptionRichContent: unknown;
+}
+
+export async function updateVocDescriptionFields(
+  input: UpdateVocDescriptionFieldsInput,
+): Promise<LockedVoc> {
+  const { tx, vocId, workspaceId, title, descriptionRichContent } = input;
+
+  if (title === undefined && descriptionRichContent === undefined) {
+    throw new Error(
+      'updateVocDescriptionFields: called with empty diff — caller must not invoke on no-op',
+    );
+  }
+
+  // Build SET clause for non-undefined fields only.
+  const setClauses: ReturnType<typeof sql>[] = [sql`updated_at = now()`];
+  if (title !== undefined) {
+    setClauses.push(sql`title = ${title}`);
+  }
+  if (descriptionRichContent !== undefined) {
+    setClauses.push(sql`description_rich_content = ${descriptionRichContent as object}::jsonb`);
+  }
+
+  // Combine SET clauses
+  const setClause = sql.join(setClauses, sql`, `);
+
+  const rows = await tx.execute<{
+    id: string;
+    workspace_id: string;
+    primary_managed_system_id: string;
+    analytics_area_id: string | null;
+    reporter_id: string;
+    display_id: string;
+    title: string;
+    description_rich_content: unknown;
+    severity: string | null;
+    reporter_facing_status: string;
+    triage_state: string;
+    triage_state_review_postponed_at: Date | string | null;
+    owner_user_id: string | null;
+    owner_team_id: string | null;
+    source_context: string;
+    archived_at: Date | string | null;
+    created_at: Date | string;
+    updated_at: Date | string;
+  }>(sql`
+    UPDATE ${vocs}
+    SET ${setClause}
+    WHERE id = ${vocId}
+      AND workspace_id = ${workspaceId}
+    RETURNING
+      id, workspace_id, primary_managed_system_id, analytics_area_id, reporter_id,
+      display_id, title, description_rich_content, severity, reporter_facing_status,
+      triage_state, triage_state_review_postponed_at,
+      owner_user_id, owner_team_id, source_context,
+      archived_at, created_at, updated_at
+  `);
+
+  const row = rows.rows[0];
+  if (!row) {
+    throw new Error('updateVocDescriptionFields: UPDATE returned no row');
+  }
+
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    primaryManagedSystemId: row.primary_managed_system_id,
+    analyticsAreaId: row.analytics_area_id,
+    reporterId: row.reporter_id,
+    displayId: row.display_id,
+    title: row.title,
+    descriptionRichContent: row.description_rich_content,
+    severity: row.severity as LockedVoc['severity'],
+    reporterFacingStatus: row.reporter_facing_status,
+    triageState: row.triage_state as LockedVoc['triageState'],
+    triageStateReviewPostponedAt: toDateOrNull(row.triage_state_review_postponed_at),
+    ownerUserId: row.owner_user_id,
+    ownerTeamId: row.owner_team_id,
+    sourceContext: row.source_context,
+    archivedAt: toDateOrNull(row.archived_at),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
+}
+
 export async function insertVoc(tx: Tx, input: InsertVocInput) {
   // next_voc_display_id is a SECURITY DEFINER function from migration 0010
   // (#12). It assigns the next VOC-#### slug for the workspace under an
