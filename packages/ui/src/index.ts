@@ -40,3 +40,10 @@ export { RichEditor, type RichEditorProps, type TipTapDoc } from './rich-content
 export { RichContentRenderer, type RichContentRendererProps, type RichContentMode } from './rich-content/RichContentRenderer';
 export { AttachmentRef, type AttachmentRefAttrs } from './rich-content/extensions/attachmentRef';
 export { Mention, type MentionAttrs } from './rich-content/extensions/mention';
+
+// Layout shells (ADR-0020 — exactly three shells: PageShell / ListShell / WorkbenchShell)
+export { PageShell, type PageShellProps } from './layout/PageShell';
+export { ListShell, type ListShellProps } from './layout/ListShell';
+export { WorkbenchShell, type WorkbenchShellProps } from './layout/WorkbenchShell';
+export { ShellHeader, type ShellHeaderProps } from './layout/ShellHeader';
+export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPanelSlot';
