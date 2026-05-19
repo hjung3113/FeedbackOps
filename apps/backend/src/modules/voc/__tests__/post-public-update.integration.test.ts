@@ -374,6 +374,44 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     expect(res.json<{ code: string }>().code).toBe('permission.scope_required');
   });
 
+  // ── Sanitizer attr-injection (#23) ────────────────────────────────────
+
+  it('body with link mark (not in public-update allowlist) + extra target attr → 422 disallowed_node', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-atki`, 'AtKI MS');
+    const voc = await insertVoc(msId, 'AtKI VOC');
+
+    // public-update has no attachmentRef; use link mark on paragraph instead.
+    // Note: link mark itself is NOT in public-update marks allowlist (bold/italic only),
+    // so the mark-type rejection fires before attr-key inspection.
+    // Per plan: "link mark with {href, target: '_blank'} (since public-update has no attachmentRef)"
+    // — assert disallowed_node (mark type rejected, link is not in public-update allowlist).
+    const attrInjectionDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'click',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com', target: '_blank' } }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = await postPublicUpdate(adminCookie, voc.id, {
+      skip_public_update: false,
+      body_rich_content: attrInjectionDoc,
+      next_reporter_facing_status: 'received',
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_node');
+    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.path).toEqual(['body_rich_content']);
+  });
+
   // ── gate stub: evaluateReporterStatusGate returns null ──
 
   it('gate stub: ERROR_CODES contains reporter_facing_status.gate_blocked', () => {

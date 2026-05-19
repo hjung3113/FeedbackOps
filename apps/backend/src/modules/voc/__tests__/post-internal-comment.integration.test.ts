@@ -418,6 +418,83 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
     expect(res.json<{ code: string }>().code).toBe('conflict.record_archived');
   });
 
+  // ── Sanitizer attr-injection (#23) ────────────────────────────────────
+
+  it('body with mention.attrs disallowed label key → 422 disallowed_attr_key', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-atki`, 'AtKI MS');
+    const voc = await insertVoc(msId, 'AtKI VOC');
+
+    const attrInjectionDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'mention',
+          attrs: { actor_id: randomUUID(), label: '<x>' },
+        },
+      ],
+    };
+
+    const res = await postInternalComment(adminCookie, voc.id, {
+      body_rich_content: attrInjectionDoc,
+      mentions: [],
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_node');
+    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.path).toEqual(['body_rich_content']);
+    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
+    expect(res.json<{ detail: { hint: string } }>().detail?.hint).toMatch(/attrs\.label$/);
+  });
+
+  // ── codeBlock.language round-trip (#23 cycle-1 M2) ──────────────────────
+  // Verifies sanitizer's nullable-string schema + canonical doc rebuild persists
+  // and returns the language attr (null / string / absent) intact through JSONB.
+
+  it.each<[string, unknown, unknown]>([
+    ['language=null', null, null],
+    ['language="ts"', 'ts', 'ts'],
+    ['language absent', undefined, undefined],
+  ])('codeBlock %s round-trips through internal-comment', async (_label, langIn, langExpected) => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-cblk`, 'CodeBlock MS');
+    const voc = await insertVoc(msId, 'CodeBlock VOC');
+
+    const codeBlockNode: Record<string, unknown> = { type: 'codeBlock', content: [{ type: 'text', text: 'console.log(1)' }] };
+    if (langIn !== undefined) {
+      codeBlockNode.attrs = { language: langIn };
+    }
+    const body = { type: 'doc', content: [codeBlockNode] };
+
+    const res = await postInternalComment(adminCookie, voc.id, {
+      body_rich_content: body,
+      mentions: [],
+    });
+    expect(res.statusCode).toBe(201);
+
+    type Reply = { internal_comment: { id: string; body_rich_content: { content: Array<{ type: string; attrs?: { language?: unknown } }> } } };
+    const reply = res.json<Reply>();
+    const cb = reply.internal_comment.body_rich_content.content[0]!;
+    expect(cb.type).toBe('codeBlock');
+    if (langExpected === undefined) {
+      // Canonical rebuild omits empty/absent attrs.
+      expect(cb.attrs).toBeUndefined();
+    } else {
+      expect(cb.attrs?.language).toBe(langExpected);
+    }
+
+    // Verify persisted row matches envelope.
+    const persisted = await dbHandle.pool.query<{ body_rich_content: { content: Array<{ type: string; attrs?: { language?: unknown } }> } }>(
+      `select body_rich_content from voc.voc_internal_comments where id = $1`,
+      [reply.internal_comment.id],
+    );
+    const persistedCb = persisted.rows[0]?.body_rich_content.content[0];
+    expect(persistedCb?.type).toBe('codeBlock');
+    if (langExpected === undefined) {
+      expect(persistedCb?.attrs).toBeUndefined();
+    } else {
+      expect(persistedCb?.attrs?.language).toBe(langExpected);
+    }
+  });
+
   // ── Rate limit: 11th POST within 60s → 429 ──
 
   it('rate limit: 11th POST within 60s → 429 rate_limited.actor', async () => {

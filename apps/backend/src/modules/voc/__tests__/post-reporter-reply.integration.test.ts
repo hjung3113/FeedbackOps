@@ -255,6 +255,33 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
     expect(res.json<{ code: string }>().code).toBe('attachment.unsupported_pending_storage_slice');
   });
 
+  // ── Sanitizer attr-injection (#23) ────────────────────────────────────
+
+  it('body with attachmentRef.attrs disallowed_attr_key → 422 disallowed_attr_key', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-atki`, 'AtKI MS');
+    const voc = await insertVoc(msId, 'AtKI VOC');
+
+    const attrInjectionDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'attachmentRef',
+          attrs: { id: randomUUID(), onclick: 'x' },
+        },
+      ],
+    };
+
+    const res = await postReporterReply(reporterCookie, voc.id, {
+      body_rich_content: attrInjectionDoc,
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_node');
+    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.path).toEqual(['body_rich_content']);
+    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
+    expect(res.json<{ detail: { hint: string } }>().detail?.hint).toMatch(/attrs\.onclick$/);
+  });
+
   // ── Status field on envelope unchanged after reply ──
 
   it('reporter_facing_status on voc envelope unchanged after reply', async () => {

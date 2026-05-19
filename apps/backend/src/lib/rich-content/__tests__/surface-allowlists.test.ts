@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sanitizeTipTap } from '../sanitize.js';
+import { SURFACE_ALLOWLISTS, SURFACES } from '../surface-allowlists.js';
 
 function doc(...children: unknown[]) {
   return { type: 'doc' as const, content: children };
@@ -208,5 +209,29 @@ describe('sanitizeTipTap (internal-comment)', () => {
     });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe('rich_content.disallowed_node');
+  });
+});
+
+// ── Static drift assertions ────────────────────────────────────────────────────
+
+describe('surface allowlist drift assertions', () => {
+  it.each(SURFACES)('%s: every nodeAttrs key must be in nodes set', (surface) => {
+    const allowlist = SURFACE_ALLOWLISTS[surface];
+    const nodeAttrKeys = Object.keys(allowlist.nodeAttrs);
+    for (const key of nodeAttrKeys) {
+      expect(allowlist.nodes.has(key),
+        `surface '${surface}': nodeAttrs key '${key}' not in nodes set`,
+      ).toBe(true);
+    }
+  });
+
+  it.each(SURFACES)('%s: every markAttrs key must be in marks set', (surface) => {
+    const allowlist = SURFACE_ALLOWLISTS[surface];
+    const markAttrKeys = Object.keys(allowlist.markAttrs);
+    for (const key of markAttrKeys) {
+      expect(allowlist.marks.has(key),
+        `surface '${surface}': markAttrs key '${key}' not in marks set`,
+      ).toBe(true);
+    }
   });
 });
