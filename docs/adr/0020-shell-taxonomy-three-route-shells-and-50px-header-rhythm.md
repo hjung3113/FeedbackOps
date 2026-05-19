@@ -54,7 +54,7 @@ When porting a screen into production:
 ## Out of scope
 
 - Mobile / tablet shell behaviour. Pack 13 landed responsive scaffolding (sidebar drawer < 900px, detail-panel drill-in overlays); a future ADR will codify the touch-target + breakpoint contract.
-- Light-theme support. ADR-0016 dark-only stance still holds. The Samsung-light palette refresh in Pack 17 retunes dark-theme tokens to the new visual identity; it does NOT introduce a light theme.
+- Right-to-left (RTL) layout direction. The 240px sidebar + 440px detail panel mirror naturally under `dir="rtl"`; locking the RTL implementation is a future ADR.
 - Multi-pane shells beyond detail-panel-on-right. If a route ever needs a left+center+right layout, this ADR must amend first.
 
 ## Related
@@ -62,5 +62,6 @@ When porting a screen into production:
 - `docs/design-prototype/HANDOFF.md` §"Pack 18 — Route pattern shells + aligned headers" (Session 17 changelog); §"Pack 20 — Baseline QA + nested-button polish" (Session 19) confirms post-Pack-19-split visual stability.
 - `docs/design-prototype/DESIGN-MAP.md` §2 (route → screen → baseline mapping).
 - `docs/design-prototype/components.jsx` (`PageShell`, `ListShell`, `WorkbenchShell`, `ShellTitle` source-of-truth implementations — port these, do not re-derive).
-- ADR-0016 (UI foundation: dark-only MVP, WCAG AA, CSS-var tokens, full shadcn wrap).
+- ADR-0016 (Superseded by ADR-0021; historical UI foundation context).
+- ADR-0021 (Pack 17 Samsung-light design system — current theme contract).
 - ADR-0011 (Rich content editor + attachment storage — RichEditor surfaces interact with shells but do not vary by shell type).
