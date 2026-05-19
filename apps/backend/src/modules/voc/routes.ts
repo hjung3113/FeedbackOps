@@ -412,7 +412,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
 
-      const hash = hashRequestBody({ vocId, ...rawBody });
+      const hash = hashRequestBody({ ...rawBody, vocId });
       const result = await db.transaction(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
@@ -467,7 +467,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
 
-      const hash = hashRequestBody({ vocId, ...rawBody });
+      const hash = hashRequestBody({ ...rawBody, vocId });
       const result = await db.transaction(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
@@ -522,7 +522,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
 
-      const hash = hashRequestBody({ vocId, ...rawBody });
+      const hash = hashRequestBody({ ...rawBody, vocId });
       const result = await db.transaction(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,

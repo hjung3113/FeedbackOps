@@ -507,11 +507,22 @@ export function createConversationService(deps: {
 
     // 4. Validate mentions[] — set-equality with body mention nodes (codex cycle-1 fix).
     //    Extract deduped actor_ids from `mention` nodes in sanitized doc.
+    //    Reject malformed mention nodes (missing / non-string / non-UUID attrs.actor_id)
+    //    rather than silently dropping them — codex cycle-2 fix.
     const mentionNodes = findNodesOfType(sanitizedBody, 'mention');
+    const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    for (const n of mentionNodes) {
+      const id = n.attrs?.actor_id;
+      if (typeof id !== 'string' || !UUID_RE.test(id)) {
+        throw new HttpError(
+          'validation.failed',
+          'mention node attrs.actor_id must be a valid UUID',
+          { fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }] },
+        );
+      }
+    }
     const bodyMentionIds = dedupe(
-      mentionNodes
-        .map((n) => n.attrs?.actor_id)
-        .filter((id): id is string => typeof id === 'string'),
+      mentionNodes.map((n) => n.attrs!.actor_id as string),
     );
 
     const requestMentionIds = dedupe(input.mentions ?? []);

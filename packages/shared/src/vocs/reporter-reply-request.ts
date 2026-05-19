@@ -7,9 +7,11 @@ import { tipTapDocSchema } from './create-request.js';
 // until then (service raises attachment.unsupported_pending_storage_slice).
 const attachmentRefSchema = z.object({ id: z.string().uuid() });
 
-export const reporterReplyRequestSchema = z.object({
-  body_rich_content: tipTapDocSchema,
-  attachments: z.array(attachmentRefSchema).optional(),
-});
+export const reporterReplyRequestSchema = z
+  .object({
+    body_rich_content: tipTapDocSchema,
+    attachments: z.array(attachmentRefSchema).optional(),
+  })
+  .strict();
 
 export type ReporterReplyRequest = z.infer<typeof reporterReplyRequestSchema>;

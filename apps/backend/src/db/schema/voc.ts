@@ -141,12 +141,12 @@ export const vocPublicUpdates = vocSchema.table(
       'voc_public_updates_status_after_enum',
       sql`${t.reporterFacingStatusAfter} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
     ),
-    // Migration 0012: full skip-row invariants replace the old skip_reason_min_length CHECK.
-    // skip=true  ⇒ body NULL,    skip_reason IS NOT NULL AND length(trim) >= 8
+    // Migration 0012 + 0013: full skip-row invariants.
+    // skip=true  ⇒ body NULL, skip_reason ≥ 8 trimmed, status_before <> status_after
     // skip=false ⇒ body NOT NULL, skip_reason IS NULL
     skipInvariants: check(
       'voc_public_updates_skip_invariants',
-      sql`(${t.skipPublicUpdate} = true AND ${t.bodyRichContent} IS NULL AND ${t.skipReason} IS NOT NULL AND length(trim(${t.skipReason})) >= 8) OR (${t.skipPublicUpdate} = false AND ${t.bodyRichContent} IS NOT NULL AND ${t.skipReason} IS NULL)`,
+      sql`(${t.skipPublicUpdate} = true AND ${t.bodyRichContent} IS NULL AND ${t.skipReason} IS NOT NULL AND length(trim(${t.skipReason})) >= 8 AND ${t.reporterFacingStatusBefore} <> ${t.reporterFacingStatusAfter}) OR (${t.skipPublicUpdate} = false AND ${t.bodyRichContent} IS NOT NULL AND ${t.skipReason} IS NULL)`,
     ),
   }),
 );
