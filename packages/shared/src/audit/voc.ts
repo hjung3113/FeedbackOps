@@ -150,7 +150,7 @@ export const internalCommentCreatedDetailSchema = z.object({
   voc_id: uuid(),
   internal_comment_id: uuid(),
   actor_id: uuid(),
-  mentions: z.array(uuid()).min(1),
+  mentions: z.array(uuid()),
 });
 export type InternalCommentCreatedDetail = z.infer<typeof internalCommentCreatedDetailSchema>;
 
