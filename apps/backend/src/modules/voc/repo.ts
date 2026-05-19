@@ -6,8 +6,9 @@
 import { sql } from 'drizzle-orm';
 
 import { analyticsAreas, managedSystems } from '../../db/schema/core.js';
-import { vocs } from '../../db/schema/voc.js';
+import { vocInternalComments, vocPublicUpdates, vocReporterReplies, vocs } from '../../db/schema/voc.js';
 import type { Tx } from '../../db/tx.js';
+import type { ReporterFacingStatus } from './transitions.js';
 
 export interface LockedManagedSystem {
   id: string;
@@ -177,6 +178,109 @@ export interface InsertVocInput {
   title: string;
   descriptionRichContent: unknown;
   sourceContext: string;
+}
+
+// ── insertPublicUpdate ─────────────────────────────────────────────────────
+// Appends one row to voc.voc_public_updates. DB CHECK (C1 migration 0012)
+// enforces the skip-invariants so callers do not need to duplicate them.
+
+export async function insertPublicUpdate(
+  tx: Tx,
+  args: {
+    vocId: string;
+    actorId: string;
+    body: unknown | null;
+    statusBefore: ReporterFacingStatus;
+    statusAfter: ReporterFacingStatus;
+    skip: boolean;
+    skipReason: string | null;
+  },
+): Promise<{ id: string; created_at: Date }> {
+  const rows = await tx
+    .insert(vocPublicUpdates)
+    .values({
+      vocId: args.vocId,
+      actorId: args.actorId,
+      bodyRichContent: args.body as object | null,
+      reporterFacingStatusBefore: args.statusBefore,
+      reporterFacingStatusAfter: args.statusAfter,
+      skipPublicUpdate: args.skip,
+      skipReason: args.skipReason,
+    })
+    .returning({ id: vocPublicUpdates.id, createdAt: vocPublicUpdates.createdAt });
+  const row = rows[0];
+  if (!row) throw new Error('insertPublicUpdate returned no row');
+  return { id: row.id, created_at: row.createdAt };
+}
+
+// ── insertReporterReply ────────────────────────────────────────────────────
+// Appends one row to voc.voc_reporter_replies. The DB BEFORE INSERT trigger
+// `enforce_reporter_reply_actor` (migration 0010) is defense-in-depth; the
+// service layer must already have verified actor === reporter.
+
+export async function insertReporterReply(
+  tx: Tx,
+  args: {
+    vocId: string;
+    actorId: string;
+    body: unknown;
+  },
+): Promise<{ id: string; created_at: Date }> {
+  const rows = await tx
+    .insert(vocReporterReplies)
+    .values({
+      vocId: args.vocId,
+      actorId: args.actorId,
+      bodyRichContent: args.body as object,
+    })
+    .returning({ id: vocReporterReplies.id, createdAt: vocReporterReplies.createdAt });
+  const row = rows[0];
+  if (!row) throw new Error('insertReporterReply returned no row');
+  return { id: row.id, created_at: row.createdAt };
+}
+
+// ── insertInternalComment ──────────────────────────────────────────────────
+// Appends one row to voc.voc_internal_comments.
+
+export async function insertInternalComment(
+  tx: Tx,
+  args: {
+    vocId: string;
+    actorId: string;
+    body: unknown;
+  },
+): Promise<{ id: string; created_at: Date }> {
+  const rows = await tx
+    .insert(vocInternalComments)
+    .values({
+      vocId: args.vocId,
+      actorId: args.actorId,
+      bodyRichContent: args.body as object,
+    })
+    .returning({ id: vocInternalComments.id, createdAt: vocInternalComments.createdAt });
+  const row = rows[0];
+  if (!row) throw new Error('insertInternalComment returned no row');
+  return { id: row.id, created_at: row.createdAt };
+}
+
+// ── updateVocReporterStatus ────────────────────────────────────────────────
+// Bumps reporter_facing_status and updated_at on voc.vocs.
+// No workspace filter — caller must have already locked the row via
+// selectVocForUpdate within the same transaction.
+
+export async function updateVocReporterStatus(
+  tx: Tx,
+  args: {
+    vocId: string;
+    nextStatus: ReporterFacingStatus;
+  },
+): Promise<void> {
+  await tx.execute(sql`
+    UPDATE ${vocs}
+    SET reporter_facing_status = ${args.nextStatus},
+        updated_at = now()
+    WHERE id = ${args.vocId}
+  `);
 }
 
 export async function insertVoc(tx: Tx, input: InsertVocInput) {
