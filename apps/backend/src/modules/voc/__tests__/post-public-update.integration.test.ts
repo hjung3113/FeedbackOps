@@ -512,6 +512,62 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     expect(res2.json<{ code: string }>().code).toBe('conflict.idempotency_key_reuse');
   });
 
+  // ── cycle-2 B1: cross-endpoint idempotency key isolation ──
+  // Two routes share `{body_rich_content}` as a wire-valid shape (internal-
+  // comment with strict() rejects unknown keys; admin actor has voc.triage so
+  // both calls authorise). Without the route discriminator in the hash, the
+  // second call would replay the first's internal_comment envelope. With the
+  // fix, the same (actor, key, body) on a different route hashes differently
+  // → idempotency lookup misses → 409 conflict.idempotency_key_reuse.
+
+  it('idempotency: same key + same body across different routes → 409 (route discriminator in hash)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-xrt`, 'X-route MS');
+    const voc = await insertVoc(msId, 'X-route VOC');
+    const key = randomUUID();
+    const sharedBody = { body_rich_content: paragraphDoc('cross-route body') };
+
+    const r1 = await app.inject({
+      method: 'POST',
+      url: `/vocs/${voc.id}/internal-comments`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'workspace-id': WORKSPACE_ID,
+        'idempotency-key': key,
+        'content-type': 'application/json',
+      },
+      payload: sharedBody,
+    });
+    expect(r1.statusCode).toBe(201);
+
+    // Same body wire-valid for reporter-reply too (body_rich_content only).
+    // adminActor is not the reporter for this VOC, so service would 403 — but
+    // the idempotency lookup happens FIRST inside the tx (before the service
+    // call). A hash collision would replay the 201 envelope from r1. A correct
+    // route-discriminated hash misses → service runs → 403 (not 201, not 409).
+    // What we assert: the body+key did NOT cache-replay across routes.
+    const r2 = await app.inject({
+      method: 'POST',
+      url: `/vocs/${voc.id}/reporter-replies`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'workspace-id': WORKSPACE_ID,
+        'idempotency-key': key,
+        'content-type': 'application/json',
+      },
+      payload: sharedBody,
+    });
+    // Without the route discriminator, r2 would replay r1's 201
+    // internal_comment envelope (wrong endpoint, wrong audit). With the fix,
+    // the hash differs → idempotencyService.lookup returns `mismatch` for
+    // same-key/different-hash → 409 conflict.idempotency_key_reuse. Either
+    // behavior (409 or service-403) proves no cross-route cache replay;
+    // 409 is the spec-correct outcome since the client violated the
+    // "Idempotency-Key unique per request intent" contract.
+    expect(r2.statusCode).not.toBe(201);
+    expect(r2.statusCode).toBe(409);
+    expect(r2.json<{ code: string }>().code).toBe('conflict.idempotency_key_reuse');
+  });
+
   // ── archived VOC → 409 conflict.record_archived ──
 
   it('archived VOC → 409 conflict.record_archived', async () => {

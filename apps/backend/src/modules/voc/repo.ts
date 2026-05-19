@@ -265,12 +265,14 @@ export async function insertInternalComment(
 
 // ── updateVocReporterStatus ────────────────────────────────────────────────
 // Bumps reporter_facing_status and updated_at on voc.vocs.
-// No workspace filter — caller must have already locked the row via
-// selectVocForUpdate within the same transaction.
+// Caller must have already locked the row via selectVocForUpdate within the
+// same transaction. workspace_id filter is defense-in-depth (cycle-2 B2 fix —
+// guards against future regressions where a caller skips the pre-validation).
 
 export async function updateVocReporterStatus(
   tx: Tx,
   args: {
+    workspaceId: string;
     vocId: string;
     nextStatus: ReporterFacingStatus;
   },
@@ -280,6 +282,7 @@ export async function updateVocReporterStatus(
     SET reporter_facing_status = ${args.nextStatus},
         updated_at = now()
     WHERE id = ${args.vocId}
+      AND workspace_id = ${args.workspaceId}
   `);
 }
 

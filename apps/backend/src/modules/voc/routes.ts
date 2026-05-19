@@ -412,7 +412,10 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
 
-      const hash = hashRequestBody({ ...rawBody, vocId });
+      // cycle-2 B1 fix: include endpoint discriminator so same key+body across
+      // different conversation endpoints produces distinct hashes (no spurious
+      // idempotency replay across routes).
+      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.public_update' });
       const result = await db.transaction(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
@@ -467,7 +470,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
 
-      const hash = hashRequestBody({ ...rawBody, vocId });
+      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.reporter_reply' });
       const result = await db.transaction(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
@@ -522,7 +525,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
 
-      const hash = hashRequestBody({ ...rawBody, vocId });
+      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.internal_comment' });
       const result = await db.transaction(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,

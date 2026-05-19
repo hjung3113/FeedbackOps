@@ -96,16 +96,19 @@ interface TipTapNode {
  * "smallest change" rule.
  */
 function findNodesOfType(doc: unknown, type: string): TipTapNode[] {
+  // Iterative walk with explicit stack (cycle-2 M3 fix — recursion blew V8
+  // default frame budget on deeply nested adversarial docs even at 50 KB
+  // payload).
   const results: TipTapNode[] = [];
-  function visit(node: TipTapNode): void {
+  const stack: TipTapNode[] = [doc as TipTapNode];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (!node || typeof node !== 'object') continue;
     if (node.type === type) results.push(node);
     if (Array.isArray(node.content)) {
-      for (const child of node.content) {
-        visit(child);
-      }
+      for (const child of node.content) stack.push(child);
     }
   }
-  visit(doc as TipTapNode);
   return results;
 }
 
@@ -275,8 +278,12 @@ export function createConversationService(deps: {
       );
     }
 
-    // 6. Linked-Task gate stub — Slice 6 wires real checks; always returns null.
-    await evaluateReporterStatusGate({ tx, vocId, nextStatus });
+    // 6. Linked-Task gate stub — only invoked on actual transitions (cycle-2 M1
+    //    fix: body-only path has no gate semantics). Slice 6 wires real checks;
+    //    always returns null in Slice 3.
+    if (statusWillChange) {
+      await evaluateReporterStatusGate({ tx, vocId, nextStatus });
+    }
 
     // 7. INSERT voc_public_updates row.
     const skipReason = input.skip_public_update ? input.skip_reason : null;
@@ -292,7 +299,7 @@ export function createConversationService(deps: {
 
     // 8. UPDATE vocs.reporter_facing_status only on status change.
     if (statusWillChange) {
-      await updateVocReporterStatus(tx, { vocId, nextStatus });
+      await updateVocReporterStatus(tx, { workspaceId: actor.workspace_id, vocId, nextStatus });
     }
 
     // 9. Audit.
