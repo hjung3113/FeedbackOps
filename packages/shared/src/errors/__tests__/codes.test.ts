@@ -12,3 +12,15 @@ describe('errorCodeSchema — Slice 3 #13 codes', () => {
     expect(errorCodeSchema.parse(code)).toBe(code);
   });
 });
+
+describe('errorCodeSchema — Slice 3 #17 codes', () => {
+  it('parses conflict.triage_already_committed', () => {
+    expect(errorCodeSchema.parse('conflict.triage_already_committed')).toBe(
+      'conflict.triage_already_committed',
+    );
+  });
+
+  it('rejects unknown code', () => {
+    expect(() => errorCodeSchema.parse('conflict.unknown_code')).toThrow();
+  });
+});

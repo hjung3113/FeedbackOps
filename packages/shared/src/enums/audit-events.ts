@@ -27,6 +27,7 @@ import {
   reporterReplyCreatedDetailSchema,
   internalCommentCreatedDetailSchema,
   vocTriagePostponedDetailSchema,
+  vocDescriptionEditedDetailSchema,
 } from '../audit/voc.js';
 
 export const AUDIT_EVENT_TYPES = [
@@ -52,6 +53,8 @@ export const AUDIT_EVENT_TYPES = [
   'internal_comment_created',
   // Slice 3 #14: 보류 path audit event.
   'voc_triage_postponed',
+  // Slice 3 #17: Reporter pre-triage description edit.
+  'voc_description_edited',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -160,4 +163,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   internal_comment_created: internalCommentCreatedDetailSchema,
   // Slice 3 #14: 보류 path audit event.
   voc_triage_postponed: vocTriagePostponedDetailSchema,
+  // Slice 3 #17: Reporter pre-triage description edit.
+  voc_description_edited: vocDescriptionEditedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

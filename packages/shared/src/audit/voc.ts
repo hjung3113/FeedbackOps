@@ -4,6 +4,8 @@
 
 import { z } from 'zod';
 
+import { attachmentRefSchema } from '../vocs/create-request.js';
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 const uuid = () => z.string().uuid();
 
@@ -163,3 +165,42 @@ export const vocTriagePostponedDetailSchema = z.object({
   actor_id: uuid(),
 });
 export type VocTriagePostponedDetail = z.infer<typeof vocTriagePostponedDetailSchema>;
+
+// ── voc_description_edited ─────────────────────────────────────────────────
+// Emitted by PATCH /vocs/:id/description (Slice 3 #17) when the Reporter
+// makes an actual diff (non-empty changes object). Per-key types are
+// semantically precise: title uses a string {from,to} pair; description
+// uses a {from_hash, to_hash} 64-char hex pair (SHA-256 of stableStringify
+// of the sanitized canonical doc); attachments uses an {from,to} array pair.
+// The `.refine` enforces at least one changed field so an audit row is never
+// written for an empty diff.
+const stringChangeSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+});
+
+const richHashChangeSchema = z.object({
+  from_hash: z.string().length(64),
+  to_hash: z.string().length(64),
+});
+
+const attachmentsDeltaSchema = z.object({
+  from: z.array(attachmentRefSchema),
+  to: z.array(attachmentRefSchema),
+});
+
+export const vocDescriptionEditedDetailSchema = z
+  .object({
+    voc_id: uuid(),
+    changes: z
+      .object({
+        title: stringChangeSchema.optional(),
+        description_rich_content: richHashChangeSchema.optional(),
+        attachments: attachmentsDeltaSchema.optional(),
+      })
+      .refine(
+        (o) => Object.keys(o).length > 0,
+        { message: 'changes must be non-empty' },
+      ),
+  });
+export type VocDescriptionEditedDetail = z.infer<typeof vocDescriptionEditedDetailSchema>;
