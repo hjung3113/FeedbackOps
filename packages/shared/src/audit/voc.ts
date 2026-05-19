@@ -120,9 +120,9 @@ export const publicUpdateCreatedDetailSchema = z
   })
   .refine(
     (d) => d.skip_public_update
-      ? typeof d.skip_reason === 'string' && d.skip_reason.length >= 8
+      ? typeof d.skip_reason === 'string' && d.skip_reason.trim().length >= 8
       : d.skip_reason === null,
-    { message: 'skip_reason must be null when skip=false, >=8 chars when skip=true' },
+    { message: 'skip_reason must be null when skip=false, >=8 trimmed chars when skip=true' },
   );
 export type PublicUpdateCreatedDetail = z.infer<typeof publicUpdateCreatedDetailSchema>;
 
@@ -150,7 +150,7 @@ export const internalCommentCreatedDetailSchema = z.object({
   voc_id: uuid(),
   internal_comment_id: uuid(),
   actor_id: uuid(),
-  mentions: z.array(uuid()).min(1),
+  mentions: z.array(uuid()),
 });
 export type InternalCommentCreatedDetail = z.infer<typeof internalCommentCreatedDetailSchema>;
 

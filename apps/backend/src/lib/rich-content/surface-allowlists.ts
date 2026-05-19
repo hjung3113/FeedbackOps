@@ -33,24 +33,32 @@ export const SURFACE_ALLOWLISTS: Readonly<Record<Surface, SurfaceAllowlist>> = {
     allowedLinkSchemes: HTTP_ONLY,
     maxTextBytes: 50 * 1024,
   },
-  // Stubs for later slices — Slice 3 #13 only exercises voc-description.
-  // Keep entries so #16 (composers) can extend additively rather than
-  // restructuring this file.
-  'reporter-reply': {
-    nodes: new Set(['doc', 'paragraph', 'text']),
-    marks: new Set(['bold', 'italic', 'link']),
-    allowedLinkSchemes: HTTP_ONLY,
-    maxTextBytes: 50 * 1024,
-  },
+  // Tightened for Slice 3 #16 per spec §5.7 table.
+  // public-update: no links, no attachments, no mentions, no images.
   'public-update': {
     nodes: new Set(['doc', 'paragraph', 'text', 'bulletList', 'orderedList', 'listItem']),
     marks: new Set(['bold', 'italic']),
-    allowedLinkSchemes: new Set(),
+    allowedLinkSchemes: new Set<string>(),
     maxTextBytes: 50 * 1024,
   },
+  // reporter-reply: attachmentRef node allowed (value layer rejects non-empty
+  // attachments[] until storage slice ships); link mark allowed http/https.
+  'reporter-reply': {
+    nodes: new Set([
+      'doc', 'paragraph', 'text',
+      'bulletList', 'orderedList', 'listItem',
+      'attachmentRef',
+    ]),
+    marks: new Set(['bold', 'italic', 'code', 'link']),
+    allowedLinkSchemes: HTTP_ONLY,
+    maxTextBytes: 50 * 1024,
+  },
+  // internal-comment: full feature set — codeBlock, mention, attachmentRef,
+  // bold, italic, code, link.
   'internal-comment': {
     nodes: new Set([
       'doc', 'paragraph', 'text',
+      'codeBlock',
       'bulletList', 'orderedList', 'listItem',
       'mention', 'attachmentRef',
     ]),

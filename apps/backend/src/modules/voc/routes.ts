@@ -11,8 +11,11 @@ import {
   FORBIDDEN_PATCH_FIELD_ERROR_CODES,
   createVocRequestSchema,
   getConversationQuerySchema,
+  internalCommentRequestSchema,
   listVocsQuerySchema,
   patchVocRequestSchema,
+  publicUpdateRequestSchema,
+  reporterReplyRequestSchema,
   type CreateVocRequest,
 } from '@fops/shared';
 
@@ -23,6 +26,7 @@ import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { ConversationService } from './conversation-service.js';
 import type { ReadActorContext, VocReadService } from './read-service.js';
 import type { VocService } from './service.js';
 
@@ -38,6 +42,7 @@ export interface VocRoutesOptions {
   vocService: VocService;
   vocReadService: VocReadService;
   idempotencyService: IdempotencyService;
+  conversationService: ConversationService;
   workspaceId: string;
   rateLimitConfig?: {
     mutation: Record<string, unknown>;
@@ -46,7 +51,7 @@ export interface VocRoutesOptions {
 }
 
 export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts) => {
-  const { db, sessionService, vocService, vocReadService, idempotencyService, workspaceId, rateLimitConfig } = opts;
+  const { db, sessionService, vocService, vocReadService, idempotencyService, conversationService, workspaceId, rateLimitConfig } = opts;
 
   function requireIfMatch(headers: Record<string, unknown>): string {
     const raw = headers['if-match'];
@@ -375,6 +380,174 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         .header('cache-control', 'private, no-cache')
         .code(200)
         .send(result);
+    },
+  });
+
+  // ── POST /vocs/:id/public-updates — Slice 3 #16 C4 ───────────────────────
+  // TODO(F21 follow-up): dedicated 60/min rate-limit bucket (currently uses shared mutation tier)
+  app.route({
+    method: 'POST',
+    url: '/vocs/:id/public-updates',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const params = req.params as { id: string };
+      const vocId = params.id;
+
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = publicUpdateRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      // cycle-2 B1 fix: include endpoint discriminator so same key+body across
+      // different conversation endpoints produces distinct hashes (no spurious
+      // idempotency replay across routes).
+      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.public_update' });
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
+        );
+        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
+        if (hit.kind === 'match') return { status: hit.status, body: hit.body };
+        if (hit.kind === 'mismatch') {
+          throw new HttpError(
+            'conflict.idempotency_key_reuse',
+            'Idempotency-Key reused with different request body',
+          );
+        }
+        const envelope = await conversationService.postPublicUpdate({
+          tx,
+          actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id, role_level: sess.role_level },
+          vocId,
+          input: parsed.data,
+        });
+        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
+        return { status: 201, body: envelope };
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  // ── POST /vocs/:id/reporter-replies — Slice 3 #16 C4 ─────────────────────
+  // TODO(F21 follow-up): dedicated 60/min rate-limit bucket
+  app.route({
+    method: 'POST',
+    url: '/vocs/:id/reporter-replies',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const params = req.params as { id: string };
+      const vocId = params.id;
+
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = reporterReplyRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.reporter_reply' });
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
+        );
+        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
+        if (hit.kind === 'match') return { status: hit.status, body: hit.body };
+        if (hit.kind === 'mismatch') {
+          throw new HttpError(
+            'conflict.idempotency_key_reuse',
+            'Idempotency-Key reused with different request body',
+          );
+        }
+        const envelope = await conversationService.postReporterReply({
+          tx,
+          actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id, role_level: sess.role_level },
+          vocId,
+          input: parsed.data,
+        });
+        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
+        return { status: 201, body: envelope };
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  // ── POST /vocs/:id/internal-comments — Slice 3 #16 C4 ────────────────────
+  // TODO(F21 follow-up): dedicated 60/min rate-limit bucket
+  app.route({
+    method: 'POST',
+    url: '/vocs/:id/internal-comments',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const params = req.params as { id: string };
+      const vocId = params.id;
+
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = internalCommentRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.internal_comment' });
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
+        );
+        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
+        if (hit.kind === 'match') return { status: hit.status, body: hit.body };
+        if (hit.kind === 'mismatch') {
+          throw new HttpError(
+            'conflict.idempotency_key_reuse',
+            'Idempotency-Key reused with different request body',
+          );
+        }
+        const envelope = await conversationService.postInternalComment({
+          tx,
+          actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id, role_level: sess.role_level },
+          vocId,
+          input: parsed.data,
+        });
+        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
+        return { status: 201, body: envelope };
+      });
+      return reply.code(result.status).send(result.body);
     },
   });
 };

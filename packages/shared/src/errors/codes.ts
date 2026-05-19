@@ -51,6 +51,9 @@ export const ERROR_CODES = [
   'voc.reporter_status_via_public_update_only',
   // permission.* → 403 (Slice 3 #14 — MS-scope required)
   'permission.scope_required',
+  // reporter_facing_status.* → 422 (Slice 3 #16 — transition validation + gate)
+  'reporter_facing_status.invalid_transition',
+  'reporter_facing_status.gate_blocked',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES);

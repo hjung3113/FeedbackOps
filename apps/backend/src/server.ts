@@ -34,7 +34,12 @@ import {
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
-import { createVocReadService, createVocService, vocRoutes } from './modules/voc/index.js';
+import {
+  createConversationService,
+  createVocReadService,
+  createVocService,
+  vocRoutes,
+} from './modules/voc/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -351,7 +356,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  // ── VOC module — Slice 3 issue #13 / #14 / #15 ─────────────────────────
+  // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
   const vocService = createVocService({
     db: dbHandle.db,
     auditService,
@@ -361,11 +366,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     db: dbHandle.db,
     checkService,
   });
+  const conversationService = createConversationService({
+    auditService,
+    checkService,
+    vocReadService,
+  });
   await app.register(vocRoutes, {
     db: dbHandle.db,
     sessionService,
     vocService,
     vocReadService,
+    conversationService,
     idempotencyService,
     workspaceId,
     rateLimitConfig: {

@@ -337,15 +337,15 @@ describe('internalCommentCreatedDetailSchema', () => {
     ).toThrow(z.ZodError);
   });
 
-  it('rejects empty mentions array (min(1) required)', () => {
-    expect(() =>
-      internalCommentCreatedDetailSchema.parse({
-        voc_id: U,
-        internal_comment_id: U,
-        actor_id: U,
-        mentions: [],
-      }),
-    ).toThrow();
+  it('accepts empty mentions array (no-mention path allowed — Slice 3 #16 C0 relax)', () => {
+    // .min(1) was removed in Slice 3 #16 C0 to allow the no-mentions path.
+    const result = internalCommentCreatedDetailSchema.parse({
+      voc_id: U,
+      internal_comment_id: U,
+      actor_id: U,
+      mentions: [],
+    });
+    expect(result.mentions).toEqual([]);
   });
 });
 
