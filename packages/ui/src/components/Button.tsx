@@ -1,57 +1,117 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import * as React from 'react';
+import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { Loader2 } from 'lucide-react';
 import { cn } from '../utils/cn.js';
 
-// Per ADR-0016: variant surface constrained to component-inventory.md.
-// `outline`, `ghost`, `link` not exposed; add them via inventory + ADR follow-up.
-type Variant = 'primary' | 'secondary' | 'subtle' | 'destructive';
-type Size = 'sm' | 'md' | 'lg';
+/**
+ * Pack 17 shadcn-CVA Button. Per ADR-0021.
+ *
+ * Variant aliases: `primary` → `default`, `subtle` → `ghost` (preserved for back-compat from ADR-0016 Button).
+ *
+ * `loading` is incompatible with `asChild`. When both are true, throws in dev and logs a warning + degrades
+ * silently in prod (renders the child WITHOUT the loading affordance). Radix Slot enforces single-child
+ * contract that conflicts with spinner injection.
+ */
+const buttonVariants = cva(
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-surface-canvas transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  {
+    variants: {
+      variant: {
+        default: 'bg-accent-primary text-text-on-accent hover:bg-accent-primary/90',
+        secondary:
+          'bg-surface-raised text-text-primary border border-border-subtle hover:bg-surface-card',
+        destructive: 'bg-accent-danger text-text-on-accent hover:bg-accent-danger/90',
+        outline:
+          'border border-border-default bg-transparent text-text-primary hover:bg-surface-card',
+        ghost: 'text-text-primary hover:bg-surface-card',
+        link: 'text-accent-primary underline-offset-4 hover:underline',
+      },
+      size: {
+        sm: 'h-8 px-3',
+        md: 'h-10 px-4',
+        lg: 'h-12 px-6',
+      },
+    },
+    defaultVariants: { variant: 'default', size: 'md' },
+  },
+);
 
-interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
-  variant?: Variant;
-  size?: Size;
+type ShadcnVariant = NonNullable<VariantProps<typeof buttonVariants>['variant']>;
+type LegacyVariant = 'primary' | 'subtle';
+type ButtonVariant = ShadcnVariant | LegacyVariant;
+type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>['size']>;
+
+const VARIANT_ALIAS: Record<LegacyVariant, ShadcnVariant> = {
+  primary: 'default',
+  subtle: 'ghost',
+};
+
+function resolveVariant(v?: ButtonVariant): ShadcnVariant {
+  if (!v) return 'default';
+  if (v === 'primary' || v === 'subtle') return VARIANT_ALIAS[v];
+  return v;
+}
+
+export interface ButtonProps
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   loading?: boolean;
-  children: ReactNode;
+  asChild?: boolean;
+  children?: React.ReactNode;
 }
 
-const VARIANT_CLASSES: Record<Variant, string> = {
-  primary: 'bg-accent-primary text-text-inverse hover:opacity-90',
-  secondary: 'bg-surface-raised text-text-primary hover:bg-surface-overlay',
-  subtle: 'bg-transparent text-text-muted hover:text-text-primary',
-  destructive: 'bg-accent-danger text-text-primary hover:opacity-90',
-};
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    { className, variant, size, loading, asChild = false, disabled, children, ...props },
+    ref,
+  ) => {
+    if (asChild && loading) {
+      if (process.env.NODE_ENV !== 'production') {
+        throw new Error(
+          'Button: `loading` is incompatible with `asChild` — Slot enforces single-child contract.',
+        );
+      }
+      console.warn(
+        'Button: `loading` is incompatible with `asChild`; rendering child without loading affordance.',
+      );
+      const Comp = Slot;
+      return (
+        <Comp
+          ref={ref as never}
+          className={cn(
+            buttonVariants({ variant: resolveVariant(variant), size }),
+            className,
+          )}
+          {...props}
+        >
+          {children as React.ReactElement}
+        </Comp>
+      );
+    }
 
-const SIZE_CLASSES: Record<Size, string> = {
-  sm: 'h-8 px-3 text-sm',
-  md: 'h-10 px-4 text-sm',
-  lg: 'h-12 px-6 text-base',
-};
+    const Comp = asChild ? Slot : 'button';
+    return (
+      <Comp
+        ref={ref as never}
+        className={cn(buttonVariants({ variant: resolveVariant(variant), size }), className)}
+        aria-busy={loading ? 'true' : undefined}
+        disabled={disabled || loading}
+        {...props}
+      >
+        {loading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            {children}
+          </>
+        ) : (
+          children
+        )}
+      </Comp>
+    );
+  },
+);
+Button.displayName = 'Button';
 
-export function Button({
-  variant = 'primary',
-  size = 'md',
-  loading = false,
-  disabled,
-  className,
-  children,
-  ...rest
-}: ButtonProps) {
-  return (
-    <button
-      type="button"
-      {...rest}
-      disabled={disabled === true || loading}
-      aria-busy={loading}
-      className={cn(
-        'inline-flex items-center justify-center rounded-md font-medium',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        'min-h-10 min-w-10', // ADR-0016 touch target
-        VARIANT_CLASSES[variant],
-        SIZE_CLASSES[size],
-        className,
-      )}
-    >
-      {children}
-    </button>
-  );
-}
+export { buttonVariants };
