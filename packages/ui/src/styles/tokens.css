@@ -1,20 +1,161 @@
-/* Raw color tokens per ADR-0016 + DESIGN.md.
- * Components MUST NOT reference --color-* directly; consume semantic tokens in semantic.css.
- * Values stored as `R G B` triples for Tailwind alpha-value composition.
+/* Raw color tokens — Pack 17 Samsung-light palette per ADR-0021.
+ * Colors declared as R G B triples (decimal, space-separated) so Tailwind can
+ * compose alpha via `rgb(var(--color-X) / <alpha-value>)`.
+ * Hex comments are for human readability + fixture cross-reference.
+ * Token NAMES are preserved from ADR-0016 (historical); VALUES invert dark→light.
+ * Components MUST NOT reference --color-* directly; consume semantic tokens below.
  */
 :root {
-  --color-pitch-black: 8 9 10;
-  --color-graphite: 26 27 30;
-  --color-coal: 35 37 41;
-  --color-iron: 53 56 61;
-  --color-storm-cloud: 138 143 152;
-  --color-cement: 187 191 197;
-  --color-porcelain: 240 241 243;
-  --color-white: 255 255 255;
+  /* --- Raw color tokens (R G B triple format per ADR-0021) --- */
+  --color-pitch-black: 243 247 254;   /* #f3f7fe — canvas / lightest bg */
+  --color-graphite: 251 253 255;      /* #fbfdff — detail / card surface */
+  --color-deep-slate: 237 243 251;    /* #edf3fb — popover / elevated */
+  --color-charcoal-grey: 203 214 230; /* #cbd6e6 — subtle border */
+  --color-muted-ash: 184 196 214;     /* #b8c4d6 — strong border */
+  --color-gunmetal: 148 163 184;      /* #94a3b8 */
+  --color-porcelain: 16 24 40;        /* #101828 — primary text */
+  --color-light-steel: 55 65 81;      /* #374151 — secondary text */
+  --color-storm-cloud: 104 115 134;   /* #687386 — muted text */
+  --color-fog-grey: 152 162 179;      /* #98a2b3 — disabled text */
+  --color-alabaster: 229 229 230;     /* #e5e5e6 */
+  --color-neon-lime: 20 40 160;       /* #1428a0 — Samsung blue; name historical per ADR-0021 */
+  --color-aether-blue: 20 40 160;     /* #1428a0 — alias of neon-lime */
+  --color-forest-green: 0 141 76;     /* #008d4c */
+  --color-cyan-spark: 0 169 224;      /* #00a9e0 */
+  --color-emerald: 24 168 107;        /* #18a86b */
+  --color-warning-red: 217 45 58;     /* #d92d3a */
+  --color-deep-violet: 49 87 213;     /* #3157d5 */
+  --color-amethyst: 106 141 255;      /* #6a8dff */
+  --color-amber: 165 99 0;            /* #a56300 */
 
-  --color-neon-lime: 228 242 34;
-  --color-electric-blue: 90 161 255;
-  --color-warn-amber: 245 173 66;
-  --color-danger-crimson: 232 76 76;
-  --color-success-jade: 80 200 140;
+  /* --- Semantic text tokens --- */
+  --text-primary: var(--color-porcelain);
+  --text-secondary: var(--color-light-steel);
+  --text-muted: var(--color-storm-cloud);
+  --text-disabled: var(--color-fog-grey);
+  --text-danger: var(--color-warning-red);
+  --text-warning: var(--color-amber);
+  --text-success: var(--color-emerald);
+  --text-info: var(--color-cyan-spark);
+  --text-on-accent: #ffffff;
+
+  /* --- Surface tokens --- */
+  --surface-canvas: var(--color-pitch-black);
+  --surface-sidebar: #eef4fb;
+  --surface-list: var(--color-pitch-black);
+  --surface-row-hover: #e7effc;
+  --surface-row-selected: #d8e7fb;
+  --surface-detail: var(--color-graphite);
+  --surface-popover: var(--color-deep-slate);
+  --surface-field: transparent;
+  --surface-field-filled: #ffffff;
+  --surface-blocked: #eef2f7;
+  --surface-card: var(--color-graphite);
+  --surface-card-elevated: var(--color-deep-slate);
+
+  /* --- Border tokens --- */
+  --border-subtle: var(--color-charcoal-grey);
+  --border-strong: var(--color-muted-ash);
+  --border-selected: var(--color-aether-blue);
+  --focus-ring: var(--color-neon-lime);
+  --focus-ring-danger: var(--color-warning-red);
+
+  /* --- Status tokens (Reporter-facing VOC status) --- */
+  --status-reporter-received: var(--color-cyan-spark);    /* 접수됨 */
+  --status-reporter-reviewing: var(--color-aether-blue);  /* 검토 중 */
+  --status-reporter-assigned: var(--color-deep-violet);   /* 담당자 배정됨 */
+  --status-reporter-progress: var(--color-amethyst);      /* 처리 중 */
+  --status-reporter-prep: var(--color-amber);             /* 해결 준비 중 */
+  --status-reporter-resolved: var(--color-emerald);       /* 해결됨 */
+  --status-reporter-reopened: var(--color-warning-red);   /* 다시 처리 중 */
+  --status-reporter-closed: var(--color-fog-grey);        /* 종료됨 */
+
+  /* --- Status tokens (Internal Task status) --- */
+  --status-internal-backlog: var(--color-fog-grey);
+  --status-internal-todo: var(--color-storm-cloud);
+  --status-internal-doing: var(--color-aether-blue);
+  --status-internal-review: var(--color-amethyst);
+  --status-internal-done: var(--color-emerald);
+  --status-internal-released: var(--color-cyan-spark);
+  --status-internal-reopened: var(--color-warning-red);
+
+  /* --- Severity / signal tokens --- */
+  --severity-low: var(--color-storm-cloud);
+  --severity-medium: var(--color-amber);
+  --severity-high: #f08a4a;
+  --severity-critical: var(--color-warning-red);
+  --confidence-low: var(--color-storm-cloud);
+  --confidence-medium: var(--color-cyan-spark);
+  --confidence-high: var(--color-emerald);
+
+  /* --- Layout tokens --- */
+  --sidebar-width: 240px;
+  --sidebar-width-collapsed: 56px;
+  --rail-width: 52px;
+  --detail-panel-width: 440px;
+  --toolbar-height: 50px;
+  --topbar-height: 50px;
+  --row-height-compact: 44px;
+  --row-height-default: 60px;
+  --row-height-expanded: 96px;
+  --badge-height: 20px;
+  --icon-size-sm: 12px;
+  --icon-size-md: 16px;
+  --icon-size-lg: 20px;
+
+  /* --- Spacing scale --- */
+  --spacing-4: 4px;
+  --spacing-8: 8px;
+  --spacing-12: 12px;
+  --spacing-16: 16px;
+  --spacing-20: 20px;
+  --spacing-24: 24px;
+  --spacing-28: 28px;
+  --spacing-32: 32px;
+  --spacing-36: 36px;
+  --spacing-40: 40px;
+  --spacing-48: 48px;
+  --spacing-64: 64px;
+
+  /* --- Radius --- */
+  --radius-sm: 2px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 9999px;
+
+  /* --- Shadows --- */
+  --shadow-sm: rgba(16, 24, 40, 0.06) 0px 2px 4px 0px;
+  --shadow-md: rgba(20, 40, 160, 0.06) 0px 0px 12px 0px inset;
+  --shadow-subtle: rgb(213, 224, 244) 0px 0px 0px 1px inset;
+  --shadow-subtle-2: rgba(20, 40, 160, 0.10) 0px 0px 0px 1px;
+  --shadow-xl: rgba(20, 40, 160, 0.12) 0px 12px 36px 0px;
+  --shadow-focus: 0 0 0 2px #ffffff, 0 0 0 4px var(--color-neon-lime);
+
+  /* --- Typography: font families --- */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* --- Typography: sizes --- */
+  --text-caption: 10px;
+  --text-tiny: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-body: 14px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-heading: 24px;
+  --text-heading-lg: 32px;
+  --text-display: 48px;
+
+  /* --- Typography: leading --- */
+  --leading-tight: 1.2;
+  --leading-normal: 1.4;
+  --leading-relaxed: 1.6;
+
+  /* --- Typography: tracking --- */
+  --tracking-tight: -0.22px;
+  --tracking-normal: -0.13px;
+  --tracking-wide: 0.04em;
 }

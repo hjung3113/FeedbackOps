@@ -87,13 +87,13 @@ export function ManagedSystemsBody() {
         {listQuery.isPending ? (
           <p className="text-sm text-text-muted">Loading…</p>
         ) : listQuery.isError ? (
-          <p className="text-sm text-status-danger">Error: {envelopeMessage(listQuery.error)}</p>
+          <p className="text-sm text-accent-danger">Error: {envelopeMessage(listQuery.error)}</p>
         ) : listQuery.data.items.length === 0 ? (
           <p className="text-sm text-text-muted">No managed systems.</p>
         ) : (
           <table
             data-testid="managed-systems-table"
-            className="w-full border border-surface-overlay text-sm"
+            className="w-full border border-default text-sm"
           >
             <thead>
               <tr className="text-left">
@@ -139,7 +139,7 @@ function CreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
   return (
     <form
       data-testid="create-managed-system-form"
-      className="space-y-2 rounded-md border border-surface-overlay p-3"
+      className="space-y-2 rounded-md border border-default p-3"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
@@ -182,7 +182,7 @@ function CreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         Register
       </Button>
       {error && (
-        <p data-testid="create-error" className="text-sm text-status-danger">
+        <p data-testid="create-error" className="text-sm text-accent-danger">
           {error}
         </p>
       )}
@@ -226,7 +226,7 @@ function ManagedSystemRow({
   });
 
   return (
-    <tr data-testid={`managed-system-row-${row.slug}`} className="border-t border-surface-overlay">
+    <tr data-testid={`managed-system-row-${row.slug}`} className="border-t border-default">
       <td className="p-2">{row.slug}</td>
       <td className="p-2">
         <input
@@ -267,7 +267,7 @@ function ManagedSystemRow({
           Archive
         </Button>
         {error && (
-          <p data-testid={`row-error-${row.slug}`} className="text-xs text-status-danger">
+          <p data-testid={`row-error-${row.slug}`} className="text-xs text-accent-danger">
             {error}
           </p>
         )}

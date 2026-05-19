@@ -33,7 +33,7 @@ export function AdminPlaceholderPage() {
       <PermissionGate capability="workspace.admin">
         <section
           data-testid="admin-placeholder-body"
-          className="rounded-md border border-surface-overlay bg-surface-raised p-6"
+          className="rounded-md border border-default bg-surface-raised p-6"
         >
           <p className="text-text-primary">Admin placeholder</p>
         </section>

@@ -1,43 +1,39 @@
-/* Semantic tokens per ADR-0016. Components consume ONLY these names.
- * shadcn/ui stock CSS vars are remapped here so wrapped primitives render our palette.
+/* Semantic CSS: shadcn/ui HSL var remaps + backward-compat surface aliases.
+ * Format split (ADR-0021): tokens.css owns all Pack 17 prototype tokens (R G B triples
+ * for colors, raw values for layout/spacing/etc.). This file owns only shadcn wiring
+ * and backward-compatibility aliases for Slice 1/2 routes.
+ *
+ * shadcn/ui primitives expect --background, --foreground, --primary, etc.
+ * Downstream components MUST use `rgb(var(--background) / <alpha-value>)` syntax.
  */
 :root {
-  /* Surfaces */
-  --surface-canvas: var(--color-pitch-black);
+  /* --- shadcn/ui core var remaps (R G B triple references) --- */
+  --background: var(--color-pitch-black);
+  --foreground: var(--color-porcelain);
+  --card: var(--color-graphite);
+  --card-foreground: var(--color-porcelain);
+  --popover: var(--color-deep-slate);
+  --popover-foreground: var(--color-porcelain);
+  --primary: var(--color-neon-lime);
+  --primary-foreground: 255 255 255;
+  --secondary: var(--color-deep-slate);
+  --secondary-foreground: var(--color-porcelain);
+  --muted: var(--color-deep-slate);
+  --muted-foreground: var(--color-storm-cloud);
+  --accent: var(--color-deep-slate);
+  --accent-foreground: var(--color-porcelain);
+  --destructive: var(--color-warning-red);
+  --destructive-foreground: 255 255 255;
+  --border: var(--color-charcoal-grey);
+  --input: var(--color-charcoal-grey);
+  --ring: var(--color-neon-lime);
+
+  /* --- Backward-compat aliases for Slice 1/2 routes --- */
+  /* surface-raised was removed in Pack 17; routes use surface-card instead.
+     Alias kept so existing bg-surface-raised classes still resolve. */
   --surface-raised: var(--color-graphite);
-  --surface-overlay: var(--color-coal);
 
-  /* Text */
-  --text-primary: var(--color-porcelain);
-  --text-muted: var(--color-cement);
-  --text-subtle: var(--color-storm-cloud);
-  --text-inverse: var(--color-pitch-black);
-
-  /* Borders */
-  --border-default: var(--color-iron);
-  --border-strong: var(--color-storm-cloud);
-
-  /* Accent */
-  --accent-primary: var(--color-neon-lime);
-  --accent-info: var(--color-electric-blue);
-  --accent-warn: var(--color-warn-amber);
-  --accent-danger: var(--color-danger-crimson);
-  --accent-success: var(--color-success-jade);
-
-  /* shadcn/ui remap */
-  --background: var(--surface-canvas);
-  --foreground: var(--text-primary);
-  --card: var(--surface-raised);
-  --card-foreground: var(--text-primary);
-  --popover: var(--surface-overlay);
-  --popover-foreground: var(--text-primary);
-  --primary: var(--accent-primary);
-  --primary-foreground: var(--text-inverse);
-  --muted: var(--surface-raised);
-  --muted-foreground: var(--text-muted);
-  --border: var(--border-default);
-  --input: var(--border-default);
-  --ring: var(--accent-primary);
-  --destructive: var(--accent-danger);
-  --destructive-foreground: var(--text-primary);
+  /* border-default alias: routes use border-default; Pack 17 canonical is border-subtle.
+     Alias points at same value so both classes render the same border color. */
+  --border-default: var(--color-charcoal-grey);
 }

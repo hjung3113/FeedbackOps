@@ -129,7 +129,7 @@ export function AnalyticsAreasBody() {
       {aaQuery.isPending ? (
         <p className="text-sm text-text-muted">Loading…</p>
       ) : aaQuery.isError ? (
-        <p className="text-sm text-status-danger">Error: {envelopeMessage(aaQuery.error)}</p>
+        <p className="text-sm text-accent-danger">Error: {envelopeMessage(aaQuery.error)}</p>
       ) : aaQuery.data.items.length === 0 ? (
         <p className="text-sm text-text-muted">No analytics areas.</p>
       ) : filterMsId ? (
@@ -167,7 +167,7 @@ function CreateForm({
   return (
     <form
       data-testid="create-analytics-area-form"
-      className="space-y-2 rounded-md border border-surface-overlay p-3"
+      className="space-y-2 rounded-md border border-default p-3"
       onSubmit={(e) => {
         e.preventDefault();
         if (!msId) {
@@ -212,7 +212,7 @@ function CreateForm({
         Register
       </Button>
       {error && (
-        <p data-testid="create-aa-error" className="text-sm text-status-danger">
+        <p data-testid="create-aa-error" className="text-sm text-accent-danger">
           {error}
         </p>
       )}
@@ -252,7 +252,7 @@ function AAFlatList({
   return (
     <table
       data-testid="analytics-areas-table"
-      className="w-full border border-surface-overlay text-sm"
+      className="w-full border border-default text-sm"
     >
       <thead>
         <tr className="text-left">
@@ -305,7 +305,7 @@ function AnalyticsAreaRow({
   });
 
   return (
-    <tr data-testid={`aa-row-${row.slug}`} className="border-t border-surface-overlay">
+    <tr data-testid={`aa-row-${row.slug}`} className="border-t border-default">
       <td className="p-2">{row.slug}</td>
       <td className="p-2">
         <input
@@ -336,7 +336,7 @@ function AnalyticsAreaRow({
           Archive
         </Button>
         {error && (
-          <p data-testid={`aa-row-error-${row.slug}`} className="text-xs text-status-danger">
+          <p data-testid={`aa-row-error-${row.slug}`} className="text-xs text-accent-danger">
             {error}
           </p>
         )}
