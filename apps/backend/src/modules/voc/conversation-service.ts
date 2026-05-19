@@ -611,6 +611,12 @@ function isTriggerActorMismatchError(err: unknown): boolean {
   if (err === null || typeof err !== 'object') return false;
   const e = err as Record<string, unknown>;
   // pg-node surfaces the message on `message` and the sqlstate on `code`.
+  // The trigger RAISE EXCEPTION message is 'voc_reporter_reply_actor_must_be_reporter'
+  // (migration 0010 function voc_reporter_reply_actor_check).
+  if (typeof e.message === 'string' && e.message.includes('voc_reporter_reply_actor_must_be_reporter')) {
+    return true;
+  }
+  // Belt-and-suspenders: also match on legacy message variant.
   if (typeof e.message === 'string' && e.message.includes('voc_reporter_reply.actor_must_match_reporter')) {
     return true;
   }

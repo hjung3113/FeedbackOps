@@ -16,6 +16,7 @@ const STATUS_BY_PREFIX: ReadonlyArray<[string, number]> = [
   ['voc.', 422],
   ['rich_content.', 422],
   ['attachment.', 422],
+  ['reporter_facing_status.', 422],
   ['rate_limited.', 429],
   ['internal.', 500],
   ['upstream.', 502],
