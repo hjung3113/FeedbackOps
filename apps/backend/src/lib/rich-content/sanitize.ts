@@ -227,8 +227,20 @@ export function sanitizeTipTap(args: {
   }
 
   let totalText = 0;
+  let nodeCount = 0;
+  let markCount = 0;
 
   const visitMark = (raw: unknown, path: string): { mark: CleanMark } | { error: RichContentError } => {
+    markCount++;
+    if (markCount > allow.maxMarks) {
+      return {
+        error: {
+          code: 'rich_content.disallowed_node',
+          reason: `max mark count exceeded (cap: ${allow.maxMarks})`,
+          path,
+        },
+      };
+    }
     if (!isPlainObject(raw) || typeof raw.type !== 'string') {
       return {
         error: {
@@ -259,7 +271,26 @@ export function sanitizeTipTap(args: {
     return { mark: cleanMark };
   };
 
-  const visit = (raw: unknown, path: string): VisitResult => {
+  const visit = (raw: unknown, path: string, depth: number): VisitResult => {
+    nodeCount++;
+    if (nodeCount > allow.maxNodes) {
+      return {
+        error: {
+          code: 'rich_content.disallowed_node',
+          reason: `max node count exceeded (cap: ${allow.maxNodes})`,
+          path,
+        },
+      };
+    }
+    if (depth > allow.maxDepth) {
+      return {
+        error: {
+          code: 'rich_content.disallowed_node',
+          reason: `max depth exceeded (cap: ${allow.maxDepth})`,
+          path,
+        },
+      };
+    }
     if (!isPlainObject(raw) || typeof raw.type !== 'string') {
       return {
         error: {
@@ -301,7 +332,7 @@ export function sanitizeTipTap(args: {
         return {
           error: {
             code: 'rich_content.disallowed_node',
-            reason: 'text content exceeds 50KB cap',
+            reason: `text content exceeds max bytes (cap: ${allow.maxTextBytes})`,
             path,
           },
         };
@@ -327,7 +358,7 @@ export function sanitizeTipTap(args: {
     const cleanContent: CleanNode[] = [];
     if (Array.isArray(node.content)) {
       for (let i = 0; i < node.content.length; i++) {
-        const childResult = visit(node.content[i], `${path}.content[${i}]`);
+        const childResult = visit(node.content[i], `${path}.content[${i}]`, depth + 1);
         if ('error' in childResult) return childResult;
         cleanContent.push(childResult.node);
       }
@@ -351,7 +382,7 @@ export function sanitizeTipTap(args: {
     return { node: cleanNode };
   };
 
-  const rootResult = visit(root, '$');
+  const rootResult = visit(root, '$', 0);
   if ('error' in rootResult) return { ok: false, error: rootResult.error };
   return { ok: true, doc: rootResult.node as unknown as TipTapDoc };
 }

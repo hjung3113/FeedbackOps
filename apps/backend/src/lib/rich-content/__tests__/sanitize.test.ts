@@ -417,3 +417,193 @@ describe('attr allowlist — missing required keys', () => {
     }
   });
 });
+
+// ── Depth / node / mark caps (DoS guard, issue #24) ──────────────────────────
+
+// nestedListDoc(N): doc → bulletList → listItem → bulletList → listItem → ...
+//   (N levels of list wrapping) → paragraph → text
+// Max depth formula: 2*N + 2  (each loop adds 2 levels: bulletList + listItem)
+// N=15 → depth 32 = cap (ok), N=16 → paragraph at depth 33 > cap (fail).
+function nestedListDoc(depth: number) {
+  let node: any = { type: 'paragraph', content: [{ type: 'text', text: 'x' }] };
+  for (let i = 0; i < depth; i++) {
+    node = { type: 'bulletList', content: [{ type: 'listItem', content: [node] }] };
+  }
+  return { type: 'doc', content: [node] };
+}
+
+// wideDoc(W): doc with W paragraphs each containing one text node.
+// nodeCount = 1 (doc) + 2*W → cap 5000 → W=2499 ok (4999 nodes), W=2500 fail (5001).
+function wideDoc(width: number) {
+  return {
+    type: 'doc',
+    content: Array.from({ length: width }, () => ({ type: 'paragraph', content: [{ type: 'text', text: 'x' }] })),
+  };
+}
+
+describe('depth / node / mark caps', () => {
+  // ── Depth ──────────────────────────────────────────────────────────────────
+
+  it('depth 5 (nestedListDoc(1), max depth 4) → ok', () => {
+    const res = sanitizeTipTap({ surface, doc: nestedListDoc(1) as never });
+    expect(res.ok).toBe(true);
+  });
+
+  it('nestedListDoc(15) → max depth 32 = cap → ok (boundary)', () => {
+    const res = sanitizeTipTap({ surface, doc: nestedListDoc(15) as never });
+    expect(res.ok).toBe(true);
+  });
+
+  it('nestedListDoc(16) → paragraph at depth 33 > cap → 422 max depth', () => {
+    const res = sanitizeTipTap({ surface, doc: nestedListDoc(16) as never });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.reason).toMatch(/max depth/);
+    }
+  });
+
+  it('nestedListDoc(100) → 422 max depth (no RangeError)', () => {
+    const res = sanitizeTipTap({ surface, doc: nestedListDoc(100) as never });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.reason).toMatch(/max depth/);
+    }
+  });
+
+  it('rejects 10k depth without stack overflow (fast-fail under 500ms)', () => {
+    const start = Date.now();
+    const res = sanitizeTipTap({ surface, doc: nestedListDoc(10_000) as never });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.reason).toMatch(/max depth/);
+    }
+    expect(Date.now() - start).toBeLessThan(500);
+  });
+
+  // ── Node count ─────────────────────────────────────────────────────────────
+
+  it('wideDoc(100) → ok', () => {
+    const res = sanitizeTipTap({ surface, doc: wideDoc(100) as never });
+    expect(res.ok).toBe(true);
+  });
+
+  it('wideDoc(2499) → 4999 nodes ≤ cap → ok', () => {
+    const res = sanitizeTipTap({ surface, doc: wideDoc(2499) as never });
+    expect(res.ok).toBe(true);
+  });
+
+  it('exact-5000 nodes (boundary, inclusive) → ok', () => {
+    // doc + 4999 empty paragraphs = 5000 nodes exactly. Pins inclusive boundary
+    // (>maxNodes rejects, not >=). Cycle-1 codex MINOR.
+    const docExact5000 = {
+      type: 'doc',
+      content: Array.from({ length: 4999 }, () => ({ type: 'paragraph' })),
+    };
+    const res = sanitizeTipTap({ surface, doc: docExact5000 as never });
+    expect(res.ok).toBe(true);
+  });
+
+  it('exact-5001 nodes (boundary +1) → 422 max node', () => {
+    const docExact5001 = {
+      type: 'doc',
+      content: Array.from({ length: 5000 }, () => ({ type: 'paragraph' })),
+    };
+    const res = sanitizeTipTap({ surface, doc: docExact5001 as never });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.reason).toMatch(/max node/);
+    }
+  });
+
+  it('wideDoc(2500) → 5001 nodes > cap → 422 max node', () => {
+    const res = sanitizeTipTap({ surface, doc: wideDoc(2500) as never });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.reason).toMatch(/max node/);
+    }
+  });
+
+  // ── Mark count ─────────────────────────────────────────────────────────────
+
+  it('single text node with 100 bold marks → ok', () => {
+    const res = sanitizeTipTap({
+      surface,
+      doc: {
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'x', marks: Array.from({ length: 100 }, () => ({ type: 'bold' })) }],
+        }],
+      } as never,
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it('single text node with 1500 bold marks → 422 max mark (mark fan-out BLOCKER)', () => {
+    const res = sanitizeTipTap({
+      surface,
+      doc: {
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'x', marks: Array.from({ length: 1500 }, () => ({ type: 'bold' })) }],
+        }],
+      } as never,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.reason).toMatch(/max mark/);
+    }
+  });
+
+  // ── Counter-placement regression ───────────────────────────────────────────
+
+  // 6 paragraphs × 200 bold marks = 1200 total marks > 1000 cap.
+  // Node count = 1 (doc) + 6*2 (paragraph + text) = 13 << 5000 cap.
+  // Reason must be max mark, NOT max node.
+  it('6 paragraphs each with 200 bold marks → mark cap fires before node cap', () => {
+    const res = sanitizeTipTap({
+      surface,
+      doc: {
+        type: 'doc',
+        content: Array.from({ length: 6 }, () => ({
+          type: 'paragraph',
+          content: [{
+            type: 'text',
+            text: 'x',
+            marks: Array.from({ length: 200 }, () => ({ type: 'bold' })),
+          }],
+        })),
+      } as never,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.reason).toMatch(/max mark/);
+      expect(res.error.reason).not.toMatch(/max node/);
+    }
+  });
+
+  // ── Text byte cap regression ───────────────────────────────────────────────
+
+  it('50KB text inside depth-5 doc → text byte cap fires (not depth/node cap)', () => {
+    const big = 'a'.repeat(50 * 1024 + 1);
+    const res = sanitizeTipTap({
+      surface,
+      doc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: big }] }],
+      } as never,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.reason).toMatch(/max bytes/);
+      expect(res.error.reason).toMatch(/51200/); // cap value rendered
+      expect(res.error.reason).not.toMatch(/max depth/);
+      expect(res.error.reason).not.toMatch(/max node/);
+    }
+  });
+});
