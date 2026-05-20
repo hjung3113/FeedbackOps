@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>SLICE-3 #20 · CP2 pixel-diff vs prototype baseline</title>
+<style>
+  :root { --bg:#0f1115; --surface:#161922; --border:#2a3142; --text:#e6e9f2; --text-dim:#8b94aa; --accent:#c3f53c; --warn:#ffb454; --ok:#5eead4; --danger:#ff6b6b; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,sans-serif;padding:24px;max-width:1600px;margin-inline:auto}
+  h1{font-size:22px;margin:0 0 4px} h2{font-size:16px;margin:28px 0 10px;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:6px}
+  .meta{color:var(--text-dim);font-size:12.5px;margin-bottom:18px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .panel header{padding:8px 12px;background:#1d2230;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-dim);display:flex;justify-content:space-between}
+  .panel header strong{color:var(--text)}
+  .panel img{display:block;width:100%;height:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:#1d2230;color:var(--text-dim);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;font-size:11px}
+  td.sev{font-weight:600;font-family:"SF Mono",monospace;font-size:11.5px;letter-spacing:0.02em}
+  td.sev[data-s="HIGH"]{color:var(--danger)} td.sev[data-s="MEDIUM"]{color:var(--warn)} td.sev[data-s="LOW"]{color:var(--ok)}
+  .pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:500;line-height:16px}
+  .pill.scope-in{background:rgba(195,245,60,0.14);color:var(--accent)}
+  .pill.scope-out{background:rgba(139,148,170,0.14);color:var(--text-dim)}
+  .pill.scope-locked{background:rgba(94,234,212,0.14);color:var(--ok)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin:10px 0}
+  .card.warn{border-left:3px solid var(--warn)} .card.risk{border-left:3px solid var(--danger)} .card.ok{border-left:3px solid var(--ok)}
+  .footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--border);color:var(--text-dim);font-size:12px}
+</style>
+</head>
+<body>
+
+<h1>SLICE-3 #20 · CP2 pixel-diff vs prototype baseline</h1>
+<div class="meta">
+  <b>Page:</b> /vocs?view=inbox&amp;selected=&lt;voc-01&gt; · <b>Captured:</b> 2026-05-21 · <b>Baseline:</b> <code>docs/design-prototype/screenshots/final-baselines/voc-inbox-detail.png</code> (Pack 20)<br/>
+  <b>Impl:</b> Pack 17 light tokens · ADR-0021 · branch <code>feature/20-voc-inbox-detail</code> @ commit C9+C10
+</div>
+
+<h2>1 · Side-by-side (1440px)</h2>
+<div class="grid">
+  <div class="panel">
+    <header><strong>Prototype baseline</strong> · 1440×960 dark</header>
+    <img src="../docs/design-prototype/screenshots/final-baselines/voc-inbox-detail.png" alt="prototype" />
+  </div>
+  <div class="panel">
+    <header><strong>Impl</strong> · 1440×900 light</header>
+    <img src="./SLICE-3-20-cp1-inbox-detail-1440.png" alt="impl" />
+  </div>
+</div>
+
+<h2>2 · Diff enumeration (9 items)</h2>
+<table>
+  <thead><tr><th>#</th><th>Severity</th><th>Category</th><th>Issue</th><th>Scope</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td class="sev" data-s="MEDIUM">MEDIUM</td>
+      <td>Theme</td>
+      <td>Light(Pack 17) vs prototype dark(Pack 20). ADR-0021 locks Pack 17 light as current authority — prototype hasn't been re-baselined. <b>Largest visual gap.</b></td>
+      <td><span class="pill scope-locked">ADR locked</span> → #55</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td class="sev" data-s="LOW">LOW</td>
+      <td>Sidebar</td>
+      <td>No Managed System scope filter list in sidebar (prototype has MS list as secondary nav). #18 sidebar territory.</td>
+      <td><span class="pill scope-out">OOS</span></td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td class="sev" data-s="LOW">LOW</td>
+      <td>Detail nav</td>
+      <td>No inner section nav inside Detail panel — prototype has Overview/Triage/Public/Internal/Conversation tabs above sections. Spec §3 explicitly defers section nav to #21.</td>
+      <td><span class="pill scope-out">#21</span></td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td class="sev" data-s="LOW">LOW</td>
+      <td>Description</td>
+      <td>RichContentRenderer renders an empty box when description is empty (seed VOC has no real content). Should fall back to muted '설명 없음' placeholder.</td>
+      <td><span class="pill scope-in">IN — fix in C11</span></td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td class="sev" data-s="LOW">LOW</td>
+      <td>Linked entity trail</td>
+      <td>Prototype shows Evidence/Finding/Task/Outcome cards; impl shows the dashed placeholder. Spec §3.7 defers real node resolution to Slice 4.</td>
+      <td><span class="pill scope-out">Slice 4</span></td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td class="sev" data-s="LOW">LOW</td>
+      <td>Next action footer</td>
+      <td>Prototype shows '+ Create Finding' primary CTA at bottom; impl renders '다음 액션 없음' because BE returns <code>next_actions: []</code> for fresh VOCs. Behavior-correct per #15.</td>
+      <td><span class="pill scope-out">BE data</span></td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td class="sev" data-s="LOW">LOW</td>
+      <td>Row density</td>
+      <td>Impl row uses single visual line (title + meta inline). Prototype uses 2-line: title prominent (font-medium), meta tight beneath. 60px row height OK.</td>
+      <td><span class="pill scope-in">IN — fix in C11</span></td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td class="sev" data-s="LOW">LOW</td>
+      <td>Row severity color</td>
+      <td>Impl SeverityIndicator visible but very small; prototype has more visible left-edge accent. Could amplify bar width or add a tint to the left edge.</td>
+      <td><span class="pill scope-in">IN — minor C11</span></td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td class="sev" data-s="LOW">LOW</td>
+      <td>Tab strip</td>
+      <td>Tabs blend into row area; prototype has clearer container separation (subtle bg shift between tab bar and rows).</td>
+      <td><span class="pill scope-in">IN — minor C11</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3 · Decision (per memory <code>feedback_pixel_diff_per_page</code>)</h2>
+<div class="card warn">
+  <b>Count:</b> 9 items (1 MEDIUM + 8 LOW). Threshold = "≥5 항목 또는 MEDIUM+" → 중대 → C11 폴리시 청크 필요.<br/><br/>
+  <b>그러나</b> MEDIUM = theme = ADR-0021 lock = #20에서 해결 불가 (별도 ADR + #55 영역).<br/>
+  <b>실제로 #20 PR 안에서 처리 가능한 항목:</b>
+  <ul>
+    <li>#4 description 비어있을 때 '설명 없음' fallback</li>
+    <li>#7 row 2-line density (title prominent + meta sub-line)</li>
+    <li>#8 row severity 좌측 강조 (선택)</li>
+    <li>#9 tab strip 컨테이너 분리 (선택)</li>
+  </ul>
+  <b>OOS 항목:</b> #1 (#55), #2 (#18 sidebar 후속), #3 (#21 detail section nav), #5 (Slice 4 linked entity), #6 (BE next_actions logic — Slice 3+).<br/>
+</div>
+
+<h2>4 · 추천 (사용자 컨펌)</h2>
+<div class="card ok">
+  <b>A 추천:</b> C11 폴리시 (#4 + #7 fixes only, 30분 이내) → 재캡처 → 차이 LOW 줄어든 상태로 REV-1 진입 → 머지.<br/>
+  나머지 OOS 항목은 PR body에서 명시 + 각자 이슈/슬라이스에 위임.<br/><br/>
+  <b>B:</b> C11 skip, 현 상태 그대로 REV-1 → PR (PR body에 9 diff items 전체 명시). 빠르지만 #6 description fallback은 사용자 UX에 약간 거슬릴 수 있음.<br/>
+  <b>C:</b> 더 큰 폴리시 (모든 IN 항목 + 추가 미세 정렬) — 토큰 범위 확장 위험.
+</div>
+
+<h2>5 · 추가 캡처</h2>
+<div class="grid">
+  <div class="panel"><header><strong>1024px</strong> tablet</header><img src="./SLICE-3-20-cp1-inbox-detail-1024.png" /></div>
+  <div class="panel"><header><strong>390px</strong> mobile</header><img src="./SLICE-3-20-cp1-inbox-detail-390.png" /></div>
+</div>
+
+<div class="footer">
+  생성: 2026-05-21 · main 오케스트레이터 · Opus 4.7 · per memory <code>feedback_pixel_diff_per_page</code>
+</div>
+
+</body>
+</html>

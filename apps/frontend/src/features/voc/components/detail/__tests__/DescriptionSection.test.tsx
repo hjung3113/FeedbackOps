@@ -15,15 +15,38 @@ vi.mock('@fops/ui', async (importOriginal) => {
 import { DescriptionSection } from '../DescriptionSection';
 import { DETAIL_ENVELOPE } from './_fixtures';
 
+const ENVELOPE_WITH_BODY = {
+  ...DETAIL_ENVELOPE,
+  description_rich_content: {
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: '실제 내용' }] }],
+  },
+};
+
 describe('<DescriptionSection>', () => {
   it('renders section title', () => {
     render(<DescriptionSection voc={DETAIL_ENVELOPE} isReporterOnOwnVoc={false} />);
     expect(screen.getByText('설명')).toBeInTheDocument();
   });
 
-  it('renders RichContentRenderer', () => {
-    render(<DescriptionSection voc={DETAIL_ENVELOPE} isReporterOnOwnVoc={false} />);
+  it('renders RichContentRenderer when description has content', () => {
+    render(<DescriptionSection voc={ENVELOPE_WITH_BODY} isReporterOnOwnVoc={false} />);
     expect(screen.getByTestId('rich-content-renderer')).toBeInTheDocument();
+  });
+
+  it("renders '설명 없음' fallback when description is empty", () => {
+    render(<DescriptionSection voc={DETAIL_ENVELOPE} isReporterOnOwnVoc={false} />);
+    expect(screen.getByText('설명 없음')).toBeInTheDocument();
+    expect(screen.queryByTestId('rich-content-renderer')).not.toBeInTheDocument();
+  });
+
+  it("renders '설명 없음' fallback when description has only empty paragraph", () => {
+    const envelope = {
+      ...DETAIL_ENVELOPE,
+      description_rich_content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    };
+    render(<DescriptionSection voc={envelope} isReporterOnOwnVoc={false} />);
+    expect(screen.getByText('설명 없음')).toBeInTheDocument();
   });
 
   it('shows EditDescriptionLink when isReporterOnOwnVoc is true', () => {
