@@ -145,7 +145,8 @@ export function InternalCommentComposer({
       {/* RichEditor with InternalCommentToolbar — prototype: minHeight 84px */}
       <RichEditor
         surface="internal-comment"
-        {...(draftDoc != null ? { value: draftDoc } : {})}
+        // REV-3 Cluster Z: explicit value (null = clear).
+        value={draftDoc}
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="내부 코멘트를 입력하세요..."
         minHeight={84}

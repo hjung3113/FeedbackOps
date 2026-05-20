@@ -90,3 +90,25 @@
 
 **RED → GREEN test:** `apps/frontend/src/features/voc/hooks/__tests__/useComposerDraft.vocSwitchRace.test.tsx` — uses a child component that records `draft.state.public` synchronously inside its render function and asserts null on every render after the vocId switch.
 
+
+---
+
+## REV-3 (codex Cycle 3) — Cluster Z: RichEditor controlled clear
+
+### D-REV3-CZ: RichEditor honors null/undefined controlled value as explicit clear
+
+**Origin:** codex REV-3 P1 (`RichEditor.tsx:71`, `PublicUpdateComposer.tsx:221`, `ReporterReplyComposer.tsx:169`, `InternalCommentComposer.tsx:148` — REV-2 #6 + #7 partial residuals).
+
+**Issue (compound):**
+- `RichEditor`'s controlled-sync effect bailed on `!value`, so `null` from the parent never triggered a content reset.
+- The three composers spread `{...(draftDoc != null ? { value: draftDoc } : {})}`, omitting the prop entirely when the draft was cleared. The editor effect then saw `value === undefined` and did nothing.
+- Net effect: submit success (which sets the parent draft to `null`) and VOC switch (which resets per-VOC draft to `null`) left stale body text visible in the composer editor.
+
+**Fix:**
+- `RichEditor` widens `value` to `TipTapDoc | null | undefined`. A `wasControlledRef` records that the component has been controlled at least once. While controlled, both `null` and `undefined` values mean "clear" — the effect calls `editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph' }] })` when the current JSON differs from the target.
+- A purely uncontrolled `<RichEditor surface="..." defaultValue={...} />` (no `value` prop ever passed) stays uncontrolled; the ref stays `false` and the effect is a no-op.
+- `PublicUpdateComposer`, `ReporterReplyComposer`, `InternalCommentComposer` drop the conditional-spread and pass `value={draftDoc}` directly (where `draftDoc: TipTapDoc | null`). The editor now visibly clears on submit success / VOC switch.
+
+**Files modified:** `packages/ui/src/rich-content/RichEditor.tsx`, `apps/frontend/src/features/voc/components/detail/PublicUpdateComposer.tsx`, `apps/frontend/src/features/voc/components/detail/ReporterReplyComposer.tsx`, `apps/frontend/src/features/voc/components/detail/InternalCommentComposer.tsx`.
+
+**RED → GREEN test:** `packages/ui/__tests__/rich-editor-controlled-clear.test.tsx` — (a) flipping the controlled `value` from a non-empty doc to `null` clears the visible editor content; (b) flipping to an explicit empty doc also clears.

@@ -166,7 +166,8 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
       {/* RichEditor with ReporterReplyToolbar — prototype: minHeight 84px */}
       <RichEditor
         surface="reporter-reply"
-        {...(draftDoc != null ? { value: draftDoc } : {})}
+        // REV-3 Cluster Z: explicit value (null = clear).
+        value={draftDoc}
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="리포터에게 보낼 답장 내용을 입력하세요..."
         minHeight={84}

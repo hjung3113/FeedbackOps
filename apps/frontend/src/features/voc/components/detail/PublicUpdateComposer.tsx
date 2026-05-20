@@ -218,7 +218,10 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
       {/* RichEditor with PublicUpdateToolbar — prototype: minHeight 84px */}
       <RichEditor
         surface="public-update"
-        {...(draftDoc != null ? { value: draftDoc } : {})}
+        // REV-3 Cluster Z: pass an explicit value (TipTapDoc | null) so the
+        // editor honors an explicit clear after submit-success / VOC switch.
+        // Omitting the prop left stale content visible.
+        value={draftDoc}
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="공개 업데이트 내용을 입력하세요..."
         minHeight={84}
