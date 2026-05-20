@@ -16,12 +16,21 @@ vi.mock('@/features/voc/hooks/useComposerVisibility', () => ({
 }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 
-// Mock RichEditor to avoid TipTap JSDOM issues (pulled in by ReporterReplyComposer / PublicUpdateComposer).
+// Mock RichEditor to avoid TipTap JSDOM issues. Emits onChange with a
+// non-empty doc on click so the dirty derivation (REV-2 #6) lights up.
 vi.mock('@fops/ui', async (importActual) => {
   const actual = await importActual<typeof import('@fops/ui')>();
   return {
     ...actual,
-    RichEditor: () => React.createElement('div', { 'data-testid': 'rich-editor' }),
+    RichEditor: ({ onChange }: { onChange?: (doc: import('@fops/ui').TipTapDoc) => void }) =>
+      React.createElement('div', {
+        'data-testid': 'rich-editor',
+        onClick: () =>
+          onChange?.({
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x' }] }],
+          }),
+      }),
   };
 });
 

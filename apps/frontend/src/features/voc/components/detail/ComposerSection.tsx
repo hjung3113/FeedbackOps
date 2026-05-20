@@ -23,13 +23,30 @@ import { type ComposerSurface, useComposerDraft } from '@/features/voc/hooks/use
 import { useComposerVisibility } from '@/features/voc/hooks/useComposerVisibility';
 import type { MeResponse } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';
-import { DirtyConfirmation } from '@fops/ui';
+import { DirtyConfirmation, type TipTapDoc } from '@fops/ui';
 import { X } from 'lucide-react';
 import * as React from 'react';
 import { ComposerTabs } from './ComposerTabs';
 import { InternalCommentComposer } from './InternalCommentComposer';
 import { PublicUpdateComposer } from './PublicUpdateComposer';
 import { ReporterReplyComposer } from './ReporterReplyComposer';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Returns true when a TipTapDoc has no meaningful content (null, empty, or
+// only an empty paragraph). Mirrors the same logic the individual composers
+// use to gate their submit buttons.
+function isDocEmpty(doc: TipTapDoc | null): boolean {
+  if (doc == null) return true;
+  const content = doc.content;
+  if (!Array.isArray(content) || content.length === 0) return true;
+  return content.every((node) => {
+    if (node == null || typeof node !== 'object') return true;
+    const n = node as { type?: string; content?: unknown[] };
+    if (n.type !== 'paragraph') return false;
+    return !Array.isArray(n.content) || n.content.length === 0;
+  });
+}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -72,25 +89,21 @@ export function ComposerSection({
   const [activeTab, setActiveTab] = React.useState<ComposerSurface>(getDefaultTab);
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
 
-  // Dirty tracking: any composer can mark the section dirty via this ref.
-  // We track dirty state per composer surface via a Set.
-  const dirtyRef = React.useRef<Set<ComposerSurface>>(new Set());
+  // REV-2 #6: dirty is derived from the controlled draft state (the same
+  // TipTapDoc each composer passes through onDraftChange), not from a
+  // container onClick. Keyboard-only typing now flows through onChange →
+  // useComposerDraft → this derivation, so close always sees the correct
+  // dirty state regardless of pointer interaction.
+  const isDirty =
+    !isDocEmpty(draft.state.public) ||
+    !isDocEmpty(draft.state.reply) ||
+    !isDocEmpty(draft.state.internal);
 
-  // Expose a setter for child composers to report dirty state.
-  // NOTE: In C5.5 approach we detect dirty by watching for a non-empty editor click.
-  // The dirty state is derived from whether any editor has been interacted with.
-  // For simplicity in this integration, we track whether the close button was clicked
-  // while any rich-editor in the section has been touched.
-  // The actual check uses a boolean state tracking whether any composer reported dirty.
-  const [isDirty, setIsDirty] = React.useState(false);
-
-  // Reset dirty tracking and tab when VOC changes.
+  // Reset tab when VOC changes (drafts auto-clear via useComposerDraft).
   const prevVocIdRef = React.useRef(voc.id);
   if (prevVocIdRef.current !== voc.id) {
     prevVocIdRef.current = voc.id;
     setActiveTab(getDefaultTab());
-    setIsDirty(false);
-    dirtyRef.current.clear();
   }
 
   // REV-1 #6: notify parent panel whenever dirty state changes.
@@ -114,19 +127,13 @@ export function ComposerSection({
 
   function handleDirtyConfirm() {
     setDirtyConfirmOpen(false);
-    setIsDirty(false);
-    dirtyRef.current.clear();
+    // Clear all drafts so the next render's isDirty derivation flips to false.
+    draft.clearAll();
     onCloseRequest?.();
   }
 
   function handleDirtyCancel() {
     setDirtyConfirmOpen(false);
-  }
-
-  // Composer dirty change handler — composers call this when their draft changes.
-  // REV-1 #7: also updates draft state for the active surface.
-  function handleComposerInteraction() {
-    setIsDirty(true);
   }
 
   return (
@@ -148,9 +155,9 @@ export function ComposerSection({
       <ComposerTabs visibility={visibility} activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Composer bodies — all three kept mounted (display toggled) so drafts survive tab
-          switches. REV-1 #7: draft state controlled by parent via useComposerDraft. */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: monitoring clicks on contained interactive elements */}
-      <div className="p-4" onClick={handleComposerInteraction}>
+          switches. REV-1 #7: draft state controlled by parent via useComposerDraft.
+          REV-2 #6: no onClick dirty handler — dirty is derived from draft state above. */}
+      <div className="p-4">
         {visibility.showPublic && (
           <div style={{ display: activeTab === 'public' ? undefined : 'none' }}>
             <PublicUpdateComposer
