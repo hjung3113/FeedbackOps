@@ -83,7 +83,9 @@ describe('useUndoableMutation', () => {
     await act(async () => { result.current.undoLast(); });
 
     expect(compensateFn).toHaveBeenCalledOnce();
-    expect(compensateFn).toHaveBeenCalledWith('snap:world');
+    // REV-1 #4: compensateFn now receives (snapshot, output) — output is 'ok'
+    // from mutationFn's resolved value (TriagePanel uses it as fresh updated_at).
+    expect(compensateFn).toHaveBeenCalledWith('snap:world', 'ok');
   });
 
   it('error during mutation sets state to error and does not call compensateFn on undo', async () => {
@@ -115,7 +117,8 @@ describe('useUndoableMutation', () => {
     await act(async () => { result.current.undoLast(); });
 
     expect(snapshot).toHaveBeenCalledWith('capture-me');
-    expect(compensateFn).toHaveBeenCalledWith('snap:capture-me');
+    // REV-1 #4: compensateFn receives (snapshot, output).
+    expect(compensateFn).toHaveBeenCalledWith('snap:capture-me', 'ok');
   });
 
   it('dispose/cleanup aborts any pending in-flight mutation', () => {
