@@ -27,6 +27,8 @@ export interface UseUndoableMutationOptions<TInput, TOutput, TSnapshot = TInput>
   mutationFn: (input: TInput, signal?: AbortSignal) => Promise<TOutput>;
   snapshot: (input: TInput) => TSnapshot;
   compensateFn: (snapshot: TSnapshot) => Promise<unknown>;
+  /** Optional error handler — called with the error when mutationFn rejects (non-abort). */
+  onError?: (err: unknown) => void;
 }
 
 export interface UseUndoableMutationResult<TInput> {
@@ -85,6 +87,7 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
         }
         console.error('[useUndoableMutation] mutation failed', err);
         setState('error');
+        optsRef.current.onError?.(err);
       });
   }, []);
 

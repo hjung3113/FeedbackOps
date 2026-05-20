@@ -5,7 +5,8 @@
 // from TriageRoute. Composes TriageQueue + TriagePanel within WorkbenchShell
 // scroll body.
 //
-// Chunk 1: queue rendered read-only. Mutation callbacks are stubs.
+// C3.2: passes optimisticRemove + optimisticRestore from useTriageQueue into
+// TriagePanel so the panel can drive queue side-effects on mutation.
 
 import * as React from 'react';
 import type { VocListItem } from '@fops/shared';
@@ -43,8 +44,14 @@ export function VocTriageScreen({
   onSelectVoc,
   onTabChange,
 }: VocTriageScreenProps): React.ReactElement {
-  const { liveQueue } = useTriageQueue(items);
+  const {
+    liveQueue,
+    optimisticRemove,
+    optimisticRestore,
+  } = useTriageQueue(items);
 
+  // Derive the selected VOC — when the current selection is optimistically removed,
+  // auto-advance to the next item in the live queue.
   const selectedVoc = liveQueue.find((v) => v.id === selectedId) ?? liveQueue[0] ?? null;
 
   return (
@@ -98,12 +105,23 @@ export function VocTriageScreen({
             <TriagePanel
               voc={selectedVoc}
               onAct={(kind) => {
-                // Chunk 3 will wire real mutation here
+                // Non-mutation side effects per kind
                 if (kind === 'finding') {
-                  // Per spec: "Finding 생성은 Slice 5에서 제공됩니다"
-                  // Toast will be implemented in Chunk 3
+                  // D-3.4: Toast "Finding 생성은 Slice 5에서 제공됩니다" is handled
+                  // inside TriagePanel. No navigation here (Slice 5).
                 }
               }}
+              onOptimisticRemove={(vocId) => {
+                const item = items.find((v) => v.id === vocId);
+                if (!item) return;
+                optimisticRemove(vocId, {
+                  severity: item.severity,
+                  ownerUserId: item.owner_user_id,
+                  ownerTeamId: item.owner_team_id,
+                  analyticsAreaId: item.analytics_area_id,
+                });
+              }}
+              onOptimisticRestore={optimisticRestore}
             />
           </div>
         )}
