@@ -1,0 +1,52 @@
+// ConversationTimeline — tabbed public / internal conversation view.
+
+import * as React from 'react';
+import type { VocDetailEnvelope } from '@fops/shared';
+import {
+  PanelSectionTitle,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from '@fops/ui';
+import { PublicTimeline } from './PublicTimeline';
+import { InternalTimeline } from './InternalTimeline';
+
+export interface ConversationTimelineProps {
+  voc: VocDetailEnvelope;
+}
+
+export function ConversationTimeline({ voc }: ConversationTimelineProps): React.ReactElement {
+  const publicEntries = voc.conversation_timeline.filter(
+    (e) => e.kind === 'public_update' || e.kind === 'reporter_reply',
+  );
+  const internalEntries = voc.conversation_timeline.filter(
+    (e) => e.kind === 'internal_comment',
+  );
+
+  return (
+    <div>
+      <PanelSectionTitle>대화</PanelSectionTitle>
+      <Tabs defaultValue="public" className="w-full">
+        <TabsList className="mx-4">
+          <TabsTrigger value="public">공개</TabsTrigger>
+          <TabsTrigger value="internal">내부</TabsTrigger>
+        </TabsList>
+        <TabsContent value="public" className="px-4">
+          <PublicTimeline
+            vocId={voc.id}
+            inline={publicEntries}
+            hasMore={voc.conversation_page.has_more}
+          />
+        </TabsContent>
+        <TabsContent value="internal" className="px-4">
+          <InternalTimeline
+            vocId={voc.id}
+            inline={internalEntries}
+            hasMore={voc.conversation_page.has_more}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
