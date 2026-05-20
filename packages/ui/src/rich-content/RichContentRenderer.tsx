@@ -30,8 +30,10 @@ function stripMentions(doc: TipTapDoc): TipTapDoc {
 }
 
 export function RichContentRenderer({ doc, mode, className }: RichContentRendererProps) {
-  const safe = mode === 'reporter_visible' ? stripMentions(doc) : doc;
   const html = React.useMemo(() => {
+    // stripMentions is moved inside useMemo so generateHTML is only re-invoked
+    // when doc or mode actually change — not on every parent render.
+    const safe = mode === 'reporter_visible' ? stripMentions(doc) : doc;
     return generateHTML(safe as JSONContent, [
       StarterKit.configure({
         // Disable built-ins that we configure separately below to avoid duplicate extension warnings.
@@ -43,7 +45,7 @@ export function RichContentRenderer({ doc, mode, className }: RichContentRendere
       AttachmentRef,
       Mention,
     ]);
-  }, [safe]);
+  }, [doc, mode]);
 
   return (
     <div
