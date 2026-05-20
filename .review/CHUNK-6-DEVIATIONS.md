@@ -175,3 +175,15 @@
 **Files affected (not C6.1 scope):**
 - `apps/frontend/src/features/voc/components/detail/__tests__/ReporterStatusChangeBlock.test.tsx`
 - `apps/frontend/src/features/voc/hooks/__tests__/useReporterStatusTransitions.test.ts`
+
+---
+
+## REV-1 (codex Cycle 1) — C6.3 follow-up: VocTriageScreen integration test
+
+**Origin:** codex REV-1 finding #5 explicitly asked for a real `VocTriageScreen` integration test, not a `TriagePanel`-direct one (the original C6.3 stale_write/permission tests bypassed `VocTriageScreen`, exactly where the restore-id bug lived).
+
+**Added:** `apps/frontend/src/features/voc/components/triage/__tests__/VocTriageScreen.errorRollback.test.tsx`.
+
+Both tests render the full `VocTriageScreen`, click confirm on VOC_A, wait for the auto-advance to VOC_B, then release a deferred PATCH error (409 stale_write / 403 permission.denied). They assert that VOC_A reappears in the queue and VOC_B remains — the failure mode that the prior C6.3 tests could not catch.
+
+For the production-code fix detail (closure over `input.vocId` instead of `vocIdRef.current`), see `.review/CHUNK-3-DEVIATIONS.md` → `D-REV1-#5`.
