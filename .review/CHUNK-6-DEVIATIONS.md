@@ -224,3 +224,19 @@ For the production-code fix detail (closure over `input.vocId` instead of `vocId
 
 **RED → GREEN test:** `apps/frontend/src/features/voc/routes/__tests__/TriageRoute.capability.test.tsx` — 3 cases: blocked actor sees PermissionBlockedPanel; approved actor sees the queue; blocked actor's useVocList is invoked with `enabled: false`.
 
+
+---
+
+## REV-3 (codex Cycle 3) — Cluster W: reload awaits refetch
+
+### D-REV3-CW: 다시 불러오기 action awaits refetchQueries before form.reset
+
+**Origin:** codex REV-3 P1 (`EditDescriptionModal.tsx:121`, REV-2 #8 partial residual).
+
+**Issue:** `handleReloadFromVoc` reset the form synchronously from `vocRef.current`. After the stale_write 409, the modal invalidates `['voc', id]` but the refetch is async. If the user clicked 다시 불러오기 before the refetch landed, `vocRef.current` was still the OLD `voc` prop (the parent hasn't re-rendered with the refetched data yet), and the form was reset to the stale values — the very state the user was trying to leave.
+
+**Fix:** `handleReloadFromVoc` is now async and `await`s `queryClient.refetchQueries({ queryKey: ['voc', voc.id] })` before reading the fresh envelope. It prefers `queryClient.getQueryData(['voc', voc.id])` (post-refetch cache) over `vocRef.current`, so even if the parent hasn't yet propagated the new prop, the form reset uses the freshest server state. If refetch itself rejects (offline / network), it falls back to `vocRef.current` — strictly no worse than the prior behavior.
+
+**Files modified:** `apps/frontend/src/features/voc/components/detail/EditDescriptionModal.tsx`.
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.reloadAwaitsRefetch.test.tsx` — pre-seeds the QueryClient with V1, intercepts `refetchQueries` to swap the cache to V2 only when released, asserts the action handler (a) calls `refetchQueries` with `['voc', id]`, (b) does NOT reset until the refetch resolves, and (c) resets to V2 fields after release (despite the parent still passing V1 as the `voc` prop).

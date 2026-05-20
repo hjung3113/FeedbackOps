@@ -118,14 +118,26 @@ export function EditDescriptionModal({
     // Intentionally only voc.id — updated_at change must NOT auto-reset.
   }, [voc.id]);
 
-  const handleReloadFromVoc = React.useCallback(() => {
-    const fresh = vocRef.current;
+  // REV-3 Cluster W: the 다시 불러오기 action must AWAIT a refetch before
+  // resetting the form. The prior implementation reset from `vocRef.current`,
+  // which lagged the refetch — clicks landing between the stale_write toast
+  // and the refetch arrival reset to the OLD voc values, defeating the
+  // purpose of the action.
+  const handleReloadFromVoc = React.useCallback(async () => {
+    try {
+      await queryClient.refetchQueries({ queryKey: ['voc', voc.id] });
+    } catch {
+      // If refetch itself failed (offline, etc.), fall back to whatever
+      // vocRef currently holds — still better than a stuck modal.
+    }
+    const cached = queryClient.getQueryData<EditDescriptionModalVoc>(['voc', voc.id]);
+    const fresh = cached ?? vocRef.current;
     form.reset({
       title: fresh.title,
       description_rich_content: fresh.description_rich_content as TipTapDoc,
       attachments: [],
     });
-  }, [form]);
+  }, [form, queryClient, voc.id]);
 
   // Propagate server validation.failed errors into form field errors.
   // biome-ignore lint/correctness/useExhaustiveDependencies: form is stable (useForm), mutation.error is the reactive dep
