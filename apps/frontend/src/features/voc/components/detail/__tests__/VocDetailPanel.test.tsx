@@ -23,6 +23,11 @@ vi.mock('@/features/voc/components/detail/EditDescriptionModal', () => ({
     open ? <div data-testid="edit-description-modal" /> : null,
 }));
 
+// PublicUpdateComposer uses QueryClient — stub to isolate VocDetailPanel tests (C5.2)
+vi.mock('@/features/voc/components/detail/PublicUpdateComposer', () => ({
+  PublicUpdateComposer: () => <div data-testid="public-update-composer-stub" />,
+}));
+
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';

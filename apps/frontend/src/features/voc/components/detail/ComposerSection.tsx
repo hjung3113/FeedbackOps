@@ -1,12 +1,12 @@
-// ComposerSection — orchestrator mounting the tab strip + draft state + placeholder bodies.
+// ComposerSection — orchestrator mounting the tab strip + draft state + composer bodies.
 //
-// C5.1 (slice3 #21)
-// Spec: PLAN-21-SUBCHUNKS.md C5.1
+// C5.1 (slice3 #21) — infrastructure (tabs, draft state, visibility)
+// C5.2 (slice3 #21) — PublicUpdateComposer wired (replaces placeholder)
+// C5.3 (slice3 #21) — ReporterReplyComposer wired (replaces placeholder)
+// C5.4 (slice3 #21) — InternalCommentComposer wired (replaces placeholder)
+//
+// Spec: PLAN-21-SUBCHUNKS.md C5.1 / C5.2
 // Prototype ref: docs/design-prototype/screen-voc.jsx:400-470
-//
-// Composer bodies are intentional placeholders in this sub-chunk — real bodies
-// arrive in C5.2 (PublicUpdateComposer), C5.3 (ReporterReplyComposer),
-// and C5.4 (InternalCommentComposer).
 //
 // Mount point: VocDetailPanel renders <ComposerSection voc={voc} me={me} />
 // between <ConversationTimeline> and <NextActionFooter>.
@@ -17,6 +17,7 @@ import type { MeResponse } from '@/lib/auth/useMe';
 import { useComposerVisibility } from '@/features/voc/hooks/useComposerVisibility';
 import { useComposerDraft, type ComposerSurface } from '@/features/voc/hooks/useComposerDraft';
 import { ComposerTabs } from './ComposerTabs';
+import { PublicUpdateComposer } from './PublicUpdateComposer';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -63,10 +64,10 @@ export function ComposerSection({ voc, me }: ComposerSectionProps): React.ReactE
         onTabChange={setActiveTab}
       />
 
-      {/* Composer bodies — placeholders until C5.2/C5.3/C5.4 */}
+      {/* Composer bodies */}
       <div className="p-4">
         {activeTab === 'public' && visibility.showPublic && (
-          <div data-testid="composer-public-placeholder">TODO: PublicUpdateComposer</div>
+          <PublicUpdateComposer voc={voc} me={me} />
         )}
         {activeTab === 'reply' && visibility.showReply && (
           <div data-testid="composer-reply-placeholder">TODO: ReporterReplyComposer</div>
