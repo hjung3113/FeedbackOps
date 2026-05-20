@@ -20,8 +20,24 @@ const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   'permission.scope_required': { tone: 'error', message: '해당 Managed System에 대한 권한이 없습니다.' },
 
   // rate_limited.*
-  'rate_limited.actor': { tone: 'warning', message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' },
-  'rate_limited.ip':    { tone: 'warning', message: '동일 IP에서의 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' },
+  'rate_limited.actor': {
+    tone: 'warning',
+    message: (detail) => {
+      const wait = formatRetryAfter(detail);
+      return wait
+        ? `요청이 너무 많습니다. ${wait} 후 다시 시도해 주세요.`
+        : '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+    },
+  },
+  'rate_limited.ip': {
+    tone: 'warning',
+    message: (detail) => {
+      const wait = formatRetryAfter(detail);
+      return wait
+        ? `동일 IP에서의 요청이 너무 많습니다. ${wait} 후 다시 시도해 주세요.`
+        : '동일 IP에서의 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+    },
+  },
 
   // validation.*
   'validation.failed':                    { tone: 'error', message: '입력값이 올바르지 않습니다.' },
@@ -63,6 +79,14 @@ const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   'reporter_facing_status.invalid_transition': { tone: 'warning', message: '허용되지 않는 상태 전환입니다.' },
   'reporter_facing_status.gate_blocked':       { tone: 'warning', message: '권한 게이트로 상태를 변경할 수 없습니다.' },
 };
+
+function formatRetryAfter(detail?: Record<string, unknown>): string | undefined {
+  const raw = detail?.['retry_after_seconds'];
+  const secs = typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
+  if (secs === undefined || secs <= 0) return undefined;
+  if (secs < 60) return `${secs}초`;
+  return `${Math.ceil(secs / 60)}분`;
+}
 
 export function errorMapper(envelope: ApiErrorEnvelope, opts?: { onRetry?: () => void }): MappedError {
   const entry = CATALOG[envelope.code];

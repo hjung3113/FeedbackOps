@@ -5,11 +5,19 @@ import type { ErrorCode, ErrorEnvelope } from '@fops/shared';
 // (packages/shared/src/errors/codes.ts); do NOT duplicate it here.
 export type { ErrorEnvelope as ApiErrorEnvelope } from '@fops/shared';
 
+export interface RateLimitInfo {
+  limit: number;
+  remaining: number;
+  resetAt: Date;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly envelope: ErrorEnvelope,
     public readonly requestId?: string,
+    public readonly rateLimit?: RateLimitInfo,
+    public readonly retryAfterSeconds?: number,
   ) {
     super(envelope.message);
     this.name = 'ApiError';

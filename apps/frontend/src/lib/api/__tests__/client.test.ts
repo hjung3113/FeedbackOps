@@ -106,4 +106,67 @@ describe('apiClient', () => {
     const init = getCallInit(fetchMock);
     expect(init.credentials).toBe('include');
   });
+
+  it('429 ApiError populates rateLimit + retryAfterSeconds from headers', async () => {
+    const resetEpoch = Math.floor(Date.now() / 1000) + 30;
+    global.fetch = mockFetch({
+      ok: false,
+      status: 429,
+      headers: {
+        'x-ratelimit-limit': '100',
+        'x-ratelimit-remaining': '0',
+        'x-ratelimit-reset': String(resetEpoch),
+        'retry-after': '30',
+      },
+      jsonBody: {
+        code: 'rate_limited.actor',
+        message: 'rate limit exceeded',
+        detail: { retry_after_seconds: 30 },
+      },
+    });
+    try {
+      await apiClient('POST', '/x', { body: {} });
+      throw new Error('should have thrown');
+    } catch (e) {
+      const err = e as ApiError;
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err.code).toBe('rate_limited.actor');
+      expect(err.retryAfterSeconds).toBe(30);
+      expect(err.rateLimit).toEqual({
+        limit: 100,
+        remaining: 0,
+        resetAt: new Date(resetEpoch * 1000),
+      });
+    }
+  });
+
+  it('200 ApiResponse exposes rateLimit when headers present', async () => {
+    const resetEpoch = Math.floor(Date.now() / 1000) + 60;
+    global.fetch = mockFetch({
+      status: 200,
+      jsonBody: { ok: true },
+      headers: {
+        'x-ratelimit-limit': '50',
+        'x-ratelimit-remaining': '49',
+        'x-ratelimit-reset': String(resetEpoch),
+      },
+    });
+    const res = await apiClient('GET', '/x');
+    expect(res.rateLimit).toEqual({
+      limit: 50,
+      remaining: 49,
+      resetAt: new Date(resetEpoch * 1000),
+    });
+    expect(res.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('omits rateLimit when any ratelimit header missing', async () => {
+    global.fetch = mockFetch({
+      status: 200,
+      jsonBody: {},
+      headers: { 'x-ratelimit-limit': '50' },
+    });
+    const res = await apiClient('GET', '/x');
+    expect(res.rateLimit).toBeUndefined();
+  });
 });
