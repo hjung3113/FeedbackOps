@@ -35,8 +35,14 @@ const vocSearchSchema = z
     action: z.enum(['create']).optional(),
     selected: z.string().uuid().optional(),
     managedSystem: z.string().optional(),
-    tab: z.string().optional(),
-    sort: z.string().optional(),
+    tab: z.enum(['untriaged', 'high', 'unassigned', 'similar', 'no-link']).optional(),
+    sort: z.enum([
+      'created_at:desc',
+      'created_at:asc',
+      'severity:desc',
+      'severity:asc',
+      'reporter_facing_status:asc',
+    ]).optional(),
     'filter.severity': z.string().optional(),
     'filter.reporterStatus': z.string().optional(),
     'filter.owner': z.string().optional(),
@@ -141,7 +147,7 @@ describe('/vocs route shell selection', () => {
     vi.restoreAllMocks();
   });
 
-  test('resolves /vocs?view=inbox to ListShell with Inbox title', async () => {
+  test('resolves /vocs?view=inbox to ListShell with Inbox tabs', async () => {
     stubFetchMe();
     const { router, qc } = buildHarness({ initialPath: '/vocs?view=inbox' });
     render(
@@ -150,9 +156,8 @@ describe('/vocs route shell selection', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => {
-      // Title appears in ShellHeader h2 — use getAllByText since the tab also says "Inbox"
-      const matches = screen.getAllByText('Inbox');
-      expect(matches.length).toBeGreaterThanOrEqual(1);
+      // Inbox renders ListToolbar with tab labels (Korean) — check for '미트리아지' tab
+      expect(screen.getByText('미트리아지')).toBeInTheDocument();
     });
     // Confirm the list shell is rendered (not workbench / page)
     expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
@@ -208,8 +213,8 @@ describe('/vocs route shell selection', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => {
-      const matches = screen.getAllByText('Inbox');
-      expect(matches.length).toBeGreaterThanOrEqual(1);
+      // Default view is inbox — ListToolbar renders tab labels
+      expect(screen.getByText('미트리아지')).toBeInTheDocument();
     });
     expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
   });

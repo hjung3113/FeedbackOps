@@ -64,3 +64,47 @@ export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPa
 export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
 // Feedback primitives (Slice 3 #19)
 export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';
+
+// Indicators + badges (Slice 3 #20)
+export { SeverityIndicator, type SeverityIndicatorProps, type SeverityEnum } from './indicators/SeverityIndicator';
+export { SeverityBadge, type SeverityBadgeProps } from './badges/SeverityBadge';
+export { ReporterStatusBadge, type ReporterStatusBadgeProps, type ReporterFacingStatusEnum } from './badges/ReporterStatusBadge';
+export { InternalTaskBadge, type InternalTaskBadgeProps, type InternalTaskStatusEnum } from './badges/InternalTaskBadge';
+export { ManagedSystemPill, type ManagedSystemPillProps } from './badges/ManagedSystemPill';
+export { OutlineBadge, type OutlineBadgeProps } from './badges/OutlineBadge';
+export { EntityIconBadge, type EntityIconBadgeProps, type EntityIconType, ENTITY_ICON_MAP } from './badges/EntityIconBadge';
+
+// Identity (Slice 3 #20)
+export { UserAvatar, type UserAvatarProps, type AvatarUser } from './identity/UserAvatar';
+export { UserChip, type UserChipProps } from './identity/UserChip';
+
+// Toolbar primitives (Slice 3 #20)
+export { ListToolbar, type ListToolbarProps, type ListToolbarTab } from './toolbar/ListToolbar';
+export { ListFilterButton, type ListFilterButtonProps, type FilterCategory } from './toolbar/ListFilterButton';
+export { ListSortButton, type ListSortButtonProps, type SortOption } from './toolbar/ListSortButton';
+// Forms (Slice 3 #20)
+export { SearchInput, type SearchInputProps } from './forms/SearchInput';
+// Feedback (Slice 3 #20)
+export { EmptyState, type EmptyStateProps } from './feedback/EmptyState';
+
+// Panel primitives (Slice 3 #20)
+export { DetailPanelHeader, type DetailPanelHeaderProps, type DetailPanelKind } from './panel/DetailPanelHeader';
+export { PanelTitleBlock, type PanelTitleBlockProps } from './panel/PanelTitleBlock';
+export { NestedTextBlock, type NestedTextBlockProps } from './panel/NestedTextBlock';
+export { FieldRow, type FieldRowProps } from './panel/FieldRow';
+export { PanelSectionTitle, type PanelSectionTitleProps } from './panel/PanelSectionTitle';
+export { Callout, type CalloutProps, type CalloutTone } from './panel/Callout';
+export { DetailPanelHeaderActions, type DetailPanelHeaderActionsProps } from './panel/DetailPanelHeaderActions';
+
+// Permissions (Slice 3 #20)
+export {
+  PermissionBlockedPanel,
+  type PermissionBlockedPanelProps,
+  type PermissionState,
+} from './permissions/PermissionBlockedPanel';
+// Entity (Slice 3 #20 placeholder; Slice 4 wires real node resolution)
+export {
+  LinkedEntityTrail,
+  type LinkedEntityTrailProps,
+  type EntityNodeRef,
+} from './entity/LinkedEntityTrail';

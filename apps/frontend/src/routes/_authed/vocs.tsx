@@ -5,8 +5,9 @@
 // create form, triage queue) lands in #19 / #20 / #21.
 
 import { ListShell, PageShell, WorkbenchShell } from '@fops/ui';
-import { Link, createFileRoute, useSearch } from '@tanstack/react-router';
+import { createFileRoute, useSearch } from '@tanstack/react-router';
 import { CreateRoute } from '@/features/voc/routes/CreateRoute';
+import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
 import { z } from 'zod';
 
 const vocSearchSchema = z
@@ -15,8 +16,14 @@ const vocSearchSchema = z
     action: z.enum(['create']).optional(),
     selected: z.string().uuid().optional(),
     managedSystem: z.string().optional(),
-    tab: z.string().optional(),
-    sort: z.string().optional(),
+    tab: z.enum(['untriaged', 'high', 'unassigned', 'similar', 'no-link']).optional(),
+    sort: z.enum([
+      'created_at:desc',
+      'created_at:asc',
+      'severity:desc',
+      'severity:asc',
+      'reporter_facing_status:asc',
+    ]).optional(),
     // filter.* keys reserved for #20 per-view filters. Declared as explicit
     // dot-keys here to keep .strict() — no open-ended passthrough.
     'filter.severity': z.string().optional(),
@@ -56,32 +63,24 @@ export function VocRouteShell() {
   }
   // inbox / my / default
   const view = search.view ?? 'inbox';
-  const title = view === 'my' ? 'My VOCs' : 'Inbox';
+  return <InboxShell view={view} />;
+}
+
+// ── InboxShell ────────────────────────────────────────────────────────────────
+//
+// Composition decision: useInboxRoute() returns three render slots
+// (toolbar, list, detailPanel) that are composed here inside ListShell.
+// This keeps ListShell as the ADR-0020-locked wrapper in the route file while
+// giving InboxRoute full ownership of URL state + data logic.
+// Returning an object from a hook avoids the anti-pattern of rendering
+// an object from a component function.
+
+function InboxShell({ view }: { view: 'inbox' | 'my' }) {
+  const { list, detailPanel } = useInboxRoute(view);
   return (
     <ListShell
-      toolbar={{
-        title,
-        actions: (
-          <Link
-            to="/vocs"
-            search={{ action: 'create' }}
-            className="text-sm text-accent-primary hover:underline"
-          >
-            + New VOC
-          </Link>
-        ),
-      }}
-      tabs={
-        <div className="flex gap-3 text-sm">
-          <ViewTab to={{ view: 'inbox' }} active={view === 'inbox'}>
-            Inbox
-          </ViewTab>
-          <ViewTab to={{ view: 'my' }} active={view === 'my'}>
-            My VOCs
-          </ViewTab>
-        </div>
-      }
-      list={<Placeholder kind={view} />}
+      list={list}
+      {...(detailPanel !== undefined ? { detailPanel } : {})}
     />
   );
 }
@@ -99,26 +98,3 @@ function Placeholder({ kind }: { kind: string }) {
   );
 }
 
-function ViewTab({
-  to,
-  active,
-  children,
-}: {
-  to: { view: 'inbox' | 'my' | 'triage' };
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      to="/vocs"
-      search={to}
-      className={
-        active
-          ? 'border-b-2 border-accent-primary text-text-primary pb-1'
-          : 'text-text-muted hover:text-text-primary pb-1'
-      }
-    >
-      {children}
-    </Link>
-  );
-}
