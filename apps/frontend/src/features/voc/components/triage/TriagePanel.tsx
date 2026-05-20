@@ -22,6 +22,7 @@ import {
   NestedTextBlock,
   ReporterStatusBadge,
   AnalyticsAreaPicker,
+  DetailPanelSectionNav,
   UndoToast,
   type PickerOption,
   cn,
@@ -32,6 +33,7 @@ import { useUndoableMutation } from '../../hooks/useUndoableMutation';
 import {
   executeCompensatingPatch,
   type TriageInput,
+  type TriageOutput,
   type TriageSnapshot,
 } from '../../hooks/useVocTriageMutation';
 import { apiClient, ApiError } from '@/lib/api';
@@ -63,6 +65,20 @@ export interface TriagePanelProps {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// Prototype ref (screen-voc-create.jsx:411-418): section IDs for the triage panel.
+// Owner and Cluster sections are always shown; Cluster count badge reflects similarCount.
+function buildTriageSections(similarCount: number) {
+  return [
+    { id: 'overview', label: 'Overview' },
+    { id: 'body', label: 'Body' },
+    { id: 'severity', label: 'Severity' },
+    { id: 'owner', label: 'Owner' },
+    { id: 'area', label: 'Area' },
+    ...(similarCount > 0 ? [{ id: 'cluster', label: 'Cluster', count: similarCount }] : []),
+    { id: 'summary', label: 'Summary' },
+  ];
+}
+
 export function TriagePanel({
   voc,
   onAct,
@@ -71,6 +87,8 @@ export function TriagePanel({
 }: TriagePanelProps): React.ReactElement {
   const { panelState, dispatch, dirty } = useTriagePanelState(voc);
   const { actors } = useWorkspaceActors();
+  // Ref for the scrollable body — used by DetailPanelSectionNav to observe anchors
+  const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // Panel-level lock for idempotency_key_reuse (per spec §5.3 + PLAN-21 §307)
   const [panelLocked, setPanelLocked] = React.useState(false);
@@ -105,44 +123,70 @@ export function TriagePanel({
   // (The closure in toast.custom captures undoLast at call time; the ref stays current.)
   const undoLastRef = React.useRef<() => void>(() => { /* no-op until mounted */ });
 
-  // Stable refs so callbacks used inside useUndoableMutation always see current values
+  // Stable ref so the hook callbacks always see the latest restore handler.
+  // We deliberately do NOT keep a ref to voc.id here: VocTriageScreen
+  // auto-advances the selected VOC after optimistic remove, so a vocIdRef would
+  // point at the NEXT row by the time onError/onAbort fires (REV-1 #5). All
+  // queue side-effects must close over the original mutation input instead.
   const onOptimisticRestoreRef = React.useRef(onOptimisticRestore);
   onOptimisticRestoreRef.current = onOptimisticRestore;
-  const vocIdRef = React.useRef(voc.id);
-  vocIdRef.current = voc.id;
 
   const { mutate: undoableMutate, undoLast, state: mutationState } = useUndoableMutation<
     TriageInput,
-    void,
+    TriageOutput,
     TriageSnapshot
   >({
-    mutationFn: async (input: TriageInput, signal?: AbortSignal) => {
-      await apiClient('PATCH', `/vocs/${input.vocId}`, {
+    mutationFn: async (input: TriageInput, signal?: AbortSignal): Promise<TriageOutput> => {
+      const res = await apiClient<TriageOutput>('PATCH', `/vocs/${input.vocId}`, {
         body: buildPayload(input),
         ifMatch: input.ifMatch,
         ...(signal !== undefined && { signal }),
       });
+      return res.data;
     },
     snapshot: (input: TriageInput): TriageSnapshot => {
+      // REV-1 #3: snapshot from the PRIOR voc values (what compensate must
+      // restore the VOC to), NOT from staged panelState (the new values the
+      // user just chose). If we snapshot staged values, the compensating
+      // PATCH writes the new values back with triage_state='untriaged' and
+      // permanently mutates severity/owner/AA.
       const isConfirm = input.kind === 'confirm' || input.kind === 'finding';
       return {
         vocId: input.vocId,
         ifMatch: input.ifMatch,
-        severity: isConfirm ? (panelState.severity ?? null) : null,
-        ownerUserId: isConfirm ? (panelState.ownerUserId ?? null) : null,
-        ownerTeamId: isConfirm ? (panelState.ownerTeamId ?? null) : null,
-        analyticsAreaId: isConfirm ? (panelState.analyticsAreaId ?? null) : null,
+        severity: isConfirm ? voc.severity : null,
+        ownerUserId: isConfirm ? voc.owner_user_id : null,
+        ownerTeamId: isConfirm ? voc.owner_team_id : null,
+        analyticsAreaId: isConfirm ? voc.analytics_area_id : null,
         wasConfirm: isConfirm,
       };
     },
-    compensateFn: async (snapshot: TriageSnapshot) => {
-      await executeCompensatingPatch(snapshot);
+    compensateFn: async (snapshot: TriageSnapshot, output: TriageOutput | null) => {
+      // REV-1 #4: use the FRESH updated_at from the first PATCH response as
+      // the If-Match for the compensating PATCH. The original snapshot.ifMatch
+      // (voc.updated_at at confirm time) is stale once the first PATCH commits
+      // — reusing it self-fails with conflict.stale_write.
+      const freshSnapshot: TriageSnapshot =
+        output !== null && typeof output.updated_at === 'string'
+          ? { ...snapshot, ifMatch: output.updated_at }
+          : snapshot;
+      await executeCompensatingPatch(freshSnapshot);
       // Re-insert into queue after successful compensate
       onOptimisticRestoreRef.current?.(snapshot.vocId);
     },
-    // Error matrix (PLAN-21 §302-307): handle via onError so we get the actual error object
-    onError: (err: unknown) => {
-      const vocId = vocIdRef.current;
+    // REV-1 #1: when the user undoes while the PATCH is still in-flight,
+    // useUndoableMutation aborts the controller and fires onAbort with the
+    // original input. Restore the row to the queue using that input — never
+    // current props, which may already point at the auto-advanced VOC.
+    onAbort: (input: TriageInput) => {
+      onOptimisticRestoreRef.current?.(input.vocId);
+    },
+    // Error matrix (PLAN-21 §302-307): handle via onError so we get the actual error object.
+    // REV-1 #5: use the original input.vocId (closure on the failing mutate call),
+    // never vocIdRef.current — VocTriageScreen auto-advances the selected VOC after
+    // optimistic remove, so vocIdRef.current points at the NEXT row, not the failed one.
+    onError: (err: unknown, input: TriageInput) => {
+      const vocId = input.vocId;
       if (err instanceof ApiError) {
         switch (err.code) {
           case 'conflict.stale_write':
@@ -294,6 +338,8 @@ export function TriagePanel({
 
   const isSubmitting = mutationState === 'pending';
 
+  const triageSections = buildTriageSections(voc.similar_count);
+
   return (
     <div className="flex flex-col h-full bg-surface-detail border-l border-border-subtle overflow-hidden">
       {/* Panel header */}
@@ -302,10 +348,13 @@ export function TriagePanel({
         <div className="flex items-center gap-1" />
       </div>
 
+      {/* Section nav — sticky anchor tabs (prototype: screen-voc-create.jsx:428) */}
+      <DetailPanelSectionNav sections={triageSections} scrollRef={scrollRef} />
+
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
         {/* Overview / title block */}
-        <div className="mb-6">
+        <div className="mb-6" data-anchor="overview">
           <PanelTitleBlock
             title={voc.title}
             badges={
@@ -320,7 +369,7 @@ export function TriagePanel({
         </div>
 
         {/* Description */}
-        <div className="mb-8">
+        <div className="mb-8" data-anchor="body">
           <PanelSectionTitle>Body</PanelSectionTitle>
           <NestedTextBlock>
             <span className="text-sm text-text-secondary">{voc.title}</span>

@@ -99,6 +99,8 @@ export { FieldRow, type FieldRowProps } from './panel/FieldRow';
 export { PanelSectionTitle, type PanelSectionTitleProps } from './panel/PanelSectionTitle';
 export { Callout, type CalloutProps, type CalloutTone } from './panel/Callout';
 export { DetailPanelHeaderActions, type DetailPanelHeaderActionsProps } from './panel/DetailPanelHeaderActions';
+// Panel section nav (Slice 3 #21 — deferred from #20)
+export { DetailPanelSectionNav, type DetailPanelSectionNavProps, type PanelSection } from './panel/DetailPanelSectionNav';
 
 // Permissions (Slice 3 #20)
 export {
