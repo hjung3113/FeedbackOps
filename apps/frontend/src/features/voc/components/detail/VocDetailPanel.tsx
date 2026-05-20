@@ -2,7 +2,7 @@
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
 import * as React from 'react';
-import { Skeleton, PermissionBlockedPanel, DirtyConfirmation } from '@fops/ui';
+import { Skeleton, PermissionBlockedPanel, DirtyConfirmation, DetailPanelSectionNav } from '@fops/ui';
 import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
@@ -133,6 +133,20 @@ interface FullDetailViewProps {
   me: import('@/lib/auth/useMe').MeResponse | null;
 }
 
+// Prototype ref (screen-voc.jsx:172-182): section IDs for the detail panel.
+// Execution section only shown when there's an active finding/task (Slice 4+).
+// For Slice 3, show all static sections; Internal tab maps to the internal
+// conversation tab in ConversationTimeline.
+const DETAIL_SECTIONS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'triage', label: 'Triage' },
+  { id: 'description', label: 'Description' },
+  { id: 'trail', label: 'Trail' },
+  { id: 'conversation', label: 'Public' },
+  { id: 'internal', label: 'Internal' },
+  { id: 'compose', label: 'Compose' },
+];
+
 function FullDetailView({
   voc,
   vocId,
@@ -144,6 +158,8 @@ function FullDetailView({
   // REV-1 #6: track composer dirty state; intercept panel close to show DirtyConfirmation.
   const [composerDirty, setComposerDirty] = React.useState(false);
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
+  // Scroll container ref for section nav anchor tracking
+  const scrollRef = React.useRef<HTMLDivElement>(null);
 
   function handleClose() {
     if (composerDirty) {
@@ -165,7 +181,7 @@ function FullDetailView({
 
   return (
     <>
-      <div className="flex flex-col h-full overflow-y-auto" data-testid="voc-detail-panel">
+      <div className="flex flex-col h-full" data-testid="voc-detail-panel">
         <DetailHeader
           vocId={vocId}
           displayId={voc.display_id}
@@ -173,14 +189,17 @@ function FullDetailView({
           {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
         />
 
-        <div className="flex flex-col flex-1 min-h-0 overflow-y-auto pb-16">
-          <IdentitySection voc={voc} />
-          <TriageBlock voc={voc} />
-          <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
-          <LinkedExecutionSection voc={voc} />
-          <LinkedEntityTrailSection />
-          <ConversationTimeline voc={voc} />
-          <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
+        {/* Section nav — sticky anchor tabs (prototype: screen-voc.jsx:191) */}
+        <DetailPanelSectionNav sections={DETAIL_SECTIONS} scrollRef={scrollRef} />
+
+        <div ref={scrollRef} className="flex flex-col flex-1 min-h-0 overflow-y-auto pb-16">
+          <div data-anchor="overview"><IdentitySection voc={voc} /></div>
+          <div data-anchor="triage"><TriageBlock voc={voc} /></div>
+          <div data-anchor="description"><DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} /></div>
+          <div data-anchor="trail"><LinkedExecutionSection voc={voc} /><LinkedEntityTrailSection /></div>
+          <div data-anchor="conversation"><ConversationTimeline voc={voc} /></div>
+          <div data-anchor="internal" />
+          <div data-anchor="compose"><ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} /></div>
         </div>
 
         <NextActionFooter voc={voc} />
