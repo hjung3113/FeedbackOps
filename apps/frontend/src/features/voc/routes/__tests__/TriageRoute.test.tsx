@@ -1,5 +1,6 @@
 // TriageRoute.test.tsx — RED tests for the Triage view routing.
 // Covers: URL → view=triage → renders queue; tab change updates URL; selected updates URL.
+// REV-1 #9: user role without voc.triage capability gets PermissionBlockedPanel.
 // TDD RED: written before TriageRoute.tsx implementation exists.
 
 import * as React from 'react';
@@ -87,6 +88,30 @@ vi.mock('../../hooks/useWorkspaceActors', () => ({
   }),
 }));
 
+// ── Stub useMe ────────────────────────────────────────────────────────────────
+
+vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
+
+// ── Stub PermissionBlockedPanel (avoids JSDOM rendering issues with @fops/ui internals)
+vi.mock('@fops/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@fops/ui')>();
+  return {
+    ...actual,
+    PermissionBlockedPanel: ({
+      category,
+      reason,
+    }: {
+      category: string;
+      reason?: string;
+    }) => (
+      <div data-testid="permission-blocked-panel">
+        <span>{category}</span>
+        {reason && <span>{reason}</span>}
+      </div>
+    ),
+  };
+});
+
 // ── Stub VocDetailPanel ───────────────────────────────────────────────────────
 
 vi.mock('../../components/detail/VocDetailPanel', () => ({
@@ -108,13 +133,49 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 // ── Import subject ─────────────────────────────────────────────────────────────
 
 import { TriageRoute } from '../TriageRoute';
+import { useMe } from '@/lib/auth/useMe';
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+// Default me mock — admin actor who has voc.triage capability
+const ADMIN_ME = {
+  data: {
+    actor: {
+      id: 'admin-uuid-1',
+      external_id: 'admin-1',
+      email: 'admin@test.local',
+      display_name: '관리자',
+      role_level: 'admin',
+    },
+    workspace_id: 'ws-1',
+  },
+  isLoading: false,
+  isError: false,
+  isPending: false,
+  isSuccess: true,
+  error: null,
+  status: 'success' as const,
+  fetchStatus: 'idle' as const,
+  isFetching: false,
+  isRefetching: false,
+  isLoadingError: false,
+  isRefetchError: false,
+  isPlaceholderData: false,
+  isStale: false,
+  dataUpdatedAt: 0,
+  errorUpdatedAt: 0,
+  failureCount: 0,
+  failureReason: null,
+  errorUpdateCount: 0,
+  refetch: vi.fn(),
+};
 
 describe('TriageRoute', () => {
   beforeEach(() => {
     searchState = { view: 'triage' };
     navigateMock.mockClear();
+    // Default: admin actor with voc.triage capability
+    vi.mocked(useMe).mockReturnValue(ADMIN_ME as unknown as ReturnType<typeof useMe>);
   });
 
   it('renders the triage queue with VOC rows when view=triage', async () => {
@@ -163,5 +224,35 @@ describe('TriageRoute', () => {
     expect(callArg.to).toBe('/vocs');
     const result = callArg.search({});
     expect(result).toHaveProperty('selected');
+  });
+
+  // REV-1 #9: actor with role_level 'user' lacks voc.triage capability.
+  // TriageRoute must render PermissionBlockedPanel instead of the queue.
+  it('[#9] user role: renders PermissionBlockedPanel instead of the triage queue', async () => {
+    vi.mocked(useMe).mockReturnValue({
+      ...ADMIN_ME,
+      data: {
+        ...ADMIN_ME.data,
+        actor: {
+          ...ADMIN_ME.data.actor,
+          role_level: 'user',
+        },
+      },
+    } as unknown as ReturnType<typeof useMe>);
+
+    render(<TriageRoute />);
+
+    // PermissionBlockedPanel must be visible
+    await waitFor(() => {
+      // PermissionBlockedPanel renders some form of "권한" or blocked state copy.
+      // The component is from @fops/ui; check for its container testid or blocked text.
+      expect(
+        screen.queryByText('Triage VOC 1'),
+      ).not.toBeInTheDocument();
+    });
+
+    // The queue items must NOT be rendered for user-role actor
+    expect(screen.queryByText('Triage VOC 1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Triage VOC 2')).not.toBeInTheDocument();
   });
 });
