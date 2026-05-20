@@ -42,6 +42,20 @@ describe('token-fidelity: tokens.css + semantic.css against Pack 17 fixture', ()
   const fixtureNames = new Set(PACK_17_TOKENS.map((t) => t.tokenName));
   const parsedNames = new Set(tokenProps.keys());
 
+  it('no color-valued token is stored as raw hex (#RRGGBB) — must be R G B triple', () => {
+    // Any fixture entry with a hex field MUST have the runtime value be the rgb triple.
+    // This prevents silently broken Tailwind /α utilities.
+    const colorTokensWithHex = PACK_17_TOKENS.filter((t) => t.hex !== undefined);
+    const violations: string[] = [];
+    for (const entry of colorTokensWithHex) {
+      const runtimeValue = tokenProps.get(entry.tokenName);
+      if (runtimeValue && /^#[0-9a-fA-F]{3,8}$/.test(runtimeValue.trim())) {
+        violations.push(`${entry.tokenName}: runtime value is raw hex "${runtimeValue}" — must be R G B triple "${entry.rgb}"`);
+      }
+    }
+    expect(violations, violations.join('\n')).toHaveLength(0);
+  });
+
   it('has no EXTRA tokens beyond fixture (closed-world)', () => {
     const extras = [...parsedNames].filter((n) => !fixtureNames.has(n));
     expect(extras, `Extra tokens in CSS not in fixture: ${extras.join(', ')}`).toHaveLength(0);

@@ -37,19 +37,19 @@
   --text-warning: var(--color-amber);
   --text-success: var(--color-emerald);
   --text-info: var(--color-cyan-spark);
-  --text-on-accent: #ffffff;
+  --text-on-accent: 255 255 255;       /* #ffffff */
 
   /* --- Surface tokens --- */
   --surface-canvas: var(--color-pitch-black);
-  --surface-sidebar: #eef4fb;
+  --surface-sidebar: 238 244 251;      /* #eef4fb */
   --surface-list: var(--color-pitch-black);
-  --surface-row-hover: #e7effc;
-  --surface-row-selected: #d8e7fb;
+  --surface-row-hover: 231 239 252;    /* #e7effc */
+  --surface-row-selected: 216 231 251; /* #d8e7fb */
   --surface-detail: var(--color-graphite);
   --surface-popover: var(--color-deep-slate);
   --surface-field: transparent;
-  --surface-field-filled: #ffffff;
-  --surface-blocked: #eef2f7;
+  --surface-field-filled: 255 255 255; /* #ffffff */
+  --surface-blocked: 238 242 247;      /* #eef2f7 */
   --surface-card: var(--color-graphite);
   --surface-card-elevated: var(--color-deep-slate);
 
@@ -82,7 +82,7 @@
   /* --- Severity / signal tokens --- */
   --severity-low: var(--color-storm-cloud);
   --severity-medium: var(--color-amber);
-  --severity-high: #f08a4a;
+  --severity-high: 240 138 74;         /* #f08a4a */
   --severity-critical: var(--color-warning-red);
   --confidence-low: var(--color-storm-cloud);
   --confidence-medium: var(--color-cyan-spark);

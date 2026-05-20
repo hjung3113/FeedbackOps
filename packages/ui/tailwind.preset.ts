@@ -17,14 +17,15 @@ const preset: Config = {
         // --- Surface tokens ---
         'surface-canvas': 'rgb(var(--surface-canvas) / <alpha-value>)',
         'surface-raised': 'rgb(var(--surface-raised) / <alpha-value>)',        // compat alias
-        'surface-sidebar': 'rgb(var(--color-pitch-black) / <alpha-value>)',    // uses raw; #eef4fb is not a triple
+        'surface-sidebar': 'rgb(var(--surface-sidebar) / <alpha-value>)',
         'surface-list': 'rgb(var(--surface-list) / <alpha-value>)',
-        'surface-row-hover': 'rgb(var(--color-charcoal-grey) / <alpha-value>)', // closest triple
-        'surface-row-selected': 'rgb(var(--color-charcoal-grey) / <alpha-value>)',
+        'surface-row-hover': 'rgb(var(--surface-row-hover) / <alpha-value>)',
+        'surface-row-selected': 'rgb(var(--surface-row-selected) / <alpha-value>)',
         'surface-detail': 'rgb(var(--surface-detail) / <alpha-value>)',
         'surface-popover': 'rgb(var(--surface-popover) / <alpha-value>)',
         'surface-field': 'transparent',
-        'surface-field-filled': '#ffffff',
+        'surface-field-filled': 'rgb(var(--surface-field-filled) / <alpha-value>)',
+        'surface-blocked': 'rgb(var(--surface-blocked) / <alpha-value>)',
         'surface-card': 'rgb(var(--surface-card) / <alpha-value>)',
         'surface-card-elevated': 'rgb(var(--surface-card-elevated) / <alpha-value>)',
 
@@ -37,7 +38,7 @@ const preset: Config = {
         'text-warning': 'rgb(var(--text-warning) / <alpha-value>)',
         'text-success': 'rgb(var(--text-success) / <alpha-value>)',
         'text-info': 'rgb(var(--text-info) / <alpha-value>)',
-        'text-on-accent': '#ffffff',
+        'text-on-accent': 'rgb(var(--text-on-accent) / <alpha-value>)',
         'text-inverse': 'rgb(var(--color-pitch-black) / <alpha-value>)',
 
         // --- Border tokens ---
@@ -79,7 +80,7 @@ const preset: Config = {
         // --- Severity tokens ---
         'severity-low':      'rgb(var(--color-storm-cloud) / <alpha-value>)',
         'severity-medium':   'rgb(var(--color-amber) / <alpha-value>)',
-        'severity-high':     '#f08a4a',
+        'severity-high':     'rgb(var(--severity-high) / <alpha-value>)',
         'severity-critical': 'rgb(var(--color-warning-red) / <alpha-value>)',
 
         // --- Confidence tokens ---
