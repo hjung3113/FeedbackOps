@@ -5,6 +5,10 @@ export {
   type ManagedSystemPickerProps,
   type PickerOption,
 } from './components/ManagedSystemPicker.js';
+export {
+  AnalyticsAreaPicker,
+  type AnalyticsAreaPickerProps,
+} from './components/AnalyticsAreaPicker.js';
 export { cn } from './utils/cn.js';
 
 // shadcn primitives (Pack 17, ADR-0021)
@@ -38,6 +42,9 @@ export {
   type RichEditorSurface,
   type TipTapDoc,
 } from './rich-content/RichEditor';
+// Re-export the TipTap Editor type so feature packages can type render-prop callbacks
+// (e.g. RichEditor toolbar) without depending on @tiptap/react directly.
+export type { Editor as TipTapEditor } from '@tiptap/react';
 export {
   RichContentRenderer,
   type RichContentRendererProps,
@@ -52,3 +59,8 @@ export { ListShell, type ListShellProps } from './layout/ListShell';
 export { WorkbenchShell, type WorkbenchShellProps } from './layout/WorkbenchShell';
 export { ShellHeader, type ShellHeaderProps } from './layout/ShellHeader';
 export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPanelSlot';
+
+// Form primitives (Slice 3 #19)
+export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
+// Feedback primitives (Slice 3 #19)
+export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';

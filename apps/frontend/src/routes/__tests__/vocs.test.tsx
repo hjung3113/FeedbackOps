@@ -186,7 +186,7 @@ describe('/vocs route shell selection', () => {
     });
   });
 
-  test('resolves /vocs?action=create to PageShell with New VOC', async () => {
+  test('resolves /vocs?action=create to PageShell with 새 VOC 작성', async () => {
     stubFetchMe();
     const { router, qc } = buildHarness({ initialPath: '/vocs?action=create' });
     render(
@@ -195,7 +195,7 @@ describe('/vocs route shell selection', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => {
-      expect(screen.getByText('New VOC')).toBeInTheDocument();
+      expect(screen.getByText('새 VOC 작성')).toBeInTheDocument();
     });
   });
 

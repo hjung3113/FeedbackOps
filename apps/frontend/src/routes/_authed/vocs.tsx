@@ -6,6 +6,7 @@
 
 import { ListShell, PageShell, WorkbenchShell } from '@fops/ui';
 import { Link, createFileRoute, useSearch } from '@tanstack/react-router';
+import { CreateRoute } from '@/features/voc/routes/CreateRoute';
 import { z } from 'zod';
 
 const vocSearchSchema = z
@@ -41,8 +42,8 @@ export function VocRouteShell() {
   // Per-view shell selection. spec voc.md §2 + ADR-0020 §taxonomy lock.
   if (search.action === 'create') {
     return (
-      <PageShell header={{ title: 'New VOC' }}>
-        <Placeholder kind="create" />
+      <PageShell header={{ title: '새 VOC 작성' }}>
+        <CreateRoute />
       </PageShell>
     );
   }
