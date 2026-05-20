@@ -7,7 +7,7 @@
 // C5.4 of slice3 #21.
 // Prototype ref: docs/design-prototype/screen-voc.jsx:415-468 (internal variant)
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as React from 'react';
@@ -107,10 +107,7 @@ describe('<InternalCommentComposer>', () => {
   });
 
   it('submits body_rich_content and extracted mentions[] on Add click', () => {
-    render(
-      <InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />,
-      { wrapper: makeWrapper() },
-    );
+    render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
 
     // Simulate typing content with a mention node.
     const docWithMention: import('@fops/ui').TipTapDoc = {
@@ -125,22 +122,24 @@ describe('<InternalCommentComposer>', () => {
         },
       ],
     };
-    capturedOnChange?.(docWithMention);
+    act(() => {
+      capturedOnChange?.(docWithMention);
+    });
 
     const addBtn = screen.getByRole('button', { name: /add note/i });
     fireEvent.click(addBtn);
 
     expect(mockMutate).toHaveBeenCalledTimes(1);
-    const callArg = mockMutate.mock.calls[0][0];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const callArg = (mockMutate.mock.calls[0] as unknown[])[0] as {
+      body: { body_rich_content: unknown; mentions: string[] };
+    };
     expect(callArg.body.body_rich_content).toBeDefined();
     expect(callArg.body.mentions).toContain('actor-uuid-1');
   });
 
   it('deduplicates duplicate mention nodes in the submitted mentions array', () => {
-    render(
-      <InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />,
-      { wrapper: makeWrapper() },
-    );
+    render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
 
     // Simulate doc with two mentions of the same actor.
     const docWithDuplicateMentions: import('@fops/ui').TipTapDoc = {
@@ -157,13 +156,18 @@ describe('<InternalCommentComposer>', () => {
         },
       ],
     };
-    capturedOnChange?.(docWithDuplicateMentions);
+    act(() => {
+      capturedOnChange?.(docWithDuplicateMentions);
+    });
 
     const addBtn = screen.getByRole('button', { name: /add note/i });
     fireEvent.click(addBtn);
 
     expect(mockMutate).toHaveBeenCalledTimes(1);
-    const callArg = mockMutate.mock.calls[0][0];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const callArg = (mockMutate.mock.calls[0] as unknown[])[0] as {
+      body: { mentions: string[] };
+    };
     const mentions: string[] = callArg.body.mentions;
     // Should be deduped: actor-uuid-1 only once
     expect(mentions.filter((m) => m === 'actor-uuid-1')).toHaveLength(1);
@@ -171,10 +175,7 @@ describe('<InternalCommentComposer>', () => {
   });
 
   it('Preview button is DOM-disabled (not hidden) per D-5.4', () => {
-    render(
-      <InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />,
-      { wrapper: makeWrapper() },
-    );
+    render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
 
     const previewBtn = screen.getByRole('button', { name: /preview/i });
     expect(previewBtn).toBeInTheDocument();

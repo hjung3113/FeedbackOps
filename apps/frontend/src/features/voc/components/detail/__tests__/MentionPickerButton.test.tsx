@@ -45,10 +45,7 @@ describe('<MentionPickerButton>', () => {
 
   it('lists workspace actors in the Combobox dropdown', async () => {
     const onSelect = vi.fn();
-    render(
-      <MentionPickerButton onSelect={onSelect} />,
-      { wrapper: makeWrapper() },
-    );
+    render(<MentionPickerButton onSelect={onSelect} />, { wrapper: makeWrapper() });
 
     // Click the @Mention trigger button to open the combobox.
     const triggerBtn = screen.getByRole('button', { name: /@/i });
@@ -61,10 +58,7 @@ describe('<MentionPickerButton>', () => {
 
   it('calls onSelect with actor id when an actor is chosen', async () => {
     const onSelect = vi.fn();
-    render(
-      <MentionPickerButton onSelect={onSelect} />,
-      { wrapper: makeWrapper() },
-    );
+    render(<MentionPickerButton onSelect={onSelect} />, { wrapper: makeWrapper() });
 
     // Open the picker.
     const triggerBtn = screen.getByRole('button', { name: /@/i });

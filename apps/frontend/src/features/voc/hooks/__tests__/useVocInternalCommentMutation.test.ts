@@ -86,10 +86,9 @@ describe('useVocInternalCommentMutation', () => {
     const onSuccess = vi.fn();
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
-      () => useVocInternalCommentMutation({ onSuccess }),
-      { wrapper: Wrapper },
-    );
+    const { result } = renderHook(() => useVocInternalCommentMutation({ onSuccess }), {
+      wrapper: Wrapper,
+    });
 
     await act(async () => {
       result.current.mutate(BASE_VARS);
@@ -101,8 +100,7 @@ describe('useVocInternalCommentMutation', () => {
     expect(capturedMethod.toUpperCase()).toBe('POST');
 
     // Idempotency-Key must be present.
-    const idkValue =
-      capturedHeaders['idempotency-key'] ?? capturedHeaders['Idempotency-Key'];
+    const idkValue = capturedHeaders['idempotency-key'] ?? capturedHeaders['Idempotency-Key'];
     expect(idkValue).toBeTruthy();
 
     // If-Match must carry voc.updated_at.

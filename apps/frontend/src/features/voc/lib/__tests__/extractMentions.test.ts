@@ -43,9 +43,7 @@ function docWithNoMentions(): TipTapDoc {
     content: [
       {
         type: 'paragraph',
-        content: [
-          { type: 'text', text: 'No mentions here' },
-        ],
+        content: [{ type: 'text', text: 'No mentions here' }],
       },
     ],
   };

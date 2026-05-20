@@ -11,15 +11,15 @@
 // Mount point: VocDetailPanel renders <ComposerSection voc={voc} me={me} />
 // between <ConversationTimeline> and <NextActionFooter>.
 
-import * as React from 'react';
-import type { VocDetailEnvelope } from '@fops/shared';
-import type { MeResponse } from '@/lib/auth/useMe';
+import { type ComposerSurface, useComposerDraft } from '@/features/voc/hooks/useComposerDraft';
 import { useComposerVisibility } from '@/features/voc/hooks/useComposerVisibility';
-import { useComposerDraft, type ComposerSurface } from '@/features/voc/hooks/useComposerDraft';
+import type { MeResponse } from '@/lib/auth/useMe';
+import type { VocDetailEnvelope } from '@fops/shared';
+import * as React from 'react';
 import { ComposerTabs } from './ComposerTabs';
+import { InternalCommentComposer } from './InternalCommentComposer';
 import { PublicUpdateComposer } from './PublicUpdateComposer';
 import { ReporterReplyComposer } from './ReporterReplyComposer';
-import { InternalCommentComposer } from './InternalCommentComposer';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -56,15 +56,8 @@ export function ComposerSection({ voc, me }: ComposerSectionProps): React.ReactE
   if (!visibility) return null;
 
   return (
-    <div
-      className="border-t border-border-subtle"
-      data-testid="composer-section"
-    >
-      <ComposerTabs
-        visibility={visibility}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
+    <div className="border-t border-border-subtle" data-testid="composer-section">
+      <ComposerTabs visibility={visibility} activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Composer bodies */}
       <div className="p-4">
@@ -78,7 +71,6 @@ export function ComposerSection({ voc, me }: ComposerSectionProps): React.ReactE
           <InternalCommentComposer voc={voc} me={me} />
         )}
       </div>
-
     </div>
   );
 }
