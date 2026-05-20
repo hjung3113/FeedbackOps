@@ -24,6 +24,12 @@ export function ConversationTimeline({ voc }: ConversationTimelineProps): React.
     (e) => e.kind === 'internal_comment',
   );
 
+  // TODO(#21): Hide the "내부" tab when viewer is Reporter-only. Server already
+  // returns empty internal_comment array for Reporter-only viewers, but rendering
+  // the tab still hints at the existence of internal traffic they aren't meant
+  // to know about. REV-1 cycle 1 M1 — deferred to #21 alongside composer +
+  // permission-aware viewer logic (needs useMe + voc.reporter_id comparison +
+  // role_level check).
   return (
     <div>
       <PanelSectionTitle>대화</PanelSectionTitle>

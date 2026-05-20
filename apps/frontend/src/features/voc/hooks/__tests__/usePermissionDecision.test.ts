@@ -58,7 +58,7 @@ describe('usePermissionDecision', () => {
     expect(usePermissionDecision(entity, '_self')).toBeNull();
   });
 
-  test('returns null and warns on unknown state (BE drift)', () => {
+  test('defaults to denied for `_self` on unknown state (BE drift safety, REV-1 M2)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const entity = {
       permission_decisions: {
@@ -66,12 +66,26 @@ describe('usePermissionDecision', () => {
       },
     };
     const result = usePermissionDecision(entity, '_self');
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result?.state).toBe('denied');
+    expect(result?.reason).toBe('권한 결정 데이터를 해석할 수 없습니다.');
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('[usePermissionDecision]'),
       'unknown_future_state',
       expect.stringContaining('BE schema drift'),
     );
+  });
+
+  test('returns null on unknown state for non-_self keys (no safety fallback)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const entity = {
+      permission_decisions: {
+        linkedFinding: { state: 'unknown_future_state' },
+      },
+    };
+    const result = usePermissionDecision(entity, 'linkedFinding');
+    expect(result).toBeNull();
+    expect(warnSpy).toHaveBeenCalled();
   });
 
   test('returns null when permission_decisions is absent', () => {

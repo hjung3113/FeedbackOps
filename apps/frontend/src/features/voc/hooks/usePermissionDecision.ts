@@ -36,6 +36,14 @@ export function usePermissionDecision(
       r['state'],
       '— BE schema drift?',
     );
+    // For the `_self` key (controls whether the orchestrator renders the
+    // full envelope vs the permission-blocked panel), defaulting to `null`
+    // would let the orchestrator fall through to the full envelope path and
+    // potentially leak data that BE intended to hide. Default to denied so
+    // the UI degrades safely on schema drift. (REV-1 cycle 1 M2 fix.)
+    if (key === '_self') {
+      return { state: 'denied', reason: '권한 결정 데이터를 해석할 수 없습니다.' };
+    }
     return null;
   }
 
