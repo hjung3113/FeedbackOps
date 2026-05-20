@@ -22,7 +22,7 @@ import {
   fetchManagedSystems,
   registerAnalyticsArea,
   updateAnalyticsArea,
-} from '../../../lib/api.js';
+} from '../../../lib/api';
 
 export const Route = createFileRoute('/_authed/admin/analytics-areas')({
   component: AnalyticsAreasAdminPage,

@@ -20,7 +20,7 @@ import {
   fetchManagedSystems,
   registerManagedSystem,
   updateManagedSystem,
-} from '../../../lib/api.js';
+} from '../../../lib/api';
 
 export const Route = createFileRoute('/_authed/admin/managed-systems')({
   component: ManagedSystemsAdminPage,

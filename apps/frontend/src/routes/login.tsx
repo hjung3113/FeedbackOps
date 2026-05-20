@@ -18,7 +18,7 @@
 import { Button } from '@fops/ui';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, createFileRoute, useNavigate } from '@tanstack/react-router';
-import { mockLogin } from '../lib/api.js';
+import { mockLogin } from '../lib/api';
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,

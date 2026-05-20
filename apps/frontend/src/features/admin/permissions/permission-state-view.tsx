@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import type { FrontendPermissionState, PermissionDecision } from '../../../lib/api.js';
+import type { FrontendPermissionState, PermissionDecision } from '../../../lib/api';
 import { RequestAccessButton } from './request-access-button.js';
 
 export interface PermissionStateViewProps {
