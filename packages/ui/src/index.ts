@@ -5,6 +5,10 @@ export {
   type ManagedSystemPickerProps,
   type PickerOption,
 } from './components/ManagedSystemPicker.js';
+export {
+  AnalyticsAreaPicker,
+  type AnalyticsAreaPickerProps,
+} from './components/AnalyticsAreaPicker.js';
 export { cn } from './utils/cn.js';
 
 // shadcn primitives (Pack 17, ADR-0021)

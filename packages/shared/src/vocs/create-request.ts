@@ -18,6 +18,10 @@ export const tipTapDocSchema = z.object({
 });
 export type TipTapDoc = z.infer<typeof tipTapDocSchema>;
 
+export function emptyTipTapDoc(): TipTapDoc {
+  return { type: 'doc', content: [] };
+}
+
 // Slice 3 #22 will define this fully; the create-request only needs a stub.
 export const attachmentRefSchema = z.object({
   id: z.string().uuid(),
