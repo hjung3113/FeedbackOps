@@ -76,7 +76,7 @@ beforeEach(() => {
     failureReason: null,
     errorUpdateCount: 0,
     refetch: vi.fn(),
-  } as ReturnType<typeof useMe>);
+  } as unknown as ReturnType<typeof useMe>);
 });
 
 describe('<ComposerSection>', () => {

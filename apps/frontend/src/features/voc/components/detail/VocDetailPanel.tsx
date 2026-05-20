@@ -14,6 +14,7 @@ import { DescriptionSection } from './DescriptionSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
 import { ConversationTimeline } from './ConversationTimeline';
+import { ComposerSection } from './ComposerSection';
 import { NextActionFooter } from './NextActionFooter';
 import { DetailPanelNotFound } from './DetailPanelNotFound';
 
@@ -124,6 +125,7 @@ export function VocDetailPanel({
         <LinkedExecutionSection voc={voc} />
         <LinkedEntityTrailSection />
         <ConversationTimeline voc={voc} />
+        <ComposerSection voc={voc} me={me} />
       </div>
 
       <NextActionFooter voc={voc} />
