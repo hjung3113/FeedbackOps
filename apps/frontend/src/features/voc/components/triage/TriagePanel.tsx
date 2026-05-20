@@ -1,17 +1,17 @@
 /**
- * TriagePanel — read-only first pass (Chunk 1).
+ * TriagePanel — full read+pick pass (Chunk 2).
  *
  * Prototype ref: screen-voc-create.jsx:393-587
  * Renders the right-column detail panel in the WorkbenchShell triage view.
  *
- * Chunk 1 scope: layout sections are rendered read-only.
- * Severity/Owner pickers are static display badges — wired in Chunk 2.
- * Dirty state is plumbed (useTriagePanelState) but action buttons are stubbed.
+ * Chunk 2 scope: wires SeverityPicker, OwnerPicker, AnalyticsAreaPicker,
+ * ClusterSectionReadOnly, TriageSummaryCard, TriageActions.
+ * TriageActions.onConfirm fires no network request — stubbed until Chunk 3.
  *
  * Token translations (PROTOTYPE-TO-PACK17.md §3.5):
  *   .panel-scroll → pt-7 pr-6 pb-8 pl-6 overflow-y-auto flex-1
  *   .panel-section → mb-8 (last child mb-0)
- *   .panel-footer → border-t border-border-subtle p-5 flex flex-col gap-2 bg-surface-detail
+ *   .panel-footer handled by TriageActions component
  */
 
 import * as React from 'react';
@@ -19,20 +19,27 @@ import type { VocListItem } from '@fops/shared';
 import {
   PanelSectionTitle,
   PanelTitleBlock,
-  FieldRow,
+  NestedTextBlock,
   ReporterStatusBadge,
-  SeverityBadge,
+  AnalyticsAreaPicker,
+  type PickerOption,
   cn,
 } from '@fops/ui';
 import { useTriagePanelState } from '../../hooks/useTriagePanelState';
+import { useWorkspaceActors } from '../../hooks/useWorkspaceActors';
+import { SeverityPicker, type SeverityLevel } from './SeverityPicker';
+import { OwnerPicker, type OwnerCandidate } from './OwnerPicker';
+import { TriageSummaryCard } from './TriageSummaryCard';
+import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
+import { TriageActions } from './TriageActions';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface TriagePanelProps {
   voc: VocListItem;
   /**
-   * Stub callback for Chunk 1 — called when the user clicks action buttons.
-   * Chunk 3 will wire real mutation.
+   * Stub callback — called when the user triggers an action.
+   * Chunk 3 will wire real mutation for 'confirm'.
    */
   onAct?: (kind: 'confirm' | 'finding' | 'skip') => void;
 }
@@ -40,11 +47,33 @@ export interface TriagePanelProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function TriagePanel({ voc, onAct }: TriagePanelProps): React.ReactElement {
-  const { panelState, dirty } = useTriagePanelState(voc);
+  const { panelState, dispatch, dirty } = useTriagePanelState(voc);
+  const { actors } = useWorkspaceActors();
 
-  // Derived display values (Chunk 2 will wire interactive pickers)
-  const displaySeverity = panelState.severity;
-  const ownerMissing = panelState.ownerUserId === null && panelState.ownerTeamId === null;
+  // Build owner candidates from workspace actors list
+  const candidates: OwnerCandidate[] = React.useMemo(() => {
+    if (!actors) return [];
+    return actors.map((a) => ({
+      id: a.id,
+      display_name: a.display_name,
+      kind: a.kind,
+    }));
+  }, [actors]);
+
+  // Build actor map for TriageSummaryCard display
+  const actorMap = React.useMemo(() => {
+    const map = new Map<string, { display_name: string }>();
+    for (const c of candidates) {
+      map.set(c.id, { display_name: c.display_name });
+    }
+    return map;
+  }, [candidates]);
+
+  // Stub analytics area options — real options come from useAnalyticsAreas in a later commit
+  // TODO(#21 Chunk 2): wire real AA options from useAnalyticsAreas when available
+  const aaOptions: PickerOption[] = [];
+
+  const currentOwnerId = panelState.ownerUserId ?? panelState.ownerTeamId;
 
   return (
     <div className="flex flex-col h-full bg-surface-detail border-l border-border-subtle overflow-hidden">
@@ -58,6 +87,7 @@ export function TriagePanel({ voc, onAct }: TriagePanelProps): React.ReactElemen
 
       {/* Scrollable body — .panel-scroll (§3.5): pt-7 pr-6 pb-8 pl-6 */}
       <div className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
+
         {/* Overview / title block — .panel-title-block (§3.5): mb-6 */}
         <div className="mb-6">
           <PanelTitleBlock
@@ -73,119 +103,82 @@ export function TriagePanel({ voc, onAct }: TriagePanelProps): React.ReactElemen
           />
         </div>
 
-        {/* Severity section — read-only display (Chunk 2: SeverityPicker) */}
+        {/* Description — prototype line 440-442 */}
         <div className="mb-8">
+          <PanelSectionTitle>Body</PanelSectionTitle>
+          {/* NestedTextBlock for plain-text description fallback */}
+          <NestedTextBlock>
+            <span className="text-sm text-text-secondary">{voc.title}</span>
+          </NestedTextBlock>
+        </div>
+
+        {/* Severity section — SeverityPicker (§3.12) */}
+        {/* Prototype: screen-voc-create.jsx:444-464 */}
+        <div className={cn('mb-8')} data-anchor="severity">
           <PanelSectionTitle>Severity 결정</PanelSectionTitle>
-          <FieldRow label="현재 심각도">
-            {displaySeverity !== null ? (
-              <SeverityBadge severity={displaySeverity as 'low' | 'medium' | 'high' | 'critical'} />
-            ) : (
-              <span className="text-sm text-text-muted">미지정</span>
-            )}
-          </FieldRow>
+          <SeverityPicker
+            value={(panelState.severity as SeverityLevel) ?? null}
+            onChange={(sev) => {
+              dispatch({ type: 'set_severity', severity: sev });
+            }}
+          />
         </div>
 
-        {/* Owner section — read-only display (Chunk 2: OwnerPicker) */}
-        <div className="mb-8">
+        {/* Owner section — OwnerPicker (§3.15) */}
+        {/* Prototype: screen-voc-create.jsx:466-491 */}
+        <div className="mb-8" data-anchor="owner">
           <PanelSectionTitle>Owner 배정</PanelSectionTitle>
-          <FieldRow label="담당자">
-            {ownerMissing ? (
-              <span className="text-sm text-text-danger">Owner 없음</span>
-            ) : panelState.ownerUserId !== null ? (
-              <span className="text-sm text-text-primary">
-                {panelState.ownerUserId.slice(0, 8)}…
-              </span>
-            ) : (
-              <span className="text-sm text-text-primary">
-                Team {panelState.ownerTeamId?.slice(0, 8)}…
-              </span>
-            )}
-          </FieldRow>
+          <OwnerPicker
+            candidates={candidates}
+            value={currentOwnerId}
+            onChange={({ ownerUserId, ownerTeamId }) => {
+              dispatch({ type: 'set_owner', ownerUserId, ownerTeamId });
+            }}
+          />
         </div>
 
-        {/* Analytics Area section — read-only (Chunk 2: AnalyticsAreaPicker) */}
-        <div className="mb-8">
+        {/* Analytics Area section */}
+        {/* Prototype: screen-voc-create.jsx:493-510 */}
+        <div className="mb-8" data-anchor="area">
           <PanelSectionTitle>Analytics Area 연결</PanelSectionTitle>
-          <FieldRow label="Analytics Area">
-            {panelState.analyticsAreaId !== null ? (
-              <span className="text-sm text-text-primary">
-                {panelState.analyticsAreaId.slice(0, 8)}…
-              </span>
-            ) : (
-              <span className="text-sm text-text-muted">없음</span>
-            )}
-          </FieldRow>
+          <AnalyticsAreaPicker
+            options={aaOptions}
+            value={panelState.analyticsAreaId}
+            onChange={(id) => {
+              dispatch({ type: 'set_analytics_area', analyticsAreaId: id });
+            }}
+            placeholder="Analytics Area 선택"
+            testId="triage-aa-picker"
+          />
+          <p className="text-xs text-text-muted mt-2 leading-relaxed">
+            Analytics Area는 권한 경계가 아닙니다. 분류·기본값 용도로만 사용됩니다.
+          </p>
         </div>
 
-        {/* Triage decision summary — read-only preview (Chunk 2: TriageSummaryCard) */}
-        <div className="mb-0">
+        {/* Cluster section — read-only empty state (Slice 3) */}
+        {/* Prototype: screen-voc-create.jsx:512-541 */}
+        <ClusterSectionReadOnly similarCount={voc.similar_count} />
+
+        {/* Triage 결과 미리보기 */}
+        {/* Prototype: screen-voc-create.jsx:543-569 */}
+        <div className="mb-0" data-anchor="summary">
           <PanelSectionTitle>Triage 결과 미리보기</PanelSectionTitle>
-          <div className="bg-surface-canvas rounded-md p-3 flex flex-col gap-2.5">
-            <FieldRow label="Severity">
-              {displaySeverity !== null ? (
-                <SeverityBadge severity={displaySeverity as 'low' | 'medium' | 'high' | 'critical'} />
-              ) : (
-                <span className="text-text-muted text-sm">미지정</span>
-              )}
-            </FieldRow>
-            <FieldRow label="Owner">
-              {ownerMissing ? (
-                <span className="text-sm text-text-muted">미지정</span>
-              ) : (
-                <span className="text-sm text-text-primary">
-                  {panelState.ownerUserId ?? panelState.ownerTeamId}
-                </span>
-              )}
-            </FieldRow>
-            <FieldRow label="Analytics Area">
-              {panelState.analyticsAreaId !== null ? (
-                <span className="text-sm text-text-primary">{panelState.analyticsAreaId.slice(0, 8)}</span>
-              ) : (
-                <span className="text-sm text-text-muted">없음</span>
-              )}
-            </FieldRow>
-          </div>
+          <TriageSummaryCard
+            panelState={panelState}
+            actorMap={actorMap}
+          />
         </div>
       </div>
 
-      {/* Panel footer — .panel-footer (§3.5) */}
-      {/* Prototype: btn-block primary "Triage 확정 & 다음 VOC" (disabled when !dirty)
-          + secondary "Finding 만들기" + subtle "보류" */}
-      <div
-        className={cn(
-          'border-t border-border-subtle p-5 flex flex-col gap-2 bg-surface-detail shrink-0',
-        )}
-      >
-        <button
-          type="button"
-          disabled={!dirty}
-          onClick={() => { onAct?.('confirm'); }}
-          className={cn(
-            'w-full inline-flex items-center justify-center gap-1.5',
-            'h-8 px-3.5 rounded-md text-sm font-semibold',
-            'bg-accent-primary text-text-on-accent',
-            !dirty && 'opacity-40 pointer-events-none',
-          )}
-        >
-          Triage 확정 &amp; 다음 VOC
-        </button>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => { onAct?.('finding'); }}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 h-7 px-2.5 rounded-md text-[13px] font-medium bg-surface-card text-text-primary border border-border-subtle hover:bg-surface-popover"
-          >
-            Finding 만들기
-          </button>
-          <button
-            type="button"
-            onClick={() => { onAct?.('skip'); }}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 h-7 px-2.5 rounded-md text-[13px] font-medium text-text-secondary hover:bg-surface-card hover:text-text-primary"
-          >
-            보류
-          </button>
-        </div>
-      </div>
+      {/* Panel footer — TriageActions */}
+      {/* Prototype: screen-voc-create.jsx:572-584 */}
+      <TriageActions
+        dirty={dirty}
+        submitting={false}
+        onConfirm={() => { onAct?.('confirm'); }}
+        onFinding={() => { onAct?.('finding'); }}
+        onSkip={() => { onAct?.('skip'); }}
+      />
     </div>
   );
 }

@@ -77,6 +77,16 @@ vi.mock('../../hooks/useVocList', () => ({
   }),
 }));
 
+// Stub useWorkspaceActors — added in Chunk 2; TriagePanel now calls it.
+vi.mock('../../hooks/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({
+    actors: [],
+    isSuccess: true,
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 // ── Stub VocDetailPanel ───────────────────────────────────────────────────────
 
 vi.mock('../../components/detail/VocDetailPanel', () => ({
