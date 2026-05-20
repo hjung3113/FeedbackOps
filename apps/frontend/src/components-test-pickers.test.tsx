@@ -3,11 +3,15 @@
 // chip-click semantics; the dumb-prop contract (PickerOption[],
 // onChange(string|null), disabled, testId) is preserved unchanged. The DOM
 // assertion surface now matches the Radix ToggleGroup that ships per spec §3.4.
+//
+// AnalyticsAreaPicker is feature-local in packages/ui (not exported from
+// @fops/ui public index) until a real second consumer lands (likely #21).
+// Its contract tests live in packages/ui/__tests__/pickers.test.tsx.
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { AnalyticsAreaPicker, ManagedSystemPicker } from '@fops/ui';
+import { ManagedSystemPicker } from '@fops/ui';
 
 describe('<ManagedSystemPicker>', () => {
   test('renders options and fires onChange with the selected id', () => {
@@ -45,20 +49,5 @@ describe('<ManagedSystemPicker>', () => {
       />,
     );
     expect(screen.getByText('Alpha (archived)')).toBeInTheDocument();
-  });
-});
-
-describe('<AnalyticsAreaPicker>', () => {
-  test('disabled prop is announced on the picker root via aria-disabled', () => {
-    render(
-      <AnalyticsAreaPicker
-        options={[{ id: 'a', label: 'Alpha' }]}
-        value={null}
-        onChange={() => {}}
-        disabled
-        testId="aa-picker"
-      />,
-    );
-    expect(screen.getByTestId('aa-picker')).toHaveAttribute('aria-disabled', 'true');
   });
 });

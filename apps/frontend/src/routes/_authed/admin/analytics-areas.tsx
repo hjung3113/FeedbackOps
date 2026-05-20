@@ -5,7 +5,7 @@
 // GET /analytics-areas?managed_system_id=… and shows a flat list. Strict
 // functional rendering per the design-HTML-pending rule.
 
-import { AnalyticsAreaPicker, Button, ManagedSystemPicker, type PickerOption } from '@fops/ui';
+import { Button, ManagedSystemPicker, type PickerOption } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -334,7 +334,3 @@ function AnalyticsAreaRow({
   );
 }
 
-// Unused export silences "AnalyticsAreaPicker has no consumer" complaints
-// from boundary tooling; the picker is exported from @fops/ui and may be
-// consumed by routes that don't exist yet (Slice 3+).
-export const _unusedPickerImport = AnalyticsAreaPicker;
