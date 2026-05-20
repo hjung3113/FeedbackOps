@@ -1,12 +1,16 @@
+import { RichContentRenderer, RichEditor, type RichEditorSurface, type TipTapDoc } from '@fops/ui';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { RichEditor, RichContentRenderer, type TipTapDoc } from '@fops/ui';
 import { errorMapper } from '../lib/api/errorMapper';
 import type { ApiErrorEnvelope } from '../lib/api/types';
 
-const SURFACES = ['voc-description', 'reporter-reply', 'public-update', 'internal-comment'] as const;
-type Surface = (typeof SURFACES)[number];
+const SURFACES: RichEditorSurface[] = [
+  'voc-description',
+  'reporter-reply',
+  'public-update',
+  'internal-comment',
+];
 
 /** Dev-only: fire a fake ApiErrorEnvelope through errorMapper → sonner toast. */
 function triggerToast(envelope: ApiErrorEnvelope, onRetry?: () => void) {
@@ -28,7 +32,7 @@ function triggerToast(envelope: ApiErrorEnvelope, onRetry?: () => void) {
 }
 
 function DevRichEditorPage() {
-  const [surface, setSurface] = useState<Surface>('voc-description');
+  const [surface, setSurface] = useState<RichEditorSurface>('voc-description');
   const [mode, setMode] = useState<'reporter_visible' | 'internal'>('internal');
   const [doc, setDoc] = useState<TipTapDoc>({
     type: 'doc',
@@ -47,7 +51,9 @@ function DevRichEditorPage() {
     <div className="p-8 max-w-5xl mx-auto space-y-6">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-text-primary">RichEditor demo (DEV only)</h1>
-        <p className="text-sm text-text-muted">surface = opaque pass-through. Backend sanitizer authoritative.</p>
+        <p className="text-sm text-text-muted">
+          surface = opaque pass-through. Backend sanitizer authoritative.
+        </p>
       </header>
 
       <div className="flex gap-3 flex-wrap">
@@ -56,7 +62,7 @@ function DevRichEditorPage() {
           <select
             className="ml-2 px-2 py-1 border border-border-subtle rounded"
             value={surface}
-            onChange={(e) => setSurface(e.target.value as Surface)}
+            onChange={(e) => setSurface(e.target.value as RichEditorSurface)}
           >
             {SURFACES.map((s) => (
               <option key={s} value={s}>
@@ -80,7 +86,13 @@ function DevRichEditorPage() {
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-text-secondary">Editor</h2>
-        <RichEditor surface={surface} value={doc} onChange={setDoc} placeholder="..." minHeight={140} />
+        <RichEditor
+          surface={surface}
+          value={doc}
+          onChange={setDoc}
+          placeholder="..."
+          minHeight={140}
+        />
       </section>
 
       <section className="space-y-2">
@@ -92,7 +104,9 @@ function DevRichEditorPage() {
 
       {/* DEV: Sanitizer-error → toast smoke test */}
       <section className="space-y-2 border border-dashed border-border-strong rounded-md p-3">
-        <h2 className="text-sm font-medium text-text-secondary">Sanitizer error toast (dev smoke)</h2>
+        <h2 className="text-sm font-medium text-text-secondary">
+          Sanitizer error toast (dev smoke)
+        </h2>
         <p className="text-xs text-text-muted">
           Simulates backend sanitizer rejection envelopes through errorMapper → sonner. Validates
           the editor → sanitizer → toast UX before real network calls land in #19.
@@ -114,9 +128,8 @@ function DevRichEditorPage() {
             type="button"
             className="px-3 py-1.5 text-sm rounded border border-border-subtle bg-surface-field hover:bg-surface-row-hover"
             onClick={() =>
-              triggerToast(
-                { code: 'conflict.stale_write', message: '' },
-                () => toast.info('최신 내용을 불러옵니다…'),
+              triggerToast({ code: 'conflict.stale_write', message: '' }, () =>
+                toast.info('최신 내용을 불러옵니다…'),
               )
             }
           >

@@ -1,20 +1,27 @@
-import * as React from 'react';
-import { useEditor, EditorContent, type Editor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
-import Underline from '@tiptap/extension-underline';
-import Placeholder from '@tiptap/extension-placeholder';
 import type { JSONContent } from '@tiptap/core';
+import Link from '@tiptap/extension-link';
+import Placeholder from '@tiptap/extension-placeholder';
+import Underline from '@tiptap/extension-underline';
+import { type Editor, EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import * as React from 'react';
+import { cn } from '../utils/cn';
 import { AttachmentRef } from './extensions/attachmentRef';
 import { Mention } from './extensions/mention';
-import { cn } from '../utils/cn';
 
 // TipTapDoc is a branded alias over JSONContent for type safety at feature boundaries.
 // The `content` array is typed as JSONContent[] to satisfy @tiptap/core's strict overloads.
 export type TipTapDoc = JSONContent & { type: 'doc' };
 
+/** Spec-locked surface identifiers. Typos compile-fail here instead of silently producing wrong toolbar config in #19. */
+export type RichEditorSurface =
+  | 'voc-description'
+  | 'reporter-reply'
+  | 'public-update'
+  | 'internal-comment';
+
 export interface RichEditorProps {
-  surface: string;
+  surface: RichEditorSurface;
   value?: TipTapDoc;
   defaultValue?: TipTapDoc;
   onChange?: (doc: TipTapDoc) => void;
@@ -76,14 +83,21 @@ export function RichEditor({
 
   return (
     <div
-      className={cn('rich-editor border border-border-subtle rounded-md bg-surface-canvas', className)}
+      className={cn(
+        'rich-editor border border-border-subtle rounded-md bg-surface-canvas',
+        className,
+      )}
       data-surface={surface}
     >
       {toolbar?.(editor)}
       <EditorContent
         editor={editor}
         className="prose prose-sm max-w-none px-3 py-2 focus:outline-none"
-        style={minHeight ? { minHeight: typeof minHeight === 'number' ? `${minHeight}px` : minHeight } : undefined}
+        style={
+          minHeight
+            ? { minHeight: typeof minHeight === 'number' ? `${minHeight}px` : minHeight }
+            : undefined
+        }
       />
     </div>
   );
