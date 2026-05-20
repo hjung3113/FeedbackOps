@@ -37,7 +37,7 @@ const UPDATED_AT = '2026-05-01T00:00:00.000Z';
 const SUCCESS_VARS: EditDescriptionVars = {
   vocId: VOC_ID,
   ifMatch: UPDATED_AT,
-  body: { title: 'Updated title', description_rich_content: null, attachments: [] },
+  body: { title: 'Updated title', attachments: [] },
 };
 
 // ── 1. Success: correct body + headers sent ────────────────────────────────
@@ -51,10 +51,20 @@ describe('useVocEditDescriptionMutation', () => {
   });
 
   it('sends PATCH with Idempotency-Key and If-Match headers on success', async () => {
-    let capturedReq: Request | null = null;
+    let capturedUrl = '';
+    let capturedMethod = '';
+    let capturedHeaders: Record<string, string> = {};
 
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      capturedReq = new Request(input, init);
+      capturedUrl = typeof input === 'string' ? input : input.toString();
+      capturedMethod = init?.method ?? 'GET';
+      // Headers may be a plain object in RequestInit
+      const rawHeaders = init?.headers;
+      if (rawHeaders && typeof rawHeaders === 'object' && !(rawHeaders instanceof Headers)) {
+        capturedHeaders = rawHeaders as Record<string, string>;
+      } else if (rawHeaders instanceof Headers) {
+        rawHeaders.forEach((v, k) => { capturedHeaders[k] = v; });
+      }
       return jsonResponse({
         id: VOC_ID,
         title: 'Updated title',
@@ -73,15 +83,18 @@ describe('useVocEditDescriptionMutation', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(capturedReq).not.toBeNull();
-    const req = capturedReq!;
     // Must hit PATCH /vocs/:id/description
-    expect(req.url).toContain(`/vocs/${VOC_ID}/description`);
-    expect(req.method).toBe('PATCH');
-    // Idempotency-Key must be present (auto-minted by apiClient)
-    expect(req.headers.get('idempotency-key')).toBeTruthy();
+    expect(capturedUrl).toContain(`/vocs/${VOC_ID}/description`);
+    expect(capturedMethod.toUpperCase()).toBe('PATCH');
+    // Idempotency-Key must be present (auto-minted by apiClient) — key is
+    // lowercased by the Headers object but stored as-is in the plain object.
+    const idkLower = 'idempotency-key';
+    const idkMixed = 'Idempotency-Key';
+    const idkValue = capturedHeaders[idkLower] ?? capturedHeaders[idkMixed];
+    expect(idkValue).toBeTruthy();
     // If-Match must carry the voc's updated_at
-    expect(req.headers.get('if-match')).toBe(UPDATED_AT);
+    const ifMatchValue = capturedHeaders['If-Match'] ?? capturedHeaders['if-match'];
+    expect(ifMatchValue).toBe(UPDATED_AT);
   });
 
   // ── 2. 409 triage_already_committed ──────────────────────────────────────
