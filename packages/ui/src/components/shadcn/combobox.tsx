@@ -127,7 +127,10 @@ export function Combobox({
   // the popover and primes the first option as active.
   function handleTriggerKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
     if (disabled) return;
-    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ')) {
+    if (
+      !open &&
+      (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ')
+    ) {
       e.preventDefault();
       setOpen(true);
       setActiveIndex(0);
@@ -135,10 +138,16 @@ export function Combobox({
   }
 
   return (
-    <Popover open={open} onOpenChange={(next) => { if (!disabled) setOpen(next); }}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (!disabled) setOpen(next);
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
+          // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires button+role="combobox"; native <select> does not support this popover-with-search pattern
           role="combobox"
           aria-expanded={open}
           aria-haspopup="listbox"
@@ -161,6 +170,7 @@ export function Combobox({
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
         <div className="border-b border-border-subtle px-3 py-2">
           <input
+            // biome-ignore lint/a11y/noAutofocus: WAI-ARIA APG §combobox requires search input to auto-focus when popup opens so keyboard users can immediately type to filter
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -172,8 +182,11 @@ export function Combobox({
             className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
           />
         </div>
+        {/* biome-ignore lint/a11y/useFocusableInteractive: WAI-ARIA APG §combobox — listbox focus managed via aria-activedescendant on the search input; container itself does not need tabIndex */}
         <ul
           id={listboxId}
+          // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires <ul role="listbox"> as scrollable container; native <select> does not support this layout
+          // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: <ul role="listbox"> is canonical ARIA listbox per APG §combobox; keyboard managed via search input onKeyDown
           role="listbox"
           aria-label="Options"
           className="max-h-60 overflow-y-auto py-1"
@@ -184,9 +197,12 @@ export function Combobox({
             </li>
           ) : (
             filtered.map((option, idx) => (
+              // biome-ignore lint/a11y/useKeyWithClickEvents: WAI-ARIA APG §combobox — keyboard selection handled by search input onKeyDown (Enter selects activeIndex); onClick is the pointer path
               <li
                 key={option.value}
                 id={`${optionIdPrefix}-opt-${idx}`}
+                // biome-ignore lint/a11y/useSemanticElements: WAI-ARIA APG §combobox requires <li role="option">; native <option> only works inside <select>
+                // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: <li role="option"> is canonical ARIA listbox option per APG §combobox
                 role="option"
                 aria-selected={option.value === value}
                 tabIndex={-1}
