@@ -73,3 +73,7 @@ export { InternalTaskBadge, type InternalTaskBadgeProps, type InternalTaskStatus
 export { ManagedSystemPill, type ManagedSystemPillProps } from './badges/ManagedSystemPill';
 export { OutlineBadge, type OutlineBadgeProps } from './badges/OutlineBadge';
 export { EntityIconBadge, type EntityIconBadgeProps, type EntityIconType, ENTITY_ICON_MAP } from './badges/EntityIconBadge';
+
+// Identity (Slice 3 #20)
+export { UserAvatar, type UserAvatarProps, type AvatarUser } from './identity/UserAvatar';
+export { UserChip, type UserChipProps } from './identity/UserChip';
