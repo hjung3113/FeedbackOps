@@ -118,3 +118,22 @@
 
 **RED → GREEN test:** `apps/frontend/src/features/voc/hooks/__tests__/useUndoableMutation.abortRace.test.ts` — 3 cases: (a) abort-after-settle runs compensateFn with the server output, (b) second mutate fires onAbort with the first input, (c) preempted call resolving later runs compensateFn against the first snapshot/output.
 
+
+---
+
+## REV-3 (codex Cycle 3) — Cluster X: undo toast token binding
+
+### D-REV3-CX: per-call CallToken binds each UndoToast to its originating call
+
+**Origin:** codex REV-3 P1 (`TriagePanel.tsx:267`, REV-2 #2 partial residual).
+
+**Issue:** `UndoToast.onAction` invoked `undoLastRef.current()`, which reads the latest hook state. After call A settled and a follow-up call B started, the still-visible toast A's button now operated on call B — clicking A's stale toast aborted/undid the unrelated newer call.
+
+**Fix:**
+- `useUndoableMutation` mints a monotonic `CallToken` for every `mutate()` invocation and returns it. The token is stored on the per-call `Call` closure.
+- `undoLast(callToken?)` accepts an optional token. When provided and the current call's token doesn't match, the call is a no-op (the toast is stale). Omitting the token preserves the legacy "undo the latest" semantics for callers that don't manage tokens.
+- `TriagePanel` captures the token returned by `undoableMutate(input)` in both `handleConfirmOrFinding` and `handleSkip`, and the `UndoToast.onAction` closure passes that token to `undoLastRef.current(callToken)`. Stale toasts (issued before a follow-up mutation replaced the current call) now no-op.
+
+**Files modified:** `apps/frontend/src/features/voc/hooks/useUndoableMutation.ts`, `apps/frontend/src/features/voc/components/triage/TriagePanel.tsx`.
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/components/triage/__tests__/TriagePanel.undoTokenBinding.test.tsx` — call A settles, call B starts and stays in-flight, clicking toast A asserts (a) call B's controller is not aborted and (b) `onOptimisticRestore` is not invoked.

@@ -61,9 +61,27 @@ export interface UseUndoableMutationOptions<TInput, TOutput, TSnapshot = TInput>
   onAbort?: (input: TInput) => void;
 }
 
+/**
+ * Opaque token returned by `mutate()` identifying that specific call. Pass it
+ * back to `undoLast(token)` to bind an undo trigger (e.g. a toast button) to
+ * the originating call only. If the current call's token doesn't match, the
+ * undo is a no-op — preventing stale toasts from affecting a follow-up
+ * mutation (REV-3 Cluster X).
+ */
+export type CallToken = number & { readonly __brand: 'CallToken' };
+
 export interface UseUndoableMutationResult<TInput> {
-  mutate: (input: TInput) => void;
-  undoLast: () => void;
+  mutate: (input: TInput) => CallToken;
+  /**
+   * Undo the latest call.
+   *
+   * - When `callToken` is omitted: legacy behavior — operates on the current
+   *   call regardless of identity (kept for tests / call sites that don't
+   *   manage tokens).
+   * - When `callToken` is provided: only fires if it matches the current
+   *   call's token; otherwise no-op (token-bound undo).
+   */
+  undoLast: (callToken?: CallToken) => void;
   compensate: () => Promise<void>;
   state: MutationState;
 }
@@ -72,6 +90,7 @@ export interface UseUndoableMutationResult<TInput> {
 // the corresponding .then/.catch handlers. This isolates concurrent or
 // preempted calls so their compensation paths don't trample each other.
 interface Call<TInput, TOutput, TSnapshot> {
+  token: CallToken;
   input: TInput;
   snapshot: TSnapshot;
   output: TOutput | null;
@@ -104,6 +123,12 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
   // committed (REV-1 #2).
   const phaseRef = useRef<MutationState>('idle');
 
+  // Monotonic token generator. Each mutate() invocation gets a fresh token so
+  // toasts (and any other UI tied to a specific call) can bind their undo
+  // action to one call and become inert once a newer call has started
+  // (REV-3 Cluster X).
+  const nextTokenRef = useRef(0);
+
   // Cleanup: abort any in-flight request on unmount.
   useEffect(() => {
     return () => {
@@ -111,7 +136,7 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
     };
   }, []);
 
-  const mutate = useCallback((input: TInput) => {
+  const mutate = useCallback((input: TInput): CallToken => {
     // REV-2 NEW-1: if a prior call is still pending, treat the preemption as
     // an abort for the prior call so the caller can restore its optimistic
     // UI. The prior call's .then() may still resolve later — when it does,
@@ -125,7 +150,10 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
     }
 
     const controller = new AbortController();
+    nextTokenRef.current += 1;
+    const token = nextTokenRef.current as CallToken;
     const call: Call<TInput, TOutput, TSnapshot> = {
+      token,
       input,
       snapshot: optsRef.current.snapshot(input),
       output: null,
@@ -177,6 +205,8 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
         }
         optsRef.current.onError?.(err, input);
       });
+
+    return token;
   }, []);
 
   const compensate = useCallback(async () => {
@@ -193,10 +223,14 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
   // NEVER on the React `state` closure. If the request settled between the
   // click and undoLast running, phaseRef.current === 'settled' here even
   // though `state` is still 'pending' in this closure.
-  const undoLast = useCallback(() => {
+  const undoLast = useCallback((callToken?: CallToken) => {
     const phase = phaseRef.current;
     const call = currentCallRef.current;
     if (!call) return;
+    // REV-3 Cluster X: when a token is supplied, only undo if it matches the
+    // current call. Stale toasts (issued before a follow-up mutate replaced
+    // the current call) are inert.
+    if (callToken !== undefined && call.token !== callToken) return;
 
     if (phase === 'pending') {
       // REV-2 #1: mark the call as user-aborted so its .then() handler (if it

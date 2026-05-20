@@ -29,7 +29,7 @@ import {
 } from '@fops/ui';
 import { useTriagePanelState } from '../../hooks/useTriagePanelState';
 import { useWorkspaceActors } from '../../hooks/useWorkspaceActors';
-import { useUndoableMutation } from '../../hooks/useUndoableMutation';
+import { useUndoableMutation, type CallToken } from '../../hooks/useUndoableMutation';
 import {
   executeCompensatingPatch,
   type TriageInput,
@@ -121,7 +121,9 @@ export function TriagePanel({
 
   // Keep a stable ref to undoLast so the toast closure always sees the latest version.
   // (The closure in toast.custom captures undoLast at call time; the ref stays current.)
-  const undoLastRef = React.useRef<() => void>(() => { /* no-op until mounted */ });
+  // REV-3 Cluster X: undoLast accepts an optional CallToken so toasts can bind
+  // their undo action to the specific call that produced them.
+  const undoLastRef = React.useRef<(token?: CallToken) => void>(() => { /* no-op until mounted */ });
 
   // Stable ref so the hook callbacks always see the latest restore handler.
   // We deliberately do NOT keep a ref to voc.id here: VocTriageScreen
@@ -249,8 +251,11 @@ export function TriagePanel({
       // Optimistic remove synchronously
       onOptimisticRemove?.(voc.id);
 
-      // Fire the undoable mutation — error surfaces via mutationState+lastError
-      undoableMutate(input);
+      // Fire the undoable mutation — error surfaces via mutationState+lastError.
+      // REV-3 Cluster X: capture the per-call token so the toast we issue
+      // below binds its undo to THIS call only. Once a follow-up mutate
+      // replaces the current call, this toast becomes inert.
+      const callToken: CallToken = undoableMutate(input);
 
       // Show UndoToast via sonner's toast.custom
       // Prototype ref: screen-voc-create.jsx:699-730 → UndoToast positioning
@@ -264,8 +269,9 @@ export function TriagePanel({
           <UndoToast
             message={message}
             onAction={() => {
-              // Always call via ref so we get the latest undoLast (handles state transition)
-              undoLastRef.current();
+              // REV-3 Cluster X: pass the token so undoLast no-ops if this is
+              // a stale toast (a newer mutation has since started).
+              undoLastRef.current(callToken);
               toast.dismiss(toastId);
             }}
             onDismiss={() => { toast.dismiss(toastId); }}
@@ -305,7 +311,8 @@ export function TriagePanel({
     // Optimistic remove
     onOptimisticRemove?.(voc.id);
 
-    undoableMutate(input);
+    // REV-3 Cluster X: capture per-call token and bind the toast's undo to it.
+    const callToken: CallToken = undoableMutate(input);
 
     const message = `${voc.display_id} 보류 처리됨`;
     toast.custom(
@@ -313,7 +320,7 @@ export function TriagePanel({
         <UndoToast
           message={message}
           onAction={() => {
-            undoLastRef.current();
+            undoLastRef.current(callToken);
             toast.dismiss(toastId);
           }}
           onDismiss={() => { toast.dismiss(toastId); }}
