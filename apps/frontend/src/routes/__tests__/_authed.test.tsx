@@ -11,7 +11,7 @@
 
 import { redirect } from '@tanstack/react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { UnauthenticatedError, fetchMe } from '../../lib/api.js';
+import { UnauthenticatedError, fetchMe } from '../../lib/api';
 
 // Re-implement beforeLoad logic verbatim from _authed.tsx so we can
 // exercise it in isolation without the TanStack file-route type brands.

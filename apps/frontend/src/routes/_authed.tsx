@@ -11,7 +11,7 @@
 
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router';
 import { AppFrame } from '../lib/layout/AppFrame';
-import { UnauthenticatedError, fetchMe } from '../lib/api.js';
+import { UnauthenticatedError, fetchMe } from '../lib/api';
 
 // Sidebar entries locked per Slice 3 #18 spec (C5).
 // Per-feature entries are added in their owning slice (AGENTS.md two-consumer rule).

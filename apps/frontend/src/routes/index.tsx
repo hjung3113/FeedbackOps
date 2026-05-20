@@ -17,7 +17,7 @@ import {
   fetchMe,
   fetchPermissionRequestsMine,
   logout,
-} from '../lib/api.js';
+} from '../lib/api';
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
