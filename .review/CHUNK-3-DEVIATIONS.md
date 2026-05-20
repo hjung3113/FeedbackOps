@@ -155,3 +155,26 @@
 **Files modified:** `apps/frontend/src/features/voc/components/triage/TriagePanel.tsx`, `apps/frontend/src/features/voc/routes/__tests__/TriageRoute.test.tsx`, `apps/frontend/src/features/voc/routes/__tests__/TriageRoute.capability.test.tsx`.
 
 **RED → GREEN test:** `apps/frontend/src/features/voc/components/triage/__tests__/TriagePanel.emptyBodyCompensate.test.tsx` — first PATCH returns an empty 200 body; the undo path asserts (a) the VOC detail GET fires, (b) the compensating PATCH `If-Match` carries the refetched `updated_at`, (c) no unhandled rejection and `onOptimisticRestore` fires on the success path.
+
+---
+
+## REV-4 (codex Cycle 4) — Cluster Y P1 fix: refetch-failure surface error + no stale PATCH
+
+### D-REV4-P1: refetch failure in compensateFn now surfaces toast and stops stale PATCH
+
+**Origin:** codex REV-4 P1 (`TriagePanel.tsx:185`, `useUndoableMutation.ts:254`).
+
+**Issue:** When the first PATCH response lacks a fresh `updated_at`, `compensateFn` refetches the VOC. The prior catch block silently swallowed refetch errors and fell through to `executeCompensatingPatch` with a stale `If-Match` — guaranteed to 409. `undoLast` used `void compensate()` (fire-and-forget), so any `compensateFn` rejection became an unhandled promise rejection with no user-facing feedback.
+
+**Fix (two-part):**
+1. `TriagePanel.tsx` catch block: surface `toast.error('VOC를 새로 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.')`, tag the error with `__refetchFailure: true`, re-throw to stop the stale PATCH.
+2. `useUndoableMutation.ts`: added `onCompensateError?: (err: unknown) => void` to `UseUndoableMutationOptions`. Attached `.catch(err => onCompensateError?.(err))` to all fire-and-forget `compensateFn` calls in `undoLast` and the aborted-by-user `.then()` path.
+3. `TriagePanel.tsx` `onCompensateError`: surfaces `toast.error('실행 취소 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')` for compensating PATCH failures; skips double-toast for refetch failures (detected via `__refetchFailure` tag).
+
+**Files modified:**
+- `apps/frontend/src/features/voc/components/triage/TriagePanel.tsx`
+- `apps/frontend/src/features/voc/hooks/useUndoableMutation.ts`
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/components/triage/__tests__/TriagePanel.refetchFailure.test.tsx` — 3 cases covering all required behaviors.
+
+**P2 deferred:** `EditDescriptionModal` user-edit race during reload await — product decision to keep reload non-locking; user edits during await accepted as known minor data-loss. Details in `CHUNK-6-DEVIATIONS.md`.

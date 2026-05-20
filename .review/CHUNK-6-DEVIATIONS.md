@@ -240,3 +240,36 @@ For the production-code fix detail (closure over `input.vocId` instead of `vocId
 **Files modified:** `apps/frontend/src/features/voc/components/detail/EditDescriptionModal.tsx`.
 
 **RED → GREEN test:** `apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.reloadAwaitsRefetch.test.tsx` — pre-seeds the QueryClient with V1, intercepts `refetchQueries` to swap the cache to V2 only when released, asserts the action handler (a) calls `refetchQueries` with `['voc', id]`, (b) does NOT reset until the refetch resolves, and (c) resets to V2 fields after release (despite the parent still passing V1 as the `voc` prop).
+
+---
+
+## REV-4 (codex Cycle 4) — Cluster Y P1 fix: refetch-failure surface error + no stale PATCH
+
+### D-REV4-P1: refetch failure in compensateFn now surfaces toast and stops stale PATCH
+
+**Origin:** codex REV-4 P1 (`TriagePanel.tsx:185`, `useUndoableMutation.ts:254`).
+
+**Issue:** When the first PATCH response lacks a fresh `updated_at` (empty body), `compensateFn` refetches the VOC. The catch block silently swallowed refetch errors and fell through to `executeCompensatingPatch` with the original stale `If-Match` — guaranteed to 409. Additionally, `undoLast` called `void compensate()` fire-and-forget. If `compensateFn` threw (either from refetch failure or from the compensating PATCH itself), the rejection became unhandled with no user-facing feedback.
+
+**Fix (two-part):**
+1. **`TriagePanel.tsx` catch block**: when refetch throws, surface `toast.error('VOC를 새로 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.')`, tag the error with `__refetchFailure: true`, and re-throw. This stops `executeCompensatingPatch` from running with a stale `If-Match`.
+2. **`useUndoableMutation.ts` `undoLast` and aborted-by-user/.then paths**: attached `.catch(err => onCompensateError?.(err))` to all fire-and-forget `compensateFn` calls to prevent unhandled rejections. Added `onCompensateError?: (err: unknown) => void` option to `UseUndoableMutationOptions`.
+3. **`TriagePanel.tsx` `onCompensateError`**: surfaces `toast.error('실행 취소 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')` for compensating PATCH failures. Skips double-toasting for refetch failures (detected via `__refetchFailure` tag).
+
+**Files modified:**
+- `apps/frontend/src/features/voc/components/triage/TriagePanel.tsx`
+- `apps/frontend/src/features/voc/hooks/useUndoableMutation.ts`
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/components/triage/__tests__/TriagePanel.refetchFailure.test.tsx` — 3 cases: (1) refetch fails → toast + no compensating PATCH + no unhandled rejection; (2) refetch succeeds, compensating PATCH 409s → toast; (3) happy path → `onOptimisticRestore` called, no error toast.
+
+---
+
+## REV-4 P2: EditDescriptionModal user-edit race during reload — deferred
+
+**Origin:** codex REV-4 P2 (`EditDescriptionModal.tsx:126`, Cluster W residual).
+
+**Issue:** When a user types in the modal while `handleReloadFromVoc` is awaiting `refetchQueries`, the eventual `form.reset()` clobbers that typing.
+
+**Decision:** Deferred — product decision to keep reload non-locking. User edits during the await window are accepted as a known minor data-loss edge case. The reload path is triggered explicitly by the user (action button click), so typing simultaneously is an edge case with acceptable tradeoff. Re-opening requires a product decision to lock the form during reload.
+
+**Action required:** None at this time. Track in product backlog if reload-locking becomes a requirement.
