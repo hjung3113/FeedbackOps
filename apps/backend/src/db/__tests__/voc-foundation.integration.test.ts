@@ -272,7 +272,7 @@ describe.skipIf(!runIntegration)('Slice 3 conversation tables', () => {
     expect(result.rows[0]?.id).toBeDefined();
   });
 
-  it('rejects skip_public_update=true with skip_reason shorter than 8 chars (voc_public_updates_skip_reason_min_length)', async () => {
+  it('rejects skip_public_update=true with skip_reason shorter than 8 chars (voc_public_updates_skip_invariants)', async () => {
     await expect(
       migrateHandle.pool.query(
         `insert into voc.voc_public_updates (
@@ -280,13 +280,13 @@ describe.skipIf(!runIntegration)('Slice 3 conversation tables', () => {
            reporter_facing_status_before, reporter_facing_status_after,
            skip_public_update, skip_reason
          ) values (
-           $1, $2, '{"type":"doc","content":[]}'::jsonb,
+           $1, $2, NULL,
            'received', 'reviewing', true, 'short'
          )`,
         [vocId, reporterId],
       ),
     ).rejects.toMatchObject({
-      message: expect.stringContaining('voc_public_updates_skip_reason_min_length'),
+      message: expect.stringContaining('voc_public_updates_skip_invariants'),
     });
   });
 
@@ -604,8 +604,8 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
     });
   });
 
-  // IM-05: trim-aware skip_reason min-length.
-  it('rejects skip_reason = 8-spaces (trim aware, voc_public_updates_skip_reason_min_length)', async () => {
+  // IM-05 / migration 0012: trim-aware skip_reason min-length, now part of skip_invariants.
+  it('rejects skip_reason = 8-spaces (trim aware, voc_public_updates_skip_invariants)', async () => {
     await expect(
       migrateHandle.pool.query(
         `insert into voc.voc_public_updates (
@@ -613,13 +613,13 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
            reporter_facing_status_before, reporter_facing_status_after,
            skip_public_update, skip_reason
          ) values (
-           $1, $2, '{"type":"doc","content":[]}'::jsonb,
+           $1, $2, NULL,
            'received', 'reviewing', true, '        '
          )`,
         [vocId, actorId],
       ),
     ).rejects.toMatchObject({
-      message: expect.stringContaining('voc_public_updates_skip_reason_min_length'),
+      message: expect.stringContaining('voc_public_updates_skip_invariants'),
     });
   });
 

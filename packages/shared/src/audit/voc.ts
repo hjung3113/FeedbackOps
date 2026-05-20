@@ -4,6 +4,8 @@
 
 import { z } from 'zod';
 
+import { attachmentRefSchema } from '../vocs/create-request.js';
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 const uuid = () => z.string().uuid();
 
@@ -54,11 +56,14 @@ export const vocTriageCommittedDetailSchema = z.object({
 export type VocTriageCommittedDetail = z.infer<typeof vocTriageCommittedDetailSchema>;
 
 // ── voc_severity_set ───────────────────────────────────────────────────────
+// `to` is nullable to support the severity-clear ("de-triage") path where
+// severity is explicitly set back to null. The refine still enforces an
+// actual change (from !== to).
 export const vocSeveritySetDetailSchema = z
   .object({
     voc_id: uuid(),
     from: severitySchema.nullable(),
-    to: severitySchema,
+    to: severitySchema.nullable(),
   })
   .refine((d) => d.from !== d.to, { message: 'severity_set must record an actual change' });
 export type VocSeveritySetDetail = z.infer<typeof vocSeveritySetDetailSchema>;
@@ -117,9 +122,9 @@ export const publicUpdateCreatedDetailSchema = z
   })
   .refine(
     (d) => d.skip_public_update
-      ? typeof d.skip_reason === 'string' && d.skip_reason.length >= 8
+      ? typeof d.skip_reason === 'string' && d.skip_reason.trim().length >= 8
       : d.skip_reason === null,
-    { message: 'skip_reason must be null when skip=false, >=8 chars when skip=true' },
+    { message: 'skip_reason must be null when skip=false, >=8 trimmed chars when skip=true' },
   );
 export type PublicUpdateCreatedDetail = z.infer<typeof publicUpdateCreatedDetailSchema>;
 
@@ -147,6 +152,55 @@ export const internalCommentCreatedDetailSchema = z.object({
   voc_id: uuid(),
   internal_comment_id: uuid(),
   actor_id: uuid(),
-  mentions: z.array(uuid()).min(1),
+  mentions: z.array(uuid()),
 });
 export type InternalCommentCreatedDetail = z.infer<typeof internalCommentCreatedDetailSchema>;
+
+// ── voc_triage_postponed ───────────────────────────────────────────────────
+// Emitted when `postpone_review: true` is sent in PATCH /vocs/:id (Slice 3
+// #14). triage_state remains 'untriaged'; `triage_state_review_postponed_at`
+// is set to now(). No `postponed_until` in Slice 3 (deferred scheduling).
+export const vocTriagePostponedDetailSchema = z.object({
+  voc_id: uuid(),
+  actor_id: uuid(),
+});
+export type VocTriagePostponedDetail = z.infer<typeof vocTriagePostponedDetailSchema>;
+
+// ── voc_description_edited ─────────────────────────────────────────────────
+// Emitted by PATCH /vocs/:id/description (Slice 3 #17) when the Reporter
+// makes an actual diff (non-empty changes object). Per-key types are
+// semantically precise: title uses a string {from,to} pair; description
+// uses a {from_hash, to_hash} 64-char hex pair (SHA-256 of stableStringify
+// of the sanitized canonical doc); attachments uses an {from,to} array pair.
+// The `.refine` enforces at least one changed field so an audit row is never
+// written for an empty diff.
+const stringChangeSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+});
+
+const richHashChangeSchema = z.object({
+  from_hash: z.string().length(64),
+  to_hash: z.string().length(64),
+});
+
+const attachmentsDeltaSchema = z.object({
+  from: z.array(attachmentRefSchema),
+  to: z.array(attachmentRefSchema),
+});
+
+export const vocDescriptionEditedDetailSchema = z
+  .object({
+    voc_id: uuid(),
+    changes: z
+      .object({
+        title: stringChangeSchema.optional(),
+        description_rich_content: richHashChangeSchema.optional(),
+        attachments: attachmentsDeltaSchema.optional(),
+      })
+      .refine(
+        (o) => Object.keys(o).length > 0,
+        { message: 'changes must be non-empty' },
+      ),
+  });
+export type VocDescriptionEditedDetail = z.infer<typeof vocDescriptionEditedDetailSchema>;

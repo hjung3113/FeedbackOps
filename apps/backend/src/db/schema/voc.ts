@@ -123,7 +123,8 @@ export const vocPublicUpdates = vocSchema.table(
     actorId: uuid('actor_id')
       .notNull()
       .references(() => actors.id),
-    bodyRichContent: jsonb('body_rich_content').notNull(),
+    // nullable: skip-path rows carry NULL body (migration 0012).
+    bodyRichContent: jsonb('body_rich_content'),
     reporterFacingStatusBefore: text('reporter_facing_status_before').notNull(),
     reporterFacingStatusAfter: text('reporter_facing_status_after').notNull(),
     skipPublicUpdate: boolean('skip_public_update').notNull().default(false),
@@ -140,9 +141,12 @@ export const vocPublicUpdates = vocSchema.table(
       'voc_public_updates_status_after_enum',
       sql`${t.reporterFacingStatusAfter} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
     ),
-    skipReasonMinLength: check(
-      'voc_public_updates_skip_reason_min_length',
-      sql`${t.skipPublicUpdate} = false OR (length(trim(coalesce(${t.skipReason}, ''))) >= 8)`,
+    // Migration 0012 + 0013: full skip-row invariants.
+    // skip=true  ⇒ body NULL, skip_reason ≥ 8 trimmed, status_before <> status_after
+    // skip=false ⇒ body NOT NULL, skip_reason IS NULL
+    skipInvariants: check(
+      'voc_public_updates_skip_invariants',
+      sql`(${t.skipPublicUpdate} = true AND ${t.bodyRichContent} IS NULL AND ${t.skipReason} IS NOT NULL AND length(trim(${t.skipReason})) >= 8 AND ${t.reporterFacingStatusBefore} <> ${t.reporterFacingStatusAfter}) OR (${t.skipPublicUpdate} = false AND ${t.bodyRichContent} IS NOT NULL AND ${t.skipReason} IS NULL)`,
     ),
   }),
 );

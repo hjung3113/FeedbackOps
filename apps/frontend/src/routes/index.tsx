@@ -17,7 +17,7 @@ import {
   fetchMe,
   fetchPermissionRequestsMine,
   logout,
-} from '../lib/api.js';
+} from '../lib/api';
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
@@ -80,7 +80,7 @@ export function HomePage() {
             {requests.map((r) => (
               <li
                 key={r.id}
-                className="rounded-md border border-surface-overlay bg-surface-raised p-3"
+                className="rounded-md border border-default bg-surface-raised p-3"
               >
                 <p className="text-sm font-medium text-text-primary">{r.requested_capability}</p>
                 <p className="text-xs text-text-muted">

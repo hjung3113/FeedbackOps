@@ -1,8 +1,9 @@
 // AnalyticsAreaPicker — dumb component (AGENTS.md:76, grill Q7 lock).
 // Identical shape to ManagedSystemPicker; the AA picker is `disabled` until
 // the caller picks a Managed System and pre-filters `options` accordingly.
+// Pack 17 / ADR-0021: rebuilt on shadcn ToggleGroup (chip pattern, spec §3.4).
 
-import type { ChangeEvent } from 'react';
+import { ToggleGroup, ToggleGroupItem } from './shadcn/toggle-group.js';
 import { cn } from '../utils/cn.js';
 import type { PickerOption } from './ManagedSystemPicker.js';
 
@@ -18,28 +19,48 @@ export interface AnalyticsAreaPickerProps {
 }
 
 export function AnalyticsAreaPicker(props: AnalyticsAreaPickerProps) {
-  function handle(e: ChangeEvent<HTMLSelectElement>) {
-    const v = e.target.value;
-    props.onChange(v === '' ? null : v);
+  const {
+    options,
+    value,
+    onChange,
+    disabled,
+    includeArchivedInLabel,
+    placeholder,
+    testId,
+    className,
+  } = props;
+
+  function handleValueChange(next: string) {
+    onChange(next === '' ? null : next);
   }
+
   return (
-    <select
-      className={cn('border px-2 py-1 text-sm', props.className)}
-      value={props.value ?? ''}
-      onChange={handle}
-      disabled={props.disabled}
-      data-testid={props.testId ?? 'analytics-area-picker'}
+    <ToggleGroup
+      type="single"
+      value={value ?? ''}
+      onValueChange={handleValueChange}
+      {...(disabled ? { disabled: true } : {})}
+      variant="outline"
+      size="sm"
+      aria-label={placeholder ?? 'Select Analytics Area'}
+      {...(disabled ? { 'aria-disabled': 'true' as const } : {})}
+      data-testid={testId ?? 'analytics-area-picker'}
+      className={cn('flex flex-wrap justify-start gap-2', className)}
     >
-      <option value="">{props.placeholder ?? 'Select Analytics Area…'}</option>
-      {props.options.map((opt) => {
+      {options.map((opt) => {
         const label =
-          props.includeArchivedInLabel && opt.archived ? `${opt.label} (archived)` : opt.label;
+          includeArchivedInLabel && opt.archived ? `${opt.label} (archived)` : opt.label;
         return (
-          <option key={opt.id} value={opt.id}>
+          <ToggleGroupItem
+            key={opt.id}
+            value={opt.id}
+            aria-label={label}
+            className="rounded-pill border border-border-subtle px-3 data-[state=on]:bg-accent-primary data-[state=on]:text-text-inverse data-[state=on]:border-accent-primary"
+          >
             {label}
-          </option>
+          </ToggleGroupItem>
         );
       })}
-    </select>
+    </ToggleGroup>
   );
 }

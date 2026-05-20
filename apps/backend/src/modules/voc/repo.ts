@@ -6,8 +6,9 @@
 import { sql } from 'drizzle-orm';
 
 import { analyticsAreas, managedSystems } from '../../db/schema/core.js';
-import { vocs } from '../../db/schema/voc.js';
+import { vocInternalComments, vocPublicUpdates, vocReporterReplies, vocs } from '../../db/schema/voc.js';
 import type { Tx } from '../../db/tx.js';
+import type { ReporterFacingStatus } from './transitions.js';
 
 export interface LockedManagedSystem {
   id: string;
@@ -72,6 +73,103 @@ export async function lockAnalyticsArea(
     : null;
 }
 
+// ── selectVocForUpdate ─────────────────────────────────────────────────────
+// Acquires a FOR UPDATE row lock on voc.vocs for the PATCH triage flow.
+// Returns null when no matching row exists (caller throws not_found).
+// Mirrors lockManagedSystem / lockAnalyticsArea style.
+
+export interface LockedVoc {
+  id: string;
+  workspaceId: string;
+  primaryManagedSystemId: string;
+  analyticsAreaId: string | null;
+  reporterId: string;
+  displayId: string;
+  title: string;
+  descriptionRichContent: unknown;
+  severity: 'low' | 'medium' | 'high' | 'critical' | null;
+  reporterFacingStatus: string;
+  triageState: 'untriaged' | 'triaged' | 'needs_more_information' | 'dismissed_not_actionable';
+  triageStateReviewPostponedAt: Date | null;
+  ownerUserId: string | null;
+  ownerTeamId: string | null;
+  sourceContext: string;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export async function selectVocForUpdate(
+  tx: Tx,
+  workspaceId: string,
+  vocId: string,
+): Promise<LockedVoc | null> {
+  const rows = await tx.execute<{
+    id: string;
+    workspace_id: string;
+    primary_managed_system_id: string;
+    analytics_area_id: string | null;
+    reporter_id: string;
+    display_id: string;
+    title: string;
+    description_rich_content: unknown;
+    severity: string | null;
+    reporter_facing_status: string;
+    triage_state: string;
+    triage_state_review_postponed_at: Date | string | null;
+    owner_user_id: string | null;
+    owner_team_id: string | null;
+    source_context: string;
+    archived_at: Date | string | null;
+    created_at: Date | string;
+    updated_at: Date | string;
+  }>(sql`
+    select
+      id, workspace_id, primary_managed_system_id, analytics_area_id, reporter_id,
+      display_id, title, description_rich_content, severity, reporter_facing_status,
+      triage_state, triage_state_review_postponed_at,
+      owner_user_id, owner_team_id, source_context,
+      archived_at, created_at, updated_at
+    from ${vocs}
+    where id = ${vocId}
+      and workspace_id = ${workspaceId}
+    for update
+  `);
+  const row = rows.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    primaryManagedSystemId: row.primary_managed_system_id,
+    analyticsAreaId: row.analytics_area_id,
+    reporterId: row.reporter_id,
+    displayId: row.display_id,
+    title: row.title,
+    descriptionRichContent: row.description_rich_content,
+    severity: row.severity as LockedVoc['severity'],
+    reporterFacingStatus: row.reporter_facing_status,
+    triageState: row.triage_state as LockedVoc['triageState'],
+    triageStateReviewPostponedAt: toDateOrNull(row.triage_state_review_postponed_at),
+    ownerUserId: row.owner_user_id,
+    ownerTeamId: row.owner_team_id,
+    sourceContext: row.source_context,
+    archivedAt: toDateOrNull(row.archived_at),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
+}
+
+// node-pg returns timestamptz as a Date by default, but drizzle `tx.execute`
+// raw rows may surface ISO strings depending on type-parser registration.
+// Normalise to Date so callers can call `.toISOString()` without guarding.
+function toDate(v: Date | string): Date {
+  return v instanceof Date ? v : new Date(v);
+}
+function toDateOrNull(v: Date | string | null): Date | null {
+  if (v === null) return null;
+  return v instanceof Date ? v : new Date(v);
+}
+
 export interface InsertVocInput {
   workspaceId: string;
   primaryManagedSystemId: string;
@@ -80,6 +178,208 @@ export interface InsertVocInput {
   title: string;
   descriptionRichContent: unknown;
   sourceContext: string;
+}
+
+// ── insertPublicUpdate ─────────────────────────────────────────────────────
+// Appends one row to voc.voc_public_updates. DB CHECK (C1 migration 0012)
+// enforces the skip-invariants so callers do not need to duplicate them.
+
+export async function insertPublicUpdate(
+  tx: Tx,
+  args: {
+    vocId: string;
+    actorId: string;
+    body: unknown | null;
+    statusBefore: ReporterFacingStatus;
+    statusAfter: ReporterFacingStatus;
+    skip: boolean;
+    skipReason: string | null;
+  },
+): Promise<{ id: string; created_at: Date }> {
+  const rows = await tx
+    .insert(vocPublicUpdates)
+    .values({
+      vocId: args.vocId,
+      actorId: args.actorId,
+      bodyRichContent: args.body as object | null,
+      reporterFacingStatusBefore: args.statusBefore,
+      reporterFacingStatusAfter: args.statusAfter,
+      skipPublicUpdate: args.skip,
+      skipReason: args.skipReason,
+    })
+    .returning({ id: vocPublicUpdates.id, createdAt: vocPublicUpdates.createdAt });
+  const row = rows[0];
+  if (!row) throw new Error('insertPublicUpdate returned no row');
+  return { id: row.id, created_at: row.createdAt };
+}
+
+// ── insertReporterReply ────────────────────────────────────────────────────
+// Appends one row to voc.voc_reporter_replies. The DB BEFORE INSERT trigger
+// `enforce_reporter_reply_actor` (migration 0010) is defense-in-depth; the
+// service layer must already have verified actor === reporter.
+
+export async function insertReporterReply(
+  tx: Tx,
+  args: {
+    vocId: string;
+    actorId: string;
+    body: unknown;
+  },
+): Promise<{ id: string; created_at: Date }> {
+  const rows = await tx
+    .insert(vocReporterReplies)
+    .values({
+      vocId: args.vocId,
+      actorId: args.actorId,
+      bodyRichContent: args.body as object,
+    })
+    .returning({ id: vocReporterReplies.id, createdAt: vocReporterReplies.createdAt });
+  const row = rows[0];
+  if (!row) throw new Error('insertReporterReply returned no row');
+  return { id: row.id, created_at: row.createdAt };
+}
+
+// ── insertInternalComment ──────────────────────────────────────────────────
+// Appends one row to voc.voc_internal_comments.
+
+export async function insertInternalComment(
+  tx: Tx,
+  args: {
+    vocId: string;
+    actorId: string;
+    body: unknown;
+  },
+): Promise<{ id: string; created_at: Date }> {
+  const rows = await tx
+    .insert(vocInternalComments)
+    .values({
+      vocId: args.vocId,
+      actorId: args.actorId,
+      bodyRichContent: args.body as object,
+    })
+    .returning({ id: vocInternalComments.id, createdAt: vocInternalComments.createdAt });
+  const row = rows[0];
+  if (!row) throw new Error('insertInternalComment returned no row');
+  return { id: row.id, created_at: row.createdAt };
+}
+
+// ── updateVocReporterStatus ────────────────────────────────────────────────
+// Bumps reporter_facing_status and updated_at on voc.vocs.
+// Caller must have already locked the row via selectVocForUpdate within the
+// same transaction. workspace_id filter is defense-in-depth (cycle-2 B2 fix —
+// guards against future regressions where a caller skips the pre-validation).
+
+export async function updateVocReporterStatus(
+  tx: Tx,
+  args: {
+    workspaceId: string;
+    vocId: string;
+    nextStatus: ReporterFacingStatus;
+  },
+): Promise<void> {
+  await tx.execute(sql`
+    UPDATE ${vocs}
+    SET reporter_facing_status = ${args.nextStatus},
+        updated_at = now()
+    WHERE id = ${args.vocId}
+      AND workspace_id = ${args.workspaceId}
+  `);
+}
+
+// ── updateVocDescriptionFields ─────────────────────────────────────────────
+// Applies a non-empty set of description field changes to a voc row within
+// the calling transaction. Caller MUST NOT invoke this if all 3 fields are
+// absent (defensive throw enforces the invariant).
+// workspace_id filter is defense-in-depth (cycle-2 B2 — guards cross-ws).
+
+export interface UpdateVocDescriptionFieldsInput {
+  tx: Tx;
+  vocId: string;
+  workspaceId: string;
+  title: string | undefined;
+  descriptionRichContent: unknown;
+}
+
+export async function updateVocDescriptionFields(
+  input: UpdateVocDescriptionFieldsInput,
+): Promise<LockedVoc> {
+  const { tx, vocId, workspaceId, title, descriptionRichContent } = input;
+
+  if (title === undefined && descriptionRichContent === undefined) {
+    throw new Error(
+      'updateVocDescriptionFields: called with empty diff — caller must not invoke on no-op',
+    );
+  }
+
+  // Build SET clause for non-undefined fields only.
+  const setClauses: ReturnType<typeof sql>[] = [sql`updated_at = now()`];
+  if (title !== undefined) {
+    setClauses.push(sql`title = ${title}`);
+  }
+  if (descriptionRichContent !== undefined) {
+    setClauses.push(sql`description_rich_content = ${descriptionRichContent as object}::jsonb`);
+  }
+
+  // Combine SET clauses
+  const setClause = sql.join(setClauses, sql`, `);
+
+  const rows = await tx.execute<{
+    id: string;
+    workspace_id: string;
+    primary_managed_system_id: string;
+    analytics_area_id: string | null;
+    reporter_id: string;
+    display_id: string;
+    title: string;
+    description_rich_content: unknown;
+    severity: string | null;
+    reporter_facing_status: string;
+    triage_state: string;
+    triage_state_review_postponed_at: Date | string | null;
+    owner_user_id: string | null;
+    owner_team_id: string | null;
+    source_context: string;
+    archived_at: Date | string | null;
+    created_at: Date | string;
+    updated_at: Date | string;
+  }>(sql`
+    UPDATE ${vocs}
+    SET ${setClause}
+    WHERE id = ${vocId}
+      AND workspace_id = ${workspaceId}
+    RETURNING
+      id, workspace_id, primary_managed_system_id, analytics_area_id, reporter_id,
+      display_id, title, description_rich_content, severity, reporter_facing_status,
+      triage_state, triage_state_review_postponed_at,
+      owner_user_id, owner_team_id, source_context,
+      archived_at, created_at, updated_at
+  `);
+
+  const row = rows.rows[0];
+  if (!row) {
+    throw new Error('updateVocDescriptionFields: UPDATE returned no row');
+  }
+
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    primaryManagedSystemId: row.primary_managed_system_id,
+    analyticsAreaId: row.analytics_area_id,
+    reporterId: row.reporter_id,
+    displayId: row.display_id,
+    title: row.title,
+    descriptionRichContent: row.description_rich_content,
+    severity: row.severity as LockedVoc['severity'],
+    reporterFacingStatus: row.reporter_facing_status,
+    triageState: row.triage_state as LockedVoc['triageState'],
+    triageStateReviewPostponedAt: toDateOrNull(row.triage_state_review_postponed_at),
+    ownerUserId: row.owner_user_id,
+    ownerTeamId: row.owner_team_id,
+    sourceContext: row.source_context,
+    archivedAt: toDateOrNull(row.archived_at),
+    createdAt: toDate(row.created_at),
+    updatedAt: toDate(row.updated_at),
+  };
 }
 
 export async function insertVoc(tx: Tx, input: InsertVocInput) {

@@ -141,9 +141,15 @@ describe.skipIf(!runIntegration)('Slice 3 seed determinism + coverage', () => {
   });
 
   it('writes exactly two linkedFinding decision fixtures with the correct states', async () => {
-    const r = await handle.db.execute(
-      sql`SELECT envelope FROM voc.voc_permission_decisions_seed_fixture`,
-    );
+    // Scope to seed-owned rows. Concurrent integration tests (e.g. #15 read-tests)
+    // may add their own seed_fixture rows for foreign VOCs; we must only assert
+    // on the seed's own fixtures (display_id LIKE 'VOC-SEED-%').
+    const r = await handle.db.execute(sql`
+      SELECT f.envelope
+        FROM voc.voc_permission_decisions_seed_fixture f
+        JOIN voc.vocs v ON v.id = f.voc_id
+       WHERE v.display_id LIKE 'VOC-SEED-%'
+    `);
     const envelopes = r.rows.map(
       (row) => (row as { envelope: { linkedFinding?: { state: string } } }).envelope,
     );
@@ -154,17 +160,21 @@ describe.skipIf(!runIntegration)('Slice 3 seed determinism + coverage', () => {
 
   it('decision_ids are stable across re-runs', async () => {
     const ids1 = await handle.db.execute(sql`
-      SELECT envelope->'linkedFinding'->>'decision_id' AS id
-      FROM voc.voc_permission_decisions_seed_fixture
-      ORDER BY voc_id
+      SELECT f.envelope->'linkedFinding'->>'decision_id' AS id
+        FROM voc.voc_permission_decisions_seed_fixture f
+        JOIN voc.vocs v ON v.id = f.voc_id
+       WHERE v.display_id LIKE 'VOC-SEED-%'
+       ORDER BY f.voc_id
     `);
     // Precondition: must have exactly 2 rows — empty result must not pass silently.
     expect(ids1.rows).toHaveLength(2);
     await runSeed(handle);
     const ids2 = await handle.db.execute(sql`
-      SELECT envelope->'linkedFinding'->>'decision_id' AS id
-      FROM voc.voc_permission_decisions_seed_fixture
-      ORDER BY voc_id
+      SELECT f.envelope->'linkedFinding'->>'decision_id' AS id
+        FROM voc.voc_permission_decisions_seed_fixture f
+        JOIN voc.vocs v ON v.id = f.voc_id
+       WHERE v.display_id LIKE 'VOC-SEED-%'
+       ORDER BY f.voc_id
     `);
     expect(ids2.rows).toHaveLength(2);
     expect(ids1.rows).toEqual(ids2.rows);

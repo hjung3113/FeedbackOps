@@ -20,7 +20,7 @@ import {
   ApiError,
   type CreatePermissionRequestSuccess,
   createPermissionRequest,
-} from '../../../lib/api.js';
+} from '../../../lib/api';
 import { permissionCheckQueryKey, permissionRequestsMineKey } from './use-permission-check.js';
 
 export interface RequestAccessButtonProps {

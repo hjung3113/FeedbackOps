@@ -45,6 +45,17 @@ export const ERROR_CODES = [
   'rich_content.disallowed_node',
   'rich_content.external_image_forbidden',
   'attachment.unsupported_pending_storage_slice',
+  // conflict.* → 409 (Slice 3 #14 — optimistic concurrency)
+  'conflict.stale_write',
+  // voc.* → 422 (Slice 3 #14 — forbidden field on PATCH)
+  'voc.reporter_status_via_public_update_only',
+  // permission.* → 403 (Slice 3 #14 — MS-scope required)
+  'permission.scope_required',
+  // reporter_facing_status.* → 422 (Slice 3 #16 — transition validation + gate)
+  'reporter_facing_status.invalid_transition',
+  'reporter_facing_status.gate_blocked',
+  // conflict.* → 409 (Slice 3 #17 — Reporter edit blocked by committed triage)
+  'conflict.triage_already_committed',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES);

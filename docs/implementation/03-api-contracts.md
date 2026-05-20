@@ -375,12 +375,31 @@ POST /vocs
 GET /vocs
 GET /vocs/:id
 PATCH /vocs/:id
+PATCH /vocs/:id/description
 POST /vocs/:id/create-finding
 POST /vocs/:id/request-task
 POST /vocs/:id/public-updates
 POST /vocs/:id/reporter-replies
 POST /vocs/:id/internal-comments
 ```
+
+### PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17)
+
+| Aspect | Contract |
+|---|---|
+| Purpose | Reporter-only edit of `title` / `description_rich_content` / `attachments` while VOC is in `triage_state='untriaged'`. Closes Slice 3 BE exit criterion (`docs/implementation/08-mvp-slice-plan.md`). |
+| Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · `Authorization: Bearer <session>` |
+| Body | `{ title?: 1..200, description_rich_content?: TipTapDoc, attachments?: AttachmentRef[] }` — at least one field; `.strict()` (zod) rejects unknown keys |
+| Forbidden fields (UX-named) | `severity`, `owner_user_id`, `owner_team_id`, `analytics_area_id`, `triage_state`, `cluster_decision`, `reporter_facing_status`, `source_context`, `primary_managed_system_id`, `reporter_id`, `archived_at`, `workspace_id`, `display_id`, `id`, `created_at`, `updated_at` → 422 `validation.unexpected_field` |
+| Permission | `actor.actor_id === voc.reporter_id` — exclusive. Admin / Developer (with capability) / any non-reporter → 403 `permission.denied`. No admin elevation on this endpoint. |
+| State gate | `voc.triage_state === 'untriaged'` — else 409 `conflict.triage_already_committed` with `detail.current_triage_state` |
+| Optimistic concurrency | `If-Match` compared against `voc.updated_at`; mismatch → 409 `conflict.stale_write` with `detail.current_updated_at` |
+| Service ordering | `SELECT FOR UPDATE voc → reporter check → state gate → If-Match → SELECT FOR UPDATE managed_system → sanitize description (surface `voc-description`) → attachments rejection (non-empty → 422 `attachment.unsupported_pending_storage_slice`) → diff → UPDATE (only when diff is non-empty) → audit emit → refresh envelope` |
+| Empty-diff semantics | If sanitizer normalizes input to match current row (per-field check; description hashed via `stableStringify` → SHA-256) → 200 returns current envelope without bumping `updated_at` and without emitting an audit row. Idempotency cache still records the 200 envelope so replay is byte-equal. |
+| Audit event | `voc_description_edited` with `changes: { title?: {from, to}, description_rich_content?: {from_hash, to_hash}, attachments?: {from, to} }` (per-field shape; non-empty required). |
+| Idempotency hash | Includes `vocId`, `ifMatch`, route, and request body — a retry with a refreshed `If-Match` (post-409 refetch) produces a new hash; client must mint a fresh `Idempotency-Key` for each distinct `If-Match` value (same caveat as `PATCH /vocs/:id`). |
+| Rate limit | 30/min per actor — dedicated `reporterEdit` bucket, separate from the 10/min `mutation` tier. |
+| Error codes | `validation.failed` · `validation.unexpected_field` · `permission.denied` · `not_found.record` · `conflict.triage_already_committed` (new in #17) · `conflict.stale_write` · `conflict.record_archived` · `conflict.parent_archived` · `conflict.idempotency_key_reuse` · `rich_content.disallowed_node` · `rich_content.external_image_forbidden` · `attachment.unsupported_pending_storage_slice` · `rate_limited.actor` |
 
 ### VOC Cluster
 

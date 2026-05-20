@@ -34,7 +34,12 @@ import {
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
-import { createVocService, vocRoutes } from './modules/voc/index.js';
+import {
+  createConversationService,
+  createVocReadService,
+  createVocService,
+  vocRoutes,
+} from './modules/voc/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -201,6 +206,24 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       keyGenerator: mutationKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'sensitive') as never,
     },
+    // TODO(F18 follow-up): add admin bypass for the read tier once the
+    // admin-role detection helper lands (see plan §C3 follow-up F18).
+    read: {
+      max: 300,
+      timeWindow: '1 minute',
+      keyGenerator: mutationKeyGenerator,
+      store: createPgRateLimitStore(dbHandle.pool, 'read') as never,
+    },
+    // Slice 3 #17 — Reporter pre-triage edit (PATCH /vocs/:id/description).
+    // 30/min per actor (more permissive than generic `mutation: 10/min` because
+    // a single edit session can produce several saves; less than read tier).
+    // Plan §spec issue #17.
+    reporterEdit: {
+      max: 30,
+      timeWindow: '1 minute',
+      keyGenerator: mutationKeyGenerator,
+      store: createPgRateLimitStore(dbHandle.pool, 'reporter_edit') as never,
+    },
   });
 
   // ── Error handler ─ ADR-0012 envelope ────────────────────────────────
@@ -214,11 +237,24 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       const parsed = errorCodeSchema.safeParse(rawCode);
       if (parsed.success) {
         const status = statusForCode(parsed.data);
-        return reply.code(status).send({
+        const errDetail = (err as { detail?: Record<string, unknown> }).detail;
+        // F3: `requestable_permission` belongs at the top level of ErrorEnvelope
+        // (ADR-0012 / packages/shared/src/errors/codes.ts:67-71). Hoist it out
+        // of `detail` when present so the wire format matches the typed contract.
+        let hoisted: Record<string, unknown> | undefined;
+        let cleanDetail: Record<string, unknown> | undefined = errDetail;
+        if (errDetail && 'requestable_permission' in errDetail) {
+          const { requestable_permission, ...rest } = errDetail;
+          hoisted = requestable_permission as Record<string, unknown>;
+          cleanDetail = Object.keys(rest).length > 0 ? rest : undefined;
+        }
+        const envelope: Record<string, unknown> = {
           code: parsed.data,
           message: err.message,
-          detail: (err as { detail?: unknown }).detail,
-        });
+          detail: cleanDetail,
+        };
+        if (hoisted !== undefined) envelope.requestable_permission = hoisted;
+        return reply.code(status).send(envelope);
       }
     }
     // Zod validation errors surface via fastify-type-provider-zod with
@@ -330,19 +366,33 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  // ── VOC module — Slice 3 issue #13 ──────────────────────────────────────
+  // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
   const vocService = createVocService({
     db: dbHandle.db,
     auditService,
+    checkService,
+  });
+  const vocReadService = createVocReadService({
+    db: dbHandle.db,
+    checkService,
+  });
+  const conversationService = createConversationService({
+    auditService,
+    checkService,
+    vocReadService,
   });
   await app.register(vocRoutes, {
     db: dbHandle.db,
     sessionService,
     vocService,
+    vocReadService,
+    conversationService,
     idempotencyService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+      reporterEdit: app.rateLimitConfig.reporterEdit,
     },
   });
 

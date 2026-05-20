@@ -1,11 +1,17 @@
-// Dumb picker contracts (Slice 2 #11). Verifies that the pickers render
-// the options they are passed, fire `onChange(null)` when the placeholder
-// option is selected, and stay accessible via the test id.
+// Dumb picker contracts (Slice 2 #11, rebuilt Pack 17 / ADR-0021 on shadcn
+// ToggleGroup). Migrated from native-select fireEvent.change semantics to
+// chip-click semantics; the dumb-prop contract (PickerOption[],
+// onChange(string|null), disabled, testId) is preserved unchanged. The DOM
+// assertion surface now matches the Radix ToggleGroup that ships per spec §3.4.
+//
+// AnalyticsAreaPicker is feature-local in packages/ui (not exported from
+// @fops/ui public index) until a real second consumer lands (likely #21).
+// Its contract tests live in packages/ui/__tests__/pickers.test.tsx.
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { AnalyticsAreaPicker, ManagedSystemPicker } from '@fops/ui';
+import { ManagedSystemPicker } from '@fops/ui';
 
 describe('<ManagedSystemPicker>', () => {
   test('renders options and fires onChange with the selected id', () => {
@@ -20,16 +26,16 @@ describe('<ManagedSystemPicker>', () => {
         onChange={onChange}
       />,
     );
-    fireEvent.change(screen.getByTestId('managed-system-picker'), { target: { value: 'b' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Beta' }));
     expect(onChange).toHaveBeenCalledWith('b');
   });
 
-  test('selecting placeholder fires onChange(null)', () => {
+  test('re-clicking the selected chip fires onChange(null)', () => {
     const onChange = vi.fn();
     render(
       <ManagedSystemPicker options={[{ id: 'a', label: 'Alpha' }]} value="a" onChange={onChange} />,
     );
-    fireEvent.change(screen.getByTestId('managed-system-picker'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Alpha' }));
     expect(onChange).toHaveBeenCalledWith(null);
   });
 
@@ -43,20 +49,5 @@ describe('<ManagedSystemPicker>', () => {
       />,
     );
     expect(screen.getByText('Alpha (archived)')).toBeInTheDocument();
-  });
-});
-
-describe('<AnalyticsAreaPicker>', () => {
-  test('disabled prop disables the underlying select', () => {
-    render(
-      <AnalyticsAreaPicker
-        options={[]}
-        value={null}
-        onChange={() => {}}
-        disabled
-        testId="aa-picker"
-      />,
-    );
-    expect(screen.getByTestId('aa-picker')).toBeDisabled();
   });
 });

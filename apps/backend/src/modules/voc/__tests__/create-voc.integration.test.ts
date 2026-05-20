@@ -510,7 +510,18 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   });
 
   // ── 12. Sanitizer rejections ──────────────────────────────────────────
-  it.each<[string, () => unknown, 'rich_content.external_image_forbidden' | 'rich_content.disallowed_node']>([
+  // expectedFieldsCode follows sanitize.ts fields_code semantics post-#23:
+  //   - node-type / mark-type / shape failures → 'disallowed_node'
+  //   - bad attr key → 'disallowed_attr_key'
+  //   - bad attr value (URL scheme, UUID, length, etc.) → 'invalid_attr_value'
+  it.each<
+    [
+      string,
+      () => unknown,
+      'rich_content.external_image_forbidden' | 'rich_content.disallowed_node',
+      string,
+    ]
+  >([
     [
       'image node',
       () => ({
@@ -518,6 +529,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         content: [{ type: 'image', attrs: { src: 'https://x.example/a.png' } }],
       }),
       'rich_content.external_image_forbidden',
+      'external_image_forbidden',
     ],
     [
       'mention node',
@@ -526,6 +538,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         content: [{ type: 'mention', attrs: { id: 'u-1' } }],
       }),
       'rich_content.disallowed_node',
+      'disallowed_node',
     ],
     [
       'javascript: link',
@@ -545,6 +558,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         ],
       }),
       'rich_content.disallowed_node',
+      'invalid_attr_value',
     ],
     [
       'oversized text >50KB',
@@ -555,6 +569,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         ],
       }),
       'rich_content.disallowed_node',
+      'disallowed_node',
     ],
     [
       'strike mark',
@@ -568,8 +583,9 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         ],
       }),
       'rich_content.disallowed_node',
+      'disallowed_node',
     ],
-  ])('sanitizer rejects %s → 422 %s', async (_label, buildDoc, expectedCode) => {
+  ])('sanitizer rejects %s → 422 %s', async (_label, buildDoc, expectedCode, expectedFieldsCode) => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-voc-san', 'San MS');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -586,11 +602,38 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe(expectedCode);
     expect(res.json().detail?.fields?.[0]?.path).toEqual(['description_rich_content']);
-    expect(res.json().detail?.fields?.[0]?.code).toBe(
-      expectedCode === 'rich_content.external_image_forbidden'
-        ? 'external_image_forbidden'
-        : 'disallowed_node',
+    expect(res.json().detail?.fields?.[0]?.code).toBe(expectedFieldsCode);
+  });
+
+  // ── 12b. Sanitizer attr-injection (#23) ─────────────────────────────────
+  it('sanitizer rejects attachmentRef.attrs with disallowed_attr_key → 422', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-voc-atki', 'AtKI MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+    const attrInjectionDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'attachmentRef',
+          attrs: { id: randomUUID(), onclick: 'x' },
+        },
+      ],
+    };
+    const res = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'x',
+        description_rich_content: attrInjectionDoc,
+      },
+      randomUUID(),
     );
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('rich_content.disallowed_node');
+    expect(res.json().detail?.fields?.[0]?.path).toEqual(['description_rich_content']);
+    expect(res.json().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
+    expect(res.json().detail?.hint).toMatch(/attrs\.onclick$/);
   });
 
   // ── 13. attachments: [] accepted ──────────────────────────────────────
