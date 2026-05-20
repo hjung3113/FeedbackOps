@@ -7,33 +7,22 @@
 
 import { Button } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 
-import { PermissionGate } from '../../features/admin/permissions/permission-gate.js';
+import { PermissionGate } from '../../../features/admin/permissions/permission-gate.js';
 import {
   ApiError,
   type ManagedSystemDto,
   type RegisterManagedSystemBody,
-  UnauthenticatedError,
   type UpdateManagedSystemBody,
   archiveManagedSystem,
   fetchManagedSystems,
-  fetchMe,
   registerManagedSystem,
   updateManagedSystem,
-} from '../../lib/api.js';
+} from '../../../lib/api.js';
 
-export const Route = createFileRoute('/admin/managed-systems')({
-  beforeLoad: async () => {
-    try {
-      await fetchMe();
-    } catch (err) {
-      if (err instanceof UnauthenticatedError) {
-        throw redirect({ to: '/login' });
-      }
-    }
-  },
+export const Route = createFileRoute('/_authed/admin/managed-systems')({
   component: ManagedSystemsAdminPage,
 });
 
@@ -87,13 +76,13 @@ export function ManagedSystemsBody() {
         {listQuery.isPending ? (
           <p className="text-sm text-text-muted">Loading…</p>
         ) : listQuery.isError ? (
-          <p className="text-sm text-status-danger">Error: {envelopeMessage(listQuery.error)}</p>
+          <p className="text-sm text-accent-danger">Error: {envelopeMessage(listQuery.error)}</p>
         ) : listQuery.data.items.length === 0 ? (
           <p className="text-sm text-text-muted">No managed systems.</p>
         ) : (
           <table
             data-testid="managed-systems-table"
-            className="w-full border border-surface-overlay text-sm"
+            className="w-full border border-default text-sm"
           >
             <thead>
               <tr className="text-left">
@@ -139,7 +128,7 @@ function CreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
   return (
     <form
       data-testid="create-managed-system-form"
-      className="space-y-2 rounded-md border border-surface-overlay p-3"
+      className="space-y-2 rounded-md border border-default p-3"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
@@ -182,7 +171,7 @@ function CreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         Register
       </Button>
       {error && (
-        <p data-testid="create-error" className="text-sm text-status-danger">
+        <p data-testid="create-error" className="text-sm text-accent-danger">
           {error}
         </p>
       )}
@@ -226,7 +215,7 @@ function ManagedSystemRow({
   });
 
   return (
-    <tr data-testid={`managed-system-row-${row.slug}`} className="border-t border-surface-overlay">
+    <tr data-testid={`managed-system-row-${row.slug}`} className="border-t border-default">
       <td className="p-2">{row.slug}</td>
       <td className="p-2">
         <input
@@ -267,7 +256,7 @@ function ManagedSystemRow({
           Archive
         </Button>
         {error && (
-          <p data-testid={`row-error-${row.slug}`} className="text-xs text-status-danger">
+          <p data-testid={`row-error-${row.slug}`} className="text-xs text-accent-danger">
             {error}
           </p>
         )}

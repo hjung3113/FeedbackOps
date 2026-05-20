@@ -26,9 +26,8 @@ describe('<PermissionStateView>', () => {
     render(<PermissionStateView state="request_access" capability="workspace.admin" />);
     const btn = screen.getByRole('button', { name: 'Request access' });
     expect(btn).toBeInTheDocument();
-    // ADR-0016 touch target: the @fops/ui Button class set encodes min-h-10
-    // / min-w-10 which is 40×40px in the tailwind preset.
-    expect(btn).toHaveClass('min-h-10');
+    // ADR-0021 shadcn CVA Button: h-10 px-4 for size=md (default).
+    expect(btn).toHaveClass('h-10');
   });
 
   test('pending_request → "Request pending"', () => {

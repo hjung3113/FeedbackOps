@@ -28,6 +28,7 @@
       }
     }
   },
+  "overrides": [],
   "javascript": {
     "formatter": {
       "quoteStyle": "single",

@@ -5,37 +5,26 @@
 // GET /analytics-areas?managed_system_id=… and shows a flat list. Strict
 // functional rendering per the design-HTML-pending rule.
 
-import { AnalyticsAreaPicker, Button, ManagedSystemPicker, type PickerOption } from '@fops/ui';
+import { Button, ManagedSystemPicker, type PickerOption } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 
-import { PermissionGate } from '../../features/admin/permissions/permission-gate.js';
+import { PermissionGate } from '../../../features/admin/permissions/permission-gate.js';
 import {
   type AnalyticsAreaDto,
   ApiError,
   type ManagedSystemDto,
   type RegisterAnalyticsAreaBody,
-  UnauthenticatedError,
   type UpdateAnalyticsAreaBody,
   archiveAnalyticsArea,
   fetchAnalyticsAreas,
   fetchManagedSystems,
-  fetchMe,
   registerAnalyticsArea,
   updateAnalyticsArea,
-} from '../../lib/api.js';
+} from '../../../lib/api.js';
 
-export const Route = createFileRoute('/admin/analytics-areas')({
-  beforeLoad: async () => {
-    try {
-      await fetchMe();
-    } catch (err) {
-      if (err instanceof UnauthenticatedError) {
-        throw redirect({ to: '/login' });
-      }
-    }
-  },
+export const Route = createFileRoute('/_authed/admin/analytics-areas')({
   component: AnalyticsAreasAdminPage,
 });
 
@@ -129,7 +118,7 @@ export function AnalyticsAreasBody() {
       {aaQuery.isPending ? (
         <p className="text-sm text-text-muted">Loading…</p>
       ) : aaQuery.isError ? (
-        <p className="text-sm text-status-danger">Error: {envelopeMessage(aaQuery.error)}</p>
+        <p className="text-sm text-accent-danger">Error: {envelopeMessage(aaQuery.error)}</p>
       ) : aaQuery.data.items.length === 0 ? (
         <p className="text-sm text-text-muted">No analytics areas.</p>
       ) : filterMsId ? (
@@ -167,7 +156,7 @@ function CreateForm({
   return (
     <form
       data-testid="create-analytics-area-form"
-      className="space-y-2 rounded-md border border-surface-overlay p-3"
+      className="space-y-2 rounded-md border border-default p-3"
       onSubmit={(e) => {
         e.preventDefault();
         if (!msId) {
@@ -212,7 +201,7 @@ function CreateForm({
         Register
       </Button>
       {error && (
-        <p data-testid="create-aa-error" className="text-sm text-status-danger">
+        <p data-testid="create-aa-error" className="text-sm text-accent-danger">
           {error}
         </p>
       )}
@@ -252,7 +241,7 @@ function AAFlatList({
   return (
     <table
       data-testid="analytics-areas-table"
-      className="w-full border border-surface-overlay text-sm"
+      className="w-full border border-default text-sm"
     >
       <thead>
         <tr className="text-left">
@@ -305,7 +294,7 @@ function AnalyticsAreaRow({
   });
 
   return (
-    <tr data-testid={`aa-row-${row.slug}`} className="border-t border-surface-overlay">
+    <tr data-testid={`aa-row-${row.slug}`} className="border-t border-default">
       <td className="p-2">{row.slug}</td>
       <td className="p-2">
         <input
@@ -336,7 +325,7 @@ function AnalyticsAreaRow({
           Archive
         </Button>
         {error && (
-          <p data-testid={`aa-row-error-${row.slug}`} className="text-xs text-status-danger">
+          <p data-testid={`aa-row-error-${row.slug}`} className="text-xs text-accent-danger">
             {error}
           </p>
         )}
@@ -345,7 +334,3 @@ function AnalyticsAreaRow({
   );
 }
 
-// Unused export silences "AnalyticsAreaPicker has no consumer" complaints
-// from boundary tooling; the picker is exported from @fops/ui and may be
-// consumed by routes that don't exist yet (Slice 3+).
-export const _unusedPickerImport = AnalyticsAreaPicker;

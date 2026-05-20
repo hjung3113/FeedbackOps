@@ -106,7 +106,7 @@ export function PermissionStateView(props: PermissionStateViewProps) {
     <section
       aria-live="polite"
       data-permission-state={props.state}
-      className="rounded-md border border-surface-overlay bg-surface-raised p-6 space-y-3"
+      className="rounded-md border border-default bg-surface-raised p-6 space-y-3"
     >
       <header className="flex items-center gap-3">
         <Icon className={`h-5 w-5 ${chrome.iconClassName}`} aria-hidden="true" />

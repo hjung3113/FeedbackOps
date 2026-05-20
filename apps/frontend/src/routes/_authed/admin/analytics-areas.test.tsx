@@ -9,7 +9,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { AnalyticsAreasAdminPage } from './analytics-areas';
@@ -154,16 +154,19 @@ describe('/admin/analytics-areas route', () => {
     await waitFor(() => {
       expect(screen.getByTestId('filter-managed-system-picker')).toBeInTheDocument();
     });
-    // Wait for the MS options to load before selecting one (jsdom <select>
-    // reverts an unknown value to '').
+    // Wait for the MS chips to load before clicking one.
     await waitFor(() => {
       expect(
-        screen.getByTestId('filter-managed-system-picker').querySelector('option[value="ms-tab"]'),
-      ).not.toBeNull();
+        within(screen.getByTestId('filter-managed-system-picker')).getByRole('radio', {
+          name: 'Tableau',
+        }),
+      ).toBeInTheDocument();
     });
-    fireEvent.change(screen.getByTestId('filter-managed-system-picker'), {
-      target: { value: 'ms-tab' },
-    });
+    fireEvent.click(
+      within(screen.getByTestId('filter-managed-system-picker')).getByRole('radio', {
+        name: 'Tableau',
+      }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId('analytics-areas-table')).toBeInTheDocument();
     });
@@ -192,10 +195,12 @@ describe('/admin/analytics-areas route', () => {
     });
     await waitFor(() => {
       expect(
-        screen.getByTestId('create-ms-picker').querySelector('option[value="ms-tab"]'),
-      ).not.toBeNull();
+        within(screen.getByTestId('create-ms-picker')).getByRole('radio', { name: 'Tableau' }),
+      ).toBeInTheDocument();
     });
-    fireEvent.change(screen.getByTestId('create-ms-picker'), { target: { value: 'ms-tab' } });
+    fireEvent.click(
+      within(screen.getByTestId('create-ms-picker')).getByRole('radio', { name: 'Tableau' }),
+    );
     fireEvent.change(screen.getByTestId('create-aa-slug'), { target: { value: 'x' } });
     fireEvent.change(screen.getByTestId('create-aa-name'), { target: { value: 'X' } });
     fireEvent.click(screen.getByTestId('create-aa-submit'));

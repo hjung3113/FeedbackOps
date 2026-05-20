@@ -1,5 +1,7 @@
 # UI foundation: dark-only MVP, WCAG AA, CSS-var tokens, full shadcn wrap
 
+> **Status:** Superseded by [ADR-0021](0021-pack-17-samsung-light-design-system.md) on 2026-05-20. The "dark-only in MVP" decision is reversed; FeedbackOps now ships light-only per Pack 17. This document is retained for historical context; do NOT use it for current decisions.
+
 `docs/frontend/ui-design-system.md` (978 lines) + `DESIGN.md` + `docs/frontend/component-inventory.md` already cover anatomy, variants, states, breakpoints, semantic-token names, and accessibility rules. This ADR locks the four remaining decisions that those documents leave open.
 
 ## Theme: dark-only in MVP
