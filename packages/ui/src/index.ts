@@ -95,3 +95,16 @@ export { FieldRow, type FieldRowProps } from './panel/FieldRow';
 export { PanelSectionTitle, type PanelSectionTitleProps } from './panel/PanelSectionTitle';
 export { Callout, type CalloutProps, type CalloutTone } from './panel/Callout';
 export { DetailPanelHeaderActions, type DetailPanelHeaderActionsProps } from './panel/DetailPanelHeaderActions';
+
+// Permissions (Slice 3 #20)
+export {
+  PermissionBlockedPanel,
+  type PermissionBlockedPanelProps,
+  type PermissionState,
+} from './permissions/PermissionBlockedPanel';
+// Entity (Slice 3 #20 placeholder; Slice 4 wires real node resolution)
+export {
+  LinkedEntityTrail,
+  type LinkedEntityTrailProps,
+  type EntityNodeRef,
+} from './entity/LinkedEntityTrail';
