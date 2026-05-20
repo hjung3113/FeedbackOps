@@ -1,9 +1,31 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { RichEditor, RichContentRenderer, type TipTapDoc } from '@fops/ui';
+import { errorMapper } from '../lib/api/errorMapper';
+import type { ApiErrorEnvelope } from '../lib/api/types';
 
 const SURFACES = ['voc-description', 'reporter-reply', 'public-update', 'internal-comment'] as const;
 type Surface = (typeof SURFACES)[number];
+
+/** Dev-only: fire a fake ApiErrorEnvelope through errorMapper → sonner toast. */
+function triggerToast(envelope: ApiErrorEnvelope, onRetry?: () => void) {
+  const mapped = errorMapper(envelope, onRetry ? { onRetry } : undefined);
+  if (mapped.action) {
+    toast.warning(mapped.message, {
+      action: {
+        label: mapped.action.label,
+        onClick: mapped.action.run,
+      },
+    });
+  } else if (mapped.tone === 'warning') {
+    toast.warning(mapped.message);
+  } else if (mapped.tone === 'info') {
+    toast.info(mapped.message);
+  } else {
+    toast.error(mapped.message);
+  }
+}
 
 function DevRichEditorPage() {
   const [surface, setSurface] = useState<Surface>('voc-description');
@@ -65,6 +87,41 @@ function DevRichEditorPage() {
         <h2 className="text-sm font-medium text-text-secondary">Renderer (mode = {mode})</h2>
         <div className="border border-border-subtle rounded-md p-3 bg-surface-canvas">
           <RichContentRenderer doc={doc} mode={mode} />
+        </div>
+      </section>
+
+      {/* DEV: Sanitizer-error → toast smoke test */}
+      <section className="space-y-2 border border-dashed border-border-strong rounded-md p-3">
+        <h2 className="text-sm font-medium text-text-secondary">Sanitizer error toast (dev smoke)</h2>
+        <p className="text-xs text-text-muted">
+          Simulates backend sanitizer rejection envelopes through errorMapper → sonner. Validates
+          the editor → sanitizer → toast UX before real network calls land in #19.
+        </p>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            type="button"
+            className="px-3 py-1.5 text-sm rounded border border-border-subtle bg-surface-field hover:bg-surface-row-hover"
+            onClick={() =>
+              triggerToast({
+                code: 'rich_content.disallowed_node',
+                message: '',
+              })
+            }
+          >
+            Trigger rich_content.disallowed_node
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1.5 text-sm rounded border border-border-subtle bg-surface-field hover:bg-surface-row-hover"
+            onClick={() =>
+              triggerToast(
+                { code: 'conflict.stale_write', message: '' },
+                () => toast.info('최신 내용을 불러옵니다…'),
+              )
+            }
+          >
+            Trigger conflict.stale_write (with action)
+          </button>
         </div>
       </section>
 
