@@ -92,6 +92,14 @@ vi.mock('../../hooks/useWorkspaceActors', () => ({
 
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 
+// ── Stub usePermissionCheck (REV-2 #9 capability gate) ────────────────────────
+
+vi.mock('@/features/admin/permissions/use-permission-check', () => ({
+  usePermissionCheck: vi.fn(),
+  permissionCheckQueryKey: () => ['permission-check', 'voc.triage', null],
+  permissionRequestsMineKey: ['permission-requests-mine'],
+}));
+
 // ── Stub PermissionBlockedPanel (avoids JSDOM rendering issues with @fops/ui internals)
 vi.mock('@fops/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@fops/ui')>();
@@ -134,6 +142,7 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 import { TriageRoute } from '../TriageRoute';
 import { useMe } from '@/lib/auth/useMe';
+import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -176,6 +185,15 @@ describe('TriageRoute', () => {
     navigateMock.mockClear();
     // Default: admin actor with voc.triage capability
     vi.mocked(useMe).mockReturnValue(ADMIN_ME as unknown as ReturnType<typeof useMe>);
+    // Default: capability check approves (Admin/Developer with scope).
+    vi.mocked(usePermissionCheck).mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: {
+        state: 'approved',
+        decision: { allow: true, via: 'role' },
+      },
+    } as unknown as ReturnType<typeof usePermissionCheck>);
   });
 
   it('renders the triage queue with VOC rows when view=triage', async () => {
@@ -226,19 +244,18 @@ describe('TriageRoute', () => {
     expect(result).toHaveProperty('selected');
   });
 
-  // REV-1 #9: actor with role_level 'user' lacks voc.triage capability.
-  // TriageRoute must render PermissionBlockedPanel instead of the queue.
-  it('[#9] user role: renders PermissionBlockedPanel instead of the triage queue', async () => {
-    vi.mocked(useMe).mockReturnValue({
-      ...ADMIN_ME,
+  // REV-1 #9 / REV-2 #9: actor without voc.triage capability sees
+  // PermissionBlockedPanel instead of the queue. The gate is now driven by
+  // the authoritative usePermissionCheck decision, not by role_level.
+  it('[#9] no voc.triage capability: renders PermissionBlockedPanel instead of the queue', async () => {
+    vi.mocked(usePermissionCheck).mockReturnValue({
+      isPending: false,
+      isError: false,
       data: {
-        ...ADMIN_ME.data,
-        actor: {
-          ...ADMIN_ME.data.actor,
-          role_level: 'user',
-        },
+        state: 'blocked_non_requestable',
+        decision: { allow: false, reason: 'no scope' },
       },
-    } as unknown as ReturnType<typeof useMe>);
+    } as unknown as ReturnType<typeof usePermissionCheck>);
 
     render(<TriageRoute />);
 

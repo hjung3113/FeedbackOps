@@ -10,6 +10,12 @@ export interface UseVocListParams {
   sort?: string;
   cursor?: string;
   limit?: number;
+  /**
+   * REV-2 #9: when false the query stays in 'pending' status and does not
+   * fire its queryFn. Used by TriageRoute to avoid fetching the queue
+   * before the capability gate decides.
+   */
+  enabled?: boolean;
 }
 
 export interface VocListPage {
@@ -22,10 +28,11 @@ export interface VocListPage {
 }
 
 export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage> {
-  const { view, managedSystemId, tab, filters, sort, cursor, limit } = params;
+  const { view, managedSystemId, tab, filters, sort, cursor, limit, enabled } = params;
 
   return useQuery({
     queryKey: ['vocs', view, managedSystemId, tab, filters, sort, cursor] as const,
+    enabled: enabled !== false,
     queryFn: async ({ signal }) => {
       const qs = new URLSearchParams();
       qs.set('view', view);
