@@ -64,3 +64,12 @@ export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPa
 export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
 // Feedback primitives (Slice 3 #19)
 export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';
+
+// Indicators + badges (Slice 3 #20)
+export { SeverityIndicator, type SeverityIndicatorProps, type SeverityEnum } from './indicators/SeverityIndicator';
+export { SeverityBadge, type SeverityBadgeProps } from './badges/SeverityBadge';
+export { ReporterStatusBadge, type ReporterStatusBadgeProps, type ReporterFacingStatusEnum } from './badges/ReporterStatusBadge';
+export { InternalTaskBadge, type InternalTaskBadgeProps, type InternalTaskStatusEnum } from './badges/InternalTaskBadge';
+export { ManagedSystemPill, type ManagedSystemPillProps } from './badges/ManagedSystemPill';
+export { OutlineBadge, type OutlineBadgeProps } from './badges/OutlineBadge';
+export { EntityIconBadge, type EntityIconBadgeProps, type EntityIconType, ENTITY_ICON_MAP } from './badges/EntityIconBadge';
