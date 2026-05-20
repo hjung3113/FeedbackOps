@@ -109,16 +109,17 @@ describe('TriageRoute', () => {
 
   it('renders the triage queue with VOC rows when view=triage', async () => {
     render(<TriageRoute />);
+    // The title may appear in both the queue row and the panel; use getAllByText
     await waitFor(() => {
-      expect(screen.getByText('Triage VOC 1')).toBeInTheDocument();
-      expect(screen.getByText('Triage VOC 2')).toBeInTheDocument();
+      expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Triage VOC 2').length).toBeGreaterThanOrEqual(1);
     });
   });
 
   it('selecting a tab calls navigate with tab param', async () => {
     render(<TriageRoute />);
     await waitFor(() => {
-      expect(screen.getByText('Triage VOC 1')).toBeInTheDocument();
+      expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
     });
 
     // Find a tab trigger (e.g. "미배정" = unassigned)
@@ -138,7 +139,7 @@ describe('TriageRoute', () => {
   it('clicking a row calls navigate with selected param', async () => {
     render(<TriageRoute />);
     await waitFor(() => {
-      expect(screen.getByText('Triage VOC 1')).toBeInTheDocument();
+      expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
     });
 
     const rows = screen.getAllByRole('button', { name: /VOC-00[12]/ });

@@ -8,6 +8,7 @@ import { ListShell, PageShell, WorkbenchShell } from '@fops/ui';
 import { createFileRoute, useSearch } from '@tanstack/react-router';
 import { CreateRoute } from '@/features/voc/routes/CreateRoute';
 import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
+import { TriageRoute } from '@/features/voc/routes/TriageRoute';
 import { z } from 'zod';
 
 const vocSearchSchema = z
@@ -16,7 +17,10 @@ const vocSearchSchema = z
     action: z.enum(['create']).optional(),
     selected: z.string().uuid().optional(),
     managedSystem: z.string().optional(),
-    tab: z.enum(['untriaged', 'high', 'unassigned', 'similar', 'no-link']).optional(),
+    // D-1.1: 'waiting' appended (Chunk 1 — S3-008 decision); existing values stay.
+    // All four triage tabs (unassigned/untriaged/high/waiting) share the same tab= param
+    // as inbox tabs per the #18 schema lock.
+    tab: z.enum(['untriaged', 'high', 'unassigned', 'similar', 'no-link', 'waiting']).optional(),
     sort: z.enum([
       'created_at:desc',
       'created_at:asc',
@@ -55,9 +59,11 @@ export function VocRouteShell() {
     );
   }
   if (search.view === 'triage') {
+    // TriageRoute owns its own toolbar + body; WorkbenchShell wraps at the shell
+    // level. We pass the TriageRoute body via the WorkbenchShell default slot.
     return (
       <WorkbenchShell toolbar={{ title: 'Triage Console' }}>
-        <Placeholder kind="triage" />
+        <TriageRoute />
       </WorkbenchShell>
     );
   }
@@ -85,16 +91,4 @@ function InboxShell({ view }: { view: 'inbox' | 'my' }) {
   );
 }
 
-function Placeholder({ kind }: { kind: string }) {
-  return (
-    <div className="p-8 text-center text-text-muted">
-      <p className="text-sm">
-        VOC routes — <code>{kind}</code> view.
-      </p>
-      <p className="text-xs mt-1">
-        Content lands in #19 (Create) / #20 (Inbox+Detail) / #21 (Triage).
-      </p>
-    </div>
-  );
-}
 

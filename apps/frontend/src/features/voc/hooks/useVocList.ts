@@ -3,7 +3,7 @@ import { apiClient } from '@/lib/api';
 import type { VocListItem } from '@fops/shared';
 
 export interface UseVocListParams {
-  view: 'inbox' | 'my';
+  view: 'inbox' | 'my' | 'triage';
   managedSystemId?: string;
   tab?: string;
   filters?: Record<string, string[]>;
