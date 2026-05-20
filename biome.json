@@ -28,6 +28,22 @@
       }
     }
   },
+  "overrides": [
+    {
+      "include": ["packages/ui/src/components/shadcn/combobox.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "noAutofocus": "off",
+            "useFocusableInteractive": "off",
+            "noNoninteractiveElementToInteractiveRole": "off",
+            "useKeyWithClickEvents": "off"
+          }
+        }
+      }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "single",

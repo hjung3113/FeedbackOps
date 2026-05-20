@@ -1,3 +1,4 @@
+import { Check, ChevronsUpDown } from 'lucide-react';
 /**
  * Combobox — command-less pattern (ADR-0021 C1b).
  *
@@ -20,9 +21,8 @@
  *   - Keyboard: Arrow Down/Up (cycle), Enter (select), Escape (close), Home/End.
  */
 import * as React from 'react';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from './popover.js';
 import { cn } from '../../utils/cn.js';
+import { Popover, PopoverContent, PopoverTrigger } from './popover.js';
 
 export interface ComboboxOption {
   value: string;
@@ -62,7 +62,8 @@ export function Combobox({
 
   const selected = options.find((o) => o.value === value);
 
-  // Reset active index when filtered list changes or popover closes
+  // Reset active index when filtered list changes or popover closes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — filtered is a derived value from useMemo; open is a signal not a dep of setActiveIndex
   React.useEffect(() => {
     setActiveIndex(-1);
   }, [filtered, open]);
@@ -161,7 +162,9 @@ export function Combobox({
           className="max-h-60 overflow-y-auto py-1"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-text-muted" role="presentation">No results.</li>
+            <li className="px-3 py-2 text-sm text-text-muted" role="presentation">
+              No results.
+            </li>
           ) : (
             filtered.map((option, idx) => (
               <li
