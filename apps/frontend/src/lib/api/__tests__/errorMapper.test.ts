@@ -63,6 +63,30 @@ describe('errorMapper — ERROR_CODES coverage', () => {
     expect(called).toBe(true);
   });
 
+  it('rate_limited.actor renders retry_after_seconds inline (<60s → 초)', () => {
+    const mapped = errorMapper({
+      code: 'rate_limited.actor',
+      message: 'rate limit exceeded',
+      detail: { retry_after_seconds: 30 },
+    });
+    expect(mapped.tone).toBe('warning');
+    expect(mapped.message).toContain('30초');
+  });
+
+  it('rate_limited.ip renders retry_after_seconds inline (≥60s → 분, ceil)', () => {
+    const mapped = errorMapper({
+      code: 'rate_limited.ip',
+      message: 'rate limit exceeded',
+      detail: { retry_after_seconds: 75 },
+    });
+    expect(mapped.message).toContain('2분');
+  });
+
+  it('rate_limited.actor falls back to generic wait copy without detail', () => {
+    const mapped = errorMapper({ code: 'rate_limited.actor', message: '' });
+    expect(mapped.message).toBe('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
+  });
+
   it('unknown code falls back to generic error', () => {
     const mapped = errorMapper({ code: 'made.up.code' as ErrorCode, message: '' });
     expect(mapped.message).toBe(GENERIC_ERROR_MESSAGE);

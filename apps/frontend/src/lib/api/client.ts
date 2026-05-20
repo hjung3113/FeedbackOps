@@ -1,4 +1,4 @@
-import { ApiError, type ApiErrorEnvelope } from './types';
+import { ApiError, type ApiErrorEnvelope, type RateLimitInfo } from './types';
 
 export interface ApiClientOptions {
   body?: unknown;
@@ -14,6 +14,8 @@ export interface ApiResponse<T> {
   data: T;
   etag: string | undefined;
   requestId: string | undefined;
+  rateLimit?: RateLimitInfo;
+  retryAfterSeconds?: number;
 }
 
 // PUT is intentionally excluded: the locked API contract auto-mints Idempotency-Key
@@ -49,9 +51,13 @@ export async function apiClient<T = unknown>(
 
   const etag = res.headers.get('etag') ?? undefined;
   const requestId = res.headers.get('x-request-id') ?? undefined;
+  const { rateLimit, retryAfterSeconds } = parseRateLimitHeaders(res.headers);
 
   if (res.status === 304) {
-    return { status: 304, data: undefined as T, etag, requestId };
+    const base: ApiResponse<T> = { status: 304, data: undefined as T, etag, requestId };
+    if (rateLimit) base.rateLimit = rateLimit;
+    if (retryAfterSeconds !== undefined) base.retryAfterSeconds = retryAfterSeconds;
+    return base;
   }
 
   const text = await res.text();
@@ -62,13 +68,45 @@ export async function apiClient<T = unknown>(
       data && typeof data === 'object' && 'code' in data
         ? (data as ApiErrorEnvelope)
         : { code: 'internal.unexpected', message: `HTTP ${res.status}` };
-    throw new ApiError(res.status, envelope, requestId);
+    throw new ApiError(res.status, envelope, requestId, rateLimit, retryAfterSeconds);
   }
 
-  return { status: res.status, data: data as T, etag, requestId };
+  const base: ApiResponse<T> = { status: res.status, data: data as T, etag, requestId };
+  if (rateLimit) base.rateLimit = rateLimit;
+  if (retryAfterSeconds !== undefined) base.retryAfterSeconds = retryAfterSeconds;
+  return base;
 }
 
 function mintInlineKey(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+// Parses fastify @fastify/rate-limit response headers.
+// `x-ratelimit-reset` is unix epoch seconds; `retry-after` is delta-seconds.
+// All four headers must be present and integer-parseable for rateLimit to be populated;
+// otherwise the field is omitted (callers fall back to generic copy).
+function parseRateLimitHeaders(
+  headers: Headers,
+): { rateLimit?: RateLimitInfo; retryAfterSeconds?: number } {
+  const limit = parseIntHeader(headers.get('x-ratelimit-limit'));
+  const remaining = parseIntHeader(headers.get('x-ratelimit-remaining'));
+  const reset = parseIntHeader(headers.get('x-ratelimit-reset'));
+  const retryAfter = parseIntHeader(headers.get('retry-after'));
+
+  const rateLimit: RateLimitInfo | undefined =
+    limit !== undefined && remaining !== undefined && reset !== undefined
+      ? { limit, remaining, resetAt: new Date(reset * 1000) }
+      : undefined;
+
+  const result: { rateLimit?: RateLimitInfo; retryAfterSeconds?: number } = {};
+  if (rateLimit) result.rateLimit = rateLimit;
+  if (retryAfter !== undefined) result.retryAfterSeconds = retryAfter;
+  return result;
+}
+
+function parseIntHeader(raw: string | null): number | undefined {
+  if (raw == null) return undefined;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : undefined;
 }
