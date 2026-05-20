@@ -59,6 +59,13 @@ export interface UseUndoableMutationOptions<TInput, TOutput, TSnapshot = TInput>
    * compensate optimistic UI side-effects (e.g. restore a removed row).
    */
   onAbort?: (input: TInput) => void;
+  /**
+   * Optional compensation-error handler — fired when compensateFn rejects
+   * (either because a required refetch failed, or the compensating PATCH itself
+   * returned an error). REV-4: prevents unhandled rejections from fire-and-forget
+   * `void compensate()` in undoLast; callers use this to surface an error toast.
+   */
+  onCompensateError?: (err: unknown) => void;
 }
 
 /**
@@ -174,7 +181,11 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
         // compensateFn to reconcile, do NOT silently drop the response.
         if (call.status === 'aborted-by-user' || call.status === 'preempted') {
           call.status = 'settled';
-          void optsRef.current.compensateFn(call.snapshot, output);
+          // REV-4: attach .catch so compensation failures do not become
+          // unhandled rejections. Surface via onCompensateError.
+          void optsRef.current.compensateFn(call.snapshot, output).catch((err: unknown) => {
+            optsRef.current.onCompensateError?.(err);
+          });
           // Don't touch phaseRef/state — undoLast or the new mutate already
           // moved the hook out of pending for THIS call's lifecycle.
           return;
@@ -251,10 +262,18 @@ export function useUndoableMutation<TInput, TOutput, TSnapshot = TInput>(
 
     if (phase === 'settled') {
       // Already resolved: fire compensate, then reset.
-      void compensate().then(() => {
-        phaseRef.current = 'idle';
-        setState('idle');
-      });
+      // REV-4: attach .catch so compensation failures (refetch error, 409, etc.)
+      // do not become unhandled rejections. Surface via onCompensateError.
+      void compensate()
+        .then(() => {
+          phaseRef.current = 'idle';
+          setState('idle');
+        })
+        .catch((err: unknown) => {
+          phaseRef.current = 'idle';
+          setState('idle');
+          optsRef.current.onCompensateError?.(err);
+        });
       return;
     }
 

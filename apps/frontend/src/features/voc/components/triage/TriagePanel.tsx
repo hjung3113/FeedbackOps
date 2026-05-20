@@ -212,11 +212,19 @@ export function TriagePanel({
           if (fresh && typeof fresh.updated_at === 'string') {
             freshUpdatedAt = fresh.updated_at;
           }
-        } catch {
-          // Refetch itself failed (network, etc.) — fall back to the stale
-          // baseline. The compensating PATCH will then likely 409, which is
-          // a better outcome than throwing inside compensateFn (which would
-          // surface as an unhandled rejection).
+        } catch (refetchErr) {
+          // REV-4 P1: Refetch itself failed (network, etc.). Do NOT fall through
+          // to executeCompensatingPatch with a stale If-Match — that's a
+          // guaranteed 409 and provides no value to the user. Surface an error
+          // toast so the user knows compensation failed, and throw so undoLast's
+          // .catch handler can reset the hook state cleanly.
+          toast.error('VOC를 새로 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.');
+          // Tag so onCompensateError can skip double-toasting.
+          const tagged = Object.assign(
+            refetchErr instanceof Error ? refetchErr : new Error(String(refetchErr)),
+            { __refetchFailure: true as const },
+          );
+          throw tagged;
         }
       }
 
@@ -232,6 +240,17 @@ export function TriagePanel({
     // current props, which may already point at the auto-advanced VOC.
     onAbort: (input: TriageInput) => {
       onOptimisticRestoreRef.current?.(input.vocId);
+    },
+    // REV-4: surface a toast when compensateFn rejects. Two paths land here:
+    //   a) Refetch failure — the catch block above already toasted and tagged
+    //      the error with __refetchFailure; skip toasting again here.
+    //   b) Compensating PATCH failure (e.g. 409) — toast the generic undo error.
+    onCompensateError: (err: unknown) => {
+      if (err !== null && typeof err === 'object' && '__refetchFailure' in err) {
+        // Already toasted by the refetch catch block.
+        return;
+      }
+      toast.error('실행 취소 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
     },
     // Error matrix (PLAN-21 §302-307): handle via onError so we get the actual error object.
     // REV-1 #5: use the original input.vocId (closure on the failing mutate call),
