@@ -95,15 +95,37 @@ export function EditDescriptionModal({
   // access to trigger re-renders when isDirty flips.
   const { isDirty } = form.formState;
 
-  // Re-populate defaults whenever the voc changes (e.g. after stale_write refresh).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed on id+updated_at; voc.title/description change is correlated and form.reset is stable
+  // REV-2 #8: do NOT auto-reset the form when voc.updated_at changes.
+  // A stale_write refetch lands while the user may still be typing — auto-reset
+  // would clobber their edits. Instead, only reset when voc.id changes (the
+  // modal is being reused for a different VOC entirely) and otherwise leave
+  // the user's in-progress edits intact. The stale_write toast carries a
+  // "다시 불러오기" action that explicitly resets the form to the refreshed
+  // VOC defaults (handleReloadFromVoc, below).
+  // Keep the latest voc in a ref so the toast action button (created inside
+  // mutation.onError, which runs outside the React render lifecycle) always
+  // resets to the most recently refetched defaults.
+  const vocRef = React.useRef(voc);
+  vocRef.current = voc;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only reset when the modal hosts a different VOC; form.reset is stable
   React.useEffect(() => {
     form.reset({
       title: voc.title,
       description_rich_content: voc.description_rich_content as TipTapDoc,
       attachments: [],
     });
-  }, [voc.id, voc.updated_at]);
+    // Intentionally only voc.id — updated_at change must NOT auto-reset.
+  }, [voc.id]);
+
+  const handleReloadFromVoc = React.useCallback(() => {
+    const fresh = vocRef.current;
+    form.reset({
+      title: fresh.title,
+      description_rich_content: fresh.description_rich_content as TipTapDoc,
+      attachments: [],
+    });
+  }, [form]);
 
   // Propagate server validation.failed errors into form field errors.
   // biome-ignore lint/correctness/useExhaustiveDependencies: form is stable (useForm), mutation.error is the reactive dep
@@ -177,14 +199,21 @@ export function EditDescriptionModal({
             closeAndReset();
             return;
           }
-          // REV-1 #8: stale_write — invalidate ['voc', id] so the detail query refetches
-          // and the useEffect above re-populates form defaults with the fresh VOC + new
-          // updated_at (If-Match baseline). Keep modal open with user's edits preserved.
+          // REV-1 #8 + REV-2 #8: stale_write — invalidate ['voc', id] so the
+          // detail query refetches with the new updated_at (If-Match baseline).
+          // The modal does NOT auto-reset; the toast carries a "다시 불러오기"
+          // action so user edits made between the 409 and the refetch aren't
+          // clobbered. The user clicks the action when they're ready to
+          // restart from the refreshed defaults.
           if (code === 'conflict.stale_write') {
             void queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
-            toast.warning(
-              'VOC가 변경되었습니다. 새로 불러왔습니다. 다시 시도해 주세요.',
-            );
+            toast.warning('VOC가 변경되었습니다. 편집 중인 내용을 잃지 않으려면 [다시 불러오기]를 눌러 새로 시작하세요.', {
+              duration: 10000,
+              action: {
+                label: '다시 불러오기',
+                onClick: handleReloadFromVoc,
+              },
+            });
             return;
           }
           // validation.failed: handled via useEffect → form.setError
