@@ -64,6 +64,8 @@ export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPa
 export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
 // Feedback primitives (Slice 3 #19)
 export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';
+// Feedback primitives (Slice 3 #21 C3.1)
+export { UndoToast, type UndoToastProps } from './feedback/UndoToast';
 
 // Indicators + badges (Slice 3 #20)
 export { SeverityIndicator, type SeverityIndicatorProps, type SeverityEnum } from './indicators/SeverityIndicator';

@@ -10,16 +10,34 @@ import { useUndoableMutation } from '../useUndoableMutation';
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * makeSuccessHook — creates mock fns for a mutation that resolves after `delay` ms.
+ * delay=0 uses Promise.resolve() (microtask) so fake timers are not needed.
+ * delay>0 uses setTimeout so the caller must advance fake timers.
+ */
 function makeSuccessHook(delay = 0) {
   const mutationFn = vi.fn(
-    (_input: string, signal?: AbortSignal) =>
-      new Promise<string>((resolve, reject) => {
+    (_input: string, signal?: AbortSignal) => {
+      if (delay === 0) {
+        // Resolve immediately as a microtask — no setTimeout needed.
+        return new Promise<string>((resolve, reject) => {
+          Promise.resolve().then(() => {
+            if (signal?.aborted) {
+              reject(new DOMException('Aborted', 'AbortError'));
+            } else {
+              resolve('ok');
+            }
+          });
+        });
+      }
+      return new Promise<string>((resolve, reject) => {
         const timer = setTimeout(() => resolve('ok'), delay);
         signal?.addEventListener('abort', () => {
           clearTimeout(timer);
           reject(new DOMException('Aborted', 'AbortError'));
         });
-      }),
+      });
+    },
   );
   const snapshot = vi.fn((input: string) => `snap:${input}`);
   const compensateFn = vi.fn((_snap: string) => Promise.resolve('compensated'));
@@ -31,27 +49,25 @@ function makeSuccessHook(delay = 0) {
 // ---------------------------------------------------------------------------
 
 describe('useUndoableMutation', () => {
-  beforeEach(() => {
+  it('abort cancels an in-flight mutation before it resolves', () => {
     vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+    try {
+      const { mutationFn, snapshot, compensateFn } = makeSuccessHook(500);
 
-  it('abort cancels an in-flight mutation before it resolves', async () => {
-    const { mutationFn, snapshot, compensateFn } = makeSuccessHook(500);
+      const { result } = renderHook(() =>
+        useUndoableMutation<string, string>({ mutationFn, snapshot, compensateFn }),
+      );
 
-    const { result } = renderHook(() =>
-      useUndoableMutation<string, string>({ mutationFn, snapshot, compensateFn }),
-    );
+      // fire and abort before it resolves
+      act(() => { result.current.mutate('hello'); });
+      act(() => { result.current.undoLast(); });
 
-    // fire and abort before it resolves
-    act(() => { result.current.mutate('hello'); });
-    act(() => { result.current.undoLast(); });
-
-    // compensateFn should NOT be called on in-flight abort
-    expect(compensateFn).not.toHaveBeenCalled();
-    expect(result.current.state).toBe('idle');
+      // compensateFn should NOT be called on in-flight abort
+      expect(compensateFn).not.toHaveBeenCalled();
+      expect(result.current.state).toBe('idle');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('settled compensate fires with a fresh key after mutation resolves', async () => {
@@ -103,19 +119,24 @@ describe('useUndoableMutation', () => {
   });
 
   it('dispose/cleanup aborts any pending in-flight mutation', () => {
-    const { mutationFn, snapshot, compensateFn } = makeSuccessHook(1000);
+    vi.useFakeTimers();
+    try {
+      const { mutationFn, snapshot, compensateFn } = makeSuccessHook(1000);
 
-    const { result, unmount } = renderHook(() =>
-      useUndoableMutation<string, string>({ mutationFn, snapshot, compensateFn }),
-    );
+      const { result, unmount } = renderHook(() =>
+        useUndoableMutation<string, string>({ mutationFn, snapshot, compensateFn }),
+      );
 
-    act(() => { result.current.mutate('cleanup-test'); });
-    expect(result.current.state).toBe('pending');
+      act(() => { result.current.mutate('cleanup-test'); });
+      expect(result.current.state).toBe('pending');
 
-    // unmount triggers useEffect cleanup → aborts the controller
-    unmount();
+      // unmount triggers useEffect cleanup → aborts the controller
+      unmount();
 
-    // compensateFn should never have fired
-    expect(compensateFn).not.toHaveBeenCalled();
+      // compensateFn should never have fired
+      expect(compensateFn).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
