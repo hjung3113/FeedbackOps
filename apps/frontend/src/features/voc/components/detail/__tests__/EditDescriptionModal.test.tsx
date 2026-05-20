@@ -163,6 +163,56 @@ describe('<EditDescriptionModal>', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  // Test 3b: [REV-1 #8] stale_write: invalidates query + shows refresh toast (keeps modal open)
+  // On conflict.stale_write the modal must invalidate ['voc', id] so the next render
+  // re-opens with fresh data + new If-Match baseline. A specific toast message is shown.
+  it('[#8] stale_write: invalidates voc query and shows refresh toast', async () => {
+    const qc = new (await import('@tanstack/react-query')).QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
+
+    const { QueryClientProvider: QCP } = await import('@tanstack/react-query');
+    const onClose = vi.fn();
+
+    const staleWriteError = new (await import('@/lib/api')).ApiError(409, {
+      code: 'conflict.stale_write',
+      message: '수정 충돌이 발생했습니다.',
+    });
+
+    let capturedOnError: ((err: unknown) => void) | undefined;
+    const mutateMock = vi.fn((_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+      capturedOnError = opts?.onError;
+    });
+
+    vi.mocked(useVocEditDescriptionMutation).mockReturnValue({
+      ...DEFAULT_MUTATION,
+      mutate: mutateMock,
+    } as unknown as ReturnType<typeof useVocEditDescriptionMutation>);
+
+    const user = userEvent.setup();
+    render(
+      <QCP client={qc}>
+        <EditDescriptionModal voc={VOC} open={true} onClose={onClose} />
+      </QCP>,
+    );
+
+    // Submit the form (no dirty needed — just submit as-is)
+    await user.click(screen.getByRole('button', { name: '수정 저장' }));
+
+    // Trigger stale_write error via captured onError
+    expect(capturedOnError).toBeDefined();
+    capturedOnError!(staleWriteError);
+
+    // Modal must stay open (onClose not called)
+    expect(onClose).not.toHaveBeenCalled();
+
+    // ['voc', id] must be invalidated
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['voc', VOC.id] }),
+    );
+  });
+
   // Test 4: validation.failed renders per-field error
   // The useEffect in EditDescriptionModal watches mutation.error and calls
   // form.setError when a validation.failed error is present. This test verifies

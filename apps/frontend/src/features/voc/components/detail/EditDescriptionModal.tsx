@@ -7,6 +7,8 @@
 // surface, dropzone disabled state, and footer button gap as the create form.
 //
 // C6.2 of slice3 #21.
+// REV-1 #8: stale_write now invalidates ['voc', id] so the modal re-opens with fresh
+//           data and a new If-Match baseline. Toast "VOC가 변경되었습니다…" is shown.
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
@@ -175,9 +177,14 @@ export function EditDescriptionModal({
             closeAndReset();
             return;
           }
-          // stale_write: keep modal open; caller re-reads voc.updated_at on next query refresh
+          // REV-1 #8: stale_write — invalidate ['voc', id] so the detail query refetches
+          // and the useEffect above re-populates form defaults with the fresh VOC + new
+          // updated_at (If-Match baseline). Keep modal open with user's edits preserved.
           if (code === 'conflict.stale_write') {
-            toast.warning(errorMapper(err.envelope).message);
+            void queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
+            toast.warning(
+              'VOC가 변경되었습니다. 새로 불러왔습니다. 다시 시도해 주세요.',
+            );
             return;
           }
           // validation.failed: handled via useEffect → form.setError
