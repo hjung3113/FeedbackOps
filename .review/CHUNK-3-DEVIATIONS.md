@@ -137,3 +137,21 @@
 **Files modified:** `apps/frontend/src/features/voc/hooks/useUndoableMutation.ts`, `apps/frontend/src/features/voc/components/triage/TriagePanel.tsx`.
 
 **RED → GREEN test:** `apps/frontend/src/features/voc/components/triage/__tests__/TriagePanel.undoTokenBinding.test.tsx` — call A settles, call B starts and stays in-flight, clicking toast A asserts (a) call B's controller is not aborted and (b) `onOptimisticRestore` is not invoked.
+
+---
+
+### D-REV3-CY: empty-body / shape-mismatch compensate refetches the VOC envelope
+
+**Origin:** codex REV-3 P1 (`TriagePanel.tsx:170`, REV-2 #4 still REWORK).
+
+**Issue:** `apiClient` returns `undefined` for an empty 200 response body (`client.ts:64`). The compensate guard checked `output !== null` and then dereferenced `output.updated_at` — `undefined !== null` is true, so the path threw `TypeError: Cannot read properties of undefined`, propagating as an unhandled rejection inside `compensateFn` and leaving the queue and server divergent.
+
+**Fix (option 2 from the directive — most defensive):**
+- `compensateFn` now treats both `null` and an `output` lacking a string `updated_at` as "fresh updated_at unknown".
+- When fresh `updated_at` is missing it refetches `['voc', vocId]` via `queryClient.refetchQueries({ ..., type: 'all' })` (so the refetch fires even when there's no active observer) and reads the fresh value off the cache. If the cache is empty, it falls back to `fetchQuery` against the same key with the standard `apiClient<…>('GET', /vocs/:id)` queryFn.
+- Only when both paths fail does it fall back to the stale baseline; the compensating PATCH may then 409, but it will not throw inside `compensateFn`.
+- `TriagePanel` now wires `useQueryClient()`. TriageRoute test files gained a `QueryClientProvider` wrapper to satisfy the new dependency in render.
+
+**Files modified:** `apps/frontend/src/features/voc/components/triage/TriagePanel.tsx`, `apps/frontend/src/features/voc/routes/__tests__/TriageRoute.test.tsx`, `apps/frontend/src/features/voc/routes/__tests__/TriageRoute.capability.test.tsx`.
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/components/triage/__tests__/TriagePanel.emptyBodyCompensate.test.tsx` — first PATCH returns an empty 200 body; the undo path asserts (a) the VOC detail GET fires, (b) the compensating PATCH `If-Match` carries the refetched `updated_at`, (c) no unhandled rejection and `onOptimisticRestore` fires on the success path.

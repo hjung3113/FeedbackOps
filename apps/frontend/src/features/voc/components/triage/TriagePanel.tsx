@@ -15,6 +15,7 @@
 
 import * as React from 'react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import type { VocListItem } from '@fops/shared';
 import {
   PanelSectionTitle,
@@ -87,6 +88,7 @@ export function TriagePanel({
 }: TriagePanelProps): React.ReactElement {
   const { panelState, dispatch, dirty } = useTriagePanelState(voc);
   const { actors } = useWorkspaceActors();
+  const queryClient = useQueryClient();
   // Ref for the scrollable body — used by DetailPanelSectionNav to observe anchors
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -168,10 +170,58 @@ export function TriagePanel({
       // the If-Match for the compensating PATCH. The original snapshot.ifMatch
       // (voc.updated_at at confirm time) is stale once the first PATCH commits
       // — reusing it self-fails with conflict.stale_write.
+      //
+      // REV-3 Cluster Y: `apiClient` returns `undefined` for an empty 200
+      // body. The prior guard checked `output !== null` and then dereferenced
+      // `output.updated_at`, which threw for `undefined`. When fresh
+      // `updated_at` is absent from the PATCH response, refetch
+      // ['voc', vocId] and pull the fresh `updated_at` off the refreshed
+      // envelope instead of falling back to the stale snapshot baseline.
+      let freshUpdatedAt: string | undefined =
+        output != null && typeof (output as { updated_at?: unknown }).updated_at === 'string'
+          ? (output as { updated_at: string }).updated_at
+          : undefined;
+
+      if (freshUpdatedAt === undefined) {
+        try {
+          // Use refetchQueries with type:'all' so we refetch even when there's
+          // no active observer (the detail panel may not be mounted while the
+          // triage queue panel runs the undo). If the query has never been
+          // populated, fall back to fetchQuery.
+          await queryClient.refetchQueries({
+            queryKey: ['voc', snapshot.vocId],
+            type: 'all',
+          });
+          let fresh = queryClient.getQueryData<{ updated_at?: unknown }>([
+            'voc',
+            snapshot.vocId,
+          ]);
+          if (!fresh) {
+            fresh = await queryClient.fetchQuery<{ updated_at?: unknown }>({
+              queryKey: ['voc', snapshot.vocId],
+              queryFn: async ({ signal }) => {
+                const res = await apiClient<{ updated_at?: unknown }>(
+                  'GET',
+                  `/vocs/${snapshot.vocId}`,
+                  { signal },
+                );
+                return res.data;
+              },
+            });
+          }
+          if (fresh && typeof fresh.updated_at === 'string') {
+            freshUpdatedAt = fresh.updated_at;
+          }
+        } catch {
+          // Refetch itself failed (network, etc.) — fall back to the stale
+          // baseline. The compensating PATCH will then likely 409, which is
+          // a better outcome than throwing inside compensateFn (which would
+          // surface as an unhandled rejection).
+        }
+      }
+
       const freshSnapshot: TriageSnapshot =
-        output !== null && typeof output.updated_at === 'string'
-          ? { ...snapshot, ifMatch: output.updated_at }
-          : snapshot;
+        freshUpdatedAt !== undefined ? { ...snapshot, ifMatch: freshUpdatedAt } : snapshot;
       await executeCompensatingPatch(freshSnapshot);
       // Re-insert into queue after successful compensate
       onOptimisticRestoreRef.current?.(snapshot.vocId);

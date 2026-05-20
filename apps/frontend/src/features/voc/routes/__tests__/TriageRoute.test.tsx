@@ -6,6 +6,16 @@
 import * as React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// REV-3 Cluster Y: TriagePanel now uses useQueryClient (for the empty-body
+// compensate refetch path). Tests must wrap renders in QueryClientProvider.
+function renderWithQc(node: React.ReactElement) {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>);
+}
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
 
@@ -197,7 +207,7 @@ describe('TriageRoute', () => {
   });
 
   it('renders the triage queue with VOC rows when view=triage', async () => {
-    render(<TriageRoute />);
+    renderWithQc(<TriageRoute />);
     // The title may appear in both the queue row and the panel; use getAllByText
     await waitFor(() => {
       expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
@@ -206,7 +216,7 @@ describe('TriageRoute', () => {
   });
 
   it('selecting a tab calls navigate with tab param', async () => {
-    render(<TriageRoute />);
+    renderWithQc(<TriageRoute />);
     await waitFor(() => {
       expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
     });
@@ -226,7 +236,7 @@ describe('TriageRoute', () => {
   });
 
   it('clicking a row calls navigate with selected param', async () => {
-    render(<TriageRoute />);
+    renderWithQc(<TriageRoute />);
     await waitFor(() => {
       expect(screen.getAllByText('Triage VOC 1').length).toBeGreaterThanOrEqual(1);
     });
@@ -257,7 +267,7 @@ describe('TriageRoute', () => {
       },
     } as unknown as ReturnType<typeof usePermissionCheck>);
 
-    render(<TriageRoute />);
+    renderWithQc(<TriageRoute />);
 
     // PermissionBlockedPanel must be visible
     await waitFor(() => {

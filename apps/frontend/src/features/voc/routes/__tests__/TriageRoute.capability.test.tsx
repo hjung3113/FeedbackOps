@@ -12,6 +12,16 @@
 import * as React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// REV-3 Cluster Y: TriagePanel now uses useQueryClient (for the empty-body
+// compensate refetch path). Tests must wrap renders in QueryClientProvider.
+function renderWithQc(node: React.ReactElement) {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>);
+}
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
 
@@ -116,7 +126,7 @@ describe('TriageRoute capability gate (REV-2 #9 + NEW-3)', () => {
       },
     } as unknown as ReturnType<typeof usePermissionCheck>);
 
-    render(<TriageRoute />);
+    renderWithQc(<TriageRoute />);
 
     await waitFor(() => {
       expect(screen.getByTestId('permission-blocked-panel')).toBeInTheDocument();
@@ -161,7 +171,7 @@ describe('TriageRoute capability gate (REV-2 #9 + NEW-3)', () => {
       refetch: vi.fn(),
     });
 
-    render(<TriageRoute />);
+    renderWithQc(<TriageRoute />);
 
     await waitFor(() => {
       // Title appears at least once (queue row).
@@ -179,7 +189,7 @@ describe('TriageRoute capability gate (REV-2 #9 + NEW-3)', () => {
       },
     } as unknown as ReturnType<typeof usePermissionCheck>);
 
-    render(<TriageRoute />);
+    renderWithQc(<TriageRoute />);
 
     // useVocList must have been called with enabled:false (or not at all
     // executing the query). We assert on the queryFn never firing by checking
