@@ -3,7 +3,7 @@
 // C5.1 (slice3 #21) — infrastructure (tabs, draft state, visibility)
 // C5.2 (slice3 #21) — PublicUpdateComposer wired (replaces placeholder)
 // C5.3 (slice3 #21) — ReporterReplyComposer wired (replaces placeholder)
-// C5.4 (slice3 #21) — InternalCommentComposer wired (replaces placeholder)
+// C5.4 (slice3 #21) — InternalCommentComposer wired (replaces placeholder) ← THIS CHUNK
 //
 // Spec: PLAN-21-SUBCHUNKS.md C5.1 / C5.2
 // Prototype ref: docs/design-prototype/screen-voc.jsx:400-470
@@ -18,6 +18,8 @@ import { useComposerVisibility } from '@/features/voc/hooks/useComposerVisibilit
 import { useComposerDraft, type ComposerSurface } from '@/features/voc/hooks/useComposerDraft';
 import { ComposerTabs } from './ComposerTabs';
 import { PublicUpdateComposer } from './PublicUpdateComposer';
+import { ReporterReplyComposer } from './ReporterReplyComposer';
+import { InternalCommentComposer } from './InternalCommentComposer';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -70,10 +72,10 @@ export function ComposerSection({ voc, me }: ComposerSectionProps): React.ReactE
           <PublicUpdateComposer voc={voc} me={me} />
         )}
         {activeTab === 'reply' && visibility.showReply && (
-          <div data-testid="composer-reply-placeholder">TODO: ReporterReplyComposer</div>
+          <ReporterReplyComposer voc={voc} me={me} />
         )}
         {activeTab === 'internal' && visibility.showInternal && (
-          <div data-testid="composer-internal-placeholder">TODO: InternalCommentComposer</div>
+          <InternalCommentComposer voc={voc} me={me} />
         )}
       </div>
 

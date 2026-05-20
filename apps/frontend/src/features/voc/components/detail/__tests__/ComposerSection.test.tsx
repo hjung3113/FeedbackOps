@@ -5,11 +5,22 @@
 
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as React from 'react';
 
 vi.mock('@/features/voc/hooks/useComposerVisibility', () => ({
   useComposerVisibility: vi.fn(),
 }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
+
+// Mock RichEditor to avoid TipTap JSDOM issues (pulled in by ReporterReplyComposer / PublicUpdateComposer).
+vi.mock('@fops/ui', async (importActual) => {
+  const actual = await importActual<typeof import('@fops/ui')>();
+  return {
+    ...actual,
+    RichEditor: () => React.createElement('div', { 'data-testid': 'rich-editor' }),
+  };
+});
 
 import { useComposerVisibility } from '@/features/voc/hooks/useComposerVisibility';
 import { useMe } from '@/lib/auth/useMe';
@@ -79,6 +90,14 @@ beforeEach(() => {
   } as unknown as ReturnType<typeof useMe>);
 });
 
+function makeWrapper() {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return ({ children }: { children: React.ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: qc }, children);
+}
+
 describe('<ComposerSection>', () => {
   it('renders the composer section when at least one tab is visible', () => {
     vi.mocked(useComposerVisibility).mockReturnValue({
@@ -86,13 +105,13 @@ describe('<ComposerSection>', () => {
       showReply: true,
       showInternal: false,
     });
-    render(<ComposerSection voc={VOC} me={ME} />);
+    render(<ComposerSection voc={VOC} me={ME} />, { wrapper: makeWrapper() });
     expect(screen.getByTestId('composer-section')).toBeInTheDocument();
   });
 
   it('renders nothing when no tabs are visible', () => {
     vi.mocked(useComposerVisibility).mockReturnValue(null);
-    const { container } = render(<ComposerSection voc={VOC} me={ME} />);
+    const { container } = render(<ComposerSection voc={VOC} me={ME} />, { wrapper: makeWrapper() });
     expect(container.firstChild).toBeNull();
   });
 });
