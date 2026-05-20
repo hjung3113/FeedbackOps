@@ -37,8 +37,11 @@ const vocSearchSchema = z
     managedSystem: z.string().optional(),
     tab: z.string().optional(),
     sort: z.string().optional(),
+    'filter.severity': z.string().optional(),
+    'filter.reporterStatus': z.string().optional(),
+    'filter.owner': z.string().optional(),
   })
-  .passthrough();
+  .strict();
 
 // ---- Zod schema unit tests ----
 describe('vocSearchSchema', () => {
@@ -70,9 +73,17 @@ describe('vocSearchSchema', () => {
     expect(() => vocSearchSchema.parse({ action: 'delete' })).toThrow();
   });
 
-  test('passes through unknown filter.* keys via passthrough', () => {
-    const result = vocSearchSchema.parse({ view: 'inbox', 'filter.status': 'open' });
-    expect((result as Record<string, unknown>)['filter.status']).toBe('open');
+  test('accepts spec-locked filter.severity key', () => {
+    const result = vocSearchSchema.parse({ view: 'inbox', 'filter.severity': 'high' });
+    expect(result['filter.severity']).toBe('high');
+  });
+
+  test('rejects unknown query key (strict mode — link-poisoning guard)', () => {
+    expect(() => vocSearchSchema.parse({ view: 'inbox', onload: 'evil' })).toThrow();
+  });
+
+  test('rejects unlisted filter.* key', () => {
+    expect(() => vocSearchSchema.parse({ view: 'inbox', 'filter.status': 'open' })).toThrow();
   });
 });
 

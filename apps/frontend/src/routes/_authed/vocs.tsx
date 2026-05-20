@@ -4,9 +4,9 @@
 // action=create → PageShell. Feature content (list rows, detail panel,
 // create form, triage queue) lands in #19 / #20 / #21.
 
-import { createFileRoute, Link, useSearch } from '@tanstack/react-router';
-import { z } from 'zod';
 import { ListShell, PageShell, WorkbenchShell } from '@fops/ui';
+import { Link, createFileRoute, useSearch } from '@tanstack/react-router';
+import { z } from 'zod';
 
 const vocSearchSchema = z
   .object({
@@ -16,8 +16,13 @@ const vocSearchSchema = z
     managedSystem: z.string().optional(),
     tab: z.string().optional(),
     sort: z.string().optional(),
+    // filter.* keys reserved for #20 per-view filters. Declared as explicit
+    // dot-keys here to keep .strict() — no open-ended passthrough.
+    'filter.severity': z.string().optional(),
+    'filter.reporterStatus': z.string().optional(),
+    'filter.owner': z.string().optional(),
   })
-  .passthrough(); // filter.* parsed per-view in #20
+  .strict(); // reject unknown query keys — prevents link-poisoning as #20 grows
 
 type VocSearch = z.infer<typeof vocSearchSchema>;
 
