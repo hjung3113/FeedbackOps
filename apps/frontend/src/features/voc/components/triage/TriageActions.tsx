@@ -61,12 +61,16 @@ export function TriageActions({
         Triage 확정 &amp; 다음 VOC
       </button>
 
-      {/* Secondary actions row */}
+      {/* Secondary actions row.
+          REV-2 #2 / NEW-1: disable secondary buttons while a mutation is pending
+          so the user cannot start a second mutation that would silently abort
+          the first optimistic row. */}
       <div className="flex gap-2">
         {/* Finding 만들기 */}
         <button
           type="button"
           aria-label="Finding 만들기"
+          disabled={submitting}
           onClick={onFinding}
           className={cn(
             'flex-1 inline-flex items-center justify-center gap-1.5',
@@ -74,6 +78,7 @@ export function TriageActions({
             'bg-surface-card text-text-primary shadow-subtle',
             'hover:bg-surface-popover',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+            'disabled:opacity-40 disabled:pointer-events-none',
           )}
         >
           <BookOpen size={11} aria-hidden="true" />
@@ -84,6 +89,7 @@ export function TriageActions({
         <button
           type="button"
           aria-label="보류"
+          disabled={submitting}
           onClick={onSkip}
           className={cn(
             'flex-1 inline-flex items-center justify-center gap-1.5',
@@ -91,6 +97,7 @@ export function TriageActions({
             'text-text-secondary',
             'hover:bg-surface-card hover:text-text-primary',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+            'disabled:opacity-40 disabled:pointer-events-none',
           )}
         >
           <ChevronRight size={11} aria-hidden="true" />
