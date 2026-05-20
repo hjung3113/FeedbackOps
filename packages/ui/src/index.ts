@@ -86,3 +86,12 @@ export { ListSortButton, type ListSortButtonProps, type SortOption } from './too
 export { SearchInput, type SearchInputProps } from './forms/SearchInput';
 // Feedback (Slice 3 #20)
 export { EmptyState, type EmptyStateProps } from './feedback/EmptyState';
+
+// Panel primitives (Slice 3 #20)
+export { DetailPanelHeader, type DetailPanelHeaderProps, type DetailPanelKind } from './panel/DetailPanelHeader';
+export { PanelTitleBlock, type PanelTitleBlockProps } from './panel/PanelTitleBlock';
+export { NestedTextBlock, type NestedTextBlockProps } from './panel/NestedTextBlock';
+export { FieldRow, type FieldRowProps } from './panel/FieldRow';
+export { PanelSectionTitle, type PanelSectionTitleProps } from './panel/PanelSectionTitle';
+export { Callout, type CalloutProps, type CalloutTone } from './panel/Callout';
+export { DetailPanelHeaderActions, type DetailPanelHeaderActionsProps } from './panel/DetailPanelHeaderActions';
