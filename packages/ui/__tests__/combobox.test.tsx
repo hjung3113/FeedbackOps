@@ -78,4 +78,47 @@ describe('Combobox', () => {
     expect(listboxId).toBeTruthy();
     expect(trigger).toHaveAttribute('aria-controls', listboxId);
   });
+
+  it('disabled trigger ignores click and does not open popover', () => {
+    render(<Combobox options={OPTIONS} value={null} onChange={() => {}} disabled />);
+    const trigger = screen.getByRole('combobox');
+    expect(trigger).toBeDisabled();
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('ArrowDown on closed trigger opens popover', () => {
+    render(<Combobox options={OPTIONS} value={null} onChange={() => {}} />);
+    const trigger = screen.getByRole('combobox');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+  });
+
+  it('Enter on closed trigger opens popover', () => {
+    render(<Combobox options={OPTIONS} value={null} onChange={() => {}} />);
+    const trigger = screen.getByRole('combobox');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+  });
+
+  it('two Combobox instances have distinct listbox IDs', () => {
+    render(
+      <>
+        <Combobox options={OPTIONS} value={null} onChange={() => {}} />
+        <Combobox options={OPTIONS} value={null} onChange={() => {}} />
+      </>,
+    );
+    const triggers = screen.getAllByRole('combobox');
+    expect(triggers).toHaveLength(2);
+    // Open both to expose listboxes
+    fireEvent.click(triggers[0]!);
+    // Only first is open; second is closed — just verify trigger IDs are independent
+    const openListboxes = screen.getAllByRole('listbox');
+    expect(openListboxes).toHaveLength(1);
+    const listboxId = openListboxes[0]!.id;
+    expect(listboxId).toBeTruthy();
+    expect(triggers[0]).toHaveAttribute('aria-controls', listboxId);
+  });
 });

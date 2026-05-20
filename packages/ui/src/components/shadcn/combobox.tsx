@@ -36,6 +36,8 @@ export interface ComboboxProps {
   placeholder?: string;
   searchPlaceholder?: string;
   className?: string;
+  /** When true, the trigger is disabled and the popover cannot be opened. */
+  disabled?: boolean;
 }
 
 export function Combobox({
@@ -45,6 +47,7 @@ export function Combobox({
   placeholder = 'Select…',
   searchPlaceholder = 'Search…',
   className,
+  disabled,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -120,8 +123,19 @@ export function Combobox({
     }
   }
 
+  // WAI-ARIA combobox pattern: ArrowDown/Enter/Space on a closed trigger opens
+  // the popover and primes the first option as active.
+  function handleTriggerKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
+    if (disabled) return;
+    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      setOpen(true);
+      setActiveIndex(0);
+    }
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => { if (!disabled) setOpen(next); }}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -129,6 +143,9 @@ export function Combobox({
           aria-expanded={open}
           aria-haspopup="listbox"
           aria-controls={open ? listboxId : undefined}
+          aria-disabled={disabled}
+          disabled={disabled}
+          onKeyDown={handleTriggerKeyDown}
           className={cn(
             'flex h-10 w-full items-center justify-between rounded-md border border-border-subtle bg-surface-field px-3 py-2 text-sm text-text-primary',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2',
