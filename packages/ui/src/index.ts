@@ -56,3 +56,8 @@ export { ListShell, type ListShellProps } from './layout/ListShell';
 export { WorkbenchShell, type WorkbenchShellProps } from './layout/WorkbenchShell';
 export { ShellHeader, type ShellHeaderProps } from './layout/ShellHeader';
 export { useDetailPanelSlot, DetailPanelSlotContext } from './layout/useDetailPanelSlot';
+
+// Form primitives (Slice 3 #19)
+export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
+// Feedback primitives (Slice 3 #19)
+export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';
