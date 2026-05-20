@@ -187,3 +187,40 @@
 Both tests render the full `VocTriageScreen`, click confirm on VOC_A, wait for the auto-advance to VOC_B, then release a deferred PATCH error (409 stale_write / 403 permission.denied). They assert that VOC_A reappears in the queue and VOC_B remains — the failure mode that the prior C6.3 tests could not catch.
 
 For the production-code fix detail (closure over `input.vocId` instead of `vocIdRef.current`), see `.review/CHUNK-3-DEVIATIONS.md` → `D-REV1-#5`.
+
+---
+
+## REV-2 (codex Cycle 2) — EditDescriptionModal + capability gate
+
+### D-REV2-G2: EditDescriptionModal stale_write reload via action button (no auto-reset)
+
+**Origin:** codex REV-2 #8 (`EditDescriptionModal.tsx:100`).
+
+**Issue:** `useEffect([voc.id, voc.updated_at])` unconditionally `form.reset(...)`d when the refetch landed. A user typing between the 409 toast and the refetch completion had their edits clobbered.
+
+**Fix:**
+- Removed the `voc.updated_at` dependency from the reset effect — auto-reset now only fires when `voc.id` changes (i.e., the modal is being reused for a different VOC entirely).
+- On `conflict.stale_write` the toast carries an action button `다시 불러오기` that explicitly resets the form to the refetched defaults.
+- `vocRef` captures the latest voc so the action button (rendered by sonner outside the React lifecycle) always resets to the most recent refetched values.
+
+**Files modified:** `apps/frontend/src/features/voc/components/detail/EditDescriptionModal.tsx`.
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/components/detail/__tests__/EditDescriptionModal.staleWriteReload.test.tsx` — (a) edits survive a mid-flight refetch; (b) the action button resets to the refetched defaults.
+
+---
+
+### D-REV2-G5: TriageRoute capability gate via /me/permissions/check (not role label)
+
+**Origin:** codex REV-2 #9 + NEW-3 (`TriageRoute.tsx:77-78`, `docs/design/09-permission-access.md:78,104`).
+
+**Issue:** Gate was `role_level !== 'user'`. A Developer without scoped `voc.triage` capability could enter the queue — direct violation of "frontend must not derive authorization from display labels" (09-permission-access.md). The queue query also fired before the gate.
+
+**Fix:**
+- Replaced the role-label check with `usePermissionCheck({ capability: 'voc.triage', managedSystemId })` — the authoritative server decision is the only signal.
+- Only `state === 'approved'` allows the queue to render; every other state maps to `PermissionBlockedPanel` via a small mapper that handles the `blocked_non_requestable` (API) ↔ `blocked_not_requestable` (UI) spelling drift in one place.
+- `useVocList` gained an optional `enabled` param. `TriageRoute` passes `enabled: isApproved` so a blocked actor never triggers a queue query.
+
+**Files modified:** `apps/frontend/src/features/voc/routes/TriageRoute.tsx`, `apps/frontend/src/features/voc/routes/__tests__/TriageRoute.test.tsx` (mocks usePermissionCheck instead of role_level), `apps/frontend/src/features/voc/hooks/useVocList.ts` (added `enabled?: boolean`).
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/routes/__tests__/TriageRoute.capability.test.tsx` — 3 cases: blocked actor sees PermissionBlockedPanel; approved actor sees the queue; blocked actor's useVocList is invoked with `enabled: false`.
+

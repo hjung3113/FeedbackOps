@@ -59,3 +59,34 @@
    - **Found during:** Implementation
    - **Description:** `VocDetailEnvelope` doesn't include the reporter's display_name directly — it only has `reporter_id`. A full implementation would require a separate actor lookup. For C5.5 scope, hardcoded "Reporter" label is used. A future improvement would fetch actor display_name from workspace actors.
    - **Impact:** Preview shows "Reporter" instead of actual reporter name.
+
+---
+
+## REV-2 (codex Cycle 2) — Composer dirty + draft race
+
+### D-REV2-G3: ComposerSection dirty derived from controlled draft state
+
+**Origin:** codex REV-2 #6 (`ComposerSection.tsx:153`).
+
+**Issue:** `isDirty` was set via a container `onClick` on the `p-4` wrapper. Keyboard-only typing (or any onChange path that didn't include a pointer click on the container) bypassed the dirty signal — VocDetailPanel close fired without DirtyConfirmation, losing user edits silently.
+
+**Fix:** `isDirty` is now a pure derivation of `useComposerDraft.state.{public,reply,internal}` non-emptiness, computed every render. The container's `onClick` dirty setter is removed. `handleDirtyConfirm` calls `draft.clearAll()` so the next render's derivation flips to false.
+
+**Files modified:** `apps/frontend/src/features/voc/components/detail/ComposerSection.tsx`, `apps/frontend/src/features/voc/components/detail/__tests__/ComposerSection.test.tsx` (stub RichEditor now emits onChange on click so the new derivation lights up).
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/components/detail/__tests__/ComposerDirtyKeyboard.test.tsx` — keyboard typing (no container click) triggers DirtyConfirmation; empty drafts allow direct close.
+
+---
+
+### D-REV2-G4: useComposerDraft synchronous vocId switch via derived effective state
+
+**Origin:** codex REV-2 #7 (`useComposerDraft.ts:73,98`).
+
+**Issue:** The old implementation dispatched `CLEAR_ALL` during render when `vocId` changed, then returned the *current* reducer state. Children consuming `state.public/.reply/.internal` directly saw the prior VOC's drafts on the first render with a new vocId; the re-render landed before the user could observe it in normal use, but the race is real.
+
+**Fix:** `vocId` is now part of the reducer state. The hook synchronously computes an `effective` state for THIS render: if `stored.vocId === vocId` it returns stored; otherwise it returns `makeInitial(vocId)` AND dispatches `RESET_FOR_VOC` to catch the reducer up for subsequent renders. `RESET_FOR_VOC` is idempotent so the dispatch doesn't loop.
+
+**Files modified:** `apps/frontend/src/features/voc/hooks/useComposerDraft.ts`.
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/hooks/__tests__/useComposerDraft.vocSwitchRace.test.tsx` — uses a child component that records `draft.state.public` synchronously inside its render function and asserts null on every render after the vocId switch.
+

@@ -91,3 +91,30 @@
 **Files modified:** `useUndoableMutation.ts`, `TriagePanel.tsx`.
 
 **New integration test (codex required):** `VocTriageScreen.errorRollback.test.tsx` — exercises the FULL `VocTriageScreen` (not direct `TriagePanel`), so auto-advance actually happens before the error lands. Both `conflict.stale_write` (409) and `permission.denied` (403) paths verified.
+
+---
+
+## REV-2 (codex Cycle 2) — Cluster A: abort/race safety
+
+### D-REV2-G1: useUndoableMutation per-call isolation; abort-after-settle compensation; preempt-aware second mutate
+
+**Origin:** codex REV-2 findings #1, #2, NEW-1, NEW-2 (`useUndoableMutation.ts:96-113`, `TriageActions.tsx:67,84`).
+
+**Issue (compound):**
+- #1 abort-after-settle: `undoLast()` aborted the controller, but the server had already committed. The `.then()` handler's `if (controller.signal.aborted) return` dropped the successful response — local row restored by `onAbort`, server stayed triaged → divergence.
+- #2 / NEW-1 second mutate aborts first silently: `mutate()` aborted any prior in-flight call without invoking `onAbort`. The caller's optimistic row stayed removed from the queue.
+- NEW-2 preempted call commits server-side: if the preempted call later resolved, no compensation ran — server got triaged, queue locally restored, divergent again.
+
+**Fix:** Each `mutate()` call creates an isolated `Call<TInput, TOutput, TSnapshot>` closure that the `.then`/`.catch` handlers operate on:
+
+1. `mutate()` checks for a prior pending call and, if found, marks it `'preempted'`, aborts its controller, and fires `onAbort(prevInput)` so the caller restores the prior optimistic row.
+2. `undoLast()` on a pending call marks the call `'aborted-by-user'`, aborts the controller, fires `onAbort(input)`, detaches `currentCallRef`. The pending promise's `.then`/`.catch` still references the call closure.
+3. When the preempted/aborted-by-user call's `.then(output)` runs, it inspects `call.status`. If aborted post-resolution, it runs `compensateFn(snapshot, output)` to reconcile the server back to the snapshot — restoring data convergence.
+4. Unmount cleanup is handled separately: the catch path swallows aborts that didn't flip `call.status` (i.e., the consumer is gone, no action needed).
+
+`TriageActions` also disables 'Finding 만들기' / '보류' while `submitting`, removing the easiest pointer path to a silent preemption.
+
+**Files modified:** `apps/frontend/src/features/voc/hooks/useUndoableMutation.ts`, `apps/frontend/src/features/voc/components/triage/TriageActions.tsx`.
+
+**RED → GREEN test:** `apps/frontend/src/features/voc/hooks/__tests__/useUndoableMutation.abortRace.test.ts` — 3 cases: (a) abort-after-settle runs compensateFn with the server output, (b) second mutate fires onAbort with the first input, (c) preempted call resolving later runs compensateFn against the first snapshot/output.
+
