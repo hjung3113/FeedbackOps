@@ -96,6 +96,74 @@
 
 ---
 
+---
+
+## REV-1 Cluster B Fixes (#6, #7, #8, #9)
+
+### D-REV1-6: VocDetailPanel close intercepted via FullDetailView extraction
+
+**Origin:** Codex REV-1 finding #6.
+
+**Found during:** REV-1 Cluster B execution.
+
+**Issue:** DetailHeader `onClose` in `VocDetailPanel` bypassed `DirtyConfirmation` entirely — `ComposerSection` had no mechanism to report dirty state to the panel's close handler.
+
+**Fix:** Extracted `FullDetailView` from `VocDetailPanel` to own dirty state. Added `onDirtyChange` prop to `ComposerSection`; when any composer becomes dirty, the panel intercepts close and shows `DirtyConfirmation` before calling `onClose`. The existing `ComposerSection.onCloseRequest` path is preserved for the section's own close button.
+
+**Files modified:** `VocDetailPanel.tsx`, `ComposerSection.tsx`
+
+**Commits:** 5ab38f0
+
+---
+
+### D-REV1-7: Composer drafts now survive tab switches via keep-mounted pattern
+
+**Origin:** Codex REV-1 finding #7.
+
+**Found during:** REV-1 Cluster B execution.
+
+**Issue:** All three composers unmounted on tab switch — `useComposerDraft` was created but unused; draft content was lost on every tab change.
+
+**Fix:** All three composer bodies are kept mounted (CSS `display: none` for inactive ones). `useComposerDraft` upgraded from `string` to `TipTapDoc | null`. Each composer accepts `draftDoc` + `onDraftChange` as controlled props; when provided by `ComposerSection`, local state is bypassed. On VOC switch `clearAll()` is called by the draft hook's built-in ref check.
+
+**Files modified:** `useComposerDraft.ts`, `ComposerSection.tsx`, `PublicUpdateComposer.tsx`, `ReporterReplyComposer.tsx`, `InternalCommentComposer.tsx`
+
+**Commits:** 5ab38f0
+
+---
+
+### D-REV1-8: EditDescriptionModal stale_write now invalidates query
+
+**Origin:** Codex REV-1 finding #8.
+
+**Found during:** REV-1 Cluster B execution.
+
+**Issue:** `conflict.stale_write` only toasted; the modal's `voc.updated_at` (If-Match baseline) stayed stale, causing retry loops.
+
+**Fix:** On `conflict.stale_write`, call `queryClient.invalidateQueries({ queryKey: ['voc', voc.id] })`. The existing `useEffect` keyed on `[voc.id, voc.updated_at]` then re-populates form defaults from the refreshed VOC envelope on the next render. Toast message changed to "VOC가 변경되었습니다. 새로 불러왔습니다. 다시 시도해 주세요." to communicate the refresh to the user. Modal stays open with user's edits preserved.
+
+**Files modified:** `EditDescriptionModal.tsx`
+
+**Commits:** 83eb220
+
+---
+
+### D-REV1-9: TriageRoute capability gate via role_level check
+
+**Origin:** Codex REV-1 finding #9.
+
+**Found during:** REV-1 Cluster B execution.
+
+**Issue:** TriageRoute rendered the queue for all actors including `user` (Reporter) role who never have `voc.triage` capability.
+
+**Fix:** Added `useMe()` call in `TriageRoute`. Actors with `role_level === 'user'` receive `<PermissionBlockedPanel state="blocked_not_requestable">` instead of the queue. Admin and Developer roles pass through. The check is a UX gate — backend remains authoritative per AGENTS.md rule.
+
+**Files modified:** `TriageRoute.tsx`
+
+**Commits:** b8a0e8e
+
+---
+
 ### D-C6.1-2: Pre-existing typecheck errors from C4.1 RED tests
 
 **Found during:** `pnpm typecheck` after GREEN.
