@@ -47,15 +47,15 @@ describe('useReporterStatusTransitions', () => {
   });
 
   it('returns gate when reporter_status_gate is present on voc', () => {
-    const vocWithGate = {
+    const vocWithGate: VocDetailEnvelope = {
       ...BASE_VOC,
       reporter_status_gate: {
-        blocking_for: ['resolved'] as const,
+        blocking_for: ['resolved'],
         reason: '연결된 Task가 doing 상태입니다.',
       },
     };
     const { result } = renderHook(() =>
-      useReporterStatusTransitions(vocWithGate as VocDetailEnvelope),
+      useReporterStatusTransitions(vocWithGate),
     );
     expect(result.current.gate).not.toBeNull();
     expect(result.current.gate?.blocking_for).toContain('resolved');

@@ -64,22 +64,27 @@ describe('ReporterStatusChangeBlock', () => {
     const options = Array.from(select.querySelectorAll('option')) as HTMLOptionElement[];
 
     // First option is current status
-    expect(options[0].value).toBe('received');
-    expect(options[0].textContent).toContain('(현재)');
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    expect(options[0]!.value).toBe('received');
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    expect(options[0]!.textContent).toContain('(현재)');
 
     // Allowed statuses come next (before forbidden)
     const allowedValues = ['reviewing', 'assigned'];
     for (const v of allowedValues) {
       const opt = options.find((o) => o.value === v);
       expect(opt).toBeTruthy();
-      expect(opt?.disabled).toBe(false);
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      expect(opt!.disabled).toBe(false);
     }
 
     // Forbidden statuses have DOM disabled=true and '차단됨' suffix
     const resolvedOpt = options.find((o) => o.value === 'resolved');
     expect(resolvedOpt).toBeTruthy();
-    expect(resolvedOpt?.disabled).toBe(true);
-    expect(resolvedOpt?.textContent).toContain('차단됨');
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    expect(resolvedOpt!.disabled).toBe(true);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    expect(resolvedOpt!.textContent).toContain('차단됨');
   });
 
   it('forbidden statuses have DOM disabled attribute', () => {
@@ -161,7 +166,7 @@ describe('ReporterStatusChangeBlock', () => {
 
   it('renders reporter preview card with body excerpt when draft has content', () => {
     const draftDoc = {
-      type: 'doc',
+      type: 'doc' as const,
       content: [
         {
           type: 'paragraph',
