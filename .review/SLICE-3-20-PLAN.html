@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>SLICE-3 #20 — VOC Inbox + Detail · PLAN</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root { --bg:#0f1115; --surface:#161922; --surface-2:#1d2230; --border:#2a3142; --text:#e6e9f2; --text-dim:#8b94aa; --accent:#c3f53c; --warn:#ffb454; --ok:#5eead4; --danger:#ff6b6b; --code-bg:#0b0d12; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:32px 28px 80px;max-width:1100px;margin-left:auto;margin-right:auto}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-0.01em} h2{font-size:16px;margin:28px 0 10px;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:6px;letter-spacing:0.02em}
+  h3{font-size:13px;margin:18px 0 6px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em}
+  p,ul,ol{margin:8px 0} ul,ol{padding-left:22px} li{margin:2px 0}
+  code{background:var(--code-bg);padding:1px 6px;border-radius:4px;font-family:"SF Mono",Menlo,monospace;font-size:12.5px;color:var(--accent)}
+  .meta{color:var(--text-dim);font-size:12.5px;margin-bottom:18px} .meta b{color:var(--text);font-weight:600}
+  table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--text-dim);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:0.05em;background:var(--surface)}
+  tr:hover td{background:var(--surface)} td.num{color:var(--accent);font-weight:600;font-family:"SF Mono",monospace}
+  .pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:500;line-height:16px}
+  .pill.inline{background:rgba(94,234,212,0.12);color:var(--ok)}
+  .pill.sub{background:rgba(255,180,84,0.12);color:var(--warn)}
+  .pill.cp{background:rgba(195,245,60,0.14);color:var(--accent)}
+  .pill.risk{background:rgba(255,107,107,0.13);color:var(--danger)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin:10px 0}
+  .card.warn{border-left:3px solid var(--warn)} .card.ok{border-left:3px solid var(--ok)} .card.risk{border-left:3px solid var(--danger)}
+  details{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin:8px 0}
+  details > summary{cursor:pointer;font-weight:500;color:var(--text);list-style:none}
+  details > summary::-webkit-details-marker{display:none}
+  details > summary::before{content:"▸ ";color:var(--accent);font-size:11px;display:inline-block;width:14px}
+  details[open] > summary::before{content:"▾ "}
+  .footer{margin-top:30px;padding-top:16px;border-top:1px solid var(--border);color:var(--text-dim);font-size:12px}
+  .sigchoice{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+  .sigchoice button{background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:5px;font-size:12.5px;cursor:default}
+  .sigchoice .rec{border-color:var(--accent);color:var(--accent)}
+  .key-val{display:grid;grid-template-columns:140px 1fr;gap:6px 14px;font-size:12.5px}
+  .key-val dt{color:var(--text-dim)} .key-val dd{margin:0;color:var(--text)}
+</style>
+</head>
+<body>
+
+<h1>SLICE-3 #20 — VOC Inbox + My + Detail panel <span class="pill cp">PLAN</span></h1>
+<div class="meta">
+  <b>Branch:</b> <code>feature/20-voc-inbox-detail</code> · <b>From:</b> <code>develop @ c6f620e</code><br/>
+  <b>Spec:</b> issue #20 + <code>docs/frontend/specs/voc.md</code> §2/§3/§6/§7<br/>
+  <b>Builds on:</b> #15 (GET endpoints) · #18 (FE FOUNDATION) · #19 (form patterns)<br/>
+  <b>Baseline:</b> <code>voc-inbox-detail.png</code> + <code>voc-inbox-detail-full.png</code><br/>
+  <b>Source plan file:</b> <code>.review/SLICE-3-20-PLAN.md</code>
+</div>
+
+<h2>1 · Goal</h2>
+<div class="card ok">
+  <code>/vocs?view=inbox</code> + <code>/vocs?view=my</code> list-first layout + 단일 선택 + 우측 read-only Detail panel (7 sections).
+  Composers / edit / triage 변경은 #21 영역.
+</div>
+
+<h2>2 · 스코프 사이즈</h2>
+<div class="card warn">
+  Massive. ~12 packages/ui primitives + 2 routes + 7-section Detail panel + queries + URL state + permission UI + tests + pixel-diff.
+  추정 <b>~3500 LOC, 25-35 files, 16 chunks + CP1/CP2 + REV-1/REV-2 + PR</b>. 단일 PR, 청크별 commit.
+</div>
+
+<h2>3 · 청크 분할 (16 chunks)</h2>
+<table>
+  <thead><tr><th>#</th><th>내용</th><th>LOC</th><th>모델</th></tr></thead>
+  <tbody>
+    <tr><td class="num">C0</td><td>branch + recon (deps/baseline/barrel 상태)</td><td>~20</td><td><span class="pill inline">inline</span></td></tr>
+    <tr><td class="num">C1</td><td>@fops/ui badges: SeverityIndicator, SeverityBadge, ReporterStatusBadge(pill), InternalTaskBadge(squared), ManagedSystemPill, OutlineBadge, EntityIconBadge + 토큰 매핑 단위 테스트</td><td>~400</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C2</td><td>@fops/ui identity: Avatar wrapper, UserChip (sm/md/sub/unknown)</td><td>~120</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C3</td><td>@fops/ui toolbar: ListToolbar, ListFilterButton, ListSortButton, SearchInput(disabled+tooltip), EmptyState</td><td>~300</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C4</td><td>@fops/ui panel: DetailPanelHeader, PanelTitleBlock, NestedTextBlock, FieldRow, PanelSectionTitle, Callout(5 tones), DetailPanelHeaderActions(kebab)</td><td>~350</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C5</td><td>@fops/ui permission UI + LinkedEntityTrail placeholder: PermissionBlockedPanel(4 states) + LinkedEntityTrail</td><td>~250</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C6</td><td>features/voc/hooks: useManagedSystem, usePermissionDecision, useVocList, useVocDetail, useVocConversation(infinite)</td><td>~250</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C7</td><td>features/voc/components/list: VocList + VocRow (60px) + skeleton + error variants</td><td>~250</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C8</td><td>features/voc/components/detail: VocDetailPanel + 7 sub-sections + NextActionFooter + DetailPanelNotFound</td><td>~600</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C9</td><td>features/voc/routes: InboxRoute + URL 상태 plumbing (tab/filter/sort/selected/managedSystem)</td><td>~250</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C10</td><td>routes/_authed/vocs.tsx: inbox/my Placeholder → InboxRoute mount + out_of_scope_summary peek banner</td><td>~80</td><td><span class="pill inline">inline</span></td></tr>
+    <tr><td class="num" style="color:var(--accent);"><b>CP1</b></td><td>라이브 스크린샷 3 viewport (1440/1024/390)</td><td>—</td><td><span class="pill cp">user</span></td></tr>
+    <tr><td class="num" style="color:var(--accent);"><b>CP2</b></td><td><b>pixel-diff</b> vs <code>voc-inbox-detail.png</code> baseline · 차이 enum화 report HTML</td><td>—</td><td><span class="pill cp">user</span></td></tr>
+    <tr><td class="num">C11</td><td>(조건부) CP2 차이 따라 폴리시 청크. MEDIUM↑ → 동일 PR에서 처리.</td><td>가변</td><td>inline/Sonnet</td></tr>
+    <tr><td class="num">C12</td><td>통합 테스트: list happy/empty/error, tab/filter/sort 라운드트립, selected mount, 404, summary envelope, out_of_scope_summary, conversation 더보기</td><td>~500</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num">C13</td><td>단위 테스트: 신규 primitives 토큰 매핑 + state snapshot + variants</td><td>~400</td><td><span class="pill sub">Sonnet</span></td></tr>
+    <tr><td class="num" style="color:var(--accent);"><b>REV-1</b></td><td>Opus self-adversarial 1차</td><td>—</td><td><span class="pill cp">main</span></td></tr>
+    <tr><td class="num">픽스</td><td>REV-1 발견사항 픽스</td><td>가변</td><td>inline/Sonnet</td></tr>
+    <tr><td class="num" style="color:var(--accent);"><b>REV-2</b></td><td>2차 검증</td><td>—</td><td><span class="pill cp">main</span></td></tr>
+    <tr><td class="num">PR</td><td>open + 시각 fidelity 본문 포함 + squash-merge + 이슈 close + 메모리</td><td>—</td><td><span class="pill inline">main</span></td></tr>
+  </tbody>
+</table>
+
+<h2>4 · 새 primitives 정리 (12개)</h2>
+<div class="card">
+  <h3>badges/</h3>
+  <ul>
+    <li><code>SeverityIndicator</code> · 3×16 bar, <code>--severity-*</code> 토큰</li>
+    <li><code>SeverityBadge</code> · 칩 + indicator prefix</li>
+    <li><code>ReporterStatusBadge</code> · 8 states · <b>pill 고정</b></li>
+    <li><code>InternalTaskBadge</code> · 7 states · <b>squared 고정</b> · Slice 3 unit test only (linked_execution.taskRef=null)</li>
+    <li><code>ManagedSystemPill</code> · outline + 12px color mark</li>
+    <li><code>OutlineBadge</code> · shadcn outline pass-through</li>
+    <li><code>EntityIconBadge</code> · 7 entity kinds letter glyph</li>
+  </ul>
+  <h3>identity/</h3>
+  <ul><li><code>Avatar</code> · shadcn Avatar wrapper</li><li><code>UserChip</code> · Avatar+name+sub</li></ul>
+  <h3>toolbar/, panel/, permissions/, entity/, feedback/, forms/</h3>
+  <ul>
+    <li>ListToolbar · ListFilterButton · ListSortButton · SearchInput(disabled) · EmptyState</li>
+    <li>DetailPanelHeader · PanelTitleBlock · NestedTextBlock · FieldRow · PanelSectionTitle · Callout(5 tones) · DetailPanelHeaderActions</li>
+    <li>PermissionBlockedPanel(4 states) · LinkedEntityTrail placeholder</li>
+  </ul>
+</div>
+
+<h2>5 · 위험 + 미해결</h2>
+<div class="card warn">
+  <ol>
+    <li>토큰 Pack 17 vs prototype Pack 20 — CP2에서 정량화. 차이 enum화 후 C11 통합 처리.</li>
+    <li><code>useInfiniteQuery</code> cursor+kind 페이지네이션 — TanStack Query v5 API 확인.</li>
+    <li><code>PermissionBlockedPanel</code> request_access CTA target route <code>/admin/permissions/requests</code> 미존재 → placeholder toast 또는 navigate 시도. 본 PR은 navigate만 시도 + 부재 시 404 허용.</li>
+    <li><code>useManagedSystem</code> color 컬럼 BE에 없음. 해시 → 고정 팔레트 매핑 (deterministic).</li>
+    <li><code>tab='waiting'</code> BE enum에 있으나 UI 탭 없음 → 무시 (URL 통과는 허용).</li>
+  </ol>
+</div>
+
+<h2>6 · 데이터 흐름</h2>
+<dl class="key-val">
+  <dt>GET /vocs?...</dt><dd><code>{ items, next_cursor, out_of_scope_summary? }</code></dd>
+  <dt>GET /vocs/:id</dt><dd>vocDetailEnvelope 또는 vocSummaryEnvelope (<code>permission_decisions._self.state</code> 분기)</dd>
+  <dt>GET /vocs/:id/conversation</dt><dd><code>?cursor=&kind=</code> · useInfiniteQuery 기반</dd>
+  <dt>스키마</dt><dd>모두 <code>@fops/shared/vocs/</code>에 존재</dd>
+</dl>
+
+<h2>7 · 체크포인트 (per memory <code>feedback_pixel_diff_per_page</code>)</h2>
+<table>
+  <thead><tr><th>단계</th><th>산출물</th><th>주체</th></tr></thead>
+  <tbody>
+    <tr><td>CP1 (after C10)</td><td>3 viewport 라이브 스크린샷</td><td>main + user 보기</td></tr>
+    <tr><td>CP2 (after CP1)</td><td><code>.review/SLICE-3-20-pixel-diff.html</code> · 차이 enum화 · 5↓ LOW PR 명시 / MEDIUM↑ C11 폴리시</td><td>사용자 컨펌</td></tr>
+    <tr><td>REV-1, REV-2</td><td>self-adversarial 2-cycle</td><td>main</td></tr>
+  </tbody>
+</table>
+
+<h2>8 · Out of scope (재확인)</h2>
+<ul>
+  <li>Triage console (#21)</li><li>모든 composers (#21)</li><li>모든 edit 어포던스 (#21)</li>
+  <li>Bulk action bar · CmdK · 검색 BE · EntityHoverPreview · 실 LinkedEntityTrail (Slice 4)</li>
+  <li>#55 시각 폴리시 — 본 이슈 CP2 결과 봐서 통합 or 별도 처리</li>
+</ul>
+
+<h2>9 · 사용자 결정</h2>
+<div class="card risk">
+  <p><b>다음 선택:</b></p>
+  <div class="sigchoice">
+    <button class="rec">A · PLAN 그대로 진행 (C0 inline 즉시) — <span style="color:var(--accent);">추천</span></button>
+    <button>B · 청크 재분할 (예: badges + identity 묶기)</button>
+    <button>C · 두 PR로 split (primitives PR → 화면 PR)</button>
+    <button>D · 스코프 조정 (Detail panel 일부 미루기)</button>
+  </div>
+  <p style="font-size:12px;color:var(--text-dim);margin-top:8px;">
+    A 추천: 이슈 본문이 컴포넌트/AC를 lock. 단일 PR로 가야 통합 시점 잡기 쉽고 CP2 시각 비교가 컴플리트. C는 라우팅이 primitives에 강하게 의존해서 통합 PR이 큰 게 안전. D는 spec lock 깨므로 권장X.
+  </p>
+</div>
+
+<div class="footer">
+  생성: 2026-05-20 · main 오케스트레이터 · Opus 4.7<br/>
+  본 HTML은 <code>.review/SLICE-3-20-PLAN.md</code>의 사용자 컨펌용 시각화.
+</div>
+
+</body>
+</html>
