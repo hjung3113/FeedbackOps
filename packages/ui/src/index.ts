@@ -66,6 +66,8 @@ export { FieldLabel, type FieldLabelProps } from './forms/FieldLabel';
 export { DirtyConfirmation, type DirtyConfirmationProps } from './feedback/DirtyConfirmation';
 // Feedback primitives (Slice 3 #21 C3.1)
 export { UndoToast, type UndoToastProps } from './feedback/UndoToast';
+// Feedback primitives (Slice 3 #21 C5.5)
+export { PreviewModal, type PreviewModalProps } from './feedback/PreviewModal';
 
 // Indicators + badges (Slice 3 #20)
 export { SeverityIndicator, type SeverityIndicatorProps, type SeverityEnum } from './indicators/SeverityIndicator';

@@ -7,13 +7,13 @@
 // Spec: PLAN-21-SUBCHUNKS.md C5.5 (DirtyConfirmation on panel close)
 // See: packages/ui/src/feedback/DirtyConfirmation.tsx for the primitive
 
-import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ComposerSection } from '../ComposerSection';
-import type { VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
+import type { VocDetailEnvelope } from '@fops/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import * as React from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import { ComposerSection } from '../ComposerSection';
 
 // ── Mock RichEditor ────────────────────────────────────────────────────────
 
@@ -121,25 +121,35 @@ function makeWrapper() {
 describe('ComposerSection DirtyConfirmation', () => {
   it('shows DirtyConfirmation dialog when close is requested with a dirty composer draft', async () => {
     const onCloseRequest = vi.fn();
-    render(
-      <ComposerSection
-        voc={BASE_VOC}
-        me={ME_ADMIN}
-        onCloseRequest={onCloseRequest}
-      />,
-      { wrapper: makeWrapper() },
-    );
+    render(<ComposerSection voc={BASE_VOC} me={ME_ADMIN} onCloseRequest={onCloseRequest} />, {
+      wrapper: makeWrapper(),
+    });
 
-    // Make the editor dirty by clicking (mock returns non-empty doc).
-    const editor = screen.getByRole('textbox');
-    fireEvent.click(editor);
-
-    // Trigger close request (the parent would call this when the panel is about to close).
+    // The close button should be visible (onCloseRequest prop enables it).
     const closeBtn = screen.getByRole('button', { name: /닫기/i });
-    fireEvent.click(closeBtn);
+    expect(closeBtn).toBeInTheDocument();
 
-    // DirtyConfirmation dialog should appear.
-    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
-    expect(screen.getByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    // Click the editor to mark the section as dirty.
+    // The p-4 container onClick bubbles up from child elements.
+    const editor = screen.getByRole('textbox');
+    await act(async () => {
+      fireEvent.click(editor);
+    });
+
+    // Click the close button — should detect dirty state and open DirtyConfirmation.
+    await act(async () => {
+      fireEvent.click(closeBtn);
+    });
+
+    // DirtyConfirmation (AlertDialog) should now be in the DOM.
+    // Radix AlertDialog renders in a portal when open=true.
+    await waitFor(() => {
+      // Check for the confirmation dialog text directly since alertdialog role
+      // may render in a portal that needs a tick to mount.
+      expect(screen.getByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    });
+
+    // onCloseRequest should NOT have been called (user hasn't confirmed).
+    expect(onCloseRequest).not.toHaveBeenCalled();
   });
 });

@@ -1,16 +1,5 @@
-/// <reference types="@testing-library/jest-dom" />
-// PreviewModal.test.tsx — TDD RED
-// Tests:
-//   1. open/close: renders children when open, hidden when closed
-//   2. size lg: Dialog renders with max-w-3xl (lg size class)
-//   3. title: renders the provided title string
-//
-// C5.5 of slice3 #21.
-// Prototype ref: docs/design-prototype/screen-voc.jsx:486-504
-
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PreviewModal } from '../PreviewModal.js';
 
 describe('PreviewModal', () => {

@@ -1,17 +1,7 @@
-/// <reference types="@testing-library/jest-dom" />
-// ComposerPublicPreview.test.tsx — TDD RED
-// Tests:
-//   1. with-body: renders VOC id, next ReporterStatusBadge, owner attribution, body excerpt
-//   2. empty-body: renders italic empty-body placeholder copy
-//
-// C5.5 of slice3 #21.
-// Prototype ref: docs/design-prototype/screen-voc.jsx:665-707
-
-import * as React from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
-import { ComposerPublicPreview } from '../ComposerPublicPreview';
 import type { VocDetailEnvelope } from '@fops/shared';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { ComposerPublicPreview } from '../ComposerPublicPreview';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -30,9 +20,7 @@ describe('<ComposerPublicPreview>', () => {
   it('renders VOC id, next status badge, owner name, and body excerpt when body is non-empty', () => {
     const draftDoc = {
       type: 'doc',
-      content: [
-        { type: 'paragraph', content: [{ type: 'text', text: '검토 완료되었습니다.' }] },
-      ],
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '검토 완료되었습니다.' }] }],
     } as import('@fops/ui').TipTapDoc;
 
     render(

@@ -1,8 +1,12 @@
 // PublicUpdateComposer — public-update tab body for <ComposerSection>.
 //
-// C5.2 (slice3 #21)
-// Spec: PLAN-21-SUBCHUNKS.md C5.2
-// Prototype ref: docs/design-prototype/screen-voc.jsx:415-468
+// C5.2 (slice3 #21) — initial implementation
+// C5.5 (slice3 #21) — PreviewModal wire-up + error matrix (invalid_transition, gate_blocked,
+//                     idempotency_key_reuse)
+//
+// Spec: PLAN-21-SUBCHUNKS.md C5.2 / C5.5
+// Prototype ref: docs/design-prototype/screen-voc.jsx:415-468 (composer body + footer)
+//               docs/design-prototype/screen-voc.jsx:486-504 (PreviewModal mount)
 //
 // Verbatim prototype JSX (lines 415-468, Pack 17 translation):
 //
@@ -51,17 +55,25 @@
 //   body+status: nextStatus !== voc.reporter_facing_status  →  new status sent
 //
 // On success: invalidate ['voc', voc.id], clear draft, toast 공개 업데이트가 게시되었습니다.
+//
+// Error matrix (D-5.6: Callout copy sourced from backend detail.reason, not errorMapper):
+//   reporter_facing_status.invalid_transition → red Callout inline
+//   reporter_facing_status.gate_blocked       → amber Callout inline
+//   conflict.idempotency_key_reuse            → lock Submit + Preview until VOC switch
 
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
+import type { ApiError } from '@/lib/api';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
-import { RichEditor, type TipTapDoc } from '@fops/ui';
+import { Callout, PreviewModal, RichEditor } from '@fops/ui';
+import type { TipTapDoc } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import { Megaphone } from 'lucide-react';
-import * as React from 'react';
+import { AlertCircle, Megaphone } from 'lucide-react';
+import { type ReactElement, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ComposerFooter } from './ComposerFooter';
+import { ComposerPublicPreview } from './ComposerPublicPreview';
 import { ReporterStatusChangeBlock } from './ReporterStatusChangeBlock';
 import { PublicUpdateToolbar } from './rich-toolbars/PublicUpdateToolbar';
 
@@ -86,23 +98,32 @@ function isDocEmpty(doc: TipTapDoc | null): boolean {
   });
 }
 
+// Maps ApiError code to Callout tone for the inline error surface.
+function getComposerErrorTone(code: string): 'red' | 'amber' | null {
+  if (code === 'reporter_facing_status.invalid_transition') return 'red';
+  if (code === 'reporter_facing_status.gate_blocked') return 'amber';
+  return null;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function PublicUpdateComposer({ voc, me }: PublicUpdateComposerProps): React.ReactElement {
+export function PublicUpdateComposer({ voc, me }: PublicUpdateComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
   // Local draft state for this composer instance.
-  const [draftDoc, setDraftDoc] = React.useState<TipTapDoc | null>(null);
-  const [nextStatus, setNextStatus] = React.useState<ReporterFacingStatusEnum>(
+  const [draftDoc, setDraftDoc] = useState<TipTapDoc | null>(null);
+  const [nextStatus, setNextStatus] = useState<ReporterFacingStatusEnum>(
     voc.reporter_facing_status,
   );
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Reset state when VOC changes.
-  const prevVocIdRef = React.useRef(voc.id);
+  const prevVocIdRef = useRef(voc.id);
   if (prevVocIdRef.current !== voc.id) {
     prevVocIdRef.current = voc.id;
     setDraftDoc(null);
     setNextStatus(voc.reporter_facing_status);
+    setPreviewOpen(false);
   }
 
   // Gate check: Publish is disabled when reporter_status_gate.blocking_for includes nextStatus.
@@ -132,8 +153,7 @@ export function PublicUpdateComposer({ voc, me }: PublicUpdateComposerProps): Re
     });
   }
 
-  // Owner for the ReporterStatusChangeBlock preview card.
-  // Priority: owner_user_id actor → fall back to me actor.
+  // Owner for the ReporterStatusChangeBlock preview card + ComposerPublicPreview.
   const owner: { id: string; display_name: string; email?: string } = {
     id: me?.actor.id ?? '',
     display_name: me?.actor.display_name ?? '—',
@@ -156,6 +176,20 @@ export function PublicUpdateComposer({ voc, me }: PublicUpdateComposerProps): Re
     <span className="text-xs text-text-muted">Reporter-facing status는 그대로 유지됩니다.</span>
   );
 
+  // ── Error matrix ─────────────────────────────────────────────────────────────
+  // Inline Callout copy comes from backend detail.reason per D-5.6 in PLAN-21.
+  // conflict.idempotency_key_reuse → lock both Submit + Preview until VOC switch.
+
+  const mutationError = mutation.error as ApiError | null;
+  const isIdempotencyLocked =
+    mutationError != null && mutationError.code === 'conflict.idempotency_key_reuse';
+
+  const inlineCalloutTone = mutationError != null ? getComposerErrorTone(mutationError.code) : null;
+  const inlineCalloutReason =
+    inlineCalloutTone != null
+      ? ((mutationError?.detail?.reason as string | undefined) ?? mutationError?.message)
+      : null;
+
   return (
     <div data-testid="public-update-composer">
       {/* RichEditor with PublicUpdateToolbar — prototype: minHeight 84px */}
@@ -177,18 +211,46 @@ export function PublicUpdateComposer({ voc, me }: PublicUpdateComposerProps): Re
         owner={owner}
       />
 
+      {/* Inline error Callout — reporter_facing_status.invalid_transition (red)
+                               or reporter_facing_status.gate_blocked (amber)
+          D-5.6: copy from backend detail.reason, not errorMapper message */}
+      {inlineCalloutTone != null && inlineCalloutReason != null && (
+        <div
+          className="mt-2 px-1"
+          data-testid="composer-error-callout"
+          data-tone={inlineCalloutTone}
+        >
+          <Callout tone={inlineCalloutTone} icon={<AlertCircle size={12} />}>
+            {inlineCalloutReason}
+          </Callout>
+        </div>
+      )}
+
       {/* ComposerFooter — shared across all three composer surfaces */}
       <ComposerFooter
         submitLabel="Publish update"
-        onPreview={() => {
-          // Preview modal wired in C5.5.
-        }}
+        onPreview={() => setPreviewOpen(true)}
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
         isSubmitting={mutation.isPending}
-        isSubmitDisabled={isGateBlocked}
+        isSubmitDisabled={isGateBlocked || isIdempotencyLocked}
+        isPreviewDisabled={isIdempotencyLocked}
         statusHint={statusHint}
       />
+
+      {/* PreviewModal — Public update preview */}
+      <PreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title="Public update — Reporter preview"
+      >
+        <ComposerPublicPreview
+          voc={voc}
+          owner={owner}
+          nextStatus={nextStatus}
+          draftDoc={draftDoc}
+        />
+      </PreviewModal>
     </div>
   );
 }

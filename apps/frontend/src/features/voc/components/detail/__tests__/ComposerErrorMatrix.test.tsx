@@ -12,11 +12,11 @@
 // Spec: PLAN-21-SUBCHUNKS.md C5.5 error matrix
 // PLAN-21 §3.7.b: inline Callout copy sourced from backend detail.reason (not errorMapper)
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@/lib/api';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Shared RichEditor mock ─────────────────────────────────────────────────
 
@@ -64,10 +64,10 @@ vi.mock('@/features/voc/hooks/useVocReporterReplyMutation', () => ({
   })),
 }));
 
+import type { MeResponse } from '@/lib/auth/useMe';
+import type { VocDetailEnvelope } from '@fops/shared';
 import { PublicUpdateComposer } from '../PublicUpdateComposer';
 import { ReporterReplyComposer } from '../ReporterReplyComposer';
-import type { VocDetailEnvelope } from '@fops/shared';
-import type { MeResponse } from '@/lib/auth/useMe';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -159,7 +159,7 @@ describe('Composer error matrix (C5.5)', () => {
       isPending: false,
       isError: true,
       error: makeInvalidTransitionError(),
-    } as ReturnType<typeof useVocPublicUpdateMutation>);
+    } as unknown as ReturnType<typeof useVocPublicUpdateMutation>);
 
     render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, {
       wrapper: makeWrapper(),
@@ -184,7 +184,7 @@ describe('Composer error matrix (C5.5)', () => {
       isPending: false,
       isError: true,
       error: makeGateBlockedError(),
-    } as ReturnType<typeof useVocReporterReplyMutation>);
+    } as unknown as ReturnType<typeof useVocReporterReplyMutation>);
 
     render(<ReporterReplyComposer voc={BASE_VOC} me={ME_ADMIN} />, {
       wrapper: makeWrapper(),
@@ -207,7 +207,7 @@ describe('Composer error matrix (C5.5)', () => {
       isPending: false,
       isError: true,
       error: makeIdempotencyReuseError(),
-    } as ReturnType<typeof useVocPublicUpdateMutation>);
+    } as unknown as ReturnType<typeof useVocPublicUpdateMutation>);
 
     render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, {
       wrapper: makeWrapper(),

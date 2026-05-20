@@ -1,8 +1,12 @@
 // ReporterReplyComposer — reporter-reply tab body for <ComposerSection>.
 //
-// C5.3 (slice3 #21)
-// Spec: PLAN-21-SUBCHUNKS.md C5.3
+// C5.3 (slice3 #21) — initial implementation
+// C5.5 (slice3 #21) — PreviewModal wire-up + error matrix (gate_blocked amber Callout,
+//                     idempotency_key_reuse locks submit + preview)
+//
+// Spec: PLAN-21-SUBCHUNKS.md C5.3 / C5.5
 // Prototype ref: docs/design-prototype/screen-voc.jsx:415-468 (reply variant)
+//               docs/design-prototype/screen-voc.jsx:486-504 (PreviewModal mount)
 //
 // Verbatim prototype JSX (lines 415-468, Pack 17 translation, reply variant):
 //
@@ -28,16 +32,23 @@
 //
 // Submit endpoint: POST /vocs/:id/reporter-replies
 // On success: invalidate ['voc', voc.id], clear draft, toast 리포터에게 답장이 전송되었습니다.
-// Preview modal wired in C5.5.
+//
+// Error matrix (D-5.6: Callout copy sourced from backend detail.reason, not errorMapper):
+//   reporter_facing_status.gate_blocked → amber Callout inline
+//   conflict.idempotency_key_reuse      → lock Submit + Preview until VOC switch
 
 import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporterReplyMutation';
+import type { ApiError } from '@/lib/api';
 import type { MeResponse } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';
-import { RichEditor, type TipTapDoc } from '@fops/ui';
+import { Callout, PreviewModal, RichEditor } from '@fops/ui';
+import type { TipTapDoc } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import * as React from 'react';
+import { AlertCircle } from 'lucide-react';
+import { type ReactElement, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ComposerFooter } from './ComposerFooter';
+import { ComposerReplyPreview } from './ComposerReplyPreview';
 import { ReporterReplyToolbar } from './rich-toolbars/ReporterReplyToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -61,19 +72,29 @@ function isDocEmpty(doc: TipTapDoc | null): boolean {
   });
 }
 
+// Maps ApiError code to Callout tone for the inline error surface.
+function getComposerErrorTone(code: string): 'amber' | null {
+  if (code === 'reporter_facing_status.gate_blocked') return 'amber';
+  // invalid_transition is primarily a public-update error; treat as amber fallback on reply surface.
+  if (code === 'reporter_facing_status.invalid_transition') return 'amber';
+  return null;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ReporterReplyComposer({ voc }: ReporterReplyComposerProps): React.ReactElement {
+export function ReporterReplyComposer({ voc, me }: ReporterReplyComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
   // Local draft state for this composer instance.
-  const [draftDoc, setDraftDoc] = React.useState<TipTapDoc | null>(null);
+  const [draftDoc, setDraftDoc] = useState<TipTapDoc | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Reset state when VOC changes.
-  const prevVocIdRef = React.useRef(voc.id);
+  const prevVocIdRef = useRef(voc.id);
   if (prevVocIdRef.current !== voc.id) {
     prevVocIdRef.current = voc.id;
     setDraftDoc(null);
+    setPreviewOpen(false);
   }
 
   const isEmpty = isDocEmpty(draftDoc);
@@ -99,9 +120,29 @@ export function ReporterReplyComposer({ voc }: ReporterReplyComposerProps): Reac
   }
 
   // Status hint — prototype: "공개 타임라인에 기록됨" for reply surface
-  const statusHint = (
-    <span className="text-xs text-text-muted">공개 타임라인에 기록됨</span>
-  );
+  const statusHint = <span className="text-xs text-text-muted">공개 타임라인에 기록됨</span>;
+
+  // ── Error matrix ─────────────────────────────────────────────────────────────
+  const mutationError = mutation.error as ApiError | null;
+  const isIdempotencyLocked =
+    mutationError != null && mutationError.code === 'conflict.idempotency_key_reuse';
+
+  const inlineCalloutTone = mutationError != null ? getComposerErrorTone(mutationError.code) : null;
+  const inlineCalloutReason =
+    inlineCalloutTone != null
+      ? ((mutationError?.detail?.reason as string | undefined) ?? mutationError?.message)
+      : null;
+
+  // Owner for preview card — priority: actor from me, then fallback.
+  const owner = {
+    id: me?.actor.id ?? '',
+    display_name: me?.actor.display_name ?? '—',
+  };
+  // Reporter identity — use VOC reporter context (display_name not on envelope; use fallback).
+  const reporter = {
+    id: voc.reporter_id,
+    display_name: 'Reporter',
+  };
 
   return (
     <div data-testid="reporter-reply-composer">
@@ -115,17 +156,40 @@ export function ReporterReplyComposer({ voc }: ReporterReplyComposerProps): Reac
         toolbar={(editor) => <ReporterReplyToolbar editor={editor} />}
       />
 
+      {/* Inline error Callout — reporter_facing_status.gate_blocked (amber)
+          D-5.6: copy from backend detail.reason, not errorMapper message */}
+      {inlineCalloutTone != null && inlineCalloutReason != null && (
+        <div
+          className="mt-2 px-1"
+          data-testid="composer-error-callout"
+          data-tone={inlineCalloutTone}
+        >
+          <Callout tone={inlineCalloutTone} icon={<AlertCircle size={12} />}>
+            {inlineCalloutReason}
+          </Callout>
+        </div>
+      )}
+
       {/* ComposerFooter — shared across all three composer surfaces */}
       <ComposerFooter
         submitLabel="Send reply"
-        onPreview={() => {
-          // Preview modal wired in C5.5.
-        }}
+        onPreview={() => setPreviewOpen(true)}
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
         isSubmitting={mutation.isPending}
+        isSubmitDisabled={isIdempotencyLocked}
+        isPreviewDisabled={isIdempotencyLocked}
         statusHint={statusHint}
       />
+
+      {/* PreviewModal — Reporter reply preview */}
+      <PreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title="Reporter reply preview"
+      >
+        <ComposerReplyPreview voc={voc} owner={owner} reporter={reporter} draftDoc={draftDoc} />
+      </PreviewModal>
     </div>
   );
 }

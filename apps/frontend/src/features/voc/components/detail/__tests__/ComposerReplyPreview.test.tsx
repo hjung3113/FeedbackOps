@@ -1,17 +1,7 @@
-/// <reference types="@testing-library/jest-dom" />
-// ComposerReplyPreview.test.tsx — TDD RED
-// Tests:
-//   1. with-body: renders VOC id, owner, reporter, body excerpt
-//   2. empty-body: renders italic empty-body placeholder copy
-//
-// C5.5 of slice3 #21.
-// Prototype ref: docs/design-prototype/screen-voc.jsx:709-742
-
-import * as React from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
-import { ComposerReplyPreview } from '../ComposerReplyPreview';
 import type { VocDetailEnvelope } from '@fops/shared';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { ComposerReplyPreview } from '../ComposerReplyPreview';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -21,7 +11,10 @@ const BASE_VOC = {
   title: '답장 미리보기 테스트',
   reporter_facing_status: 'received',
   created_at: '2026-05-01T00:00:00Z',
-  description_rich_content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '원본 내용입니다.' }] }] },
+  description_rich_content: {
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: '원본 내용입니다.' }] }],
+  },
 } as unknown as VocDetailEnvelope;
 
 const OWNER = { id: 'actor-002', display_name: '관리자' };
@@ -39,12 +32,7 @@ describe('<ComposerReplyPreview>', () => {
     } as import('@fops/ui').TipTapDoc;
 
     render(
-      <ComposerReplyPreview
-        voc={BASE_VOC}
-        owner={OWNER}
-        reporter={REPORTER}
-        draftDoc={draftDoc}
-      />,
+      <ComposerReplyPreview voc={BASE_VOC} owner={OWNER} reporter={REPORTER} draftDoc={draftDoc} />,
     );
 
     // Owner name
@@ -59,12 +47,7 @@ describe('<ComposerReplyPreview>', () => {
     const emptyDoc = { type: 'doc', content: [] } as import('@fops/ui').TipTapDoc;
 
     render(
-      <ComposerReplyPreview
-        voc={BASE_VOC}
-        owner={OWNER}
-        reporter={REPORTER}
-        draftDoc={emptyDoc}
-      />,
+      <ComposerReplyPreview voc={BASE_VOC} owner={OWNER} reporter={REPORTER} draftDoc={emptyDoc} />,
     );
 
     // Empty-body italic placeholder
