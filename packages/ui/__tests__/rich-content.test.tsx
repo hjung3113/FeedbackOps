@@ -9,7 +9,7 @@ const sampleDoc: TipTapDoc = {
       type: 'paragraph',
       content: [
         { type: 'text', text: 'Hello ' },
-        { type: 'mention', attrs: { actor_id: 'u1', label: 'alice' } },
+        { type: 'mention', attrs: { actor_id: 'u1' } },
         { type: 'text', text: ' world.' },
       ],
     },
@@ -57,38 +57,44 @@ describe('RichEditor', () => {
 describe('RichContentRenderer mode handling', () => {
   it('mode="reporter_visible" strips mention nodes', () => {
     render(<RichContentRenderer doc={sampleDoc} mode="reporter_visible" />);
-    expect(screen.queryByText(/@alice/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/@u1/)).not.toBeInTheDocument();
     expect(screen.getByText(/Hello/)).toBeInTheDocument();
     expect(screen.getByText(/world/)).toBeInTheDocument();
   });
 
   it('mode="internal" preserves mention nodes', () => {
     render(<RichContentRenderer doc={sampleDoc} mode="internal" />);
-    expect(screen.getByText(/@alice/)).toBeInTheDocument();
+    expect(screen.getByText(/@u1/)).toBeInTheDocument();
   });
 });
 
 describe('attachmentRef + mention extension round-trip', () => {
-  it('attachmentRef attrs preserved through HTML generation', () => {
+  it('attachmentRef round-trip — only id survives, extra attrs not present', () => {
     const doc: TipTapDoc = {
       type: 'doc',
       content: [
         {
           type: 'attachmentRef',
-          attrs: { id: 'a1', name: 'spec.pdf', sizeBytes: 1024, mimeType: 'application/pdf' },
+          attrs: { id: 'a1' },
         },
       ],
     };
     render(<RichContentRenderer doc={doc} mode="internal" />);
     const el = document.querySelector('[data-type="attachment-ref"]');
     expect(el).toBeInTheDocument();
-    expect(el?.getAttribute('data-size-bytes')).toBe('1024');
+    // Canonical attrs: only id. No name, sizeBytes, mimeType (display via runtime registry #19+).
+    expect(el?.getAttribute('id')).toBe('a1');
+    expect(el?.getAttribute('data-size-bytes')).toBeNull();
+    expect(el?.getAttribute('name')).toBeNull();
+    expect(el?.getAttribute('mimetype')).toBeNull();
   });
 
-  it('mention chip renders @label', () => {
+  it('mention round-trip — only actor_id, label not present', () => {
     render(<RichContentRenderer doc={sampleDoc} mode="internal" />);
     const el = document.querySelector('[data-type="mention"]');
     expect(el).toBeInTheDocument();
-    expect(el?.textContent).toContain('@alice');
+    // Canonical: actor_id only. Label comes from runtime user registry (#19+).
+    expect(el?.textContent).toContain('@u1');
+    expect(el?.getAttribute('label')).toBeNull();
   });
 });

@@ -2,7 +2,6 @@ import { Node, mergeAttributes } from '@tiptap/core';
 
 export interface MentionAttrs {
   actor_id: string;
-  label: string;
 }
 
 export const Mention = Node.create({
@@ -14,7 +13,6 @@ export const Mention = Node.create({
   addAttributes() {
     return {
       actor_id: { default: null },
-      label: { default: null },
     };
   },
   parseHTML() {
@@ -24,7 +22,8 @@ export const Mention = Node.create({
     return [
       'span',
       mergeAttributes({ 'data-type': 'mention', class: 'mention-chip' }, HTMLAttributes),
-      `@${HTMLAttributes.label ?? 'mention'}`,
+      // Label comes from runtime user registry (passed via context in #19+).
+      `@${HTMLAttributes.actor_id ?? 'mention'}`,
     ];
   },
 });

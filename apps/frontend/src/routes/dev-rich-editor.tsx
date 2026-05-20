@@ -41,7 +41,7 @@ function DevRichEditorPage() {
         type: 'paragraph',
         content: [
           { type: 'text', text: '여기에 입력하세요. ' },
-          { type: 'mention', attrs: { actor_id: 'u1', label: 'alice' } },
+          { type: 'mention', attrs: { actor_id: 'u1' } },
         ],
       },
     ],

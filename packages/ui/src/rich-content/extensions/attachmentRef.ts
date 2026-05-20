@@ -2,9 +2,6 @@ import { Node, mergeAttributes } from '@tiptap/core';
 
 export interface AttachmentRefAttrs {
   id: string;
-  name: string;
-  sizeBytes: number;
-  mimeType: string;
 }
 
 export const AttachmentRef = Node.create({
@@ -16,13 +13,6 @@ export const AttachmentRef = Node.create({
   addAttributes() {
     return {
       id: { default: null },
-      name: { default: null },
-      sizeBytes: {
-        default: 0,
-        renderHTML: (attrs) => ({ 'data-size-bytes': attrs.sizeBytes }),
-        parseHTML: (el) => Number(el.getAttribute('data-size-bytes') ?? 0),
-      },
-      mimeType: { default: 'application/octet-stream' },
     };
   },
   parseHTML() {
@@ -32,8 +22,10 @@ export const AttachmentRef = Node.create({
     return [
       'div',
       mergeAttributes({ 'data-type': 'attachment-ref' }, HTMLAttributes),
+      // Display name/size/mime come from a runtime registry (passed via context in #19+).
+      // Without context, render id-only placeholder.
       ['span', { class: 'attachment-icon' }, '📎'],
-      ['span', { class: 'attachment-name' }, HTMLAttributes.name ?? 'attachment'],
+      ['span', { class: 'attachment-id', 'data-attachment-id': HTMLAttributes.id ?? '' }, HTMLAttributes.id ?? 'attachment'],
     ];
   },
 });
