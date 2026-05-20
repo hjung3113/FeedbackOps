@@ -91,6 +91,14 @@ describe('apiClient', () => {
     expect(res.etag).toBe('W/"abc"');
   });
 
+  it('PUT does not auto-attach Idempotency-Key', async () => {
+    const fetchMock = mockFetch({ status: 200, jsonBody: { ok: true } });
+    global.fetch = fetchMock;
+    await apiClient('PUT', '/x', { body: { a: 1 } });
+    const headers = getCallInit(fetchMock).headers as Record<string, string>;
+    expect(headers['Idempotency-Key']).toBeUndefined();
+  });
+
   it('uses credentials include', async () => {
     const fetchMock = mockFetch({ status: 200, jsonBody: {} });
     global.fetch = fetchMock;

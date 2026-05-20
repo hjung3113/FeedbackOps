@@ -16,7 +16,9 @@ export interface ApiResponse<T> {
   requestId: string | undefined;
 }
 
-const MUTATION_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
+// PUT is intentionally excluded: the locked API contract auto-mints Idempotency-Key
+// only for POST/PATCH/DELETE. Include PUT explicitly if a future endpoint opts in.
+const MUTATION_METHODS = new Set(['POST', 'PATCH', 'DELETE']);
 
 export async function apiClient<T = unknown>(
   method: string,
