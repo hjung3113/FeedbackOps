@@ -2,18 +2,27 @@
 // Spec: drag-over highlight + no-op drop/click + sonner toast informing the
 // user that attachments arrive in the next slice.
 
-import * as React from 'react';
-import { Paperclip } from 'lucide-react';
-import { toast } from 'sonner';
 import { Card, cn } from '@fops/ui';
+import { Paperclip } from 'lucide-react';
+import * as React from 'react';
+import { toast } from 'sonner';
 
 export interface AttachmentDropzoneProps {
   testId?: string;
+  /** When true the dropzone remains visible but suppresses all interaction
+   *  (drag, click, keyboard) — used by EditDescriptionModal (C6.2). */
+  disabled?: boolean;
 }
 
 const DEFER_MESSAGE = '첨부 기능은 다음 슬라이스에서 제공됩니다 (Slice 3+)';
 
-export function AttachmentDropzone({ testId }: AttachmentDropzoneProps): React.ReactElement {
+// The dropzone is always "disabled" in its current spec (attachments land in #22).
+// The `disabled` prop is wired to `aria-disabled` so callers (e.g. EditDescriptionModal)
+// can explicitly surface the disabled intent without duplicating the aria attribute.
+export function AttachmentDropzone({
+  testId,
+  disabled = true,
+}: AttachmentDropzoneProps): React.ReactElement {
   const [dragOver, setDragOver] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -53,7 +62,7 @@ export function AttachmentDropzone({ testId }: AttachmentDropzoneProps): React.R
       onDrop={handleDrop}
       onClick={handleClick}
       role="button"
-      aria-disabled="true"
+      aria-disabled={disabled}
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {

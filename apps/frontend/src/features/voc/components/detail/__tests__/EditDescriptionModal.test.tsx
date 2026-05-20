@@ -9,7 +9,8 @@
 // C6.2 of slice3 #21.
 
 import * as React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -71,19 +72,30 @@ const DEFAULT_MUTATION = {
   mutate: vi.fn(),
   isPending: false,
   isError: false,
+  isIdle: true,
+  isSuccess: false,
+  isPaused: false,
+  status: 'idle' as const,
+  submittedAt: 0,
+  variables: undefined,
+  data: undefined,
   error: null,
   reset: vi.fn(),
+  context: undefined,
+  failureCount: 0,
+  failureReason: null,
+  mutateAsync: vi.fn(),
 };
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('<EditDescriptionModal>', () => {
   beforeEach(() => {
-    vi.mocked(useVocEditDescriptionMutation).mockReturnValue(DEFAULT_MUTATION as ReturnType<typeof useVocEditDescriptionMutation>);
+    vi.mocked(useVocEditDescriptionMutation).mockReturnValue(DEFAULT_MUTATION as unknown as ReturnType<typeof useVocEditDescriptionMutation>);
   });
 
   // Test 1: Modal prefills title + description from voc props
-  it('prefills title and description from voc on open', () => {
+  it('prefills title and description from voc on open', async () => {
     render(
       <EditDescriptionModal
         voc={VOC}
@@ -93,7 +105,9 @@ describe('<EditDescriptionModal>', () => {
       { wrapper: makeWrapper() },
     );
 
-    const titleInput = screen.getByLabelText('제목');
+    // FieldLabel renders a <label for="edit-title"> with extra children (* and tip icon).
+    // Use getByRole with name regex to match the accessible label.
+    const titleInput = screen.getByRole('textbox', { name: /제목/ });
     expect(titleInput).toHaveValue('기존 제목');
 
     // RichEditor is rendered with the voc description surface
@@ -101,7 +115,7 @@ describe('<EditDescriptionModal>', () => {
   });
 
   // Test 2: AttachmentDropzone is visible and has aria-disabled
-  it('renders AttachmentDropzone with aria-disabled', () => {
+  it('renders AttachmentDropzone with aria-disabled', async () => {
     render(
       <EditDescriptionModal
         voc={VOC}
@@ -118,6 +132,7 @@ describe('<EditDescriptionModal>', () => {
 
   // Test 3: Dirty form + close attempt shows DirtyConfirmation
   it('shows DirtyConfirmation when modal is closed with dirty form', async () => {
+    const user = userEvent.setup();
     const onClose = vi.fn();
     render(
       <EditDescriptionModal
@@ -128,16 +143,19 @@ describe('<EditDescriptionModal>', () => {
       { wrapper: makeWrapper() },
     );
 
-    // Dirty the title field
-    const titleInput = screen.getByLabelText('제목');
-    fireEvent.change(titleInput, { target: { value: '변경된 제목' } });
+    // Dirty the title field using userEvent (fires realistic keyboard events that
+    // properly trigger react-hook-form's onChange handler and isDirty tracking)
+    const titleInput = screen.getByRole('textbox', { name: /제목/ });
+    await user.clear(titleInput);
+    await user.type(titleInput, '변경된 제목');
 
     // Click the cancel/close button
-    const cancelButton = screen.getByRole('button', { name: '취소' });
-    fireEvent.click(cancelButton);
+    await user.click(screen.getByRole('button', { name: '취소' }));
 
-    // DirtyConfirmation should appear
+    // DirtyConfirmation uses DirtyConfirmation (AlertDialog from @radix-ui/react-dialog)
+    // which renders with role="dialog". Query by the title text.
     await waitFor(() => {
+      // The DirtyConfirmation title text is the default:
       expect(screen.getByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
     });
 
@@ -146,6 +164,9 @@ describe('<EditDescriptionModal>', () => {
   });
 
   // Test 4: validation.failed renders per-field error
+  // The useEffect in EditDescriptionModal watches mutation.error and calls
+  // form.setError when a validation.failed error is present. This test verifies
+  // that the per-field message is visible after the effect fires.
   it('renders per-field error when mutation returns validation.failed', async () => {
     const { ApiError } = await import('@/lib/api');
     const validationError = new ApiError(422, {
@@ -159,8 +180,10 @@ describe('<EditDescriptionModal>', () => {
     vi.mocked(useVocEditDescriptionMutation).mockReturnValue({
       ...DEFAULT_MUTATION,
       isError: true,
+      isIdle: false,
+      status: 'error' as const,
       error: validationError,
-    } as ReturnType<typeof useVocEditDescriptionMutation>);
+    } as unknown as ReturnType<typeof useVocEditDescriptionMutation>);
 
     render(
       <EditDescriptionModal
@@ -171,10 +194,8 @@ describe('<EditDescriptionModal>', () => {
       { wrapper: makeWrapper() },
     );
 
-    // Submit to trigger error display
-    const submitButton = screen.getByRole('button', { name: '수정 저장' });
-    fireEvent.click(submitButton);
-
+    // The useEffect should fire on mount and call form.setError.
+    // waitFor ensures the effect has run and the DOM has updated.
     await waitFor(() => {
       expect(screen.getByText('제목을 입력해 주세요.')).toBeInTheDocument();
     });

@@ -1,9 +1,12 @@
-// DescriptionSection — rich description display with optional edit placeholder.
+// DescriptionSection — rich description display with modal edit trigger.
+// 수정 button is visible only when the actor is the reporter + VOC is untriaged
+// (gate driven by isReporterOnOwnVoc prop from parent).
+// C6.2 of slice3 #21 — replaced EditDescriptionLink placeholder with real modal.
 
-import * as React from 'react';
 import type { VocDetailEnvelope } from '@fops/shared';
-import { PanelSectionTitle, NestedTextBlock, RichContentRenderer, type TipTapDoc } from '@fops/ui';
-import { EditDescriptionLink } from './EditDescriptionLink';
+import { NestedTextBlock, PanelSectionTitle, RichContentRenderer, type TipTapDoc } from '@fops/ui';
+import * as React from 'react';
+import { EditDescriptionModal } from './EditDescriptionModal';
 
 export interface DescriptionSectionProps {
   voc: VocDetailEnvelope;
@@ -33,6 +36,8 @@ export function DescriptionSection({
   isReporterOnOwnVoc,
 }: DescriptionSectionProps): React.ReactElement {
   const empty = isDocEmpty(voc.description_rich_content);
+  const [modalOpen, setModalOpen] = React.useState(false);
+
   return (
     <div>
       <PanelSectionTitle>설명</PanelSectionTitle>
@@ -43,7 +48,18 @@ export function DescriptionSection({
           <RichContentRenderer doc={voc.description_rich_content as TipTapDoc} mode="internal" />
         )}
       </NestedTextBlock>
-      {isReporterOnOwnVoc && <EditDescriptionLink />}
+      {isReporterOnOwnVoc && (
+        <>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="mt-1 text-xs text-text-muted underline hover:text-text-primary transition-colors"
+          >
+            설명 수정
+          </button>
+          <EditDescriptionModal voc={voc} open={modalOpen} onClose={() => setModalOpen(false)} />
+        </>
+      )}
     </div>
   );
 }

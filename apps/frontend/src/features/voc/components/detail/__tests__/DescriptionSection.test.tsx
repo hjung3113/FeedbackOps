@@ -12,6 +12,12 @@ vi.mock('@fops/ui', async (importOriginal) => {
   };
 });
 
+// EditDescriptionModal uses QueryClient + mutation hooks — stub it to isolate DescriptionSection
+vi.mock('../EditDescriptionModal', () => ({
+  EditDescriptionModal: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="edit-description-modal" /> : null,
+}));
+
 import { DescriptionSection } from '../DescriptionSection';
 import { DETAIL_ENVELOPE } from './_fixtures';
 

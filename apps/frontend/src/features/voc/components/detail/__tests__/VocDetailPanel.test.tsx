@@ -17,6 +17,12 @@ vi.mock('@/features/voc/components/list/VocRow', () => ({
   formatVocCreatedAt: () => '방금 전',
 }));
 
+// EditDescriptionModal uses QueryClient + mutation hooks — stub to isolate VocDetailPanel tests
+vi.mock('@/features/voc/components/detail/EditDescriptionModal', () => ({
+  EditDescriptionModal: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="edit-description-modal" /> : null,
+}));
+
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
