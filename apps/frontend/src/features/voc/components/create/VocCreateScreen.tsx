@@ -71,6 +71,11 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
     onSuccess: (data) => {
       markConsumed();
       form.reset(form.getValues()); // clear dirty so DirtyConfirmation won't fire
+      // Synchronously notify the route (which holds the blocker ref) that the
+      // form is no longer dirty BEFORE triggering the navigate. The
+      // useEffect-driven sync below would not have propagated by the time
+      // useBlocker.shouldBlockFn runs against this navigation intent.
+      onDirtyChange?.(false);
       void navigate({ to: '/vocs', search: { view: 'inbox', selected: data.id } });
     },
     onError: (err: ApiError) => {
