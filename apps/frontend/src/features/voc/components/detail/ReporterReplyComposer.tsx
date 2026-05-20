@@ -56,6 +56,10 @@ import { ReporterReplyToolbar } from './rich-toolbars/ReporterReplyToolbar';
 export interface ReporterReplyComposerProps {
   voc: VocDetailEnvelope;
   me: MeResponse | null | undefined;
+  /** REV-1 #7: controlled draft doc from parent ComposerSection. */
+  draftDoc?: TipTapDoc | null;
+  /** REV-1 #7: called when the editor content changes. */
+  onDraftChange?: (doc: TipTapDoc | null) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -82,18 +86,31 @@ function getComposerErrorTone(code: string): 'amber' | null {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ReporterReplyComposer({ voc, me }: ReporterReplyComposerProps): ReactElement {
+export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, onDraftChange }: ReporterReplyComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
-  // Local draft state for this composer instance.
-  const [draftDoc, setDraftDoc] = useState<TipTapDoc | null>(null);
+  // REV-1 #7: controlled draft support.
+  const isControlled = controlledDraftDoc !== undefined;
+  const [localDraftDoc, setLocalDraftDoc] = useState<TipTapDoc | null>(null);
+  const draftDoc = isControlled ? (controlledDraftDoc ?? null) : localDraftDoc;
+
+  function setDraftDoc(doc: TipTapDoc | null) {
+    if (isControlled) {
+      onDraftChange?.(doc);
+    } else {
+      setLocalDraftDoc(doc);
+    }
+  }
+
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Reset state when VOC changes.
+  // Reset state when VOC changes (preview; draft reset handled by parent for controlled).
   const prevVocIdRef = useRef(voc.id);
   if (prevVocIdRef.current !== voc.id) {
     prevVocIdRef.current = voc.id;
-    setDraftDoc(null);
+    if (!isControlled) {
+      setLocalDraftDoc(null);
+    }
     setPreviewOpen(false);
   }
 
@@ -102,7 +119,7 @@ export function ReporterReplyComposer({ voc, me }: ReporterReplyComposerProps): 
   const mutation = useVocReporterReplyMutation({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
-      setDraftDoc(null);
+      setDraftDoc(null); // calls onDraftChange?.(null) when controlled
       toast.success('리포터에게 답장이 전송되었습니다.');
     },
   });

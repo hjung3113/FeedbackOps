@@ -44,6 +44,10 @@ import { InternalCommentToolbar } from './rich-toolbars/InternalCommentToolbar';
 export interface InternalCommentComposerProps {
   voc: VocDetailEnvelope;
   me: MeResponse | null | undefined;
+  /** REV-1 #7: controlled draft doc from parent ComposerSection. */
+  draftDoc?: TipTapDoc | null;
+  /** REV-1 #7: called when the editor content changes. */
+  onDraftChange?: (doc: TipTapDoc | null) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -68,20 +72,34 @@ export function InternalCommentComposer({
   // PublicUpdateComposer / ReporterReplyComposer
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   me: _me,
+  draftDoc: controlledDraftDoc,
+  onDraftChange,
 }: InternalCommentComposerProps): React.ReactElement {
   const queryClient = useQueryClient();
 
   // Hold a ref to the editor instance to allow MentionPickerButton insertions.
   const editorRef = React.useRef<TipTapEditor | null>(null);
 
-  // Local draft state for this composer instance.
-  const [draftDoc, setDraftDoc] = React.useState<TipTapDoc | null>(null);
+  // REV-1 #7: controlled draft support.
+  const isControlled = controlledDraftDoc !== undefined;
+  const [localDraftDoc, setLocalDraftDoc] = React.useState<TipTapDoc | null>(null);
+  const draftDoc = isControlled ? (controlledDraftDoc ?? null) : localDraftDoc;
 
-  // Reset state when VOC changes.
+  function setDraftDoc(doc: TipTapDoc | null) {
+    if (isControlled) {
+      onDraftChange?.(doc);
+    } else {
+      setLocalDraftDoc(doc);
+    }
+  }
+
+  // Reset state when VOC changes (draft reset handled by parent for controlled).
   const prevVocIdRef = React.useRef(voc.id);
   if (prevVocIdRef.current !== voc.id) {
     prevVocIdRef.current = voc.id;
-    setDraftDoc(null);
+    if (!isControlled) {
+      setLocalDraftDoc(null);
+    }
   }
 
   const isEmpty = isDocEmpty(draftDoc);
@@ -89,7 +107,7 @@ export function InternalCommentComposer({
   const mutation = useVocInternalCommentMutation({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
-      setDraftDoc(null);
+      setDraftDoc(null); // calls onDraftChange?.(null) when controlled
       toast.success('내부 코멘트가 추가되었습니다.');
     },
   });

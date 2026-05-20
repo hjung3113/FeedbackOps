@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
@@ -26,6 +26,26 @@ vi.mock('@/features/voc/components/detail/EditDescriptionModal', () => ({
 // PublicUpdateComposer uses QueryClient — stub to isolate VocDetailPanel tests (C5.2)
 vi.mock('@/features/voc/components/detail/PublicUpdateComposer', () => ({
   PublicUpdateComposer: () => <div data-testid="public-update-composer-stub" />,
+}));
+
+// ComposerSection stub that can report dirty state via onDirtyChange callback.
+// REV-1 #6: VocDetailPanel must intercept close when a composer draft is dirty.
+vi.mock('@/features/voc/components/detail/ComposerSection', () => ({
+  ComposerSection: ({
+    onDirtyChange,
+  }: {
+    onDirtyChange?: (dirty: boolean) => void;
+  }) => (
+    <div data-testid="composer-section-stub">
+      <button
+        type="button"
+        data-testid="composer-dirty-trigger"
+        onClick={() => onDirtyChange?.(true)}
+      >
+        make dirty
+      </button>
+    </div>
+  ),
 }));
 
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
@@ -135,5 +155,25 @@ describe('<VocDetailPanel>', () => {
     );
     render(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getAllByText('김개발').length).toBeGreaterThan(0);
+  });
+
+  // REV-1 #6: dirty composer close must show DirtyConfirmation, not call onClose immediately.
+  it('#6 dirty composer close: shows DirtyConfirmation before closing panel', async () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    const onClose = vi.fn();
+    render(<VocDetailPanel vocId="voc-uuid-1111" onClose={onClose} />);
+
+    // Mark composer dirty via stub trigger
+    fireEvent.click(screen.getByTestId('composer-dirty-trigger'));
+
+    // Click the DetailHeader close button (aria-label "닫기" on the X icon button)
+    const closeBtn = screen.getByRole('button', { name: /닫기|패널 닫기|close/i });
+    fireEvent.click(closeBtn);
+
+    // DirtyConfirmation should appear; onClose NOT called yet
+    await waitFor(() => {
+      expect(screen.getByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

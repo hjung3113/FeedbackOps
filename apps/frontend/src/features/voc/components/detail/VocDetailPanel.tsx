@@ -1,7 +1,8 @@
 // VocDetailPanel — orchestrator for the read-only VOC detail panel (Slice 3 #20 C8).
+// REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
 import * as React from 'react';
-import { Skeleton, PermissionBlockedPanel } from '@fops/ui';
+import { Skeleton, PermissionBlockedPanel, DirtyConfirmation } from '@fops/ui';
 import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
@@ -110,26 +111,87 @@ export function VocDetailPanel({
     me?.actor.id === voc.reporter_id && voc.triage_state === 'untriaged';
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto" data-testid="voc-detail-panel">
-      <DetailHeader
-        vocId={vocId}
-        displayId={voc.display_id}
-        onClose={onClose}
-        {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
-      />
+    <FullDetailView
+      voc={voc}
+      vocId={vocId}
+      onClose={onClose}
+      {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
+      isReporterOnOwnVoc={isReporterOnOwnVoc}
+      me={me ?? null}
+    />
+  );
+}
 
-      <div className="flex flex-col flex-1 min-h-0 overflow-y-auto pb-16">
-        <IdentitySection voc={voc} />
-        <TriageBlock voc={voc} />
-        <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
-        <LinkedExecutionSection voc={voc} />
-        <LinkedEntityTrailSection />
-        <ConversationTimeline voc={voc} />
-        <ComposerSection voc={voc} me={me} />
+// ── Full detail view (extracted to own component to own dirty state) ──────────
+
+interface FullDetailViewProps {
+  voc: VocDetailEnvelope;
+  vocId: string;
+  onClose: () => void;
+  onExpandToggle?: () => void;
+  isReporterOnOwnVoc: boolean;
+  me: import('@/lib/auth/useMe').MeResponse | null;
+}
+
+function FullDetailView({
+  voc,
+  vocId,
+  onClose,
+  onExpandToggle,
+  isReporterOnOwnVoc,
+  me,
+}: FullDetailViewProps): React.ReactElement {
+  // REV-1 #6: track composer dirty state; intercept panel close to show DirtyConfirmation.
+  const [composerDirty, setComposerDirty] = React.useState(false);
+  const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
+
+  function handleClose() {
+    if (composerDirty) {
+      setDirtyConfirmOpen(true);
+    } else {
+      onClose();
+    }
+  }
+
+  function handleDirtyConfirm() {
+    setDirtyConfirmOpen(false);
+    setComposerDirty(false);
+    onClose();
+  }
+
+  function handleDirtyCancel() {
+    setDirtyConfirmOpen(false);
+  }
+
+  return (
+    <>
+      <div className="flex flex-col h-full overflow-y-auto" data-testid="voc-detail-panel">
+        <DetailHeader
+          vocId={vocId}
+          displayId={voc.display_id}
+          onClose={handleClose}
+          {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
+        />
+
+        <div className="flex flex-col flex-1 min-h-0 overflow-y-auto pb-16">
+          <IdentitySection voc={voc} />
+          <TriageBlock voc={voc} />
+          <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
+          <LinkedExecutionSection voc={voc} />
+          <LinkedEntityTrailSection />
+          <ConversationTimeline voc={voc} />
+          <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
+        </div>
+
+        <NextActionFooter voc={voc} />
       </div>
 
-      <NextActionFooter voc={voc} />
-    </div>
+      <DirtyConfirmation
+        open={dirtyConfirmOpen}
+        onConfirm={handleDirtyConfirm}
+        onCancel={handleDirtyCancel}
+      />
+    </>
   );
 }
 

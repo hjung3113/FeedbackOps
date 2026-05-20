@@ -5,6 +5,9 @@
 // C5.3 (slice3 #21) — ReporterReplyComposer wired (replaces placeholder)
 // C5.4 (slice3 #21) — InternalCommentComposer wired (replaces placeholder)
 // C5.5 (slice3 #21) — DirtyConfirmation on panel close with dirty draft ← THIS CHUNK
+// REV-1 #6 — onDirtyChange callback added so VocDetailPanel can intercept panel close.
+// REV-1 #7 — useComposerDraft wired into all three composers; all kept mounted with
+//            visibility toggled via CSS display so drafts survive tab switches.
 //
 // Spec: PLAN-21-SUBCHUNKS.md C5.1 / C5.2 / C5.5
 // Prototype ref: docs/design-prototype/screen-voc.jsx:400-470
@@ -39,6 +42,12 @@ export interface ComposerSectionProps {
    * actual close fires.
    */
   onCloseRequest?: () => void;
+  /**
+   * REV-1 #6: called whenever the aggregate dirty state of the composer section
+   * changes. The parent panel (VocDetailPanel) uses this to intercept its own
+   * close button and show DirtyConfirmation before closing the panel.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -47,11 +56,11 @@ export function ComposerSection({
   voc,
   me,
   onCloseRequest,
+  onDirtyChange,
 }: ComposerSectionProps): React.ReactElement | null {
   const visibility = useComposerVisibility(voc, me);
-  // Draft state is wired here; placeholder bodies in C5.1 don't use it yet.
-  // C5.2/C5.3/C5.4 will pass draft.getDraft / draft.setDraft into the real composer bodies.
-  const _draft = useComposerDraft(voc.id);
+  // REV-1 #7: draft state is now wired into all three composers as controlled props.
+  const draft = useComposerDraft(voc.id);
 
   // Determine the default (leftmost visible) tab surface.
   function getDefaultTab(): ComposerSurface {
@@ -84,6 +93,14 @@ export function ComposerSection({
     dirtyRef.current.clear();
   }
 
+  // REV-1 #6: notify parent panel whenever dirty state changes.
+  // Use a ref to avoid stale closure issues in the effect dep array.
+  const onDirtyChangeRef = React.useRef(onDirtyChange);
+  onDirtyChangeRef.current = onDirtyChange;
+  React.useEffect(() => {
+    onDirtyChangeRef.current?.(isDirty);
+  }, [isDirty]);
+
   // No visible tabs → render nothing.
   if (!visibility) return null;
 
@@ -107,6 +124,7 @@ export function ComposerSection({
   }
 
   // Composer dirty change handler — composers call this when their draft changes.
+  // REV-1 #7: also updates draft state for the active surface.
   function handleComposerInteraction() {
     setIsDirty(true);
   }
@@ -129,17 +147,39 @@ export function ComposerSection({
 
       <ComposerTabs visibility={visibility} activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Composer bodies — wrap in a container that monitors interaction for dirty tracking */}
+      {/* Composer bodies — all three kept mounted (display toggled) so drafts survive tab
+          switches. REV-1 #7: draft state controlled by parent via useComposerDraft. */}
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: monitoring clicks on contained interactive elements */}
       <div className="p-4" onClick={handleComposerInteraction}>
-        {activeTab === 'public' && visibility.showPublic && (
-          <PublicUpdateComposer voc={voc} me={me} />
+        {visibility.showPublic && (
+          <div style={{ display: activeTab === 'public' ? undefined : 'none' }}>
+            <PublicUpdateComposer
+              voc={voc}
+              me={me}
+              draftDoc={draft.state.public}
+              onDraftChange={(doc) => draft.setDraft('public', doc)}
+            />
+          </div>
         )}
-        {activeTab === 'reply' && visibility.showReply && (
-          <ReporterReplyComposer voc={voc} me={me} />
+        {visibility.showReply && (
+          <div style={{ display: activeTab === 'reply' ? undefined : 'none' }}>
+            <ReporterReplyComposer
+              voc={voc}
+              me={me}
+              draftDoc={draft.state.reply}
+              onDraftChange={(doc) => draft.setDraft('reply', doc)}
+            />
+          </div>
         )}
-        {activeTab === 'internal' && visibility.showInternal && (
-          <InternalCommentComposer voc={voc} me={me} />
+        {visibility.showInternal && (
+          <div style={{ display: activeTab === 'internal' ? undefined : 'none' }}>
+            <InternalCommentComposer
+              voc={voc}
+              me={me}
+              draftDoc={draft.state.internal}
+              onDraftChange={(doc) => draft.setDraft('internal', doc)}
+            />
+          </div>
         )}
       </div>
 

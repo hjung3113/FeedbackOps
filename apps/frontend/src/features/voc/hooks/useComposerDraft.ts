@@ -1,6 +1,7 @@
 // useComposerDraft — per-(vocId, surface) draft state with reducer.
 //
 // C5.1 (slice3 #21)
+// REV-1 #7: stores TipTapDoc | null per surface so drafts survive tab switches.
 // Spec: PLAN-21-SUBCHUNKS.md C5.1
 // Prototype ref: docs/design-prototype/screen-voc.jsx:400-470
 //
@@ -9,17 +10,19 @@
 // never touches 'reply' or 'internal'.
 
 import { useReducer, useRef, useCallback } from 'react';
+import type { TipTapDoc } from '@fops/ui';
 
 export type ComposerSurface = 'public' | 'reply' | 'internal';
 
+// REV-1 #7: draft values are TipTapDoc | null (not string) so rich content is preserved.
 interface DraftState {
-  public: string;
-  reply: string;
-  internal: string;
+  public: TipTapDoc | null;
+  reply: TipTapDoc | null;
+  internal: TipTapDoc | null;
 }
 
 type DraftAction =
-  | { type: 'SET'; surface: ComposerSurface; value: string }
+  | { type: 'SET'; surface: ComposerSurface; value: TipTapDoc | null }
   | { type: 'CLEAR'; surface: ComposerSurface }
   | { type: 'CLEAR_ALL' };
 
@@ -28,19 +31,19 @@ function draftReducer(state: DraftState, action: DraftAction): DraftState {
     case 'SET':
       return { ...state, [action.surface]: action.value };
     case 'CLEAR':
-      return { ...state, [action.surface]: '' };
+      return { ...state, [action.surface]: null };
     case 'CLEAR_ALL':
-      return { public: '', reply: '', internal: '' };
+      return { public: null, reply: null, internal: null };
     default:
       return state;
   }
 }
 
-const INITIAL_STATE: DraftState = { public: '', reply: '', internal: '' };
+const INITIAL_STATE: DraftState = { public: null, reply: null, internal: null };
 
 export interface ComposerDraftHandle {
-  getDraft: (surface: ComposerSurface) => string;
-  setDraft: (surface: ComposerSurface, value: string) => void;
+  getDraft: (surface: ComposerSurface) => TipTapDoc | null;
+  setDraft: (surface: ComposerSurface, value: TipTapDoc | null) => void;
   clearDraft: (surface: ComposerSurface) => void;
   clearAll: () => void;
   state: DraftState;
@@ -73,12 +76,12 @@ export function useComposerDraft(vocId: string): ComposerDraftHandle {
   }
 
   const getDraft = useCallback(
-    (surface: ComposerSurface): string => state[surface],
+    (surface: ComposerSurface): TipTapDoc | null => state[surface],
     [state],
   );
 
   const setDraft = useCallback(
-    (surface: ComposerSurface, value: string) => {
+    (surface: ComposerSurface, value: TipTapDoc | null) => {
       dispatch({ type: 'SET', surface, value });
     },
     [],

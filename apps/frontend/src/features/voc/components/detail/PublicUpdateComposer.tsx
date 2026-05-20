@@ -82,6 +82,14 @@ import { PublicUpdateToolbar } from './rich-toolbars/PublicUpdateToolbar';
 export interface PublicUpdateComposerProps {
   voc: VocDetailEnvelope;
   me: MeResponse | null | undefined;
+  /**
+   * REV-1 #7: controlled draft doc from parent ComposerSection (persists across tab switches).
+   * When provided, this value drives the editor; onChange updates the parent instead of
+   * local state.
+   */
+  draftDoc?: TipTapDoc | null;
+  /** REV-1 #7: called when the editor content changes. */
+  onDraftChange?: (doc: TipTapDoc | null) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -107,21 +115,35 @@ function getComposerErrorTone(code: string): 'red' | 'amber' | null {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function PublicUpdateComposer({ voc, me }: PublicUpdateComposerProps): ReactElement {
+export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, onDraftChange }: PublicUpdateComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
-  // Local draft state for this composer instance.
-  const [draftDoc, setDraftDoc] = useState<TipTapDoc | null>(null);
+  // REV-1 #7: if parent provides controlled draft, use it; otherwise keep local state
+  // for backward-compat when the composer is used standalone.
+  const isControlled = controlledDraftDoc !== undefined;
+  const [localDraftDoc, setLocalDraftDoc] = useState<TipTapDoc | null>(null);
+  const draftDoc = isControlled ? (controlledDraftDoc ?? null) : localDraftDoc;
+
+  function setDraftDoc(doc: TipTapDoc | null) {
+    if (isControlled) {
+      onDraftChange?.(doc);
+    } else {
+      setLocalDraftDoc(doc);
+    }
+  }
+
   const [nextStatus, setNextStatus] = useState<ReporterFacingStatusEnum>(
     voc.reporter_facing_status,
   );
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Reset state when VOC changes.
+  // Reset state when VOC changes (status + preview; draft reset handled by parent for controlled).
   const prevVocIdRef = useRef(voc.id);
   if (prevVocIdRef.current !== voc.id) {
     prevVocIdRef.current = voc.id;
-    setDraftDoc(null);
+    if (!isControlled) {
+      setLocalDraftDoc(null);
+    }
     setNextStatus(voc.reporter_facing_status);
     setPreviewOpen(false);
   }
@@ -134,6 +156,7 @@ export function PublicUpdateComposer({ voc, me }: PublicUpdateComposerProps): Re
   const mutation = useVocPublicUpdateMutation({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
+      // clear draft (calls onDraftChange?.(null) when controlled)
       setDraftDoc(null);
       setNextStatus(voc.reporter_facing_status);
       toast.success('공개 업데이트가 게시되었습니다.');
