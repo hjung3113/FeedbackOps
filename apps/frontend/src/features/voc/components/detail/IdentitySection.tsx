@@ -46,13 +46,17 @@ export function IdentitySection({ voc }: IdentitySectionProps): React.ReactEleme
 
   const relativeTime = formatVocCreatedAt(voc.created_at);
 
-  // Title block: xl typography per reference; no badge slot here — the
-  // status pill + meta line lives in its own row below the title.
-  // mb-7 (28px) matches the spacing scale and the reference rhythm between
-  // the title group and the BODY card.
+  // Title block: xl typography per reference (.review/title-reference.png).
+  // Rhythm:
+  //   - pt-2  (8 px)  — top inset (reference shows ~8 px from panel top).
+  //   - mb-4  (16 px) — gap to next section, matches reference badge→BODY (~16 CSS).
+  //   - title mb-1 (4 px) — tight gap to the status row (reference ≈ 8 CSS but
+  //     visually feels too wide once the pill carries weight; user feedback
+  //     "제목과 뱃지/날짜 간격 너무 넓음").
+  //   - px-4 (16 px) — horizontal inset aligns with the rest of the panel.
   return (
-    <div className="mb-7 px-4 pt-3">
-      <PanelTitleBlock title={voc.title} size="xl" className="!px-0 !py-0 mb-2" />
+    <div className="mb-4 px-4 pt-2">
+      <PanelTitleBlock title={voc.title} size="xl" className="!px-0 !py-0 mb-1" />
       <div className="flex items-center gap-2 text-xs text-text-muted">
         <ReporterStatusBadge status={voc.reporter_facing_status} />
         <span aria-hidden="true">·</span>
