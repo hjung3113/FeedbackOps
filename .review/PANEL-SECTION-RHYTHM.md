@@ -51,3 +51,19 @@
 
 - Committed on feature branch `feature/v1-inline-kicker-triage`.
 - **No PR opened.** User requested wait — work is committed locally, push deferred.
+
+---
+
+## Related
+
+- **`.review/TITLE-BLOCK-RESTORE.md`** — documents the title-block + BODY-card restore that
+  shipped alongside this rhythm fix in PR #59; xl title variant, IdentityMetadataStrip,
+  DescriptionSection body card.
+- **`.review/PIXEL-MATCH-TITLE-BLOCK.md`** — pixel-match iteration log that confirmed the
+  restored title-block visual contract after the rhythm fix landed.
+- **`.review/CHUNK-DEVIATIONS-V1-KICKER.md`** — deviation log for the V1 inline kicker (same PR);
+  records ShellHeader removal and kicker label tracking decision.
+- **`.review/POST-PR59-AUDIT.md`** — full post-merge audit of PR #59; B3 is the PanelSectionTitle
+  borderless consumer sweep confirming no layout regressions at callsites.
+- **`.review/VOC-DETAIL-CRITIQUE.md`** — original UX critique; P1 #1 (section rhythm broken) is
+  the finding this document resolves. See status snapshot for ADDRESSED confirmation.
