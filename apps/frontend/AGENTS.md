@@ -84,6 +84,6 @@ Every page-level FE issue (route mount, full screen) runs a structured Playwrigh
 
 See root `AGENTS.md` → Prototype Is The Spec for full rules. Frontend reminders:
 
-- Quote labels from `screen-*.jsx` and `data.js` exactly; preserve the prototype's English ↔ Korean split.
+- Quote labels from `screen-*.jsx` and `data.js` exactly. Korean and English may mix freely per surface; copy the reference verbatim regardless of language.
 - Section headers like `Triage (Read only)` stay as-is.
-- Reflexive Korean translation of English prototype strings is a REV-blocking smell.
+- Do not blanket-translate either direction — but per-surface variance (e.g. `BODY` label in detail panel coexisting with `설명` in create form) is allowed when the reference design/screenshot shows it that way.
