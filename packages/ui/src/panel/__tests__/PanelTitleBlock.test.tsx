@@ -42,12 +42,28 @@ describe('PanelTitleBlock', () => {
     expect(container.firstElementChild).toHaveClass('custom-cls');
   });
 
-  it('renders compact V1b title typography: text-lg font-semibold tracking-tight', () => {
+  it('renders compact V1b title typography by default: text-lg font-semibold tracking-tight', () => {
     render(<PanelTitleBlock title="제목" />);
     const h2 = screen.getByRole('heading', { level: 2 });
     expect(h2).toHaveClass('text-lg');
     expect(h2).toHaveClass('font-semibold');
     expect(h2).toHaveClass('tracking-tight');
     expect(h2).not.toHaveClass('text-xl');
+  });
+
+  it('renders xl typography when size="xl": text-xl font-bold tracking-tight (per title-reference.png)', () => {
+    render(<PanelTitleBlock title="제목" size="xl" />);
+    const h2 = screen.getByRole('heading', { level: 2 });
+    expect(h2).toHaveClass('text-xl');
+    expect(h2).toHaveClass('font-bold');
+    expect(h2).toHaveClass('tracking-tight');
+    expect(h2).not.toHaveClass('text-lg');
+  });
+
+  it('renders lg typography when size="lg" explicit (backward compat preservation)', () => {
+    render(<PanelTitleBlock title="제목" size="lg" />);
+    const h2 = screen.getByRole('heading', { level: 2 });
+    expect(h2).toHaveClass('text-lg');
+    expect(h2).toHaveClass('font-semibold');
   });
 });
