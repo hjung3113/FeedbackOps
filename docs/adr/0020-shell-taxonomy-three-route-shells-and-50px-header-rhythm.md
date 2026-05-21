@@ -51,6 +51,38 @@ When porting a screen into production:
 - **Drawer / panel discipline.** Anywhere a drawer opens — Survey preview, VOC compose, Triage panel, Findings detail — the drawer's header height inherits from the shared primitive. Per-route height overrides are disallowed.
 - **Backlog / Survey are not exceptions.** They look different because their bodies carry richer rows; the shell underneath is unchanged. This prevents the next "make backlog its own shell" temptation from re-fracturing the taxonomy.
 
+## Amendment — WorkbenchShell optional toolbar (V1 inline kicker, 2026-05-21)
+
+`WorkbenchShell` allows the `toolbar` prop to be omitted. When omitted, the 50px
+`ShellHeader` bar is not rendered and the route-owned screen is responsible for
+providing identity inside its own toolbar.
+
+The trigger: VOC Triage Console ships V1 inline kicker layout (see
+`.review/TRIAGE-LAYOUT-VARIANTS.html §V1`). The two-bar stack (50px ShellHeader +
+50px triage toolbar) was judged visually cramped on a high-density decision surface.
+Removing the ShellHeader recovers 50px of vertical queue space — roughly one extra
+expanded row above the fold.
+
+Rules for routes that omit `WorkbenchShell.toolbar`:
+
+1. The route-owned screen **must** provide an inline route-identity element
+   (a "kicker") in its primary toolbar as the first child so the user can orient
+   without a top bar.
+2. The kicker MUST use Pack 17 tokens only. Approved pattern (per
+   `.review/PROTOTYPE-TO-PACK17.md §toolbar-kicker`):
+   - label: `text-xs font-medium uppercase tracking-[0.04em] text-text-muted`
+   - name: `text-[13px] font-semibold text-text-secondary`
+   - divider: `w-px h-[22px] bg-border-subtle` (right border of the kicker wrapper)
+3. The 50px height on the inner toolbar is still required (ADR-0020 §2 rhythm
+   applies to the route-internal toolbar, not only to ShellHeader).
+4. This pattern is intentional for high-density operational screens whose
+   sidebar active item already provides navigation anchoring. It is **not** a
+   blanket permission to omit the header everywhere — use V1 only when the
+   two-bar stack is demonstrably cramped (Triage-class surfaces).
+
+No new shell is introduced. `WorkbenchShell.toolbar` was already optional in the
+TypeScript interface; this amendment documents the intended pattern.
+
 ## Out of scope
 
 - Mobile / tablet shell behaviour. Pack 13 landed responsive scaffolding (sidebar drawer < 900px, detail-panel drill-in overlays); a future ADR will codify the touch-target + breakpoint contract.
