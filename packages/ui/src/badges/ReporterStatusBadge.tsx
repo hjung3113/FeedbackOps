@@ -51,7 +51,11 @@ export function ReporterStatusBadge({ status, className }: ReporterStatusBadgePr
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold',
+        // Pill proportions per `.review/title-reference.png`:
+        //   - px-2.5 py-1  — slightly taller pill than the 0.5 y-pad so the dot
+        //     and the label both sit centred with breathing room.
+        //   - gap-1.5      — 6 px between dot and label.
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold',
         className,
       )}
       style={{
