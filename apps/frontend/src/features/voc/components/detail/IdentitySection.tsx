@@ -35,7 +35,6 @@ export interface IdentitySectionProps {
 
 export function IdentitySection({ voc }: IdentitySectionProps): React.ReactElement {
   const { data: me } = useMe();
-  const managedSystem = useManagedSystem(voc.primary_managed_system_id);
 
   // Reporter resolution: if the current actor IS the reporter, use real name;
   // otherwise fall back to a truncated-ID stub (no actor-lookup API in Slice 3).
