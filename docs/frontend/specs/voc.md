@@ -82,7 +82,7 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
 | `<DetailPanelHeader kind="voc" id … extras>` | `<DetailPanelHeader>` in `packages/ui/src/panel/` (custom — no shadcn equivalent) | none (Tailwind + `lucide-react` for icons) | `kind: 'voc' \| 'finding' \| 'task' \| ...10 kinds`, `id: string`, `onClose: () => void`, `extras?: ReactNode` | One color band per kind, bound to `--surface-card-elevated` + kind-specific accent token (voc uses `--color-aether-blue` accent stripe) |
-| `<PanelTitleBlock>` | `<PanelTitleBlock>` in `packages/ui/src/panel/` | none | `title: string`, `children: ReactNode` (badges row) | Default; long-title truncation via Tailwind `line-clamp-2` |
+| `<PanelTitleBlock>` | `<PanelTitleBlock>` in `packages/ui/src/panel/` | none | `title: string`, `badges?: ReactNode`, `className?: string`, `size?: 'lg' \| 'xl'` (default `'lg'`) | `size='lg'`: `text-lg font-semibold tracking-tight` (17px, default, all surfaces). `size='xl'`: `text-xl font-bold tracking-tight` (20px, VOC detail/triage hero blocks). `children` prop does not exist — use `badges` slot. |
 | `<NestedTextBlock>` | `<NestedTextBlock>` in `packages/ui/src/panel/` | none | `padding?: number`, `children: ReactNode` | Default only |
 | `<FieldRow>` | `<FieldRow>` in `packages/ui/src/panel/` | none | `label: string`, `children: ReactNode` | Default |
 | `<PanelSectionTitle>` | `<PanelSectionTitle>` in `packages/ui/src/panel/` | none | `children: ReactNode`, `action?: ReactNode` | Default |
