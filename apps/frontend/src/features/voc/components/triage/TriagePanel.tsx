@@ -20,7 +20,6 @@ import type { VocListItem } from '@fops/shared';
 import {
   PanelSectionTitle,
   PanelTitleBlock,
-  NestedTextBlock,
   ReporterStatusBadge,
   AnalyticsAreaPicker,
   DetailPanelSectionNav,
@@ -429,27 +428,30 @@ export function TriagePanel({
 
       {/* Scrollable body — V1b document rhythm (no dividers, typographic-only hierarchy) */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
-        {/* Overview / title block */}
-        <div className="mb-8" data-anchor="overview">
-          <PanelTitleBlock
-            title={voc.title}
-            badges={
-              <>
-                <ReporterStatusBadge status={voc.reporter_facing_status} />
-                <span className="text-xs text-text-muted">
-                  · {new Date(voc.created_at).toLocaleDateString('ko-KR')}
-                </span>
-              </>
-            }
-          />
+        {/* Overview / title block — restored per .review/title-reference.png:
+            xl title + status pill + meta row (date only; no reporter actor
+            available on VocListItem). Mirrors the read-only detail panel
+            IdentitySection for cross-surface consistency. */}
+        <div className="mb-7" data-anchor="overview">
+          <PanelTitleBlock title={voc.title} size="xl" className="!px-0 !py-0 mb-2" />
+          <div className="flex items-center gap-2 text-xs text-text-muted">
+            <ReporterStatusBadge status={voc.reporter_facing_status} />
+            <span aria-hidden="true">·</span>
+            <span>{new Date(voc.created_at).toLocaleDateString('ko-KR')}</span>
+          </div>
         </div>
 
-        {/* Description */}
+        {/* Body — BODY label + tinted card per reference image */}
         <div className="mb-8" data-anchor="body">
-          <PanelSectionTitle>Body</PanelSectionTitle>
-          <NestedTextBlock>
-            <span className="text-sm text-text-secondary">{voc.title}</span>
-          </NestedTextBlock>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">
+            BODY
+          </p>
+          <div
+            data-testid="triage-body-card"
+            className="rounded-md bg-surface-card-elevated p-4 text-sm text-text-secondary leading-relaxed"
+          >
+            {voc.title}
+          </div>
         </div>
 
         {/* Severity section */}
