@@ -41,4 +41,13 @@ describe('PanelTitleBlock', () => {
     const { container } = render(<PanelTitleBlock title="x" className="custom-cls" />);
     expect(container.firstElementChild).toHaveClass('custom-cls');
   });
+
+  it('renders compact V1b title typography: text-lg font-semibold tracking-tight', () => {
+    render(<PanelTitleBlock title="제목" />);
+    const h2 = screen.getByRole('heading', { level: 2 });
+    expect(h2).toHaveClass('text-lg');
+    expect(h2).toHaveClass('font-semibold');
+    expect(h2).toHaveClass('tracking-tight');
+    expect(h2).not.toHaveClass('text-xl');
+  });
 });
