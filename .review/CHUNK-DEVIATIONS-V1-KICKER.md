@@ -78,3 +78,19 @@ This is not a production code change — tests-only, and necessary to properly e
 | FE (`apps/frontend`) | 388 | 391 | +3 (kicker tests) |
 | UI (`packages/ui`) | 358 | 358 | 0 |
 | Shared / BE | unchanged | unchanged | 0 |
+
+---
+
+## Related
+
+- **`.review/TITLE-BLOCK-RESTORE.md`** — documents the parallel title-block + BODY-card restore
+  that shipped in the same PR (#59): xl title variant, IdentityMetadataStrip, DescriptionSection
+  body card.
+- **`.review/PIXEL-MATCH-TITLE-BLOCK.md`** — pixel-match iteration log for the restored title
+  block; records ReporterStatusBadge token fix (b05d7b7) and vertical rhythm tightening.
+- **`.review/PANEL-SECTION-RHYTHM.md`** — documents the borderless PanelSectionTitle fix
+  (P1 #1 from VOC-DETAIL-CRITIQUE); resolves the `border-t pt-4` rhythm break.
+- **`.review/POST-PR59-AUDIT.md`** — full post-merge audit of PR #59; groups all follow-up
+  items (GAP / STALE / OK) across docs, components, tests, and layout.
+- **`.review/VOC-DETAIL-CRITIQUE.md`** — original UX critique that motivated the PR #59 changes;
+  see "Status snapshot — 2026-05-21 post-PR-59" section for current finding states.

@@ -184,3 +184,19 @@ DOM + class assertions:
 Estimated structural match: **8/8 reference features mirrored** at the
 DOM/class level. Pixel-precise spacing and color rendering must still be
 verified visually in a follow-up pass with Playwright MCP available.
+
+---
+
+## Related
+
+- **`.review/PIXEL-MATCH-TITLE-BLOCK.md`** — pixel-match iteration log for this restore;
+  records ReporterStatusBadge token fix (b05d7b7), vertical rhythm tightening iterations,
+  and reference measurement table.
+- **`.review/CHUNK-DEVIATIONS-V1-KICKER.md`** — deviation log for the V1 inline kicker that
+  shipped in the same PR (#59): ShellHeader removal, kicker label tracking decision.
+- **`.review/PANEL-SECTION-RHYTHM.md`** — documents the borderless PanelSectionTitle fix
+  that shipped alongside this restore (P1 #1 from VOC-DETAIL-CRITIQUE).
+- **`.review/POST-PR59-AUDIT.md`** — full post-merge audit of PR #59; lists all remaining
+  follow-up items (GAP / STALE) across docs, components, tests, and layout.
+- **`.review/VOC-DETAIL-CRITIQUE.md`** — original UX critique; "Status snapshot — 2026-05-21
+  post-PR-59" maps each P1 finding to ADDRESSED / OPEN.
