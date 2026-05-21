@@ -66,6 +66,13 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 | heading-lg | 48px | 1.2 | -0.22px | `--text-heading-lg` |
 | display | 72px | 1 | -0.22px | `--text-display` |
 
+### Panel Title Block Scale (PR #59)
+
+`PanelTitleBlock` ships two title-scale variants via the `size` prop:
+
+- **Compact (`size='lg'`, default):** `text-lg font-semibold tracking-tight` — 17px / weight 600. Used on all surfaces except the VOC detail/triage hero blocks. Preserves the V1b "document" axis density.
+- **Hero (`size='xl'`, opt-in):** `text-xl font-bold tracking-tight` — 20px / weight 700. Used by `IdentitySection` (VOC Inbox Detail) and `TriagePanel` (Triage overview), per `.review/title-reference.png` reference image. Opt in explicitly; default does not change for existing consumers.
+
 ## Tokens — Spacing & Shapes
 
 **Base unit:** 4px
@@ -161,6 +168,11 @@ Card with 'Deep Slate' background (#edf3fb), 12px top border-radius (0px bottom)
 **Role:** Internal content grouping
 
 Card with 'Pitch Black' background (#f3f7fe) and 12px border-radius, no shadow. Padding 8px on all sides, used for containing sub-elements within larger cards.
+
+### Body Card
+**Role:** Rich body content container inside detail panels (introduced PR #59)
+
+Card using 'Deep Slate' background (`bg-surface-card-elevated`, `#edf3fb`), 6px border-radius (`rounded-md`), 16px padding (`p-4`). Preceded by an uppercase English section label `BODY` styled `text-xs font-semibold uppercase tracking-wide text-text-muted mb-2`. Body text inside uses `text-sm text-text-secondary leading-relaxed`. `RichContentRenderer` renders the TipTap content inside the card; empty state shows `'설명 없음'` with `text-text-muted`. Canonical implementation: `DescriptionSection` in `apps/frontend/src/features/voc/components/detail/`. Used on both VOC Inbox Detail and Triage Panel overview sections.
 
 ### Input Field
 **Role:** User input fields
