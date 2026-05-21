@@ -30,9 +30,25 @@ const ENVELOPE_WITH_BODY = {
 };
 
 describe('<DescriptionSection>', () => {
-  it('renders section title', () => {
+  it('renders the BODY section label (English, per .review/title-reference.png)', () => {
     render(<DescriptionSection voc={DETAIL_ENVELOPE} isReporterOnOwnVoc={false} />);
-    expect(screen.getByText('설명')).toBeInTheDocument();
+    // Per relaxed copy convention (root AGENTS.md): the reference shows
+    // 'BODY' in English uppercase. Mirror verbatim.
+    expect(screen.getByText('BODY')).toBeInTheDocument();
+    // Old Korean label '설명' is removed in favor of the reference.
+    expect(screen.queryByText('설명')).not.toBeInTheDocument();
+  });
+
+  it('wraps the body in a tinted card (bg-surface-card-elevated) per reference image', () => {
+    const { container } = render(
+      <DescriptionSection voc={DETAIL_ENVELOPE} isReporterOnOwnVoc={false} />,
+    );
+    // Card element carries the elevated-card token; assertion is on the
+    // CSS class hook rather than computed style so it survives JSDOM.
+    const card = container.querySelector('[data-testid="description-body-card"]');
+    expect(card).not.toBeNull();
+    expect(card?.className).toMatch(/bg-surface-card-elevated/);
+    expect(card?.className).toMatch(/rounded-md/);
   });
 
   it('renders RichContentRenderer when description has content', () => {

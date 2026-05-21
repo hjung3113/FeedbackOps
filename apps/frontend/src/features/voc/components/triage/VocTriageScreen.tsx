@@ -56,8 +56,25 @@ export function VocTriageScreen({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Toolbar: title + tab strip */}
-      <div className="flex items-center gap-2 px-5 h-[50px] border-b border-border-subtle bg-surface-detail shrink-0">
+      {/* Toolbar: kicker (V1 inline identity) + title + tab strip */}
+      {/* V1: ShellHeader removed from WorkbenchShell; route identity lives here as a left-edge kicker. */}
+      <div data-testid="triage-toolbar" className="flex items-center gap-2 px-5 h-[50px] border-b border-border-subtle bg-surface-detail shrink-0">
+        {/* Kicker: "Console · Triage" — absorbs route identity previously held by ShellHeader toolbar prop. */}
+        <div data-testid="triage-kicker" className="inline-flex items-center gap-1.5 pr-2.5 mr-1 h-[22px] border-r border-border-subtle shrink-0">
+          <span
+            data-testid="triage-kicker-console"
+            className="text-xs font-medium uppercase tracking-[0.04em] text-text-muted"
+          >
+            Console
+          </span>
+          <span className="text-[10px] text-text-muted" aria-hidden="true">·</span>
+          <span
+            data-testid="triage-kicker-name"
+            className="text-[13px] font-semibold text-text-secondary"
+          >
+            Triage
+          </span>
+        </div>
         <Flag size={14} className="text-text-warning shrink-0" aria-hidden="true" />
         <span className="text-sm font-semibold text-text-primary">Triage queue</span>
         <span className="ml-1 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-[11px] font-medium bg-surface-canvas text-text-muted border border-border-subtle">

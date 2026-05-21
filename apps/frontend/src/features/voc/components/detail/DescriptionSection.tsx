@@ -1,10 +1,11 @@
-// DescriptionSection — rich description display with modal edit trigger.
-// 수정 button is visible only when the actor is the reporter + VOC is untriaged
-// (gate driven by isReporterOnOwnVoc prop from parent).
-// C6.2 of slice3 #21 — replaced EditDescriptionLink placeholder with real modal.
+// DescriptionSection — BODY label + tinted body card per
+// `.review/title-reference.png`. Replaces the previous PanelSectionTitle('설명')
+// + NestedTextBlock pair.
+// C6.2 of slice3 #21 retains the EditDescriptionModal hook on the reporter
+// affordance below the card.
 
 import type { VocDetailEnvelope } from '@fops/shared';
-import { NestedTextBlock, PanelSectionTitle, RichContentRenderer, type TipTapDoc } from '@fops/ui';
+import { RichContentRenderer, type TipTapDoc } from '@fops/ui';
 import * as React from 'react';
 import { EditDescriptionModal } from './EditDescriptionModal';
 
@@ -39,21 +40,26 @@ export function DescriptionSection({
   const [modalOpen, setModalOpen] = React.useState(false);
 
   return (
-    <div>
-      <PanelSectionTitle>설명</PanelSectionTitle>
-      <NestedTextBlock>
+    <div className="px-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">
+        BODY
+      </p>
+      <div
+        data-testid="description-body-card"
+        className="rounded-md bg-surface-card-elevated p-4 text-sm text-text-secondary leading-relaxed"
+      >
         {empty ? (
-          <p className="text-sm text-text-muted">설명 없음</p>
+          <p className="text-text-muted">설명 없음</p>
         ) : (
           <RichContentRenderer doc={voc.description_rich_content as TipTapDoc} mode="internal" />
         )}
-      </NestedTextBlock>
+      </div>
       {isReporterOnOwnVoc && (
         <>
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="mt-1 text-xs text-text-muted underline hover:text-text-primary transition-colors"
+            className="mt-2 text-xs text-text-muted underline hover:text-text-primary transition-colors"
           >
             설명 수정
           </button>

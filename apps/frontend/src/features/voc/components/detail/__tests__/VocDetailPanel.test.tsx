@@ -143,7 +143,9 @@ describe('<VocDetailPanel>', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     render(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
-    expect(screen.getByText('설명')).toBeInTheDocument();
+    // Description section now uses an English 'BODY' label per the
+    // reference image (see .review/title-reference.png + relaxed copy rule).
+    expect(screen.getByText('BODY')).toBeInTheDocument();
     expect(screen.getByText('연결된 실행')).toBeInTheDocument();
     expect(screen.getByText('관련 엔티티')).toBeInTheDocument();
     expect(screen.getByText('대화')).toBeInTheDocument();
