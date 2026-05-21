@@ -427,10 +427,10 @@ export function TriagePanel({
       {/* Section nav — sticky anchor tabs (prototype: screen-voc-create.jsx:428) */}
       <DetailPanelSectionNav sections={triageSections} scrollRef={scrollRef} />
 
-      {/* Scrollable body */}
+      {/* Scrollable body — V1b document rhythm (no dividers, typographic-only hierarchy) */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
         {/* Overview / title block */}
-        <div className="mb-6" data-anchor="overview">
+        <div className="mb-8" data-anchor="overview">
           <PanelTitleBlock
             title={voc.title}
             badges={
