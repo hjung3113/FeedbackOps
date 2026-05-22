@@ -79,15 +79,45 @@ describe('factory', () => {
     expect(redacted.secretAccessKey).toBe('***REDACTED***');
   });
 
-  it('boot log line includes bucket + endpoint but never the secret', () => {
+  it('boot log line includes bucket + endpoint but never the secret', async () => {
     const calls: string[] = [];
     vi.spyOn(console, 'info').mockImplementation((...args: unknown[]) => {
       calls.push(args.map((a) => String(a)).join(' '));
     });
-    getStorage(VALID_ENV);
+    const backend = getStorage(VALID_ENV);
+    // Lazy init: log fires only on first method call.
+    await backend.exists('any-key').catch(() => {
+      /* expected: no MinIO running in unit tests */
+    });
     const joined = calls.join('\n');
     expect(joined).toContain('bucket=fops-attachments');
     expect(joined).toContain('endpoint=http://localhost:9000');
     expect(joined).not.toContain('super-secret-key-do-not-log');
+  });
+
+  // ─── Lazy init (Slice 3 #22 hotfix) ──────────────────────────────────────
+  // Bug: boot path of integration tests called getStorage() unconditionally,
+  // which threw "missing required env" and crashed unrelated suites.
+  // Contract: getStorage() must be cheap and never validate env until a
+  // storage method is actually invoked. parseStorageEnv() retains its
+  // strict throw-on-missing semantics — production failures still loud.
+  describe('lazy initialization', () => {
+    const MISSING_ENV: StorageEnv = {};
+
+    it('getStorage() does NOT throw if env missing (lazy init)', () => {
+      expect(() => getStorage(MISSING_ENV)).not.toThrow();
+    });
+
+    it('first put() with missing env throws missing-env error', async () => {
+      const backend = getStorage(MISSING_ENV);
+      await expect(
+        backend.put({ key: 'k', bytes: Buffer.from(''), mimeType: 'text/plain' }),
+      ).rejects.toThrow(/missing required env/);
+    });
+
+    it('first exists() with missing env throws missing-env error', async () => {
+      const backend = getStorage(MISSING_ENV);
+      await expect(backend.exists('k')).rejects.toThrow(/missing required env/);
+    });
   });
 });
