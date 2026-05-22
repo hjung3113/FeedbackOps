@@ -21,17 +21,20 @@
 // on serialized HTML so we would re-render + re-parse, (c) the test surface is
 // the JSON we already validate on the server.
 
+// ADR-0016: @fops/ui MUST NOT import @fops/shared. The allowlist values are
+// duplicated locally and kept in lockstep via drift tests on both sides
+// (backend↔shared and ui↔inline-fixture).
 import {
-  SHARED_ALLOWLISTS,
+  UI_ALLOWLISTS,
   type AttrSchema,
-  type SharedSurface,
-} from '@fops/shared';
+  type UISurface,
+} from './allowlist-local';
 
 import type { TipTapDoc } from './RichEditor';
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
-export type ClientSanitizeSurface = SharedSurface;
+export type ClientSanitizeSurface = UISurface;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -168,7 +171,7 @@ interface WalkCtx {
 const EMPTY_DOC: TipTapDoc = { type: 'doc', content: [] } as unknown as TipTapDoc;
 
 function cleanNode(raw: unknown, depth: number, ctx: WalkCtx): CleanNode | null {
-  const allow = SHARED_ALLOWLISTS[ctx.surface];
+  const allow = UI_ALLOWLISTS[ctx.surface];
 
   if (depth > allow.maxDepth) return null;
   if (!isPlainObject(raw)) return null;
@@ -240,7 +243,7 @@ function cleanNode(raw: unknown, depth: number, ctx: WalkCtx): CleanNode | null 
  * Unrecognised input shapes coerce to an empty `doc`.
  */
 export function sanitizeClient(doc: TipTapDoc, surface: ClientSanitizeSurface): TipTapDoc {
-  if (!SHARED_ALLOWLISTS[surface]) return EMPTY_DOC;
+  if (!UI_ALLOWLISTS[surface]) return EMPTY_DOC;
   if (!isPlainObject(doc as unknown)) return EMPTY_DOC;
 
   const ctx: WalkCtx = { surface, nodeCount: 0, markCount: 0, textBytes: 0 };
