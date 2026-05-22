@@ -36,6 +36,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { uploadAttachment } from '@/lib/api/attachments';
+import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { MentionPickerButton } from './MentionPickerButton';
 import { InternalCommentToolbar } from './rich-toolbars/InternalCommentToolbar';
@@ -103,6 +104,10 @@ export function InternalCommentComposer({
     }
   }
 
+  // PLAN-22 C7a: composer-level attachment dropzone state.
+  const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
+  const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
+
   const isEmpty = isDocEmpty(draftDoc);
 
   const mutation = useVocInternalCommentMutation({
@@ -122,6 +127,8 @@ export function InternalCommentComposer({
       body: {
         body_rich_content: draftDoc,
         mentions,
+        // PLAN-22 C7a (D1): widened body field — schema reconciled in C7b.
+        attachment_ids: attachmentIds,
       },
     });
   }
@@ -186,6 +193,13 @@ export function InternalCommentComposer({
         <MentionPickerButton onSelect={handleInsertMention} disabled={mutation.isPending} />
       </div>
 
+      {/* PLAN-22 C7a: composer-level attachment dropzone (compact). */}
+      <ComposerAttachmentDropzone
+        testId="internal-comment-attachment-dropzone"
+        onChange={setAttachmentIds}
+        onUploadingChange={setAttachmentsUploading}
+      />
+
       {/* ComposerFooter — Preview disabled per D-5.4 */}
       <ComposerFooter
         submitLabel="Add note"
@@ -195,6 +209,7 @@ export function InternalCommentComposer({
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
         isSubmitting={mutation.isPending}
+        isSubmitDisabled={attachmentsUploading}
         isPreviewDisabled={true}
         statusHint={statusHint}
       />
