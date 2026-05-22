@@ -22,6 +22,7 @@ import type { CheckService } from '../permissions/check-service.js';
 import type {
   ConversationEntry,
   GetConversationQuery,
+  LinkedAttachment,
   ListVocsQuery,
   VocDetailEnvelope,
   VocListItem,
@@ -94,7 +95,7 @@ function decodeConversationCursor(raw: string): ConversationCursor {
 
 // ── Row mappers ──────────────────────────────────────────────────────────────
 
-function mapRowToListItem(row: VocReadRow): VocListItem {
+function mapRowToListItem(row: VocReadRow, attachmentCount = 0): VocListItem {
   return {
     id: row.id,
     display_id: row.displayId,
@@ -111,10 +112,28 @@ function mapRowToListItem(row: VocReadRow): VocListItem {
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
     similar_count: 0,
+    // PLAN-22 §Bug-1: populated by listVocs via bulk subquery.
+    attachment_count: attachmentCount,
   };
 }
 
-function mapConversationRow(row: ConversationRow): ConversationEntry {
+// PLAN-22 §Bug-1: read-row → wire-shape mapper for linked attachments.
+function mapAttachmentRow(row: import('./repo-read.js').LinkedAttachmentReadRow): LinkedAttachment {
+  return {
+    id: row.id,
+    name: row.name,
+    size_bytes: row.size_bytes,
+    mime_type: row.mime_type,
+    uploaded_by_actor_id: row.uploaded_by_actor_id,
+    created_at: row.created_at.toISOString(),
+    linked_at: row.linked_at.toISOString(),
+  };
+}
+
+function mapConversationRow(
+  row: ConversationRow,
+  attachments: LinkedAttachment[] = [],
+): ConversationEntry {
   const entry: ConversationEntry = {
     id: row.id,
     kind: row.kind,
@@ -122,6 +141,8 @@ function mapConversationRow(row: ConversationRow): ConversationEntry {
     body_rich_content: row.bodyRichContent,
     created_at: row.createdAt.toISOString(),
     visibility: row.visibility,
+    // PLAN-22 §Bug-1: per-entry attachments; [] when none.
+    attachments,
   };
   if (row.kind === 'public_update') {
     entry.reporter_facing_status_before = row.reporterFacingStatusBefore;
@@ -130,6 +151,19 @@ function mapConversationRow(row: ConversationRow): ConversationEntry {
     entry.skip_reason = row.skipReason ?? null;
   }
   return entry;
+}
+
+// PLAN-22 §Bug-1: helper that takes a list of conversation rows + bulk
+// attachment map (comment_id → rows) and emits ConversationEntry[] with
+// per-entry `attachments[]` populated.
+function mapConversationRowsWithAttachments(
+  rows: ConversationRow[],
+  attachmentsByCommentId: Map<string, import('./repo-read.js').LinkedAttachmentReadRow[]>,
+): ConversationEntry[] {
+  return rows.map((row) => {
+    const linked = attachmentsByCommentId.get(row.id) ?? [];
+    return mapConversationRow(row, linked.map(mapAttachmentRow));
+  });
 }
 
 // ── Scope helpers ────────────────────────────────────────────────────────────
@@ -345,8 +379,14 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
     const { rows, hasMore, nextCursor: repoCursor } = await repoRead.listVocsForRead(deps.db, repoArgs);
 
-    // ── 9. Map rows → VocListItem ──────────────────────────────────────────────
-    const items = rows.map(mapRowToListItem);
+    // ── 9. Bulk attachment count per row (PLAN-22 §Bug-1) ────────────────────
+    const attachmentCounts = await repoRead.selectVocAttachmentCounts(
+      deps.db,
+      rows.map((r) => r.id),
+    );
+
+    // ── 9b. Map rows → VocListItem with attachment_count ─────────────────────
+    const items = rows.map((r) => mapRowToListItem(r, attachmentCounts.get(r.id) ?? 0));
 
     // ── 10. Encode nextCursor ──────────────────────────────────────────────────
     let nextCursorStr: string | undefined;
@@ -467,7 +507,19 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       limit: 50,
     });
 
-    const conversationTimeline = convResult.entries.map(mapConversationRow);
+    // ── 5b. PLAN-22 §Bug-1: VOC-body attachments + per-comment attachments ──
+    // Fetched in parallel — one query for VOC-body attachments, one bulk
+    // query for ALL inline comment-attached rows (no N+1).
+    const commentIds = convResult.entries.map((e) => e.id);
+    const [vocAttRows, commentAttachmentsMap] = await Promise.all([
+      repoRead.selectVocAttachments(deps.db, actor.workspace_id, vocId),
+      repoRead.selectAttachmentsForComments(deps.db, actor.workspace_id, commentIds),
+    ]);
+
+    const conversationTimeline = mapConversationRowsWithAttachments(
+      convResult.entries,
+      commentAttachmentsMap,
+    );
     let convNextCursor: string | undefined;
     if (convResult.hasMore && convResult.nextCursor) {
       convNextCursor = encodeConversationCursor(convResult.nextCursor);
@@ -504,6 +556,9 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
       similar_count: 0,
+      // PLAN-22 §Bug-1: detail row also carries attachment_count (matches the
+      // shared schema which extends vocListItemSchema).
+      attachment_count: vocAttRows.length,
       description_rich_content: row.descriptionRichContent,
       next_actions: [],
       next_reporter_states: {
@@ -517,6 +572,8 @@ export function createVocReadService(deps: VocReadServiceDeps) {
         ? { cursor: convNextCursor, has_more: convResult.hasMore }
         : { has_more: convResult.hasMore },
       permission_decisions: permissionDecisions,
+      // PLAN-22 §Bug-1: VOC-body linked attachments.
+      attachments: vocAttRows.map(mapAttachmentRow),
     };
 
     return { kind: 'full', envelope, etag };
@@ -581,7 +638,15 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
     const convResult = await repoRead.selectConversationPage(deps.db, convArgs);
 
-    const items = convResult.entries.map(mapConversationRow);
+    // PLAN-22 §Bug-1: hydrate per-entry attachments[] (same contract as the
+    // inline timeline on getVocDetail).
+    const commentIds = convResult.entries.map((e) => e.id);
+    const commentAttachmentsMap = await repoRead.selectAttachmentsForComments(
+      deps.db,
+      actor.workspace_id,
+      commentIds,
+    );
+    const items = mapConversationRowsWithAttachments(convResult.entries, commentAttachmentsMap);
 
     let nextCursorStr: string | undefined;
     if (convResult.hasMore && convResult.nextCursor) {
@@ -634,7 +699,20 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       isReporter,
       limit: 50,
     });
-    const conversationTimeline = convResult.entries.map(mapConversationRow);
+
+    // PLAN-22 §Bug-1: VOC-body + per-comment attachments, hydrated inside tx
+    // so the post-write envelope reflects link rows written in the same tx
+    // (e.g. a public_update that just attached files).
+    const commentIds = convResult.entries.map((e) => e.id);
+    const [vocAttRows, commentAttachmentsMap] = await Promise.all([
+      repoRead.selectVocAttachments(tx, actor.workspace_id, vocId),
+      repoRead.selectAttachmentsForComments(tx, actor.workspace_id, commentIds),
+    ]);
+
+    const conversationTimeline = mapConversationRowsWithAttachments(
+      convResult.entries,
+      commentAttachmentsMap,
+    );
     let convNextCursor: string | undefined;
     if (convResult.hasMore && convResult.nextCursor) {
       convNextCursor = encodeConversationCursor(convResult.nextCursor);
@@ -669,6 +747,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
       similar_count: 0,
+      attachment_count: vocAttRows.length,
       description_rich_content: row.descriptionRichContent,
       next_actions: [],
       next_reporter_states: {
@@ -681,6 +760,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
         ? { cursor: convNextCursor, has_more: convResult.hasMore }
         : { has_more: convResult.hasMore },
       permission_decisions: permissionDecisions,
+      attachments: vocAttRows.map(mapAttachmentRow),
     };
   }
 
