@@ -242,17 +242,6 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3a validation',
     expect((lastBody as { code: string }).code).toBe('rate_limited.actor');
   });
 
-  // Tombstone — C3b will flip this to 201 + envelope shape.
-  it('501 not_implemented.todo for happy path (C3b stub)', async () => {
-    const cookie = await loginAs(app, 'mock-user-1');
-    const res = await postAttachment(app, {
-      cookie,
-      idempotencyKey: randomUUID(),
-      bytes: Buffer.from('hello-png-bytes'),
-      filename: 'photo.png',
-      contentType: 'image/png',
-    });
-    expect(res.statusCode).toBe(501);
-    expect(res.json().code).toBe('not_implemented.todo');
-  });
+  // C3b removed the 501 not_implemented.todo tombstone — happy-path coverage
+  // lives in post-attachments-happy.integration.test.ts.
 });
