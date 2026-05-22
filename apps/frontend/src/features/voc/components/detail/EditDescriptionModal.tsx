@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import {
   type EditDescriptionRequest,
   type ErrorEnvelope,
+  type LinkedAttachment,
   editDescriptionRequestSchema,
 } from '@fops/shared';
 import {
@@ -40,6 +41,7 @@ import { errorMapper } from '@/lib/api';
 import { useVocEditDescriptionMutation } from '../../hooks/useVocEditDescriptionMutation';
 import { AttachmentDropzone } from '../create/AttachmentDropzone';
 import { VocDescriptionToolbar } from '../create/VocDescriptionToolbar';
+import { AttachmentChipList } from './AttachmentChip';
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,19 @@ export interface EditDescriptionModalVoc {
   title: string;
   updated_at: string;
   description_rich_content?: unknown;
+  /**
+   * PLAN-22 §Bug-3 (2026-05-22): existing linked attachments on the VOC body.
+   * Hydrated from `GET /vocs/:id` (PR #77). Rendered as read-only chips above
+   * the upload dropzone. Optional for backward-compat with callers that build
+   * the prop from a narrower shape; treat undefined as empty.
+   *
+   * PATCH semantics — ADDITIVE: the BE `editVocDescription` calls
+   * `linkAttachments(attachment_ids)` which rejects already-linked ids, so the
+   * modal MUST send only NEW uploads in `attachment_ids[]`. Removing or
+   * replacing existing rows is not supported in this slice; the chips render
+   * without an X affordance.
+   */
+  attachments?: ReadonlyArray<Pick<LinkedAttachment, 'id' | 'name' | 'size_bytes'>>;
 }
 
 export interface EditDescriptionModalProps {
@@ -323,6 +338,17 @@ export function EditDescriptionModal({
                 </p>
               )}
             </div>
+
+            {/* Existing attachments (read-only) — PLAN-22 §Bug-3 (2026-05-22).
+                Hydrated from voc.attachments[] so reopening the modal shows
+                previously-uploaded files. PATCH is additive (see prop docs);
+                rows render without remove affordance. */}
+            {voc.attachments && voc.attachments.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>기존 첨부</FieldLabel>
+                <AttachmentChipList attachments={voc.attachments} />
+              </div>
+            )}
 
             {/* Attachments — active upload (C6). ───────────── */}
             <AttachmentDropzone

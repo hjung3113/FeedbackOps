@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { uploadAttachment } from '@/lib/api/attachments';
 import { errorMapper } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
+import { formatFileSize } from '@/features/voc/lib/format-file-size';
 
 const MAX_SIZE_BYTES = 25 * 1024 * 1024;
 
@@ -76,12 +77,7 @@ function mintIdempotencyKey(): string {
   return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
 }
 
-function formatFileSize(bytes: number): string {
-  if (!bytes) return '0 B';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+// formatFileSize moved to lib/format-file-size.ts (PLAN-22 §Bug-1, 2026-05-22).
 
 export function ComposerAttachmentDropzone({
   testId,

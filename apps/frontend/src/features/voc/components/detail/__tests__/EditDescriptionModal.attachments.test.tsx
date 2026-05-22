@@ -180,6 +180,72 @@ describe('<EditDescriptionModal> attachments (C6)', () => {
     expect(calledVars.body.attachment_ids).toEqual([]);
   });
 
+  // ── PLAN-22 §Bug-3 (2026-05-22): existing-attachment hydration on reopen ───
+  describe('existing attachments (GET-side hydration)', () => {
+    const EXISTING_A = {
+      id: 'cccc3333-0000-4000-8000-000000000001',
+      name: 'previously-uploaded.png',
+      size_bytes: 4096,
+      mime_type: 'image/png',
+      uploaded_by_actor_id: '00000000-0000-4000-8000-000000000099',
+      created_at: '2026-05-20T10:00:00.000Z',
+      linked_at: '2026-05-20T10:00:00.000Z',
+    };
+
+    it('renders existing attachments[] when opened on a VOC with attachments', () => {
+      const vocWithExisting = { ...VOC, attachments: [EXISTING_A] };
+      render(
+        <EditDescriptionModal voc={vocWithExisting} open={true} onClose={vi.fn()} />,
+        { wrapper: wrap() },
+      );
+      // The existing-attachment list is portaled to the dialog; query the
+      // document for the chip.
+      const chip = document.querySelector('[data-testid="attachment-chip"]');
+      expect(chip).not.toBeNull();
+      expect(chip?.getAttribute('data-attachment-id')).toBe(EXISTING_A.id);
+      expect(document.body.textContent).toContain('previously-uploaded.png');
+      expect(document.body.textContent).toContain('기존 첨부');
+    });
+
+    it('PATCH body only includes NEW upload ids — additive semantics (BE rejects re-link)', async () => {
+      vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
+      const mutateMock = vi.fn();
+      vi.mocked(useVocEditDescriptionMutation).mockReturnValue(
+        { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<typeof useVocEditDescriptionMutation>,
+      );
+
+      const vocWithExisting = { ...VOC, attachments: [EXISTING_A] };
+      const { container } = render(
+        <EditDescriptionModal voc={vocWithExisting} open={true} onClose={vi.fn()} />,
+        { wrapper: wrap() },
+      );
+
+      await act(async () => {
+        pickFile(container, makeFile());
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
+      });
+
+      const user = userEvent.setup();
+      const titleInput = screen.getByRole('textbox', { name: /제목/ });
+      await user.clear(titleInput);
+      await user.type(titleInput, '새 제목');
+      await user.click(screen.getByRole('button', { name: '수정 저장' }));
+
+      await waitFor(() => {
+        expect(mutateMock).toHaveBeenCalled();
+      });
+      const calledVars = mutateMock.mock.calls[0]![0] as {
+        body: { attachment_ids: string[] };
+      };
+      // Additive: only NEW upload id, NOT the pre-existing EXISTING_A.id
+      // (BE linkAttachments rejects already-linked rows).
+      expect(calledVars.body.attachment_ids).toEqual([ATTACHMENT.id]);
+      expect(calledVars.body.attachment_ids).not.toContain(EXISTING_A.id);
+    });
+  });
+
   it('submit disabled while any attachment is mid-upload', async () => {
     let resolveUpload!: (v: typeof ATTACHMENT) => void;
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockReturnValue(

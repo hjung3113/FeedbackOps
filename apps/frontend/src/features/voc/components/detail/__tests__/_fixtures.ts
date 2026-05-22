@@ -47,6 +47,11 @@ export const DETAIL_ENVELOPE: VocDetailEnvelope = {
   conversation_timeline: [],
   conversation_page: { has_more: false },
   permission_decisions: {},
+  // PLAN-22 §Bug-1 (2026-05-22): linked-attachment fields added to VocDetailEnvelope
+  // (and attachment_count to the list-item shape). Default to empty for fixtures that
+  // don't exercise attachments rendering.
+  attachments: [],
+  attachment_count: 0,
 };
 
 // ── Query result helpers ─────────────────────────────────────────────────────

@@ -7,6 +7,7 @@
 import type { VocDetailEnvelope } from '@fops/shared';
 import { RichContentRenderer, type TipTapDoc } from '@fops/ui';
 import * as React from 'react';
+import { AttachmentChipList } from './AttachmentChip';
 import { EditDescriptionModal } from './EditDescriptionModal';
 
 export interface DescriptionSectionProps {
@@ -54,6 +55,10 @@ export function DescriptionSection({
           <RichContentRenderer doc={voc.description_rich_content as TipTapDoc} mode="internal" />
         )}
       </div>
+      {/* PLAN-22 §Bug-1 (2026-05-22): linked attachments on the VOC body.
+          BE GET /vocs/:id returns these in voc.attachments[]; clicking a
+          chip downloads via GET /attachments/:id/download. */}
+      <AttachmentChipList attachments={voc.attachments} />
       {isReporterOnOwnVoc && (
         <>
           <button

@@ -138,6 +138,16 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 | `<ComposerReplyPreview>` (inside modal) | `<ComposerReplyPreview>` in `features/voc/components/detail/` | none | `voc`, `owner`, `reporter`, `draftDoc` | with-body · empty-body |
 | `<PreviewModal>` | `<PreviewModal>` in `packages/ui/src/feedback/` | shadcn `<Dialog>` (size `lg`) | `open`, `onClose`, `title`, `children` | open · closed |
 
+### 3.5b Detail panel body card + attachment chips (PLAN-22 §Bug-1/2/3, 2026-05-22)
+
+| Prototype surface | Production component | Composition | State variants |
+|---|---|---|---|
+| BODY card (description) | `<DescriptionSection>` in `features/voc/components/detail/` | BODY label + `bg-surface-card-elevated` rounded card · `<RichContentRenderer doc=voc.description_rich_content mode="internal">` · `<AttachmentChipList attachments=voc.attachments>` rendered below the card when non-empty · `<EditDescriptionModal>` opener (reporter-on-own-VOC only) | empty body → `설명 없음` · with body → rich render · attachments=[] → no chip list · attachments[].length>0 → horizontal chip row |
+| Conversation entry body | `<TimelineEntry>` in `features/voc/components/detail/` | actor `<UserChip>` + kind `<OutlineBadge>` · `<RichContentRenderer>` · `<AttachmentChipList attachments=entry.attachments>` below the body · optional status-transition pair | public/reporter_reply/internal_comment all read `entry.attachments[]` |
+| Attachment chip | `<AttachmentChip>` in `features/voc/components/detail/` | `<Paperclip>` icon + truncated filename + `formatFileSize(size_bytes)` rendered as `<a href="/attachments/:id/download" download={name}>`. Same-tab navigation; BE's `Content-Disposition: attachment` makes the browser save. | default · hover (`bg-surface-card-elevated`) |
+| Existing attachments in EditDescriptionModal | `<EditDescriptionModal>` `voc.attachments` slot | When `voc.attachments?.length > 0`, render `기존 첨부` label + `<AttachmentChipList>` above the active `<AttachmentDropzone>`. **PATCH is additive**: only NEW upload ids land in `attachment_ids[]`; existing rows are NOT re-sent (BE `linkAttachments` rejects already-linked ids). Remove affordance deferred — chips are read-only this slice. | hydrated (chips visible) · empty (dropzone-only) |
+| `formatFileSize(bytes)` util | `apps/frontend/src/features/voc/lib/format-file-size.ts` | Single source of truth — previously duplicated in `<AttachmentDropzone>` and `<ComposerAttachmentDropzone>`. Returns `0 B` · `<n> B` · `<n.n> KB` · `<n.n> MB`. | n/a |
+
 ### 3.6 Status + signal badges
 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
