@@ -33,7 +33,8 @@ import { SourceContextSegmented } from './SourceContextSegmented';
 import { AttachmentDropzone } from './AttachmentDropzone';
 import { ReporterCard } from './ReporterCard';
 import { SeverityDisclaimerCard } from './SeverityDisclaimerCard';
-import { VocDescriptionToolbar } from './VocDescriptionToolbar';
+import { vocDescriptionToolbar } from './VocDescriptionToolbar';
+import { uploadAttachment } from '@/lib/api/attachments';
 
 export interface VocCreateScreenProps {
   initialManagedSystemId?: string;
@@ -283,7 +284,22 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                   onChange={(doc) => field.onChange(doc)}
                   placeholder="VOC 내용을 자세히 적어주세요"
                   minHeight={160}
-                  toolbar={VocDescriptionToolbar}
+                  toolbar={vocDescriptionToolbar({
+                    onAttachError: (err) => {
+                      const msg =
+                        err instanceof Error ? err.message : '첨부 업로드에 실패했습니다';
+                      toast.error(msg);
+                    },
+                  })}
+                  onAttach={async (file) => {
+                    const result = await uploadAttachment(file);
+                    return {
+                      attachment_id: result.id,
+                      name: result.name,
+                      size_bytes: result.size_bytes,
+                      mime_type: result.mime_type,
+                    };
+                  }}
                 />
               )}
             />

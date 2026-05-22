@@ -75,6 +75,7 @@ import { toast } from 'sonner';
 import { ComposerFooter } from './ComposerFooter';
 import { ComposerPublicPreview } from './ComposerPublicPreview';
 import { ReporterStatusChangeBlock } from './ReporterStatusChangeBlock';
+import { uploadAttachment } from '@/lib/api/attachments';
 import { PublicUpdateToolbar } from './rich-toolbars/PublicUpdateToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -225,7 +226,24 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="공개 업데이트 내용을 입력하세요..."
         minHeight={84}
-        toolbar={(editor) => <PublicUpdateToolbar editor={editor} />}
+        onAttach={async (file) => {
+          const r = await uploadAttachment(file);
+          return {
+            attachment_id: r.id,
+            name: r.name,
+            size_bytes: r.size_bytes,
+            mime_type: r.mime_type,
+          };
+        }}
+        toolbar={(editor, api) => (
+          <PublicUpdateToolbar
+            editor={editor}
+            onAttach={(file) => api.attach(file)}
+            onAttachError={(e) =>
+              toast.error(e instanceof Error ? e.message : '첨부 업로드에 실패했습니다')
+            }
+          />
+        )}
       />
 
       {/* ReporterStatusChangeBlock — always shown in the public-update composer */}

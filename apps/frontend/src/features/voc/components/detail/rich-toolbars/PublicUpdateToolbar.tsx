@@ -4,11 +4,12 @@
 // Spec: PLAN-21-SUBCHUNKS.md C5.2
 // Prototype ref: docs/design-prototype/screen-voc.jsx:415-468
 //
-// Allowed marks: Bold, Italic, BulletList.
-// Link and Attach are NOT included on this surface (clean public copy policy).
+// Allowed marks: Bold, Italic, BulletList. Link is intentionally excluded.
+// PLAN-22 C8: Attach is now available on all four RichEditor surfaces per
+// OQ-3 default. Earlier "clean public copy policy" deferred attach here;
+// OQ-3 explicitly overrides that for #22.
 
-import type { TipTapEditor } from '@fops/ui';
-import { cn } from '@fops/ui';
+import { AttachButton, cn, type TipTapEditor } from '@fops/ui';
 import { Bold, Italic, List } from 'lucide-react';
 import type * as React from 'react';
 
@@ -16,6 +17,9 @@ import type * as React from 'react';
 
 export interface PublicUpdateToolbarProps {
   editor: TipTapEditor | null;
+  /** PLAN-22 C8: wired through RichEditor toolbar API; hidden when omitted. */
+  onAttach?: (file: File) => Promise<unknown>;
+  onAttachError?: (err: unknown) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -59,7 +63,11 @@ function ToolbarButton({
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function PublicUpdateToolbar({ editor }: PublicUpdateToolbarProps): React.ReactElement {
+export function PublicUpdateToolbar({
+  editor,
+  onAttach,
+  onAttachError,
+}: PublicUpdateToolbarProps): React.ReactElement {
   const disabled = editor === null;
 
   return (
@@ -93,6 +101,21 @@ export function PublicUpdateToolbar({ editor }: PublicUpdateToolbarProps): React
       >
         <List size={14} />
       </ToolbarButton>
+
+      {/* Attach — PLAN-22 C8 (OQ-3 default). Wired through RichEditor toolbar API. */}
+      {onAttach ? (
+        <AttachButton
+          data-testid="public-update-attach"
+          disabled={disabled}
+          onPick={async (file) => {
+            try {
+              await onAttach(file);
+            } catch (e) {
+              onAttachError?.(e);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

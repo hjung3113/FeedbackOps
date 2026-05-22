@@ -49,6 +49,7 @@ import { type ReactElement, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ComposerFooter } from './ComposerFooter';
 import { ComposerReplyPreview } from './ComposerReplyPreview';
+import { uploadAttachment } from '@/lib/api/attachments';
 import { ReporterReplyToolbar } from './rich-toolbars/ReporterReplyToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -171,7 +172,24 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="리포터에게 보낼 답장 내용을 입력하세요..."
         minHeight={84}
-        toolbar={(editor) => <ReporterReplyToolbar editor={editor} />}
+        onAttach={async (file) => {
+          const r = await uploadAttachment(file);
+          return {
+            attachment_id: r.id,
+            name: r.name,
+            size_bytes: r.size_bytes,
+            mime_type: r.mime_type,
+          };
+        }}
+        toolbar={(editor, api) => (
+          <ReporterReplyToolbar
+            editor={editor}
+            onAttach={(file) => api.attach(file)}
+            onAttachError={(e) =>
+              toast.error(e instanceof Error ? e.message : '첨부 업로드에 실패했습니다')
+            }
+          />
+        )}
       />
 
       {/* Inline error Callout — reporter_facing_status.gate_blocked (amber)
