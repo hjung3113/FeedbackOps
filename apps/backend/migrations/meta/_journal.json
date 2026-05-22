@@ -99,6 +99,13 @@
       "when": 1780140000000,
       "tag": "0013_slice3_voc_public_update_skip_status_diff",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1780240000000,
+      "tag": "0014_slice3_attachment_storage_activation",
+      "breakpoints": true
     }
   ]
 }
