@@ -79,3 +79,56 @@ against the `uploadAttachment` client landed in C5.
 - `tsc -p tsconfig.json --noEmit` clean for our touched files (the only
   errors are pre-existing `routeTree.gen` codegen issues that vite generates
   at dev/build time — unchanged by this chunk).
+
+---
+
+## 2026-05-22 amendment — EditDescriptionModal GET-side attachment hydration (PLAN-22 §Bug-3)
+
+Live Playwright verification after PR #77 surfaced a hydration gap that this
+chunk's C6 work missed: the modal opens on a VOC whose `voc.attachments[]`
+already carries one or more linked rows (e.g. reporter uploaded a file, saved,
+reopened the modal), but the modal initialized only `attachment_ids: []` and
+showed no chips for the existing rows. The user saw the file silently
+disappear from the edit surface.
+
+**Fix landed on `fix/22-fe-render-attachments-in-detail`:**
+
+- `EditDescriptionModalVoc` now optionally accepts `attachments?: LinkedAttachment[]`.
+- When the prop is non-empty, render a `기존 첨부` label + `<AttachmentChipList>`
+  above the active `<AttachmentDropzone>`. Chips are read-only — no remove
+  affordance this slice (see PATCH-semantics note below).
+- PATCH body shape unchanged: `attachment_ids: string[]` carries only the
+  **newly uploaded** ids; pre-existing rows are NOT re-sent.
+
+**PATCH semantic decision — ADDITIVE (not full-set):**
+
+Audited `apps/backend/src/modules/voc/service.ts:editVocDescription` (and the
+`linkAttachments` repo it delegates to). The BE only **adds** unlinked rows;
+re-sending an already-linked id throws `LinkAttachmentsRejected`, which the
+service translates to `validation.failed` and rolls the entire PATCH tx back.
+There is no unlink path on `editVocDescription` — the audit diff comment in
+the service literally says *"Future chunks that support remove/replace will
+populate `from` from a prior SELECT."*
+
+So the only safe wire shape today is **additive**: send the new ids only.
+Tests assert `attachment_ids` excludes the pre-existing row id (see
+`EditDescriptionModal.attachments.test.tsx` → `existing attachments
+(GET-side hydration)` describe block).
+
+**Companion fixes in the same branch:**
+
+- `<DescriptionSection>` renders `voc.attachments[]` as chips below the BODY
+  card (PLAN-22 §Bug-1).
+- `<TimelineEntry>` renders `entry.attachments[]` for every kind
+  (`public_update` / `reporter_reply` / `internal_comment`) (PLAN-22 §Bug-2).
+- Added `apps/frontend/src/features/voc/lib/format-file-size.ts` and pointed
+  the two pre-existing private `formatFileSize` definitions
+  (`<AttachmentDropzone>`, `<ComposerAttachmentDropzone>`) at it — single
+  source of truth, zero behavior change.
+- Test fixtures (`_fixtures.ts`, `ConversationTimeline.test.tsx`,
+  `TimelineEntry.test.tsx`) updated to include the now-required `attachments`
+  and `attachment_count` fields introduced by PR #77.
+
+**Remove / replace semantics — deferred:** when the BE adds an unlink path on
+`editVocDescription`, the chip's read-only state will gain a remove button
+and the modal will switch to full-set PATCH. Not in this slice.

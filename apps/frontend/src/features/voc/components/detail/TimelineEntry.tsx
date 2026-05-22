@@ -12,6 +12,7 @@ import {
 } from '@fops/ui';
 import { useMe } from '@/lib/auth/useMe';
 import { formatVocCreatedAt } from '@/features/voc/components/list/VocRow';
+import { AttachmentChipList } from './AttachmentChip';
 
 // ── Korean labels ────────────────────────────────────────────────────────────
 
@@ -60,6 +61,8 @@ export function TimelineEntry({ entry }: TimelineEntryProps): React.ReactElement
       {/* Rich body */}
       <div className="pl-8">
         <RichContentRenderer doc={entry.body_rich_content as TipTapDoc} mode={rendererMode} />
+        {/* PLAN-22 §Bug-2 (2026-05-22): per-entry linked attachments. */}
+        <AttachmentChipList attachments={entry.attachments} />
       </div>
 
       {/* Status transition pair (public_update only) */}

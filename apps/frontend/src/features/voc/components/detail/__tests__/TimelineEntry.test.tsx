@@ -27,6 +27,8 @@ const BASE: Omit<ConversationEntry, 'kind' | 'visibility'> = {
   actor_id: 'actor-99',
   body_rich_content: {},
   created_at: '2026-05-01T00:00:00Z',
+  // PLAN-22 §Bug-2 (2026-05-22): per-entry linked attachments — default empty.
+  attachments: [],
 };
 
 describe('<TimelineEntry>', () => {
@@ -68,5 +70,63 @@ describe('<TimelineEntry>', () => {
     const entry: ConversationEntry = { ...BASE, kind: 'public_update', visibility: 'public' };
     render(<TimelineEntry entry={entry} />);
     expect(screen.queryByText('→')).not.toBeInTheDocument();
+  });
+
+  // ── PLAN-22 §Bug-2 (2026-05-22): per-entry attachment chips ────────────────
+  describe('attachment chips', () => {
+    const ATT = {
+      id: 'bbbb2222-0000-4000-8000-000000000001',
+      name: 'log.txt',
+      size_bytes: 512,
+      mime_type: 'text/plain',
+      uploaded_by_actor_id: '00000000-0000-4000-8000-000000000099',
+      created_at: '2026-05-22T10:00:00.000Z',
+      linked_at: '2026-05-22T10:00:00.000Z',
+    };
+
+    it('public_update entry with linked attachments renders chip(s)', () => {
+      const entry: ConversationEntry = {
+        ...BASE,
+        kind: 'public_update',
+        visibility: 'public',
+        attachments: [ATT],
+      };
+      render(<TimelineEntry entry={entry} />);
+      expect(screen.getByTestId('attachment-chip')).toBeInTheDocument();
+      expect(screen.getByText('log.txt')).toBeInTheDocument();
+    });
+
+    it('internal_comment entry renders chips', () => {
+      const entry: ConversationEntry = {
+        ...BASE,
+        kind: 'internal_comment',
+        visibility: 'internal',
+        attachments: [ATT],
+      };
+      render(<TimelineEntry entry={entry} />);
+      expect(screen.getByTestId('attachment-chip')).toBeInTheDocument();
+    });
+
+    it('reporter_reply entry renders chips', () => {
+      const entry: ConversationEntry = {
+        ...BASE,
+        kind: 'reporter_reply',
+        visibility: 'reporter',
+        attachments: [ATT],
+      };
+      render(<TimelineEntry entry={entry} />);
+      expect(screen.getByTestId('attachment-chip')).toBeInTheDocument();
+    });
+
+    it('entry with empty attachments[] renders no chips', () => {
+      const entry: ConversationEntry = {
+        ...BASE,
+        kind: 'public_update',
+        visibility: 'public',
+        attachments: [],
+      };
+      render(<TimelineEntry entry={entry} />);
+      expect(screen.queryByTestId('attachment-chip')).not.toBeInTheDocument();
+    });
   });
 });
