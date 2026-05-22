@@ -13,7 +13,7 @@ describe('editDescriptionRequestSchema', () => {
     const result = editDescriptionRequestSchema.parse({
       title: 'New title',
       description_rich_content: validDoc,
-      attachments: [],
+      attachment_ids: [],
     });
     expect(result.title).toBe('New title');
   });
@@ -30,9 +30,21 @@ describe('editDescriptionRequestSchema', () => {
     expect(result.description_rich_content).toEqual(validDoc);
   });
 
-  it('accepts attachments only', () => {
-    const result = editDescriptionRequestSchema.parse({ attachments: [] });
-    expect(result.attachments).toEqual([]);
+  it('accepts attachment_ids only (PLAN-22 C7b)', () => {
+    const result = editDescriptionRequestSchema.parse({ attachment_ids: [] });
+    expect(result.attachment_ids).toEqual([]);
+  });
+
+  it('accepts attachment_ids with valid uuid (PLAN-22 C7b)', () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    const result = editDescriptionRequestSchema.parse({ attachment_ids: [id] });
+    expect(result.attachment_ids).toEqual([id]);
+  });
+
+  it('rejects legacy attachments field (replaced by attachment_ids)', () => {
+    expect(() =>
+      editDescriptionRequestSchema.parse({ attachments: [] }),
+    ).toThrow(z.ZodError);
   });
 
   it('rejects empty body (non-empty refinement)', () => {
@@ -73,16 +85,10 @@ describe('editDescriptionRequestSchema', () => {
     expect(result.title?.length).toBe(200);
   });
 
-  it('rejects malformed uuid in attachments', () => {
+  it('rejects malformed uuid in attachment_ids', () => {
     expect(() =>
       editDescriptionRequestSchema.parse({
-        attachments: [{
-          id: 'not-a-uuid',
-          name: 'file.txt',
-          size_bytes: 100,
-          mime_type: 'text/plain',
-          storage_uri: 'gs://bucket/file',
-        }],
+        attachment_ids: ['not-a-uuid'],
       }),
     ).toThrow(z.ZodError);
   });
