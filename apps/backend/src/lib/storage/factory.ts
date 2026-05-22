@@ -1,15 +1,18 @@
 // Singleton factory for the S3-compatible storage backend.
 //
-// Reads `STORAGE_S3_*` env once at boot. Exports `getStorage()` which lazily
-// constructs the singleton and returns the same instance for every call.
+// `getStorage()` returns a lazy proxy that defers `STORAGE_S3_*` env parsing
+// and `new S3Client({...})` construction until the first `put/get/delete/exists`
+// call. This keeps `buildServer()` boot cheap for tests and dev runs that
+// never touch attachments — env validation still throws loudly, just on
+// first real use instead of at module import time (Slice 3 #22 hotfix).
 // `__resetStorageForTests()` clears the cache so unit tests can re-exercise
 // env parsing without leaking instances across files.
 //
-// Logging: when the singleton is first constructed we emit one informational
-// line `storage: bucket=<name> endpoint=<endpoint>` (no creds). The secret
-// access key is **never** logged and is omitted from `toString()` on the
-// config object — see `redact()` and the `Symbol.for('nodejs.util.inspect.custom')`
-// hook below.
+// Logging: when the singleton is first materialized (first method call) we
+// emit one informational line `storage: bucket=<name> endpoint=<endpoint>`
+// (no creds). The secret access key is **never** logged and is omitted from
+// `toString()` on the config object — see `redact()` and the
+// `Symbol.for('nodejs.util.inspect.custom')` hook below.
 
 import { S3CompatStorageBackend, type S3CompatConfig } from './s3-compat.js';
 import type { StorageBackend } from './index.js';
@@ -82,15 +85,46 @@ export function redactConfig(cfg: S3CompatConfig): Record<string, unknown> {
 
 let cachedBackend: StorageBackend | null = null;
 
+/**
+ * Returns a lazy proxy over the real storage backend. The proxy defers env
+ * parsing + `S3Client` construction until the first method call so that boot
+ * paths (and integration tests that inject their own storage via
+ * `buildServer({ storage })`) do not crash on missing `STORAGE_S3_*` env.
+ *
+ * Env validation still throws — just at first use, not at import time. The
+ * thrown error preserves the existing `storage: missing required env: ...`
+ * message so callers / tests can match on it.
+ */
 export function getStorage(env: StorageEnv = process.env as StorageEnv): StorageBackend {
   if (cachedBackend) return cachedBackend;
-  const cfg = parseStorageEnv(env);
-  // Audit-friendly: log bucket + endpoint only. No creds.
-  // Using stderr-bound console.info keeps it out of stdout pipelines while
-  // remaining visible to the standard fastify logger.
-  console.info(`storage: bucket=${cfg.bucket} endpoint=${cfg.endpoint}`);
-  cachedBackend = new S3CompatStorageBackend(cfg);
-  return cachedBackend;
+
+  // Materialize on demand. Memoized inside the proxy so we only parse env +
+  // build the S3 client once per process even across many method calls.
+  let real: StorageBackend | null = null;
+  const materialize = (): StorageBackend => {
+    if (real) return real;
+    const cfg = parseStorageEnv(env);
+    // Audit-friendly: log bucket + endpoint only. No creds.
+    // Using stderr-bound console.info keeps it out of stdout pipelines while
+    // remaining visible to the standard fastify logger.
+    console.info(`storage: bucket=${cfg.bucket} endpoint=${cfg.endpoint}`);
+    real = new S3CompatStorageBackend(cfg);
+    return real;
+  };
+
+  // Wrap each call so a synchronous throw from `materialize()` (env missing,
+  // S3 client construction failure) surfaces as a rejected promise rather
+  // than a thrown error at the call site. Callers `await` these methods and
+  // expect Promise-shaped failure.
+  const proxy: StorageBackend = {
+    put: async (input) => materialize().put(input),
+    get: async (key) => materialize().get(key),
+    delete: async (key) => materialize().delete(key),
+    exists: async (key) => materialize().exists(key),
+  };
+
+  cachedBackend = proxy;
+  return proxy;
 }
 
 /** Test-only: clear the cached singleton. */

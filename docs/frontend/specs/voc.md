@@ -245,7 +245,7 @@ interface PendingAttachment {
   name: string;
   size: number;                 // bytes
   mimeType: string;
-  serverAttachmentId?: string;  // populated after PUT /attachments returns
+  serverAttachmentId?: string;  // populated after POST /attachments returns
   uploadState: 'pending' | 'uploading' | 'uploaded' | 'failed';
   errorCode?: string;           // 'attachment.too_large' | 'attachment.unsupported_type'
 }

@@ -1,0 +1,23 @@
+-- Slice 3 #22 hotfix: restore DELETE grant on voc.voc_attachments for fops_app.
+--
+-- Background:
+--   * 0010 granted SELECT, INSERT, UPDATE, DELETE on voc.voc_attachments to
+--     fops_app when the table was first created.
+--   * 0011 then REVOKE'd DELETE in service of the archive-over-delete
+--     invariant for user-facing flows (IM-03).
+--   * 0015 added the `core.attachments_purge` queue + worker, whose handler
+--     (purge-unlinked-attachments.ts) issues a DELETE against unlinked rows
+--     older than 24h. That worker runs as fops_app via DATABASE_URL — the
+--     0011 REVOKE was not paired with a re-grant for this internal path,
+--     so the purge handler hits `permission denied for table voc_attachments`.
+--
+-- Fix:
+--   Re-grant DELETE on voc.voc_attachments to fops_app. The archive-over-
+--   delete invariant from 0011 is enforced at the service layer for
+--   user-initiated paths (attachments service archive endpoint); the purge
+--   job is an internal reclaim path that legitimately DELETEs orphaned
+--   rows whose backing S3 object is also being reclaimed.
+--
+-- Idempotent: GRANT is a no-op if the privilege already exists.
+
+GRANT DELETE ON "voc"."voc_attachments" TO fops_app;

@@ -679,8 +679,12 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
     });
   });
 
-  // IM-03: archive-over-delete — UPDATE archived_at works; fops_app DELETE is rejected.
-  it('voc_attachments archive write succeeds; fops_app DELETE is rejected', async () => {
+  // IM-03 (revised by migration 0016): archive-over-delete remains the rule
+  // for user-initiated paths and is enforced at the service layer. The DB
+  // GRANT DELETE was restored in 0016 so the internal purge worker
+  // (purge-unlinked-attachments.ts, queue core.attachments_purge) can reclaim
+  // truly orphaned rows whose backing S3 objects are also being reclaimed.
+  it('voc_attachments archive write succeeds (DB-layer assertion)', async () => {
     // Insert an attachment via migrate role.
     const att = await migrateHandle.pool.query<{ id: string }>(
       `insert into voc.voc_attachments (
@@ -701,9 +705,13 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
         [actorId, attId],
       ),
     ).resolves.toBeDefined();
+  });
 
-    // fops_app must not be able to DELETE from voc_attachments.
-    const att2 = await migrateHandle.pool.query<{ id: string }>(
+  // 0016: fops_app holds DELETE for the internal purge worker. The
+  // archive-over-delete invariant for user paths is asserted by the
+  // attachments service layer tests, not at the GRANT level.
+  it('voc_attachments DELETE is permitted for fops_app (purge-worker path)', async () => {
+    const att = await migrateHandle.pool.query<{ id: string }>(
       `insert into voc.voc_attachments (
          voc_id, name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
        ) values (
@@ -712,14 +720,14 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
        ) returning id`,
       [vocId, actorId],
     );
-    const att2Id = att2.rows[0]?.id ?? '';
-    expect(att2Id).not.toBe('');
+    const attId = att.rows[0]?.id ?? '';
+    expect(attId).not.toBe('');
 
     await expect(
       appHandle.pool.query(
         `delete from voc.voc_attachments where id = $1`,
-        [att2Id],
+        [attId],
       ),
-    ).rejects.toMatchObject({ message: expect.stringMatching(/permission denied/i) });
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 });
