@@ -79,6 +79,11 @@ export function EditDescriptionModal({
   // Track if the user attempted to close while dirty
   const [confirmOpen, setConfirmOpen] = React.useState(false);
 
+  // C6: attachment IDs for successfully-uploaded rows in the dropzone, plus a
+  // mid-upload flag that disables Save while files are still in flight.
+  const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
+  const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
+
   const form = useForm<EditFormValues>({
     resolver: zodResolver(editDescriptionRequestSchema),
     defaultValues: {
@@ -179,15 +184,19 @@ export function EditDescriptionModal({
   }
 
   function handleSubmit(values: EditFormValues): void {
+    // C6: send attachment_ids[] alongside the existing `attachments` field
+    // (legacy shape, [] until C7 reconciles the schema).
+    const body = {
+      title: values.title,
+      description_rich_content: values.description_rich_content,
+      attachments: values.attachments ?? [],
+      attachment_ids: attachmentIds,
+    } as EditDescriptionRequest & { attachment_ids: string[] };
     mutation.mutate(
       {
         vocId: voc.id,
         ifMatch: voc.updated_at,
-        body: {
-          title: values.title,
-          description_rich_content: values.description_rich_content,
-          attachments: values.attachments ?? [],
-        },
+        body,
       },
       {
         onSuccess: () => {
@@ -312,8 +321,12 @@ export function EditDescriptionModal({
               )}
             </div>
 
-            {/* Attachments (disabled — upload deferred to #22) ───────────── */}
-            <AttachmentDropzone disabled testId="edit-attachment-dropzone" />
+            {/* Attachments — active upload (C6). ───────────── */}
+            <AttachmentDropzone
+              testId="edit-attachment-dropzone"
+              onChange={setAttachmentIds}
+              onUploadingChange={setAttachmentsUploading}
+            />
           </form>
 
           {/* Footer ───────────────────────────────────────────────────────── */}
@@ -321,7 +334,11 @@ export function EditDescriptionModal({
             <Button type="button" variant="ghost" onClick={handleCancel} disabled={isSubmitting}>
               취소
             </Button>
-            <Button type="submit" form="edit-description-form" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              form="edit-description-form"
+              disabled={isSubmitting || attachmentsUploading}
+            >
               수정 저장
             </Button>
           </DialogFooter>

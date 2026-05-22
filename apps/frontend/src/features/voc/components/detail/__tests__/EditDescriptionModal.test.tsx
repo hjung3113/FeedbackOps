@@ -114,8 +114,8 @@ describe('<EditDescriptionModal>', () => {
     expect(screen.getByTestId('rich-editor-voc-description')).toBeInTheDocument();
   });
 
-  // Test 2: AttachmentDropzone is visible and has aria-disabled
-  it('renders AttachmentDropzone with aria-disabled', async () => {
+  // Test 2 (C6): AttachmentDropzone is rendered in active upload mode.
+  it('renders AttachmentDropzone (active upload mode after C6)', async () => {
     render(
       <EditDescriptionModal
         voc={VOC}
@@ -125,9 +125,9 @@ describe('<EditDescriptionModal>', () => {
       { wrapper: makeWrapper() },
     );
 
-    const dropzone = screen.getByRole('button', { name: /첨부 파일/i });
-    expect(dropzone).toBeInTheDocument();
-    expect(dropzone).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('edit-attachment-dropzone')).toBeInTheDocument();
+    // C6 dropzone shows prototype copy
+    expect(screen.getByText('파일을 드래그하거나 클릭해서 추가')).toBeInTheDocument();
   });
 
   // Test 3: Dirty form + close attempt shows DirtyConfirmation

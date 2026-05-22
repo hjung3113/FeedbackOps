@@ -67,6 +67,12 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
 
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
+  // C6: track server-side attachment ids + whether any row is mid-upload.
+  // We do NOT use react-hook-form state for these because the AttachmentDropzone
+  // is the source of truth (it owns per-row state machine + Idempotency-Keys).
+  const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
+  const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
+
   const mutation = useVocCreateMutation({
     idempotencyKey,
     onSuccess: (data) => {
@@ -146,7 +152,14 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
   const isSubmitting = mutation.isPending;
 
   function handleSubmit(body: CreateVocRequest): void {
-    mutation.mutate(body);
+    // C6: include attachment_ids[] for successfully-uploaded rows. The
+    // shared CreateVocRequest schema still carries the legacy `attachments`
+    // shape (AttachmentRef[]) which C7 will reconcile to id-only; until then
+    // we attach the id-list as an extra field passed through to the wire.
+    const withAttachments = { ...body, attachment_ids: attachmentIds } as CreateVocRequest & {
+      attachment_ids: string[];
+    };
+    mutation.mutate(withAttachments);
   }
 
   return (
@@ -310,8 +323,12 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
             )}
           </div>
 
-          {/* Attachments (visible but disabled) */}
-          <AttachmentDropzone testId="attachment-dropzone" />
+          {/* Attachments — active multi-file upload (C6). */}
+          <AttachmentDropzone
+            testId="attachment-dropzone"
+            onChange={setAttachmentIds}
+            onUploadingChange={setAttachmentsUploading}
+          />
         </form>
 
         {/* Right column */}
@@ -334,7 +351,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
         <Button
           type="submit"
           form="voc-create-form"
-          disabled={!form.formState.isValid || isSubmitting}
+          disabled={!form.formState.isValid || isSubmitting || attachmentsUploading}
         >
           VOC 제출
         </Button>
