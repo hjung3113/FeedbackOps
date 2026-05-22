@@ -1,7 +1,7 @@
 // VOC description surface toolbar configuration (spec §5.7).
 // Pure data — no imports, no rendering.
-// The Attach action is visible but disabled with a deferral tooltip.
-// C5 wires this constant into VocCreateScreen's RichEditor.
+// PLAN-22 C8: Attach is now an active button wired through VocDescriptionToolbar's
+// `onAttach` render-prop (uploads via attachmentsApi.uploadAttachment).
 
 export type VocDescriptionToolbarAction =
   | 'bold'
@@ -25,5 +25,5 @@ export const VOC_DESCRIPTION_TOOLBAR: readonly VocDescriptionToolbarItem[] = [
   { id: 'code' },
   { id: 'bulletList' },
   { id: 'link' },
-  { id: 'attach', disabled: true, tooltip: '첨부 기능은 다음 슬라이스에서 제공됩니다' },
+  { id: 'attach', tooltip: '첨부 파일 추가' },
 ];
