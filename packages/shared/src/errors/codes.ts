@@ -56,6 +56,13 @@ export const ERROR_CODES = [
   'reporter_facing_status.gate_blocked',
   // conflict.* → 409 (Slice 3 #17 — Reporter edit blocked by committed triage)
   'conflict.triage_already_committed',
+  // storage.* → 502 (Slice 3 #22 / PLAN-22 C3a — object-store unavailable)
+  'storage.unavailable',
+  // attachment.* → 422 (PLAN-22 C3a — declared content type / size cap)
+  'attachment.too_large',
+  'attachment.unsupported_type',
+  // not_implemented.* → 501 (PLAN-22 C3a — stubbed happy path until C3b)
+  'not_implemented.todo',
 ] as const;
 
 export const errorCodeSchema = z.enum(ERROR_CODES);

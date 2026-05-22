@@ -20,6 +20,10 @@ const STATUS_BY_PREFIX: ReadonlyArray<[string, number]> = [
   ['rate_limited.', 429],
   ['internal.', 500],
   ['upstream.', 502],
+  // PLAN-22 C3a: object-store unavailable bubbles as 502 per OQ-2 default.
+  ['storage.', 502],
+  // PLAN-22 C3a: stub-path marker until C3b lands real implementation.
+  ['not_implemented.', 501],
 ];
 
 export function statusForCode(code: ErrorCode): number {

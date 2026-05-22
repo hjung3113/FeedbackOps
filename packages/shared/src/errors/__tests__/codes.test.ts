@@ -24,3 +24,14 @@ describe('errorCodeSchema — Slice 3 #17 codes', () => {
     expect(() => errorCodeSchema.parse('conflict.unknown_code')).toThrow();
   });
 });
+
+describe('errorCodeSchema — Slice 3 #22 / PLAN-22 C3a codes', () => {
+  it.each([
+    'storage.unavailable',
+    'attachment.too_large',
+    'attachment.unsupported_type',
+    'not_implemented.todo',
+  ])('parses %s', (code) => {
+    expect(errorCodeSchema.parse(code)).toBe(code);
+  });
+});

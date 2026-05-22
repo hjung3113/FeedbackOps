@@ -30,6 +30,7 @@ declare module 'fastify' {
       sensitive: Record<string, unknown>;
       read: Record<string, unknown>;
       reporterEdit: Record<string, unknown>;
+      attachmentMutation: Record<string, unknown>;
     };
   }
 }
