@@ -8,12 +8,21 @@ import { cn } from '../utils/cn';
 import type { TipTapDoc } from './RichEditor';
 import { AttachmentRef } from './extensions/attachmentRef';
 import { Mention } from './extensions/mention';
+import { sanitizeClient, type ClientSanitizeSurface } from './sanitizeClient';
 
 export type RichContentMode = 'reporter_visible' | 'internal';
 
 export interface RichContentRendererProps {
   doc: TipTapDoc;
   mode: RichContentMode;
+  /**
+   * Allowlist surface for the render-time defence-in-depth sanitizer (PLAN-22
+   * C9). Defaults to the safest reader for each `mode` when omitted, so
+   * existing call sites do not need to change. Callers SHOULD pass an explicit
+   * `surface` when they know it (e.g. `reporter-reply` rendering uses
+   * `reporter-reply`; internal-comment threads use `internal-comment`).
+   */
+  surface?: ClientSanitizeSurface;
   className?: string;
 }
 
@@ -29,11 +38,18 @@ function stripMentions(doc: TipTapDoc): TipTapDoc {
   return walk(doc) as TipTapDoc;
 }
 
-export function RichContentRenderer({ doc, mode, className }: RichContentRendererProps) {
+export function RichContentRenderer({ doc, mode, surface, className }: RichContentRendererProps) {
   const html = React.useMemo(() => {
+    // PLAN-22 C9: defence-in-depth client sanitize before TipTap render.
+    // Mode is the public/internal split (drives mention stripping); `surface`
+    // selects the allowlist. Default surface mirrors the safest reader for
+    // each mode so legacy call sites stay safe without code changes.
+    const effectiveSurface: ClientSanitizeSurface =
+      surface ?? (mode === 'reporter_visible' ? 'public-update' : 'internal-comment');
+    const sanitized = sanitizeClient(doc, effectiveSurface);
     // stripMentions is moved inside useMemo so generateHTML is only re-invoked
     // when doc or mode actually change — not on every parent render.
-    const safe = mode === 'reporter_visible' ? stripMentions(doc) : doc;
+    const safe = mode === 'reporter_visible' ? stripMentions(sanitized) : sanitized;
     return generateHTML(safe as JSONContent, [
       StarterKit.configure({
         // Disable built-ins that we configure separately below to avoid duplicate extension warnings.
@@ -45,7 +61,7 @@ export function RichContentRenderer({ doc, mode, className }: RichContentRendere
       AttachmentRef,
       Mention,
     ]);
-  }, [doc, mode]);
+  }, [doc, mode, surface]);
 
   return (
     <div
