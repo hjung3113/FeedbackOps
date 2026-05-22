@@ -14,6 +14,7 @@
 import { loadConfig } from './config.js';
 import { createDb } from './db/client.js';
 import { initBoss, shutdownBoss } from './lib/jobs.js';
+import { getStorage } from './lib/storage/factory.js';
 import { registerCoreJobs } from './modules/core/jobs/index.js';
 import { buildServer } from './server.js';
 
@@ -26,7 +27,11 @@ if (!config.DATABASE_URL) {
 const dbHandle = createDb(config.DATABASE_URL);
 
 const boss = await initBoss({ connectionString: config.DATABASE_URL });
-await registerCoreJobs(boss, { db: dbHandle.db });
+await registerCoreJobs(boss, {
+  db: dbHandle.db,
+  pool: dbHandle.pool,
+  storage: getStorage(),
+});
 
 const app = await buildServer({ config, dbHandle, boss });
 
