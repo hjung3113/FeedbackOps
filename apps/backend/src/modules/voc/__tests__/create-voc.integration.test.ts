@@ -90,6 +90,27 @@ function paragraphDoc(text: string) {
   };
 }
 
+// PLAN-22 C7b: seed an unlinked voc_attachments row owned by a given actor.
+// Mirrors the helper in modules/attachments/__tests__/get-attachments-download
+// integration test (kept local here to avoid cross-suite imports).
+async function seedAttachment(
+  dbHandle: DbHandle,
+  uploadedByActorId: string,
+  slug: string,
+  mimeType: string,
+): Promise<string> {
+  const id = randomUUID();
+  const storageKey = `${WORKSPACE_ID}/${id}/${slug}-${randomUUID()}.bin`;
+  await dbHandle.pool.query(
+    `insert into voc.voc_attachments
+       (id, voc_id, comment_id, comment_kind, name, size_bytes, mime_type,
+        storage_key, uploaded_by_actor_id, linked_at)
+     values ($1, null, null, null, $2, $3, $4, $5, $6, null)`,
+    [id, `${slug}.bin`, 1024, mimeType, storageKey, uploadedByActorId],
+  );
+  return id;
+}
+
 function postVoc(
   app: FastifyInstance,
   cookie: string,
@@ -112,7 +133,13 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   let reporterActorId: string;
 
   async function cleanupProductTables() {
-    // Order matters: vocs first (FKs to MS/AA), then AA, then MS.
+    // Order matters: voc_attachments first (FKs to vocs via voc_id),
+    // then vocs, then AA, then MS.
+    await dbHandle.pool.query(
+      `delete from voc.voc_attachments
+        where storage_key like $1 || '/%'`,
+      [WORKSPACE_ID],
+    );
     await dbHandle.pool.query(
       `delete from voc.vocs
         where primary_managed_system_id in (
@@ -636,8 +663,8 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
     expect(res.json().detail?.hint).toMatch(/attrs\.onclick$/);
   });
 
-  // ── 13. attachments: [] accepted ──────────────────────────────────────
-  it('attachments: [] → 201', async () => {
+  // ── 13. attachment_ids: [] accepted ───────────────────────────────────
+  it('attachment_ids: [] → 201 (PLAN-22 C7b)', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-voc-atte', 'AttE MS');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -648,18 +675,83 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         primary_managed_system_id: msId,
         title: 'x',
         description_rich_content: paragraphDoc('a'),
-        attachments: [],
+        attachment_ids: [],
       },
       randomUUID(),
     );
     expect(res.statusCode).toBe(201);
   });
 
-  // ── 14. attachments with ref → 422 unsupported ───────────────────────
-  it('attachments with ref → 422 attachment.unsupported_pending_storage_slice', async () => {
+  // ── 14a. attachment_ids with valid owned unlinked rows → 201 + linked ──
+  it('attachment_ids with valid owned unlinked rows → 201 + linked (PLAN-22 C7b)', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
-    const msId = await createMs(app, admin, 'it-voc-attr', 'AttR MS');
+    const msId = await createMs(app, admin, 'it-voc-attok', 'AttOk MS');
     const reporter = await loginAs(app, 'mock-user-1');
+
+    // Seed two unlinked attachment rows owned by the reporter.
+    const a1 = await seedAttachment(
+      dbHandle,
+      reporterActorId,
+      'attok-1',
+      'image/png',
+    );
+    const a2 = await seedAttachment(
+      dbHandle,
+      reporterActorId,
+      'attok-2',
+      'image/png',
+    );
+
+    const res = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'with attachments',
+        description_rich_content: paragraphDoc('a'),
+        attachment_ids: [a1, a2],
+      },
+      randomUUID(),
+    );
+    expect(res.statusCode).toBe(201);
+    const vocId = res.json().id as string;
+
+    // Both rows now point at voc_id + carry linked_at.
+    const linked = await dbHandle.pool.query<{
+      id: string;
+      voc_id: string;
+      linked_at: Date | null;
+    }>(
+      `select id, voc_id, linked_at from voc.voc_attachments where id = any($1)`,
+      [[a1, a2]],
+    );
+    expect(linked.rows.length).toBe(2);
+    for (const r of linked.rows) {
+      expect(r.voc_id).toBe(vocId);
+      expect(r.linked_at).not.toBeNull();
+    }
+  });
+
+  // ── 14b. attachment_ids owned by another actor → 422 validation.failed ─
+  it('attachment_ids referencing other-actor rows → 422 validation.failed (PLAN-22 C7b)', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-voc-attowner', 'AttOwner MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+
+    // Resolve a DIFFERENT actor id (admin) and seed under that actor.
+    const adminActorRow = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
+      [WORKSPACE_ID],
+    );
+    const adminActorId = adminActorRow.rows[0]?.id;
+    if (!adminActorId) throw new Error('admin actor not seeded');
+    const aWrongOwner = await seedAttachment(
+      dbHandle,
+      adminActorId,
+      'attowner-1',
+      'image/png',
+    );
+
     const res = await postVoc(
       app,
       reporter,
@@ -667,22 +759,65 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         primary_managed_system_id: msId,
         title: 'x',
         description_rich_content: paragraphDoc('a'),
-        attachments: [
-          {
-            id: randomUUID(),
-            name: 'a.png',
-            size_bytes: 1,
-            mime_type: 'image/png',
-            storage_uri: 's3://x/y',
-          },
-        ],
+        attachment_ids: [aWrongOwner],
       },
       randomUUID(),
     );
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('attachment.unsupported_pending_storage_slice');
-    expect(res.json().detail?.fields?.[0]?.path).toEqual(['attachments']);
-    expect(res.json().detail?.fields?.[0]?.code).toBe('unsupported');
+    expect(res.json().code).toBe('validation.failed');
+    expect(res.json().detail?.fields?.[0]?.path).toEqual(['attachment_ids', 0]);
+    expect(res.json().detail?.fields?.[0]?.code).toBe('invalid');
+
+    // Row remains unlinked (tx rolled back).
+    const after = await dbHandle.pool.query<{ voc_id: string | null; linked_at: Date | null }>(
+      `select voc_id, linked_at from voc.voc_attachments where id = $1`,
+      [aWrongOwner],
+    );
+    expect(after.rows[0]?.voc_id).toBeNull();
+    expect(after.rows[0]?.linked_at).toBeNull();
+  });
+
+  // ── 14c. attachment_ids referencing already-linked rows → 422 ─────────
+  it('attachment_ids referencing already-linked rows → 422 validation.failed (PLAN-22 C7b)', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-voc-attlinked', 'AttLinked MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+
+    // Seed an attachment + first VOC creation links it.
+    const a = await seedAttachment(
+      dbHandle,
+      reporterActorId,
+      'attlinked-1',
+      'image/png',
+    );
+    const first = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'first',
+        description_rich_content: paragraphDoc('a'),
+        attachment_ids: [a],
+      },
+      randomUUID(),
+    );
+    expect(first.statusCode).toBe(201);
+
+    // Second create that references the now-linked row → 422.
+    const second = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'second',
+        description_rich_content: paragraphDoc('b'),
+        attachment_ids: [a],
+      },
+      randomUUID(),
+    );
+    expect(second.statusCode).toBe(422);
+    expect(second.json().code).toBe('validation.failed');
+    expect(second.json().detail?.fields?.[0]?.path).toEqual(['attachment_ids', 0]);
   });
 
   // ── 15. Audit row written on success ──────────────────────────────────

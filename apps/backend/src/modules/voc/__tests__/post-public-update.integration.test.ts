@@ -673,4 +673,43 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     expect(limited.json<{ code: string }>().code).toBe('rate_limited.actor');
     expect(limited.headers['retry-after']).toBeDefined();
   });
+
+  // ── PLAN-22 C7b — attachment_ids linking on body shape ──────────────────
+
+  it('attachment_ids on body shape → 201 + linked to public_update (PLAN-22 C7b)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-puatt`, 'PU Att MS');
+    const voc = await insertVoc(msId, 'PU Att VOC');
+
+    // Admin uploads — seed owned by admin.
+    const attachmentId = randomUUID();
+    const storageKey = `${WORKSPACE_ID}/${attachmentId}/puatt-${randomUUID()}.pdf`;
+    await dbHandle.pool.query(
+      `insert into voc.voc_attachments
+         (id, voc_id, comment_id, comment_kind, name, size_bytes, mime_type,
+          storage_key, uploaded_by_actor_id, linked_at)
+       values ($1, null, null, null, 'pu.pdf', 1024, 'application/pdf', $2, $3, null)`,
+      [attachmentId, storageKey, adminActorId],
+    );
+
+    const res = await postPublicUpdate(adminCookie, voc.id, {
+      skip_public_update: false,
+      body_rich_content: paragraphDoc('public update with attachment'),
+      next_reporter_facing_status: 'reviewing',
+      attachment_ids: [attachmentId],
+    });
+    expect(res.statusCode).toBe(201);
+    const updateId = res.json<{ public_update: { id: string } }>().public_update.id;
+
+    const linked = await dbHandle.pool.query<{
+      comment_id: string;
+      comment_kind: string;
+      linked_at: Date | null;
+    }>(
+      `select comment_id, comment_kind, linked_at from voc.voc_attachments where id = $1`,
+      [attachmentId],
+    );
+    expect(linked.rows[0]?.comment_id).toBe(updateId);
+    expect(linked.rows[0]?.comment_kind).toBe('public_update');
+    expect(linked.rows[0]?.linked_at).not.toBeNull();
+  });
 });

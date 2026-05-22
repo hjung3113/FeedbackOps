@@ -384,6 +384,14 @@ export async function cleanupReadTestTables(
     [`${msSlugPrefix}%`, workspaceId],
   );
 
+  // 2b. PLAN-22 C7b — clean voc_attachments rows by storage_key workspace
+  //     prefix. Rows linked via voc_id cascade with the VOC delete below;
+  //     this catches unlinked + comment-linked rows seeded by C7b tests.
+  await dbHandle.pool.query(
+    `delete from voc.voc_attachments where storage_key like $1 || '/%'`,
+    [workspaceId],
+  );
+
   // 3. Delete VOCs — conversation tables cascade automatically (ON DELETE CASCADE).
   //    fops_app has DELETE on voc.vocs, but NOT on conversation tables.
   await dbHandle.pool.query(
