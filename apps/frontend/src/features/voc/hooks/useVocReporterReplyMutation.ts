@@ -25,6 +25,11 @@ export interface ReporterReplyBody {
   body_rich_content: TipTapDoc;
   /** Always empty until attachment-deferral lifts in #22. */
   attachments: unknown[];
+  /**
+   * PLAN-22 C7a (D1): widened body field — FE list of uploaded attachment ids
+   * from <ComposerAttachmentDropzone>. BE schema reconciled in C7b.
+   */
+  attachment_ids?: string[];
 }
 
 export interface ReporterReplyVars {

@@ -47,6 +47,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle } from 'lucide-react';
 import { type ReactElement, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { ComposerReplyPreview } from './ComposerReplyPreview';
 import { uploadAttachment } from '@/lib/api/attachments';
@@ -105,6 +106,10 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
 
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  // PLAN-22 C7a: composer-level attachment dropzone state.
+  const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
+  const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+
   // Reset state when VOC changes (preview; draft reset handled by parent for controlled).
   const prevVocIdRef = useRef(voc.id);
   if (prevVocIdRef.current !== voc.id) {
@@ -133,6 +138,8 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
       body: {
         body_rich_content: draftDoc,
         attachments: [],
+        // PLAN-22 C7a (D1): widened body field — schema reconciled in C7b.
+        attachment_ids: attachmentIds,
       },
     });
   }
@@ -192,6 +199,13 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
         )}
       />
 
+      {/* PLAN-22 C7a: composer-level attachment dropzone (compact). */}
+      <ComposerAttachmentDropzone
+        testId="reporter-reply-attachment-dropzone"
+        onChange={setAttachmentIds}
+        onUploadingChange={setAttachmentsUploading}
+      />
+
       {/* Inline error Callout — reporter_facing_status.gate_blocked (amber)
           D-5.6: copy from backend detail.reason, not errorMapper message */}
       {inlineCalloutTone != null && inlineCalloutReason != null && (
@@ -213,7 +227,7 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
         isSubmitting={mutation.isPending}
-        isSubmitDisabled={isIdempotencyLocked}
+        isSubmitDisabled={isIdempotencyLocked || attachmentsUploading}
         isPreviewDisabled={isIdempotencyLocked}
         statusHint={statusHint}
       />
