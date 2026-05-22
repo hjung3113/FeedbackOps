@@ -11,6 +11,8 @@ const base = {
   body_rich_content: { type: 'doc' },
   created_at: '2026-01-01T00:00:00.000Z',
   visibility: 'public' as const,
+  // PLAN-22 §Bug-1 (2026-05-22): attachments[] always present on every entry.
+  attachments: [],
 };
 
 describe('conversationKindSchema', () => {

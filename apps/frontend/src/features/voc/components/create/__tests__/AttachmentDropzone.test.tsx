@@ -148,6 +148,51 @@ describe('<AttachmentDropzone> (C6 active upload)', () => {
     });
   });
 
+  it('PLAN-22 Bug-3: emits onErrorCountChange when a row enters error state', async () => {
+    vi.spyOn(attachmentsApi, 'uploadAttachment').mockRejectedValue(
+      new ApiError(422, { code: 'attachment.unsupported_type', message: 'nope' }),
+    );
+    const onErrorCountChange = vi.fn();
+    const { container } = render(
+      <AttachmentDropzone onErrorCountChange={onErrorCountChange} />,
+    );
+
+    await act(async () => {
+      fireFilePick(container, [makeFile('archive.zip', 'application/zip')]);
+    });
+
+    await waitFor(() => {
+      expect(onErrorCountChange).toHaveBeenLastCalledWith(1);
+    });
+  });
+
+  it('PLAN-22 Bug-3: onErrorCountChange returns to 0 when the error row is removed', async () => {
+    vi.spyOn(attachmentsApi, 'uploadAttachment').mockRejectedValue(
+      new ApiError(422, { code: 'attachment.unsupported_type', message: 'nope' }),
+    );
+    const onErrorCountChange = vi.fn();
+    const { container } = render(
+      <AttachmentDropzone onErrorCountChange={onErrorCountChange} />,
+    );
+
+    await act(async () => {
+      fireFilePick(container, [makeFile('archive.zip', 'application/zip')]);
+    });
+
+    await waitFor(() => {
+      expect(onErrorCountChange).toHaveBeenLastCalledWith(1);
+    });
+
+    // Remove the error row → count back to 0.
+    const removeBtn = await screen.findByLabelText('첨부 제거');
+    await act(async () => {
+      fireEvent.click(removeBtn);
+    });
+    await waitFor(() => {
+      expect(onErrorCountChange).toHaveBeenLastCalledWith(0);
+    });
+  });
+
   it('emits onUploadingChange(true) while in flight then (false) when settled', async () => {
     let resolveUpload!: (v: typeof FAKE_ATTACHMENT) => void;
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockReturnValue(

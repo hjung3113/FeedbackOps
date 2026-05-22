@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { getConversationQuerySchema } from '../conversation-query.js';
 
-describe('getConversationQuerySchema — cursor (required)', () => {
-  it('rejects when cursor is missing', () => {
-    expect(() => getConversationQuerySchema.parse({})).toThrow();
+describe('getConversationQuerySchema — cursor (optional)', () => {
+  it('accepts an empty payload (first-page call, cursor undefined)', () => {
+    const result = getConversationQuerySchema.parse({});
+    expect(result.cursor).toBeUndefined();
   });
 
   it('accepts cursor string', () => {
     const result = getConversationQuerySchema.parse({ cursor: 'abc123' });
     expect(result.cursor).toBe('abc123');
+  });
+
+  it('rejects non-string cursor', () => {
+    expect(() => getConversationQuerySchema.parse({ cursor: 123 })).toThrow();
   });
 });
 

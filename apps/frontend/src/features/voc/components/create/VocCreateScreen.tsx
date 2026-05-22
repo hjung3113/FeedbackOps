@@ -74,6 +74,11 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
   // is the source of truth (it owns per-row state machine + Idempotency-Keys).
   const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
   const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
+  // PLAN-22 §Bug-3 (2026-05-22): error rows block submit AND surface a visible
+  // inline alert above the action bar. Without this users hit "submit looks
+  // disabled with no explanation" when they drop an oversize/unsupported file.
+  const [attachmentErrorCount, setAttachmentErrorCount] = React.useState(0);
+  const hasAttachmentErrors = attachmentErrorCount > 0;
 
   const mutation = useVocCreateMutation({
     idempotencyKey,
@@ -330,6 +335,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
             testId="attachment-dropzone"
             onChange={setAttachmentIds}
             onUploadingChange={setAttachmentsUploading}
+            onErrorCountChange={setAttachmentErrorCount}
           />
         </form>
 
@@ -339,6 +345,21 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
           <SeverityDisclaimerCard />
         </div>
       </div>
+
+      {/* PLAN-22 §Bug-3: inline submit-blocked alert. Visible above the action
+          bar whenever any attachment row is in error state. Disable-by-itself
+          would surface no explanation — the alert is the user-facing
+          counterpart to the disabled button. Korean copy mirrors the
+          prototype's tone. */}
+      {hasAttachmentErrors && (
+        <div
+          role="alert"
+          data-testid="attachment-submit-blocked-alert"
+          className="sticky bottom-[56px] mx-6 mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
+          첨부 파일에 오류가 있어 제출할 수 없습니다. 빨간색으로 표시된 파일을 제거하거나 다른 파일로 교체해 주세요.
+        </div>
+      )}
 
       {/* Sticky bottom action bar */}
       <div className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex justify-end gap-3">
@@ -353,7 +374,12 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
         <Button
           type="submit"
           form="voc-create-form"
-          disabled={!form.formState.isValid || isSubmitting || attachmentsUploading}
+          disabled={
+            !form.formState.isValid ||
+            isSubmitting ||
+            attachmentsUploading ||
+            hasAttachmentErrors
+          }
         >
           VOC 제출
         </Button>

@@ -52,6 +52,13 @@ export interface AttachmentDropzoneProps {
   onChange?: (serverAttachmentIds: string[]) => void;
   /** Receives true while ANY row is mid-upload so parent can disable submit. */
   onUploadingChange?: (uploading: boolean) => void;
+  /**
+   * PLAN-22 §Bug-3 (2026-05-22): receives the count of rows currently in
+   * `error` state (per-file size cap, unsupported type, or upload failure).
+   * Parent uses this to surface an inline submit-blocked alert; the dropzone
+   * itself does NOT render the alert (the parent owns the action bar).
+   */
+  onErrorCountChange?: (errorCount: number) => void;
 }
 
 function mintRowId(): string {
@@ -85,6 +92,7 @@ export function AttachmentDropzone({
   testId,
   onChange,
   onUploadingChange,
+  onErrorCountChange,
 }: AttachmentDropzoneProps): React.ReactElement {
   const [rows, setRows] = React.useState<Row[]>([]);
   const [dragOver, setDragOver] = React.useState(false);
@@ -103,6 +111,16 @@ export function AttachmentDropzone({
   // Refs to skip the initial mount-firing of useEffect (no-op notify on mount).
   const lastUploadedRef = React.useRef<string>('');
   const lastUploadingRef = React.useRef<boolean | null>(null);
+  const lastErrorCountRef = React.useRef<number | null>(null);
+
+  // PLAN-22 §Bug-3: track error rows so the parent can render an inline alert.
+  const errorCount = rows.filter((r) => r.state.kind === 'error').length;
+  React.useEffect(() => {
+    if (lastErrorCountRef.current !== errorCount) {
+      lastErrorCountRef.current = errorCount;
+      onErrorCountChange?.(errorCount);
+    }
+  }, [errorCount, onErrorCountChange]);
 
   React.useEffect(() => {
     const key = uploadedIds.join(',');

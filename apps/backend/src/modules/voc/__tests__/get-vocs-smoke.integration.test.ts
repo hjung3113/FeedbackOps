@@ -92,16 +92,17 @@ describe.skipIf(!runIntegration)('GET /vocs smoke (#15 C3)', () => {
     expect(body.code).toBe('not_found.record');
   });
 
-  it('GET /vocs/:id/conversation without cursor → 422 validation error', async () => {
+  it('GET /vocs/:id/conversation without cursor → 404 for non-existent VOC (cursor is optional now)', async () => {
     const nonExistentId = randomUUID();
     const res = await app.inject({
       method: 'GET',
       url: `/vocs/${nonExistentId}/conversation`,
       headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
     });
-    // cursor is required by getConversationQuerySchema — missing → 422.
-    expect(res.statusCode).toBe(422);
+    // PLAN-22 §Bug-2: cursor is OPTIONAL — first-page call must NOT be a 422.
+    // For a non-existent VOC the access-matrix check raises 404 first.
+    expect(res.statusCode).toBe(404);
     const body = res.json<{ code: string }>();
-    expect(body.code).toBe('validation.failed');
+    expect(body.code).toBe('not_found.record');
   });
 });

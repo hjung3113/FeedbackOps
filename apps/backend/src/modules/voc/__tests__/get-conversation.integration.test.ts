@@ -246,19 +246,52 @@ describe.skipIf(!runIntegration)('GET /vocs/:id/conversation (#15 C4)', () => {
     expect(convBody.items.filter((i) => i.kind === 'internal_comment')).toHaveLength(0);
   });
 
-  // ── AC5: Missing cursor → 422 ────────────────────────────────────────────
+  // ── AC5: First-page call (no cursor) → 200 with items ───────────────────
+  // PLAN-22 §Bug-2 (2026-05-22): cursor is optional. The endpoint accepts
+  // first-page calls and the FE infinite hook always issues the first GET
+  // without a cursor. The previous "missing cursor → 422" contract caused a
+  // 422 on every detail-panel open in production.
 
-  it('AC5: missing cursor → 422 validation.failed', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-no-cursor`, 'No Cursor MS');
-    const voc = await insertVoc(msId, 'No Cursor VOC');
+  it('AC5: first page (no cursor) returns 200 with items + next_cursor when has_more', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-first-page`, 'First Page MS');
+    const voc = await insertVoc(msId, 'First Page VOC');
+
+    // Seed 3 entries — under the page limit so has_more=false on first page.
+    for (let i = 0; i < 3; i++) {
+      await insertInternalComment(dbHandle, voc.id, adminActorId);
+    }
 
     const res = await app.inject({
       method: 'GET',
       url: `/vocs/${voc.id}/conversation`,
       headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
     });
-    expect(res.statusCode).toBe(422);
-    expect(res.json<{ code: string }>().code).toBe('validation.failed');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: unknown[]; page: { has_more: boolean; cursor?: string } }>();
+    expect(body.items.length).toBe(3);
+    expect(body.page.has_more).toBe(false);
+    expect(body.page.cursor).toBeUndefined();
+  });
+
+  it('AC5b: first page (no cursor) emits next_cursor when more entries exist', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-first-more`, 'First More MS');
+    const voc = await insertVoc(msId, 'First More VOC');
+
+    // Seed 60 entries; request limit=50 → has_more=true on first page.
+    for (let i = 0; i < 60; i++) {
+      await insertInternalComment(dbHandle, voc.id, adminActorId);
+    }
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}/conversation?limit=50`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: unknown[]; page: { has_more: boolean; cursor?: string } }>();
+    expect(body.items.length).toBe(50);
+    expect(body.page.has_more).toBe(true);
+    expect(typeof body.page.cursor).toBe('string');
   });
 
   // ── AC6: Invalid cursor (bad base64) → 422 ───────────────────────────────

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { LinkedAttachmentSchema } from './attachment.js';
+
 export const conversationKindSchema = z.enum([
   'public_update',
   'reporter_reply',
@@ -23,5 +25,10 @@ export const conversationEntrySchema = z.object({
   reporter_facing_status_after: z.string().optional(),
   skip_public_update: z.boolean().optional(),
   skip_reason: z.string().nullable().optional(),
+  // PLAN-22 §Bug-1 (2026-05-22): per-comment linked attachments. Same shape
+  // as VocDetailEnvelope.attachments[]. Always present — [] when none.
+  // For `kind === 'public_update'` entries with `skip_public_update: true`
+  // there is no body, so attachments[] will be [].
+  attachments: z.array(LinkedAttachmentSchema),
 });
 export type ConversationEntry = z.infer<typeof conversationEntrySchema>;

@@ -20,6 +20,8 @@ const valid = {
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
   similar_count: 0,
+  // PLAN-22 §Bug-1 (2026-05-22): attachment_count is now required on list rows.
+  attachment_count: 0,
 };
 
 describe('vocListItemSchema', () => {
@@ -82,6 +84,15 @@ describe('vocListItemSchema', () => {
 
   it('rejects negative similar_count', () => {
     expect(() => vocListItemSchema.parse({ ...valid, similar_count: -1 })).toThrow();
+  });
+
+  it('rejects negative attachment_count', () => {
+    expect(() => vocListItemSchema.parse({ ...valid, attachment_count: -1 })).toThrow();
+  });
+
+  it('rejects missing attachment_count', () => {
+    const { attachment_count: _, ...rest } = valid;
+    expect(() => vocListItemSchema.parse(rest)).toThrow();
   });
 
   it('rejects missing required field (title)', () => {

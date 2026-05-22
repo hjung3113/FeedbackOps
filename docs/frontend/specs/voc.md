@@ -602,9 +602,12 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 | Property | Value |
 |---|---|
 | Method / Path | `GET /vocs/:id` |
-| Response | `VocDetailEnvelope` = `{ ...VocFields, next_actions, next_reporter_states, reporter_status_gate?, permission_decisions, linked_execution: { finding?, task? }, conversation_timeline?: ConversationEntry[] }` |
+| Response | `VocDetailEnvelope` = `{ ...VocFields, next_actions, next_reporter_states, reporter_status_gate?, permission_decisions, linked_execution: { finding?, task? }, conversation_timeline: ConversationEntry[], attachments: LinkedAttachment[], attachment_count }` |
+| `attachments[]` (PLAN-22 §Bug-1) | Always present; `[]` when none. Each item: `{ id, name, size_bytes, mime_type, uploaded_by_actor_id, created_at, linked_at }`. `storage_key`/`storage_uri` NOT exposed — clients reference by `id` and download via `GET /attachments/:id/download`. Archived rows excluded. |
+| `ConversationEntry.attachments[]` (PLAN-22 §Bug-1) | Same shape as `attachments[]`. Always present on every entry on `conversation_timeline[]` AND on `GET /vocs/:id/conversation` items. `[]` when the entry has no linked rows. |
+| `attachment_count` on list rows | `GET /vocs` includes `attachment_count: number` on each `VocListItem` (subquery, no full JOIN). Used by inbox to render a paperclip + count chip. |
 | Errors | `not_found.record` (404) · `permission.denied` (403; backend may instead return summary envelope w/ permission_decision) |
-| Conversation pagination | If `conversation_timeline.has_more`, fetch via `GET /vocs/:id/conversation?cursor=`. **GAP:** decide whether timeline is inlined or always paginated — S3-002. |
+| Conversation pagination | If `conversation_timeline.has_more`, fetch via `GET /vocs/:id/conversation?cursor=`. **`cursor` is optional** (PLAN-22 §Bug-2): the endpoint accepts a first-page call (no cursor) and treats it as "start from oldest". The FE infinite-query hook issues its first GET without a cursor by design. Subsequent calls carry the encoded `{ createdAt, id }` cursor returned from the previous page. |
 
 ### 8.4 `PATCH /vocs/:id` — Triage commit / metadata edit
 
