@@ -560,8 +560,12 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       throw new HttpError('permission.denied', 'conversation not available without voc.read scope');
     }
 
-    // ── 5. Decode conversation cursor ────────────────────────────────────────
-    const decodedConvCursor = decodeConversationCursor(query.cursor);
+    // ── 5. Decode conversation cursor (optional — first-page call passes none) ─
+    // PLAN-22 §Bug-2: cursor is optional at the schema layer. Treat undefined
+    // as "start from oldest" — selectConversationPage already handles the
+    // undefined-cursor branch (no cursor predicate emitted).
+    const decodedConvCursor =
+      query.cursor !== undefined ? decodeConversationCursor(query.cursor) : undefined;
 
     // ── 6. Fetch conversation page ────────────────────────────────────────────
     const convArgs: repoRead.SelectConversationPageArgs = {
@@ -570,9 +574,9 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       actorId: actor.actor_id,
       canTriage,
       isReporter,
-      cursor: decodedConvCursor,
       limit: query.limit,
     };
+    if (decodedConvCursor !== undefined) convArgs.cursor = decodedConvCursor;
     if (query.kind !== undefined) convArgs.kind = query.kind;
 
     const convResult = await repoRead.selectConversationPage(deps.db, convArgs);
