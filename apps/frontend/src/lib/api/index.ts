@@ -6,3 +6,4 @@ export * from './auth';
 export * from './permissions';
 export * from './managed-systems';
 export * from './analytics-areas';
+export * from './attachments';

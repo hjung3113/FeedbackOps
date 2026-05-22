@@ -2,6 +2,12 @@ import { ApiError, type ApiErrorEnvelope, type RateLimitInfo } from './types';
 
 export interface ApiClientOptions {
   body?: unknown;
+  /**
+   * Multipart body. When set, `body` is ignored and Content-Type is NOT set
+   * (browser fills in `multipart/form-data; boundary=...`). Used by
+   * POST /attachments (PLAN-22 C5).
+   */
+  formData?: FormData;
   idempotencyKey?: string;
   ifMatch?: string;
   ifNoneMatch?: string;
@@ -30,7 +36,11 @@ export async function apiClient<T = unknown>(
   const upper = method.toUpperCase();
   const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers };
 
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  // Only JSON bodies set Content-Type; multipart leaves it to the browser
+  // so it can append the boundary parameter.
+  if (opts.formData === undefined && opts.body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (MUTATION_METHODS.has(upper)) {
     headers['Idempotency-Key'] = opts.idempotencyKey ?? mintInlineKey();
@@ -44,7 +54,9 @@ export async function apiClient<T = unknown>(
     credentials: 'include',
   };
   if (opts.signal != null) fetchInit.signal = opts.signal;
-  if (opts.body !== undefined) {
+  if (opts.formData !== undefined) {
+    fetchInit.body = opts.formData;
+  } else if (opts.body !== undefined) {
     fetchInit.body = JSON.stringify(opts.body);
   }
   const res = await fetch(path, fetchInit);
