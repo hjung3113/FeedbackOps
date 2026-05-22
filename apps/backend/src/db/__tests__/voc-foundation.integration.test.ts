@@ -424,7 +424,7 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
 
   afterAll(async () => {
     await handle.pool.query(
-      `delete from voc.voc_attachments where storage_uri like 's3://test-task5/%'`,
+      `delete from voc.voc_attachments where storage_key like 's3://test-task5/%'`,
     );
     await handle.pool.query(
       `delete from voc.vocs where title = 'test-voc-foundation-attachments'`,
@@ -432,12 +432,12 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
     await handle.close();
   });
 
-  it('rejects both voc_id and comment_id populated (voc_attachments_subject_xor)', async () => {
+  it('rejects both voc_id and comment_id populated (voc_attachments_subject_not_both, post-0012)', async () => {
     await expect(
       handle.pool.query(
         `insert into voc.voc_attachments (
            voc_id, comment_id, comment_kind,
-           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+           name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
          ) values (
            $1, $2, 'internal_comment',
            'test.pdf', 1024, 'application/pdf',
@@ -446,7 +446,7 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
         [vocId, commentId, actorId],
       ),
     ).rejects.toMatchObject({
-      message: expect.stringContaining('voc_attachments_subject_xor'),
+      message: expect.stringContaining('voc_attachments_subject_not_both'),
     });
   });
 
@@ -455,7 +455,7 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
       handle.pool.query(
         `insert into voc.voc_attachments (
            voc_id, comment_kind,
-           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+           name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
          ) values (
            $1, 'public_update',
            'test.pdf', 1024, 'application/pdf',
@@ -471,7 +471,7 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
   it('accepts voc-scoped attachment (voc_id only, no comment_id/kind)', async () => {
     const result = await handle.pool.query<{ id: string }>(
       `insert into voc.voc_attachments (
-         voc_id, name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         voc_id, name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
        ) values (
          $1, 'attachment.pdf', 2048, 'application/pdf',
          's3://test-task5/voc-scoped.pdf', $2
@@ -630,7 +630,7 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
       migrateHandle.pool.query(
         `insert into voc.voc_attachments (
            comment_id, comment_kind,
-           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+           name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
          ) values (
            $1, 'internal_comment',
            'ghost.pdf', 512, 'application/pdf',
@@ -666,7 +666,7 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
       migrateHandle.pool.query(
         `insert into voc.voc_attachments (
            comment_id, comment_kind,
-           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+           name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
          ) values (
            $1, 'internal_comment',
            'mismatch.pdf', 512, 'application/pdf',
@@ -684,7 +684,7 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
     // Insert an attachment via migrate role.
     const att = await migrateHandle.pool.query<{ id: string }>(
       `insert into voc.voc_attachments (
-         voc_id, name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         voc_id, name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
        ) values (
          $1, 'archive-test.pdf', 1024, 'application/pdf',
          's3://test-0011/archive-test.pdf', $2
@@ -705,7 +705,7 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
     // fops_app must not be able to DELETE from voc_attachments.
     const att2 = await migrateHandle.pool.query<{ id: string }>(
       `insert into voc.voc_attachments (
-         voc_id, name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         voc_id, name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
        ) values (
          $1, 'delete-test.pdf', 512, 'application/pdf',
          's3://test-0011/delete-test.pdf', $2

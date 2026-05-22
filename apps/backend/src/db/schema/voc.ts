@@ -216,12 +216,17 @@ export const vocAttachments = vocSchema.table(
     name: text('name').notNull(),
     sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
     mimeType: text('mime_type').notNull(),
-    storageUri: text('storage_uri').notNull(),
+    // Migration 0012 (#22 / C2): renamed from storage_uri; opaque object
+    // key shaped `{workspace_id}/{uuidv7}/{sanitized_filename}` per D-03.
+    storageKey: text('storage_key').notNull().unique('voc_attachments_storage_key_unique'),
     uploadedByActorId: uuid('uploaded_by_actor_id').notNull().references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     // IM-03: archive-over-delete columns (migration 0011).
     archivedAt: timestamp('archived_at', { withTimezone: true }),
     archivedByActorId: uuid('archived_by_actor_id').references(() => actors.id),
+    // Migration 0012 (#22 / C2): populated by C3 link step; purge job (C4)
+    // reclaims rows where linked_at IS NULL AND created_at < now() - 24h.
+    linkedAt: timestamp('linked_at', { withTimezone: true }),
   },
   (t) => ({
     vocIdx: index('voc_attachments_voc_idx').on(t.vocId).where(sql`${t.vocId} IS NOT NULL`),
@@ -230,9 +235,13 @@ export const vocAttachments = vocSchema.table(
     activeIdx: index('voc_attachments_active_idx')
       .on(t.vocId)
       .where(sql`${t.archivedAt} IS NULL AND ${t.vocId} IS NOT NULL`),
-    subjectXor: check(
-      'voc_attachments_subject_xor',
-      sql`(${t.vocId} is not null)::int + (${t.commentId} is not null)::int = 1`,
+    // Migration 0012 (#22 / C2): the original 0010 XOR ("exactly one of
+    // voc_id / comment_id") was relaxed to "not both" so that C3 can
+    // INSERT attachments BEFORE they are linked to a parent. The "exactly
+    // one" invariant is now enforced at the service layer (link step).
+    subjectNotBoth: check(
+      'voc_attachments_subject_not_both',
+      sql`not (${t.vocId} is not null and ${t.commentId} is not null)`,
     ),
     commentKindPair: check(
       'voc_attachments_comment_kind_pair',
