@@ -44,7 +44,9 @@ export const ERROR_CODES = [
   'validation.unexpected_field',
   'rich_content.disallowed_node',
   'rich_content.external_image_forbidden',
-  'attachment.unsupported_pending_storage_slice',
+  // PLAN-22 C7b: `attachment.unsupported_pending_storage_slice` retired —
+  // the storage slice (C3a/C3b) shipped and attachments now ride as
+  // `attachment_ids: string[]` on the wire (linked from voc.voc_attachments).
   // conflict.* → 409 (Slice 3 #14 — optimistic concurrency)
   'conflict.stale_write',
   // voc.* → 422 (Slice 3 #14 — forbidden field on PATCH)

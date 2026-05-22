@@ -7,9 +7,14 @@ describe('errorCodeSchema — Slice 3 #13 codes', () => {
     'validation.unexpected_field',
     'rich_content.disallowed_node',
     'rich_content.external_image_forbidden',
-    'attachment.unsupported_pending_storage_slice',
   ])('parses %s', (code) => {
     expect(errorCodeSchema.parse(code)).toBe(code);
+  });
+
+  it('rejects retired attachment.unsupported_pending_storage_slice (PLAN-22 C7b)', () => {
+    expect(() =>
+      errorCodeSchema.parse('attachment.unsupported_pending_storage_slice'),
+    ).toThrow();
   });
 });
 

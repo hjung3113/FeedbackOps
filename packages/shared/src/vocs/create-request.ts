@@ -22,7 +22,11 @@ export function emptyTipTapDoc(): TipTapDoc {
   return { type: 'doc', content: [] };
 }
 
-// Slice 3 #22 will define this fully; the create-request only needs a stub.
+// PLAN-22 C7b: `AttachmentRef` retained for audit replay
+// (`voc_description_edited.detail.changes.attachments: { from, to }`).
+// Wire-in request schemas no longer accept `attachments: AttachmentRef[]` —
+// they accept `attachment_ids: string[]` referencing pre-uploaded
+// voc.voc_attachments rows (PLAN-22 C3b).
 export const attachmentRefSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
@@ -31,6 +35,13 @@ export const attachmentRefSchema = z.object({
   storage_uri: z.string().min(1),
 });
 export type AttachmentRef = z.infer<typeof attachmentRefSchema>;
+
+// PLAN-22 C7b: shared wire shape for "link these pre-uploaded attachments to
+// this VOC / comment". Max 10 per parent (voc.md §4.4 dropzone constraint).
+export const MAX_ATTACHMENT_IDS_PER_PARENT = 10;
+export const attachmentIdsSchema = z
+  .array(z.string().uuid())
+  .max(MAX_ATTACHMENT_IDS_PER_PARENT);
 
 export const FORBIDDEN_CREATE_FIELDS = [
   'reporter_id',
@@ -49,6 +60,6 @@ export const createVocRequestSchema = z.object({
   description_rich_content: tipTapDocSchema,
   analytics_area_id: z.string().uuid().optional(),
   source_context: sourceContextSchema.default('direct_use'),
-  attachments: z.array(attachmentRefSchema).optional(),
+  attachment_ids: attachmentIdsSchema.optional(),
 });
 export type CreateVocRequest = z.infer<typeof createVocRequestSchema>;

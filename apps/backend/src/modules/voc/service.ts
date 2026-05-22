@@ -17,6 +17,12 @@ import { stableStringify } from '../../lib/json/stable-stringify.js';
 import { sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
 import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
 import { insertVoc, lockAnalyticsArea, lockManagedSystem, selectVocForUpdate, updateVocDescriptionFields } from './repo.js';
+import {
+  LinkAttachmentsRejected,
+  linkAttachments,
+  linkRejectedFields,
+  toAttachmentRefForAudit,
+} from '../attachments/repo.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { RoleLevel } from '../auth/session-service.js';
@@ -110,19 +116,11 @@ export function createVocService(deps: VocServiceDeps) {
       });
     }
 
-    // 4. Attachment guard — Slice 3 ships with no upload endpoint.
-    if (input.attachments && input.attachments.length > 0) {
-      throw new HttpError(
-        'attachment.unsupported_pending_storage_slice',
-        'attachments are not supported until the storage slice ships (#22)',
-        {
-          fields: [{ path: ['attachments'], code: 'unsupported' }],
-        },
-      );
-    }
-
-    // 5. INSERT vocs. `insertVoc` returns `inserted[0]` which is typed as
+    // 4. INSERT vocs. `insertVoc` returns `inserted[0]` which is typed as
     // possibly-undefined under noUncheckedIndexedAccess; narrow defensively.
+    // PLAN-22 C7b: the legacy `attachment.unsupported_pending_storage_slice`
+    // raise has been retired; the storage slice ships, and attachments are
+    // linked in step 5 below via `attachment_ids[]`.
     const row = await insertVoc(tx, {
       workspaceId: actor.workspace_id,
       primaryManagedSystemId: input.primary_managed_system_id,
@@ -134,6 +132,28 @@ export function createVocService(deps: VocServiceDeps) {
     });
     if (!row) {
       throw new Error('insertVoc returned no row');
+    }
+
+    // 5. PLAN-22 C7b — atomic attachment linking. Each id must reference an
+    // unlinked, actor-owned, non-archived voc_attachments row. Any predicate
+    // failure raises validation.failed → tx rolls back (VOC not persisted).
+    if (input.attachment_ids && input.attachment_ids.length > 0) {
+      try {
+        await linkAttachments(tx, {
+          attachmentIds: input.attachment_ids,
+          parent: { kind: 'voc', vocId: row.id },
+          uploaderActorId: actor.actor_id,
+        });
+      } catch (err) {
+        if (err instanceof LinkAttachmentsRejected) {
+          throw new HttpError(
+            'validation.failed',
+            `attachment_ids[${err.index}] rejected: ${err.reason}`,
+            linkRejectedFields(err),
+          );
+        }
+        throw err;
+      }
     }
 
     // 6. Audit (same tx, ADR-0008).
@@ -151,6 +171,7 @@ export function createVocService(deps: VocServiceDeps) {
         analytics_area_id: row.analyticsAreaId,
         reporter_id: row.reporterId,
         source_context: row.sourceContext,
+        attachment_ids: input.attachment_ids ?? [],
       },
     });
 
@@ -737,22 +758,39 @@ export function createVocService(deps: VocServiceDeps) {
       }
     }
 
-    // 7. Reject non-empty attachments (storage slice not shipped yet).
-    if (input.attachments && input.attachments.length > 0) {
-      throw new HttpError(
-        'attachment.unsupported_pending_storage_slice',
-        'attachments are not supported until the storage slice ships (#22)',
-        {
-          fields: [{ path: ['attachments'], code: 'unsupported' }],
-        },
-      );
+    // 7. PLAN-22 C7b — link supplied attachment_ids in the same tx. Each id
+    // must be unlinked, actor-owned, non-archived. Failure rolls the tx back.
+    // The legacy `attachment.unsupported_pending_storage_slice` rejection has
+    // been retired.
+    let linkedAttachmentsForAudit: ReturnType<typeof toAttachmentRefForAudit>[] = [];
+    if (input.attachment_ids && input.attachment_ids.length > 0) {
+      try {
+        const linked = await linkAttachments(tx, {
+          attachmentIds: input.attachment_ids,
+          parent: { kind: 'voc', vocId },
+          uploaderActorId: actor.actor_id,
+        });
+        linkedAttachmentsForAudit = linked.map(toAttachmentRefForAudit);
+      } catch (err) {
+        if (err instanceof LinkAttachmentsRejected) {
+          throw new HttpError(
+            'validation.failed',
+            `attachment_ids[${err.index}] rejected: ${err.reason}`,
+            linkRejectedFields(err),
+          );
+        }
+        throw err;
+      }
     }
 
     // 8. Diff computation.
     type DescChanges = {
       title?: { from: string; to: string };
       description_rich_content?: { from_hash: string; to_hash: string };
-      attachments?: { from: unknown[]; to: unknown[] };
+      attachments?: {
+        from: ReadonlyArray<{ id: string; name: string; size_bytes: number; mime_type: string; storage_uri: string }>;
+        to: ReadonlyArray<{ id: string; name: string; size_bytes: number; mime_type: string; storage_uri: string }>;
+      };
     };
     const changes: DescChanges = {};
 
@@ -774,13 +812,13 @@ export function createVocService(deps: VocServiceDeps) {
       }
     }
 
-    // attachments diff — in Slice 3 always [] vs [] (non-empty rejected above)
-    if (input.attachments !== undefined) {
-      const fromStr = stableStringify([]); // current always [] in Slice 3
-      const toStr = stableStringify(input.attachments);
-      if (fromStr !== toStr) {
-        changes.attachments = { from: [], to: input.attachments };
-      }
+    // attachments diff (PLAN-22 C7b) — audit replay shape unchanged:
+    // `{ from: AttachmentRef[], to: AttachmentRef[] }`. Pre-C7b VOCs never
+    // had linked attachments at edit time, so `from` is always [] for the
+    // current chunk; `to` is the rows we just linked. Future chunks that
+    // support remove/replace will populate `from` from a prior SELECT.
+    if (input.attachment_ids !== undefined && linkedAttachmentsForAudit.length > 0) {
+      changes.attachments = { from: [], to: linkedAttachmentsForAudit };
     }
 
     // 9. Empty diff — return current envelope without any writes.

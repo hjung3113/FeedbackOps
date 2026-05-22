@@ -8,32 +8,39 @@ describe('reporterReplyRequestSchema', () => {
   it('accepts minimal body without attachments', () => {
     const result = reporterReplyRequestSchema.parse({ body_rich_content: VALID_DOC });
     expect(result.body_rich_content).toEqual(VALID_DOC);
-    expect(result.attachments).toBeUndefined();
+    expect(result.attachment_ids).toBeUndefined();
   });
 
-  it('accepts empty attachments array', () => {
+  it('accepts empty attachment_ids array (PLAN-22 C7b)', () => {
     const result = reporterReplyRequestSchema.parse({
       body_rich_content: VALID_DOC,
-      attachments: [],
+      attachment_ids: [],
     });
-    expect(result.attachments).toEqual([]);
+    expect(result.attachment_ids).toEqual([]);
   });
 
-  it('accepts attachments array with valid uuid refs (shape layer; value layer rejects at service)', () => {
-    // The zod schema allows attachment refs — the service raises
-    // attachment.unsupported_pending_storage_slice at the value layer.
+  it('accepts attachment_ids array with valid uuids', () => {
     const result = reporterReplyRequestSchema.parse({
       body_rich_content: VALID_DOC,
-      attachments: [{ id: UUID }],
+      attachment_ids: [UUID],
     });
-    expect(result.attachments).toEqual([{ id: UUID }]);
+    expect(result.attachment_ids).toEqual([UUID]);
   });
 
-  it('rejects attachment ref with invalid uuid', () => {
+  it('rejects non-uuid attachment_ids entries', () => {
     expect(() =>
       reporterReplyRequestSchema.parse({
         body_rich_content: VALID_DOC,
-        attachments: [{ id: 'not-a-uuid' }],
+        attachment_ids: ['not-a-uuid'],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects legacy attachments: [] field (replaced by attachment_ids)', () => {
+    expect(() =>
+      reporterReplyRequestSchema.parse({
+        body_rich_content: VALID_DOC,
+        attachments: [],
       }),
     ).toThrow();
   });

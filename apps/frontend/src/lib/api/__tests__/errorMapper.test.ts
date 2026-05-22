@@ -17,12 +17,10 @@ const SLICE_3_OWNER_CODES_EXACT: ReadonlyArray<ErrorCode> = [
   'storage.unavailable',
 ];
 
-// Codes whose FE mapping is being retired (PLAN-22 C5). BE may still emit
-// them transiently while C4a/C4b lands; mapping rows are intentionally
-// removed so a retiring code falls back to the generic envelope copy.
-const RETIRING_CODES: ReadonlyArray<ErrorCode> = [
-  'attachment.unsupported_pending_storage_slice',
-];
+// PLAN-22 C7b: `attachment.unsupported_pending_storage_slice` retired from
+// ERROR_CODES entirely (no longer parseable). The RETIRING_CODES list is
+// now empty — no FE-mapping-suppression special-case is needed.
+const RETIRING_CODES: ReadonlyArray<ErrorCode> = [];
 
 function isSlice3OwnerCode(code: ErrorCode): boolean {
   if (RETIRING_CODES.includes(code)) return false;
@@ -111,14 +109,6 @@ describe('errorMapper — ERROR_CODES coverage', () => {
   it('attachment.unsupported_type maps to non-generic Korean copy', () => {
     const mapped = errorMapper({ code: 'attachment.unsupported_type', message: '' });
     expect(mapped.message).not.toBe(GENERIC_ERROR_MESSAGE);
-  });
-
-  it('attachment.unsupported_pending_storage_slice is retired — falls back to generic', () => {
-    const mapped = errorMapper({
-      code: 'attachment.unsupported_pending_storage_slice',
-      message: '',
-    });
-    expect(mapped.message).toBe(GENERIC_ERROR_MESSAGE);
   });
 
   it('unknown code falls back to generic error', () => {

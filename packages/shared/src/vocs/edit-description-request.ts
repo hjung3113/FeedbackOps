@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { ErrorCode } from '../errors/codes.js';
-import { attachmentRefSchema, tipTapDocSchema } from './create-request.js';
+import { attachmentIdsSchema, tipTapDocSchema } from './create-request.js';
 
 // ── editDescriptionRequestSchema ───────────────────────────────────────────
 // Used by PATCH /vocs/:id/description (Slice 3 #17). Strict so that any
@@ -9,11 +9,17 @@ import { attachmentRefSchema, tipTapDocSchema } from './create-request.js';
 // the schema's `.strict()` is the security boundary, not the forbidden-field
 // pre-check below. The pre-check exists only for UX precision on known named
 // server fields.
+//
+// PLAN-22 C7b: wire shape carries `attachment_ids: string[]` referencing
+// pre-uploaded voc_attachments rows. Audit replay shape
+// (`changes.attachments: { from: AttachmentRef[], to: AttachmentRef[] }`)
+// is unchanged — service layer resolves linked rows back to AttachmentRef[]
+// before recording the audit event.
 export const editDescriptionRequestSchema = z
   .object({
     title: z.string().min(1).max(200).optional(),
     description_rich_content: tipTapDocSchema.optional(),
-    attachments: z.array(attachmentRefSchema).optional(),
+    attachment_ids: attachmentIdsSchema.optional(),
   })
   .strict()
   .refine(

@@ -578,7 +578,7 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 |---|---|
 | Method / Path | `POST /vocs` |
 | Headers | `Content-Type: application/json`, `Idempotency-Key: <uuidv4>` (required from frontend — prevents double-submit on Create), session cookie (`fops_session`, HttpOnly + SameSite=Lax — set by `POST /auth/mock-login` or production OIDC handler) |
-| Request body | `{ primary_managed_system_id, title, description_rich_content: TipTapDoc, analytics_area_id?, source_context?, attachments?: AttachmentRef[] }` |
+| Request body | `{ primary_managed_system_id, title, description_rich_content: TipTapDoc, analytics_area_id?, source_context?, attachment_ids?: string[] }` (PLAN-22 C7b — `attachments: AttachmentRef[]` retired; `attachment_ids[]` references pre-uploaded `voc.voc_attachments` rows linked in the same tx) |
 | Forbidden fields | `reporter_id`, `severity`, `reporter_facing_status`, `triage_state`, `owner_user_id`, `owner_team_id`, `display_id` (per `packages/shared/src/vocs/create-request.ts FORBIDDEN_CREATE_FIELDS`) — client validation drops them before send |
 | Success response | `201 Created` with full VOC envelope including server-resolved `reporter_id`, `triage_state: 'untriaged'`, `reporter_facing_status: 'received'`, `next_actions`, `permission_decisions` |
 | Error codes (ADR-0012) | `validation.failed` (422) · `validation.unexpected_field` (422 — forbidden server-resolved field in body) · `validation.malformed_idempotency_key` (422 — Idempotency-Key header present but not UUIDv4) · `voc.severity_not_user_settable` (422) · `permission.denied` (403) · `not_found.record` (404 on referenced MS or AA) · `conflict.parent_archived` (409 if MS or AA is archived, per ADR-0019 Section A/B) · `conflict.idempotency_key_reuse` (409) · `rate_limited.actor` (429) · `rich_content.disallowed_node` (422) · `rich_content.external_image_forbidden` (422) · `attachment.too_large` (422 — file exceeds 25 MB) · `attachment.unsupported_type` (422 — disallowed MIME) · `storage.unavailable` (502 — upstream storage failure) |
@@ -640,7 +640,7 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 | Method / Path | `POST /vocs/:id/reporter-replies` |
 | Headers | `Idempotency-Key: <uuidv4>` |
 | Permission | Reporter on their own VOC only |
-| Request body | `{ body_rich_content: TipTapDoc, attachments?: AttachmentRef[] }` |
+| Request body | `{ body_rich_content: TipTapDoc, attachment_ids?: string[] }` (PLAN-22 C7b) |
 | Side effect | May return Waiting Reporter VOCs to the follow-up queue (per API contract); **must not** auto-change `reporter_facing_status` |
 | Errors | `permission.denied` (non-reporter) · `validation.failed` · `rich_content.external_image_forbidden` · `conflict.record_archived` |
 | Audit events | `reporter_reply_created` |
