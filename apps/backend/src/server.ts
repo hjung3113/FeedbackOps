@@ -22,6 +22,7 @@ import {
   createAnalyticsAreaService,
 } from './modules/analytics-areas/index.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
+import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
@@ -341,6 +342,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     workspaceId,
     nodeEnv: config.NODE_ENV,
+  });
+
+  // ── GET /actors — workspace actor list (post-#21 drift fix) ─────────────
+  // FE Triage OwnerPicker (`useWorkspaceActors`) calls this; the route was
+  // never registered alongside #21's FE work, leaving the assignee picker
+  // silently empty in dev. Registered after authRoutes so requireSession is
+  // available.
+  await app.register(listActorsRoutes, {
+    db: dbHandle.db,
+    sessionService,
+    workspaceId,
   });
 
   // ── Permissions module — slice 1 issue #4 ───────────────────────────────
