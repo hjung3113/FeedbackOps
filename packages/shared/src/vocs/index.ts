@@ -1,3 +1,4 @@
+export * from './attachment.js';
 export * from './conversation-query.js';
 export * from './conversation.js';
 export * from './create-request.js';
