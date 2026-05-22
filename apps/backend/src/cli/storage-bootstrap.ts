@@ -17,7 +17,7 @@ import {
   type S3Client,
 } from '@aws-sdk/client-s3';
 
-import { getStorage } from '../lib/storage/factory.js';
+import { parseStorageEnv } from '../lib/storage/factory.js';
 import { S3CompatStorageBackend } from '../lib/storage/s3-compat.js';
 
 interface BootstrapResult {
@@ -48,10 +48,11 @@ export async function bootstrapBucket(
 }
 
 async function main(): Promise<void> {
-  const backend = getStorage();
-  if (!(backend instanceof S3CompatStorageBackend)) {
-    throw new Error('storage-bootstrap: expected S3CompatStorageBackend');
-  }
+  // Build the concrete backend directly. `getStorage()` returns a lazy proxy
+  // (Slice 3 #22 hotfix) so `instanceof` against the proxy always fails; the
+  // CLI needs the raw `client` + `bucket` fields for the SDK Head/Create calls.
+  const cfg = parseStorageEnv(process.env);
+  const backend = new S3CompatStorageBackend(cfg);
   const result = await bootstrapBucket(backend.client, backend.bucket);
   if (result.created) {
     console.info(`bucket created: ${result.bucket}`);

@@ -3,6 +3,9 @@
 // We exercise `bootstrapBucket` directly with a mocked S3 client; the
 // script-entry path (`main`) is intentionally not invoked here.
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import {
   CreateBucketCommand,
   HeadBucketCommand,
@@ -43,5 +46,22 @@ describe('storage-bootstrap CLI', () => {
     const reuse = await bootstrapBucket(client, 'fops-attachments');
     expect(reuse).toEqual({ bucket: 'fops-attachments', created: false });
     expect(mock.commandCalls(CreateBucketCommand)).toHaveLength(0);
+  });
+
+  // Regression: lazy storage proxy (#22 hotfix) broke the runtime `instanceof
+  // S3CompatStorageBackend` check in main(). Source-level grep keeps main() from
+  // re-introducing the same anti-pattern. Lightweight + no subprocess.
+  it('main() must not gate on `instanceof S3CompatStorageBackend` against getStorage()', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../storage-bootstrap.ts', import.meta.url)),
+      'utf8',
+    );
+    const hasGetStorageCall = /getStorage\s*\(/.test(src);
+    const hasInstanceofCheck =
+      /instanceof\s+S3CompatStorageBackend/.test(src);
+    expect(
+      hasGetStorageCall && hasInstanceofCheck,
+      'storage-bootstrap.ts must build S3CompatStorageBackend directly via parseStorageEnv, not via getStorage() (which returns a lazy proxy that defeats instanceof).',
+    ).toBe(false);
   });
 });
