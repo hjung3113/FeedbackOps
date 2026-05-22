@@ -89,7 +89,8 @@ export function EditDescriptionModal({
     defaultValues: {
       title: voc.title,
       description_rich_content: voc.description_rich_content as TipTapDoc,
-      attachments: [],
+      // PLAN-22 C7b: wire shape renamed `attachments` → `attachment_ids`.
+      attachment_ids: [],
     },
     mode: 'onBlur',
   });
@@ -118,7 +119,8 @@ export function EditDescriptionModal({
     form.reset({
       title: voc.title,
       description_rich_content: voc.description_rich_content as TipTapDoc,
-      attachments: [],
+      // PLAN-22 C7b: wire shape renamed `attachments` → `attachment_ids`.
+      attachment_ids: [],
     });
     // Intentionally only voc.id — updated_at change must NOT auto-reset.
   }, [voc.id]);
@@ -140,7 +142,8 @@ export function EditDescriptionModal({
     form.reset({
       title: fresh.title,
       description_rich_content: fresh.description_rich_content as TipTapDoc,
-      attachments: [],
+      // PLAN-22 C7b: wire shape renamed `attachments` → `attachment_ids`.
+      attachment_ids: [],
     });
   }, [form, queryClient, voc.id]);
 
@@ -184,14 +187,14 @@ export function EditDescriptionModal({
   }
 
   function handleSubmit(values: EditFormValues): void {
-    // C6: send attachment_ids[] alongside the existing `attachments` field
-    // (legacy shape, [] until C7 reconciles the schema).
-    const body = {
+    // PLAN-22 C7b: wire shape carries `attachment_ids: string[]` only;
+    // the legacy `attachments: AttachmentRef[]` field was retired.
+    void values;
+    const body: EditDescriptionRequest = {
       title: values.title,
       description_rich_content: values.description_rich_content,
-      attachments: values.attachments ?? [],
       attachment_ids: attachmentIds,
-    } as EditDescriptionRequest & { attachment_ids: string[] };
+    };
     mutation.mutate(
       {
         vocId: voc.id,

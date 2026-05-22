@@ -54,7 +54,9 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
       description_rich_content: emptyTipTapDoc(),
       analytics_area_id: undefined,
       source_context: 'direct_use',
-      attachments: [],
+      // PLAN-22 C7b: wire shape renamed `attachments` → `attachment_ids`.
+      // C7a will wire the dropzone state through here.
+      attachment_ids: [],
     },
     mode: 'onBlur',
   });
