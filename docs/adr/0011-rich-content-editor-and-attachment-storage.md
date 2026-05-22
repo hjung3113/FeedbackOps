@@ -61,3 +61,7 @@ Bringing Rich Table in later means enabling the TipTap table extension, adding s
 ## Reopening
 
 Switching editors, dropping the storage abstraction, introducing pre-signed URLs, or enabling Rich Table each warrants a new ADR with a migration story for existing rich-content documents and stored attachments.
+
+## Amendment — 2026-05-22 (Issue #22, PLAN-22)
+
+Issue #22 supersedes the dual-implementation sketch above (`LocalFsAttachmentStorage` + `S3CompatibleAttachmentStorage`) in favor of a **single `S3CompatStorageBackend`** running against MinIO in dev and prod, env-swappable to AWS S3 / Cloudflare R2 later via `STORAGE_S3_*` (`STORAGE_S3_ENDPOINT`, `STORAGE_S3_REGION`, `STORAGE_S3_BUCKET`, `STORAGE_S3_ACCESS_KEY_ID`, `STORAGE_S3_SECRET_ACCESS_KEY`, `STORAGE_S3_FORCE_PATH_STYLE=true`). The local-FS path is dropped; `docker compose -f docker-compose.dev.yml up -d minio` makes the bucket reachable in one command, and the CI / fresh-checkout boot story is the same one container as production. The `S3_*` env names in the original §"Inline Attachments and storage abstraction" are superseded by the `STORAGE_S3_*` names above; the rest of that section (workspace-prefixed keys, server-proxied reads, no pre-signed URLs, audit vocab) stands.
