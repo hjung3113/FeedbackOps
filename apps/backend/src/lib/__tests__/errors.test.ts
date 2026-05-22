@@ -12,3 +12,21 @@ describe('statusForCode — Slice 3 #13 prefixes', () => {
     expect(statusForCode(code as never)).toBe(status);
   });
 });
+
+describe('statusForCode — PLAN-22 C3a storage prefix', () => {
+  it('storage.unavailable → 502', () => {
+    expect(statusForCode('storage.unavailable' as never)).toBe(502);
+  });
+
+  it('attachment.too_large → 422', () => {
+    expect(statusForCode('attachment.too_large' as never)).toBe(422);
+  });
+
+  it('attachment.unsupported_type → 422', () => {
+    expect(statusForCode('attachment.unsupported_type' as never)).toBe(422);
+  });
+
+  it('not_implemented.todo → 501', () => {
+    expect(statusForCode('not_implemented.todo' as never)).toBe(501);
+  });
+});

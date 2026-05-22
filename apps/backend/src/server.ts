@@ -1,5 +1,6 @@
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import { errorCodeSchema } from '@fops/shared';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
@@ -40,6 +41,7 @@ import {
   createVocService,
   vocRoutes,
 } from './modules/voc/index.js';
+import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -134,6 +136,16 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // ── @fastify/cookie ─ session cookie codec ──────────────────────────
   await app.register(cookie);
 
+  // ── @fastify/multipart ─ PLAN-22 C3a ────────────────────────────────
+  // 25 MiB cap (D-06). Limits are global — only POST /attachments accepts
+  // multipart today; other routes still validate as JSON.
+  await app.register(multipart, {
+    limits: {
+      fileSize: MAX_ATTACHMENT_BYTES,
+      files: 1,
+    },
+  });
+
   // ── @fastify/rate-limit ─ ADR-0015:7-18 ─────────────────────────────
   // Postgres-backed via our custom store. The global tier is per-Actor when
   // authenticated (100/min) or per-IP when not (50/min); the route-level
@@ -223,6 +235,15 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       timeWindow: '1 minute',
       keyGenerator: mutationKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'reporter_edit') as never,
+    },
+    // PLAN-22 C3a — POST /attachments. 20/min per actor. Admin bypass is a
+    // documented follow-up: it depends on the same admin-role helper called
+    // out for the read tier above; once that lands, both tiers gain `skip`.
+    attachmentMutation: {
+      max: 20,
+      timeWindow: '1 minute',
+      keyGenerator: mutationKeyGenerator,
+      store: createPgRateLimitStore(dbHandle.pool, 'attachment_mutation') as never,
     },
   });
 
@@ -393,6 +414,15 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
       reporterEdit: app.rateLimitConfig.reporterEdit,
+    },
+  });
+
+  // ── Attachments module — Slice 3 #22 / PLAN-22 C3a (skeleton) ───────────
+  await app.register(attachmentsRoutes, {
+    sessionService,
+    workspaceId,
+    rateLimitConfig: {
+      attachmentMutation: app.rateLimitConfig.attachmentMutation,
     },
   });
 
