@@ -1,4 +1,4 @@
-import type { JSONContent } from '@tiptap/core';
+import { mergeAttributes, type JSONContent } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import { generateHTML } from '@tiptap/html';
@@ -9,6 +9,42 @@ import type { TipTapDoc } from './RichEditor';
 import { AttachmentRef } from './extensions/attachmentRef';
 import { Mention } from './extensions/mention';
 import { sanitizeClient, type ClientSanitizeSurface } from './sanitizeClient';
+
+// PLAN-22 C10 (closes #42) — only cross-origin http(s) URLs are "external".
+// Relative paths ('/foo'), hash fragments ('#anchor'), same-origin absolute
+// URLs, and the empty href produced by the C9 sanitizer for hostile schemes
+// all stay internal: no target, no rel injection.
+//
+// SSR / non-browser render contexts have no `window`; we conservatively treat
+// any http(s)://-prefixed href as external in that case. The sanitizer is the
+// authoritative gate for hostile schemes (javascript:, data:, etc.) — they
+// arrive here as '' and short-circuit to internal.
+function isExternalHref(href: unknown): boolean {
+  if (typeof href !== 'string' || href === '') return false;
+  if (!/^https?:\/\//i.test(href)) return false;
+  if (typeof window === 'undefined' || !window.location?.origin) return true;
+  try {
+    return new URL(href).origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+// Disable Link's default target/rel injection (which fires on *every* link)
+// and substitute a renderHTML that only decorates external anchors.
+const ExternalAwareLink = Link.extend({
+  renderHTML({ HTMLAttributes }) {
+    const isExternal = isExternalHref(HTMLAttributes.href);
+    const extra = isExternal
+      ? { rel: 'noopener noreferrer', target: '_blank' }
+      : { rel: null, target: null };
+    return ['a', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, extra), 0];
+  },
+}).configure({
+  openOnClick: false,
+  // Wipe the upstream defaults so internal links inherit neither target nor rel.
+  HTMLAttributes: { target: null, rel: null, class: null },
+});
 
 export type RichContentMode = 'reporter_visible' | 'internal';
 
@@ -56,7 +92,7 @@ export function RichContentRenderer({ doc, mode, surface, className }: RichConte
         link: false,
         underline: false,
       }),
-      Link.configure({ openOnClick: false }),
+      ExternalAwareLink,
       Underline,
       AttachmentRef,
       Mention,
