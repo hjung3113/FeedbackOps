@@ -30,6 +30,7 @@ import type { SessionService } from '../auth/session-service.js';
 import type { AttachmentsService } from './service.js';
 import { FilenameSanitizeError, sanitizeFilename } from './filename-sanitize.js';
 import { MIME_ALLOWLIST } from './mime-allowlist.js';
+import { asciiFallback, encodeRfc5987 } from './rfc5987.js';
 
 const IDEMPOTENCY_KEY_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
@@ -222,6 +223,58 @@ export const attachmentsRoutes: FastifyPluginAsync<AttachmentsRoutesOptions> = a
         if (err instanceof HttpError) throw err;
         throw err;
       }
+    },
+  });
+
+  // ── GET /attachments/:id/download — PLAN-22 C4a ─────────────────────────
+  //
+  // Streaming download. Entitlement + storage lookup live in the service;
+  // the route's job is to:
+  //   1. Auth (requireSession + requireWorkspace).
+  //   2. Validate :id is a UUID (cheap rejection — service can rely on this).
+  //   3. Set Content-Type / Content-Length / Content-Disposition BEFORE
+  //      piping the body. Fastify's `reply.send(readable)` auto-pipes.
+  //   4. RFC 5987 filename* per RFC 6266 §5 so Korean / emoji filenames
+  //      survive header transport. ASCII fallback uses asciiFallback().
+  const UUID_REGEX =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
+  app.route({
+    method: 'GET',
+    url: '/attachments/:id/download',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+      const params = req.params as { id?: string };
+      const id = params?.id ?? '';
+      if (!UUID_REGEX.test(id)) {
+        throw new HttpError('validation.failed', 'attachment id must be a UUID', {
+          fields: [{ path: ['params', 'id'], code: 'invalid_uuid' }],
+        });
+      }
+
+      const result = await attachmentsService.downloadAttachment({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        id,
+      });
+
+      // RFC 6266 + RFC 5987 Content-Disposition. Quote the ASCII fallback so
+      // it survives spaces / dots in legacy clients; emit the UTF-8 form via
+      // filename*= for modern clients.
+      const ascii = asciiFallback(result.filename);
+      const encoded = encodeRfc5987(result.filename);
+      const disposition = `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+
+      reply
+        .header('Content-Type', result.mimeType)
+        .header('Content-Length', String(result.size))
+        .header('Content-Disposition', disposition);
+      return reply.send(result.stream);
     },
   });
 };

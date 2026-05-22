@@ -431,6 +431,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   const attachmentsService = createAttachmentsService({
     storage: attachmentsStorage,
     auditService,
+    db: dbHandle.db,
+    vocReadService,
   });
   await app.register(attachmentsRoutes, {
     db: dbHandle.db,
