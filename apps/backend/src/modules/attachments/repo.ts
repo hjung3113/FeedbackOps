@@ -71,7 +71,10 @@ export async function insertAttachment(
     size_bytes: typeof row.size_bytes === 'string' ? Number(row.size_bytes) : row.size_bytes,
     mime_type: row.mime_type,
     uploaded_by_actor_id: row.uploaded_by_actor_id,
-    created_at: row.created_at,
+    // node-pg returns timestamptz as a string when no OID parser is registered
+    // for this pool; tests use Date mocks. Normalize either shape to Date so
+    // the service layer's `.toISOString()` call works in both.
+    created_at: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
   };
 }
 
@@ -213,8 +216,8 @@ export async function linkAttachments(
       mime_type: row.mime_type,
       uploaded_by_actor_id: row.uploaded_by_actor_id,
       storage_key: row.storage_key,
-      created_at: row.created_at,
-      linked_at: row.linked_at,
+      created_at: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
+      linked_at: row.linked_at instanceof Date ? row.linked_at : new Date(row.linked_at),
     });
   }
   return linked;
