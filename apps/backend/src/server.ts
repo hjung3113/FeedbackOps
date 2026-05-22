@@ -42,6 +42,9 @@ import {
   vocRoutes,
 } from './modules/voc/index.js';
 import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
+import { createAttachmentsService } from './modules/attachments/service.js';
+import { getStorage } from './lib/storage/factory.js';
+import type { StorageBackend } from './lib/storage/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -54,6 +57,12 @@ export interface BuildServerOptions {
    * background jobs may omit it.
    */
   boss?: PgBoss;
+  /**
+   * Optional storage backend override. Used by integration tests to inject a
+   * mock instead of constructing the real S3-compat backend from env. In
+   * production this is undefined and `getStorage()` builds the singleton.
+   */
+  storage?: StorageBackend;
 }
 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
@@ -417,9 +426,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  // ── Attachments module — Slice 3 #22 / PLAN-22 C3a (skeleton) ───────────
+  // ── Attachments module — Slice 3 #22 / PLAN-22 C3a + C3b ────────────────
+  const attachmentsStorage = opts.storage ?? getStorage();
+  const attachmentsService = createAttachmentsService({
+    storage: attachmentsStorage,
+    auditService,
+  });
   await app.register(attachmentsRoutes, {
+    db: dbHandle.db,
     sessionService,
+    attachmentsService,
+    idempotencyService,
     workspaceId,
     rateLimitConfig: {
       attachmentMutation: app.rateLimitConfig.attachmentMutation,

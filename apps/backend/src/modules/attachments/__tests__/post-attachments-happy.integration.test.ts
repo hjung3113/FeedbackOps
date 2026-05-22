@@ -339,7 +339,9 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
       [body.id],
     );
     expect(audits.rowCount).toBe(1);
-    const detail = audits.rows[0].detail;
+    const auditRow = audits.rows[0];
+    if (!auditRow) throw new Error('audit row missing');
+    const detail = auditRow.detail;
     expect('filename' in detail).toBe(false);
     expect(detail.attachment_id).toBe(body.id);
     expect(typeof detail.storage_key).toBe('string');
