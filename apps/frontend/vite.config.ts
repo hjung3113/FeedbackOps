@@ -41,6 +41,9 @@ export default defineConfig({
       // /attachments/:id/download (streaming). No FE-route collision; forward
       // root path unconditionally.
       '/attachments': 'http://127.0.0.1:3011',
+      // Post-#21 drift fix: GET /actors?workspace=current for Triage
+      // OwnerPicker. No FE-route collision; forward root path unconditionally.
+      '/actors': 'http://127.0.0.1:3011',
     },
   },
 });

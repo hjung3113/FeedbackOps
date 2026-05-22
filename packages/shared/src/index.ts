@@ -10,3 +10,4 @@ export * from './audit/voc.js';
 export * from './audit/attachments.js';
 export * from './vocs/index.js';
 export * from './rich-content/index.js';
+export * from './auth/list-actors.js';

@@ -7,10 +7,22 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as React from 'react';
 import { useWorkspaceActors } from '../useWorkspaceActors';
 
-// Minimal actor shape matching the hook's return type
-const MOCK_ACTORS = [
-  { id: 'u-1', display_name: 'Alice', kind: 'user' as const },
-  { id: 'u-2', display_name: 'Bob', kind: 'user' as const },
+// BE wire shape per @fops/shared `listActorsResponseSchema`. The hook maps
+// each row to the UI shape `{id, display_name, kind: 'user'}` (teams not
+// seeded yet — ADR-0018).
+const MOCK_BE_ACTORS = [
+  {
+    id: '00000000-0000-0000-0000-000000000001',
+    display_name: 'Alice',
+    email: 'alice@feedbackops.local',
+    role_level: 'user' as const,
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000002',
+    display_name: 'Bob',
+    email: 'bob@feedbackops.local',
+    role_level: 'user' as const,
+  },
 ];
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -27,7 +39,7 @@ describe('useWorkspaceActors', () => {
         ok: true,
         status: 200,
         headers: new Headers(),
-        text: () => Promise.resolve(JSON.stringify({ actors: MOCK_ACTORS })),
+        text: () => Promise.resolve(JSON.stringify({ actors: MOCK_BE_ACTORS })),
       }),
     ));
   });
@@ -45,5 +57,9 @@ describe('useWorkspaceActors', () => {
     });
     expect(result.current.actors).toHaveLength(2);
     expect(result.current.actors?.[0]?.display_name).toBe('Alice');
+    // BE response is mapped to UI shape with `kind: 'user'` for every row
+    // until teams ship (ADR-0018). `email` / `role_level` stay on the BE
+    // type and are not exposed by the hook.
+    expect(result.current.actors?.[0]?.kind).toBe('user');
   });
 });
