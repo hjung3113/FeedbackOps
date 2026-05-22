@@ -35,6 +35,11 @@ import {
   selectVocForUpdate,
   updateVocReporterStatus,
 } from './repo.js';
+import {
+  LinkAttachmentsRejected,
+  linkAttachments,
+  linkRejectedFields,
+} from '../attachments/repo.js';
 import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
 import type { VocReadService } from './read-service.js';
 
@@ -302,6 +307,32 @@ export function createConversationService(deps: {
       await updateVocReporterStatus(tx, { workspaceId: actor.workspace_id, vocId, nextStatus });
     }
 
+    // 8b. PLAN-22 C7b — atomic attachment linking. Only the body shape
+    // (skip_public_update=false) carries attachment_ids; the skip shape has
+    // no body and rejects unknown keys at the schema layer.
+    const attachmentIds: string[] =
+      !input.skip_public_update && input.attachment_ids
+        ? input.attachment_ids
+        : [];
+    if (attachmentIds.length > 0) {
+      try {
+        await linkAttachments(tx, {
+          attachmentIds,
+          parent: { kind: 'public_update', commentId: inserted.id },
+          uploaderActorId: actor.actor_id,
+        });
+      } catch (err) {
+        if (err instanceof LinkAttachmentsRejected) {
+          throw new HttpError(
+            'validation.failed',
+            `attachment_ids[${err.index}] rejected: ${err.reason}`,
+            linkRejectedFields(err),
+          );
+        }
+        throw err;
+      }
+    }
+
     // 9. Audit.
     await deps.auditService.record(tx, {
       workspace_id: actor.workspace_id,
@@ -316,6 +347,7 @@ export function createConversationService(deps: {
         actor_id: actor.actor_id,
         skip_public_update: input.skip_public_update,
         skip_reason: skipReason,
+        attachment_ids: attachmentIds,
       },
     });
     if (statusWillChange) {
@@ -391,28 +423,16 @@ export function createConversationService(deps: {
     }
 
     // 3. Sanitize body.
+    // PLAN-22 C7b: the legacy slice-3 deferral guards (envelope-level
+    // `attachments` and body-level `attachmentRef` nodes both raising
+    // `attachment.unsupported_pending_storage_slice`) have been retired.
+    // Contract: envelope `attachment_ids[]` is the sole link path; body
+    // `attachmentRef` nodes are decoration-only (renderer hydrates name/size
+    // from the linked row by id). The sanitizer (allowlist) gates which
+    // node types may appear in the body.
     const sanitizedBody = sanitizeOrThrow('reporter-reply', input.body_rich_content);
 
-    // 4a. Value-layer attachment guard: non-empty attachments[] array → 422.
-    if (input.attachments && input.attachments.length > 0) {
-      throw new HttpError(
-        'attachment.unsupported_pending_storage_slice',
-        'attachments are not supported until the storage slice ships (#22)',
-        { fields: [{ path: ['attachments'], code: 'unsupported' }] },
-      );
-    }
-
-    // 4b. Walk sanitized doc: any attachmentRef node → 422 (codex cycle-1 fix).
-    const attachmentRefNodes = findNodesOfType(sanitizedBody, 'attachmentRef');
-    if (attachmentRefNodes.length > 0) {
-      throw new HttpError(
-        'attachment.unsupported_pending_storage_slice',
-        'attachmentRef nodes in body_rich_content are not supported until the storage slice ships (#22)',
-        { fields: [{ path: ['body_rich_content'], code: 'unsupported' }] },
-      );
-    }
-
-    // 5. INSERT voc_reporter_replies. Wrap in try/catch to map the DB trigger
+    // 4. INSERT voc_reporter_replies. Wrap in try/catch to map the DB trigger
     //    enforce_reporter_reply_actor (defense-in-depth) to 403 rather than 500.
     let inserted: { id: string; created_at: Date };
     try {
@@ -434,6 +454,26 @@ export function createConversationService(deps: {
       throw err;
     }
 
+    // 5. PLAN-22 C7b — atomic attachment linking to the new reporter_reply.
+    if (input.attachment_ids && input.attachment_ids.length > 0) {
+      try {
+        await linkAttachments(tx, {
+          attachmentIds: input.attachment_ids,
+          parent: { kind: 'reporter_reply', commentId: inserted.id },
+          uploaderActorId: actor.actor_id,
+        });
+      } catch (err) {
+        if (err instanceof LinkAttachmentsRejected) {
+          throw new HttpError(
+            'validation.failed',
+            `attachment_ids[${err.index}] rejected: ${err.reason}`,
+            linkRejectedFields(err),
+          );
+        }
+        throw err;
+      }
+    }
+
     // 6. Audit.
     await deps.auditService.record(tx, {
       workspace_id: actor.workspace_id,
@@ -446,6 +486,7 @@ export function createConversationService(deps: {
         voc_id: vocId,
         reporter_reply_id: inserted.id,
         actor_id: actor.actor_id,
+        attachment_ids: input.attachment_ids ?? [],
       },
     });
 
@@ -570,6 +611,26 @@ export function createConversationService(deps: {
       body: sanitizedBody,
     });
 
+    // 6b. PLAN-22 C7b — atomic attachment linking.
+    if (input.attachment_ids && input.attachment_ids.length > 0) {
+      try {
+        await linkAttachments(tx, {
+          attachmentIds: input.attachment_ids,
+          parent: { kind: 'internal_comment', commentId: inserted.id },
+          uploaderActorId: actor.actor_id,
+        });
+      } catch (err) {
+        if (err instanceof LinkAttachmentsRejected) {
+          throw new HttpError(
+            'validation.failed',
+            `attachment_ids[${err.index}] rejected: ${err.reason}`,
+            linkRejectedFields(err),
+          );
+        }
+        throw err;
+      }
+    }
+
     // 7. Audit.
     await deps.auditService.record(tx, {
       workspace_id: actor.workspace_id,
@@ -583,6 +644,7 @@ export function createConversationService(deps: {
         internal_comment_id: inserted.id,
         actor_id: actor.actor_id,
         mentions: requestMentionIds,
+        attachment_ids: input.attachment_ids ?? [],
       },
     });
 
