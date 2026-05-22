@@ -93,3 +93,15 @@ feat commit, then re-commit interface/stubs first and impl second; trivial.
 - BE before (per PLAN-22 baseline note): **558**
 - BE after C1: **+13 new tests** (s3-compat: 7, factory: 5, bootstrap: 1).
 - Typecheck clean.
+
+## 2026-05-22 amendment — lazy storage init (post-merge hotfix)
+
+The original C1 factory shipped with **eager** env parsing: `getStorage()` read `STORAGE_S3_*` and constructed the `S3Client` at first call, and the integration test "factory > parses STORAGE_S3_* env and returns singleton" implicitly required the env to be set before the factory was ever touched (including indirect references during boot wiring). In practice this made the backend crash at boot whenever `STORAGE_S3_*` was unset, even on `/healthz` and non-attachment routes (PLAN-22 T-10).
+
+Hotfix `fix/22-storage-lazy-and-attachments-grants` (commit `0d1c6ba`) deferred env validation and `S3Client` construction into the first `put`/`get`/`delete`/`exists` call on the returned backend. Effect on this chunk's contracts:
+
+- `factory > parses STORAGE_S3_* env and returns singleton` — now reads as "returns a lazy singleton; env parsing happens on first method call". The redaction guarantee (`STORAGE_S3_SECRET_ACCESS_KEY` never in toString/logs) still holds.
+- The `StorageUnavailableError` path (D-1 above) still applies — missing env now surfaces through that error on first call rather than at boot.
+- `.env.example` block is still required, but only by the upload code path, not by `pnpm --filter @fops/backend start`.
+
+See ADR-0011 second 2026-05-22 amendment and PLAN-22 D-19 / T-10 for the locked decision.

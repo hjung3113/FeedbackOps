@@ -47,3 +47,9 @@ Constraints present on `voc.voc_attachments` before 0012:
 
 - C3 must drop the `attachment.unsupported_pending_storage_slice` 422 branch from `voc/service.ts:114` and `voc/conversation-service.ts:399` in the **same commit** as renaming `AttachmentRef.storage_uri → storage_key` in `packages/shared/src/vocs/create-request.ts:31`. Otherwise the existing rejection tests will fail with an unrelated diff.
 - C3 must also update the seed fixture (`apps/backend/src/seed/voc-fixtures.ts` — if it inserts attachment rows) to use the new column name; not touched here because grep shows no current reference there.
+
+## 2026-05-22 amendment — `voc.voc_attachments` grants (post-merge hotfix)
+
+C2 shipped the column rename (`storage_uri → storage_key`), `linked_at`, and the relaxed XOR. It did **not** touch grants — the `fops_app` role inherited the existing `SELECT, INSERT, UPDATE` privileges from earlier migrations, and no `DELETE` grant existed at C2 GREEN.
+
+Post-merge, the hourly `core.attachments_purge` worker (PLAN-22 §C4b, migration 0014) needed `DELETE` to reclaim unlinked rows >24h. Hotfix migration `0016_grant_app_delete_voc_attachments.sql` (`fix/22-storage-lazy-and-attachments-grants`, commit `c6f361a`) added `GRANT DELETE ON voc.voc_attachments TO fops_app`. User-initiated removals still go through the service-layer archive (`archived_at`, `archived_by_actor_id`) — the grant is purely for the purge worker. See ADR-0011 second 2026-05-22 amendment, PLAN-22 D-20, and `docs/implementation/04-database-and-migrations.md` §"Archive over delete on voc.voc_attachments".

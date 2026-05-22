@@ -82,3 +82,19 @@ tests use. CI / a developer with the seeded DB exercises them end-to-end.
 - Did **not** touch `packages/shared/src/vocs/*` or `apps/frontend/*` (C5 territory).
 - Did **not** modify the storage backend (`apps/backend/src/lib/storage/*` is read-only
   in this chunk; only the `StorageBackend` interface is consumed).
+
+## 2026-05-22 amendment — DB DELETE grant (post-merge hotfix)
+
+The purge job's `DELETE FROM voc.voc_attachments WHERE id = $1` assumes the `fops_app` role
+has `DELETE` privilege on `voc.voc_attachments`. At C4b merge time this grant was **not**
+in any migration; the integration test passed because `DATABASE_URL`-gated runs use the
+migration superuser, masking the missing grant in CI. Production runs would have failed
+silently (job logs an error, leaves the row in place — see D4 above — but never reclaims).
+
+Hotfix migration `0016_grant_app_delete_voc_attachments.sql`
+(`fix/22-storage-lazy-and-attachments-grants`, commit `c6f361a`) added
+`GRANT DELETE ON voc.voc_attachments TO fops_app`. The archive-over-delete invariant for
+**user-initiated paths** is unchanged and still enforced at the service layer; the grant
+exists strictly so this purge worker can do its job. See ADR-0011 second 2026-05-22
+amendment, PLAN-22 D-20, and `docs/implementation/04-database-and-migrations.md`
+§"Archive over delete on voc.voc_attachments".
