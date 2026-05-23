@@ -1,0 +1,7 @@
+{
+  "command": "pnpm --filter backend run typecheck 2>&1 | grep -E \"error TS[0-9]+\" | sort -u",
+  "branch": "feature/agent-workflow-trial",
+  "head_sha": "9e460d81ca2bb653e4877eb5f66eb9c0eecb41bb",
+  "captured_at": "2026-05-23T07:32:12Z",
+  "tree_clean": true
+}
