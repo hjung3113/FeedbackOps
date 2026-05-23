@@ -33,4 +33,5 @@ smoke-*.png
 # .review/ — schemas + README tracked, per-issue JSON artifacts ephemeral
 .review/ISSUE-*.json
 .review/ISSUE-*.diff
+.review/ISSUE-*-PARTIAL-UNTRACKED*
 .review/archive/
