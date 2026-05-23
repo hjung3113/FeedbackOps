@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Adversarial Review — Multi-Agent Workflow Critical Risks</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --panel-2: #1c232c; --border: #2a313c;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #56d364; --yellow: #e3b341; --red: #f85149; --crit: #ff4747;
+    --purple: #bc8cff; --orange: #ffa657; --pink: #ff7eb6;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+    font-size: 14px; line-height: 1.6; padding: 32px 48px 80px;
+    max-width: 1280px; margin: 0 auto;
+  }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 {
+    font-size: 19px; margin: 40px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 .who {
+    font-size: 11px; padding: 3px 10px; border-radius: 12px;
+    font-family: var(--mono); font-weight: 700;
+  }
+  h2 .who.claude { background: rgba(88,166,255,0.18); color: var(--accent); }
+  h2 .who.codex { background: rgba(188,140,255,0.18); color: var(--purple); }
+  h2 .who.merged { background: rgba(255,71,71,0.22); color: var(--crit); }
+  h3 { font-size: 14px; margin: 12px 0 6px; }
+
+  .sub { color: var(--muted); margin-bottom: 6px; font-size: 13px; }
+  .meta { color: var(--muted); font-size: 12px; font-family: var(--mono); margin-bottom: 24px; }
+
+  .risk {
+    background: var(--panel); border: 1px solid var(--border);
+    border-left: 4px solid var(--red); border-radius: 6px;
+    padding: 14px 18px; margin: 10px 0;
+  }
+  .risk.crit { border-left-color: var(--crit); background: rgba(255,71,71,0.04); }
+  .risk.high { border-left-color: var(--red); }
+  .risk.med { border-left-color: var(--yellow); background: rgba(227,179,65,0.03); }
+
+  .risk .head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px; gap: 12px;
+  }
+  .risk .title {
+    font-weight: 700; font-size: 14px; color: var(--text);
+  }
+  .risk .rank {
+    background: var(--panel-2); color: var(--muted);
+    font-family: var(--mono); font-size: 11px;
+    padding: 2px 8px; border-radius: 4px; font-weight: 700;
+    white-space: nowrap;
+  }
+  .risk .sev {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 10px; font-weight: 700; font-family: var(--mono);
+  }
+  .risk .sev.crit { background: rgba(255,71,71,0.22); color: var(--crit); }
+  .risk .sev.high { background: rgba(248,81,73,0.18); color: var(--red); }
+  .risk .sev.med { background: rgba(227,179,65,0.18); color: var(--yellow); }
+
+  .risk dl { margin: 8px 0 0; }
+  .risk dt {
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 8px;
+  }
+  .risk dd {
+    margin: 2px 0 0; padding-left: 0; font-size: 13px;
+  }
+  .risk dd.fix {
+    background: rgba(86,211,100,0.05);
+    border-left: 2px solid var(--green);
+    padding: 6px 10px; margin-top: 4px;
+    border-radius: 3px;
+  }
+
+  code {
+    font-family: var(--mono); background: var(--panel-2); color: var(--orange);
+    padding: 1px 6px; border-radius: 4px; font-size: 12px;
+  }
+  pre {
+    background: #010409; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px 14px; overflow-x: auto; font-family: var(--mono); font-size: 12px;
+    color: #c9d1d9; margin: 6px 0;
+  }
+  pre code { background: transparent; padding: 0; color: inherit; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+  .summary {
+    background: linear-gradient(180deg, rgba(255,71,71,0.08), rgba(255,71,71,0.02));
+    border: 1px solid rgba(255,71,71,0.3);
+    border-radius: 8px; padding: 18px 22px; margin: 16px 0 24px;
+  }
+  .summary h3 {
+    margin: 0 0 10px; color: var(--crit); font-size: 15px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .summary ol { margin: 8px 0 0; padding-left: 20px; }
+  .summary li { margin: 6px 0; font-size: 13.5px; }
+  .summary li b { color: var(--crit); }
+
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--panel-2); color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .verdict {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin: 14px 0;
+    font-size: 13.5px;
+  }
+  .verdict b { color: var(--green); }
+</style>
+</head>
+<body>
+
+<h1>Adversarial Review — Multi-Agent Workflow</h1>
+<div class="sub">목적: 치명적 실패 가능성 사전 색출. Codex × Claude 양측 적대적 분석.</div>
+<div class="meta">2026-05-23 · transcript pane: <code>workspace:11 / surface:75</code></div>
+
+<!-- ============== EXECUTIVE SUMMARY ============== -->
+<div class="summary">
+<h3>⚠ Top 3 Ship-Blockers (배포 전 반드시 해결)</h3>
+<ol>
+  <li><b>병렬 cluster의 semantic 충돌</b> — 각 PR 통과해도 머지 순서가 망친다. <code>.review/</code> 만으론 못 막음. <b>해결:</b> 모든 cluster는 머지 직후 <code>develop</code> 재베이스 + affected 전체 테스트 강제.</li>
+  <li><b>책임 공백 (REVIEWER/VERIFIER split → 통합동작 누구도 안 봄)</b> — 각 역할 green인데 합치면 안 됨. <b>해결:</b> Release Captain 1명 (CONDUCTOR가 겸임 가능) 명시. green artifact 있어도 reject 권한.</li>
+  <li><b>Workflow tax > 구현 속도 (아이러니 실패)</b> — 모든 변경에 5 역할 강제하면 user 의도 정반대. <b>해결:</b> P3 trivial는 CODEX + VERIFIER 2 역할만. 전체 cluster는 migrations/auth/shared UI/permissions/prod data path에만.</li>
+</ol>
+</div>
+
+<!-- ============== CODEX SIDE ============== -->
+<h2><span class="who codex">CODEX 적대적 분석</span> 7 risks (severity × likelihood)</h2>
+
+<div class="risk crit">
+  <div class="head"><span class="title">1. 병렬 agent가 공유 가정 오염</span><span class="rank">CRIT-1</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>CODEX cluster들이 stale context로 adjacent contracts/tests/mocks/fixtures/migrations 편집. 각 PR 단독 통과 → 머지 순서가 prod 깨뜨림.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd><code>.review/*</code>는 의도만 기록, cluster 간 단일 머지 baseline 강제 X.</dd>
+    <dd class="fix"><b>FIX:</b> 매 머지 후 mandatory rebase-on-current-<code>develop</code> + affected 전체 테스트 (PR 전 한 번이 아님).</dd>
+  </dl>
+</div>
+
+<div class="risk high">
+  <div class="head"><span class="title">2. JSON artifact가 거짓 권위가 됨</span><span class="rank">HIGH-2</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>CONDUCTOR가 stale/partial JSON 읽고 "verified" 마킹 → human 의심 skip → 잘못된 state로 후속 작업 라우팅.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>artifact가 coordination state로 취급되는데 schema/version/checksum/source-commit 계약 없음.</dd>
+    <dd class="fix"><b>FIX:</b> 모든 artifact에 <code>base_sha</code>, <code>head_sha</code>, <code>schema_version</code>, <code>producer_role</code>, <code>verification_command</code> 필수. base 이동 시 자동 expire.</dd>
+  </dl>
+</div>
+
+<div class="risk high">
+  <div class="head"><span class="title">3. Reviewer/Verifier split → 책임 공백</span><span class="rank">HIGH-3</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>REVIEWER는 design/product fit, VERIFIER는 command 통과 확인. "integrated behavior 실제로 동작하는가" 소유자 없음.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>역할 분리가 throughput 최적화는 했으나 accountability diffuse.</dd>
+    <dd class="fix"><b>FIX:</b> 이슈당 explicit Release Captain 1명: "I own merge readiness". green artifact 있어도 reject 권한.</dd>
+  </dl>
+</div>
+
+<div class="risk high">
+  <div class="head"><span class="title">4. cmux pane이 실패한 agent 숨김</span><span class="rank">HIGH-4</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>한 pane이 block/loop/wrong branch 편집/silent stop → CONDUCTOR가 진행 중으로 가정하고 dependent work 스케줄.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>Pane visibility는 operational, stateful 아님. Human이 터미널 스캔하는 건 scale X.</dd>
+    <dd class="fix"><b>FIX:</b> Pane당 heartbeat artifact: branch, last commit, current task, blocked/unblocked, dirty status, last verification timestamp.</dd>
+  </dl>
+</div>
+
+<div class="risk med">
+  <div class="head"><span class="title">5. Visual gate가 잘못된 제품 certify</span><span class="rank">MED-5</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>VISUAL이 스크린샷만 비교 → behavior/API state는 broken. responsive/permission/error state 누락.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>Visual review를 frontend 완성도로 oversell하기 쉬움.</dd>
+    <dd class="fix"><b>FIX:</b> Visual pass 단독으론 close 불가. 터치된 create/edit/error/empty/permission state를 cover하는 interaction script와 짝.</dd>
+  </dl>
+</div>
+
+<div class="risk med">
+  <div class="head"><span class="title">6. <code>.review/</code>가 second codebase 됨</span><span class="rank">MED-6</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>plans/deviations/dashboards/reviews가 source와 드리프트. Agent들이 live code 대신 review doc 따라감.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>삭제/archival 정책 X, "superseded by commit X" 마커 X.</dd>
+    <dd class="fix"><b>FIX:</b> 모든 <code>.review</code> artifact에 lifecycle: <code>draft | active | superseded | final</code> + linked commit/PR. CONDUCTOR는 superseded 무시.</dd>
+  </dl>
+</div>
+
+<div class="risk crit">
+  <div class="head"><span class="title">7. Workflow tax > 구현 속도 (아이러니 실패)</span><span class="rank">CRIT-7</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>Agent들이 JSON/대시보드/pane summary/리뷰 만드는 데 코드 짜는 것보다 더 시간 씀.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>저위험 변경에도 모든 역할이 mandatory처럼 보임.</dd>
+    <dd class="fix"><b>FIX:</b> Risk-tier 라우팅. Tiny 변경 = CODEX + VERIFIER만. Full cluster = migrations/cross-module contracts/shared UI shells/auth/permissions/prod data path만.</dd>
+  </dl>
+</div>
+
+<!-- ============== CLAUDE SIDE ============== -->
+<h2><span class="who claude">CLAUDE 적대적 분석</span> 6 추가 risks (codex 미언급)</h2>
+
+<div class="risk crit">
+  <div class="head"><span class="title">8. CODEX abort = 작업 통째로 손실</span><span class="rank">CRIT-A</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>"abort no-commit + BLOCKER.md" 룰 — codex가 20분 구현 중 ambiguity 발견 → 모든 진행 상태 증발. 3~4번 반복되면 dev 속도 이득 사라짐.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>codex는 비대화형. "save partial?" 못 물음. 그냥 stop.</dd>
+    <dd class="fix"><b>FIX:</b> abort 전 <code>.review/ISSUE-N-PARTIAL.diff</code>에 working tree stash. ARCHITECT가 pickup 가능. 또는 WIP branch로 commit 후 abort.</dd>
+  </dl>
+</div>
+
+<div class="risk crit">
+  <div class="head"><span class="title">9. CONDUCTOR context overflow (1M도 무한 아님)</span><span class="rank">CRIT-B</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>수 주 누적된 phase summary가 1M context 채움 → 자동 truncation → 오래된 결정 손실. 복구하려면 모든 <code>.review/*.json</code>에서 재구성 (수 시간).</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>CONDUCTOR는 single session으로 설계됨. context 한계 + 회복 story 없음.</dd>
+    <dd class="fix"><b>FIX:</b> 강제 룰 — N일마다 또는 N cluster마다 CONDUCTOR session rotate. State는 100% <code>.review/PHASE-SUMMARY-*.json</code>에서 재구성 가능해야 함 (in-memory state 금지).</dd>
+  </dl>
+</div>
+
+<div class="risk high">
+  <div class="head"><span class="title">10. ARCHITECT가 review-reject loop bottleneck</span><span class="rank">HIGH-C</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>REVIEWER → ARCHITECT 프록시 룰 (D6) 때문에 매 reject마다 ARCHITECT가 review.json 읽고 patch prompt 재작성. 3 cluster 병렬 × 다중 reject = ARCHITECT context 폭발.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>"single authority" 룰이 single bottleneck 만듦. CONDUCTOR 도입 의도와 모순 (context rot 방지).</dd>
+    <dd class="fix"><b>FIX:</b> REVIEWER가 review.json에 <code>patch_instructions</code> 필드 직접 작성. ARCHITECT는 rubber-stamp 후 forward. 또는 minor patch는 REVIEWER → CODEX 직접 (룰 완화).</dd>
+  </dl>
+</div>
+
+<div class="risk crit">
+  <div class="head"><span class="title">11. codex sandbox = danger-full-access</span><span class="rank">CRIT-D</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>현재 transcript에 <code>sandbox: danger-full-access</code> 확인됨. CODEX가 worktree 밖 임의 파일 편집/삭제 가능. 잘못된 prompt → ~/, ../, 시스템 파일 손상. supply chain 공격 시 치명적.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>워크플로우는 codex의 자율성 전제. 현재 모드는 자율성 + 무제한 권한 = 위험.</dd>
+    <dd class="fix"><b>FIX:</b> codex 호출 시 <code>--sandbox workspace-write</code> + <code>--cwd &lt;worktree&gt;</code> 강제. 워크트리 외부는 read-only.</dd>
+  </dl>
+</div>
+
+<div class="risk high">
+  <div class="head"><span class="title">12. cmux 자체가 SPOF</span><span class="rank">HIGH-E</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>cmux 크래시 → 모든 pane 상태 손실. 진행 중 cluster orphan. Codex 세션도 죽음.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd>워크플로우 state가 pane(메모리) + <code>.review/</code>(디스크) 양쪽에 분산. pane state는 휘발성.</dd>
+    <dd class="fix"><b>FIX:</b> Hard rule — cmux pane = UI only. 모든 critical state 즉시 <code>.review/*.json</code>으로 flush. Pane 재생성으로 100% 복구 가능해야 함.</dd>
+  </dl>
+</div>
+
+<div class="risk med">
+  <div class="head"><span class="title">13. 도구·스키마 버전 드리프트 mid-cluster</span><span class="rank">MED-F</span></div>
+  <dl>
+    <dt>WHAT BREAKS</dt><dd>cluster 진행 중 CONDUCTOR/codex/스키마 업그레이드 → in-flight v1 artifact를 v2로 잘못 해석.</dd>
+    <dt>WHY DESIGN FAILS</dt><dd><code>schema_version</code> 필드는 있지만 migration story 없음. cross-version read 허용 시 silent corruption.</dd>
+    <dd class="fix"><b>FIX:</b> Cluster dispatch 시 schema version + 도구 버전 lock. cross-version read 금지 (refuse + alert).</dd>
+  </dl>
+</div>
+
+<!-- ============== MERGED PRIORITY ============== -->
+<h2><span class="who merged">합산 우선순위</span> 13 risks → 통합 ranking</h2>
+
+<table>
+  <tr><th>#</th><th>Risk</th><th>Sev</th><th>출처</th><th>Pre-launch?</th></tr>
+  <tr><td>1</td><td>병렬 cluster semantic 충돌</td><td><span class="sev crit">CRIT</span></td><td>codex</td><td><b>YES</b></td></tr>
+  <tr><td>2</td><td>Workflow tax > 구현 속도</td><td><span class="sev crit">CRIT</span></td><td>codex</td><td><b>YES</b></td></tr>
+  <tr><td>3</td><td>책임 공백 (Release Captain 없음)</td><td><span class="sev crit">CRIT</span></td><td>codex</td><td><b>YES</b></td></tr>
+  <tr><td>4</td><td>CODEX abort = 작업 손실</td><td><span class="sev crit">CRIT</span></td><td>claude</td><td><b>YES</b></td></tr>
+  <tr><td>5</td><td>codex sandbox 무제한 권한</td><td><span class="sev crit">CRIT</span></td><td>claude</td><td><b>YES</b></td></tr>
+  <tr><td>6</td><td>CONDUCTOR context overflow</td><td><span class="sev crit">CRIT</span></td><td>claude</td><td>P1 (1주 내)</td></tr>
+  <tr><td>7</td><td>JSON artifact 거짓 권위</td><td><span class="sev high">HIGH</span></td><td>codex</td><td>P1</td></tr>
+  <tr><td>8</td><td>cmux pane이 실패 숨김</td><td><span class="sev high">HIGH</span></td><td>codex</td><td>P1</td></tr>
+  <tr><td>9</td><td>ARCHITECT bottleneck on reject loop</td><td><span class="sev high">HIGH</span></td><td>claude</td><td>P1</td></tr>
+  <tr><td>10</td><td>cmux SPOF (state 휘발)</td><td><span class="sev high">HIGH</span></td><td>claude</td><td>P1</td></tr>
+  <tr><td>11</td><td>Visual gate가 잘못된 제품 certify</td><td><span class="sev med">MED</span></td><td>codex</td><td>P2</td></tr>
+  <tr><td>12</td><td><code>.review/</code> = second codebase</td><td><span class="sev med">MED</span></td><td>codex</td><td>P2</td></tr>
+  <tr><td>13</td><td>스키마/도구 버전 드리프트</td><td><span class="sev med">MED</span></td><td>claude</td><td>P2</td></tr>
+</table>
+
+<!-- ============== MINIMUM VIABLE GUARDRAILS ============== -->
+<h2><span class="who merged">필수 가드레일</span> v0.3 추가 사항</h2>
+<div class="verdict">
+<b>Pre-trial-run 필수 5개:</b>
+<ol>
+<li><b>Risk tier routing</b> 룰 명시 — P3 trivial = CODEX+VERIFIER 2-pane만. Full cluster = migration/auth/shared-UI/permissions/prod-data 한정.</li>
+<li><b>Release Captain</b> 역할 추가 (CONDUCTOR 겸임 권장) — 모든 green에도 reject 권한.</li>
+<li><b>Codex sandbox lock</b> — 모든 codex 호출에 <code>--sandbox workspace-write --cwd &lt;worktree&gt;</code> 강제. 호출 wrapper 스크립트 작성.</li>
+<li><b>Partial work 보존</b> — CODEX abort 시 <code>.review/ISSUE-N-PARTIAL.diff</code> 강제 저장 (worktree stash).</li>
+<li><b>Rebase-after-merge</b> hook — 한 cluster 머지 후 모든 in-flight worktree에 rebase 자동 실행 + affected test 재실행.</li>
+</ol>
+</div>
+
+<div class="verdict">
+<b>Pre-week-1 필수 5개:</b>
+<ol>
+<li><b>Artifact 계약 강화</b> — 모든 JSON에 <code>base_sha</code>, <code>head_sha</code>, <code>producer_role</code>, <code>verification_command</code> 필수. base 이동 시 expire.</li>
+<li><b>Lifecycle field</b> on <code>.review/*</code> — <code>draft | active | superseded | final</code>.</li>
+<li><b>Pane heartbeat</b> — pane당 <code>.review/PANE-&lt;id&gt;-HEARTBEAT.json</code> 주기 update. stale 감지 → CONDUCTOR alert.</li>
+<li><b>CONDUCTOR session rotate</b> 룰 — N일/N cluster 후 rotate. state는 disk artifact에서 재구성.</li>
+<li><b>REVIEWER patch_instructions</b> 필드 — ARCHITECT가 rubber-stamp만, bottleneck 완화.</li>
+</ol>
+</div>
+
+<!-- ============== FINAL VERDICT ============== -->
+<h2><span class="who merged">최종 판정</span> 워크플로우 적합성</h2>
+<div class="verdict">
+<b>방향성 OK.</b> Dev 속도 + 장기 안정성 + 안정적 운영 목표에 부합. <br><br>
+<b>단,</b> 위 5+5 가드레일 없이 trial run = <span style="color:var(--crit)">실패 확률 높음</span>. 특히 #1 (semantic 충돌) #2 (workflow tax) #4 (codex abort 손실)는 첫 cluster에서 즉시 드러날 가능성 70%+. <br><br>
+<b>권장:</b> Trial 전 위 "Pre-trial-run 필수 5개"만이라도 구현. 나머지는 trial 중 마찰 관찰 후 v0.3에 통합.
+</div>
+
+<div class="meta" style="text-align:center; margin-top: 32px;">
+  Draft: <code>docs/agents/multi-agent-workflow-draft.md</code> · Round 4: <code>workflow-decisions-v2.html</code> · 본 문서: <code>workflow-adversarial.html</code>
+</div>
+
+</body>
+</html>

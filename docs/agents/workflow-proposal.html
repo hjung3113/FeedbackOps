@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>FeedbackOps Workflow Proposal — cmux × Claude × Codex</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c232c;
+    --border: #2a313c;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #56d364;
+    --yellow: #e3b341;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    padding: 32px 48px 80px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 {
+    font-size: 19px;
+    margin: 40px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 15px; margin: 20px 0 8px; color: var(--accent); }
+  .sub { color: var(--muted); margin-bottom: 24px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 12px 0;
+  }
+  code, pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  code {
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #ffa657;
+  }
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    color: #c9d1d9;
+  }
+  pre code { background: transparent; padding: 0; color: inherit; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 16px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--panel-2); color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td.tier { font-weight: 600; }
+  .tag {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--mono);
+  }
+  .tag.p1 { background: rgba(248,81,73,0.15); color: var(--red); }
+  .tag.p2 { background: rgba(227,179,65,0.15); color: var(--yellow); }
+  .tag.p3 { background: rgba(86,211,100,0.12); color: var(--green); }
+  .tag.role { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .tag.codex { background: rgba(188,140,255,0.18); color: var(--purple); }
+
+  .grid4 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 12px 0;
+  }
+  .pane {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    min-height: 160px;
+  }
+  .pane .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .pane .name { font-weight: 700; font-size: 13px; }
+  .pane .who { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .pane ul { margin: 0; padding-left: 18px; }
+  .pane li { margin: 3px 0; font-size: 12.5px; }
+
+  .arrow-flow {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .arrow-flow .box {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    text-align: center;
+    font-size: 12px;
+  }
+  .arrow-flow .arr { color: var(--accent); font-weight: 700; }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    padding: 8px 14px;
+    background: rgba(88,166,255,0.05);
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .callout.warn { border-color: var(--yellow); background: rgba(227,179,65,0.05); }
+  .callout.win { border-color: var(--green); background: rgba(86,211,100,0.05); }
+
+  ul.checks { list-style: none; padding: 0; }
+  ul.checks li { padding: 4px 0 4px 22px; position: relative; }
+  ul.checks li::before { content: "▸"; position: absolute; left: 4px; color: var(--accent); }
+
+  .ascii {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.3;
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    color: #c9d1d9;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .muted { color: var(--muted); }
+  hr.soft { border: none; border-top: 1px dashed var(--border); margin: 24px 0; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+</style>
+</head>
+<body>
+
+<h1>FeedbackOps Workflow Proposal</h1>
+<div class="sub">cmux 4-pane × Claude(설계·리뷰) × Codex(구현) — 속도↑ 퀄리티 유지</div>
+
+<!-- ============ DIAGNOSIS ============ -->
+<h2>1. 진단 — 왜 느려졌나</h2>
+<div class="panel">
+<table>
+  <tr><th>증상</th><th>원인</th><th>비용</th></tr>
+  <tr>
+    <td>이슈당 사이클이 길다</td>
+    <td>Required Reading 10개 + per-issue 브랜치/PR/머지 + 직렬 강제</td>
+    <td>P3 cleanup도 P1과 같은 오버헤드</td>
+  </tr>
+  <tr>
+    <td>병렬 인프라 미활용</td>
+    <td>cmux <code>claude-teams</code>, <code>.claude/worktrees/</code> 존재하나 단일 pane만 사용</td>
+    <td>독립 P3 14개가 줄 서서 대기</td>
+  </tr>
+  <tr>
+    <td>설계·구현·리뷰가 한 컨텍스트</td>
+    <td>모델 한 대가 전부 처리. 큰 컨텍스트 누적 → 느린 응답·환각 증가</td>
+    <td>이슈 후반부 품질 저하</td>
+  </tr>
+  <tr>
+    <td>검증이 사후</td>
+    <td>"complete" 외친 뒤 PR review에서 잡힘</td>
+    <td>리뷰 라운드 늘어남</td>
+  </tr>
+  <tr>
+    <td>P3 묶음이 N개 PR</td>
+    <td>"per-issue feature branch" 룰 P3에도 적용</td>
+    <td>14 P3 = 14 PR review 부하</td>
+  </tr>
+</table>
+</div>
+
+<!-- ============ 4-PANE LAYOUT ============ -->
+<h2>2. cmux 4-pane 역할 분할 (워크스페이스 1개)</h2>
+<p class="muted">데모: <code>workspace:16 "WF-4role-demo"</code> 에 실제 생성 완료. 각 pane은 독립 셸 + 독립 컨텍스트.</p>
+
+<div class="ascii">┌──────────────────────────────┬──────────────────────────────┐
+│  ARCHITECT (Claude Opus)     │  CODEX (codex exec)          │
+│  pane:38 / surface:70        │  pane:40 / surface:71        │
+│  설계 · 이슈 dispatch · grill │  구현 · diff 생성 · 단순 fix │
+├──────────────────────────────┼──────────────────────────────┤
+│  REVIEWER (Claude Sonnet)    │  VERIFIER (shell · CI)       │
+│  pane:39 / surface:72        │  pane:41 / surface:73        │
+│  /code-review · 보안 · 룰    │  pnpm test · run · playwright│
+└──────────────────────────────┴──────────────────────────────┘</div>
+
+<div class="grid4">
+  <div class="pane">
+    <div class="head"><span class="name">① ARCHITECT</span><span class="who tag role">Claude Opus 4.7</span></div>
+    <ul>
+      <li>이슈 읽고 스코프 결정 (티어링 표 적용)</li>
+      <li>필요 시 <code>grill-me</code> / <code>writing-plans</code></li>
+      <li>구현 프롬프트 작성 → CODEX pane에 dispatch</li>
+      <li>worktree 분기, 브랜치 네이밍</li>
+      <li>여러 이슈 묶기 결정 (배치 PR)</li>
+    </ul>
+  </div>
+  <div class="pane">
+    <div class="head"><span class="name">② CODEX</span><span class="who tag codex">codex exec</span></div>
+    <ul>
+      <li>ARCHITECT가 준 spec 그대로 구현</li>
+      <li><code>codex exec "&lt;prompt&gt;"</code> 비대화 모드</li>
+      <li>diff 생성 → <code>codex apply</code> 또는 직접 commit</li>
+      <li>스코프 외 변경 금지 — 룰은 ARCHITECT가 강제</li>
+      <li>의문 생기면 STOP, ARCHITECT에 보고</li>
+    </ul>
+  </div>
+  <div class="pane">
+    <div class="head"><span class="name">③ REVIEWER</span><span class="who tag role">Claude Sonnet 4.6</span></div>
+    <ul>
+      <li>CODEX diff에 <code>/code-review</code> 즉시 실행</li>
+      <li>AGENTS.md 룰 vs diff 대조 (모듈 경계, 사본 verbatim)</li>
+      <li>도메인 invariant 위반 검출</li>
+      <li>fail → ARCHITECT에 reroute, pass → VERIFIER로</li>
+      <li>PR 직전 <code>/security-review</code></li>
+    </ul>
+  </div>
+  <div class="pane">
+    <div class="head"><span class="name">④ VERIFIER</span><span class="who tag role">shell · headless</span></div>
+    <ul>
+      <li><code>pnpm test --filter ...</code> 영향 받은 패키지만</li>
+      <li>typecheck, lint</li>
+      <li>FE 변경 시 <code>/run</code> + Playwright snapshot</li>
+      <li>실패 로그 ARCHITECT로 → 수정 사이클</li>
+      <li>green 확인 후 PR 생성 신호</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout">
+<b>핵심:</b> 4 pane = 4 컨텍스트 분리. ARCHITECT 컨텍스트가 구현 노이즈로 오염되지 않음. CODEX는 좁은 spec만 받음 → 환각 감소. REVIEWER는 diff만 보고 룰 체크 → 빠름.
+</div>
+
+<!-- ============ CMUX CMDS ============ -->
+<h2>3. cmux 명령 cheatsheet (이 워크플로우 전용)</h2>
+<div class="two-col">
+<div class="panel">
+<h3>워크스페이스 셋업 (이슈 시작 시)</h3>
+<pre><code># 새 worktree 워크스페이스 만들기
+cmux new-workspace --name "issue-31-idem-audit" \
+  --cwd "/Users/hyojung/Desktop/2026/FeedbackOps"
+
+# 4-pane 분할
+cmux new-split right --surface &lt;left&gt;
+cmux new-split down  --surface &lt;left&gt;
+cmux new-split down  --surface &lt;right-top&gt;
+
+# 역할 라벨
+cmux rename-tab --surface &lt;s1&gt; "ARCHITECT"
+cmux rename-tab --surface &lt;s2&gt; "CODEX"
+cmux rename-tab --surface &lt;s3&gt; "REVIEWER"
+cmux rename-tab --surface &lt;s4&gt; "VERIFIER"
+</code></pre>
+</div>
+<div class="panel">
+<h3>Pane 간 dispatch</h3>
+<pre><code># ARCHITECT → CODEX 로 작업 던지기
+cmux send --surface &lt;codex&gt; \
+  'codex exec "Fix issue #31: idempotency replay must bump audit_log. See apps/backend/src/modules/voc/idempotency.ts. Add test in *.spec.ts."'
+cmux send-key --surface &lt;codex&gt; Enter
+
+# VERIFIER 에 테스트 트리거
+cmux send --surface &lt;verifier&gt; \
+  'pnpm --filter backend test idempotency'
+cmux send-key --surface &lt;verifier&gt; Enter
+
+# 결과 읽기 (ARCHITECT가 polling)
+cmux read-screen --surface &lt;verifier&gt; --lines 40
+</code></pre>
+</div>
+</div>
+
+<div class="panel">
+<h3>알림 · 자동화</h3>
+<pre><code># CODEX 끝나면 ARCHITECT pane 깜빡임
+cmux trigger-flash --surface &lt;architect&gt;
+
+# 또는 명시 알림
+cmux notify --workspace workspace:16 \
+  --title "CODEX done" --body "issue-31 diff ready for review"
+
+# 백그라운드 빌드 결과 신호
+cmux wait-for build-green --timeout 300</code></pre>
+</div>
+
+<!-- ============ TIERING ============ -->
+<h2>4. 이슈 티어링 + 모델 위임</h2>
+<table>
+<tr>
+  <th>티어</th><th>예시 이슈</th><th>Required Reading</th>
+  <th>ARCHITECT</th><th>CODEX 위임?</th><th>사이클</th>
+</tr>
+<tr>
+  <td class="tier">Trivial <span class="tag p3">P3</span></td>
+  <td>#29 #30 #31 #33 #34</td>
+  <td>AGENTS.md만</td>
+  <td>Sonnet</td>
+  <td>✅ 통째로</td>
+  <td>spec 1줄 → codex exec → verify → PR</td>
+</tr>
+<tr>
+  <td class="tier">Normal <span class="tag p2">P2</span></td>
+  <td>#28 #32 #43 #45</td>
+  <td>+ 도메인 doc 1개</td>
+  <td>Opus</td>
+  <td>✅ spec 후 위임</td>
+  <td>TDD red → codex green → review → PR</td>
+</tr>
+<tr>
+  <td class="tier">Normal+ <span class="tag p1">P1</span></td>
+  <td>#25 #26 #27 #44</td>
+  <td>+ 관련 ADR + impl doc</td>
+  <td>Opus</td>
+  <td>⚠️ 부분 위임</td>
+  <td>plan → ARCHITECT 골격 → CODEX 채움 → review</td>
+</tr>
+<tr>
+  <td class="tier">Complex</td>
+  <td>#18 #49 #55</td>
+  <td>전체 10개 + prototype</td>
+  <td>Opus + grill</td>
+  <td>❌ Claude 직접</td>
+  <td>grill-me → plan → executing-plans → review</td>
+</tr>
+</table>
+
+<div class="callout warn">
+<b>위임 룰:</b> CODEX는 "한 파일, 좁은 scope, 명확한 AC"일 때만. 도메인 invariant (VOC 출처, Task 분리 등) 닿으면 ARCHITECT가 직접. Codex는 룰 텍스트 100% 못 따라감.
+</div>
+
+<!-- ============ BATCHING ============ -->
+<h2>5. 배치 PR (P3 클러스터링)</h2>
+<div class="panel">
+<table>
+  <tr><th>묶음</th><th>이슈</th><th>모듈</th><th>PR 1개</th></tr>
+  <tr><td>Idempotency</td><td>#27 + #30 + #31</td><td><code>voc/idempotency</code>, <code>aa/idempotency</code></td><td>1</td></tr>
+  <tr><td>Rate-limit</td><td>#25 + #28 + #32</td><td><code>middleware/rate-limit</code></td><td>1</td></tr>
+  <tr><td>ADR-0012 sync</td><td>#26 + #43</td><td><code>modules/ms</code>, <code>modules/aa</code>, ADR</td><td>1</td></tr>
+  <tr><td>TipTap fixtures</td><td>#44 + #45 + #49</td><td><code>packages/shared/tiptap</code>, FE renderer</td><td>1</td></tr>
+</table>
+<p class="muted">14 PR → 4 PR. AGENTS.md "per-issue branch" 룰에 예외 한 줄 추가: <i>"P3 cleanups may bundle if same module + same context."</i></p>
+</div>
+
+<!-- ============ PARALLEL ============ -->
+<h2>6. 병렬 실행 (worktree × 워크스페이스)</h2>
+<div class="ascii">┌─ window:1 ─────────────────────────────────────────────────┐
+│                                                            │
+│  ┌─ workspace:16 ─┐  ┌─ workspace:17 ─┐  ┌─ workspace:18 ─┐│
+│  │ Idem cluster   │  │ Rate-limit     │  │ TipTap         ││
+│  │ (4-pane setup) │  │ (4-pane setup) │  │ (4-pane setup) ││
+│  │ worktree A     │  │ worktree B     │  │ worktree C     ││
+│  └────────────────┘  └────────────────┘  └────────────────┘│
+│                                                            │
+│  사용자 = 워크스페이스 탭 전환만으로 3개 동시 진행         │
+└────────────────────────────────────────────────────────────┘</div>
+
+<div class="callout win">
+<b>이득:</b> 3 worktree = 3 독립 브랜치, 충돌 없음. 각 워크스페이스 안에서 4-pane 분업. <code>cmux claude-teams</code>로 ARCHITECT pane 동시 부팅 가능.
+</div>
+
+<!-- ============ SKILLS ============ -->
+<h2>7. 활성화할 skills (이미 설치됨, 미사용)</h2>
+<div class="panel">
+<table>
+  <tr><th>Skill</th><th>언제</th><th>어느 pane</th></tr>
+  <tr><td><code>superpowers:writing-plans</code></td><td>Complex 티어 시작</td><td>ARCHITECT</td></tr>
+  <tr><td><code>superpowers:executing-plans</code></td><td>플랜 있는 작업</td><td>ARCHITECT → CODEX</td></tr>
+  <tr><td><code>superpowers:dispatching-parallel-agents</code></td><td>독립 작업 2+개</td><td>ARCHITECT</td></tr>
+  <tr><td><code>superpowers:verification-before-completion</code></td><td>매 PR 직전</td><td>VERIFIER</td></tr>
+  <tr><td><code>tdd</code></td><td>P1/P2 동작 변경</td><td>ARCHITECT가 red 작성 → CODEX green</td></tr>
+  <tr><td><code>code-review</code></td><td>CODEX diff 받자마자</td><td>REVIEWER</td></tr>
+  <tr><td><code>security-review</code></td><td>PR 직전 (auth/permission 닿으면)</td><td>REVIEWER</td></tr>
+  <tr><td><code>verify</code> / <code>run</code></td><td>FE 변경</td><td>VERIFIER</td></tr>
+  <tr><td><code>triage</code></td><td>새 이슈 들어올 때</td><td>ARCHITECT (별도 워크스페이스)</td></tr>
+  <tr><td><code>diagnose</code></td><td>버그 재현 어려움</td><td>ARCHITECT</td></tr>
+</table>
+</div>
+
+<!-- ============ END-TO-END ============ -->
+<h2>8. End-to-end 한 이슈 흐름 예시 (#31)</h2>
+<div class="panel">
+<ol>
+  <li><b>ARCHITECT</b>: 이슈 #31 읽고 티어링 → <span class="tag p3">P3 Trivial</span>. <code>git worktree add ../wt-31 feature/31-idem-audit</code></li>
+  <li><b>ARCHITECT</b>: spec 한 단락 작성 → CODEX pane에 send:
+    <pre><code>codex exec "In apps/backend/src/modules/voc/idempotency.ts,
+when replay hits cached response, also write audit_log row with
+action='idempotent_replay'. Add spec asserting audit_log count
+increments. Touch only this file + its *.spec.ts."</code></pre>
+  </li>
+  <li><b>CODEX</b>: diff 생성 → commit</li>
+  <li><b>REVIEWER</b>: <code>git diff HEAD~1</code> + <code>/code-review</code> → AGENTS.md 룰 체크
+    <ul><li>모듈 경계 OK? repo만 audit_log 씀?</li><li>테스트 invariant 닿음?</li></ul>
+  </li>
+  <li><b>VERIFIER</b>: <code>pnpm --filter backend test idempotency</code> + typecheck → green</li>
+  <li><b>ARCHITECT</b>: 같은 모듈 #30, #27 묶을지 결정 → 묶으면 2~5 반복 후 1 PR</li>
+  <li><b>ARCHITECT</b>: PR body 작성 → <code>gh pr create</code> → develop merge</li>
+</ol>
+<p class="muted">기존 흐름: 한 모델이 1~7 전부 + 컨텍스트 누적. 신규 흐름: 4 pane 분업, 총 wall-clock ↓, 컨텍스트 깨끗.</p>
+</div>
+
+<!-- ============ AGENTS.md DIET ============ -->
+<h2>9. AGENTS.md 다이어트 제안</h2>
+<div class="panel">
+<ul class="checks">
+  <li>Required Reading → "scope-conditional" 표로 (티어별 매핑)</li>
+  <li>운영룰만 root AGENTS.md 유지, 나머지 <code>docs/agents/*.md</code>로 이동</li>
+  <li>"Finish one issue fully" → "Finish one cluster fully" (P3 배치 허용)</li>
+  <li>4-pane 역할 정의를 <code>docs/agents/workflow.md</code>에 추가</li>
+  <li>Codex 위임 가이드 새 문서: <code>docs/agents/codex-delegation.md</code></li>
+</ul>
+</div>
+
+<!-- ============ ACTIONS ============ -->
+<h2>10. 지금 할 액션 (고르기)</h2>
+<div class="panel">
+<table>
+  <tr><th>#</th><th>액션</th><th>비용</th><th>효과</th></tr>
+  <tr>
+    <td>A</td>
+    <td>P3 묶음 1개 (Idempotency #27+#30+#31) 4-pane으로 처음부터 끝까지 시연</td>
+    <td>1~2h</td>
+    <td>패턴 검증 + 즉시 3 이슈 close</td>
+  </tr>
+  <tr>
+    <td>B</td>
+    <td>cmux 4-pane 셋업 스크립트 작성 (<code>scripts/cmux-4role.sh &lt;name&gt;</code>)</td>
+    <td>30m</td>
+    <td>이슈 시작 마찰 제거</td>
+  </tr>
+  <tr>
+    <td>C</td>
+    <td>AGENTS.md 티어링 + 배치 룰 추가 PR</td>
+    <td>30m</td>
+    <td>룰 합의 → 향후 자동 적용</td>
+  </tr>
+  <tr>
+    <td>D</td>
+    <td>3개 worktree 동시 진행 시연 (#27군, #25군, #43군)</td>
+    <td>1일</td>
+    <td>병렬 모델 wall-clock 측정</td>
+  </tr>
+</table>
+<p>추천 순서: <b>A → C → B → D</b>. A로 패턴 검증부터.</p>
+</div>
+
+<hr class="soft">
+<p class="muted" style="font-size: 11px; text-align: center;">
+생성: 2026-05-23 · 데모 워크스페이스: <code>workspace:16 "WF-4role-demo"</code> · 파일: <code>docs/agents/workflow-proposal.html</code>
+</p>
+
+</body>
+</html>
