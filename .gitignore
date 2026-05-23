@@ -20,3 +20,12 @@ report/
 
 # MinIO local data volume (docker-compose.dev.yml)
 minio_data/
+
+# CodeGraph local index (per-developer)
+.codegraph/
+
+# Per-developer agent/tool caches and ephemeral artifacts
+.playwright-mcp/
+docs/.llmwiki/
+.claude/worktrees/
+smoke-*.png
