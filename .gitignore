@@ -29,3 +29,8 @@ minio_data/
 docs/.llmwiki/
 .claude/worktrees/
 smoke-*.png
+
+# .review/ — schemas + README tracked, per-issue JSON artifacts ephemeral
+.review/ISSUE-*.json
+.review/ISSUE-*.diff
+.review/archive/
