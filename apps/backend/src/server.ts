@@ -168,7 +168,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     max: (req) => (req.session?.actor_id ? 100 : 50),
     timeWindow: '1 minute',
     allowList: (req) => req.url === '/health',
-    keyGenerator: (req) => req.session?.actor_id ?? req.ip,
+    keyGenerator: (req) =>
+      req.session ? `${req.session.workspace_id}:${req.session.actor_id}` : req.ip,
     store: createPgRateLimitStore(dbHandle.pool, 'global') as never,
     errorResponseBuilder: (_req, ctx) => ({
       code: 'rate_limited.actor',
@@ -199,15 +200,15 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // observed `undefined` and fell back to `req.ip`, collapsing all users
   // behind a shared NAT into one bucket. We resolve the session cookie
   // inline (one DB lookup per mutation) so the per-actor bucket is the
-  // actor's actor_id when a valid session cookie is present, and `req.ip`
-  // only for unauthenticated traffic.
+  // workspace+actor identity when a valid session cookie is present, and
+  // `req.ip` only for unauthenticated traffic.
   const mutationKeyGenerator = async (req: FastifyRequest): Promise<string> => {
     const raw = req.cookies?.[SESSION_COOKIE_NAME];
     const token = typeof raw === 'string' ? raw : undefined;
     if (token) {
       try {
-        const actorId = await sessionService.lookupActorIdByToken(token);
-        if (actorId) return actorId;
+        const identity = await sessionService.lookupActorIdByToken(token);
+        if (identity) return `${identity.workspace_id}:${identity.actor_id}`;
       } catch (err) {
         req.log?.warn?.({ err }, 'rate-limit actor lookup failed; falling back to ip');
       }

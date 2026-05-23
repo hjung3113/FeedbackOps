@@ -38,6 +38,11 @@ export interface SessionRecord {
   roleLevel: RoleLevel;
 }
 
+export type RateLimitActorIdentity = {
+  actor_id: string;
+  workspace_id: string;
+};
+
 /** ADR-0006:23-26 — 12h TTL on issue. `last_seen_at` updated per request. */
 export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -293,8 +298,8 @@ export function createSessionService(deps: SessionServiceDeps) {
     },
 
     /**
-     * Read-only lookup of the actor_id for an active session token. Does NOT
-     * touch `last_seen_at`. Intended for the `@fastify/rate-limit`
+     * Read-only lookup of actor/workspace identifiers for an active session
+     * token. Does NOT touch `last_seen_at`. Intended for the `@fastify/rate-limit`
      * keyGenerator which runs in the `onRequest` hook (before the
      * `requireSession` preHandler) and needs the actor identity without
      * paying for a second `loadAndTouch` write. Returns null when the row
@@ -302,17 +307,18 @@ export function createSessionService(deps: SessionServiceDeps) {
      *
      * Adversarial review API-C-2.
      */
-    async lookupActorIdByToken(sessionId: string): Promise<string | null> {
+    async lookupActorIdByToken(sessionId: string): Promise<RateLimitActorIdentity | null> {
       const rightNow = now();
-      const result = await deps.db.execute<{ actor_id: string }>(sql`
-        SELECT actor_id
+      const result = await deps.db.execute<RateLimitActorIdentity>(sql`
+        SELECT actor_id,
+               workspace_id
           FROM core.sessions
          WHERE id = ${sessionId}
            AND revoked_at IS NULL
            AND expires_at > ${rightNow}
          LIMIT 1
       `);
-      return result.rows[0]?.actor_id ?? null;
+      return result.rows[0] ?? null;
     },
 
     /** Revoke immediately. Idempotent: revoking an already-revoked row is a no-op. */
