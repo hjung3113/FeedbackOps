@@ -32,6 +32,7 @@ For pixel-diff enforcement on page-level FE issues, see `apps/frontend/AGENTS.md
 - **Slice complete → PR `develop` → `main`.** User owns the final `develop` → `main` merge and any tag/release. No agent push to `main`.
 - **Exception.** Slices 1–3 shipped directly to `main` before this rule landed. From #14 onward, follow the flow above.
 - **Pre-push hook.** `.githooks/pre-push` blocks direct pushes to `main` that touch files other than `README*`. Enable once per clone: `git config core.hooksPath .githooks`. Client-side only; the real gate is GitHub branch protection.
+- **Post-merge hook.** `.githooks/post-merge` warns about in-flight sibling worktrees needing rebase after a `develop` merge. Enabled by the same `git config core.hooksPath .githooks` as pre-push.
 
 ## Monorepo Boundaries
 
