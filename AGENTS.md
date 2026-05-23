@@ -129,3 +129,4 @@ When reviewing a PR, prioritize product invariant violations, ownership boundary
 - **Triage labels.** Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 - **Domain docs.** Multi-context. Start at `CONTEXT-MAP.md`, then read the relevant per-context `CONTEXT.md`. See `docs/agents/domain.md`.
 - **Workflow.** Model tiers, REV cycles, dispatch patterns: `docs/agents/workflow.md`.
+- **Multi-agent workflow (v0.1 trial).** Operating playbook in `docs/agents/workflow.md`. Risk tiers, Release Captain, codex sandbox rule. All `codex exec` MUST go through `scripts/codex-safe.sh`.
