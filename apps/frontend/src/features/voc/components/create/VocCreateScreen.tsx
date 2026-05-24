@@ -170,179 +170,189 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Main two-column area */}
-      <div className="flex flex-1 gap-6 p-6 overflow-auto">
-        {/* Left column — form */}
-        <form
-          className="flex-1 flex flex-col gap-6"
-          onSubmit={form.handleSubmit(handleSubmit)}
-          noValidate
-          id="voc-create-form"
-        >
-          {/* Managed System */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel required htmlFor="primary_managed_system_id">
-              Managed System
-            </FieldLabel>
-            {msQuery.isLoading ? (
-              <div className="flex gap-2 flex-wrap">
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-8 w-32" />
-                <Skeleton className="h-8 w-20" />
-              </div>
-            ) : msQuery.isError ? (
-              <p className="text-sm text-red-500">
-                {errorMapper((msQuery.error as ApiError).envelope).message}
-              </p>
-            ) : msOptions.length === 0 ? (
-              <p className="text-sm text-text-muted">
-                등록된 Managed System이 없습니다.{' '}
-                <Link to="/admin/managed-systems" className="text-accent-primary underline">
-                  관리 페이지에서 추가하세요
-                </Link>
-              </p>
-            ) : (
+      <div className="flex-1 overflow-auto px-4 py-5 md:px-6">
+        <div className="grid gap-6 lg:grid-cols-12">
+          {/* Left column — single compact form card */}
+          <form
+            className="flex flex-col rounded-lg border border-border-subtle bg-surface-card p-5 shadow-sm lg:col-span-9"
+            onSubmit={form.handleSubmit(handleSubmit)}
+            noValidate
+            id="voc-create-form"
+          >
+            {/* Title */}
+            <div className="flex flex-col gap-2">
+              <FieldLabel required htmlFor="title">제목</FieldLabel>
+              <Input
+                id="title"
+                placeholder="겪으신 문제를 한 줄로 요약해 주세요"
+                {...form.register('title')}
+                aria-invalid={Boolean(form.formState.errors.title)}
+              />
+              {form.formState.errors.title?.message && (
+                <p className="text-xs text-text-danger">{form.formState.errors.title.message}</p>
+              )}
+            </div>
+
+            <FormDivider />
+
+            {/* Description */}
+            <div className="flex flex-col gap-2">
+              <FieldLabel
+                required
+                htmlFor="description_rich_content"
+                tip="겪으신 일을 시간 순서대로 적어주시면 도움이 됩니다"
+              >
+                상세 설명
+              </FieldLabel>
               <Controller
                 control={form.control}
-                name="primary_managed_system_id"
+                name="description_rich_content"
                 render={({ field }) => (
-                  <ManagedSystemPicker
-                    options={msOptions}
-                    value={field.value || null}
-                    onChange={(id) => field.onChange(id ?? '')}
-                    placeholder="Managed System 선택"
-                    testId="ms-picker"
+                  <RichEditor
+                    surface="voc-description"
+                    value={field.value as import('@fops/ui').TipTapDoc}
+                    onChange={(doc) => field.onChange(doc)}
+                    placeholder="VOC 내용을 자세히 적어주세요"
+                    minHeight={160}
+                    toolbar={vocDescriptionToolbar({
+                      onAttachError: (err) => {
+                        const msg =
+                          err instanceof Error ? err.message : '첨부 업로드에 실패했습니다';
+                        toast.error(msg);
+                      },
+                    })}
+                    onAttach={async (file) => {
+                      const result = await uploadAttachment(file);
+                      return {
+                        attachment_id: result.id,
+                        name: result.name,
+                        size_bytes: result.size_bytes,
+                        mime_type: result.mime_type,
+                      };
+                    }}
                   />
                 )}
               />
-            )}
-            {form.formState.errors.primary_managed_system_id?.message && (
-              <p className="text-xs text-red-500">
-                {form.formState.errors.primary_managed_system_id.message}
-              </p>
-            )}
-          </div>
+              {form.formState.errors.description_rich_content?.message && (
+                <p className="text-xs text-text-danger">
+                  {form.formState.errors.description_rich_content.message}
+                </p>
+              )}
+            </div>
 
-          {/* Analytics Area */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel htmlFor="analytics_area_id">Analytics Area</FieldLabel>
-            {selectedMs && aaQuery.isLoading ? (
-              <div className="flex gap-2 flex-wrap">
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-8 w-32" />
-              </div>
-            ) : (
+            <FormDivider />
+
+            {/* Source Context */}
+            <div className="flex flex-col gap-2">
+              <FieldLabel>Source Context</FieldLabel>
               <Controller
                 control={form.control}
-                name="analytics_area_id"
+                name="source_context"
                 render={({ field }) => (
-                  <AnalyticsAreaPicker
-                    options={aaOptions}
-                    value={field.value ?? null}
-                    onChange={(id) => field.onChange(id ?? undefined)}
-                    disabled={!selectedMs}
-                    placeholder="Analytics Area 선택"
-                    testId="aa-picker"
+                  <SourceContextSegmented
+                    value={field.value}
+                    onChange={field.onChange}
+                    testId="source-context-segmented"
                   />
                 )}
               />
-            )}
-            {form.formState.errors.analytics_area_id?.message && (
-              <p className="text-xs text-red-500">
-                {form.formState.errors.analytics_area_id.message}
-              </p>
-            )}
-          </div>
+            </div>
 
-          {/* Source Context */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel>Source Context</FieldLabel>
-            <Controller
-              control={form.control}
-              name="source_context"
-              render={({ field }) => (
-                <SourceContextSegmented
-                  value={field.value}
-                  onChange={field.onChange}
-                  testId="source-context-segmented"
+            <FormDivider />
+
+            {/* Managed System */}
+            <div className="flex flex-col gap-2">
+              <FieldLabel required htmlFor="primary_managed_system_id">
+                Managed System
+              </FieldLabel>
+              {msQuery.isLoading ? (
+                <div className="flex flex-wrap gap-2">
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-8 w-20" />
+                </div>
+              ) : msQuery.isError ? (
+                <p className="text-sm text-text-danger">
+                  {errorMapper((msQuery.error as ApiError).envelope).message}
+                </p>
+              ) : msOptions.length === 0 ? (
+                <p className="text-sm text-text-muted">
+                  등록된 Managed System이 없습니다.{' '}
+                  <Link to="/admin/managed-systems" className="text-accent-primary underline">
+                    관리 페이지에서 추가하세요
+                  </Link>
+                </p>
+              ) : (
+                <Controller
+                  control={form.control}
+                  name="primary_managed_system_id"
+                  render={({ field }) => (
+                    <ManagedSystemPicker
+                      options={msOptions}
+                      value={field.value || null}
+                      onChange={(id) => field.onChange(id ?? '')}
+                      placeholder="Managed System 선택"
+                      testId="ms-picker"
+                    />
+                  )}
                 />
               )}
-            />
-          </div>
+              {form.formState.errors.primary_managed_system_id?.message && (
+                <p className="text-xs text-text-danger">
+                  {form.formState.errors.primary_managed_system_id.message}
+                </p>
+              )}
+            </div>
 
-          {/* Title */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel required htmlFor="title">제목</FieldLabel>
-            <Input
-              id="title"
-              placeholder="겪으신 문제를 한 줄로 요약해 주세요"
-              {...form.register('title')}
-              aria-invalid={Boolean(form.formState.errors.title)}
-            />
-            {form.formState.errors.title?.message && (
-              <p className="text-xs text-red-500">{form.formState.errors.title.message}</p>
-            )}
-          </div>
-
-          {/* Description */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel
-              required
-              htmlFor="description_rich_content"
-              tip="겪으신 일을 시간 순서대로 적어주시면 도움이 됩니다"
-            >
-              상세 설명
-            </FieldLabel>
-            <Controller
-              control={form.control}
-              name="description_rich_content"
-              render={({ field }) => (
-                <RichEditor
-                  surface="voc-description"
-                  value={field.value as import('@fops/ui').TipTapDoc}
-                  onChange={(doc) => field.onChange(doc)}
-                  placeholder="VOC 내용을 자세히 적어주세요"
-                  minHeight={160}
-                  toolbar={vocDescriptionToolbar({
-                    onAttachError: (err) => {
-                      const msg =
-                        err instanceof Error ? err.message : '첨부 업로드에 실패했습니다';
-                      toast.error(msg);
-                    },
-                  })}
-                  onAttach={async (file) => {
-                    const result = await uploadAttachment(file);
-                    return {
-                      attachment_id: result.id,
-                      name: result.name,
-                      size_bytes: result.size_bytes,
-                      mime_type: result.mime_type,
-                    };
-                  }}
+            {/* Analytics Area */}
+            <div className="mt-4 flex flex-col gap-2">
+              <FieldLabel htmlFor="analytics_area_id">Analytics Area</FieldLabel>
+              {selectedMs && aaQuery.isLoading ? (
+                <div className="flex flex-wrap gap-2">
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-32" />
+                </div>
+              ) : (
+                <Controller
+                  control={form.control}
+                  name="analytics_area_id"
+                  render={({ field }) => (
+                    <AnalyticsAreaPicker
+                      options={aaOptions}
+                      value={field.value ?? null}
+                      onChange={(id) => field.onChange(id ?? undefined)}
+                      disabled={!selectedMs}
+                      placeholder="Analytics Area 선택"
+                      testId="aa-picker"
+                    />
+                  )}
                 />
               )}
+              {form.formState.errors.analytics_area_id?.message && (
+                <p className="text-xs text-text-danger">
+                  {form.formState.errors.analytics_area_id.message}
+                </p>
+              )}
+            </div>
+
+            <FormDivider />
+
+            {/* Attachments — active multi-file upload (C6). */}
+            <AttachmentDropzone
+              testId="attachment-dropzone"
+              onChange={setAttachmentIds}
+              onUploadingChange={setAttachmentsUploading}
+              onErrorCountChange={setAttachmentErrorCount}
             />
-            {form.formState.errors.description_rich_content?.message && (
-              <p className="text-xs text-red-500">
-                {form.formState.errors.description_rich_content.message}
-              </p>
-            )}
+          </form>
+
+          {/* Right column */}
+          <div className="flex flex-col gap-3 lg:col-span-3">
+            <ReporterCard />
+            <SeverityDisclaimerCard />
           </div>
-
-          {/* Attachments — active multi-file upload (C6). */}
-          <AttachmentDropzone
-            testId="attachment-dropzone"
-            onChange={setAttachmentIds}
-            onUploadingChange={setAttachmentsUploading}
-            onErrorCountChange={setAttachmentErrorCount}
-          />
-        </form>
-
-        {/* Right column */}
-        <div className="w-[320px] shrink-0 flex flex-col gap-4">
-          <ReporterCard />
-          <SeverityDisclaimerCard />
         </div>
       </div>
 
@@ -355,17 +365,21 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
         <div
           role="alert"
           data-testid="attachment-submit-blocked-alert"
-          className="sticky bottom-[56px] mx-6 mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="sticky bottom-16 mx-4 mb-2 rounded-md border border-border-subtle bg-surface-card px-3 py-2 text-sm text-text-danger shadow-sm md:mx-6"
         >
           첨부 파일에 오류가 있어 제출할 수 없습니다. 빨간색으로 표시된 파일을 제거하거나 다른 파일로 교체해 주세요.
         </div>
       )}
 
       {/* Sticky bottom action bar */}
-      <div className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex justify-end gap-3">
+      <div className="sticky bottom-0 flex items-center gap-3 border-t border-border-subtle bg-surface-card px-4 py-3 shadow-sm md:px-6">
+        <span className="hidden text-xs text-text-muted md:inline">
+          제출 후 Managed System은 변경 불가
+        </span>
+        <span className="flex-1" />
         <Button
           type="button"
-          variant="ghost"
+          variant="subtle"
           onClick={onCancel}
           disabled={isSubmitting}
         >
@@ -386,4 +400,8 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
       </div>
     </div>
   );
+}
+
+function FormDivider(): React.ReactElement {
+  return <div className="my-4 h-px bg-border-subtle" aria-hidden />;
 }

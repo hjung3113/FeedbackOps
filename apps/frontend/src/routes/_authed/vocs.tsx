@@ -5,7 +5,8 @@
 // create form, triage queue) lands in #19 / #20 / #21.
 
 import { ListShell, PageShell, WorkbenchShell } from '@fops/ui';
-import { createFileRoute, useSearch } from '@tanstack/react-router';
+import { createFileRoute, Link, useSearch } from '@tanstack/react-router';
+import { ChevronLeft } from 'lucide-react';
 import { CreateRoute } from '@/features/voc/routes/CreateRoute';
 import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
 import { TriageRoute } from '@/features/voc/routes/TriageRoute';
@@ -53,7 +54,27 @@ export function VocRouteShell() {
   // Per-view shell selection. spec voc.md §2 + ADR-0020 §taxonomy lock.
   if (search.action === 'create') {
     return (
-      <PageShell header={{ title: '새 VOC 작성' }}>
+      <PageShell
+        header={{
+          title: '새 VOC 작성',
+          subtitle: (
+            <div className="flex items-center gap-2">
+              <Link
+                to="/vocs"
+                search={{ view: 'inbox' }}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-text-muted hover:bg-surface-card hover:text-text-primary"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+                <span>Inbox</span>
+              </Link>
+              <span className="inline-flex items-center gap-1 rounded-md bg-accent-primary/10 px-2 py-1 text-xs font-medium text-accent-primary">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent-primary" aria-hidden />
+                New VOC
+              </span>
+            </div>
+          ),
+        }}
+      >
         <CreateRoute />
       </PageShell>
     );
@@ -91,5 +112,4 @@ function InboxShell({ view }: { view: 'inbox' | 'my' }) {
     />
   );
 }
-
 

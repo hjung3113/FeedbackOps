@@ -96,7 +96,7 @@ export function vocDescriptionToolbar(opts?: {
     return (
       <TooltipProvider>
         <div
-          className="flex items-center gap-1 border-b border-border-subtle px-2 py-1.5"
+          className="flex items-center gap-1 border-b border-border-subtle px-2 py-1"
           data-testid="voc-description-toolbar"
         >
           {VOC_DESCRIPTION_TOOLBAR.map((item) => {
@@ -137,13 +137,13 @@ export function vocDescriptionToolbar(opts?: {
                     onClick={handleClick}
                     data-testid={`voc-toolbar-${item.id}`}
                     className={cn(
-                      'inline-flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors',
+                      'inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors',
                       'hover:bg-surface-card hover:text-text-primary',
                       'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-text-muted',
                       active && 'bg-surface-card text-accent-primary',
                     )}
                   >
-                    <Icon size={14} />
+                    <Icon size={13} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>{tooltip}</TooltipContent>
