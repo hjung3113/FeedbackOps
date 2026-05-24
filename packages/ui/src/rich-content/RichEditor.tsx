@@ -6,6 +6,10 @@ import { type Editor, EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import * as React from 'react';
 import { cn } from '../utils/cn';
+import {
+  getExtensionsForSurface,
+  type UIRichContentExtensionCapability,
+} from './allowlist-local';
 import { AttachmentRef } from './extensions/attachmentRef';
 import { Mention } from './extensions/mention';
 
@@ -90,20 +94,13 @@ export function RichEditor({
   toolbar,
   onAttach,
 }: RichEditorProps) {
+  const extensions = React.useMemo(
+    () => buildExtensionsForSurface(surface, placeholder ?? ''),
+    [surface, placeholder],
+  );
+
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        // ADR-0011: image extension is NOT registered. Users cannot author images client-side; backend is authoritative.
-        // Disable built-ins that we configure separately below to avoid duplicate extension warnings.
-        link: false,
-        underline: false,
-      }),
-      Link.configure({ openOnClick: false }),
-      Underline,
-      Placeholder.configure({ placeholder: placeholder ?? '' }),
-      AttachmentRef,
-      Mention,
-    ],
+    extensions,
     // value can be null (explicit clear); fall through to defaultValue / empty doc.
     content: (value ?? defaultValue ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as TipTapDoc,
     editable: !disabled,
@@ -205,4 +202,36 @@ export function RichEditor({
       />
     </div>
   );
+}
+
+function buildExtensionsForSurface(surface: RichEditorSurface, placeholder: string) {
+  const capabilitySet = new Set<UIRichContentExtensionCapability>(getExtensionsForSurface(surface));
+  const has = (capability: UIRichContentExtensionCapability): boolean =>
+    capabilitySet.has(capability);
+
+  return [
+    StarterKit.configure({
+      // ADR-0011: image extension is NOT registered. Users cannot author images client-side; backend is authoritative.
+      // Disable built-ins that are not in the surface capability map, plus built-ins configured separately below.
+      blockquote: false,
+      bold: has('bold') ? undefined : false,
+      bulletList: has('list') ? undefined : false,
+      code: has('code') ? undefined : false,
+      codeBlock: false,
+      hardBreak: false,
+      heading: false,
+      horizontalRule: false,
+      italic: has('italic') ? undefined : false,
+      link: false,
+      listItem: has('list') ? undefined : false,
+      orderedList: has('list') ? undefined : false,
+      strike: false,
+      underline: false,
+    }),
+    ...(has('link') ? [Link.configure({ openOnClick: false })] : []),
+    ...(has('underline') ? [Underline] : []),
+    Placeholder.configure({ placeholder }),
+    ...(has('attachmentRef') ? [AttachmentRef] : []),
+    ...(has('mention') ? [Mention] : []),
+  ];
 }

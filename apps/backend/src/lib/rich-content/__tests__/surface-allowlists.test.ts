@@ -90,17 +90,25 @@ describe('sanitizeTipTap (public-update)', () => {
 describe('sanitizeTipTap (reporter-reply)', () => {
   const surface = 'reporter-reply' as const;
 
-  it('accepts paragraph with bold + italic + code + link marks', () => {
+  it('accepts paragraph with bold + italic + link marks', () => {
     const res = sanitizeTipTap({
       surface,
       doc: doc(p('hello', [
         { type: 'bold' },
         { type: 'italic' },
-        { type: 'code' },
         { type: 'link', attrs: { href: 'https://example.com' } },
       ])),
     });
     expect(res.ok).toBe(true);
+  });
+
+  it('rejects code mark', () => {
+    const res = sanitizeTipTap({
+      surface,
+      doc: doc(p('code', [{ type: 'code' }])),
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe('rich_content.disallowed_node');
   });
 
   it('accepts attachmentRef node', () => {

@@ -17,9 +17,14 @@
 
 import {
   SHARED_ALLOWLISTS,
+  SHARED_RICH_CONTENT_EXTENSION_CAPABILITIES,
+  SHARED_SURFACE_EXTENSION_CAPABILITIES,
   SHARED_SURFACES,
+  getExtensionsForSurface,
   type SharedAllowlists,
+  type SharedRichContentExtensionCapability,
   type SharedSurface,
+  type SharedSurfaceExtensionCapabilities,
   type SharedSurfaceAllowlist,
   type AttrSchema as SharedAttrSchema,
 } from '@fops/shared';
@@ -31,5 +36,11 @@ export type Surface = SharedSurface;
 
 export type AttrSchema = SharedAttrSchema;
 export type SurfaceAllowlist = SharedSurfaceAllowlist;
+export type RichContentExtensionCapability = SharedRichContentExtensionCapability;
+export type SurfaceExtensionCapabilities = SharedSurfaceExtensionCapabilities;
 
 export const SURFACE_ALLOWLISTS: SharedAllowlists = SHARED_ALLOWLISTS;
+export const RICH_CONTENT_EXTENSION_CAPABILITIES = SHARED_RICH_CONTENT_EXTENSION_CAPABILITIES;
+export const SURFACE_EXTENSION_CAPABILITIES: SharedSurfaceExtensionCapabilities =
+  SHARED_SURFACE_EXTENSION_CAPABILITIES;
+export { getExtensionsForSurface };

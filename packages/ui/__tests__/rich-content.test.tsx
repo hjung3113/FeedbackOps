@@ -24,15 +24,15 @@ const sampleDoc: TipTapDoc = {
 
 describe('RichEditor', () => {
   it('mounts with surface prop and renders initial value', () => {
-    render(<RichEditor surface="voc-description" value={sampleDoc} />);
-    const root = document.querySelector('[data-surface="voc-description"]');
+    render(<RichEditor surface="internal-comment" value={sampleDoc} />);
+    const root = document.querySelector('[data-surface="internal-comment"]');
     expect(root).toBeInTheDocument();
   });
 
   it('respects disabled prop', () => {
-    render(<RichEditor surface="voc-description" value={sampleDoc} disabled />);
+    render(<RichEditor surface="internal-comment" value={sampleDoc} disabled />);
     // Editor instance is editable=false; assertion via attribute
-    const root = document.querySelector('[data-surface="voc-description"]');
+    const root = document.querySelector('[data-surface="internal-comment"]');
     expect(root).toBeInTheDocument();
     // The ProseMirror div should have contenteditable=false when disabled
     const editorDiv = root?.querySelector('[contenteditable]');
