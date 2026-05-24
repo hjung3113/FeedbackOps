@@ -3,7 +3,7 @@ import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
 import { type Editor, EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
+import StarterKit, { type StarterKitOptions } from '@tiptap/starter-kit';
 import * as React from 'react';
 import { cn } from '../utils/cn';
 import {
@@ -209,25 +209,31 @@ function buildExtensionsForSurface(surface: RichEditorSurface, placeholder: stri
   const has = (capability: UIRichContentExtensionCapability): boolean =>
     capabilitySet.has(capability);
 
+  // ADR-0011: image extension is NOT registered. Users cannot author images client-side; backend is authoritative.
+  // Disable built-ins not in the surface capability map, plus built-ins configured separately below. A capability that
+  // IS present is left at StarterKit's default (enabled) by OMITTING the key — never set to `undefined`, which
+  // `exactOptionalPropertyTypes` rejects for an optional prop.
+  const starterKitOptions: Partial<StarterKitOptions> = {
+    blockquote: false,
+    codeBlock: false,
+    hardBreak: false,
+    heading: false,
+    horizontalRule: false,
+    link: false,
+    strike: false,
+    underline: false,
+  };
+  if (!has('bold')) starterKitOptions.bold = false;
+  if (!has('italic')) starterKitOptions.italic = false;
+  if (!has('code')) starterKitOptions.code = false;
+  if (!has('list')) {
+    starterKitOptions.bulletList = false;
+    starterKitOptions.orderedList = false;
+    starterKitOptions.listItem = false;
+  }
+
   return [
-    StarterKit.configure({
-      // ADR-0011: image extension is NOT registered. Users cannot author images client-side; backend is authoritative.
-      // Disable built-ins that are not in the surface capability map, plus built-ins configured separately below.
-      blockquote: false,
-      bold: has('bold') ? undefined : false,
-      bulletList: has('list') ? undefined : false,
-      code: has('code') ? undefined : false,
-      codeBlock: false,
-      hardBreak: false,
-      heading: false,
-      horizontalRule: false,
-      italic: has('italic') ? undefined : false,
-      link: false,
-      listItem: has('list') ? undefined : false,
-      orderedList: has('list') ? undefined : false,
-      strike: false,
-      underline: false,
-    }),
+    StarterKit.configure(starterKitOptions),
     ...(has('link') ? [Link.configure({ openOnClick: false })] : []),
     ...(has('underline') ? [Underline] : []),
     Placeholder.configure({ placeholder }),
