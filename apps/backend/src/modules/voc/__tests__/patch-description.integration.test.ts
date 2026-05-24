@@ -348,7 +348,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const res = await patchDescription(app, reporter, voc.id, {
       title: 'updated title',
       description_rich_content: paragraphDoc('updated content'),
-      attachments: [],
+      attachment_ids: [],
     }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
 
     expect(res.statusCode).toBe(200);
@@ -421,7 +421,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
   });
 
   // Case 4: empty attachments when current is also empty — no diff
-  it('case 4: attachments: [] when current is [] → no attachments diff; if title unchanged → no audit', async () => {
+  it('case 4: attachment_ids: [] when current is [] → no attachments diff; if title unchanged → no audit', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-attach-noop', 'Attach Noop');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -431,10 +431,10 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
       description_rich_content: paragraphDoc('same body'),
     }, randomUUID());
 
-    // Send title same value + attachments: [] — only attachments in body
+    // Send title same value + attachment_ids: [] — only attachments in body
     // but title is unchanged and description is unchanged, so empty diff.
     const res = await patchDescription(app, reporter, voc.id, {
-      attachments: [],
+      attachment_ids: [],
     }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
 
     expect(res.statusCode).toBe(200);
