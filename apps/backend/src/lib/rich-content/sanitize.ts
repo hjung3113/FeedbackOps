@@ -7,16 +7,11 @@
 // text?, content?}) so unknown top-level fields cannot leak to the renderer.
 // Also validates per-attr value schemas (uuid, url, bounded string).
 
-import type { TipTapDoc } from '@fops/shared';
+import type { RichContentErrorCode as SharedRichContentErrorCode, TipTapDoc } from '@fops/shared';
 
 import { SURFACE_ALLOWLISTS, type AttrSchema, type Surface } from './surface-allowlists.js';
 
-export type RichContentErrorCode =
-  | 'rich_content.disallowed_node'
-  | 'rich_content.disallowed_attr'
-  | 'rich_content.invalid_attr_value'
-  | 'rich_content.missing_required_attr'
-  | 'rich_content.external_image_forbidden';
+export type RichContentErrorCode = SharedRichContentErrorCode;
 
 // fields_code preserves field-level detail while the top-level code stays stable
 // for telemetry and client handling. Undefined means the general node-level case.

@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest';
+import { invalidDocs, validDocs } from '@fops/shared';
 import { sanitizeTipTap } from '../sanitize.js';
 import type { RichContentFieldsCode } from '../sanitize.js';
+
+describe('sanitizeTipTap canonical rich-content fixtures', () => {
+  for (const [surfaceName, docs] of Object.entries(validDocs)) {
+    it.each(docs)('%s accepts canonical valid fixture %#', (docFixture) => {
+      const res = sanitizeTipTap({ surface: surfaceName as never, doc: docFixture });
+      expect(res.ok).toBe(true);
+    });
+  }
+
+  for (const [surfaceName, docs] of Object.entries(invalidDocs)) {
+    it.each(docs)('%s rejects canonical invalid fixture %# with expected top-level code', (fixture) => {
+      const res = sanitizeTipTap({ surface: surfaceName as never, doc: fixture.doc });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error.code).toBe(fixture.expectedCode);
+      }
+    });
+  }
+});
 
 const surface = 'voc-description' as const;
 

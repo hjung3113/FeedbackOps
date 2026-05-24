@@ -182,6 +182,7 @@ function cleanNode(raw: unknown, depth: number, ctx: WalkCtx): CleanNode | null 
   // image is always dropped — there is no allowed image node on any surface.
   if (node.type === 'image') return null;
   if (!allow.nodes.has(node.type)) return null;
+  if (allow.leafNodes.has(node.type) && Array.isArray(node.content) && node.content.length > 0) return null;
 
   ctx.nodeCount++;
   if (ctx.nodeCount > allow.maxNodes) return null;
