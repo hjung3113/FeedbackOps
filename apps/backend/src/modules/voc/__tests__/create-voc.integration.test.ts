@@ -290,10 +290,17 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       description_rich_content: paragraphDoc('same'),
     };
     const r1 = await postVoc(app, reporter, body, key);
+    const auditBeforeReplay = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
+    );
     const r2 = await postVoc(app, reporter, body, key);
+    const auditAfterReplay = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
+    );
     expect(r1.statusCode).toBe(201);
     expect(r2.statusCode).toBe(201);
     expect(r1.json().id).toBe(r2.json().id);
+    expect(auditAfterReplay.rows[0]?.n).toBe(auditBeforeReplay.rows[0]?.n);
     const count = await dbHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from voc.vocs where primary_managed_system_id = $1`,
       [msId],
