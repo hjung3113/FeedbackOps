@@ -163,13 +163,40 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // routes that need them. `/health` is exempt via `allowList`.
   const sessionService = createSessionService({ db: dbHandle.db, workspaceId });
 
+  // Adversarial review API-C-2: `@fastify/rate-limit` runs as an
+  // `onRequest` hook, which fires BEFORE the `requireSession` preHandler
+  // that populates `req.session`. The prior keyGenerator therefore always
+  // observed `undefined` and fell back to `req.ip`, collapsing all users
+  // behind a shared NAT into one bucket. We resolve the session cookie
+  // inline before bucket selection so the per-actor bucket is the
+  // workspace+actor identity when a valid session cookie is present, and
+  // `req.ip` only for unauthenticated traffic.
+  const resolveRateLimitActorKey = async (req: FastifyRequest): Promise<string> => {
+    const raw = req.cookies?.[SESSION_COOKIE_NAME];
+    const token = typeof raw === 'string' ? raw : undefined;
+    if (token) {
+      try {
+        const identity = await sessionService.lookupActorIdByToken(token);
+        if (identity) {
+          return `${identity.workspace_id}:${identity.actor_id}`;
+        }
+      } catch (err) {
+        req.log?.warn?.({ err }, 'rate-limit actor lookup failed; falling back to ip');
+      }
+    }
+    return req.ip;
+  };
+
+  const actorAwareKeyGenerator = async (req: FastifyRequest): Promise<string> => {
+    return resolveRateLimitActorKey(req);
+  };
+
   await app.register(rateLimit, {
     global: true,
-    max: (req) => (req.session?.actor_id ? 100 : 50),
+    max: (req, key) => (key === req.ip ? 50 : 100),
     timeWindow: '1 minute',
     allowList: (req) => req.url === '/health',
-    keyGenerator: (req) =>
-      req.session ? `${req.session.workspace_id}:${req.session.actor_id}` : req.ip,
+    keyGenerator: actorAwareKeyGenerator,
     store: createPgRateLimitStore(dbHandle.pool, 'global') as never,
     errorResponseBuilder: (_req, ctx) => ({
       code: 'rate_limited.actor',
@@ -193,40 +220,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // mutation handlers will attach in later slices. Slice 1 #3 has no
   // consumer of the sensitive tier — the plumbing is in place so #4/#5
   // pick it up without touching server.ts again.
-  //
-  // Adversarial review API-C-2: `@fastify/rate-limit` runs as an
-  // `onRequest` hook, which fires BEFORE the `requireSession` preHandler
-  // that populates `req.session`. The prior keyGenerator therefore always
-  // observed `undefined` and fell back to `req.ip`, collapsing all users
-  // behind a shared NAT into one bucket. We resolve the session cookie
-  // inline (one DB lookup per mutation) so the per-actor bucket is the
-  // workspace+actor identity when a valid session cookie is present, and
-  // `req.ip` only for unauthenticated traffic.
-  const mutationKeyGenerator = async (req: FastifyRequest): Promise<string> => {
-    const raw = req.cookies?.[SESSION_COOKIE_NAME];
-    const token = typeof raw === 'string' ? raw : undefined;
-    if (token) {
-      try {
-        const identity = await sessionService.lookupActorIdByToken(token);
-        if (identity) return `${identity.workspace_id}:${identity.actor_id}`;
-      } catch (err) {
-        req.log?.warn?.({ err }, 'rate-limit actor lookup failed; falling back to ip');
-      }
-    }
-    return req.ip;
-  };
-
   app.decorate('rateLimitConfig', {
     mutation: {
       max: 10,
       timeWindow: '1 minute',
-      keyGenerator: mutationKeyGenerator,
+      keyGenerator: actorAwareKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'mutation') as never,
     },
     sensitive: {
       max: 5,
       timeWindow: '1 minute',
-      keyGenerator: mutationKeyGenerator,
+      keyGenerator: actorAwareKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'sensitive') as never,
     },
     // TODO(F18 follow-up): add admin bypass for the read tier once the
@@ -234,7 +238,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     read: {
       max: 300,
       timeWindow: '1 minute',
-      keyGenerator: mutationKeyGenerator,
+      keyGenerator: actorAwareKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'read') as never,
     },
     // Slice 3 #17 — Reporter pre-triage edit (PATCH /vocs/:id/description).
@@ -244,7 +248,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     reporterEdit: {
       max: 30,
       timeWindow: '1 minute',
-      keyGenerator: mutationKeyGenerator,
+      keyGenerator: actorAwareKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'reporter_edit') as never,
     },
     // PLAN-22 C3a — POST /attachments. 20/min per actor. Admin bypass is a
@@ -253,7 +257,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     attachmentMutation: {
       max: 20,
       timeWindow: '1 minute',
-      keyGenerator: mutationKeyGenerator,
+      keyGenerator: actorAwareKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'attachment_mutation') as never,
     },
   });
