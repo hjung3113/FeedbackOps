@@ -90,6 +90,41 @@ function paragraphDoc(text: string) {
   };
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForManagedSystemLockWait(
+  dbHandle: DbHandle,
+  options: { timeoutMs: number; pollIntervalMs: number },
+): Promise<void> {
+  const observer = await dbHandle.pool.connect();
+  const deadline = Date.now() + options.timeoutMs;
+
+  try {
+    while (Date.now() < deadline) {
+      const waits = await observer.query<{ wait_detected: number }>(
+        `select 1 as wait_detected
+           from pg_stat_activity a
+           join pg_locks l on l.pid = a.pid
+          where l.relation = 'core.managed_systems'::regclass
+            and a.wait_event_type = 'Lock'
+          limit 1`,
+      );
+
+      if (waits.rows.length >= 1) return;
+
+      await delay(Math.min(options.pollIntervalMs, Math.max(0, deadline - Date.now())));
+    }
+  } finally {
+    observer.release();
+  }
+
+  throw new Error(
+    `timed out waiting for lock wait on core.managed_systems after ${options.timeoutMs}ms`,
+  );
+}
+
 // PLAN-22 C7b: seed an unlinked voc_attachments row owned by a given actor.
 // Mirrors the helper in modules/attachments/__tests__/get-attachments-download
 // integration test (kept local here to avoid cross-suite imports).
@@ -976,11 +1011,12 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   // the managed_systems row (acquiring FOR NO KEY UPDATE), then we issue
   // POST /vocs in parallel — the create handler reaches lockManagedSystem
   // and BLOCKS on the conflicting row lock. We wait for the handler to
-  // park at the lock, then COMMIT the archive; the unblocked SELECT FOR
-  // UPDATE sees archived_at populated and the service throws
-  // conflict.parent_archived. Without this test a regression that drops
-  // FOR UPDATE from lockManagedSystem would be undetectable in CI; case
-  // #9 only exercises the post-archive read path, not the locking semantics.
+  // park at the lock by polling pg_locks from a third connection, then COMMIT
+  // the archive; the unblocked SELECT FOR UPDATE sees archived_at populated
+  // and the service throws conflict.parent_archived. Without this test a
+  // regression that drops FOR UPDATE from lockManagedSystem would be
+  // undetectable in CI; case #9 only exercises the post-archive read path,
+  // not the locking semantics.
   // Findings: adversarial review API-C-1, DB-B-4.
   it.skipIf(!MIGRATE_URL)(
     'concurrent archive race → 409 conflict.parent_archived (FOR UPDATE)',
@@ -998,6 +1034,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       if (!adminActorId) throw new Error('admin actor not found');
 
       const racer = await dbHandle.pool.connect();
+      let postPromise: Promise<Awaited<ReturnType<typeof postVoc>>> | null = null;
       try {
         await racer.query('BEGIN');
         // Take a row-level lock (FOR NO KEY UPDATE) on the MS row but do
@@ -1012,24 +1049,27 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
 
         // Fire the POST /vocs in parallel — it will park inside the
         // service transaction at lockManagedSystem's FOR UPDATE.
-        const postPromise = postVoc(
-          app,
-          reporter,
-          {
-            primary_managed_system_id: msId,
-            title: 'race',
-            description_rich_content: paragraphDoc('a'),
-          },
-          randomUUID(),
+        postPromise = Promise.resolve(
+          postVoc(
+            app,
+            reporter,
+            {
+              primary_managed_system_id: msId,
+              title: 'race',
+              description_rich_content: paragraphDoc('a'),
+            },
+            randomUUID(),
+          ),
         );
 
-        // Give the POST handler time to reach lockManagedSystem and block
-        // on the row lock. 200ms is generous on a local pg; we cannot
-        // observe the wait directly, but if it has not parked yet the
-        // subsequent COMMIT simply makes the row already-archived which
-        // still yields conflict.parent_archived — the assertion below
-        // remains correct either way.
-        await new Promise((r) => setTimeout(r, 200));
+        // Observe the blocked SELECT FOR UPDATE from a third connection before
+        // releasing the archive transaction. If FOR UPDATE is removed from
+        // lockManagedSystem, this wait times out instead of accepting a
+        // post-archive conflict as equivalent coverage.
+        await waitForManagedSystemLockWait(dbHandle, {
+          timeoutMs: 2000,
+          pollIntervalMs: 25,
+        });
 
         // Release the lock; the parked SELECT FOR UPDATE now proceeds,
         // sees archived_at populated, and the service rejects with
@@ -1050,6 +1090,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         } catch {
           /* ignore */
         }
+        await postPromise?.catch(() => undefined);
         throw err;
       } finally {
         racer.release();
