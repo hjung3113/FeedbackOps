@@ -21,11 +21,12 @@ describe('shared rich-content allowlist', () => {
     expect(SHARED_SURFACES).toContain('internal-comment');
   });
 
-  it('each surface defines nodes, marks, nodeAttrs, markAttrs maps', () => {
+  it('each surface defines nodes, leafNodes, marks, nodeAttrs, markAttrs maps', () => {
     for (const surface of SHARED_SURFACES) {
       const a = SHARED_ALLOWLISTS[surface];
       expect(a).toBeDefined();
       expect(a.nodes instanceof Set).toBe(true);
+      expect(a.leafNodes instanceof Set).toBe(true);
       expect(a.marks instanceof Set).toBe(true);
       expect(typeof a.nodeAttrs).toBe('object');
       expect(typeof a.markAttrs).toBe('object');
@@ -49,7 +50,20 @@ describe('shared rich-content allowlist', () => {
     const pu = SHARED_ALLOWLISTS['public-update'];
     expect(pu.marks.has('link')).toBe(false);
     expect(pu.nodes.has('attachmentRef')).toBe(false);
+    expect(pu.leafNodes.has('attachmentRef')).toBe(false);
     expect(pu.allowedLinkSchemes.size).toBe(0);
+  });
+
+  it('attachmentRef and mention are leaf nodes wherever they are allowed', () => {
+    for (const surface of SHARED_SURFACES) {
+      const a = SHARED_ALLOWLISTS[surface];
+      if (a.nodes.has('attachmentRef')) {
+        expect(a.leafNodes.has('attachmentRef')).toBe(true);
+      }
+      if (a.nodes.has('mention')) {
+        expect(a.leafNodes.has('mention')).toBe(true);
+      }
+    }
   });
 
   it('SharedAllowlists type accepts the exported map', () => {

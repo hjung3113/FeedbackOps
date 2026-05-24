@@ -102,6 +102,12 @@ function mentionDoc(attrs: Record<string, unknown>) {
     content: [{ type: 'mention', attrs }],
   };
 }
+function leafNodeDoc(type: 'attachmentRef' | 'mention', attrs: Record<string, unknown>, content?: unknown[]) {
+  return {
+    type: 'doc' as const,
+    content: [{ type, attrs, ...(content !== undefined ? { content } : {}) }],
+  };
+}
 function codeBlockDoc(attrs?: Record<string, unknown>) {
   return {
     type: 'doc' as const,
@@ -190,6 +196,35 @@ describe('attr allowlist — positive cases', () => {
   it('attachmentRef with valid uuid (internal-comment)', () => {
     const res = sanitizeTipTap({ surface: 'internal-comment', doc: attachmentDoc({ id: VALID_UUID_2 }) });
     expect(res.ok).toBe(true);
+  });
+});
+
+describe('leaf node enforcement', () => {
+  it.each([
+    ['voc-description', 'attachmentRef', { id: VALID_UUID }],
+    ['reporter-reply', 'attachmentRef', { id: VALID_UUID }],
+    ['internal-comment', 'attachmentRef', { id: VALID_UUID_2 }],
+    ['internal-comment', 'mention', { actor_id: VALID_UUID }],
+  ] as const)('%s rejects %s with non-empty content[]', (surfaceName, type, attrs) => {
+    const res = sanitizeTipTap({
+      surface: surfaceName,
+      doc: leafNodeDoc(type, attrs, [{ type: 'text', text: 'drift' }]),
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.reason).toMatch(/leaf node/);
+    }
+  });
+
+  it.each([
+    ['voc-description', 'attachmentRef', { id: VALID_UUID }],
+    ['reporter-reply', 'attachmentRef', { id: VALID_UUID }],
+    ['internal-comment', 'attachmentRef', { id: VALID_UUID_2 }],
+    ['internal-comment', 'mention', { actor_id: VALID_UUID }],
+  ] as const)('%s accepts %s with absent or empty content[]', (surfaceName, type, attrs) => {
+    expect(sanitizeTipTap({ surface: surfaceName, doc: leafNodeDoc(type, attrs) }).ok).toBe(true);
+    expect(sanitizeTipTap({ surface: surfaceName, doc: leafNodeDoc(type, attrs, []) }).ok).toBe(true);
   });
 });
 

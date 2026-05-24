@@ -13,12 +13,13 @@ describe('backend ↔ shared allowlist drift', () => {
   });
 
   it.each(['voc-description', 'reporter-reply', 'public-update', 'internal-comment'] as const)(
-    '%s — node names, mark names, and attr key shape match shared',
+    '%s — node names, leaf node names, mark names, and attr key shape match shared',
     (surface) => {
       const be = SURFACE_ALLOWLISTS[surface];
       const sh = SHARED_ALLOWLISTS[surface];
 
       expect([...be.nodes].sort()).toEqual([...sh.nodes].sort());
+      expect([...be.leafNodes].sort()).toEqual([...sh.leafNodes].sort());
       expect([...be.marks].sort()).toEqual([...sh.marks].sort());
       expect(Object.keys(be.nodeAttrs).sort()).toEqual(Object.keys(sh.nodeAttrs).sort());
       expect(Object.keys(be.markAttrs).sort()).toEqual(Object.keys(sh.markAttrs).sort());

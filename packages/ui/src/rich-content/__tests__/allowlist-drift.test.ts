@@ -26,6 +26,7 @@ type AttrKind = 'uuid' | 'url' | 'string';
 
 interface ExpectedSurface {
   nodes: string[];
+  leafNodes: string[];
   marks: string[];
   nodeAttrs: Record<string, Record<string, AttrKind>>;
   markAttrs: Record<string, Record<string, AttrKind>>;
@@ -45,6 +46,7 @@ const EXPECTED_SURFACES: readonly UISurface[] = [
 const EXPECTED: Record<UISurface, ExpectedSurface> = {
   'voc-description': {
     nodes: ['doc', 'paragraph', 'text', 'bulletList', 'orderedList', 'listItem', 'attachmentRef'],
+    leafNodes: ['attachmentRef'],
     marks: ['bold', 'italic', 'underline', 'code', 'link'],
     nodeAttrs: { attachmentRef: { id: 'uuid' } },
     markAttrs: { link: { href: 'url' } },
@@ -55,6 +57,7 @@ const EXPECTED: Record<UISurface, ExpectedSurface> = {
   },
   'public-update': {
     nodes: ['doc', 'paragraph', 'text', 'bulletList', 'orderedList', 'listItem'],
+    leafNodes: [],
     marks: ['bold', 'italic'],
     nodeAttrs: {},
     markAttrs: {},
@@ -65,6 +68,7 @@ const EXPECTED: Record<UISurface, ExpectedSurface> = {
   },
   'reporter-reply': {
     nodes: ['doc', 'paragraph', 'text', 'bulletList', 'orderedList', 'listItem', 'attachmentRef'],
+    leafNodes: ['attachmentRef'],
     marks: ['bold', 'italic', 'code', 'link'],
     nodeAttrs: { attachmentRef: { id: 'uuid' } },
     markAttrs: { link: { href: 'url' } },
@@ -79,6 +83,7 @@ const EXPECTED: Record<UISurface, ExpectedSurface> = {
       'bulletList', 'orderedList', 'listItem',
       'mention', 'attachmentRef',
     ],
+    leafNodes: ['mention', 'attachmentRef'],
     marks: ['bold', 'italic', 'code', 'link'],
     nodeAttrs: {
       attachmentRef: { id: 'uuid' },
@@ -99,12 +104,13 @@ describe('UI allowlist-local ↔ shared canonical fixture drift', () => {
   });
 
   it.each(EXPECTED_SURFACES)(
-    '%s — node names, mark names, attr key shape, and DoS caps match expected',
+    '%s — node names, leaf node names, mark names, attr key shape, and DoS caps match expected',
     (surface) => {
       const ui = UI_ALLOWLISTS[surface];
       const ex = EXPECTED[surface];
 
       expect([...ui.nodes].sort()).toEqual([...ex.nodes].sort());
+      expect([...ui.leafNodes].sort()).toEqual([...ex.leafNodes].sort());
       expect([...ui.marks].sort()).toEqual([...ex.marks].sort());
 
       expect(Object.keys(ui.nodeAttrs).sort()).toEqual(Object.keys(ex.nodeAttrs).sort());

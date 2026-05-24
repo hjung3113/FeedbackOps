@@ -325,7 +325,18 @@ export function sanitizeTipTap(args: {
       };
     }
 
-    // 3. Text byte cap.
+    // 3. Atomic TipTap nodes must remain true leaves.
+    if (allow.leafNodes.has(node.type) && Array.isArray(node.content) && node.content.length > 0) {
+      return {
+        error: {
+          code: 'rich_content.disallowed_node',
+          reason: `leaf node ${node.type} must not have content`,
+          path: `${path}.content`,
+        },
+      };
+    }
+
+    // 4. Text byte cap.
     if (typeof node.text === 'string') {
       totalText += Buffer.byteLength(node.text, 'utf8');
       if (totalText > allow.maxTextBytes) {
@@ -339,12 +350,12 @@ export function sanitizeTipTap(args: {
       }
     }
 
-    // 4. Attrs validation.
+    // 5. Attrs validation.
     const nodeAttrSchemas = allow.nodeAttrs[node.type];
     const attrsResult = validateAttrs(nodeAttrSchemas, node.attrs, path);
     if ('error' in attrsResult) return attrsResult;
 
-    // 5. Marks validation (rebuild canonical mark list).
+    // 6. Marks validation (rebuild canonical mark list).
     const cleanMarks: CleanMark[] = [];
     if (Array.isArray(node.marks)) {
       for (let i = 0; i < node.marks.length; i++) {
@@ -354,7 +365,7 @@ export function sanitizeTipTap(args: {
       }
     }
 
-    // 6. Recurse content.
+    // 7. Recurse content.
     const cleanContent: CleanNode[] = [];
     if (Array.isArray(node.content)) {
       for (let i = 0; i < node.content.length; i++) {
@@ -364,7 +375,7 @@ export function sanitizeTipTap(args: {
       }
     }
 
-    // 7. Build canonical clean node (omit empty attrs, empty marks, empty content).
+    // 8. Build canonical clean node (omit empty attrs, empty marks, empty content).
     const cleanNode: CleanNode = { type: node.type };
     if (Object.keys(attrsResult.cleanAttrs).length > 0) {
       cleanNode.attrs = attrsResult.cleanAttrs;
