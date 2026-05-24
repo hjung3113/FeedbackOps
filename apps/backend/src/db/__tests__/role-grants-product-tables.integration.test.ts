@@ -1,15 +1,29 @@
 /**
  * Slice 3 #22 — DB role grants drift check for product tables.
  *
- * Asserts that `fops_app` retains SELECT + INSERT + UPDATE + DELETE on every
- * base table in the `voc` schema after migrations apply. ADR-0008 exempts
- * `core.audit_log` (INSERT + SELECT only) but every product table is full-DML
- * for fops_app.
+ * Asserts that `fops_app` holds exactly the DML privileges each `voc.*` base
+ * table is designed for — no more, no less. Most product tables are full-DML
+ * (SELECT/INSERT/UPDATE/DELETE), but several are intentionally append-only or
+ * read-only per migration 0010 (`0010_slice3_voc_foundation.sql`):
  *
- * Catches the class of drift bug where a migration `RENAME` / `CREATE` /
- * `REVOKE` drops a previously-granted privilege without a paired re-GRANT.
- * The latest occurrence was the missing DELETE on `voc.voc_attachments`
- * after migration 0014's rename, fixed by migration 0016.
+ *   - voc_public_updates / voc_reporter_replies / voc_internal_comments:
+ *     SELECT + INSERT only. These are immutable conversation-feed rows; the
+ *     app inserts and reads them but never edits or deletes (see voc/repo.ts).
+ *   - reporter_facing_status_transitions: SELECT only. A static
+ *     allowed-transition lookup table seeded by migration; the app only reads
+ *     it (see voc/transitions.ts).
+ *
+ * (Note: ADR-0008 itself governs `core.audit_log` immutability only — it does
+ * not mandate full-DML for product tables. The append-only grants above come
+ * from the 0010 schema design, which keeps reporter-facing VOC history
+ * immutable at the role level rather than relying on app code.)
+ *
+ * The check catches drift in BOTH directions:
+ *   - under-grant: a `RENAME`/`CREATE`/`REVOKE` drops a required privilege
+ *     without a paired re-GRANT (e.g. missing DELETE on voc.voc_attachments
+ *     after 0014's rename, fixed by 0016);
+ *   - over-grant: a migration silently widens an append-only table to
+ *     UPDATE/DELETE, eroding the immutability guarantee.
  *
  * Skipped without DATABASE_URL / DATABASE_URL_MIGRATE / WORKSPACE_ID,
  * matching the existing role-grants integration test.
@@ -25,13 +39,19 @@ const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 const PRODUCT_SCHEMAS = ['voc'] as const;
-const REQUIRED_PRIVILEGES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] as const;
+const DML_PRIVILEGES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] as const;
+type DmlPrivilege = (typeof DML_PRIVILEGES)[number];
 
-// ADR-0008: core.audit_log is INSERT + SELECT only by design. No other
-// product-table exceptions today.
-const KNOWN_LIMITED_GRANTS = new Set<string>([
-  // 'core.audit_log' — not iterated because PRODUCT_SCHEMAS=['voc'] only.
-]);
+const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
+
+// Tables intentionally narrower than full-DML for fops_app, keyed by the
+// fully-qualified `schema.table` name. Grants come from migration 0010.
+const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
+  'voc.voc_public_updates': ['SELECT', 'INSERT'],
+  'voc.voc_reporter_replies': ['SELECT', 'INSERT'],
+  'voc.voc_internal_comments': ['SELECT', 'INSERT'],
+  'voc.reporter_facing_status_transitions': ['SELECT'],
+};
 
 describe.skipIf(!runIntegration)(
   'ADR-0008 role grants — product tables (Slice 3 #22)',
@@ -46,7 +66,7 @@ describe.skipIf(!runIntegration)(
       await migrateHandle?.close();
     });
 
-    it('fops_app has SELECT + INSERT + UPDATE + DELETE on every voc.* base table', async () => {
+    it('fops_app holds exactly the designed DML privileges on every voc.* base table', async () => {
       const { rows: tables } = await migrateHandle.pool.query<{
         table_schema: string;
         table_name: string;
@@ -63,7 +83,7 @@ describe.skipIf(!runIntegration)(
       const failures: string[] = [];
       for (const t of tables) {
         const fq = `${t.table_schema}.${t.table_name}`;
-        if (KNOWN_LIMITED_GRANTS.has(fq)) continue;
+        const expected = new Set<DmlPrivilege>(EXPECTED_GRANTS[fq] ?? FULL_DML);
 
         const { rows: grants } = await migrateHandle.pool.query<{ privilege_type: string }>(
           `select privilege_type
@@ -74,9 +94,14 @@ describe.skipIf(!runIntegration)(
           [t.table_schema, t.table_name],
         );
         const got = new Set(grants.map((g) => g.privilege_type));
-        for (const priv of REQUIRED_PRIVILEGES) {
-          if (!got.has(priv)) {
+        for (const priv of DML_PRIVILEGES) {
+          if (expected.has(priv) && !got.has(priv)) {
             failures.push(`fops_app missing GRANT ${priv} ON ${fq}; add to a new migration`);
+          }
+          if (!expected.has(priv) && got.has(priv)) {
+            failures.push(
+              `fops_app has unexpected GRANT ${priv} ON ${fq}; ${fq} is append-only by design (migration 0010) — REVOKE it or update EXPECTED_GRANTS if the design changed`,
+            );
           }
         }
       }
