@@ -4,11 +4,10 @@
 // Spec: docs/frontend/specs/voc.md §5.7. ADR-0011 names this layer authoritative.
 //
 // PLAN-22 C9: the canonical data now lives in `@fops/shared/rich-content/
-// allowlist.ts` so the FE render-time sanitizer (packages/ui/src/rich-content/
-// sanitizeClient.ts) can apply the same allowlist without re-declaring it. This
-// file is a thin re-export so existing backend callers (sanitize.ts and tests)
-// keep their import paths and behavior. A `drift-vs-shared.test.ts` proves the
-// two layers stay in lockstep.
+// allowlist.ts`. This file is a thin re-export so existing backend callers
+// (sanitize.ts and tests) keep their import paths and behavior. The FE
+// render-time sanitizer mirrors the same values locally because ADR-0016
+// forbids @fops/ui -> @fops/shared imports.
 //
 // Layering note unchanged: the sanitizer enforces attr *shape* here (type,
 // format, length). Service-layer business rules (e.g. rejecting non-empty

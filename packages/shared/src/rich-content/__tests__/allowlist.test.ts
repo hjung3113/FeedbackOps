@@ -1,7 +1,7 @@
 // PLAN-22 C9 RED — shared allowlist constants.
 // The shared layer is the single source of truth for per-surface node/mark/attr
-// allowlists. The backend imports and adapts it; the FE sanitizer also imports
-// it. Drift between the two would re-open the XSS hole this chunk closes.
+// allowlists. The backend imports and adapts it; the FE sanitizer mirrors it
+// locally because ADR-0016 forbids @fops/ui -> @fops/shared imports.
 
 import { describe, expect, it } from 'vitest';
 

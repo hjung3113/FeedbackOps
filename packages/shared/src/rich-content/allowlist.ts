@@ -1,11 +1,11 @@
 // PLAN-22 C9 — shared per-surface rich-content allowlist.
 //
 // This module is the single source of truth for which TipTap nodes/marks/attrs
-// each surface accepts. Both the backend authoritative sanitizer
-// (apps/backend/src/lib/rich-content/sanitize.ts, ADR-0011) and the FE
-// render-time defence-in-depth sanitizer (packages/ui/src/rich-content/
-// sanitizeClient.ts) import these constants. A `drift-vs-shared` test on the
-// backend asserts the two stay in lockstep.
+// each surface accepts. The backend authoritative sanitizer
+// (apps/backend/src/lib/rich-content/sanitize.ts, ADR-0011) imports these
+// constants directly. ADR-0016 forbids @fops/ui -> @fops/shared imports, so
+// the FE render-time defence-in-depth sanitizer mirrors them locally and pins
+// the mirror with a drift test.
 //
 // Values copied verbatim from the original backend file as of PLAN-22 C9
 // extraction; the backend file now re-exports rather than re-defines.
