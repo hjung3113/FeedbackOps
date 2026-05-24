@@ -49,6 +49,26 @@ export interface UISurfaceAllowlist {
 
 export type UIAllowlists = Readonly<Record<UISurface, UISurfaceAllowlist>>;
 
+// ── Surface extension capabilities ──────────────────────────────────────────
+
+export const UI_RICH_CONTENT_EXTENSION_CAPABILITIES = [
+  'bold',
+  'italic',
+  'underline',
+  'code',
+  'list',
+  'link',
+  'mention',
+  'attachmentRef',
+] as const;
+
+export type UIRichContentExtensionCapability =
+  (typeof UI_RICH_CONTENT_EXTENSION_CAPABILITIES)[number];
+
+export type UISurfaceExtensionCapabilities = Readonly<
+  Record<UISurface, readonly UIRichContentExtensionCapability[]>
+>;
+
 // ── Shared scheme sets ───────────────────────────────────────────────────────
 
 const HTTP_ONLY = new Set(['http:', 'https:']);
@@ -105,7 +125,7 @@ export const UI_ALLOWLISTS: UIAllowlists = {
       'attachmentRef',
     ]),
     leafNodes: new Set(['attachmentRef']),
-    marks: new Set(['bold', 'italic', 'code', 'link']),
+    marks: new Set(['bold', 'italic', 'link']),
     nodeAttrs: { attachmentRef: attachmentRefAttrs },
     markAttrs: { link: linkMarkAttrs },
     allowedLinkSchemes: HTTP_ONLY,
@@ -139,3 +159,16 @@ export const UI_ALLOWLISTS: UIAllowlists = {
     maxMarks: 1000,
   },
 };
+
+export const UI_SURFACE_EXTENSION_CAPABILITIES: UISurfaceExtensionCapabilities = {
+  'voc-description': ['bold', 'italic', 'underline', 'code', 'list', 'link', 'attachmentRef'],
+  'reporter-reply': ['bold', 'italic', 'link', 'attachmentRef'],
+  'public-update': ['bold', 'italic', 'list'],
+  'internal-comment': ['bold', 'italic', 'code', 'list', 'link', 'mention', 'attachmentRef'],
+};
+
+export function getExtensionsForSurface(
+  surface: UISurface,
+): readonly UIRichContentExtensionCapability[] {
+  return UI_SURFACE_EXTENSION_CAPABILITIES[surface];
+}

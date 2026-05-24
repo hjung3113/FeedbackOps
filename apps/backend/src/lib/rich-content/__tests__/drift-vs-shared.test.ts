@@ -3,13 +3,28 @@
 // one side without the other; align them before merging.
 
 import { describe, expect, it } from 'vitest';
-import { SHARED_ALLOWLISTS, SHARED_SURFACES } from '@fops/shared';
+import {
+  SHARED_ALLOWLISTS,
+  SHARED_RICH_CONTENT_EXTENSION_CAPABILITIES,
+  SHARED_SURFACE_EXTENSION_CAPABILITIES,
+  SHARED_SURFACES,
+} from '@fops/shared';
 
-import { SURFACE_ALLOWLISTS, SURFACES } from '../surface-allowlists.js';
+import {
+  RICH_CONTENT_EXTENSION_CAPABILITIES,
+  SURFACE_ALLOWLISTS,
+  SURFACE_EXTENSION_CAPABILITIES,
+  SURFACES,
+} from '../surface-allowlists.js';
 
 describe('backend ↔ shared allowlist drift', () => {
   it('SURFACES tuple matches SHARED_SURFACES (set equality)', () => {
     expect(new Set(SURFACES)).toEqual(new Set(SHARED_SURFACES));
+  });
+
+  it('surface extension capability maps match shared', () => {
+    expect(RICH_CONTENT_EXTENSION_CAPABILITIES).toEqual(SHARED_RICH_CONTENT_EXTENSION_CAPABILITIES);
+    expect(SURFACE_EXTENSION_CAPABILITIES).toEqual(SHARED_SURFACE_EXTENSION_CAPABILITIES);
   });
 
   it.each(['voc-description', 'reporter-reply', 'public-update', 'internal-comment'] as const)(

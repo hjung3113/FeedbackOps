@@ -45,6 +45,26 @@ export interface SharedSurfaceAllowlist {
 
 export type SharedAllowlists = Readonly<Record<SharedSurface, SharedSurfaceAllowlist>>;
 
+// ── Surface extension capabilities ──────────────────────────────────────────
+
+export const SHARED_RICH_CONTENT_EXTENSION_CAPABILITIES = [
+  'bold',
+  'italic',
+  'underline',
+  'code',
+  'list',
+  'link',
+  'mention',
+  'attachmentRef',
+] as const;
+
+export type SharedRichContentExtensionCapability =
+  (typeof SHARED_RICH_CONTENT_EXTENSION_CAPABILITIES)[number];
+
+export type SharedSurfaceExtensionCapabilities = Readonly<
+  Record<SharedSurface, readonly SharedRichContentExtensionCapability[]>
+>;
+
 // ── Shared scheme sets ───────────────────────────────────────────────────────
 
 const HTTP_ONLY = new Set(['http:', 'https:']);
@@ -101,7 +121,7 @@ export const SHARED_ALLOWLISTS: SharedAllowlists = {
       'attachmentRef',
     ]),
     leafNodes: new Set(['attachmentRef']),
-    marks: new Set(['bold', 'italic', 'code', 'link']),
+    marks: new Set(['bold', 'italic', 'link']),
     nodeAttrs: { attachmentRef: attachmentRefAttrs },
     markAttrs: { link: linkMarkAttrs },
     allowedLinkSchemes: HTTP_ONLY,
@@ -135,3 +155,16 @@ export const SHARED_ALLOWLISTS: SharedAllowlists = {
     maxMarks: 1000,
   },
 };
+
+export const SHARED_SURFACE_EXTENSION_CAPABILITIES: SharedSurfaceExtensionCapabilities = {
+  'voc-description': ['bold', 'italic', 'underline', 'code', 'list', 'link', 'attachmentRef'],
+  'reporter-reply': ['bold', 'italic', 'link', 'attachmentRef'],
+  'public-update': ['bold', 'italic', 'list'],
+  'internal-comment': ['bold', 'italic', 'code', 'list', 'link', 'mention', 'attachmentRef'],
+};
+
+export function getExtensionsForSurface(
+  surface: SharedSurface,
+): readonly SharedRichContentExtensionCapability[] {
+  return SHARED_SURFACE_EXTENSION_CAPABILITIES[surface];
+}

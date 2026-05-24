@@ -393,6 +393,8 @@ function usePermissionDecision(
 
 Backend sanitization is authoritative (ADR-0011): the editor enforces the toolbar allowlist client-side as UX guidance only. The server rejects nodes/marks outside the surface allowlist with `code: 'rich_content.disallowed_node'` (added to ADR-0012 in Slice 3 #13). Attribute failures use first-class codes: `rich_content.disallowed_attr` for unknown attr keys, `rich_content.invalid_attr_value` for schema failures, and `rich_content.missing_required_attr` for absent required attrs. The shared allowlist contract also declares atomic `leafNodes`; `attachmentRef` and `mention` must be rejected with `rich_content.disallowed_node` when they carry non-empty `content[]`.
 
+The canonical surface → rich-editor extension capability map lives in `packages/shared/src/rich-content/allowlist.ts`. `apps/backend/src/lib/rich-content/surface-allowlists.ts` may re-export it, while `packages/ui/src/rich-content/allowlist-local.ts` mirrors it locally because ADR-0016 forbids `@fops/ui` from importing `@fops/shared`.
+
 Attachment uploads from inside the editor and from the Create form dropzone share the same backend interface (per ADR-0011 §Inline Attachments). The frontend abstraction: `useAttachmentUpload({ vocId?: string, scope: 'voc' | 'comment' })`.
 
 ### 5.8 Dirty-save patterns

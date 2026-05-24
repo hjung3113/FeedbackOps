@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   SHARED_ALLOWLISTS,
+  SHARED_RICH_CONTENT_EXTENSION_CAPABILITIES,
   SHARED_SURFACES,
+  getExtensionsForSurface,
   type SharedAllowlists,
   type SharedSurface,
 } from '../allowlist.js';
@@ -52,6 +54,44 @@ describe('shared rich-content allowlist', () => {
     expect(pu.nodes.has('attachmentRef')).toBe(false);
     expect(pu.leafNodes.has('attachmentRef')).toBe(false);
     expect(pu.allowedLinkSchemes.size).toBe(0);
+  });
+
+  it('surface extension capabilities match the surface contract', () => {
+    expect(SHARED_RICH_CONTENT_EXTENSION_CAPABILITIES).toEqual([
+      'bold',
+      'italic',
+      'underline',
+      'code',
+      'list',
+      'link',
+      'mention',
+      'attachmentRef',
+    ]);
+    expect(getExtensionsForSurface('voc-description')).toEqual([
+      'bold',
+      'italic',
+      'underline',
+      'code',
+      'list',
+      'link',
+      'attachmentRef',
+    ]);
+    expect(getExtensionsForSurface('reporter-reply')).toEqual([
+      'bold',
+      'italic',
+      'link',
+      'attachmentRef',
+    ]);
+    expect(getExtensionsForSurface('public-update')).toEqual(['bold', 'italic', 'list']);
+    expect(getExtensionsForSurface('internal-comment')).toEqual([
+      'bold',
+      'italic',
+      'code',
+      'list',
+      'link',
+      'mention',
+      'attachmentRef',
+    ]);
   });
 
   it('attachmentRef and mention are leaf nodes wherever they are allowed', () => {

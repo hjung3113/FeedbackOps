@@ -18,7 +18,14 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { UI_ALLOWLISTS, UI_SURFACES, type UISurface } from '../allowlist-local';
+import {
+  UI_ALLOWLISTS,
+  UI_RICH_CONTENT_EXTENSION_CAPABILITIES,
+  UI_SURFACE_EXTENSION_CAPABILITIES,
+  UI_SURFACES,
+  type UIRichContentExtensionCapability,
+  type UISurface,
+} from '../allowlist-local';
 
 // ── Inline fixture mirroring canonical shared allowlist ──────────────────────
 
@@ -34,7 +41,19 @@ interface ExpectedSurface {
   maxDepth: number;
   maxNodes: number;
   maxMarks: number;
+  extensionCapabilities: UIRichContentExtensionCapability[];
 }
+
+const EXPECTED_EXTENSION_CAPABILITIES: readonly UIRichContentExtensionCapability[] = [
+  'bold',
+  'italic',
+  'underline',
+  'code',
+  'list',
+  'link',
+  'mention',
+  'attachmentRef',
+];
 
 const EXPECTED_SURFACES: readonly UISurface[] = [
   'voc-description',
@@ -54,6 +73,7 @@ const EXPECTED: Record<UISurface, ExpectedSurface> = {
     maxDepth: 32,
     maxNodes: 5000,
     maxMarks: 1000,
+    extensionCapabilities: ['bold', 'italic', 'underline', 'code', 'list', 'link', 'attachmentRef'],
   },
   'public-update': {
     nodes: ['doc', 'paragraph', 'text', 'bulletList', 'orderedList', 'listItem'],
@@ -65,17 +85,19 @@ const EXPECTED: Record<UISurface, ExpectedSurface> = {
     maxDepth: 32,
     maxNodes: 5000,
     maxMarks: 1000,
+    extensionCapabilities: ['bold', 'italic', 'list'],
   },
   'reporter-reply': {
     nodes: ['doc', 'paragraph', 'text', 'bulletList', 'orderedList', 'listItem', 'attachmentRef'],
     leafNodes: ['attachmentRef'],
-    marks: ['bold', 'italic', 'code', 'link'],
+    marks: ['bold', 'italic', 'link'],
     nodeAttrs: { attachmentRef: { id: 'uuid' } },
     markAttrs: { link: { href: 'url' } },
     maxTextBytes: 50 * 1024,
     maxDepth: 32,
     maxNodes: 5000,
     maxMarks: 1000,
+    extensionCapabilities: ['bold', 'italic', 'link', 'attachmentRef'],
   },
   'internal-comment': {
     nodes: [
@@ -95,12 +117,17 @@ const EXPECTED: Record<UISurface, ExpectedSurface> = {
     maxDepth: 32,
     maxNodes: 5000,
     maxMarks: 1000,
+    extensionCapabilities: ['bold', 'italic', 'code', 'list', 'link', 'mention', 'attachmentRef'],
   },
 };
 
 describe('UI allowlist-local ↔ shared canonical fixture drift', () => {
   it('UI_SURFACES tuple matches expected surfaces (set equality)', () => {
     expect(new Set(UI_SURFACES)).toEqual(new Set(EXPECTED_SURFACES));
+  });
+
+  it('UI extension capability tuple matches expected capabilities', () => {
+    expect(UI_RICH_CONTENT_EXTENSION_CAPABILITIES).toEqual(EXPECTED_EXTENSION_CAPABILITIES);
   });
 
   it.each(EXPECTED_SURFACES)(
@@ -137,6 +164,7 @@ describe('UI allowlist-local ↔ shared canonical fixture drift', () => {
       expect(ui.maxDepth).toBe(ex.maxDepth);
       expect(ui.maxNodes).toBe(ex.maxNodes);
       expect(ui.maxMarks).toBe(ex.maxMarks);
+      expect(UI_SURFACE_EXTENSION_CAPABILITIES[surface]).toEqual(ex.extensionCapabilities);
     },
   );
 });
