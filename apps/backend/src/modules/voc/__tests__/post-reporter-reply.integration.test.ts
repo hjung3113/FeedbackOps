@@ -321,7 +321,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
     });
 
     expect(res.statusCode).toBe(422);
-    expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_node');
+    expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_attr');
     expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.path).toEqual(['body_rich_content']);
     expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
     expect(res.json<{ detail: { hint: string } }>().detail?.hint).toMatch(/attrs\.onclick$/);

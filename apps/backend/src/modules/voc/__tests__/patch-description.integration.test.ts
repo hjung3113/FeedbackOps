@@ -751,7 +751,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
   });
 
   // Case 17: javascript link rejected
-  it('case 17: description_rich_content with javascript: href → 422 rich_content.disallowed_node', async () => {
+  it('case 17: description_rich_content with javascript: href → 422 rich_content.invalid_attr_value', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-js-link', 'JS Link');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -783,7 +783,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
 
     expect(res.statusCode).toBe(422);
     const body = res.json();
-    expect(body.code).toBe('rich_content.disallowed_node');
+    expect(body.code).toBe('rich_content.invalid_attr_value');
     // post-#23: fields_code differentiates value-failure from key-failure
     expect(body.detail?.fields?.[0]?.code).toBe('invalid_attr_value');
   });

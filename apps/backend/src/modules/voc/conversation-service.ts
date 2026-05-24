@@ -15,7 +15,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { actors } from '../../db/schema/core.js';
 import { HttpError } from '../../lib/errors.js';
-import { sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
+import { sanitizeTipTap, type RichContentError } from '../../lib/rich-content/sanitize.js';
 import type { Tx } from '../../db/tx.js';
 import type {
   InternalCommentRequest,
@@ -169,6 +169,13 @@ function mapTriageDenyToHttpError(
 
 // ── Sanitize helper ───────────────────────────────────────────────────────────
 
+function richContentFieldCode(error: RichContentError): string {
+  if (error.code === 'rich_content.external_image_forbidden') {
+    return 'external_image_forbidden';
+  }
+  return error.fields_code ?? 'disallowed_node';
+}
+
 function sanitizeOrThrow(
   surface: 'public-update' | 'reporter-reply' | 'internal-comment',
   doc: unknown,
@@ -179,9 +186,7 @@ function sanitizeOrThrow(
       fields: [
         {
           path: ['body_rich_content'],
-          code: result.error.code === 'rich_content.external_image_forbidden'
-            ? 'external_image_forbidden'
-            : (result.error.fields_code ?? 'disallowed_node'),
+          code: richContentFieldCode(result.error),
         },
       ],
       hint: result.error.path,
@@ -730,4 +735,3 @@ function isTriggerActorMismatchError(err: unknown): boolean {
   }
   return false;
 }
-

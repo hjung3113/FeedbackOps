@@ -6,6 +6,9 @@ describe('errorCodeSchema — Slice 3 #13 codes', () => {
     'voc.severity_not_user_settable',
     'validation.unexpected_field',
     'rich_content.disallowed_node',
+    'rich_content.disallowed_attr',
+    'rich_content.invalid_attr_value',
+    'rich_content.missing_required_attr',
     'rich_content.external_image_forbidden',
   ])('parses %s', (code) => {
     expect(errorCodeSchema.parse(code)).toBe(code);
