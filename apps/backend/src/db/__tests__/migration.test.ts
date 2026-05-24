@@ -283,4 +283,43 @@ describe('migrations directory', () => {
       /"permission"\."permission_requests"[\s\S]*FOREIGN KEY \("requested_managed_system_id"\) REFERENCES "core"\."managed_systems"\("id"\)/,
     );
   });
+
+  it('Slice 3 #34 migration switches VOC display ids to per-workspace counters', () => {
+    const sql = readFileSync(
+      join(MIGRATIONS_DIR, '0017_voc_per_workspace_display_counter.sql'),
+      'utf8',
+    );
+
+    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS "voc"\."workspace_display_counters"/i);
+    expect(sql).toMatch(/"workspace_id"\s+uuid\s+PRIMARY KEY/i);
+    expect(sql).toMatch(/"next_value"\s+bigint\s+NOT NULL\s+DEFAULT 1000/i);
+    expect(sql).toMatch(
+      /CREATE OR REPLACE FUNCTION "voc"\."next_voc_display_id"\(p_workspace_id uuid\)/i,
+    );
+    expect(sql).toMatch(/SECURITY DEFINER/i);
+    expect(sql).toMatch(/ON CONFLICT \(workspace_id\) DO NOTHING/i);
+    expect(sql).toMatch(/SET next_value = next_value \+ 1/i);
+    expect(sql).toMatch(/RETURNING next_value - 1/i);
+
+    const backfillBlock = sql.match(
+      /INSERT INTO voc\.workspace_display_counters[\s\S]*?ON CONFLICT \(workspace_id\) DO UPDATE[\s\S]*?;/i,
+    )?.[0];
+    expect(backfillBlock).toBeDefined();
+    expect(backfillBlock).toMatch(/regexp_replace\(v\.display_id, '\^VOC-'/i);
+    expect(backfillBlock).toMatch(/v\.display_id ~ '\^VOC-\[0-9\]\+\$'/i);
+    expect(backfillBlock).not.toMatch(/VOC-SEED/i);
+    expect(backfillBlock).toMatch(/GREATEST\(\s*1000,[\s\S]*max\([\s\S]*\)\s*\+\s*1/i);
+
+    expect(sql).toMatch(/DROP SEQUENCE IF EXISTS "voc"\."voc_display_seq"/i);
+    expect(sql).toMatch(/GRANT SELECT ON "voc"\."workspace_display_counters" TO fops_app/i);
+    expect(sql).not.toMatch(
+      /GRANT\s+(?:SELECT,\s*)?INSERT[\s\S]*workspace_display_counters[\s\S]*TO fops_app/i,
+    );
+    expect(sql).not.toMatch(
+      /GRANT\s+(?:SELECT,\s*)?UPDATE[\s\S]*workspace_display_counters[\s\S]*TO fops_app/i,
+    );
+    expect(sql).not.toMatch(
+      /GRANT\s+(?:SELECT,\s*)?DELETE[\s\S]*workspace_display_counters[\s\S]*TO fops_app/i,
+    );
+  });
 });
