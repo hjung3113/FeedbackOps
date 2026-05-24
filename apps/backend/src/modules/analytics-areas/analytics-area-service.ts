@@ -21,8 +21,8 @@ import type { DatabaseError } from 'pg';
 import type { AuditEventType } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
 import { analyticsAreas, managedSystems } from '../../db/schema/core.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
@@ -216,8 +216,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
   ): Promise<ServiceResult<AnalyticsAreaDto>> {
     if (!AA_SLUG_REGEX.test(body.slug)) {
       throw new HttpError('validation.failed', 'slug must match lower-kebab pattern', {
-        field: 'slug',
-        pattern: AA_SLUG_REGEX.source,
+        fields: [{ path: ['slug'], code: 'invalid_slug_format' }],
       });
     }
     const requestHash = hashRequestBody(body);
@@ -269,7 +268,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
       throw new HttpError(
         'conflict.parent_archived',
         'cannot register an Analytics Area under an archived Managed System',
-        { managed_system_id: body.managed_system_id },
+        { fields: [{ path: ['managed_system_id'], code: 'parent_archived' }] },
       );
     }
 
@@ -294,8 +293,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
       const pgErr = err as DatabaseError;
       if (pgErr?.code === '23505') {
         throw new HttpError('conflict.duplicate_slug', 'slug already in use under this MS', {
-          slug: body.slug,
-          managed_system_id: body.managed_system_id,
+          fields: [{ path: ['slug'], code: 'duplicate_slug' }],
         });
       }
       throw err;
@@ -346,6 +344,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
           throw new HttpError(
             'conflict.idempotency_key_reuse',
             'Idempotency-Key reused with a different request body',
+            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
           );
         }
       }
@@ -367,6 +366,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         throw new HttpError(
           'conflict.record_archived',
           'analytics_area is archived and cannot be updated',
+          { fields: [{ path: ['id'], code: 'record_archived' }] },
         );
       }
 
@@ -395,6 +395,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         throw new HttpError(
           'conflict.parent_archived',
           'parent managed_system is archived; analytics_area cannot be updated (ADR-0019 Section B Q1)',
+          { fields: [{ path: ['managed_system_id'], code: 'parent_archived' }] },
         );
       }
 
@@ -490,6 +491,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
           throw new HttpError(
             'conflict.idempotency_key_reuse',
             'Idempotency-Key reused with a different request body',
+            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
           );
         }
       }

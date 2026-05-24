@@ -75,6 +75,9 @@ describe.skipIf(!runIntegration)('idempotencyService.runIdempotent', () => {
         handle.db.transaction((tx) => svc.runIdempotent(tx, actorId, key, 'changed-hash', handler)),
       ).rejects.toMatchObject({
         code: 'conflict.idempotency_key_reuse',
+        detail: {
+          fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }],
+        },
       } satisfies Partial<HttpError>);
 
       expect(handler).toHaveBeenCalledTimes(1);
@@ -128,6 +131,9 @@ describe.skipIf(!runIntegration)('idempotencyService.runIdempotent', () => {
         ),
       ).rejects.toMatchObject({
         code: 'conflict.idempotency_key_reuse',
+        detail: {
+          fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }],
+        },
       } satisfies Partial<HttpError>);
     } finally {
       await handle.db.execute(sql`
