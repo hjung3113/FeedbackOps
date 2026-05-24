@@ -47,6 +47,7 @@ const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
 // Tables intentionally narrower than full-DML for fops_app, keyed by the
 // fully-qualified `schema.table` name. Grants come from migration 0010.
 const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
+  'voc.workspace_display_counters': ['SELECT'],
   'voc.voc_public_updates': ['SELECT', 'INSERT'],
   'voc.voc_reporter_replies': ['SELECT', 'INSERT'],
   'voc.voc_internal_comments': ['SELECT', 'INSERT'],

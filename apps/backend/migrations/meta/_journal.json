@@ -120,6 +120,13 @@
       "when": 1780440000000,
       "tag": "0016_voc_attachments_grants",
       "breakpoints": false
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1780540000000,
+      "tag": "0017_voc_per_workspace_display_counter",
+      "breakpoints": true
     }
   ]
 }

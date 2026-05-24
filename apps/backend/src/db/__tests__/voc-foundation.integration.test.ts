@@ -5,6 +5,7 @@
 // enum CHECK. Uses DATABASE_URL_MIGRATE so the migrate role can insert into
 // tables that the app role might not reach during boot.
 
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 
@@ -27,6 +28,7 @@ describe.skipIf(!runIntegration)('Slice 3 vocs table', () => {
   let workspaceId: string;
   let msId: string;
   let actorId: string;
+  const transientCounterWorkspaceIds: string[] = [];
 
   beforeAll(async () => {
     handle = createDb(MIGRATE_URL);
@@ -62,6 +64,17 @@ describe.skipIf(!runIntegration)('Slice 3 vocs table', () => {
     await handle.pool.query(
       `delete from voc.vocs where title like 'test-voc-foundation-%'`,
     );
+    if (transientCounterWorkspaceIds.length > 0) {
+      try {
+        await handle.pool.query(
+          'delete from voc.workspace_display_counters where workspace_id = any($1::uuid[])',
+          [transientCounterWorkspaceIds],
+        );
+      } catch {
+        // The pre-0017 schema has no counter table; the red test failure is
+        // reported by assertions below, not cleanup.
+      }
+    }
     await handle.close();
   });
 
@@ -109,6 +122,51 @@ describe.skipIf(!runIntegration)('Slice 3 vocs table', () => {
     const nums = ids.map((s) => Number(s.replace('VOC-', '')));
     expect(nums[1]).toBe(nums[0]! + 1);
     expect(nums[2]).toBe(nums[1]! + 1);
+  });
+
+  it('display_id counters are contiguous and independent per workspace', async () => {
+    const wsA = randomUUID();
+    const wsB = randomUUID();
+    transientCounterWorkspaceIds.push(wsA, wsB);
+
+    const nextDisplayId = async (workspace: string) => {
+      const result = await handle.pool.query<{ display_id: string }>(
+        'select voc.next_voc_display_id($1::uuid) as display_id',
+        [workspace],
+      );
+      return result.rows[0]?.display_id ?? '';
+    };
+
+    const ids = [
+      await nextDisplayId(wsA),
+      await nextDisplayId(wsB),
+      await nextDisplayId(wsA),
+      await nextDisplayId(wsB),
+    ];
+
+    expect([ids[0], ids[2]]).toEqual(['VOC-1000', 'VOC-1001']);
+    expect([ids[1], ids[3]]).toEqual(['VOC-1000', 'VOC-1001']);
+  });
+
+  it('display_id counter serializes concurrent calls within one workspace', async () => {
+    const workspace = randomUUID();
+    transientCounterWorkspaceIds.push(workspace);
+
+    const ids = await Promise.all(
+      Array.from({ length: 12 }, async () => {
+        const result = await handle.pool.query<{ display_id: string }>(
+          'select voc.next_voc_display_id($1::uuid) as display_id',
+          [workspace],
+        );
+        return result.rows[0]?.display_id ?? '';
+      }),
+    );
+
+    const nums = ids
+      .map((id) => Number(id.replace('VOC-', '')))
+      .sort((a, b) => a - b);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(nums).toEqual(Array.from({ length: 12 }, (_, i) => 1000 + i));
   });
 
   it('rejects analytics_area_id whose managed_system_id does not match primary_managed_system_id', async () => {
