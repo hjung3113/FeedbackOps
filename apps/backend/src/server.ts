@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
+import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import { SESSION_COOKIE_NAME } from './middleware/require-session.js';
 import {
@@ -171,13 +172,20 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // inline before bucket selection so the per-actor bucket is the
   // workspace+actor identity when a valid session cookie is present, and
   // `req.ip` only for unauthenticated traffic.
+  const rateLimitActorCache = createRateLimitActorCache();
   const resolveRateLimitActorKey = async (req: FastifyRequest): Promise<string> => {
     const raw = req.cookies?.[SESSION_COOKIE_NAME];
     const token = typeof raw === 'string' ? raw : undefined;
     if (token) {
+      const cachedIdentity = rateLimitActorCache.get(token);
+      if (cachedIdentity) {
+        return `${cachedIdentity.workspace_id}:${cachedIdentity.actor_id}`;
+      }
+
       try {
         const identity = await sessionService.lookupActorIdByToken(token);
         if (identity) {
+          rateLimitActorCache.set(token, identity);
           return `${identity.workspace_id}:${identity.actor_id}`;
         }
       } catch (err) {

@@ -42,12 +42,14 @@ function extractSqlParams(query: unknown): unknown[] {
 function createDbHandle(opts: {
   sessions?: Record<string, FakeSession>;
   failSessionLookup?: boolean;
-}): DbHandle {
+}): DbHandle & { sessionLookupCount: () => number } {
   const sessions = opts.sessions ?? {};
   const counters = new Map<string, number>();
+  let sessionLookupCount = 0;
 
   const db = {
     execute: async (query: unknown): Promise<{ rows: FakeSession[] }> => {
+      sessionLookupCount += 1;
       if (opts.failSessionLookup) {
         throw new Error('simulated session lookup failure');
       }
@@ -72,6 +74,7 @@ function createDbHandle(opts: {
     db,
     pool: pool as unknown as DbHandle['pool'],
     close: async () => undefined,
+    sessionLookupCount: () => sessionLookupCount,
   };
 }
 
@@ -134,6 +137,23 @@ describe('global rate limit actor resolution', () => {
     const actorBOverLimit = await statusesFor(app, 1, { cookie: sessionCookie('session-b') });
     expect(actorAOverLimit).toEqual([429]);
     expect(actorBOverLimit).toEqual([429]);
+  });
+
+  it('caches actor session resolution for repeated requests with the same cookie', async () => {
+    const dbHandle = createDbHandle({
+      sessions: {
+        'session-a': {
+          workspace_id: WORKSPACE_ID,
+          actor_id: '10000000-0000-4000-8000-000000000001',
+        },
+      },
+    });
+    app = await buildFakeServer(dbHandle);
+
+    expect(await statusesFor(app, 5, { cookie: sessionCookie('session-a') })).toEqual(
+      Array(5).fill(200),
+    );
+    expect(dbHandle.sessionLookupCount()).toBe(1);
   });
 
   it('uses a 50/min IP bucket without a session cookie', async () => {
