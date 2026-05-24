@@ -15,9 +15,13 @@ Four small but load-bearing decisions that the engineering skills and reviewers 
 
 Authenticated rate-limit buckets are resolved in `onRequest` from the opaque
 session cookie via a read-only session lookup, because `req.session` is only
-populated later by route `preHandler`s. If that lookup fails or the session is
-not active, rate limiting falls back to the per-IP anonymous bucket and logs a
-warn event instead of failing the request.
+populated later by route `preHandler`s. The lookup is fronted by a per-process
+LRU cache keyed by `sha256(session_cookie)` with a 30-second TTL and 1000-entry
+cap, so hot authenticated traffic does not spend one pool checkout per request
+before route handlers run. Raw session tokens are not cache keys. If that lookup
+fails or the session is not active, rate limiting falls back to the per-IP
+anonymous bucket and logs a warn event instead of failing the request. Cross-pod
+session-revoke staleness is bounded by the 30-second cache TTL.
 
 Limit responses use the ADR-0012 envelope: `{ code: 'rate_limited.actor', message: '...', detail: { retry_after_seconds } }`. The response also carries `Retry-After` so generic HTTP clients honor it.
 
