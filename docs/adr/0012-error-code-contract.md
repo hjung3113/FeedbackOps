@@ -17,7 +17,7 @@ Every non-2xx response carries this body:
 
 - `code` — stable, dotted, lowercase. Lives in `packages/shared/src/errors/codes.ts` as a Zod enum. Both backend and frontend import it; adding a new code is a single PR that updates the enum and the i18n catalog together.
 - `message` — internal English string for logs, audit summary lines, and developer-facing error overlays. Frontend uses the `code` for user-visible copy via i18next, **not** this string.
-- `detail` — code-specific structured payload. Schema for each `code` is defined alongside the enum so the frontend can narrow types.
+- `detail` — code-specific structured payload. Schema for each `code` is defined alongside the enum so the frontend can narrow types. Backend emitters use a closed `DetailShape` union in `apps/backend/src/lib/errors.ts`; adding a new detail payload shape requires extending that union instead of passing arbitrary records.
 - `requestable_permission` — present only on permission-family errors when surfacing it is safe (see "Permission errors" below).
 
 HTTP status comes from a table mapping `code` family → status:
@@ -163,6 +163,7 @@ Domain errors that happen during an audited action emit an audit row with `event
 
 - One envelope shape across the entire API.
 - `code` enum lives in `packages/shared` and is imported by both apps; adding a code is a single PR touching enum, i18n catalog, and (for permission codes) the requestable-permission table.
+- `detail` is a closed backend union covering emitted field errors, rate-limit retry metadata, resource identity, capability/reason payloads, requestable-permission details, stale-write timestamps, and triage-state conflicts.
 - `detail.fields` is the only validation error shape.
 - `requestable_permission` is conditional, never automatic.
 
