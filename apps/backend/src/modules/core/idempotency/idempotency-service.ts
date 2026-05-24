@@ -137,6 +137,7 @@ export function createIdempotencyService() {
       throw new HttpError(
         'conflict.idempotency_key_reuse',
         'Idempotency-Key reused with a different request body',
+        { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
       );
     }
 
