@@ -835,14 +835,18 @@ export function createVocService(deps: VocServiceDeps) {
     }
 
     // 10. Non-empty diff — UPDATE + audit + return refreshed envelope.
-    // Only pass fields that actually changed to updateVocDescriptionFields.
-    // The repo guard throws if both are undefined, which cannot happen here
-    // because we checked Object.keys(changes).length > 0 above.
+    // Attachment-only edits still need an updated row; pass the current title
+    // through unchanged so the repo guard can bump updated_at.
     const updatedRow = await updateVocDescriptionFields({
       tx,
       vocId,
       workspaceId,
-      title: changes.title !== undefined ? changes.title.to : undefined,
+      title:
+        changes.title !== undefined
+          ? changes.title.to
+          : changes.attachments !== undefined
+            ? row.title
+            : undefined,
       descriptionRichContent:
         changes.description_rich_content !== undefined && sanitizedDoc !== null && sanitizedDoc.ok
           ? sanitizedDoc.doc
