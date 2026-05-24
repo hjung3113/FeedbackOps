@@ -4,7 +4,8 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { summarizeIp, summarizeUserAgent } from '../session-service.js';
+import type { Db } from '../../../db/client.js';
+import { createSessionService, summarizeIp, summarizeUserAgent } from '../session-service.js';
 
 describe('summarizeIp', () => {
   test('IPv4 → 16-char hash of /24 prefix', () => {
@@ -69,5 +70,24 @@ describe('summarizeUserAgent', () => {
     const out = summarizeUserAgent('x'.repeat(200));
     expect(out).not.toBeNull();
     expect((out ?? '').length).toBeLessThanOrEqual(64);
+  });
+});
+
+describe('lookupActorIdByToken', () => {
+  test('returns actor and workspace identifiers for an active session', async () => {
+    const service = createSessionService({
+      db: {
+        execute: async () => ({
+          rows: [{ actor_id: 'actor-1', workspace_id: 'workspace-1' }],
+        }),
+      } as unknown as Db,
+      workspaceId: 'workspace-1',
+      now: () => new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    await expect(service.lookupActorIdByToken('session-1')).resolves.toEqual({
+      actor_id: 'actor-1',
+      workspace_id: 'workspace-1',
+    });
   });
 });
