@@ -15,6 +15,12 @@ const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
 
+type FieldDetail = { path: string[]; code: string };
+
+function expectFields(body: { detail?: { fields?: FieldDetail[] } }, fields: FieldDetail[]): void {
+  expect(body.detail?.fields).toEqual(fields);
+}
+
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
   if (!setCookie) return null;
   const arr = Array.isArray(setCookie) ? setCookie : [setCookie];
@@ -174,7 +180,27 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       name: 'no',
     });
     expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe('conflict.parent_archived');
+    const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('conflict.parent_archived');
+    expectFields(body, [{ path: ['managed_system_id'], code: 'parent_archived' }]);
+  });
+
+  it('invalid slug shape → 422 validation.failed with fields[] and no regex leak', async () => {
+    const cookie = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, cookie, 'it-aa-badslug-ms', 'MS');
+    const res = await createAa(app, cookie, {
+      managed_system_id: msId,
+      slug: 'IT-BadCase',
+      name: 'bad',
+    });
+    expect(res.statusCode).toBe(422);
+    const body = res.json<{
+      code: string;
+      detail?: { fields?: FieldDetail[]; pattern?: string };
+    }>();
+    expect(body.code).toBe('validation.failed');
+    expectFields(body, [{ path: ['slug'], code: 'invalid_slug_format' }]);
+    expect(body.detail?.pattern).toBeUndefined();
   });
 
   it('duplicate slug under SAME MS → 409 conflict.duplicate_slug; same slug under different MS → 201', async () => {
@@ -193,7 +219,9 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       name: 'pm2',
     });
     expect(dup.statusCode).toBe(409);
-    expect(dup.json().code).toBe('conflict.duplicate_slug');
+    const body = dup.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('conflict.duplicate_slug');
+    expectFields(body, [{ path: ['slug'], code: 'duplicate_slug' }]);
     // CONTEXT.md:337 — same slug under different MS is permitted.
     const cross = await createAa(app, cookie, {
       managed_system_id: ms2,
@@ -220,7 +248,9 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       payload: { slug: 'it-aa-renamed' },
     });
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('validation.immutable_field');
+    const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('validation.immutable_field');
+    expectFields(body, [{ path: ['slug'], code: 'immutable_field' }]);
   });
 
   it('PATCH managed_system_id → 422 validation.immutable_field', async () => {
@@ -240,7 +270,9 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       payload: { managed_system_id: ms2 },
     });
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('validation.immutable_field');
+    const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('validation.immutable_field');
+    expectFields(body, [{ path: ['managed_system_id'], code: 'immutable_field' }]);
   });
 
   it('PATCH name change → audit row with diff; no-op PATCH → 200 no audit row', async () => {
@@ -450,7 +482,9 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       payload: { managed_system_id: msId, slug: 'it-aaidem', name: 'different body' },
     });
     expect(second.statusCode).toBe(409);
-    expect(second.json().code).toBe('conflict.idempotency_key_reuse');
+    const body = second.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('conflict.idempotency_key_reuse');
+    expectFields(body, [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }]);
   });
 
   it('archive of non-existent AA → 404 not_found.record (review H1)', async () => {
@@ -496,7 +530,9 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       payload: { name: 'renamed after archive' },
     });
     expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe('conflict.record_archived');
+    const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('conflict.record_archived');
+    expectFields(body, [{ path: ['id'], code: 'record_archived' }]);
   });
 
   it('PATCH on an active AA under an archived parent MS → 409 conflict.parent_archived (ADR-0019 Section B Q1)', async () => {
@@ -532,7 +568,9 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
       payload: { name: 'attempt patch' },
     });
     expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe('conflict.parent_archived');
+    const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('conflict.parent_archived');
+    expectFields(body, [{ path: ['managed_system_id'], code: 'parent_archived' }]);
   });
 
   it('standalone archive on an active AA under an archived parent MS → 200 (ADR-0019 Section B Q2)', async () => {
@@ -594,7 +632,7 @@ describe.skipIf(!runIntegration)('Analytics Areas write path', () => {
     );
     expect(audit.rows[0]?.n).toBe(0);
     const idem = await dbHandle.pool.query(
-      `select count(*)::int as n from core.idempotency_keys where key = $1`,
+      'select count(*)::int as n from core.idempotency_keys where key = $1',
       [key],
     );
     expect(idem.rows[0]?.n).toBe(0);

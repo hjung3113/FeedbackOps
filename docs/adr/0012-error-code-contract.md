@@ -39,7 +39,7 @@ A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler r
 
 **Slice 3 #13 adds five codes to the closed enum:**
 - `voc.severity_not_user_settable` (422) — request body contained `severity`; severity is set during triage only.
-- `validation.unexpected_field` (422) — request body contained a forbidden server-resolved field (`reporter_id`, `reporter_facing_status`, `triage_state`, `owner_user_id`, `owner_team_id`, `display_id`). `detail.field` carries the offending path.
+- `validation.unexpected_field` (422) — request body contained a forbidden server-resolved field (`reporter_id`, `reporter_facing_status`, `triage_state`, `owner_user_id`, `owner_team_id`, `display_id`). `detail.fields` carries the offending path.
 - `rich_content.disallowed_node` (422) — sanitizer rejected a node, mark, structural shape, or leaf-node content outside the per-surface allowlist.
 - `rich_content.external_image_forbidden` (422) — sanitizer rejected an `image` node (Slice 3 prohibits external images on every surface).
 - `attachment.unsupported_pending_storage_slice` (422) — request supplied non-empty `attachments[]`; the attachment upload endpoint ships in a later slice (#22).
@@ -62,6 +62,11 @@ A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler r
 - `external_image_forbidden` and `disallowed_node` — paired with the rich-content sanitizer rejections (Slice 3 #13 — `rich_content.*`).
 - `disallowed_attr_key`, `invalid_attr_value`, and `missing_required_attr` — paired with rich-content attr sanitizer rejections (Issue #43 — `rich_content.disallowed_attr`, `rich_content.invalid_attr_value`, `rich_content.missing_required_attr`).
 - `unsupported` — paired with `attachment.unsupported_pending_storage_slice` (Slice 3 #13 — `attachment.*`).
+
+**Issue #26 extends the same `detail.fields` contract to Managed Systems and Analytics Areas:**
+- `invalid_slug_format` — paired with slug-pattern validation on MS/AA create; error details never expose raw regex sources.
+- `duplicate_slug` — paired with `conflict.duplicate_slug` on MS/AA create so create forms can bind the conflict to `slug`.
+- `immutable_field`, `mutually_exclusive`, `record_archived`, and `idempotency_key_reuse` — paired with the corresponding MS/AA 422/409 guards.
 
 ## Code naming
 
@@ -110,15 +115,15 @@ The complete list lives in code, not in this ADR; this is the shape it must foll
   "message": "Validation failed for create_voc",
   "detail": {
     "fields": [
-      { "path": "title",            "code": "required",        "message": "title is required" },
-      { "path": "description.body", "code": "max_length",      "message": "description body exceeds 10000 characters" },
-      { "path": "analytics_area_id","code": "out_of_scope",    "message": "Analytics Area must belong to the selected Managed System" }
+      { "path": ["title"],             "code": "required",        "message": "title is required" },
+      { "path": ["description", "body"], "code": "max_length",    "message": "description body exceeds 10000 characters" },
+      { "path": ["analytics_area_id"], "code": "out_of_scope",    "message": "Analytics Area must belong to the selected Managed System" }
     ]
   }
 }
 ```
 
-`path` is a dotted path matching the Zod schema in `packages/shared`. `code` is a smaller, validation-only enum (`required | invalid_type | invalid_format | min_length | max_length | min_value | max_value | unknown_enum | out_of_scope | custom`). React Hook Form maps `path` to its field state.
+`path` is a string array matching the Zod schema path in `packages/shared`. `code` is a smaller, validation-only enum (`required | invalid_type | invalid_format | min_length | max_length | min_value | max_value | unknown_enum | out_of_scope | custom`, plus domain-specific stable codes listed above). React Hook Form maps `path.join('.')` to its field state.
 
 RFC 7807 Problem Details was rejected because it has no native `code` field, no native validation-fields shape, and would have us inventing custom `urn:` types to recover what we already get from a domain-named code.
 

@@ -19,6 +19,12 @@ const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
 
+type FieldDetail = { path: string[]; code: string };
+
+function expectFields(body: { detail?: { fields?: FieldDetail[] } }, fields: FieldDetail[]): void {
+  expect(body.detail?.fields).toEqual(fields);
+}
+
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
   if (!setCookie) return null;
   const arr = Array.isArray(setCookie) ? setCookie : [setCookie];
@@ -158,7 +164,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     );
     expect(audit.rows[0]?.n).toBe(0);
     const idem = await dbHandle.pool.query(
-      `select count(*)::int as n from core.idempotency_keys where key = $1`,
+      'select count(*)::int as n from core.idempotency_keys where key = $1',
       [key],
     );
     expect(idem.rows[0]?.n).toBe(0);
@@ -179,7 +185,9 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       payload: { slug: 'it-dup', name: 'second' },
     });
     expect(dup.statusCode).toBe(409);
-    expect(dup.json().code).toBe('conflict.duplicate_slug');
+    const body = dup.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('conflict.duplicate_slug');
+    expectFields(body, [{ path: ['slug'], code: 'duplicate_slug' }]);
   });
 
   it('invalid slug shape → 422 validation.failed', async () => {
@@ -191,7 +199,13 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       payload: { slug: 'IT-BadCase', name: 'no' },
     });
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('validation.failed');
+    const body = res.json<{
+      code: string;
+      detail?: { fields?: FieldDetail[]; pattern?: string };
+    }>();
+    expect(body.code).toBe('validation.failed');
+    expectFields(body, [{ path: ['slug'], code: 'invalid_slug_format' }]);
+    expect(body.detail?.pattern).toBeUndefined();
   });
 
   it('Idempotency-Key replay → same response, only one row + one audit row', async () => {
@@ -249,7 +263,9 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       payload: { slug: 'it-immut-renamed' },
     });
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('validation.immutable_field');
+    const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('validation.immutable_field');
+    expectFields(body, [{ path: ['slug'], code: 'immutable_field' }]);
     const audit = await dbHandle.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'managed_system_updated'`,
     );
@@ -413,7 +429,9 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       payload: { slug: 'it-idem-mismatch', name: 'different body' },
     });
     expect(second.statusCode).toBe(409);
-    expect(second.json().code).toBe('conflict.idempotency_key_reuse');
+    const body = second.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('conflict.idempotency_key_reuse');
+    expectFields(body, [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }]);
   });
 
   it('archive of non-existent MS → 404 not_found.record (review H1)', async () => {
@@ -450,7 +468,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
     );
     expect(adminActor.rowCount).toBe(1);
     const teamRow = await dbHandle.pool.query<{ id: string }>(
-      `select id from core.teams where workspace_id = $1 limit 1`,
+      'select id from core.teams where workspace_id = $1 limit 1',
       [WORKSPACE_ID],
     );
     // Seed may not have teams; skip rather than fail.
@@ -467,7 +485,12 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       },
     });
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('validation.failed');
+    const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('validation.failed');
+    expectFields(body, [
+      { path: ['default_owner_actor_id'], code: 'mutually_exclusive' },
+      { path: ['default_owner_team_id'], code: 'mutually_exclusive' },
+    ]);
   });
 
   it('PATCH that would leave both default_owner_* set → 422 validation.failed (review H4)', async () => {
@@ -477,7 +500,7 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       [WORKSPACE_ID],
     );
     const teamRow = await dbHandle.pool.query<{ id: string }>(
-      `select id from core.teams where workspace_id = $1 limit 1`,
+      'select id from core.teams where workspace_id = $1 limit 1',
       [WORKSPACE_ID],
     );
     if (teamRow.rowCount === 0) return;
@@ -500,7 +523,12 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       payload: { default_owner_team_id: teamRow.rows[0]?.id },
     });
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('validation.failed');
+    const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('validation.failed');
+    expectFields(body, [
+      { path: ['default_owner_actor_id'], code: 'mutually_exclusive' },
+      { path: ['default_owner_team_id'], code: 'mutually_exclusive' },
+    ]);
   });
 
   it('PATCH on an archived MS → 409 conflict.record_archived (ADR-0019 Section A)', async () => {
@@ -524,7 +552,9 @@ describe.skipIf(!runIntegration)('Managed Systems write path', () => {
       payload: { name: 'renamed after archive' },
     });
     expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe('conflict.record_archived');
+    const body = res.json<{ code: string; detail?: { fields?: FieldDetail[] } }>();
+    expect(body.code).toBe('conflict.record_archived');
+    expectFields(body, [{ path: ['id'], code: 'record_archived' }]);
     const audit = await dbHandle.pool.query(
       `select count(*)::int as n from core.audit_log where event_type = 'managed_system_updated' and subject_id = $1`,
       [id],

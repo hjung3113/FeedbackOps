@@ -24,8 +24,8 @@ import type { DatabaseError } from 'pg';
 import type { AuditEventType } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
 import { managedSystems } from '../../db/schema/core.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { cascadeArchiveActiveChildren } from '../analytics-areas/analytics-area-service.js';
 import type { AuditService } from '../core/audit/audit-service.js';
@@ -144,15 +144,19 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
   ): Promise<ManagedSystemServiceResult<ManagedSystemDto>> {
     if (!MS_SLUG_REGEX.test(body.slug)) {
       throw new HttpError('validation.failed', 'slug must match lower-kebab pattern', {
-        field: 'slug',
-        pattern: MS_SLUG_REGEX.source,
+        fields: [{ path: ['slug'], code: 'invalid_slug_format' }],
       });
     }
     if (body.default_owner_actor_id && body.default_owner_team_id) {
       throw new HttpError(
         'validation.failed',
         'default_owner_actor_id and default_owner_team_id are mutually exclusive',
-        { fields: ['default_owner_actor_id', 'default_owner_team_id'] },
+        {
+          fields: [
+            { path: ['default_owner_actor_id'], code: 'mutually_exclusive' },
+            { path: ['default_owner_team_id'], code: 'mutually_exclusive' },
+          ],
+        },
       );
     }
     const requestHash = hashRequestBody(body);
@@ -179,6 +183,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
           throw new HttpError(
             'conflict.idempotency_key_reuse',
             'Idempotency-Key reused with a different request body',
+            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
           );
         }
       }
@@ -207,7 +212,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         const pgErr = err as DatabaseError;
         if (pgErr?.code === '23505') {
           throw new HttpError('conflict.duplicate_slug', 'slug already in use', {
-            slug: body.slug,
+            fields: [{ path: ['slug'], code: 'duplicate_slug' }],
           });
         }
         throw err;
@@ -269,6 +274,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
           throw new HttpError(
             'conflict.idempotency_key_reuse',
             'Idempotency-Key reused with a different request body',
+            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
           );
         }
       }
@@ -293,6 +299,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         throw new HttpError(
           'conflict.record_archived',
           'managed_system is archived and cannot be updated',
+          { fields: [{ path: ['id'], code: 'record_archived' }] },
         );
       }
 
@@ -365,7 +372,12 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
         throw new HttpError(
           'validation.failed',
           'default_owner_actor_id and default_owner_team_id are mutually exclusive',
-          { fields: ['default_owner_actor_id', 'default_owner_team_id'] },
+          {
+            fields: [
+              { path: ['default_owner_actor_id'], code: 'mutually_exclusive' },
+              { path: ['default_owner_team_id'], code: 'mutually_exclusive' },
+            ],
+          },
         );
       }
 
@@ -433,6 +445,7 @@ export function createManagedSystemService(deps: ManagedSystemServiceDeps) {
           throw new HttpError(
             'conflict.idempotency_key_reuse',
             'Idempotency-Key reused with a different request body',
+            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
           );
         }
       }

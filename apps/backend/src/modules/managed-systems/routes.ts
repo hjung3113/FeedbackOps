@@ -61,6 +61,7 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
       throw new HttpError(
         'validation.malformed_idempotency_key',
         'Idempotency-Key must be a UUIDv4',
+        { fields: [{ path: ['headers', 'idempotency-key'], code: 'invalid_uuidv4' }] },
       );
     }
     return headerKey;
@@ -108,7 +109,7 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
       const rawBody = (req.body ?? {}) as Record<string, unknown>;
       if ('slug' in rawBody) {
         return sendError(reply, 'validation.immutable_field', 'slug is immutable per ADR-0017', {
-          field: 'slug',
+          fields: [{ path: ['slug'], code: 'immutable_field' }],
         });
       }
       const parsed = updateBodySchema.safeParse(rawBody);
@@ -166,7 +167,7 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
     url: '/managed-systems',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
     schema: { querystring: listQuerySchema },
-    handler: async (req, reply) => {
+    handler: async (req, _reply) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
       const actor: ActorContext = {
@@ -175,15 +176,12 @@ export const managedSystemsRoutes: FastifyPluginAsync<ManagedSystemsRoutesOption
         role_level: sess.role_level,
       };
       const q = req.query as z.infer<typeof listQuerySchema>;
-      const result = await managedSystemService.listManagedSystems(
-        actor,
-        {
-          include_archived: q.include_archived === 'true',
-          ...(q.slug !== undefined ? { slug: q.slug } : {}),
-          ...(q.limit !== undefined ? { limit: q.limit } : {}),
-          ...(q.offset !== undefined ? { offset: q.offset } : {}),
-        },
-      );
+      const result = await managedSystemService.listManagedSystems(actor, {
+        include_archived: q.include_archived === 'true',
+        ...(q.slug !== undefined ? { slug: q.slug } : {}),
+        ...(q.limit !== undefined ? { limit: q.limit } : {}),
+        ...(q.offset !== undefined ? { offset: q.offset } : {}),
+      });
       return result;
     },
   });
