@@ -32,6 +32,7 @@ export type AttrSchema =
 // DoS caps — see surface-allowlists.ts header for rationale.
 export interface SharedSurfaceAllowlist {
   nodes: ReadonlySet<string>;
+  leafNodes: ReadonlySet<string>;
   marks: ReadonlySet<string>;
   nodeAttrs: Readonly<Record<string, Readonly<Record<string, AttrSchema>>>>;
   markAttrs: Readonly<Record<string, Readonly<Record<string, AttrSchema>>>>;
@@ -69,6 +70,7 @@ export const SHARED_ALLOWLISTS: SharedAllowlists = {
       'bulletList', 'orderedList', 'listItem',
       'attachmentRef',
     ]),
+    leafNodes: new Set(['attachmentRef']),
     marks: new Set(['bold', 'italic', 'underline', 'code', 'link']),
     nodeAttrs: { attachmentRef: attachmentRefAttrs },
     markAttrs: { link: linkMarkAttrs },
@@ -81,6 +83,7 @@ export const SHARED_ALLOWLISTS: SharedAllowlists = {
 
   'public-update': {
     nodes: new Set(['doc', 'paragraph', 'text', 'bulletList', 'orderedList', 'listItem']),
+    leafNodes: new Set<string>(),
     marks: new Set(['bold', 'italic']),
     nodeAttrs: {},
     markAttrs: {},
@@ -97,6 +100,7 @@ export const SHARED_ALLOWLISTS: SharedAllowlists = {
       'bulletList', 'orderedList', 'listItem',
       'attachmentRef',
     ]),
+    leafNodes: new Set(['attachmentRef']),
     marks: new Set(['bold', 'italic', 'code', 'link']),
     nodeAttrs: { attachmentRef: attachmentRefAttrs },
     markAttrs: { link: linkMarkAttrs },
@@ -114,6 +118,7 @@ export const SHARED_ALLOWLISTS: SharedAllowlists = {
       'bulletList', 'orderedList', 'listItem',
       'mention', 'attachmentRef',
     ]),
+    leafNodes: new Set(['mention', 'attachmentRef']),
     marks: new Set(['bold', 'italic', 'code', 'link']),
     nodeAttrs: {
       attachmentRef: attachmentRefAttrs,

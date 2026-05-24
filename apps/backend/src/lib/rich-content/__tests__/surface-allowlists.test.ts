@@ -225,6 +225,15 @@ describe('surface allowlist drift assertions', () => {
     }
   });
 
+  it.each(SURFACES)('%s: every leafNodes entry must be in nodes set', (surface) => {
+    const allowlist = SURFACE_ALLOWLISTS[surface];
+    for (const key of allowlist.leafNodes) {
+      expect(allowlist.nodes.has(key),
+        `surface '${surface}': leafNodes entry '${key}' not in nodes set`,
+      ).toBe(true);
+    }
+  });
+
   it.each(SURFACES)('%s: every markAttrs key must be in marks set', (surface) => {
     const allowlist = SURFACE_ALLOWLISTS[surface];
     const markAttrKeys = Object.keys(allowlist.markAttrs);
