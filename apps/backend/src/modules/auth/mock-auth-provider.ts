@@ -65,7 +65,7 @@ ${cards}
       const externalId = typeof input.external_id === 'string' ? input.external_id : '';
       if (!externalId) {
         throw new HttpError('validation.failed', 'external_id is required', {
-          fields: [{ path: 'external_id', code: 'required', message: 'required' }],
+          fields: [{ path: ['external_id'], code: 'required', message: 'required' }],
         });
       }
       const row = await deps.db
