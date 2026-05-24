@@ -14,7 +14,7 @@ import type { Tx } from '../../db/tx.js';
 import { vocs } from '../../db/schema/voc.js';
 import { HttpError } from '../../lib/errors.js';
 import { stableStringify } from '../../lib/json/stable-stringify.js';
-import { sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
+import { sanitizeTipTap, type RichContentError } from '../../lib/rich-content/sanitize.js';
 import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
 import { insertVoc, lockAnalyticsArea, lockManagedSystem, selectVocForUpdate, updateVocDescriptionFields } from './repo.js';
 import {
@@ -31,6 +31,13 @@ import type { CreateVocRequest, EditDescriptionRequest, PatchVocRequest } from '
 export interface CreateVocActor {
   actor_id: string;
   workspace_id: string;
+}
+
+function richContentFieldCode(error: RichContentError): string {
+  if (error.code === 'rich_content.external_image_forbidden') {
+    return 'external_image_forbidden';
+  }
+  return error.fields_code ?? 'disallowed_node';
 }
 
 export interface VocEnvelope {
@@ -107,9 +114,7 @@ export function createVocService(deps: VocServiceDeps) {
         fields: [
           {
             path: ['description_rich_content'],
-            code: sanitized.error.code === 'rich_content.external_image_forbidden'
-              ? 'external_image_forbidden'
-              : (sanitized.error.fields_code ?? 'disallowed_node'),
+            code: richContentFieldCode(sanitized.error),
           },
         ],
         hint: sanitized.error.path,
@@ -748,9 +753,7 @@ export function createVocService(deps: VocServiceDeps) {
           fields: [
             {
               path: ['description_rich_content'],
-              code: sanitizedDoc.error.code === 'rich_content.external_image_forbidden'
-                ? 'external_image_forbidden'
-                : (sanitizedDoc.error.fields_code ?? 'disallowed_node'),
+              code: richContentFieldCode(sanitizedDoc.error),
             },
           ],
           hint: sanitizedDoc.error.path,

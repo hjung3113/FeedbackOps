@@ -43,6 +43,9 @@ export const ERROR_CODES = [
   'voc.severity_not_user_settable',
   'validation.unexpected_field',
   'rich_content.disallowed_node',
+  'rich_content.disallowed_attr',
+  'rich_content.invalid_attr_value',
+  'rich_content.missing_required_attr',
   'rich_content.external_image_forbidden',
   // PLAN-22 C7b: `attachment.unsupported_pending_storage_slice` retired —
   // the storage slice (C3a/C3b) shipped and attachments now ride as

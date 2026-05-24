@@ -40,9 +40,14 @@ A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler r
 **Slice 3 #13 adds five codes to the closed enum:**
 - `voc.severity_not_user_settable` (422) — request body contained `severity`; severity is set during triage only.
 - `validation.unexpected_field` (422) — request body contained a forbidden server-resolved field (`reporter_id`, `reporter_facing_status`, `triage_state`, `owner_user_id`, `owner_team_id`, `display_id`). `detail.field` carries the offending path.
-- `rich_content.disallowed_node` (422) — sanitizer rejected a node, mark, or `link.href` scheme outside the per-surface allowlist.
+- `rich_content.disallowed_node` (422) — sanitizer rejected a node, mark, structural shape, or leaf-node content outside the per-surface allowlist.
 - `rich_content.external_image_forbidden` (422) — sanitizer rejected an `image` node (Slice 3 prohibits external images on every surface).
 - `attachment.unsupported_pending_storage_slice` (422) — request supplied non-empty `attachments[]`; the attachment upload endpoint ships in a later slice (#22).
+
+**Issue #43 / F-ADR-0012-ATTR-CODE promotes sanitizer attr failures to first-class codes:**
+- `rich_content.disallowed_attr` (422) — sanitizer rejected an unknown attr key on an otherwise-allowed node or mark. `detail.fields[].code` remains `disallowed_attr_key`, and the sanitizer hint carries the attr path.
+- `rich_content.invalid_attr_value` (422) — sanitizer rejected a present attr whose value failed its schema, including invalid URL scheme, invalid UUID, over-length string, or URL credentials. `detail.fields[].code` remains `invalid_attr_value`.
+- `rich_content.missing_required_attr` (422) — sanitizer rejected an otherwise-allowed node or mark because a required attr was absent. `detail.fields[].code` is `missing_required_attr`.
 
 **Slice 3 #16 adds two codes to the closed enum:**
 - `reporter_facing_status.invalid_transition` (422) — the requested `next_reporter_facing_status` is not reachable from the current status per the `reporter_facing_status_transitions` seed table. `detail.reason` carries the human-readable gate text.
@@ -55,6 +60,7 @@ A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler r
 - `unexpected_field` — paired with `validation.unexpected_field` / `voc.severity_not_user_settable` when a server-resolved field appears in the request body.
 - `parent_archived` — paired with `conflict.parent_archived` when the referenced parent (MS or AA) is archived; carries the offending field path so the frontend can bind the message to the picker input.
 - `external_image_forbidden` and `disallowed_node` — paired with the rich-content sanitizer rejections (Slice 3 #13 — `rich_content.*`).
+- `disallowed_attr_key`, `invalid_attr_value`, and `missing_required_attr` — paired with rich-content attr sanitizer rejections (Issue #43 — `rich_content.disallowed_attr`, `rich_content.invalid_attr_value`, `rich_content.missing_required_attr`).
 - `unsupported` — paired with `attachment.unsupported_pending_storage_slice` (Slice 3 #13 — `attachment.*`).
 
 ## Code naming
@@ -75,6 +81,10 @@ task_request.scope_mismatch
 attachment.too_large
 attachment.unsupported_type
 rich_content.external_image_forbidden
+rich_content.disallowed_node
+rich_content.disallowed_attr
+rich_content.invalid_attr_value
+rich_content.missing_required_attr
 entity_link.cross_workspace_forbidden
 entity_link.relation_type_unknown
 reporter_facing_status.invalid_transition

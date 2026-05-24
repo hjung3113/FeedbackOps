@@ -548,11 +548,12 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   //   - node-type / mark-type / shape failures → 'disallowed_node'
   //   - bad attr key → 'disallowed_attr_key'
   //   - bad attr value (URL scheme, UUID, length, etc.) → 'invalid_attr_value'
+  //   - missing required attr → 'missing_required_attr'
   it.each<
     [
       string,
       () => unknown,
-      'rich_content.external_image_forbidden' | 'rich_content.disallowed_node',
+      'rich_content.external_image_forbidden' | 'rich_content.disallowed_node' | 'rich_content.invalid_attr_value',
       string,
     ]
   >([
@@ -591,7 +592,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
           },
         ],
       }),
-      'rich_content.disallowed_node',
+      'rich_content.invalid_attr_value',
       'invalid_attr_value',
     ],
     [
@@ -664,7 +665,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       randomUUID(),
     );
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('rich_content.disallowed_node');
+    expect(res.json().code).toBe('rich_content.disallowed_attr');
     expect(res.json().detail?.fields?.[0]?.path).toEqual(['description_rich_content']);
     expect(res.json().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
     expect(res.json().detail?.hint).toMatch(/attrs\.onclick$/);

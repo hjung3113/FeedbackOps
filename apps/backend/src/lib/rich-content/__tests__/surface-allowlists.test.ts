@@ -125,7 +125,7 @@ describe('sanitizeTipTap (reporter-reply)', () => {
       doc: doc(p('x', [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }])),
     });
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error.code).toBe('rich_content.disallowed_node');
+    if (!res.ok) expect(res.error.code).toBe('rich_content.invalid_attr_value');
   });
 
   it('rejects mention node (not on reporter-reply surface)', () => {
@@ -190,7 +190,7 @@ describe('sanitizeTipTap (internal-comment)', () => {
       doc: doc(p('x', [{ type: 'link', attrs: { href: 'javascript:void(0)' } }])),
     });
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error.code).toBe('rich_content.disallowed_node');
+    if (!res.ok) expect(res.error.code).toBe('rich_content.invalid_attr_value');
   });
 
   it('rejects image node with external_image_forbidden', () => {
