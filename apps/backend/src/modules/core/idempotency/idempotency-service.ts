@@ -7,6 +7,9 @@
 //   3. Hit + mismatched hash       → throw HitMismatchError (controller → 409).
 //   4. Miss                         → caller executes the handler, then calls
 //                                     `record` inside the SAME transaction.
+//      If the serialized response body exceeds 16 KiB, `record` stores an
+//      explicit marker instead of the body and makes replay follow the
+//      existing mismatch path.
 //
 // Callers that need the full ADR-0015 frame should prefer `runIdempotent` so
 // the advisory lock, lookup, handler execution, and record stay together:
@@ -15,10 +18,12 @@
 //     return idempotencyService.runIdempotent(tx, actor_id, key, hash, runHandler);
 //   });
 
+import { Buffer } from 'node:buffer';
+
 import { and, eq, sql } from 'drizzle-orm';
 
-import type { Tx } from '../../../db/tx.js';
 import { idempotencyKeys } from '../../../db/schema/core.js';
+import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 
 export type { Tx };
@@ -31,6 +36,29 @@ export type IdempotencyLookupResult =
 export interface IdempotentResult<TBody = unknown> {
   status: number;
   body: TBody;
+}
+
+export const IDEMPOTENCY_RESPONSE_BODY_MAX_BYTES = 16 * 1024;
+
+const OVERSIZED_RESPONSE_BODY_MARKER = {
+  skipped: true,
+  reason: 'response_body_exceeds_16kb',
+} as const;
+
+const OVERSIZED_REQUEST_HASH_PREFIX = 'response-body-skipped:';
+
+function prepareCachedResponse(requestHash: string, responseBody: unknown) {
+  const serialized = JSON.stringify(responseBody);
+  const byteLength = Buffer.byteLength(serialized ?? 'null', 'utf8');
+
+  if (byteLength > IDEMPOTENCY_RESPONSE_BODY_MAX_BYTES) {
+    return {
+      requestHash: `${OVERSIZED_REQUEST_HASH_PREFIX}${requestHash}`,
+      responseBody: OVERSIZED_RESPONSE_BODY_MARKER,
+    };
+  }
+
+  return { requestHash, responseBody };
 }
 
 export function createIdempotencyService() {
@@ -73,14 +101,16 @@ export function createIdempotencyService() {
     // proceeds with no row written here, which is acceptable because the
     // protocol replays a future client retry through `lookup()` and that
     // returns the winning row's body.
+    const cacheEntry = prepareCachedResponse(requestHash, responseBody);
+
     await tx
       .insert(idempotencyKeys)
       .values({
         actorId,
         key,
-        requestHash,
+        requestHash: cacheEntry.requestHash,
         responseStatus,
-        responseBody: responseBody as object,
+        responseBody: cacheEntry.responseBody as object,
       })
       .onConflictDoNothing({
         target: [idempotencyKeys.actorId, idempotencyKeys.key],

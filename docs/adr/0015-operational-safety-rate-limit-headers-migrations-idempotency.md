@@ -92,6 +92,24 @@ AGENTS.md already states "application services own transactions, permissions, au
 
 DB-constraint-only idempotency was rejected: it surfaces as `409 conflict.duplicate_key` to clients that legitimately retry on network timeout, forcing each client to re-handle the conflict differently per endpoint.
 
+### Response-body cap (DB-C-1 amendment, 2026-05-24)
+
+`core.idempotency_keys.response_body` is a cache field, not durable domain
+history. To keep the mutation hot path from turning rich VOC envelopes into
+unbounded OLTP table growth, the application caps cached response bodies at
+16 KiB (`16 * 1024` serialized JSON bytes).
+
+If the response exceeds the cap, the mutation still succeeds, but the
+idempotency row stores an explicit skipped-body marker instead of the full
+body. The stored request hash is also marked as skipped so a later retry with
+the same idempotency key follows the existing `409 conflict.idempotency_key_reuse`
+path rather than replaying an incomplete response. Normal-size responses keep
+the original request hash and continue to replay verbatim.
+
+The retention policy remains the existing pg-boss `core.idempotency_purge`
+schedule: delete rows where `created_at < now() - interval '24 hours'`.
+No schema change is required for this amendment.
+
 ### Race surface (S-001 amendment, 2026-05-17)
 
 Two concurrent first-time retries with the same `(actor_id, key)` originally
