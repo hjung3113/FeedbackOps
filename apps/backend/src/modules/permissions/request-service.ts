@@ -244,6 +244,51 @@ export function createRequestService(deps: RequestServiceDeps) {
     });
   }
 
+  // Admin-only workspace-wide list of open (pending|needs_more_info) requests.
+  // Guarded by workspace.admin (issue #87). Mirrors the managed-system admin
+  // gate: throws permission.denied (mapped to 403) for non-admins. The count
+  // equals the returned row length (no separate pagination cap today).
+  async function listAllActive(actor: ActorContext) {
+    const decision = await checkService.checkCapability(actor, 'workspace.admin', {
+      workspace_id: actor.workspace_id,
+    });
+    if (decision.allow !== true) {
+      throw new HttpError('permission.denied', 'workspace.admin required');
+    }
+
+    const rows = await db
+      .select({
+        id: permissionRequests.id,
+        requesterActorId: permissionRequests.requesterActorId,
+        requestedCapability: permissionRequests.requestedCapability,
+        requestedManagedSystemId: permissionRequests.requestedManagedSystemId,
+        reason: permissionRequests.reason,
+        status: permissionRequests.status,
+        createdAt: permissionRequests.createdAt,
+      })
+      .from(permissionRequests)
+      .where(
+        and(
+          eq(permissionRequests.workspaceId, actor.workspace_id),
+          inArray(permissionRequests.status, [...ACTIVE_STATUSES]),
+        ),
+      )
+      .orderBy(desc(permissionRequests.createdAt));
+
+    return {
+      requests: rows.map((r) => ({
+        id: r.id,
+        requester_actor_id: r.requesterActorId,
+        requested_capability: r.requestedCapability,
+        requested_managed_system_id: r.requestedManagedSystemId,
+        reason: r.reason,
+        status: r.status,
+        created_at: r.createdAt.toISOString(),
+      })),
+      count: rows.length,
+    };
+  }
+
   async function listMine(actor: ActorContext) {
     const rows = await db
       .select({
@@ -284,5 +329,5 @@ export function createRequestService(deps: RequestServiceDeps) {
     }));
   }
 
-  return { createRequest, listMine };
+  return { createRequest, listMine, listAllActive };
 }
