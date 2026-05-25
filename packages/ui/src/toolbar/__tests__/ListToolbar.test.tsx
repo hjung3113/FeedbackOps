@@ -1,5 +1,3 @@
-/// <reference types="@testing-library/jest-dom" />
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ListToolbar } from '../ListToolbar.js';
@@ -26,9 +24,7 @@ describe('ListToolbar — tabs mode', () => {
   });
 
   it('does not render badgeCount when 0', () => {
-    const tabsWithZero: ListToolbarTab[] = [
-      { value: 'a', label: '탭A', badgeCount: 0 },
-    ];
+    const tabsWithZero: ListToolbarTab[] = [{ value: 'a', label: '탭A', badgeCount: 0 }];
     render(<ListToolbar tabs={tabsWithZero} activeTab="a" />);
     // The '0' number should not be in a badge
     const badge = screen.queryByText('0');
@@ -48,10 +44,19 @@ describe('ListToolbar — tabs mode', () => {
     expect(screen.queryByRole('heading')).toBeNull();
   });
 
+  it('applies the danger token to an urgent tab', () => {
+    const urgentTabs: ListToolbarTab[] = [
+      { value: 'untriaged', label: '미분류' },
+      { value: 'unassigned', label: 'Unassigned', urgent: true },
+    ];
+    render(<ListToolbar tabs={urgentTabs} activeTab="untriaged" />);
+    expect(screen.getByText('Unassigned').className).toContain('text-danger');
+    // Non-urgent tabs are not flagged.
+    expect(screen.getByText('미분류').className).not.toContain('text-danger');
+  });
+
   it('renders action slot when provided', () => {
-    render(
-      <ListToolbar tabs={tabs} activeTab="untriaged" action={<button>+ New VOC</button>} />,
-    );
+    render(<ListToolbar tabs={tabs} activeTab="untriaged" action={<button>+ New VOC</button>} />);
     expect(screen.getByText('+ New VOC')).toBeInTheDocument();
   });
 });

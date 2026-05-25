@@ -1,13 +1,19 @@
-import * as React from 'react';
-import { cn } from '../utils/cn.js';
-import { Tabs, TabsList, TabsTrigger } from '../components/shadcn/tabs.js';
+import type * as React from 'react';
 import { Badge } from '../components/shadcn/badge.js';
+import { Tabs, TabsList, TabsTrigger } from '../components/shadcn/tabs.js';
+import { cn } from '../utils/cn.js';
 
 export interface ListToolbarTab {
   value: string;
   label: string;
   badgeCount?: number;
   disabled?: boolean;
+  /**
+   * Urgent affordance — renders the trigger label in the danger token (red)
+   * to flag an attention-needed queue (e.g. VOC inbox "Unassigned"). Mirrors
+   * the prototype's `urgent: true` tab flag.
+   */
+  urgent?: boolean;
 }
 
 export interface ListToolbarProps {
@@ -46,6 +52,7 @@ export function ListToolbar({
                   key={tab.value}
                   value={tab.value}
                   disabled={tab.disabled}
+                  className={cn(tab.urgent === true && 'text-danger')}
                 >
                   {tab.label}
                   {tab.badgeCount !== undefined && tab.badgeCount > 0 && (
@@ -64,9 +71,7 @@ export function ListToolbar({
         )}
       </div>
 
-      {action !== undefined && (
-        <div className="shrink-0">{action}</div>
-      )}
+      {action !== undefined && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
