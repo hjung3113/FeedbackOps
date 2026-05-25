@@ -195,8 +195,8 @@ describe('/vocs route shell selection', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => {
-      // Inbox renders ListToolbar with tab labels (Korean) — check for '미트리아지' tab
-      expect(screen.getByText('미트리아지')).toBeInTheDocument();
+      // Inbox renders ListToolbar with prototype tab labels (English) — check for 'Untriaged' tab
+      expect(screen.getByText('Untriaged')).toBeInTheDocument();
     });
     // Confirm the list shell is rendered (not workbench / page)
     expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
@@ -258,8 +258,8 @@ describe('/vocs route shell selection', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => {
-      // Default view is inbox — ListToolbar renders tab labels
-      expect(screen.getByText('미트리아지')).toBeInTheDocument();
+      // Default view is inbox — ListToolbar renders prototype tab labels (English)
+      expect(screen.getByText('Untriaged')).toBeInTheDocument();
     });
     expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
   });

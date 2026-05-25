@@ -3,20 +3,22 @@
 // out_of_scope_summary peek banner, and VocDetailPanel forwarding into ListShell.
 // C9 of Slice 3 #20.
 
-import * as React from 'react';
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import {
-  ListToolbar,
+  Button,
+  type FilterCategory,
   ListFilterButton,
   ListSortButton,
-  SearchInput,
-  PermissionBlockedPanel,
+  ListToolbar,
   type ListToolbarTab,
-  type FilterCategory,
+  PermissionBlockedPanel,
+  SearchInput,
   type SortOption,
 } from '@fops/ui';
-import { VocList } from '../components/list/VocList';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { Plus } from 'lucide-react';
+import * as React from 'react';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
+import { VocList } from '../components/list/VocList';
 import { useVocList } from '../hooks/useVocList';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -45,15 +47,22 @@ interface InboxSearch {
   selected?: string;
 }
 
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// Tab labels mirror docs/design-prototype/screen-voc.jsx (VOC_TABS) verbatim —
+// prototype uses English labels for the inbox tabs. The `urgent` flag flips the
+// Unassigned tab to the danger token (red) per prototype.
+//
+// badgeCount is intentionally absent: the prototype's counts (9/7/12/4/5) are
+// synthetic local-data aggregates. GET /vocs returns no per-tab count facet, so
+// wiring live counts is data-deferred (see PR body, follow-up issue). We do not
+// invent counts.
 const INBOX_TABS: ListToolbarTab[] = [
-  { value: 'untriaged', label: '미트리아지' },
-  { value: 'high', label: '높은 심각도' },
-  { value: 'unassigned', label: '미배정' },
-  { value: 'similar', label: '유사 VOC' },
-  { value: 'no-link', label: 'Finding/Task 미연결' },
+  { value: 'untriaged', label: 'Untriaged' },
+  { value: 'high', label: 'High' },
+  { value: 'unassigned', label: 'Unassigned', urgent: true },
+  { value: 'similar', label: 'Similar' },
+  { value: 'no-link', label: 'No link' },
 ];
 
 const FILTER_CATEGORIES: FilterCategory[] = [
@@ -68,7 +77,12 @@ const FILTER_CATEGORIES: FilterCategory[] = [
     ],
   },
   {
-    key: 'filter.reporter_facing_status',
+    // Unified on the single URL/UI key `filter.reporterStatus` (#89). The
+    // backend's long-form param `filter.reporter_facing_status` is produced
+    // only at the useVocList query-string boundary. Previously this category
+    // used `filter.reporter_facing_status` — a key that never appeared in the
+    // URL — forcing a fragile read/write translation in this route.
+    key: 'filter.reporterStatus',
     label: '상태',
     options: [
       { value: 'received', label: '접수됨' },
@@ -150,7 +164,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     const sev = parseCommaList(search['filter.severity']);
     if (sev.length > 0) out['filter.severity'] = sev;
     const status = parseCommaList(search['filter.reporterStatus']);
-    if (status.length > 0) out['filter.reporter_facing_status'] = status;
+    if (status.length > 0) out['filter.reporterStatus'] = status;
     const owner = parseCommaList(search['filter.owner']);
     if (owner.length > 0) out['filter.owner'] = owner;
     return out;
@@ -176,26 +190,33 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   function handleTabChange(next: string): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void navigate({ to: '/vocs', search: (prev: any) => ({ ...prev, tab: next as InboxTab }) as any });
+    void navigate({
+      to: '/vocs',
+      search: (prev: any) => ({ ...prev, tab: next as InboxTab }) as any,
+    });
   }
 
   function handleFiltersChange(next: Record<string, string[]>): void {
     void navigate({
       to: '/vocs',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      search: (prev: any) => ({
-        ...prev,
-        'filter.severity': serialiseCommaList(next['filter.severity'] ?? []),
-        'filter.reporterStatus': serialiseCommaList(next['filter.reporter_facing_status'] ?? []),
-        'filter.owner': serialiseCommaList(next['filter.owner'] ?? []),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      }) as any,
+      search: (prev: any) =>
+        ({
+          ...prev,
+          'filter.severity': serialiseCommaList(next['filter.severity'] ?? []),
+          'filter.reporterStatus': serialiseCommaList(next['filter.reporterStatus'] ?? []),
+          'filter.owner': serialiseCommaList(next['filter.owner'] ?? []),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        }) as any,
     });
   }
 
   function handleSortChange(next: string): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void navigate({ to: '/vocs', search: (prev: any) => ({ ...prev, sort: next as InboxSort }) as any });
+    void navigate({
+      to: '/vocs',
+      search: (prev: any) => ({ ...prev, sort: next as InboxSort }) as any,
+    });
   }
 
   function handleRowSelect(id: string): void {
@@ -205,7 +226,10 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   function handlePanelClose(): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void navigate({ to: '/vocs', search: (prev: any) => ({ ...prev, selected: undefined }) as any });
+    void navigate({
+      to: '/vocs',
+      search: (prev: any) => ({ ...prev, selected: undefined }) as any,
+    });
   }
 
   // ── Slots ─────────────────────────────────────────────────────────────────
@@ -248,7 +272,10 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           : { title: 'My VOCs' })}
         action={
           <div className="flex items-center gap-2">
-            <SearchInput />
+            {/* Prototype placeholder verbatim (screen-voc.jsx). value/onChange is
+                deferred: SearchInput is disabled until the search endpoint ships
+                (no live search facet on GET /vocs). */}
+            <SearchInput placeholder="필터, 키워드…" />
             <ListFilterButton
               categories={FILTER_CATEGORIES}
               values={currentFilters}
@@ -260,13 +287,13 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
               defaultValue={DEFAULT_SORT}
               onChange={handleSortChange}
             />
-            <Link
-              to="/vocs"
-              search={{ action: 'create' }}
-              className="text-sm text-accent-primary hover:underline whitespace-nowrap"
-            >
-              + 새 VOC 작성
-            </Link>
+            {/* Prototype: primary Button (not a text link). Label verbatim "New VOC". */}
+            <Button asChild variant="primary" size="sm" className="gap-1.5 whitespace-nowrap">
+              <Link to="/vocs" search={{ action: 'create' }}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                New VOC
+              </Link>
+            </Button>
           </div>
         }
       />
@@ -278,7 +305,9 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
         selectedId={search.selected ?? null}
         onSelect={handleRowSelect}
         view={view}
-        onRetry={() => { void vocList.refetch(); }}
+        onRetry={() => {
+          void vocList.refetch();
+        }}
       />
     </>
   );
