@@ -10,19 +10,36 @@
 // INSIDE AppFrame — not here. ADR-0020 §taxonomy lock.
 
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router';
-import { AppFrame } from '../lib/layout/AppFrame';
+import { Database, Flag, Inbox, Layers, Plus, User } from 'lucide-react';
 import { UnauthenticatedError, fetchMe } from '../lib/api';
+import { AppFrame } from '../lib/layout/AppFrame';
 
 // Sidebar entries locked per Slice 3 #18 spec (C5).
 // Per-feature entries are added in their owning slice (AGENTS.md two-consumer rule).
+// Icons mapped from docs/design-prototype/shell.jsx NAV_TREE.voc + NAV_TREE.admin per #95.
 const SIDEBAR_ENTRIES = [
-  { id: 'inbox',    label: 'Inbox',            href: '/vocs?view=inbox' },
-  { id: 'my-vocs',  label: 'My VOCs',          href: '/vocs?view=my' },
-  { id: 'triage',   label: 'Triage',           href: '/vocs?view=triage' },
-  { id: 'create',   label: '+ New VOC',        href: '/vocs?action=create' },
+  { id: 'inbox', label: 'Inbox', href: '/vocs?view=inbox', icon: <Inbox className="h-4 w-4" /> },
+  { id: 'my-vocs', label: 'My VOCs', href: '/vocs?view=my', icon: <User className="h-4 w-4" /> },
+  { id: 'triage', label: 'Triage', href: '/vocs?view=triage', icon: <Flag className="h-4 w-4" /> },
+  {
+    id: 'create',
+    label: '+ New VOC',
+    href: '/vocs?action=create',
+    icon: <Plus className="h-4 w-4" />,
+  },
   // Admin entries — existing routes remain reachable via sidebar.
-  { id: 'admin-ms', label: 'Managed Systems',  href: '/admin/managed-systems' },
-  { id: 'admin-aa', label: 'Analytics Areas',  href: '/admin/analytics-areas' },
+  {
+    id: 'admin-ms',
+    label: 'Managed Systems',
+    href: '/admin/managed-systems',
+    icon: <Database className="h-4 w-4" />,
+  },
+  {
+    id: 'admin-aa',
+    label: 'Analytics Areas',
+    href: '/admin/analytics-areas',
+    icon: <Layers className="h-4 w-4" />,
+  },
 ];
 
 export const Route = createFileRoute('/_authed')({
