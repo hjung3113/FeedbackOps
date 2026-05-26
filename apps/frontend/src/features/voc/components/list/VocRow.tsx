@@ -125,8 +125,8 @@ export function VocRow({
       onClick={onSelect}
       onKeyDown={handleKeyDown}
       className={cn(
-        // Base layout
-        'relative flex w-full items-center gap-3 px-4 h-15 text-left cursor-pointer',
+        // Base layout — prototype .object-row: min-height 60px, padding 10px 20px, gap 12px
+        'relative flex w-full items-center gap-3 px-5 py-2.5 min-h-[60px] text-left cursor-pointer',
         // Hover
         'hover:bg-surface-row-hover',
         // Selected: tinted background + 2px left accent bar (prototype parity)
@@ -185,7 +185,7 @@ export function VocRow({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 text-xs text-text-muted flex-wrap">
+            <div className="flex items-center gap-2 text-xs text-text-muted overflow-hidden">
               <ReporterStatusBadge status={voc.reporter_facing_status} />
               {voc.severity !== null && <SeverityBadge severity={voc.severity} />}
               {managedSystem !== null && managedSystem !== undefined && (
