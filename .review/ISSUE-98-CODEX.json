@@ -1,0 +1,66 @@
+{
+  "issue": 98,
+  "branch": "feature/98-header-row-parity",
+  "summary": "Unified route header and toolbar rows on the shared 50px h-toolbar token, and locked the triage queue row padding test to the prototype value.",
+  "files_changed": [
+    "packages/ui/src/toolbar/ListToolbar.tsx",
+    "packages/ui/src/toolbar/__tests__/ListToolbar.test.tsx",
+    "packages/ui/src/layout/ListShell.tsx",
+    "packages/ui/__tests__/shells.test.tsx",
+    "apps/frontend/src/features/voc/components/triage/VocTriageScreen.tsx",
+    "apps/frontend/src/features/voc/components/triage/__tests__/VocTriageScreen.kicker.test.tsx",
+    "apps/frontend/src/features/voc/components/triage/__tests__/TriageRow.test.tsx",
+    "docs/adr/0020-shell-taxonomy-three-route-shells-and-50px-header-rhythm.md",
+    ".review/ISSUE-98-CODEX.json"
+  ],
+  "bar_class_changes": [
+    {
+      "surface": "ListToolbar root",
+      "file": "packages/ui/src/toolbar/ListToolbar.tsx",
+      "before": "flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-2 bg-surface-canvas sticky top-0 z-10",
+      "after": "flex h-toolbar items-center justify-between gap-3 border-b border-border-subtle px-4 bg-surface-canvas sticky top-0 z-10",
+      "marker_added": "data-toolbar-height=\"50\""
+    },
+    {
+      "surface": "ListShell tabs row",
+      "file": "packages/ui/src/layout/ListShell.tsx",
+      "before": "border-b border-border-subtle px-4 py-2 bg-surface-canvas",
+      "after": "flex h-toolbar items-center border-b border-border-subtle px-4 bg-surface-canvas",
+      "marker_added": "data-list-shell-tabs=\"\" data-toolbar-height=\"50\""
+    },
+    {
+      "surface": "VOC triage route-owned toolbar",
+      "file": "apps/frontend/src/features/voc/components/triage/VocTriageScreen.tsx",
+      "before": "flex items-center gap-2 px-5 h-[50px] border-b border-border-subtle bg-surface-detail shrink-0",
+      "after": "flex items-center gap-2 px-5 h-toolbar border-b border-border-subtle bg-surface-detail shrink-0",
+      "marker_added": "data-toolbar-height=\"50\""
+    }
+  ],
+  "triage_queue_row": {
+    "prototype_source": "docs/design-prototype/screen-voc-create.jsx TriageQueueRow + docs/design-prototype/styles.css .object-row.expanded",
+    "prototype_padding": "padding: 14px 20px",
+    "tailwind_value_mirrored": "py-3.5 px-5",
+    "min_height": "min-h-[96px]",
+    "production_change": "No content or column change; TriageRow already used the prototype padding, so a regression test now locks min-h-[96px] py-3.5 px-5."
+  },
+  "verification": [
+    {
+      "command": "pnpm --filter @fops/ui test",
+      "result": "passed",
+      "test_files": "44 passed",
+      "tests": "482 passed"
+    },
+    {
+      "command": "pnpm --filter @fops/frontend exec vitest run src/features/voc/components/triage/__tests__/TriageRow.test.tsx src/features/voc/components/triage/__tests__/VocTriageScreen.kicker.test.tsx",
+      "result": "passed",
+      "test_files": "2 passed",
+      "tests": "14 passed",
+      "note": "Existing stderr remains in VocTriageScreen.kicker.test.tsx for relative URL parsing during optimistic mutation failure path; tests pass."
+    },
+    {
+      "command": "pnpm exec biome check packages/ui/src/toolbar/ListToolbar.tsx packages/ui/src/layout/ListShell.tsx packages/ui/src/toolbar/__tests__/ListToolbar.test.tsx packages/ui/__tests__/shells.test.tsx apps/frontend/src/features/voc/components/triage/VocTriageScreen.tsx apps/frontend/src/features/voc/components/triage/__tests__/TriageRow.test.tsx apps/frontend/src/features/voc/components/triage/__tests__/VocTriageScreen.kicker.test.tsx docs/adr/0020-shell-taxonomy-three-route-shells-and-50px-header-rhythm.md",
+      "result": "passed",
+      "output": "Checked 7 files in 21ms. No fixes applied."
+    }
+  ]
+}

@@ -11,6 +11,13 @@ const tabs: ListToolbarTab[] = [
 ];
 
 describe('ListToolbar — tabs mode', () => {
+  it('locks the toolbar row to the 50px h-toolbar rhythm', () => {
+    const { container } = render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
+    const toolbar = container.firstElementChild;
+    expect(toolbar?.className).toContain('h-toolbar');
+    expect(toolbar).toHaveAttribute('data-toolbar-height', '50');
+  });
+
   it('renders all tab labels', () => {
     render(<ListToolbar tabs={tabs} activeTab="untriaged" />);
     expect(screen.getByText('미분류')).toBeInTheDocument();
@@ -56,7 +63,13 @@ describe('ListToolbar — tabs mode', () => {
   });
 
   it('renders action slot when provided', () => {
-    render(<ListToolbar tabs={tabs} activeTab="untriaged" action={<button>+ New VOC</button>} />);
+    render(
+      <ListToolbar
+        tabs={tabs}
+        activeTab="untriaged"
+        action={<button type="button">+ New VOC</button>}
+      />,
+    );
     expect(screen.getByText('+ New VOC')).toBeInTheDocument();
   });
 });

@@ -1,6 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { PageShell, ListShell, WorkbenchShell, ShellHeader, DetailPanelSlotContext } from '../src/index';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  DetailPanelSlotContext,
+  ListShell,
+  PageShell,
+  ShellHeader,
+  WorkbenchShell,
+} from '../src/index';
 
 describe('Three-shell taxonomy (ADR-0020)', () => {
   it('PageShell renders with data-shell="page" and 50px header', () => {
@@ -14,15 +20,41 @@ describe('Three-shell taxonomy (ADR-0020)', () => {
 
   it('ListShell renders with data-shell="list" and tabs slot', () => {
     const { container } = render(
-      <ListShell toolbar={{ title: 'Inbox' }} tabs={<div data-testid="tabs">tabs</div>} list={<ul><li>row</li></ul>} />,
+      <ListShell
+        toolbar={{ title: 'Inbox' }}
+        tabs={<div data-testid="tabs">tabs</div>}
+        list={
+          <ul>
+            <li>row</li>
+          </ul>
+        }
+      />,
     );
     expect(container.querySelector('[data-shell="list"]')).toBeInTheDocument();
     expect(screen.getByTestId('tabs')).toBeInTheDocument();
     expect(screen.getByText('row')).toBeInTheDocument();
   });
 
+  it('ListShell tabs row locks to the 50px h-toolbar rhythm', () => {
+    const { container } = render(
+      <ListShell
+        tabs={<div data-testid="tabs">tabs</div>}
+        list={
+          <ul>
+            <li>row</li>
+          </ul>
+        }
+      />,
+    );
+    const tabsRow = container.querySelector('[data-list-shell-tabs]');
+    expect(tabsRow?.className).toContain('h-toolbar');
+    expect(tabsRow).toHaveAttribute('data-toolbar-height', '50');
+  });
+
   it('WorkbenchShell renders with data-shell="workbench"', () => {
-    const { container } = render(<WorkbenchShell toolbar={{ title: 'Triage' }}>workbench body</WorkbenchShell>);
+    const { container } = render(
+      <WorkbenchShell toolbar={{ title: 'Triage' }}>workbench body</WorkbenchShell>,
+    );
     expect(container.querySelector('[data-shell="workbench"]')).toBeInTheDocument();
     expect(screen.getByText(/workbench body/)).toBeInTheDocument();
   });
@@ -58,7 +90,9 @@ describe('useDetailPanelSlot forwarding', () => {
       </DetailPanelSlotContext.Provider>,
     );
     expect(setContent).toHaveBeenCalledTimes(1);
-    const [, node] = setContent.mock.calls[0]!;
+    const firstCall = setContent.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const [, node] = firstCall ?? [];
     expect(node).toBeDefined();
   });
 

@@ -30,6 +30,8 @@ The following surfaces MUST share a single 50px height baseline:
 - Detail-panel drawer header (`<DetailPanelHeader>` and its analogues).
 - Survey preview drawer header.
 
+Production toolbar rows, including `ListToolbar`, `ListShell` extension rows, and route-owned inline toolbars, enforce this with the shared `h-toolbar` token.
+
 `PageShell` itself does not impose a 50px header — its layout is content-driven, not toolbar-driven — but any drawer or panel that opens on top of a `PageShell` MUST follow the 50px rule for its own header.
 
 ### 3. Source of truth: baseline screenshots + manifest

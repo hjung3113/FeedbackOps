@@ -1,12 +1,7 @@
-// TriageRow.test.tsx — RED tests for the 96px expanded triage queue row.
-// Prototype ref: screen-voc-create.jsx:367-389
-// TDD RED: these tests are written before the implementation file exists.
-
-import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import type { VocListItem } from '@fops/shared';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TriageRow } from '../TriageRow';
-import type { VocListItem } from '@fops/shared';
 
 const BASE_VOC: VocListItem = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -27,6 +22,14 @@ const BASE_VOC: VocListItem = {
 };
 
 describe('TriageRow', () => {
+  it('mirrors prototype expanded row padding and min height', () => {
+    render(<TriageRow voc={BASE_VOC} selected={false} onSelect={vi.fn()} />);
+    const row = screen.getByRole('button');
+    expect(row.className).toContain('min-h-[96px]');
+    expect(row.className).toContain('py-3.5');
+    expect(row.className).toContain('px-5');
+  });
+
   it('renders the voc title and display_id', () => {
     render(<TriageRow voc={BASE_VOC} selected={false} onSelect={vi.fn()} />);
     expect(screen.getByText('Test VOC title')).toBeInTheDocument();
