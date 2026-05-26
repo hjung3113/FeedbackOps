@@ -8,12 +8,12 @@
 // C3.2: passes optimisticRemove + optimisticRestore from useTriageQueue into
 // TriagePanel so the panel can drive queue side-effects on mutation.
 
-import * as React from 'react';
 import type { VocListItem } from '@fops/shared';
 import { Flag } from 'lucide-react';
+import type * as React from 'react';
 import { useTriageQueue } from '../../hooks/useTriageQueue';
-import { TriageQueue } from './TriageQueue';
 import { TriagePanel } from './TriagePanel';
+import { TriageQueue } from './TriageQueue';
 
 export type TriageTab = 'unassigned' | 'untriaged' | 'high' | 'waiting';
 
@@ -45,10 +45,17 @@ export function VocTriageScreen({
   onTabChange,
 }: VocTriageScreenProps): React.ReactElement {
   const {
+    state: queueState,
     liveQueue,
     optimisticRemove,
     optimisticRestore,
   } = useTriageQueue(items);
+
+  // Processed-count — number of VOCs optimistically removed (triaged/skipped)
+  // in this session. Prototype ref: screen-voc-create.jsx:652-656 ("N건 처리됨").
+  // Derived from the route-local triage queue reducer; no live server source
+  // exists for a per-session processed count.
+  const processedCount = queueState.optimisticallyRemoved.size;
 
   // Derive the selected VOC — when the current selection is optimistically removed,
   // auto-advance to the next item in the live queue.
@@ -58,16 +65,24 @@ export function VocTriageScreen({
     <div className="flex flex-col h-full">
       {/* Toolbar: kicker (V1 inline identity) + title + tab strip */}
       {/* V1: ShellHeader removed from WorkbenchShell; route identity lives here as a left-edge kicker. */}
-      <div data-testid="triage-toolbar" className="flex items-center gap-2 px-5 h-[50px] border-b border-border-subtle bg-surface-detail shrink-0">
+      <div
+        data-testid="triage-toolbar"
+        className="flex items-center gap-2 px-5 h-[50px] border-b border-border-subtle bg-surface-detail shrink-0"
+      >
         {/* Kicker: "Console · Triage" — absorbs route identity previously held by ShellHeader toolbar prop. */}
-        <div data-testid="triage-kicker" className="inline-flex items-center gap-1.5 pr-2.5 mr-1 h-[22px] border-r border-border-subtle shrink-0">
+        <div
+          data-testid="triage-kicker"
+          className="inline-flex items-center gap-1.5 pr-2.5 mr-1 h-[22px] border-r border-border-subtle shrink-0"
+        >
           <span
             data-testid="triage-kicker-console"
             className="text-xs font-medium uppercase tracking-[0.04em] text-text-muted"
           >
             Console
           </span>
-          <span className="text-[10px] text-text-muted" aria-hidden="true">·</span>
+          <span className="text-[10px] text-text-muted" aria-hidden="true">
+            ·
+          </span>
           <span
             data-testid="triage-kicker-name"
             className="text-[13px] font-semibold text-text-secondary"
@@ -81,6 +96,13 @@ export function VocTriageScreen({
           {liveQueue.length} VOC
         </span>
         <span className="text-xs text-text-muted ml-1">정렬: 미배정 → severity</span>
+        {/* Processed-count progress — emerald/accent toned. Prototype ref:
+            screen-voc-create.jsx:652-656 ("· N건 처리됨"). */}
+        {processedCount > 0 && (
+          <span data-testid="triage-processed-count" className="text-xs text-text-success ml-1">
+            · {processedCount}건 처리됨
+          </span>
+        )}
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -91,7 +113,9 @@ export function VocTriageScreen({
             <button
               key={tab.value}
               type="button"
-              onClick={() => { onTabChange(tab.value); }}
+              onClick={() => {
+                onTabChange(tab.value);
+              }}
               className={
                 activeTab === tab.value
                   ? 'h-7 px-2.5 rounded-md text-[13px] font-medium text-text-primary bg-surface-popover'

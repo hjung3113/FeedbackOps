@@ -6,10 +6,10 @@
 //
 // Spec: .review/TRIAGE-LAYOUT-VARIANTS.html §V1 kicker styling.
 
-import * as React from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen } from '@testing-library/react';
+import type * as React from 'react';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('sonner', () => ({
   toast: {
@@ -22,8 +22,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { VocTriageScreen } from '../VocTriageScreen';
 import type { VocListItem } from '@fops/shared';
+import { VocTriageScreen } from '../VocTriageScreen';
 
 const MOCK_VOC: VocListItem = {
   id: 'voc-kicker-001',
@@ -41,6 +41,7 @@ const MOCK_VOC: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  attachment_count: 0,
 };
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -108,5 +109,49 @@ describe('VocTriageScreen — V1 inline kicker', () => {
     expect(toolbar).not.toBeNull();
     const firstChild = toolbar?.firstElementChild;
     expect(firstChild?.getAttribute('data-testid')).toBe('triage-kicker');
+  });
+
+  // Prototype ref: screen-voc-create.jsx:652-656 — "· N건 처리됨" processed count.
+  it('hides the processed-count indicator when nothing has been processed', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC]}
+          selectedId={MOCK_VOC.id}
+          activeTab="untriaged"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+    expect(screen.queryByTestId('triage-processed-count')).not.toBeInTheDocument();
+  });
+
+  it('shows "N건 처리됨" after a VOC is optimistically removed (confirm)', () => {
+    const items: VocListItem[] = [
+      MOCK_VOC,
+      { ...MOCK_VOC, id: 'voc-kicker-002', display_id: 'VOC-K-002' },
+    ];
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={items}
+          selectedId={MOCK_VOC.id}
+          activeTab="untriaged"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+    expect(screen.queryByTestId('triage-processed-count')).not.toBeInTheDocument();
+
+    // Stage a severity so the confirm button enables, then confirm to trigger
+    // the optimistic remove that drives the processed count.
+    fireEvent.click(screen.getByRole('button', { name: /high/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Triage 확정/ }));
+
+    const count = screen.getByTestId('triage-processed-count');
+    expect(count).toBeInTheDocument();
+    expect(count.textContent).toContain('1건 처리됨');
   });
 });

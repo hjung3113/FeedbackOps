@@ -10,10 +10,11 @@
  *   .field-row → FieldRow primitive
  */
 
-import * as React from 'react';
-import { FieldRow, SeverityBadge, UserChip, cn } from '@fops/ui';
+import { FieldRow, ReporterStatusBadge, SeverityBadge, UserChip, cn } from '@fops/ui';
+import type { AvatarUser, ReporterFacingStatusEnum } from '@fops/ui';
+import { ArrowRight } from 'lucide-react';
+import type * as React from 'react';
 import type { TriagePanelLocalState } from '../../hooks/useTriagePanelState';
-import type { AvatarUser } from '@fops/ui';
 
 export interface TriageSummaryCardProps {
   panelState: TriagePanelLocalState;
@@ -24,6 +25,12 @@ export interface TriageSummaryCardProps {
   actorMap?: Map<string, AvatarUser>;
   /** Optional analytics area name for display. */
   analyticsAreaName?: string | null;
+  /**
+   * Current reporter-facing status of the VOC. When provided, the card renders
+   * the "Reporter status 변경" transition row (current → assigned/reviewing).
+   * Prototype ref: screen-voc-create.jsx:561-567.
+   */
+  currentReporterStatus?: ReporterFacingStatusEnum;
   className?: string;
 }
 
@@ -31,21 +38,17 @@ export function TriageSummaryCard({
   panelState,
   actorMap,
   analyticsAreaName,
+  currentReporterStatus,
   className,
 }: TriageSummaryCardProps): React.ReactElement {
   const { severity, ownerUserId, ownerTeamId, analyticsAreaId } = panelState;
 
-  const ownerUser =
-    ownerUserId !== null
-      ? (actorMap?.get(ownerUserId) ?? null)
-      : null;
+  const ownerUser = ownerUserId !== null ? (actorMap?.get(ownerUserId) ?? null) : null;
 
   const ownerMissing = ownerUserId === null && ownerTeamId === null;
 
   const areaLabel =
-    analyticsAreaId !== null
-      ? (analyticsAreaName ?? analyticsAreaId.slice(0, 8))
-      : null;
+    analyticsAreaId !== null ? (analyticsAreaName ?? analyticsAreaId.slice(0, 8)) : null;
 
   return (
     <div className={cn('bg-surface-canvas rounded-md p-3 flex flex-col gap-2.5', className)}>
@@ -84,6 +87,18 @@ export function TriageSummaryCard({
       <FieldRow label="Cluster">
         <span className="text-sm text-text-muted">미결정</span>
       </FieldRow>
+
+      {/* Reporter status 변경 — transition preview (prototype L561-567).
+          Target: 'assigned' when an owner is staged, else 'reviewing'. */}
+      {currentReporterStatus !== undefined && (
+        <FieldRow label="Reporter status 변경">
+          <span className="flex items-center gap-1.5" data-testid="reporter-status-transition">
+            <ReporterStatusBadge status={currentReporterStatus} />
+            <ArrowRight size={10} className="text-text-muted shrink-0" aria-hidden="true" />
+            <ReporterStatusBadge status={ownerMissing ? 'reviewing' : 'assigned'} />
+          </span>
+        </FieldRow>
+      )}
     </div>
   );
 }

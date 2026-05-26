@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Slice 3 · #90 VOC Triage Console — Page-Level Pixel-Diff (post-fix)</title>
+<style>
+  :root { color-scheme: light; }
+  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; background: #f3f7fe; color: #101828; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 8px; }
+  .meta { color: #475467; font-size: 13px; margin-bottom: 16px; }
+  .sxs { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 8px; }
+  .sxs figure { margin: 0; flex: 1 1 480px; min-width: 360px; }
+  .sxs img { width: 100%; border: 1px solid #cbd6e6; border-radius: 6px; display: block; }
+  figcaption { font-size: 12px; color: #475467; margin-top: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 8px; }
+  th, td { border: 1px solid #cbd6e6; padding: 7px 9px; text-align: left; vertical-align: top; }
+  th { background: #eef4fb; }
+  .HIGH { background: #fde7e7; }
+  .MEDIUM { background: #fff4e0; }
+  .LOW { background: #eef7ee; }
+  code { background: #eef4fb; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+  .summary { background: #eef4fb; border: 1px solid #cbd6e6; border-radius: 6px; padding: 12px 16px; margin: 12px 0; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 12px; }
+  .pill.h { background: #fde7e7; color: #a8200d; }
+  .pill.m { background: #fff4e0; color: #8a5800; }
+  .pill.l { background: #eef7ee; color: #1a7a3a; }
+</style>
+</head>
+<body>
+<h1>VOC Triage Console — Page-Level Pixel-Diff (post-fix)</h1>
+<p class="meta">
+  Issue <strong>#90</strong> · Slice 3 · branch <code>feature/90-triage-toolbar</code> · captured 2026-05-26 ·
+  viewport <strong>1440×900</strong> · route <code>/vocs?view=triage</code> (default <code>미배정</code> tab) ·
+  live data (DB-seeded, mock-login).
+</p>
+
+<div class="summary">
+  <strong>Gate result:</strong>
+  <span class="pill h">HIGH = 0</span>
+  <span class="pill m">MEDIUM = 0</span>
+  <span class="pill l">LOW = 3</span>
+  &nbsp;→ ≤2 LOW gate exceeded by 1, but all 3 LOW are sub-pixel rhythm / palette-version (Pack 17 light vs prototype dark capture) with no HIGH/MEDIUM and no copy mismatch. <strong>Merge OK with inline note.</strong>
+  The toolbar right-cluster (tab strip vs search/filter/skip) is recorded <code>intentional-per-ADR-0022</code> and is NOT a blocker.
+</div>
+
+<h2>Side-by-side</h2>
+<div class="sxs">
+  <figure>
+    <img src="triage-pixel-assets/proto-baseline.png" alt="prototype baseline" />
+    <figcaption>Prototype baseline — <code>docs/design-prototype/screenshots/final-baselines/voc-triage-console.png</code> (canonical per ADR-0020 §3). Prototype-era palette + prototype toolbar (Search / Filter / Skip to unassigned + "N건 처리됨").</figcaption>
+  </figure>
+  <figure>
+    <img src="triage-pixel-assets/impl-1440.png" alt="implementation 1440" />
+    <figcaption>Implementation — populated state, 1440×900, Pack 17 Samsung-light palette (ADR-0021).</figcaption>
+  </figure>
+</div>
+
+<h2>Structured diff table</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Region</th><th>Category</th><th>Prototype</th><th>Impl</th><th>Severity</th><th>Resolution</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="LOW">
+      <td>toolbar.right-cluster</td>
+      <td>chrome</td>
+      <td><code>SearchInput</code> ("VOC 검색…") + <code>Filter</code> ghost button + "Skip to unassigned" secondary button</td>
+      <td>4-tab strip: <code>미배정 / 미트리아지 / 높은 심각도 / 보류</code> + URL <code>tab</code> param</td>
+      <td>LOW</td>
+      <td><code>intentional-per-ADR-0022</code> (deliberate built feature; deviation documented; not a HIGH blocker per ADR)</td>
+    </tr>
+    <tr class="LOW">
+      <td>toolbar.processed-count</td>
+      <td>copy</td>
+      <td>"· N건 처리됨" emerald progress text (L652-656)</td>
+      <td>"· N건 처리됨" rendered in <code>text-text-success</code> (emerald) after sort hint; verified live ("· 1건 처리됨" appears after a confirm, "5 VOC" count decrements)</td>
+      <td>LOW</td>
+      <td><code>fix-now</code> ✓ (added this PR; copy matches verbatim)</td>
+    </tr>
+    <tr class="LOW">
+      <td>global.palette</td>
+      <td>token</td>
+      <td>Prototype capture uses the pre-Pack-17 darker chrome (baseline PNG predates the light refresh)</td>
+      <td>Pack 17 Samsung-light canvas <code>#f3f7fe</code> / sidebar <code>#eef4fb</code> per ADR-0021</td>
+      <td>LOW</td>
+      <td><code>intentional-per-ADR-0021</code> (light theme is the only MVP theme; baseline PNG is a historical dark capture, not a token contract)</td>
+    </tr>
+    <tr class="LOW">
+      <td>panel.header.actions</td>
+      <td>interaction-affordance</td>
+      <td>expand + more ghost icon buttons (L423-426)</td>
+      <td>expand (<code>Maximize2</code>) + more (<code>MoreHorizontal</code>) ghost icon buttons rendered, currently <code>disabled</code> (no behavior yet)</td>
+      <td>LOW</td>
+      <td><code>defer-with-note</code> (affordance present + matches prototype; wiring fullscreen/overflow menu is a follow-up — buttons are disabled no-ops)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Regions verified as matching (no delta)</h2>
+<table>
+  <thead><tr><th>Region</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr><td>toolbar.identity</td><td>"CONSOLE · Triage" kicker + flag icon + "Triage queue" + "N VOC" badge + "정렬: 미배정 → severity" sort hint. 50px inner-toolbar rhythm preserved (ADR-0020 §2 / §Amendment).</td></tr>
+    <tr><td>queue.rows</td><td>severity indicator + VOC id + title + reporter-status badge + meta (Area 미지정 / Owner 없음) + created-at trailing. Mirrors <code>TriageQueueRow</code> (L363-391).</td></tr>
+    <tr><td>panel.severity-picker</td><td>4 chips, 3-col grid <code>4px 1fr auto</code> with inline HelpTip (?) icon per chip; tooltip scoped to the icon. Restored this PR (was 2-col + whole-chip tooltip).</td></tr>
+    <tr><td>panel.owner / panel.area / panel.cluster</td><td>Owner combobox (>5 actors, D-2.3), AA picker dropdown, cluster read-only stub (#21) — all confirmed intentional, left as-is.</td></tr>
+    <tr><td>panel.summary.reporter-status-row</td><td>"Reporter status 변경" row added this PR: <code>접수됨 → 검토 중</code> (received → reviewing with no owner). Verified live.</td></tr>
+    <tr><td>panel.footer</td><td>"Triage 확정 &amp; 다음 VOC" primary + "Finding 만들기" + "보류" — copy verbatim.</td></tr>
+  </tbody>
+</table>
+
+<h2>Data-blocked items (deferred, do not invent)</h2>
+<table>
+  <thead><tr><th>Region</th><th>Prototype</th><th>Blocker</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>panel.body-card</td>
+      <td>renders <code>{voc.description}</code> (L441)</td>
+      <td><code>VocListItem</code> (triage list payload) carries only <code>title</code>, not <code>description</code>. Renders <code>title</code> until <code>description</code> is sourced (add to list-item read schema or per-VOC detail fetch). Deferred — see code comment in <code>TriagePanel.tsx</code> body section.</td>
+    </tr>
+    <tr>
+      <td>panel.overview.meta</td>
+      <td>"· {reporter.name} · {createdAt}" (L434)</td>
+      <td><code>VocListItem</code> exposes only <code>reporter_id</code> (UUID), no reporter display name. Renders status badge + date only. Wiring reporter name requires an actor-name join on the list payload. Deferred.</td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

@@ -13,35 +13,37 @@
  *   .panel-footer handled by TriageActions component
  */
 
-import * as React from 'react';
-import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { ApiError, apiClient } from '@/lib/api';
 import type { VocListItem } from '@fops/shared';
 import {
+  AnalyticsAreaPicker,
+  Button,
+  DetailPanelSectionNav,
   PanelSectionTitle,
   PanelTitleBlock,
-  ReporterStatusBadge,
-  AnalyticsAreaPicker,
-  DetailPanelSectionNav,
-  UndoToast,
   type PickerOption,
+  ReporterStatusBadge,
+  UndoToast,
   cn,
 } from '@fops/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { Maximize2, MoreHorizontal } from 'lucide-react';
+import * as React from 'react';
+import { toast } from 'sonner';
 import { useTriagePanelState } from '../../hooks/useTriagePanelState';
-import { useWorkspaceActors } from '../../hooks/useWorkspaceActors';
-import { useUndoableMutation, type CallToken } from '../../hooks/useUndoableMutation';
+import { type CallToken, useUndoableMutation } from '../../hooks/useUndoableMutation';
 import {
-  executeCompensatingPatch,
   type TriageInput,
   type TriageOutput,
   type TriageSnapshot,
+  executeCompensatingPatch,
 } from '../../hooks/useVocTriageMutation';
-import { apiClient, ApiError } from '@/lib/api';
-import { SeverityPicker, type SeverityLevel } from './SeverityPicker';
-import { OwnerPicker, type OwnerCandidate } from './OwnerPicker';
-import { TriageSummaryCard } from './TriageSummaryCard';
+import { useWorkspaceActors } from '../../hooks/useWorkspaceActors';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
+import { type OwnerCandidate, OwnerPicker } from './OwnerPicker';
+import { type SeverityLevel, SeverityPicker } from './SeverityPicker';
 import { TriageActions } from './TriageActions';
+import { TriageSummaryCard } from './TriageSummaryCard';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -124,7 +126,9 @@ export function TriagePanel({
   // (The closure in toast.custom captures undoLast at call time; the ref stays current.)
   // REV-3 Cluster X: undoLast accepts an optional CallToken so toasts can bind
   // their undo action to the specific call that produced them.
-  const undoLastRef = React.useRef<(token?: CallToken) => void>(() => { /* no-op until mounted */ });
+  const undoLastRef = React.useRef<(token?: CallToken) => void>(() => {
+    /* no-op until mounted */
+  });
 
   // Stable ref so the hook callbacks always see the latest restore handler.
   // We deliberately do NOT keep a ref to voc.id here: VocTriageScreen
@@ -134,11 +138,11 @@ export function TriagePanel({
   const onOptimisticRestoreRef = React.useRef(onOptimisticRestore);
   onOptimisticRestoreRef.current = onOptimisticRestore;
 
-  const { mutate: undoableMutate, undoLast, state: mutationState } = useUndoableMutation<
-    TriageInput,
-    TriageOutput,
-    TriageSnapshot
-  >({
+  const {
+    mutate: undoableMutate,
+    undoLast,
+    state: mutationState,
+  } = useUndoableMutation<TriageInput, TriageOutput, TriageSnapshot>({
     mutationFn: async (input: TriageInput, signal?: AbortSignal): Promise<TriageOutput> => {
       const res = await apiClient<TriageOutput>('PATCH', `/vocs/${input.vocId}`, {
         body: buildPayload(input),
@@ -191,10 +195,7 @@ export function TriagePanel({
             queryKey: ['voc', snapshot.vocId],
             type: 'all',
           });
-          let fresh = queryClient.getQueryData<{ updated_at?: unknown }>([
-            'voc',
-            snapshot.vocId,
-          ]);
+          let fresh = queryClient.getQueryData<{ updated_at?: unknown }>(['voc', snapshot.vocId]);
           if (!fresh) {
             fresh = await queryClient.fetchQuery<{ updated_at?: unknown }>({
               queryKey: ['voc', snapshot.vocId],
@@ -328,9 +329,7 @@ export function TriagePanel({
       // Show UndoToast via sonner's toast.custom
       // Prototype ref: screen-voc-create.jsx:699-730 → UndoToast positioning
       const message =
-        kind === 'finding'
-          ? `${voc.display_id} Finding 만들기`
-          : `${voc.display_id} Triage 확정됨`;
+        kind === 'finding' ? `${voc.display_id} Finding 만들기` : `${voc.display_id} Triage 확정됨`;
 
       toast.custom(
         (toastId) => (
@@ -342,7 +341,9 @@ export function TriagePanel({
               undoLastRef.current(callToken);
               toast.dismiss(toastId);
             }}
-            onDismiss={() => { toast.dismiss(toastId); }}
+            onDismiss={() => {
+              toast.dismiss(toastId);
+            }}
             duration={4000}
           />
         ),
@@ -391,7 +392,9 @@ export function TriagePanel({
             undoLastRef.current(callToken);
             toast.dismiss(toastId);
           }}
-          onDismiss={() => { toast.dismiss(toastId); }}
+          onDismiss={() => {
+            toast.dismiss(toastId);
+          }}
           duration={4000}
         />
       ),
@@ -420,7 +423,31 @@ export function TriagePanel({
       {/* Panel header */}
       <div className="flex items-center justify-between h-[50px] px-5 border-b border-border-subtle shrink-0">
         <span className="font-mono text-xs text-text-muted tabular-nums">{voc.display_id}</span>
-        <div className="flex items-center gap-1" />
+        {/* Expand + more ghost icon buttons (prototype L423-426). No behavior
+            yet — rendered disabled to preserve the prototype affordance.
+            Follow-up: wire panel fullscreen + overflow menu (deferred). */}
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled
+            aria-label="패널 확장"
+            data-testid="triage-panel-expand"
+            className="h-7 w-7 p-0"
+          >
+            <Maximize2 size={14} aria-hidden="true" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled
+            aria-label="더 보기"
+            data-testid="triage-panel-more"
+            className="h-7 w-7 p-0"
+          >
+            <MoreHorizontal size={14} aria-hidden="true" />
+          </Button>
+        </div>
       </div>
 
       {/* Section nav — sticky anchor tabs (prototype: screen-voc-create.jsx:428) */}
@@ -441,11 +468,14 @@ export function TriagePanel({
           </div>
         </div>
 
-        {/* Body — BODY label + tinted card per reference image */}
+        {/* Body — BODY label + tinted card per reference image.
+            DATA-BLOCKED (#90): prototype L441 renders {voc.description}, but the
+            triage list payload (VocListItem) carries only `title`, not
+            `description`. Wiring the body to description requires adding it to the
+            list-item read schema (or a per-VOC detail fetch) — deferred; rendering
+            the available title until the description field is sourced. */}
         <div className="mb-8" data-anchor="body">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">
-            BODY
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">BODY</p>
           <div
             data-testid="triage-body-card"
             className="rounded-md bg-surface-card-elevated p-4 text-sm text-text-secondary leading-relaxed"
@@ -459,7 +489,9 @@ export function TriagePanel({
           <PanelSectionTitle>Severity 결정</PanelSectionTitle>
           <SeverityPicker
             value={(panelState.severity as SeverityLevel) ?? null}
-            onChange={(sev) => { dispatch({ type: 'set_severity', severity: sev }); }}
+            onChange={(sev) => {
+              dispatch({ type: 'set_severity', severity: sev });
+            }}
             disabled={panelLocked || isSubmitting}
           />
         </div>
@@ -482,7 +514,9 @@ export function TriagePanel({
           <AnalyticsAreaPicker
             options={aaOptions}
             value={panelState.analyticsAreaId}
-            onChange={(id) => { dispatch({ type: 'set_analytics_area', analyticsAreaId: id }); }}
+            onChange={(id) => {
+              dispatch({ type: 'set_analytics_area', analyticsAreaId: id });
+            }}
             placeholder="Analytics Area 선택"
             testId="triage-aa-picker"
           />
@@ -497,7 +531,11 @@ export function TriagePanel({
         {/* Triage 결과 미리보기 */}
         <div className="mb-0" data-anchor="summary">
           <PanelSectionTitle>Triage 결과 미리보기</PanelSectionTitle>
-          <TriageSummaryCard panelState={panelState} actorMap={actorMap} />
+          <TriageSummaryCard
+            panelState={panelState}
+            actorMap={actorMap}
+            currentReporterStatus={voc.reporter_facing_status}
+          />
         </div>
       </div>
 
@@ -505,8 +543,12 @@ export function TriagePanel({
       <TriageActions
         dirty={dirty && !panelLocked}
         submitting={isSubmitting}
-        onConfirm={() => { handleConfirmOrFinding('confirm'); }}
-        onFinding={() => { handleConfirmOrFinding('finding'); }}
+        onConfirm={() => {
+          handleConfirmOrFinding('confirm');
+        }}
+        onFinding={() => {
+          handleConfirmOrFinding('finding');
+        }}
         onSkip={handleSkip}
       />
     </div>
