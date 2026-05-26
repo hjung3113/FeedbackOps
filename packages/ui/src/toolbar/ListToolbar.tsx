@@ -36,9 +36,10 @@ export function ListToolbar({
   return (
     <div
       className={cn(
-        'flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-2 bg-surface-canvas sticky top-0 z-10',
+        'flex h-toolbar items-center justify-between gap-3 border-b border-border-subtle px-4 bg-surface-canvas sticky top-0 z-10',
         className,
       )}
+      data-toolbar-height="50"
     >
       <div className="flex items-center min-w-0">
         {tabs !== undefined ? (

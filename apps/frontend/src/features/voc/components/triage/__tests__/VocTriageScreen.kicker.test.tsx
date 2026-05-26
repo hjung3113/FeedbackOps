@@ -52,6 +52,24 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('VocTriageScreen — V1 inline kicker', () => {
+  it('locks the route-owned toolbar to the 50px h-toolbar rhythm', () => {
+    render(
+      <Wrapper>
+        <VocTriageScreen
+          items={[MOCK_VOC]}
+          selectedId={MOCK_VOC.id}
+          activeTab="untriaged"
+          onSelectVoc={vi.fn()}
+          onTabChange={vi.fn()}
+        />
+      </Wrapper>,
+    );
+
+    const toolbar = screen.getByTestId('triage-toolbar');
+    expect(toolbar.className).toContain('h-toolbar');
+    expect(toolbar).toHaveAttribute('data-toolbar-height', '50');
+  });
+
   it('renders "Console" kicker label in the toolbar', () => {
     render(
       <Wrapper>

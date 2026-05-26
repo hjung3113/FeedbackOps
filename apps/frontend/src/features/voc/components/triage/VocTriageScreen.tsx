@@ -67,7 +67,8 @@ export function VocTriageScreen({
       {/* V1: ShellHeader removed from WorkbenchShell; route identity lives here as a left-edge kicker. */}
       <div
         data-testid="triage-toolbar"
-        className="flex items-center gap-2 px-5 h-[50px] border-b border-border-subtle bg-surface-detail shrink-0"
+        className="flex items-center gap-2 px-5 h-toolbar border-b border-border-subtle bg-surface-detail shrink-0"
+        data-toolbar-height="50"
       >
         {/* Kicker: "Console · Triage" — absorbs route identity previously held by ShellHeader toolbar prop. */}
         <div
