@@ -52,9 +52,9 @@ export function IdentitySection({ voc }: IdentitySectionProps): React.ReactEleme
   //   - title mb-1 (4 px) — tight gap to the status row (reference ≈ 8 CSS but
   //     visually feels too wide once the pill carries weight; user feedback
   //     "제목과 뱃지/날짜 간격 너무 넓음").
-  //   - px-6 (24 px) — horizontal inset aligns with DetailPanelSectionNav.
+  //   - horizontal inset now provided by the scroll container (pt-7 px-6 in VocDetailPanel).
   return (
-    <div className="mb-4 px-6 pt-2">
+    <div className="mb-4 pt-2">
       <PanelTitleBlock title={voc.title} className="!px-0 !py-0 mb-1" />
       <div className="flex items-center gap-2 text-xs text-text-muted">
         <ReporterStatusBadge status={voc.reporter_facing_status} />
@@ -93,7 +93,7 @@ export function IdentityMetadataStrip({
   }
 
   return (
-    <div className="flex flex-wrap gap-2 px-4 mt-3 text-xs">
+    <div className="flex flex-wrap gap-2 mt-3 text-xs">
       {hasSeverity && severity !== null && <SeverityBadge severity={severity} />}
       {hasManagedSystem && (
         <ManagedSystemPill name={managedSystem.name} mark={managedSystem.mark} />
