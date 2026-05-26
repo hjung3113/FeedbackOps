@@ -1,5 +1,4 @@
 /// <reference types="@testing-library/jest-dom" />
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { PanelTitleBlock } from '../PanelTitleBlock.js';
 
@@ -42,12 +41,14 @@ describe('PanelTitleBlock', () => {
     expect(container.firstElementChild).toHaveClass('custom-cls');
   });
 
-  it('renders compact V1b title typography by default: text-lg font-semibold tracking-tight', () => {
+  it('renders prototype panel-title typography by default: text-lg font-semibold tracking-tight leading-[1.35]', () => {
     render(<PanelTitleBlock title="제목" />);
     const h2 = screen.getByRole('heading', { level: 2 });
     expect(h2).toHaveClass('text-lg');
     expect(h2).toHaveClass('font-semibold');
     expect(h2).toHaveClass('tracking-tight');
+    expect(h2).toHaveClass('leading-[1.35]');
+    expect(h2).toHaveClass('text-text-primary');
     expect(h2).not.toHaveClass('text-xl');
   });
 

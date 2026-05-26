@@ -1,8 +1,8 @@
 // TriagePanel.titleBlock.test.tsx — title block restore (option A)
 //
 // Reference: .review/title-reference.png. The triage panel reuses the same
-// PanelTitleBlock as the read-only detail panel and must adopt the xl title
-// + status-pill+meta line + BODY card treatment for consistency.
+// PanelTitleBlock as the read-only detail panel and must adopt the prototype
+// lg title + status-pill+meta line + BODY card treatment for consistency.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
@@ -58,7 +58,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-describe('TriagePanel — title block restore (.review/title-reference.png)', () => {
+describe('TriagePanel — title block prototype fidelity', () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
@@ -66,7 +66,7 @@ describe('TriagePanel — title block restore (.review/title-reference.png)', ()
     vi.restoreAllMocks();
   });
 
-  it('renders the title at xl typography', () => {
+  it('renders the title at prototype lg typography', () => {
     globalThis.fetch = vi.fn(async () => jsonResponse({ actors: [] })) as typeof globalThis.fetch;
     const Wrapper = makeWrapper();
     render(
@@ -75,8 +75,10 @@ describe('TriagePanel — title block restore (.review/title-reference.png)', ()
       </Wrapper>,
     );
     const h2 = screen.getByRole('heading', { level: 2, name: TRIAGE_VOC.title });
-    expect(h2).toHaveClass('text-xl');
-    expect(h2).toHaveClass('font-bold');
+    expect(h2).toHaveClass('text-lg');
+    expect(h2).toHaveClass('font-semibold');
+    expect(h2).toHaveClass('leading-[1.35]');
+    expect(h2).not.toHaveClass('text-xl');
   });
 
   it('renders the BODY section label in English (per relaxed copy rule)', () => {
