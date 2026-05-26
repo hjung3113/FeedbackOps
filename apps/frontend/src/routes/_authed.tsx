@@ -18,26 +18,47 @@ import { AppFrame } from '../lib/layout/AppFrame';
 // Per-feature entries are added in their owning slice (AGENTS.md two-consumer rule).
 // Icons mapped from docs/design-prototype/shell.jsx NAV_TREE.voc + NAV_TREE.admin per #95.
 const SIDEBAR_ENTRIES = [
-  { id: 'inbox', label: 'Inbox', href: '/vocs?view=inbox', icon: <Inbox className="h-4 w-4" /> },
-  { id: 'my-vocs', label: 'My VOCs', href: '/vocs?view=my', icon: <User className="h-4 w-4" /> },
-  { id: 'triage', label: 'Triage', href: '/vocs?view=triage', icon: <Flag className="h-4 w-4" /> },
+  {
+    id: 'inbox',
+    label: 'Inbox',
+    href: '/vocs?view=inbox',
+    section: 'VOC',
+    icon: <Inbox className="h-4 w-4" />,
+  },
   {
     id: 'create',
     label: '+ New VOC',
     href: '/vocs?action=create',
+    section: 'VOC',
     icon: <Plus className="h-4 w-4" />,
+  },
+  {
+    id: 'triage',
+    label: 'Triage',
+    href: '/vocs?view=triage',
+    section: 'VIEWS',
+    icon: <Flag className="h-4 w-4" />,
+  },
+  {
+    id: 'my-vocs',
+    label: 'My VOCs',
+    href: '/vocs?view=my',
+    section: 'VIEWS',
+    icon: <User className="h-4 w-4" />,
   },
   // Admin entries — existing routes remain reachable via sidebar.
   {
     id: 'admin-ms',
     label: 'Managed Systems',
     href: '/admin/managed-systems',
+    section: 'MANAGED SYSTEMS',
     icon: <Database className="h-4 w-4" />,
   },
   {
     id: 'admin-aa',
     label: 'Analytics Areas',
     href: '/admin/analytics-areas',
+    section: 'MANAGED SYSTEMS',
     icon: <Layers className="h-4 w-4" />,
   },
 ];

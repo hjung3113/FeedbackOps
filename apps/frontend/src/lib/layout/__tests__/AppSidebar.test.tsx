@@ -1,11 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { Inbox } from 'lucide-react';
+import { Database, Inbox, Plus, Settings } from 'lucide-react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
 
 const entries = [
-  { id: 'inbox', label: 'Inbox', href: '/inbox', icon: <Inbox className="h-4 w-4" /> },
-  { id: 'my', label: 'My', href: '/my', active: true },
+  {
+    id: 'inbox',
+    label: 'Inbox',
+    href: '/inbox',
+    icon: <Inbox className="h-4 w-4" />,
+    section: 'VOC',
+  },
+  { id: 'my', label: 'My', href: '/my', active: true, section: 'VIEWS' },
 ];
 
 beforeEach(() => {
@@ -87,5 +93,105 @@ describe('AppSidebar', () => {
     const navLink = screen.getByTestId('sidebar-nav-inbox');
     expect(navLink.getAttribute('title')).toBeNull();
     expect(navLink.getAttribute('aria-label')).toBeNull();
+  });
+
+  it('renders section labels in grouping order when expanded', () => {
+    render(
+      <AppSidebar
+        entries={[
+          {
+            id: 'inbox',
+            label: 'Inbox',
+            href: '/inbox',
+            icon: <Inbox className="h-4 w-4" />,
+            section: 'VOC',
+          },
+          {
+            id: 'create',
+            label: '+ New VOC',
+            href: '/create',
+            icon: <Plus className="h-4 w-4" />,
+            section: 'VOC',
+          },
+          { id: 'triage', label: 'Triage', href: '/triage', section: 'VIEWS' },
+          { id: 'my', label: 'My VOCs', href: '/my', section: 'VIEWS' },
+          {
+            id: 'admin-ms',
+            label: 'Managed Systems',
+            href: '/admin/managed-systems',
+            icon: <Database className="h-4 w-4" />,
+            section: 'MANAGED SYSTEMS',
+          },
+        ]}
+      />,
+    );
+
+    const navItems = [
+      screen.getByTestId('sidebar-section-voc'),
+      screen.getByTestId('sidebar-nav-inbox'),
+      screen.getByTestId('sidebar-nav-create'),
+      screen.getByTestId('sidebar-section-views'),
+      screen.getByTestId('sidebar-nav-triage'),
+      screen.getByTestId('sidebar-nav-my'),
+      screen.getByTestId('sidebar-section-managed-systems'),
+      screen.getByTestId('sidebar-nav-admin-ms'),
+    ];
+
+    expect(navItems.map((node) => node.textContent)).toEqual([
+      'VOC',
+      'Inbox',
+      '+ New VOC',
+      'VIEWS',
+      'Triage',
+      'My VOCs',
+      'MANAGED SYSTEMS',
+      'Managed Systems',
+    ]);
+  });
+
+  it('hides section labels when collapsed', () => {
+    render(<AppSidebar entries={entries} defaultCollapsed={true} />);
+
+    expect(screen.queryByTestId('sidebar-section-voc')).not.toBeInTheDocument();
+    expect(screen.queryByText('VOC')).not.toBeInTheDocument();
+  });
+
+  it('renders footer items and keeps collapsed icons accessible', () => {
+    render(
+      <AppSidebar
+        entries={entries}
+        defaultCollapsed={true}
+        footerItems={[
+          {
+            id: 'workspace-settings',
+            label: 'Workspace settings',
+            href: '/admin/placeholder',
+            icon: <Settings className="h-4 w-4" />,
+          },
+          {
+            id: 'invite-member',
+            label: 'Invite member',
+            icon: <Plus className="h-4 w-4" />,
+            disabled: true,
+          },
+        ]}
+      />,
+    );
+
+    const settings = screen.getByTestId('sidebar-footer-workspace-settings');
+    const invite = screen.getByTestId('sidebar-footer-invite-member');
+
+    expect(settings).toHaveAttribute('href', '/admin/placeholder');
+    expect(settings).toHaveAttribute('title', 'Workspace settings');
+    expect(settings).toHaveAttribute('aria-label', 'Workspace settings');
+    expect(settings.querySelector('svg')).not.toBeNull();
+    expect(settings.textContent).toBe('');
+
+    expect(invite).toHaveAttribute('type', 'button');
+    expect(invite).toBeDisabled();
+    expect(invite).toHaveAttribute('title', 'Invite member');
+    expect(invite).toHaveAttribute('aria-label', 'Invite member');
+    expect(invite.querySelector('svg')).not.toBeNull();
+    expect(invite.textContent).toBe('');
   });
 });
