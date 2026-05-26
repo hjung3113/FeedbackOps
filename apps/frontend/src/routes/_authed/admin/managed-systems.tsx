@@ -89,11 +89,9 @@ export function ManagedSystemsAdminPage() {
         ),
       }}
     >
-      <div className="mx-auto max-w-5xl p-8">
-        <PermissionGate capability="workspace.admin">
-          <ManagedSystemsBody registerOpen={registerOpen} setRegisterOpen={setRegisterOpen} />
-        </PermissionGate>
-      </div>
+      <PermissionGate capability="workspace.admin">
+        <ManagedSystemsBody registerOpen={registerOpen} setRegisterOpen={setRegisterOpen} />
+      </PermissionGate>
     </PageShell>
   );
 }
