@@ -1,4 +1,8 @@
-// /admin/analytics-areas route tests (Slice 2 #11).
+// /admin/analytics-areas route tests (issue #88 catalog + slide-over rebuild).
+// Verifies admin sees the guardrail callout + per-MS grouped catalog, the empty
+// state per group, clicking a row opens the 460px slide-over with its sections,
+// non-admin sees the PermissionGate fallback, and the register dialog surfaces
+// backend envelopes.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -49,12 +53,7 @@ const TABLEAU = {
   created_at: '2026-05-17T00:00:00Z',
   updated_at: '2026-05-17T00:00:00Z',
 };
-const POWERBI = {
-  ...TABLEAU,
-  id: 'ms-pbi',
-  slug: 'power-bi',
-  name: 'Power BI',
-};
+const POWERBI = { ...TABLEAU, id: 'ms-pbi', slug: 'power-bi', name: 'Power BI' };
 
 const AA_TAB_PM = {
   id: 'aa-1',
@@ -62,23 +61,18 @@ const AA_TAB_PM = {
   managed_system_id: 'ms-tab',
   slug: 'permission-management',
   name: 'PM Tableau',
-  owner_team_id: null,
+  owner_team_id: 'team-1',
   archived_at: null,
   archived_by_actor_id: null,
   created_at: '2026-05-17T00:00:00Z',
   updated_at: '2026-05-17T00:00:00Z',
-};
-const AA_PBI_PM = {
-  ...AA_TAB_PM,
-  id: 'aa-2',
-  managed_system_id: 'ms-pbi',
-  name: 'PM Power BI',
 };
 
 interface FetchCase {
   permissionState: 'approved' | 'request_access';
   managedSystems: unknown[];
   analyticsAreas: unknown[];
+  resolve?: { actors: unknown[]; teams: unknown[] };
   createResponse?: { status: number; body: unknown };
 }
 
@@ -96,14 +90,14 @@ function installFetch(c: FetchCase) {
         },
       });
     }
+    if (url.includes('/actors/resolve')) {
+      return jsonResponse(c.resolve ?? { actors: [], teams: [] });
+    }
     if (url.includes('/managed-systems') && (!init?.method || init.method === 'GET')) {
       return jsonResponse({ items: c.managedSystems, total: c.managedSystems.length });
     }
     if (url.includes('/analytics-areas') && (!init?.method || init.method === 'GET')) {
-      const filterMatch = url.match(/managed_system_id=([^&]+)/);
-      let rows = c.analyticsAreas as Array<{ managed_system_id: string }>;
-      if (filterMatch) rows = rows.filter((r) => r.managed_system_id === filterMatch[1]);
-      return jsonResponse({ items: rows, total: rows.length });
+      return jsonResponse({ items: c.analyticsAreas, total: c.analyticsAreas.length });
     }
     if (url.endsWith('/analytics-areas') && init?.method === 'POST') {
       const r = c.createResponse ?? { status: 201, body: { ...AA_TAB_PM, slug: 'created' } };
@@ -113,6 +107,16 @@ function installFetch(c: FetchCase) {
   }) as typeof globalThis.fetch;
 }
 
+function renderPage(c: FetchCase) {
+  installFetch(c);
+  const { router, qc } = buildHarness({ initialPath: '/admin/analytics-areas' });
+  render(
+    <QueryClientProvider client={qc}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+}
+
 describe('/admin/analytics-areas route', () => {
   const originalFetch = globalThis.fetch;
   afterEach(() => {
@@ -120,62 +124,84 @@ describe('/admin/analytics-areas route', () => {
     vi.restoreAllMocks();
   });
 
-  test('admin sees grouped list across multiple MSs', async () => {
-    installFetch({
+  test('admin sees the guardrail callout + per-MS grouped catalog', async () => {
+    renderPage({
       permissionState: 'approved',
       managedSystems: [TABLEAU, POWERBI],
-      analyticsAreas: [AA_TAB_PM, AA_PBI_PM],
+      analyticsAreas: [AA_TAB_PM],
     });
-    const { router, qc } = buildHarness({ initialPath: '/admin/analytics-areas' });
-    render(
-      <QueryClientProvider client={qc}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
     await waitFor(() => {
       expect(screen.getByTestId('aa-grouped-list')).toBeInTheDocument();
     });
+    expect(screen.getByTestId('aa-guardrail-callout')).toHaveTextContent(
+      'Analytics Area 는 MVP 권한 경계가 아닙니다',
+    );
+    // Both MS groups render; Tableau has one area, Power BI is empty.
     expect(screen.getByTestId('aa-group-ms-tab')).toBeInTheDocument();
-    expect(screen.getByTestId('aa-group-ms-pbi')).toBeInTheDocument();
+    expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('aa-group-ms-pbi')).getByText(/등록된 Analytics Area/),
+    ).toBeInTheDocument();
   });
 
-  test('picking an MS in the filter switches to flat list filtered by that MS', async () => {
-    installFetch({
+  test('clicking a catalog row opens the slide-over with its sections', async () => {
+    renderPage({
       permissionState: 'approved',
-      managedSystems: [TABLEAU, POWERBI],
-      analyticsAreas: [AA_TAB_PM, AA_PBI_PM],
+      managedSystems: [TABLEAU],
+      analyticsAreas: [AA_TAB_PM],
+      resolve: { actors: [], teams: [{ id: 'team-1', name: 'Data Platform' }] },
     });
-    const { router, qc } = buildHarness({ initialPath: '/admin/analytics-areas' });
-    render(
-      <QueryClientProvider client={qc}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
     await waitFor(() => {
-      expect(screen.getByTestId('filter-managed-system-picker')).toBeInTheDocument();
+      expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
     });
-    // Wait for the MS chips to load before clicking one.
+    fireEvent.click(screen.getByTestId('aa-row-permission-management'));
+    await waitFor(() => {
+      expect(screen.getByTestId('aa-slide-over')).toBeInTheDocument();
+    });
+    const drawer = screen.getByTestId('aa-slide-over');
+    // Title appears twice: the sr-only SheetTitle (a11y) + the visible PanelTitleBlock.
+    expect(within(drawer).getAllByText('PM Tableau').length).toBeGreaterThanOrEqual(1);
+    // Section nav exposes all six sections including deferred Workload/Findings.
+    for (const label of [
+      'Overview',
+      'Guardrail',
+      'Definition',
+      'Workload',
+      'Findings',
+      'Used by',
+    ]) {
+      expect(within(drawer).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
+    }
+    // Lead resolved via /actors/resolve.
+    expect(within(drawer).getByText('Data Platform')).toBeInTheDocument();
+    // Deferred surfaces render placeholders, not invented counts.
+    expect(within(drawer).getByTestId('aa-workload-defer')).toBeInTheDocument();
+    expect(within(drawer).getByTestId('aa-findings-defer')).toBeInTheDocument();
+  });
+
+  test('clicking Edit in the slide-over opens the edit form', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU],
+      analyticsAreas: [AA_TAB_PM],
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('aa-row-permission-management'));
+    await waitFor(() => {
+      expect(screen.getByTestId('aa-edit-button')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('aa-edit-button'));
     await waitFor(() => {
       expect(
-        within(screen.getByTestId('filter-managed-system-picker')).getByRole('radio', {
-          name: 'Tableau',
-        }),
+        screen.getByTestId('edit-analytics-area-form-permission-management'),
       ).toBeInTheDocument();
     });
-    fireEvent.click(
-      within(screen.getByTestId('filter-managed-system-picker')).getByRole('radio', {
-        name: 'Tableau',
-      }),
-    );
-    await waitFor(() => {
-      expect(screen.getByTestId('analytics-areas-table')).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId('aa-grouped-list')).not.toBeInTheDocument();
-    expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
   });
 
-  test('parent_archived response surfaces the backend envelope', async () => {
-    installFetch({
+  test('New area dialog surfaces the backend envelope on conflict', async () => {
+    renderPage({
       permissionState: 'approved',
       managedSystems: [TABLEAU],
       analyticsAreas: [],
@@ -184,15 +210,10 @@ describe('/admin/analytics-areas route', () => {
         body: { code: 'conflict.parent_archived', message: 'parent is archived' },
       },
     });
-    const { router, qc } = buildHarness({ initialPath: '/admin/analytics-areas' });
-    render(
-      <QueryClientProvider client={qc}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
     await waitFor(() => {
-      expect(screen.getByTestId('create-analytics-area-form')).toBeInTheDocument();
+      expect(screen.getByTestId('aa-new-area-button')).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByTestId('aa-new-area-button'));
     await waitFor(() => {
       expect(
         within(screen.getByTestId('create-ms-picker')).getByRole('radio', { name: 'Tableau' }),
@@ -209,21 +230,15 @@ describe('/admin/analytics-areas route', () => {
     });
   });
 
-  test('non-admin sees the gate, no create form rendered', async () => {
-    installFetch({
+  test('non-admin sees the gate, no catalog rendered', async () => {
+    renderPage({
       permissionState: 'request_access',
       managedSystems: [],
       analyticsAreas: [],
     });
-    const { router, qc } = buildHarness({ initialPath: '/admin/analytics-areas' });
-    render(
-      <QueryClientProvider client={qc}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Request access' })).toBeInTheDocument();
     });
-    expect(screen.queryByTestId('create-analytics-area-form')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('analytics-areas-catalog')).not.toBeInTheDocument();
   });
 });
