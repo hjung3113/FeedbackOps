@@ -1,4 +1,4 @@
-import * as React from 'react';
+import type * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 export interface PanelTitleBlockProps {
@@ -7,9 +7,9 @@ export interface PanelTitleBlockProps {
   className?: string;
   /**
    * Title typography variant.
-   * - 'lg' (default): `text-lg font-semibold tracking-tight` — compact V1b rhythm.
+   * - 'lg' (default): `text-lg font-semibold tracking-tight leading-[1.35]` — prototype `.panel-title`.
    * - 'xl': `text-xl font-bold tracking-tight` — restored hero treatment per
-   *   `.review/title-reference.png` for VOC detail / triage panel headers.
+   *   `.review/title-reference.png` for legacy consumers.
    *
    * Default is `'lg'` to preserve existing consumers; opt in to `'xl'` per surface.
    */
@@ -20,14 +20,12 @@ export function PanelTitleBlock({ title, badges, className, size = 'lg' }: Panel
   const titleClass =
     size === 'xl'
       ? 'text-xl font-bold tracking-tight text-text-primary'
-      : 'text-lg font-semibold tracking-tight text-text-primary';
+      : 'text-lg font-semibold tracking-tight leading-[1.35] text-text-primary';
 
   return (
     <div className={cn('flex flex-col gap-2 px-4 py-3', className)}>
       <h2 className={titleClass}>{title}</h2>
-      {badges !== undefined && (
-        <div className="flex flex-wrap gap-2">{badges}</div>
-      )}
+      {badges !== undefined && <div className="flex flex-wrap gap-2">{badges}</div>}
     </div>
   );
 }

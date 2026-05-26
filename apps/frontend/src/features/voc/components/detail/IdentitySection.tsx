@@ -1,28 +1,28 @@
-// IdentitySection — title block (xl) + status pill + reporter/time meta line.
+// IdentitySection — shared title block + status pill + reporter/time meta line.
 // Verbose badge stack + FieldRow '제출자' / '제출 시각' relocated to a single
 // compact metadata strip below the body card.
-// Reference: .review/title-reference.png (user-supplied target layout).
+// Reference: docs/design-prototype/screen-voc.jsx overview panel title.
 
-import * as React from 'react';
+import { formatVocCreatedAt } from '@/features/voc/components/list/VocRow';
+import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
+import { useMe } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';
 import {
+  ManagedSystemPill,
+  OutlineBadge,
   PanelTitleBlock,
   ReporterStatusBadge,
   SeverityBadge,
-  ManagedSystemPill,
-  OutlineBadge,
 } from '@fops/ui';
-import { useMe } from '@/lib/auth/useMe';
-import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
-import { formatVocCreatedAt } from '@/features/voc/components/list/VocRow';
+import type * as React from 'react';
 
 // ── Source context labels ────────────────────────────────────────────────────
 
 const SOURCE_CONTEXT_LABELS: Record<string, string> = {
-  direct_use:             '직접 사용',
-  proxy_report:           '타인 대신 보고',
-  operational_discovery:  '운영 중 발견',
-  stakeholder_request:    '이해관계자 요청',
+  direct_use: '직접 사용',
+  proxy_report: '타인 대신 보고',
+  operational_discovery: '운영 중 발견',
+  stakeholder_request: '이해관계자 요청',
 };
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -45,17 +45,17 @@ export function IdentitySection({ voc }: IdentitySectionProps): React.ReactEleme
 
   const relativeTime = formatVocCreatedAt(voc.created_at);
 
-  // Title block: xl typography per reference (.review/title-reference.png).
+  // Title block: prototype .panel-title typography via PanelTitleBlock.
   // Rhythm:
   //   - pt-2  (8 px)  — top inset (reference shows ~8 px from panel top).
   //   - mb-4  (16 px) — gap to next section, matches reference badge→BODY (~16 CSS).
   //   - title mb-1 (4 px) — tight gap to the status row (reference ≈ 8 CSS but
   //     visually feels too wide once the pill carries weight; user feedback
   //     "제목과 뱃지/날짜 간격 너무 넓음").
-  //   - px-4 (16 px) — horizontal inset aligns with the rest of the panel.
+  //   - px-6 (24 px) — horizontal inset aligns with DetailPanelSectionNav.
   return (
-    <div className="mb-4 px-4 pt-2">
-      <PanelTitleBlock title={voc.title} size="xl" className="!px-0 !py-0 mb-1" />
+    <div className="mb-4 px-6 pt-2">
+      <PanelTitleBlock title={voc.title} className="!px-0 !py-0 mb-1" />
       <div className="flex items-center gap-2 text-xs text-text-muted">
         <ReporterStatusBadge status={voc.reporter_facing_status} />
         <span aria-hidden="true">·</span>
@@ -75,15 +75,18 @@ export interface IdentityMetadataStripProps {
   voc: VocDetailEnvelope;
 }
 
-export function IdentityMetadataStrip({ voc }: IdentityMetadataStripProps): React.ReactElement | null {
+export function IdentityMetadataStrip({
+  voc,
+}: IdentityMetadataStripProps): React.ReactElement | null {
   const managedSystem = useManagedSystem(voc.primary_managed_system_id);
 
-  const sourceContextLabel =
-    SOURCE_CONTEXT_LABELS[voc.source_context] ?? voc.source_context;
+  const sourceContextLabel = SOURCE_CONTEXT_LABELS[voc.source_context] ?? voc.source_context;
 
   const hasSeverity = voc.severity !== null;
   const hasAnalyticsArea = voc.analytics_area_id !== null;
   const hasManagedSystem = managedSystem !== null;
+  const severity = voc.severity;
+  const analyticsAreaId = voc.analytics_area_id;
 
   if (!hasSeverity && !hasManagedSystem && !hasAnalyticsArea) {
     // Source context always renders, so we always have at least one chip.
@@ -91,12 +94,12 @@ export function IdentityMetadataStrip({ voc }: IdentityMetadataStripProps): Reac
 
   return (
     <div className="flex flex-wrap gap-2 px-4 mt-3 text-xs">
-      {hasSeverity && <SeverityBadge severity={voc.severity!} />}
+      {hasSeverity && severity !== null && <SeverityBadge severity={severity} />}
       {hasManagedSystem && (
         <ManagedSystemPill name={managedSystem.name} mark={managedSystem.mark} />
       )}
-      {hasAnalyticsArea && (
-        <OutlineBadge>{voc.analytics_area_id!.slice(0, 8)}</OutlineBadge>
+      {hasAnalyticsArea && analyticsAreaId !== null && (
+        <OutlineBadge>{analyticsAreaId.slice(0, 8)}</OutlineBadge>
       )}
       <OutlineBadge>{sourceContextLabel}</OutlineBadge>
     </div>

@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 vi.mock('@/features/voc/hooks/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
@@ -7,10 +7,10 @@ vi.mock('@/features/voc/components/list/VocRow', () => ({
   formatVocCreatedAt: (_iso: string) => '방금 전',
 }));
 
-import { useMe } from '@/lib/auth/useMe';
 import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
-import { IdentitySection, IdentityMetadataStrip } from '../IdentitySection';
-import { DETAIL_ENVELOPE, ME_RESPONSE, REPORTER_ID, OTHER_ACTOR_ID } from './_fixtures';
+import { useMe } from '@/lib/auth/useMe';
+import { IdentityMetadataStrip, IdentitySection } from '../IdentitySection';
+import { DETAIL_ENVELOPE, ME_RESPONSE, OTHER_ACTOR_ID } from './_fixtures';
 
 beforeEach(() => {
   vi.mocked(useManagedSystem).mockReturnValue(null);
@@ -40,11 +40,19 @@ describe('<IdentitySection>', () => {
     expect(screen.getByText('높음')).toBeInTheDocument();
   });
 
-  it('renders the title at xl typography per title-reference.png', () => {
+  it('renders the shared PanelTitleBlock at prototype lg typography', () => {
     render(<IdentitySection voc={DETAIL_ENVELOPE} />);
     const h2 = screen.getByRole('heading', { level: 2 });
-    expect(h2).toHaveClass('text-xl');
-    expect(h2).toHaveClass('font-bold');
+    expect(h2).toHaveClass('text-lg');
+    expect(h2).toHaveClass('font-semibold');
+    expect(h2).toHaveClass('leading-[1.35]');
+    expect(h2).not.toHaveClass('text-xl');
+  });
+
+  it('aligns the title block to the section nav 24px left inset', () => {
+    render(<IdentitySection voc={DETAIL_ENVELOPE} />);
+    const h2 = screen.getByRole('heading', { level: 2 });
+    expect(h2.parentElement?.parentElement).toHaveClass('px-6');
   });
 
   it('renders the reporter+time meta line as "<reporter> · <relative>" (no FieldRow labels)', () => {

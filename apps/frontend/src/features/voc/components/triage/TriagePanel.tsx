@@ -298,6 +298,7 @@ export function TriagePanel({
   undoLastRef.current = undoLast;
 
   // Unlock panel when voc changes (per spec: lock until VOC switch)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: voc.id is the reset trigger for switching panels.
   React.useEffect(() => {
     setPanelLocked(false);
   }, [voc.id]);
@@ -455,12 +456,12 @@ export function TriagePanel({
 
       {/* Scrollable body — V1b document rhythm (no dividers, typographic-only hierarchy) */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
-        {/* Overview / title block — restored per .review/title-reference.png:
-            xl title + status pill + meta row (date only; no reporter actor
+        {/* Overview / title block — mirrors prototype .panel-title:
+            lg title + status pill + meta row (date only; no reporter actor
             available on VocListItem). Mirrors the read-only detail panel
             IdentitySection for cross-surface consistency. */}
         <div className="mb-7" data-anchor="overview">
-          <PanelTitleBlock title={voc.title} size="xl" className="!px-0 !py-0 mb-2" />
+          <PanelTitleBlock title={voc.title} className="!px-0 !py-0 mb-2" />
           <div className="flex items-center gap-2 text-xs text-text-muted">
             <ReporterStatusBadge status={voc.reporter_facing_status} />
             <span aria-hidden="true">·</span>
