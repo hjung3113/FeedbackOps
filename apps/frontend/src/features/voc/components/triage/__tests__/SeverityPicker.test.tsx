@@ -1,9 +1,4 @@
-// SeverityPicker.test.tsx — TDD RED tests for the severity chip grid.
-// Prototype ref: screen-voc-create.jsx:444-464
-// 4 chips (low / medium / high / critical), color bar, tooltips, onChange.
-
-import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SeverityPicker } from '../SeverityPicker';
 
@@ -37,5 +32,17 @@ describe('SeverityPicker', () => {
     for (const btn of buttons) {
       expect(btn).toBeDisabled();
     }
+  });
+
+  // Prototype ref: screen-voc-create.jsx:459 — inline HelpTip (?) icon per chip.
+  it('renders an inline HelpTip icon for each chip with its tip as the label', () => {
+    render(<SeverityPicker value={null} onChange={vi.fn()} />);
+    const lowTip = screen.getByTestId('severity-helptip-low');
+    expect(lowTip).toBeInTheDocument();
+    expect(lowTip).toHaveAttribute('aria-label', '관찰만 · 운영 영향 없음');
+    expect(screen.getByTestId('severity-helptip-critical')).toHaveAttribute(
+      'aria-label',
+      '서비스 영향 · 즉시 대응',
+    );
   });
 });

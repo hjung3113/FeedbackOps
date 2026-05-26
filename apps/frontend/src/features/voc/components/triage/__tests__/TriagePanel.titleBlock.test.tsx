@@ -4,10 +4,10 @@
 // PanelTitleBlock as the read-only detail panel and must adopt the xl title
 // + status-pill+meta line + BODY card treatment for consistency.
 
-import * as React from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen } from '@testing-library/react';
+import type * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('sonner', () => ({
   toast: {
@@ -20,8 +20,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { TriagePanel } from '../TriagePanel';
 import type { VocListItem } from '@fops/shared';
+import { TriagePanel } from '../TriagePanel';
 
 const TRIAGE_VOC: VocListItem = {
   id: 'voc-title-block-test',
@@ -39,6 +39,7 @@ const TRIAGE_VOC: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  attachment_count: 0,
 };
 
 function makeWrapper() {
@@ -101,5 +102,35 @@ describe('TriagePanel — title block restore (.review/title-reference.png)', ()
     expect(card).not.toBeNull();
     expect(card?.className).toMatch(/bg-surface-card-elevated/);
     expect(card?.className).toMatch(/rounded-md/);
+  });
+
+  // Prototype ref: screen-voc-create.jsx:423-426 — expand + more ghost buttons.
+  it('renders disabled expand + more ghost icon buttons in the panel header', () => {
+    globalThis.fetch = vi.fn(async () => jsonResponse({ actors: [] })) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    render(
+      <Wrapper>
+        <TriagePanel voc={TRIAGE_VOC} />
+      </Wrapper>,
+    );
+    const expand = screen.getByTestId('triage-panel-expand');
+    const more = screen.getByTestId('triage-panel-more');
+    expect(expand).toBeDisabled();
+    expect(more).toBeDisabled();
+  });
+
+  // Prototype ref: screen-voc-create.jsx:561-567 — reporter-status transition row.
+  it('renders the reporter-status transition row from the VOC current status', () => {
+    globalThis.fetch = vi.fn(async () => jsonResponse({ actors: [] })) as typeof globalThis.fetch;
+    const Wrapper = makeWrapper();
+    render(
+      <Wrapper>
+        <TriagePanel voc={TRIAGE_VOC} />
+      </Wrapper>,
+    );
+    const row = screen.getByTestId('reporter-status-transition');
+    // current 접수됨 → target 검토 중 (no owner staged on TRIAGE_VOC)
+    expect(row).toHaveTextContent('접수됨');
+    expect(row).toHaveTextContent('검토 중');
   });
 });
