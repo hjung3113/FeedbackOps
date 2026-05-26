@@ -3,8 +3,8 @@
 // The frontend never enforces backend permissions as truth (AGENTS.md:69) —
 // these types only describe what the server returned so the UI can pick a state.
 
-import { ApiError, type ApiErrorEnvelope } from './types';
 import { UnauthenticatedError } from './auth';
+import { ApiError, type ApiErrorEnvelope } from './types';
 
 export type FrontendPermissionState =
   | 'approved'
@@ -114,4 +114,34 @@ export async function fetchPermissionRequestsMine(
   if (res.status === 401) throw new UnauthenticatedError();
   if (!res.ok) throw new Error(`/permission-requests/mine failed: ${res.status}`);
   return (await res.json()) as { requests: MinePermissionRequestRow[] };
+}
+
+// Admin workspace-wide list (issue #87). 403 for non-admins → ApiError.
+export interface AdminPermissionRequestRow {
+  id: string;
+  requester_actor_id: string;
+  requested_capability: string;
+  requested_managed_system_id: string | null;
+  reason: string;
+  status: 'pending' | 'needs_more_info';
+  created_at: string;
+}
+
+export async function fetchPermissionRequestsAll(
+  signal?: AbortSignal,
+): Promise<{ requests: AdminPermissionRequestRow[]; count: number }> {
+  const init: RequestInit = { credentials: 'same-origin' };
+  if (signal) init.signal = signal;
+  const res = await fetch('/permission-requests', init);
+  if (res.status === 401) throw new UnauthenticatedError();
+  if (!res.ok) {
+    let envelope: ApiErrorEnvelope = { code: 'internal.unexpected', message: 'request failed' };
+    try {
+      envelope = (await res.json()) as ApiErrorEnvelope;
+    } catch {
+      // body wasn't JSON
+    }
+    throw new ApiError(res.status, envelope);
+  }
+  return (await res.json()) as { requests: AdminPermissionRequestRow[]; count: number };
 }

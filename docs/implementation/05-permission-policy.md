@@ -128,6 +128,14 @@ requested capability, requested scope, safe source summary when available,
 reason, risk indicators, requested expiration, explicit deny state, and allowed
 decision actions.
 
+The admin review queue is read via `GET /permission-requests` (Slice 3 #87),
+which returns the workspace's open (`pending` | `needs_more_info`) requests and
+a `count`. The endpoint is gated by the `workspace.admin` capability — the same
+gate the managed-systems mutations use; a non-admin caller receives
+`permission.denied` (`403`). It introduces no new capability vocabulary. The
+caller-scoped variant `GET /permission-requests/mine` requires only a session
+(an Actor may always read their own open requests).
+
 Rejected Permission Requests must not be immediately resubmitted for the same
 source object, source action, and requested scope unless the rejection response
 allows appeal, requests more information, or provides `retry_after`. This keeps

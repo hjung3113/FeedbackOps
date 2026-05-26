@@ -475,16 +475,54 @@ GET /analytics-areas
 POST /analytics-areas
 PATCH /analytics-areas/:id
 POST /analytics-areas/:id/archive
+GET /actors?workspace=current
+GET /actors/resolve?actor_ids=<csv-uuid>&team_ids=<csv-uuid>
+```
+
+`GET /actors/resolve` (Slice 3 #87) — workspace-scoped bulk identity lookup for
+owner chips. Any session may read (low sensitivity, like `GET /actors`). Each id
+must be a UUID; up to 200 per list. Ids outside the caller's workspace or
+unknown are silently dropped (no cross-workspace identity leak). Empty/absent
+lists yield empty arrays. Response:
+
+```json
+{
+  "actors": [{ "id": "uuid", "display_name": "string", "email": "string" }],
+  "teams": [{ "id": "uuid", "name": "string" }]
+}
 ```
 
 ### Permission
 
 ```text
 POST /permission-requests
-GET /permission-requests
+GET /permission-requests          # admin-only workspace list (#87)
+GET /permission-requests/mine     # caller's open requests
 POST /permission-requests/:id/approve
 POST /permission-requests/:id/reject
 POST /permission-requests/:id/revoke
+```
+
+`GET /permission-requests` (Slice 3 #87) — admin-only workspace-wide list of
+open (`pending` | `needs_more_info`) requests, plus a `count`. Guarded by the
+`workspace.admin` capability (mirrors the managed-systems mutation gate); a
+non-admin caller receives `permission.denied` → `403`. Response:
+
+```json
+{
+  "requests": [
+    {
+      "id": "uuid",
+      "requester_actor_id": "uuid",
+      "requested_capability": "string",
+      "requested_managed_system_id": "uuid | null",
+      "reason": "string",
+      "status": "pending | needs_more_info",
+      "created_at": "iso8601"
+    }
+  ],
+  "count": 0
+}
 ```
 
 ### Entity Links
