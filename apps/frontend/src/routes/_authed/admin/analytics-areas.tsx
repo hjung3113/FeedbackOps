@@ -112,11 +112,9 @@ export function AnalyticsAreasAdminPage() {
         ),
       }}
     >
-      <div className="mx-auto max-w-5xl p-8">
-        <PermissionGate capability="workspace.admin">
-          <AnalyticsAreasBody registerCtx={registerCtx} setRegisterCtx={setRegisterCtx} />
-        </PermissionGate>
-      </div>
+      <PermissionGate capability="workspace.admin">
+        <AnalyticsAreasBody registerCtx={registerCtx} setRegisterCtx={setRegisterCtx} />
+      </PermissionGate>
     </PageShell>
   );
 }
