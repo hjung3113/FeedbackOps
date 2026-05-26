@@ -118,7 +118,7 @@ export function AppSidebar({
                 {showSection && (
                   <div
                     className={cn(
-                      'mx-2 mb-1 text-caption font-semibold uppercase tracking-wide text-text-disabled',
+                      'mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled',
                       index === 0 ? 'mt-1.5' : 'mt-3.5',
                     )}
                     data-testid={`sidebar-section-${sectionTestId(section)}`}

@@ -41,7 +41,7 @@ export function DescriptionSection({
   const [modalOpen, setModalOpen] = React.useState(false);
 
   return (
-    <div className="px-4">
+    <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">
         BODY
       </p>

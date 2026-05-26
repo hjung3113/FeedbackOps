@@ -192,7 +192,7 @@ function FullDetailView({
         {/* Section nav — sticky anchor tabs (prototype: screen-voc.jsx:191) */}
         <DetailPanelSectionNav sections={DETAIL_SECTIONS} scrollRef={scrollRef} />
 
-        <div ref={scrollRef} className="flex flex-col flex-1 min-h-0 overflow-y-auto pb-16">
+        <div ref={scrollRef} className="flex flex-col flex-1 min-h-0 overflow-y-auto pt-7 px-6 pb-16">
           <div data-anchor="overview"><IdentitySection voc={voc} /></div>
           <div data-anchor="triage"><TriageBlock voc={voc} /></div>
           <div data-anchor="description">

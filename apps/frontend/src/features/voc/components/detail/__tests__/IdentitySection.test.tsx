@@ -49,10 +49,13 @@ describe('<IdentitySection>', () => {
     expect(h2).not.toHaveClass('text-xl');
   });
 
-  it('aligns the title block to the section nav 24px left inset', () => {
+  it('aligns the title block to the section nav 24px left inset (inset now on scroll container)', () => {
     render(<IdentitySection voc={DETAIL_ENVELOPE} />);
     const h2 = screen.getByRole('heading', { level: 2 });
-    expect(h2.parentElement?.parentElement).toHaveClass('px-6');
+    // px-6 removed from IdentitySection; horizontal inset is now on the
+    // VocDetailPanel scroll container (pt-7 px-6 pb-16) — matching triage pattern.
+    expect(h2.parentElement?.parentElement).not.toHaveClass('px-6');
+    expect(h2.parentElement?.parentElement).toHaveClass('mb-4');
   });
 
   it('renders the reporter+time meta line as "<reporter> · <relative>" (no FieldRow labels)', () => {
