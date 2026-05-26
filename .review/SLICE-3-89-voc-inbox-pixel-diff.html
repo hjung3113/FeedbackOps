@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>#89 VOC Inbox — Page-Level Pixel-Diff (CP-pixel)</title>
+<style>
+  :root { color-scheme: light; }
+  body { font: 14px/1.5 -apple-system, system-ui, sans-serif; margin: 24px; color: #18181b; background:#fafafa; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 32px; }
+  .pair { display: flex; gap: 16px; flex-wrap: wrap; }
+  .pair figure { margin: 0; flex: 1 1 480px; }
+  .pair img { width: 100%; border: 1px solid #d4d4d8; border-radius: 6px; }
+  figcaption { font-weight: 600; margin-bottom: 6px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; font-size: 13px; }
+  th, td { border: 1px solid #d4d4d8; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f4f4f5; }
+  .HIGH { background: #fee2e2; } .MED { background: #fef9c3; } .LOW { background: #ecfccb; }
+  code { background:#f4f4f5; padding:1px 4px; border-radius:3px; }
+  .summary { font-size: 15px; font-weight: 600; margin: 8px 0 0; }
+</style>
+</head>
+<body>
+<h1>#89 VOC Inbox list — Page-Level Pixel-Diff</h1>
+<p>Route <code>/vocs?view=inbox</code> at <strong>1440</strong>. Mock-login (<code>mock-admin-1</code>), seeded DB (6 VOCs).
+Baseline: <code>docs/design-prototype/screenshots/final-baselines/voc-inbox-detail.png</code> (list+detail; the list region is the comparison target — no list-only baseline exists).</p>
+
+<p class="summary">Result: HIGH = 0 &nbsp; MEDIUM = 0 &nbsp; LOW = 2 &nbsp; — merge OK (≤2 LOW, no HIGH/MED).</p>
+
+<h2>Populated list (impl)</h2>
+<div class="pair">
+  <figure><figcaption>Impl — /vocs inbox (populated)</figcaption><img src="assets-89/slice-3-89-inbox-populated-1440.png" /></figure>
+  <figure><figcaption>Prototype baseline — voc inbox + detail</figcaption><img src="assets-89/proto-voc-inbox-detail.png" /></figure>
+</div>
+
+<h2>Bulk-action bar (impl, 1 row checked)</h2>
+<div class="pair">
+  <figure><figcaption>Impl — bulk-action bar</figcaption><img src="assets-89/slice-3-89-inbox-bulkbar-1440.png" /></figure>
+</div>
+
+<h2>SeverityBadge live wiring (High tab — rows with severity = high)</h2>
+<div class="pair">
+  <figure><figcaption>Impl — SeverityBadge "높음" chip on the meta line</figcaption><img src="assets-89/slice-3-89-inbox-high-severitybadge-1440.png" /></figure>
+</div>
+
+<h2>Structured diff table</h2>
+<table>
+<thead><tr><th>Region</th><th>Category</th><th>Prototype</th><th>Impl</th><th>Severity</th><th>Resolution</th></tr></thead>
+<tbody>
+<tr><td>toolbar.tabs</td><td>copy</td><td>Untriaged / High / Unassigned / Similar / No link (English)</td><td>Untriaged / High / Unassigned / Similar / No link</td><td>—</td><td>match</td></tr>
+<tr><td>toolbar.tab.unassigned</td><td>token</td><td>urgent → red label</td><td><code>text-danger</code> on Unassigned tab</td><td>—</td><td>match</td></tr>
+<tr><td>toolbar.tab.counts</td><td class="LOW">data-shape</td><td>numeric badges 9/7/12/4/5</td><td>no count badge</td><td>LOW</td><td>defer — GET /vocs has no per-tab count facet; counts are synthetic prototype data (follow-up issue)</td></tr>
+<tr><td>toolbar.search</td><td>copy</td><td>placeholder "필터, 키워드…"</td><td>placeholder "필터, 키워드…" (disabled — search deferred)</td><td>—</td><td>match (value/onChange deferred: no search endpoint)</td></tr>
+<tr><td>toolbar.action</td><td>chrome</td><td>primary Button "New VOC" + plus icon</td><td>primary Button "New VOC" + plus icon</td><td>—</td><td>match (was a text link)</td></tr>
+<tr><td>row.lead.checkbox</td><td>chrome</td><td>row checkbox</td><td>Checkbox wrapper, stopPropagation</td><td>—</td><td>match</td></tr>
+<tr><td>row.lead.severity-bar</td><td>data-shape</td><td>colored SeverityIndicator</td><td>dimmed (seed severity = null)</td><td>—</td><td>data-driven; renders coloured when severity present</td></tr>
+<tr><td>row.title.id</td><td>typography</td><td>mono display id, dimmed</td><td><code>font-mono text-text-disabled</code></td><td>—</td><td>match</td></tr>
+<tr><td>row.title.similar</td><td>data-shape</td><td>"N similar" layers chip</td><td>chip rendered only when similar_count &gt; 0 (seed = 0 → hidden)</td><td>—</td><td>data-driven; wired</td></tr>
+<tr><td>row.meta.status-badge</td><td>chrome</td><td>ReporterStatusBadge</td><td>ReporterStatusBadge (검토 중 / 접수됨)</td><td>—</td><td>match</td></tr>
+<tr><td>row.meta.severity-badge</td><td>data-shape</td><td>SeverityBadge chip</td><td>SeverityBadge rendered only when severity ≠ null (seed = null → hidden)</td><td>—</td><td>data-driven; wired</td></tr>
+<tr><td>row.meta.managed-system</td><td>chrome</td><td>system name</td><td>ManagedSystemPill (Tableau / Power BI)</td><td>—</td><td>match</td></tr>
+<tr><td>row.meta.area</td><td>data-shape</td><td>area name OR amber "No area"</td><td>resolved area name; amber "No area" when area_id null</td><td>—</td><td>match (wired via /analytics-areas)</td></tr>
+<tr><td>row.meta.dot-sep</td><td>spacing</td><td>2px muted dot separators</td><td>2px <code>bg-text-muted/60</code> dots</td><td>—</td><td>match</td></tr>
+<tr><td>row.meta.linked-finding</td><td class="LOW">data-shape</td><td>↔ FIN-xxx cyan ref</td><td>not rendered</td><td>LOW</td><td>defer — VocListItem has no linkedFindingId field (follow-up issue)</td></tr>
+<tr><td>row.trailing.owner</td><td>chrome</td><td>owner Avatar OR red "Owner 필요"</td><td>UserAvatar when owner resolved; "Owner 필요" red badge otherwise</td><td>—</td><td>match</td></tr>
+<tr><td>row.trailing.reporter</td><td>chrome</td><td>reporter Avatar</td><td>UserAvatar (initial) when reporter resolved via /actors</td><td>—</td><td>match</td></tr>
+<tr><td>row.selected</td><td>token</td><td>2px left lime accent bar + tinted bg</td><td><code>before:bg-accent-primary</code> bar + <code>bg-surface-row-selected</code></td><td>—</td><td>match (left bar, not ring)</td></tr>
+<tr><td>list.bulk-bar</td><td>chrome</td><td>"N selected · Assign / Set severity / Add to cluster / Create finding · Clear"</td><td>same copy + icons; 4 mutating actions disabled, Clear wired</td><td>—</td><td>match (mutations deferred — no batch endpoint)</td></tr>
+</tbody>
+</table>
+
+<h2>Data-deferred row elements (no live field — not invented per #89 DATA-SHAPE RULE)</h2>
+<ul>
+  <li><strong>linked-finding ↔ ref</strong> — <code>VocListItem</code> has no <code>linked_finding_id</code>. Element coded to render only when supplied (today: never).</li>
+  <li><strong>tab counts (9/7/12/4/5)</strong> — <code>GET /vocs</code> returns no per-tab count facet; prototype numbers are synthetic. <code>badgeCount</code> omitted.</li>
+  <li><strong>severity bar colour + SeverityBadge</strong> — wired to live <code>severity</code>; seed rows have <code>severity = null</code> so both are hidden (correct).</li>
+  <li><strong>bulk mutations</strong> (Assign / Set severity / Add to cluster / Create finding) — no batch endpoint; buttons present-but-disabled. Clear is wired.</li>
+</ul>
+</body>
+</html>

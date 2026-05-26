@@ -1,8 +1,8 @@
-import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { VocListItem } from '@fops/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen } from '@testing-library/react';
+import type * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VocList } from '../VocList';
 
 // ---------------------------------------------------------------------------
@@ -75,6 +75,7 @@ function makeVoc(overrides: Partial<VocListItem> = {}): VocListItem {
     created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     similar_count: 0,
+    attachment_count: 0,
     ...overrides,
   };
 }
@@ -98,15 +99,9 @@ describe('<VocList>', () => {
   });
 
   it('shows 10 skeletons when loading with no items', () => {
-    render(
-      <VocList
-        items={[]}
-        loading={true}
-        error={null}
-        onSelect={onSelect}
-      />,
-      { wrapper: makeWrapper() },
-    );
+    render(<VocList items={[]} loading={true} error={null} onSelect={onSelect} />, {
+      wrapper: makeWrapper(),
+    });
     // Skeletons have role="row" + aria-busy="true"
     const skeletons = screen.getAllByRole('row');
     expect(skeletons).toHaveLength(10);
@@ -114,31 +109,17 @@ describe('<VocList>', () => {
   });
 
   it('shows inbox empty state with "큐가 비었습니다" for view=inbox', () => {
-    render(
-      <VocList
-        items={[]}
-        loading={false}
-        error={null}
-        onSelect={onSelect}
-        view="inbox"
-      />,
-      { wrapper: makeWrapper() },
-    );
+    render(<VocList items={[]} loading={false} error={null} onSelect={onSelect} view="inbox" />, {
+      wrapper: makeWrapper(),
+    });
     expect(screen.getByText('큐가 비었습니다')).toBeInTheDocument();
     expect(screen.getByText('제출된 VOC가 표시됩니다.')).toBeInTheDocument();
   });
 
   it('shows my empty state with "내가 제출한 VOC가 없습니다" for view=my', () => {
-    render(
-      <VocList
-        items={[]}
-        loading={false}
-        error={null}
-        onSelect={onSelect}
-        view="my"
-      />,
-      { wrapper: makeWrapper() },
-    );
+    render(<VocList items={[]} loading={false} error={null} onSelect={onSelect} view="my" />, {
+      wrapper: makeWrapper(),
+    });
     expect(screen.getByText('내가 제출한 VOC가 없습니다')).toBeInTheDocument();
   });
 
@@ -181,13 +162,7 @@ describe('<VocList>', () => {
       makeVoc({ id: 'id-3', display_id: 'VOC-003', title: 'Third VOC' }),
     ];
     render(
-      <VocList
-        items={items}
-        loading={false}
-        error={null}
-        onSelect={onSelect}
-        view="inbox"
-      />,
+      <VocList items={items} loading={false} error={null} onSelect={onSelect} view="inbox" />,
       { wrapper: makeWrapper() },
     );
     // Rows have role="row" (not aria-busy which skeletons have)
@@ -203,13 +178,7 @@ describe('<VocList>', () => {
       makeVoc({ id: 'id-2', display_id: 'VOC-002', title: 'Second VOC' }),
     ];
     render(
-      <VocList
-        items={items}
-        loading={false}
-        error={null}
-        selectedId="id-1"
-        onSelect={onSelect}
-      />,
+      <VocList items={items} loading={false} error={null} selectedId="id-1" onSelect={onSelect} />,
       { wrapper: makeWrapper() },
     );
     const rows = screen.getAllByRole('row');
@@ -220,18 +189,44 @@ describe('<VocList>', () => {
 
   it('calls onSelect with the voc id when a row is clicked', () => {
     const items = [makeVoc({ id: 'id-1', display_id: 'VOC-001', title: 'Clickable VOC' })];
-    render(
-      <VocList
-        items={items}
-        loading={false}
-        error={null}
-        onSelect={onSelect}
-      />,
-      { wrapper: makeWrapper() },
-    );
+    render(<VocList items={items} loading={false} error={null} onSelect={onSelect} />, {
+      wrapper: makeWrapper(),
+    });
     const rows = screen.getAllByRole('row');
     const dataRows = rows.filter((r) => r.getAttribute('aria-busy') !== 'true');
     fireEvent.click(dataRows[0]!);
     expect(onSelect).toHaveBeenCalledWith('id-1');
+  });
+
+  it('checking a row checkbox reveals the bulk-action bar and does NOT open the row', () => {
+    const items = [
+      makeVoc({ id: 'id-1', display_id: 'VOC-001', title: 'First VOC' }),
+      makeVoc({ id: 'id-2', display_id: 'VOC-002', title: 'Second VOC' }),
+    ];
+    render(
+      <VocList items={items} loading={false} error={null} onSelect={onSelect} view="inbox" />,
+      { wrapper: makeWrapper() },
+    );
+    expect(screen.queryByRole('toolbar', { name: '일괄 작업' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('VOC-001 선택'));
+
+    expect(screen.getByRole('toolbar', { name: '일괄 작업' })).toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    // Clicking the checkbox must not open the detail panel.
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('Clear button empties the selection and hides the bar', () => {
+    const items = [makeVoc({ id: 'id-1', display_id: 'VOC-001', title: 'First VOC' })];
+    render(
+      <VocList items={items} loading={false} error={null} onSelect={onSelect} view="inbox" />,
+      { wrapper: makeWrapper() },
+    );
+    fireEvent.click(screen.getByLabelText('VOC-001 선택'));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.queryByRole('toolbar', { name: '일괄 작업' })).not.toBeInTheDocument();
   });
 });

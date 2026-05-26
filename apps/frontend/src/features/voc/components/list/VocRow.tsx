@@ -1,28 +1,40 @@
 /**
- * VocRow — 60px single-select row for the VOC list.
+ * VocRow — single-select row for the VOC inbox list.
  *
- * SEVERITY NULL CHOICE: when severity is null, we render a dimmed SeverityIndicator
- * using 'low' as the fallback severity value (all 3 bars at 30% opacity via
- * SeverityIndicator's built-in dimming). This matches the "dimmed bars" option
- * in the spec and gives visual consistency over a muted dash. The aria-label
- * will read "low" for assistive tech — callers should note this if they need
- * a distinct "unset" semantic.
+ * Mirrors docs/design-prototype/screen-voc.jsx `VocRow`: a checkbox + severity
+ * indicator lead, a title line (id · title · "N similar"), a meta line
+ * (reporter-status badge · severity badge · managed system · area/"No area" ·
+ * time · linked finding), and a trailing identity column (owner avatar /
+ * "Owner 필요" badge + reporter avatar).
  *
- * HOOK-IN-MAP NOTE: VocRow does NOT call useManagedSystem directly.
- * The caller (VocList) lifts useManagedSystem to a single useManagedSystemMap()
- * call that returns Record<id, ResolvedManagedSystem> and passes the per-row
- * result via the `managedSystem` prop. This avoids any rules-of-hooks concern
- * and makes zero extra fetches (all rows share the same cache key).
+ * SELECTED STATE: prototype uses a 2px left accent bar (`.object-row.selected::before`,
+ * `--color-neon-lime`) plus a tinted row background — NOT a full ring. Mirrored here.
+ *
+ * SEVERITY NULL CHOICE: when severity is null we render a dimmed SeverityIndicator
+ * ('low' fallback at reduced opacity) and omit the SeverityBadge chip — there is
+ * no badge variant for "unset". aria reads "low" for the indicator.
+ *
+ * HOOK-IN-MAP NOTE: VocRow calls no data hooks. VocList lifts the managed-system,
+ * actor (owner/reporter), and analytics-area lookups to single map queries and
+ * passes per-row results via props. Avoids rules-of-hooks issues + N fetches.
+ *
+ * DATA-DEFERRED (#89): `linked finding ref` is not present on VocListItem — the
+ * `↔ FIN-xxx` chip renders only if a linkedFindingId is ever supplied (today never).
  */
 
-import * as React from 'react';
 import type { VocListItem } from '@fops/shared';
 import {
-  SeverityIndicator,
-  ReporterStatusBadge,
+  type AvatarUser,
+  Checkbox,
   ManagedSystemPill,
+  ReporterStatusBadge,
+  SeverityBadge,
+  SeverityIndicator,
+  UserAvatar,
 } from '@fops/ui';
 import { cn } from '@fops/ui';
+import { Layers } from 'lucide-react';
+import type * as React from 'react';
 
 // ---------------------------------------------------------------------------
 // Korean relative-time helper
@@ -65,6 +77,15 @@ export interface VocRowProps {
    * per row and passes the result in. Decouples primitive from the hook.
    */
   managedSystem?: { name: string; mark: string; archived: boolean } | null;
+  /** Resolved owner identity (from the workspace-actors map). Null = unassigned. */
+  owner?: AvatarUser | null;
+  /** Resolved reporter identity (from the workspace-actors map). Null = not resolvable. */
+  reporter?: AvatarUser | null;
+  /** Resolved analytics-area display name. Null = no area linked (amber "No area"). */
+  areaName?: string | null;
+  /** Bulk-selection checkbox state. When `onToggleCheck` is omitted the checkbox is hidden. */
+  checked?: boolean;
+  onToggleCheck?: () => void;
   className?: string;
 }
 
@@ -78,12 +99,18 @@ export function VocRow({
   onSelect,
   permissionLimited,
   managedSystem,
+  owner,
+  reporter,
+  areaName,
+  checked,
+  onToggleCheck,
   className,
 }: VocRowProps) {
   const ownerMissing = voc.owner_user_id === null && voc.owner_team_id === null;
   const relTime = formatVocCreatedAt(voc.created_at);
+  const showCheckbox = onToggleCheck !== undefined;
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       onSelect();
@@ -91,8 +118,7 @@ export function VocRow({
   };
 
   return (
-    <button
-      type="button"
+    <div
       role="row"
       aria-selected={selected}
       tabIndex={0}
@@ -100,21 +126,42 @@ export function VocRow({
       onKeyDown={handleKeyDown}
       className={cn(
         // Base layout
-        'flex w-full items-center gap-3 px-4 h-15 text-left',
+        'relative flex w-full items-center gap-3 px-4 h-15 text-left cursor-pointer',
         // Hover
-        'hover:bg-surface-detail',
-        // Selected
-        selected && 'bg-surface-detail ring-1 ring-[color:var(--border-selected)]',
+        'hover:bg-surface-row-hover',
+        // Selected: tinted background + 2px left accent bar (prototype parity)
+        selected && 'bg-surface-row-selected',
+        selected &&
+          'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-accent-primary before:content-[""]',
         // Permission-limited
         permissionLimited === true && 'opacity-60',
         className,
       )}
     >
-      {/* LEFT: severity indicator */}
-      <SeverityIndicator severity={voc.severity ?? 'low'} />
+      {/* LEAD: checkbox (bulk select) + severity indicator. Click here must not
+          open the detail panel. */}
+      <div
+        className="flex items-center gap-3 shrink-0"
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+        }}
+        role="presentation"
+      >
+        {showCheckbox && permissionLimited !== true && (
+          <Checkbox
+            checked={checked === true}
+            onCheckedChange={() => onToggleCheck?.()}
+            aria-label={`${voc.display_id} 선택`}
+          />
+        )}
+        <SeverityIndicator severity={voc.severity ?? 'low'} />
+      </div>
 
-      {/* TITLE column */}
-      <div className="flex-1 min-w-0 flex flex-col justify-center">
+      {/* TITLE + META column */}
+      <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
         {permissionLimited === true ? (
           // Permission-limited peek: display_id + status only
           <div className="flex items-center gap-2 text-sm">
@@ -123,10 +170,24 @@ export function VocRow({
           </div>
         ) : (
           <>
-            <span className="font-medium text-text-primary truncate">{voc.title}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-mono text-xs text-text-disabled shrink-0">
+                {voc.display_id}
+              </span>
+              <span className="font-medium text-text-primary truncate">{voc.title}</span>
+              {voc.similar_count > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-status-reporter-reviewing/10 px-1.5 py-0.5 text-xs font-medium text-status-reporter-reviewing shrink-0"
+                  aria-label={`${voc.similar_count} similar`}
+                >
+                  <Layers className="h-2.5 w-2.5" aria-hidden="true" />
+                  {voc.similar_count} similar
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 text-xs text-text-muted flex-wrap">
-              <span className="font-mono">{voc.display_id}</span>
               <ReporterStatusBadge status={voc.reporter_facing_status} />
+              {voc.severity !== null && <SeverityBadge severity={voc.severity} />}
               {managedSystem !== null && managedSystem !== undefined && (
                 <ManagedSystemPill
                   name={managedSystem.name}
@@ -134,20 +195,49 @@ export function VocRow({
                   archived={managedSystem.archived}
                 />
               )}
-              {ownerMissing ? (
-                <span className="text-[color:var(--color-warning-red)]">Owner 없음</span>
+              {areaName !== null && areaName !== undefined && areaName.length > 0 ? (
+                <>
+                  <RowDot />
+                  <span>{areaName}</span>
+                </>
+              ) : voc.analytics_area_id === null ? (
+                <>
+                  <RowDot />
+                  <span className="text-text-warning">No area</span>
+                </>
               ) : null}
+              <RowDot />
+              <span>{relTime}</span>
             </div>
           </>
         )}
       </div>
 
-      {/* TRAILING: relative time */}
+      {/* TRAILING: owner avatar / "Owner 필요" + reporter avatar */}
       {permissionLimited !== true && (
-        <span className="text-xs text-text-muted shrink-0">{relTime}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {ownerMissing ? (
+            <span className="inline-flex items-center rounded-full bg-accent-danger/10 px-2 py-0.5 text-xs font-medium text-accent-danger">
+              Owner 필요
+            </span>
+          ) : owner !== null && owner !== undefined ? (
+            <UserAvatar user={owner} size="sm" />
+          ) : null}
+          {reporter !== null && reporter !== undefined && <UserAvatar user={reporter} size="sm" />}
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 
 VocRow.displayName = 'VocRow';
+
+/** 2px muted dot separator — mirrors prototype `.row-meta .dot`. */
+function RowDot() {
+  return (
+    <span
+      className="inline-block h-0.5 w-0.5 shrink-0 rounded-full bg-text-muted/60"
+      aria-hidden="true"
+    />
+  );
+}
