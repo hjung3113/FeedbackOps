@@ -181,10 +181,63 @@ describe('<VocRow>', () => {
 
   it('applies the selected-row token + left accent bar when selected', () => {
     render(<VocRow voc={BASE_VOC} selected={true} onSelect={onSelect} managedSystem={null} />);
+    const row = screen.getByRole('row');
+    // Prototype parity: tinted selected background
+    expect(row.className).toContain('bg-surface-row-selected');
+    // Left edge bar exists and uses accent-primary color when selected
+    const bar = row.querySelector('[data-testid="voc-row-left-bar"]');
+    expect(bar).not.toBeNull();
+    expect(bar?.className).toContain('bg-accent-primary');
+  });
+
+  it('has a bottom border divider on every row', () => {
+    render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
     const cls = screen.getByRole('row').className;
-    // Prototype parity: tinted selected background + 2px left accent bar (not a ring).
-    expect(cls).toContain('bg-surface-row-selected');
-    expect(cls).toContain('before:bg-accent-primary');
+    expect(cls).toContain('border-b');
+    expect(cls).toContain('border-border-subtle');
+  });
+
+  it('renders left-bar with severity-high class for high severity', () => {
+    render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
+    const bar = screen.getByTestId('voc-row-left-bar');
+    expect(bar).toBeInTheDocument();
+    expect(bar.className).toContain('bg-severity-high');
+  });
+
+  it('renders left-bar with severity-low class for low severity', () => {
+    const vocLow: VocListItem = { ...BASE_VOC, severity: 'low' };
+    render(<VocRow voc={vocLow} selected={false} onSelect={onSelect} managedSystem={null} />);
+    const bar = screen.getByTestId('voc-row-left-bar');
+    expect(bar.className).toContain('bg-severity-low');
+  });
+
+  it('renders left-bar with severity-medium class for medium severity', () => {
+    const vocMed: VocListItem = { ...BASE_VOC, severity: 'medium' };
+    render(<VocRow voc={vocMed} selected={false} onSelect={onSelect} managedSystem={null} />);
+    const bar = screen.getByTestId('voc-row-left-bar');
+    expect(bar.className).toContain('bg-severity-medium');
+  });
+
+  it('renders left-bar with severity-critical class for critical severity', () => {
+    const vocCrit: VocListItem = { ...BASE_VOC, severity: 'critical' };
+    render(<VocRow voc={vocCrit} selected={false} onSelect={onSelect} managedSystem={null} />);
+    const bar = screen.getByTestId('voc-row-left-bar');
+    expect(bar.className).toContain('bg-severity-critical');
+  });
+
+  it('renders left-bar with neutral token when severity is null', () => {
+    const vocNull: VocListItem = { ...BASE_VOC, severity: null };
+    render(<VocRow voc={vocNull} selected={false} onSelect={onSelect} managedSystem={null} />);
+    const bar = screen.getByTestId('voc-row-left-bar');
+    expect(bar.className).toContain('bg-border-strong');
+  });
+
+  it('left-bar uses accent-primary when selected regardless of severity', () => {
+    const vocNull: VocListItem = { ...BASE_VOC, severity: null };
+    render(<VocRow voc={vocNull} selected={true} onSelect={onSelect} managedSystem={null} />);
+    const bar = screen.getByTestId('voc-row-left-bar');
+    expect(bar.className).toContain('bg-accent-primary');
+    expect(bar.className).not.toContain('bg-border-strong');
   });
 
   it('renders permission-limited variant — title replaced by peek', () => {
