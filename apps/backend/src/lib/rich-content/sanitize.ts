@@ -7,23 +7,19 @@
 // text?, content?}) so unknown top-level fields cannot leak to the renderer.
 // Also validates per-attr value schemas (uuid, url, bounded string).
 
-import type { TipTapDoc } from '@fops/shared';
+import type { RichContentErrorCode as SharedRichContentErrorCode, TipTapDoc } from '@fops/shared';
 
 import { SURFACE_ALLOWLISTS, type AttrSchema, type Surface } from './surface-allowlists.js';
 
-// ── Re-exported types (ADR-0012 closed enum — do not add codes here; see F-ADR-0012-ATTR-CODE) ──
+export type RichContentErrorCode = SharedRichContentErrorCode;
 
-export type RichContentErrorCode =
-  | 'rich_content.disallowed_node'
-  | 'rich_content.external_image_forbidden';
-
-// fields_code differentiates sub-failure modes within a single ADR-0012 code.
-// Service callers map this to fields[].code (disallowed_attr_key / invalid_attr_value).
-// Undefined means the general disallowed_node case.
+// fields_code preserves field-level detail while the top-level code stays stable
+// for telemetry and client handling. Undefined means the general node-level case.
 export type RichContentFieldsCode =
   | 'disallowed_node'
   | 'disallowed_attr_key'
-  | 'invalid_attr_value';
+  | 'invalid_attr_value'
+  | 'missing_required_attr';
 
 export interface RichContentError {
   code: RichContentErrorCode;
@@ -149,10 +145,10 @@ function validateAttrs(
     if (keys.length > 0) {
       return {
         error: {
-          code: 'rich_content.disallowed_node',
+          code: 'rich_content.disallowed_attr',
           reason: `no attrs are allowed on this node/mark; found key '${keys[0]}'`,
-          path: `${basePath}.attrs`,
-          // no fields_code — node has no attr schema at all; treat as disallowed_node
+          path: `${basePath}.attrs.${keys[0]}`,
+          fields_code: 'disallowed_attr_key',
         },
       };
     }
@@ -165,10 +161,10 @@ function validateAttrs(
     if (schema.required && !(key in attrsObj)) {
       return {
         error: {
-          code: 'rich_content.disallowed_node',
+          code: 'rich_content.missing_required_attr',
           reason: `required attr '${key}' is missing`,
           path: `${basePath}.attrs.${key}`,
-          fields_code: 'invalid_attr_value',
+          fields_code: 'missing_required_attr',
         },
       };
     }
@@ -179,7 +175,7 @@ function validateAttrs(
     if (!(key in attrSchemas)) {
       return {
         error: {
-          code: 'rich_content.disallowed_node',
+          code: 'rich_content.disallowed_attr',
           reason: `attr key '${key}' is not allowed`,
           path: `${basePath}.attrs.${key}`,
           fields_code: 'disallowed_attr_key',
@@ -200,7 +196,7 @@ function validateAttrs(
     if (reason !== null) {
       return {
         error: {
-          code: 'rich_content.disallowed_node',
+          code: 'rich_content.invalid_attr_value',
           reason: `attr '${key}' ${reason}`,
           path: `${basePath}.attrs.${key}`,
           fields_code: 'invalid_attr_value',
@@ -325,7 +321,18 @@ export function sanitizeTipTap(args: {
       };
     }
 
-    // 3. Text byte cap.
+    // 3. Atomic TipTap nodes must remain true leaves.
+    if (allow.leafNodes.has(node.type) && Array.isArray(node.content) && node.content.length > 0) {
+      return {
+        error: {
+          code: 'rich_content.disallowed_node',
+          reason: `leaf node ${node.type} must not have content`,
+          path: `${path}.content`,
+        },
+      };
+    }
+
+    // 4. Text byte cap.
     if (typeof node.text === 'string') {
       totalText += Buffer.byteLength(node.text, 'utf8');
       if (totalText > allow.maxTextBytes) {
@@ -339,12 +346,12 @@ export function sanitizeTipTap(args: {
       }
     }
 
-    // 4. Attrs validation.
+    // 5. Attrs validation.
     const nodeAttrSchemas = allow.nodeAttrs[node.type];
     const attrsResult = validateAttrs(nodeAttrSchemas, node.attrs, path);
     if ('error' in attrsResult) return attrsResult;
 
-    // 5. Marks validation (rebuild canonical mark list).
+    // 6. Marks validation (rebuild canonical mark list).
     const cleanMarks: CleanMark[] = [];
     if (Array.isArray(node.marks)) {
       for (let i = 0; i < node.marks.length; i++) {
@@ -354,7 +361,7 @@ export function sanitizeTipTap(args: {
       }
     }
 
-    // 6. Recurse content.
+    // 7. Recurse content.
     const cleanContent: CleanNode[] = [];
     if (Array.isArray(node.content)) {
       for (let i = 0; i < node.content.length; i++) {
@@ -364,7 +371,7 @@ export function sanitizeTipTap(args: {
       }
     }
 
-    // 7. Build canonical clean node (omit empty attrs, empty marks, empty content).
+    // 8. Build canonical clean node (omit empty attrs, empty marks, empty content).
     const cleanNode: CleanNode = { type: node.type };
     if (Object.keys(attrsResult.cleanAttrs).length > 0) {
       cleanNode.attrs = attrsResult.cleanAttrs;

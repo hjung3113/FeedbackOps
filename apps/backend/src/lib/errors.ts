@@ -20,6 +20,10 @@ const STATUS_BY_PREFIX: ReadonlyArray<[string, number]> = [
   ['rate_limited.', 429],
   ['internal.', 500],
   ['upstream.', 502],
+  // PLAN-22 C3a: object-store unavailable bubbles as 502 per OQ-2 default.
+  ['storage.', 502],
+  // PLAN-22 C3a: stub-path marker until C3b lands real implementation.
+  ['not_implemented.', 501],
 ];
 
 export function statusForCode(code: ErrorCode): number {
@@ -29,10 +33,41 @@ export function statusForCode(code: ErrorCode): number {
   return 500;
 }
 
+export type DetailField = {
+  path: ReadonlyArray<string | number>;
+  code: string;
+  message?: string;
+};
+
+export type DetailShape =
+  | {
+      fields: DetailField[];
+      hint?: string | undefined;
+      max_bytes?: number;
+      mime_type?: string;
+      reason?: string | null;
+      detail?: { reason: string | null };
+    }
+  | { retry_after_seconds: number }
+  | { resource_id?: string; resource_type?: string }
+  | { capability: string }
+  | { reason: string }
+  | {
+      requiredScope?: string[];
+      requestable_permission: {
+        permission: string;
+        managed_system_id?: string | null;
+        reason_required?: boolean;
+      };
+    }
+  | { current_updated_at: string }
+  | { current_triage_state: string }
+  | undefined;
+
 export class HttpError extends Error {
   readonly code: ErrorCode;
-  readonly detail?: Record<string, unknown>;
-  constructor(code: ErrorCode, message: string, detail?: Record<string, unknown>) {
+  readonly detail?: Exclude<DetailShape, undefined>;
+  constructor(code: ErrorCode, message: string, detail?: DetailShape) {
     super(message);
     this.code = code;
     if (detail !== undefined) this.detail = detail;
@@ -43,7 +78,7 @@ export function sendError(
   reply: FastifyReply,
   code: ErrorCode,
   message: string,
-  detail?: Record<string, unknown>,
+  detail?: DetailShape,
 ): FastifyReply {
   const body: Record<string, unknown> = { code, message };
   if (detail !== undefined) body.detail = detail;

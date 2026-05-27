@@ -67,18 +67,14 @@ describe('<VocDescriptionToolbar>', () => {
     expect(VOC_DESCRIPTION_TOOLBAR).toHaveLength(7);
   });
 
-  it('attach button is disabled; all other buttons are enabled', () => {
+  it('all buttons (including PLAN-22 C8 attach) are enabled', () => {
     const { editor } = makeEditorMock();
     const element = VocDescriptionToolbar(editor);
     render(element!);
 
     for (const item of VOC_DESCRIPTION_TOOLBAR) {
       const btn = screen.getByTestId(`voc-toolbar-${item.id}`);
-      if (item.id === 'attach') {
-        expect(btn).toBeDisabled();
-      } else {
-        expect(btn).not.toBeDisabled();
-      }
+      expect(btn).not.toBeDisabled();
     }
   });
 

@@ -59,10 +59,11 @@ export function VocRouteShell() {
     );
   }
   if (search.view === 'triage') {
-    // TriageRoute owns its own toolbar + body; WorkbenchShell wraps at the shell
-    // level. We pass the TriageRoute body via the WorkbenchShell default slot.
+    // V1 inline kicker: toolbar prop removed — VocTriageScreen absorbs route
+    // identity as a left-edge kicker ("Console · Triage") in its own toolbar.
+    // ShellHeader is intentionally absent for this route only (ADR-0020 §optional header).
     return (
-      <WorkbenchShell toolbar={{ title: 'Triage Console' }}>
+      <WorkbenchShell>
         <TriageRoute />
       </WorkbenchShell>
     );

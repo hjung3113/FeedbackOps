@@ -14,9 +14,16 @@ const SLICE_3_OWNER_CODES_EXACT: ReadonlyArray<ErrorCode> = [
   'conflict.stale_write',
   'conflict.triage_already_committed',
   'conflict.idempotency_key_reuse',
+  'storage.unavailable',
 ];
 
+// PLAN-22 C7b: `attachment.unsupported_pending_storage_slice` retired from
+// ERROR_CODES entirely (no longer parseable). The RETIRING_CODES list is
+// now empty — no FE-mapping-suppression special-case is needed.
+const RETIRING_CODES: ReadonlyArray<ErrorCode> = [];
+
 function isSlice3OwnerCode(code: ErrorCode): boolean {
+  if (RETIRING_CODES.includes(code)) return false;
   return (
     SLICE_3_OWNER_PREFIXES.some((p) => code.startsWith(p)) ||
     SLICE_3_OWNER_CODES_EXACT.includes(code)
@@ -85,6 +92,23 @@ describe('errorMapper — ERROR_CODES coverage', () => {
   it('rate_limited.actor falls back to generic wait copy without detail', () => {
     const mapped = errorMapper({ code: 'rate_limited.actor', message: '' });
     expect(mapped.message).toBe('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
+  });
+
+  it('storage.unavailable maps to error tone with Korean copy', () => {
+    const mapped = errorMapper({ code: 'storage.unavailable', message: '' });
+    expect(mapped.tone).toBe('error');
+    expect(mapped.message).not.toBe(GENERIC_ERROR_MESSAGE);
+    expect(mapped.message.length).toBeGreaterThan(0);
+  });
+
+  it('attachment.too_large maps to non-generic Korean copy', () => {
+    const mapped = errorMapper({ code: 'attachment.too_large', message: '' });
+    expect(mapped.message).not.toBe(GENERIC_ERROR_MESSAGE);
+  });
+
+  it('attachment.unsupported_type maps to non-generic Korean copy', () => {
+    const mapped = errorMapper({ code: 'attachment.unsupported_type', message: '' });
+    expect(mapped.message).not.toBe(GENERIC_ERROR_MESSAGE);
   });
 
   it('unknown code falls back to generic error', () => {

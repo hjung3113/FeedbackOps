@@ -40,8 +40,11 @@ export {
   RichEditor,
   type RichEditorProps,
   type RichEditorSurface,
+  type RichEditorToolbarApi,
+  type RichEditorAttachmentResult,
   type TipTapDoc,
 } from './rich-content/RichEditor';
+export { AttachButton, type AttachButtonProps } from './rich-content/toolbar/AttachButton';
 // Re-export the TipTap Editor type so feature packages can type render-prop callbacks
 // (e.g. RichEditor toolbar) without depending on @tiptap/react directly.
 export type { Editor as TipTapEditor } from '@tiptap/react';

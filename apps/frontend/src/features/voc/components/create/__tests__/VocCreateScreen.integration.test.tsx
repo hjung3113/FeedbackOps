@@ -413,6 +413,62 @@ describe('VocCreateScreen integration', () => {
     });
   });
 
+  // ── 7. PLAN-22 Bug-3: submit-blocked alert when an attachment row errors ──
+  test('PLAN-22 Bug-3: attachment row in error → inline alert visible + submit disabled', async () => {
+    installFetch({
+      postVocsResponse: {
+        status: 201,
+        body: { id: VOC_ID, display_id: 'V-1', created_at: '2026-05-20T00:00:00Z' },
+      },
+    });
+
+    renderHarness({ onCancel: vi.fn() });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ms-picker')).toBeInTheDocument();
+    });
+
+    // Fill the rest of the form so the only remaining gate is the attachment.
+    fireEvent.click(screen.getByRole('radio', { name: MS_ITEM.name }));
+    const titleInput = screen.getByRole('textbox', { name: /제목/i });
+    fireEvent.change(titleInput, { target: { value: '제목' } });
+    fireEvent.blur(titleInput);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
+    });
+
+    // Initially: no alert.
+    expect(screen.queryByTestId('attachment-submit-blocked-alert')).not.toBeInTheDocument();
+
+    // Drop an oversize file (client-side rejection sets row.state = 'error').
+    const input = screen
+      .getByTestId('attachment-dropzone')
+      .querySelector('input[type="file"]') as HTMLInputElement;
+    const big = new File(['x'], 'big.png', { type: 'image/png' });
+    Object.defineProperty(big, 'size', { value: 26 * 1024 * 1024, configurable: true });
+    fireEvent.change(input, { target: { files: [big] } });
+
+    // Alert appears.
+    await waitFor(() => {
+      expect(screen.getByTestId('attachment-submit-blocked-alert')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('attachment-submit-blocked-alert').textContent).toContain(
+      '첨부 파일에 오류가 있어 제출할 수 없습니다',
+    );
+    // Submit becomes disabled while the alert is visible.
+    expect(screen.getByRole('button', { name: 'VOC 제출' })).toBeDisabled();
+
+    // Remove the error row → alert disappears + submit re-enables.
+    fireEvent.click(screen.getByLabelText('첨부 제거'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('attachment-submit-blocked-alert')).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
+    });
+  });
+
   // ── 6. Empty MS list ──────────────────────────────────────────────────────
   test('empty MS list: shows empty-state copy and link to /admin/managed-systems', async () => {
     installFetch({ msItems: [] });

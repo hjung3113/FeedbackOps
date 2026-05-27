@@ -1,5 +1,5 @@
-import * as React from 'react';
 import { X } from 'lucide-react';
+import type * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 export type DetailPanelKind = 'voc' | 'finding' | 'task' | 'survey' | 'cluster';
@@ -13,18 +13,18 @@ export interface DetailPanelHeaderProps {
 }
 
 const KIND_LABELS: Record<DetailPanelKind, string> = {
-  voc:     'VOC',
+  voc: 'VOC',
   finding: 'Finding',
-  task:    'Task',
-  survey:  'Survey',
+  task: 'Task',
+  survey: 'Survey',
   cluster: 'Cluster',
 };
 
 const KIND_ACCENT: Record<DetailPanelKind, string> = {
-  voc:     'var(--color-aether-blue)',
+  voc: 'var(--color-aether-blue)',
   finding: 'var(--color-emerald)',
-  task:    'var(--color-amethyst)',
-  survey:  'var(--color-cyan-spark)',
+  task: 'var(--color-amethyst)',
+  survey: 'var(--color-cyan-spark)',
   cluster: 'var(--color-amber)',
 };
 
@@ -42,32 +42,28 @@ export function DetailPanelHeader({
       data-kind={kind}
       className={cn(
         'sticky top-0 z-10 bg-surface-card border-b border-border-subtle',
-        'flex items-stretch min-h-[48px]',
+        'flex items-stretch h-[50px]',
         className,
       )}
     >
       {/* 4px accent stripe on the left */}
-      <div
-        aria-hidden="true"
-        style={{ width: 4, flexShrink: 0, backgroundColor: accentColor }}
-      />
+      <div aria-hidden="true" style={{ width: 4, flexShrink: 0, backgroundColor: accentColor }} />
 
       {/* Content row */}
-      <div className="flex flex-1 items-center gap-3 px-3 py-2 min-w-0">
+      <div
+        data-testid="detail-panel-header-content"
+        className="flex flex-1 items-center gap-3 pl-4 pr-3 min-w-0"
+      >
         {/* Kind label + id */}
         <div className="flex items-baseline gap-2 min-w-0">
           <span className="text-xs text-text-muted shrink-0 uppercase tracking-wide">
             {KIND_LABELS[kind]}
           </span>
-          <span className="font-mono text-lg text-text-primary leading-none">
-            {id}
-          </span>
+          <span className="font-mono text-xs text-text-muted leading-none">{id}</span>
         </div>
 
         {/* Extras slot */}
-        {extras !== undefined && (
-          <div className="ml-auto flex items-center">{extras}</div>
-        )}
+        {extras !== undefined && <div className="ml-auto flex items-center">{extras}</div>}
 
         {/* Close button */}
         <button

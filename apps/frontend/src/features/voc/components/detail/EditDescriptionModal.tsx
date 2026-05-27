@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import {
   type EditDescriptionRequest,
   type ErrorEnvelope,
+  type LinkedAttachment,
   editDescriptionRequestSchema,
 } from '@fops/shared';
 import {
@@ -40,6 +41,7 @@ import { errorMapper } from '@/lib/api';
 import { useVocEditDescriptionMutation } from '../../hooks/useVocEditDescriptionMutation';
 import { AttachmentDropzone } from '../create/AttachmentDropzone';
 import { VocDescriptionToolbar } from '../create/VocDescriptionToolbar';
+import { AttachmentChipList } from './AttachmentChip';
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,19 @@ export interface EditDescriptionModalVoc {
   title: string;
   updated_at: string;
   description_rich_content?: unknown;
+  /**
+   * PLAN-22 §Bug-3 (2026-05-22): existing linked attachments on the VOC body.
+   * Hydrated from `GET /vocs/:id` (PR #77). Rendered as read-only chips above
+   * the upload dropzone. Optional for backward-compat with callers that build
+   * the prop from a narrower shape; treat undefined as empty.
+   *
+   * PATCH semantics — ADDITIVE: the BE `editVocDescription` calls
+   * `linkAttachments(attachment_ids)` which rejects already-linked ids, so the
+   * modal MUST send only NEW uploads in `attachment_ids[]`. Removing or
+   * replacing existing rows is not supported in this slice; the chips render
+   * without an X affordance.
+   */
+  attachments?: ReadonlyArray<Pick<LinkedAttachment, 'id' | 'name' | 'size_bytes'>>;
 }
 
 export interface EditDescriptionModalProps {
@@ -79,12 +94,18 @@ export function EditDescriptionModal({
   // Track if the user attempted to close while dirty
   const [confirmOpen, setConfirmOpen] = React.useState(false);
 
+  // C6: attachment IDs for successfully-uploaded rows in the dropzone, plus a
+  // mid-upload flag that disables Save while files are still in flight.
+  const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
+  const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
+
   const form = useForm<EditFormValues>({
     resolver: zodResolver(editDescriptionRequestSchema),
     defaultValues: {
       title: voc.title,
       description_rich_content: voc.description_rich_content as TipTapDoc,
-      attachments: [],
+      // PLAN-22 C7b: wire shape renamed `attachments` → `attachment_ids`.
+      attachment_ids: [],
     },
     mode: 'onBlur',
   });
@@ -113,7 +134,8 @@ export function EditDescriptionModal({
     form.reset({
       title: voc.title,
       description_rich_content: voc.description_rich_content as TipTapDoc,
-      attachments: [],
+      // PLAN-22 C7b: wire shape renamed `attachments` → `attachment_ids`.
+      attachment_ids: [],
     });
     // Intentionally only voc.id — updated_at change must NOT auto-reset.
   }, [voc.id]);
@@ -135,7 +157,8 @@ export function EditDescriptionModal({
     form.reset({
       title: fresh.title,
       description_rich_content: fresh.description_rich_content as TipTapDoc,
-      attachments: [],
+      // PLAN-22 C7b: wire shape renamed `attachments` → `attachment_ids`.
+      attachment_ids: [],
     });
   }, [form, queryClient, voc.id]);
 
@@ -179,15 +202,19 @@ export function EditDescriptionModal({
   }
 
   function handleSubmit(values: EditFormValues): void {
+    // PLAN-22 C7b: wire shape carries `attachment_ids: string[]` only;
+    // the legacy `attachments: AttachmentRef[]` field was retired.
+    void values;
+    const body: EditDescriptionRequest = {
+      title: values.title,
+      description_rich_content: values.description_rich_content,
+      attachment_ids: attachmentIds,
+    };
     mutation.mutate(
       {
         vocId: voc.id,
         ifMatch: voc.updated_at,
-        body: {
-          title: values.title,
-          description_rich_content: values.description_rich_content,
-          attachments: values.attachments ?? [],
-        },
+        body,
       },
       {
         onSuccess: () => {
@@ -312,8 +339,23 @@ export function EditDescriptionModal({
               )}
             </div>
 
-            {/* Attachments (disabled — upload deferred to #22) ───────────── */}
-            <AttachmentDropzone disabled testId="edit-attachment-dropzone" />
+            {/* Existing attachments (read-only) — PLAN-22 §Bug-3 (2026-05-22).
+                Hydrated from voc.attachments[] so reopening the modal shows
+                previously-uploaded files. PATCH is additive (see prop docs);
+                rows render without remove affordance. */}
+            {voc.attachments && voc.attachments.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>기존 첨부</FieldLabel>
+                <AttachmentChipList attachments={voc.attachments} />
+              </div>
+            )}
+
+            {/* Attachments — active upload (C6). ───────────── */}
+            <AttachmentDropzone
+              testId="edit-attachment-dropzone"
+              onChange={setAttachmentIds}
+              onUploadingChange={setAttachmentsUploading}
+            />
           </form>
 
           {/* Footer ───────────────────────────────────────────────────────── */}
@@ -321,7 +363,11 @@ export function EditDescriptionModal({
             <Button type="button" variant="ghost" onClick={handleCancel} disabled={isSubmitting}>
               취소
             </Button>
-            <Button type="submit" form="edit-description-form" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              form="edit-description-form"
+              disabled={isSubmitting || attachmentsUploading}
+            >
               수정 저장
             </Button>
           </DialogFooter>

@@ -7,9 +7,8 @@
 // Allowed: Bold, Italic, Code (inline), BulletList, Link, @Mention (via MentionPickerButton).
 // Attach: rendered but always DOM-disabled (deferred to #22).
 
-import type { TipTapEditor } from '@fops/ui';
-import { cn } from '@fops/ui';
-import { AtSign, Bold, Code, Italic, Link, List, Paperclip } from 'lucide-react';
+import { AttachButton, cn, type TipTapEditor } from '@fops/ui';
+import { AtSign, Bold, Code, Italic, Link, List } from 'lucide-react';
 import type * as React from 'react';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -18,6 +17,14 @@ export interface InternalCommentToolbarProps {
   editor: TipTapEditor | null;
   /** Called when the @Mention button is pressed — opens MentionPickerButton. */
   onInsertMention: () => void;
+  /**
+   * Wired by the composer through the RichEditor toolbar API (PLAN-22 C8).
+   * When provided, the Attach button uploads + inserts an attachmentRef node.
+   * When omitted, the button is hidden (no degraded placeholder).
+   */
+  onAttach?: (file: File) => Promise<unknown>;
+  /** Surface to toast on attach failure. */
+  onAttachError?: (err: unknown) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -64,6 +71,8 @@ function ToolbarButton({
 export function InternalCommentToolbar({
   editor,
   onInsertMention,
+  onAttach,
+  onAttachError,
 }: InternalCommentToolbarProps): React.ReactElement {
   const editorDisabled = editor === null;
 
@@ -139,10 +148,20 @@ export function InternalCommentToolbar({
         <AtSign size={14} />
       </ToolbarButton>
 
-      {/* Attach — rendered but disabled (deferred to #22). */}
-      <ToolbarButton onClick={() => {}} isActive={false} disabled={true} title="Attach file">
-        <Paperclip size={14} />
-      </ToolbarButton>
+      {/* Attach — wired through RichEditor toolbar API (PLAN-22 C8). */}
+      {onAttach ? (
+        <AttachButton
+          data-testid="internal-comment-attach"
+          disabled={editorDisabled}
+          onPick={async (file) => {
+            try {
+              await onAttach(file);
+            } catch (e) {
+              onAttachError?.(e);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

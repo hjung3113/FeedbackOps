@@ -1,0 +1,1 @@
+src/cli/storage-bootstrap.ts(54,31): error TS2559: Type 'ProcessEnv' has no properties in common with type 'StorageEnv'.

@@ -35,6 +35,8 @@ import { RichEditor } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 import { toast } from 'sonner';
+import { uploadAttachment } from '@/lib/api/attachments';
+import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { MentionPickerButton } from './MentionPickerButton';
 import { InternalCommentToolbar } from './rich-toolbars/InternalCommentToolbar';
@@ -102,6 +104,10 @@ export function InternalCommentComposer({
     }
   }
 
+  // PLAN-22 C7a: composer-level attachment dropzone state.
+  const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
+  const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
+
   const isEmpty = isDocEmpty(draftDoc);
 
   const mutation = useVocInternalCommentMutation({
@@ -121,6 +127,8 @@ export function InternalCommentComposer({
       body: {
         body_rich_content: draftDoc,
         mentions,
+        // PLAN-22 C7a (D1): widened body field — schema reconciled in C7b.
+        attachment_ids: attachmentIds,
       },
     });
   }
@@ -150,7 +158,16 @@ export function InternalCommentComposer({
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="내부 코멘트를 입력하세요..."
         minHeight={84}
-        toolbar={(editor) => {
+        onAttach={async (file) => {
+          const r = await uploadAttachment(file);
+          return {
+            attachment_id: r.id,
+            name: r.name,
+            size_bytes: r.size_bytes,
+            mime_type: r.mime_type,
+          };
+        }}
+        toolbar={(editor, api) => {
           // Keep editor ref in sync for mention insertion.
           editorRef.current = editor;
           return (
@@ -162,6 +179,10 @@ export function InternalCommentComposer({
                 // The toolbar's @Mention button will be handled via a shared state flag
                 // below.
               }}
+              onAttach={(file) => api.attach(file)}
+              onAttachError={(e) =>
+                toast.error(e instanceof Error ? e.message : '첨부 업로드에 실패했습니다')
+              }
             />
           );
         }}
@@ -172,6 +193,13 @@ export function InternalCommentComposer({
         <MentionPickerButton onSelect={handleInsertMention} disabled={mutation.isPending} />
       </div>
 
+      {/* PLAN-22 C7a: composer-level attachment dropzone (compact). */}
+      <ComposerAttachmentDropzone
+        testId="internal-comment-attachment-dropzone"
+        onChange={setAttachmentIds}
+        onUploadingChange={setAttachmentsUploading}
+      />
+
       {/* ComposerFooter — Preview disabled per D-5.4 */}
       <ComposerFooter
         submitLabel="Add note"
@@ -181,6 +209,7 @@ export function InternalCommentComposer({
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
         isSubmitting={mutation.isPending}
+        isSubmitDisabled={attachmentsUploading}
         isPreviewDisabled={true}
         statusHint={statusHint}
       />

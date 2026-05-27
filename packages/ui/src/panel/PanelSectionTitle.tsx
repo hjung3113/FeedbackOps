@@ -10,7 +10,7 @@ export function PanelSectionTitle({ children, className }: PanelSectionTitleProp
   return (
     <h3
       className={cn(
-        'text-xs font-medium uppercase tracking-wide text-text-muted px-4 pt-4 pb-2 border-t border-border-subtle',
+        'text-xs font-semibold uppercase tracking-wide text-text-muted mb-3.5',
         className,
       )}
     >

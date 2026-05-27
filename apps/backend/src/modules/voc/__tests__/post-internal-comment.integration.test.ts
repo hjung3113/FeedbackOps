@@ -440,7 +440,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
     });
 
     expect(res.statusCode).toBe(422);
-    expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_node');
+    expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_attr');
     expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.path).toEqual(['body_rich_content']);
     expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
     expect(res.json<{ detail: { hint: string } }>().detail?.hint).toMatch(/attrs\.label$/);
@@ -524,5 +524,43 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
     expect(limited.statusCode).toBe(429);
     expect(limited.json<{ code: string }>().code).toBe('rate_limited.actor');
     expect(limited.headers['retry-after']).toBeDefined();
+  });
+
+  // ── PLAN-22 C7b — attachment_ids linking ─────────────────────────────────
+
+  it('attachment_ids with valid owned unlinked row → 201 + linked to internal_comment (PLAN-22 C7b)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-icatt`, 'IC Att MS');
+    const voc = await insertVoc(msId, 'IC Att VOC');
+
+    // Admin is the actor here — seed under adminActorId.
+    const attachmentId = randomUUID();
+    const storageKey = `${WORKSPACE_ID}/${attachmentId}/icatt-${randomUUID()}.pdf`;
+    await dbHandle.pool.query(
+      `insert into voc.voc_attachments
+         (id, voc_id, comment_id, comment_kind, name, size_bytes, mime_type,
+          storage_key, uploaded_by_actor_id, linked_at)
+       values ($1, null, null, null, 'ic.pdf', 1024, 'application/pdf', $2, $3, null)`,
+      [attachmentId, storageKey, adminActorId],
+    );
+
+    const res = await postInternalComment(adminCookie, voc.id, {
+      body_rich_content: paragraphDoc('internal note with attachment'),
+      mentions: [],
+      attachment_ids: [attachmentId],
+    });
+    expect(res.statusCode).toBe(201);
+    const commentId = res.json<{ internal_comment: { id: string } }>().internal_comment.id;
+
+    const linked = await dbHandle.pool.query<{
+      comment_id: string;
+      comment_kind: string;
+      linked_at: Date | null;
+    }>(
+      `select comment_id, comment_kind, linked_at from voc.voc_attachments where id = $1`,
+      [attachmentId],
+    );
+    expect(linked.rows[0]?.comment_id).toBe(commentId);
+    expect(linked.rows[0]?.comment_kind).toBe('internal_comment');
+    expect(linked.rows[0]?.linked_at).not.toBeNull();
   });
 });

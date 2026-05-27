@@ -85,14 +85,10 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
         role_level: sess.role_level,
       };
 
-      const decision: Decision = await checkService.checkCapability(
-        actor,
-        capability,
-        {
-          workspace_id: sess.workspace_id,
-          ...(q.managed_system_id !== undefined ? { managed_system_id: q.managed_system_id } : {}),
-        },
-      );
+      const decision: Decision = await checkService.checkCapability(actor, capability, {
+        workspace_id: sess.workspace_id,
+        ...(q.managed_system_id !== undefined ? { managed_system_id: q.managed_system_id } : {}),
+      });
 
       // Look up the actor's currently-open request (pending|needs_more_info)
       // for this capability AND the same managed-system scope so the state
@@ -192,7 +188,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     method: 'GET',
     url: '/permission-requests/mine',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    handler: async (req, reply) => {
+    handler: async (req) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
 
@@ -204,6 +200,28 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
 
       const requests = await requestService.listMine(actor);
       return { requests };
+    },
+  });
+
+  // ── GET /permission-requests ────────────────────────────────────────────
+  // Admin-only workspace-wide list of open (pending|needs_more_info) requests
+  // plus a count (issue #87). The service enforces the workspace.admin gate;
+  // non-admins get permission.denied → 403 via the error mapper.
+  app.route({
+    method: 'GET',
+    url: '/permission-requests',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    handler: async (req) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
+
+      return await requestService.listAllActive(actor);
     },
   });
 };

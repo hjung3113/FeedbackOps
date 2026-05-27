@@ -118,6 +118,45 @@ function stubFetchMe() {
   }) as typeof globalThis.fetch;
 }
 
+// Stub fetch for triage route: /me + /me/permissions/check (approved) + /vocs list.
+// Required because TriageRoute gates behind a capability check; without the
+// permissions stub the route renders PermissionBlockedPanel instead of the
+// VocTriageScreen that contains the V1 kicker.
+function stubFetchMeTriage() {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.endsWith('/me')) {
+      return new Response(
+        JSON.stringify({
+          actor: {
+            id: '00000000-0000-0000-0000-000000000001',
+            external_id: 'mock-admin-1',
+            email: 'admin@feedbackops.local',
+            display_name: 'Mock Admin',
+            role_level: 'admin',
+          },
+          workspace_id: '11111111-1111-1111-1111-111111111111',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    if (url.includes('/me/permissions/check')) {
+      return new Response(
+        JSON.stringify({ state: 'approved' }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    // VOC list (triage queue)
+    if (url.includes('/vocs')) {
+      return new Response(
+        JSON.stringify({ items: [], total: 0 }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    return new Response('not mocked', { status: 500 });
+  }) as typeof globalThis.fetch;
+}
+
 // Import the VocRouteShell component and the zod schema from the route file.
 // We bypass createFileRoute by mounting the component directly in a harness.
 // This matches the admin route test pattern exactly.
@@ -156,8 +195,8 @@ describe('/vocs route shell selection', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => {
-      // Inbox renders ListToolbar with tab labels (Korean) — check for '미트리아지' tab
-      expect(screen.getByText('미트리아지')).toBeInTheDocument();
+      // Inbox renders ListToolbar with prototype tab labels (English) — check for 'Untriaged' tab
+      expect(screen.getByText('Untriaged')).toBeInTheDocument();
     });
     // Confirm the list shell is rendered (not workbench / page)
     expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
@@ -178,8 +217,10 @@ describe('/vocs route shell selection', () => {
     expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
   });
 
-  test('resolves /vocs?view=triage to WorkbenchShell with Triage Console', async () => {
-    stubFetchMe();
+  // V1 inline kicker: ShellHeader removed from WorkbenchShell; identity is now
+  // the "Console · Triage" kicker in the triage toolbar. Assert the kicker renders.
+  test('resolves /vocs?view=triage to WorkbenchShell with inline kicker (V1)', async () => {
+    stubFetchMeTriage();
     const { router, qc } = buildHarness({ initialPath: '/vocs?view=triage' });
     render(
       <QueryClientProvider client={qc}>
@@ -187,8 +228,12 @@ describe('/vocs route shell selection', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => {
-      expect(screen.getByText('Triage Console')).toBeInTheDocument();
+      // V1: identity is the kicker in the triage toolbar ("Console · Triage").
+      // VocTriageScreen renders after the capability check passes (approved stub).
+      expect(document.querySelector('[data-testid="triage-kicker"]')).not.toBeNull();
     });
+    // WorkbenchShell wrapper still present.
+    expect(document.querySelector('[data-shell="workbench"]')).not.toBeNull();
   });
 
   test('resolves /vocs?action=create to PageShell with 새 VOC 작성', async () => {
@@ -213,8 +258,8 @@ describe('/vocs route shell selection', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => {
-      // Default view is inbox — ListToolbar renders tab labels
-      expect(screen.getByText('미트리아지')).toBeInTheDocument();
+      // Default view is inbox — ListToolbar renders prototype tab labels (English)
+      expect(screen.getByText('Untriaged')).toBeInTheDocument();
     });
     expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
   });

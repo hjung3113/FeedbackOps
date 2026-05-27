@@ -15,14 +15,10 @@
  * — a richer layout than ToggleGroupItem supports.
  */
 
-import * as React from 'react';
 import { cn } from '@fops/ui';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@fops/ui';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@fops/ui';
+import { HelpCircle } from 'lucide-react';
+import type * as React from 'react';
 
 export type SeverityLevel = 'low' | 'medium' | 'high' | 'critical';
 
@@ -36,33 +32,33 @@ const SEVERITY_CONFIG: {
   level: SeverityLevel;
   tip: string;
 }[] = [
-  { level: 'low',      tip: '관찰만 · 운영 영향 없음' },
-  { level: 'medium',   tip: '주기적 발생 · 사용성 저하' },
-  { level: 'high',     tip: '주요 흐름 차단 · 빠른 대응 필요' },
+  { level: 'low', tip: '관찰만 · 운영 영향 없음' },
+  { level: 'medium', tip: '주기적 발생 · 사용성 저하' },
+  { level: 'high', tip: '주요 흐름 차단 · 빠른 대응 필요' },
   { level: 'critical', tip: '서비스 영향 · 즉시 대응' },
 ];
 
 // Severity bar colors — maps to Pack 17 semantic tokens
 // PROTOTYPE-TO-PACK17.md §1: severity-{level} via bg-severity-{level}
 const BAR_CLASS: Record<SeverityLevel, string> = {
-  low:      'bg-severity-low',
-  medium:   'bg-severity-medium',
-  high:     'bg-severity-high',
+  low: 'bg-severity-low',
+  medium: 'bg-severity-medium',
+  high: 'bg-severity-high',
   critical: 'bg-severity-critical',
 };
 
 // Active chip tinted background + inset ring
 const ACTIVE_CLASS: Record<SeverityLevel, string> = {
-  low:      'bg-severity-low/10 ring-1 ring-inset ring-severity-low/40',
-  medium:   'bg-severity-medium/10 ring-1 ring-inset ring-severity-medium/40',
-  high:     'bg-severity-high/10 ring-1 ring-inset ring-severity-high/40',
+  low: 'bg-severity-low/10 ring-1 ring-inset ring-severity-low/40',
+  medium: 'bg-severity-medium/10 ring-1 ring-inset ring-severity-medium/40',
+  high: 'bg-severity-high/10 ring-1 ring-inset ring-severity-high/40',
   critical: 'bg-severity-critical/10 ring-1 ring-inset ring-severity-critical/40',
 };
 
 const ACTIVE_LABEL_CLASS: Record<SeverityLevel, string> = {
-  low:      'text-severity-low',
-  medium:   'text-severity-medium',
-  high:     'text-severity-high',
+  low: 'text-severity-low',
+  medium: 'text-severity-medium',
+  high: 'text-severity-high',
   critical: 'text-severity-critical',
 };
 
@@ -79,46 +75,66 @@ export function SeverityPicker({
           const isActive = value === level;
 
           return (
-            <Tooltip key={level}>
-              <TooltipTrigger asChild>
-                {/* .severity-pick */}
-                <button
-                  type="button"
-                  aria-label={level}
-                  aria-pressed={isActive}
-                  data-active={isActive ? 'true' : 'false'}
-                  data-sev={level}
-                  disabled={disabled}
-                  onClick={() => { onChange(level); }}
-                  className={cn(
-                    'grid items-center gap-2.5 px-3 py-2 rounded-md bg-surface-canvas shadow-subtle text-left',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
-                    'disabled:opacity-40 disabled:pointer-events-none',
-                    isActive && ACTIVE_CLASS[level],
-                  )}
-                  style={{ gridTemplateColumns: '4px 1fr' }}
-                >
-                  {/* .severity-pick-bar */}
-                  <span className={cn('w-1 self-stretch rounded-full shrink-0', BAR_CLASS[level])} />
+            // Prototype ref (screen-voc-create.jsx:456-460): 3-col chip
+            // (4px bar | 1fr label | auto HelpTip). The tooltip lives on the
+            // inline HelpTip icon only — NOT on the whole chip — so the chip
+            // click stays a clean severity-select affordance.
+            <button
+              key={level}
+              type="button"
+              aria-label={level}
+              aria-pressed={isActive}
+              data-active={isActive ? 'true' : 'false'}
+              data-sev={level}
+              disabled={disabled}
+              onClick={() => {
+                onChange(level);
+              }}
+              className={cn(
+                'grid items-center gap-2.5 px-3 py-2 rounded-md bg-surface-canvas shadow-subtle text-left',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                'disabled:opacity-40 disabled:pointer-events-none',
+                isActive && ACTIVE_CLASS[level],
+              )}
+              style={{ gridTemplateColumns: '4px 1fr auto' }}
+            >
+              {/* .severity-pick-bar */}
+              <span className={cn('w-1 self-stretch rounded-full shrink-0', BAR_CLASS[level])} />
 
-                  {/* label column */}
-                  <span className="flex flex-col min-w-0">
-                    {/* .severity-pick-label */}
-                    <span className={cn(
-                      'text-[13px] font-semibold capitalize leading-none mb-[3px]',
-                      isActive ? ACTIVE_LABEL_CLASS[level] : 'text-text-primary',
-                    )}>
-                      {level}
-                    </span>
-                    {/* .severity-pick-meta */}
-                    <span className="text-xs text-text-muted leading-[1.45]">{tip}</span>
+              {/* label column */}
+              <span className="flex flex-col min-w-0">
+                {/* .severity-pick-label */}
+                <span
+                  className={cn(
+                    'text-[13px] font-semibold capitalize leading-none mb-[3px]',
+                    isActive ? ACTIVE_LABEL_CLASS[level] : 'text-text-primary',
+                  )}
+                >
+                  {level}
+                </span>
+                {/* .severity-pick-meta */}
+                <span className="text-xs text-text-muted leading-[1.45]">{tip}</span>
+              </span>
+
+              {/* .field-help — inline HelpTip icon (prototype HelpTip). Tooltip
+                  is scoped to this icon only. Rendered as a span (not a nested
+                  button) so it stays valid inside the chip <button>. */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    role="img"
+                    aria-label={tip}
+                    data-testid={`severity-helptip-${level}`}
+                    className="self-start text-text-muted hover:text-text-secondary shrink-0"
+                  >
+                    <HelpCircle size={10} strokeWidth={1.8} aria-hidden="true" />
                   </span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-xs">
-                {tip}
-              </TooltipContent>
-            </Tooltip>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {tip}
+                </TooltipContent>
+              </Tooltip>
+            </button>
           );
         })}
       </div>

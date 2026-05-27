@@ -99,6 +99,34 @@
       "when": 1780140000000,
       "tag": "0013_slice3_voc_public_update_skip_status_diff",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1780240000000,
+      "tag": "0014_slice3_attachment_storage_activation",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1780340000000,
+      "tag": "0015_attachments_purge_queue",
+      "breakpoints": false
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1780440000000,
+      "tag": "0016_voc_attachments_grants",
+      "breakpoints": false
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1780540000000,
+      "tag": "0017_voc_per_workspace_display_counter",
+      "breakpoints": true
     }
   ]
 }

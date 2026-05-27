@@ -90,6 +90,62 @@ function paragraphDoc(text: string) {
   };
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForManagedSystemLockWait(
+  dbHandle: DbHandle,
+  options: { timeoutMs: number; pollIntervalMs: number },
+): Promise<void> {
+  const observer = await dbHandle.pool.connect();
+  const deadline = Date.now() + options.timeoutMs;
+
+  try {
+    while (Date.now() < deadline) {
+      const waits = await observer.query<{ wait_detected: number }>(
+        `select 1 as wait_detected
+           from pg_stat_activity a
+           join pg_locks l on l.pid = a.pid
+          where l.relation = 'core.managed_systems'::regclass
+            and a.wait_event_type = 'Lock'
+          limit 1`,
+      );
+
+      if (waits.rows.length >= 1) return;
+
+      await delay(Math.min(options.pollIntervalMs, Math.max(0, deadline - Date.now())));
+    }
+  } finally {
+    observer.release();
+  }
+
+  throw new Error(
+    `timed out waiting for lock wait on core.managed_systems after ${options.timeoutMs}ms`,
+  );
+}
+
+// PLAN-22 C7b: seed an unlinked voc_attachments row owned by a given actor.
+// Mirrors the helper in modules/attachments/__tests__/get-attachments-download
+// integration test (kept local here to avoid cross-suite imports).
+async function seedAttachment(
+  dbHandle: DbHandle,
+  uploadedByActorId: string,
+  slug: string,
+  mimeType: string,
+): Promise<string> {
+  const id = randomUUID();
+  const storageKey = `${WORKSPACE_ID}/${id}/${slug}-${randomUUID()}.bin`;
+  await dbHandle.pool.query(
+    `insert into voc.voc_attachments
+       (id, voc_id, comment_id, comment_kind, name, size_bytes, mime_type,
+        storage_key, uploaded_by_actor_id, linked_at)
+     values ($1, null, null, null, $2, $3, $4, $5, $6, null)`,
+    [id, `${slug}.bin`, 1024, mimeType, storageKey, uploadedByActorId],
+  );
+  return id;
+}
+
 function postVoc(
   app: FastifyInstance,
   cookie: string,
@@ -112,7 +168,13 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   let reporterActorId: string;
 
   async function cleanupProductTables() {
-    // Order matters: vocs first (FKs to MS/AA), then AA, then MS.
+    // Order matters: voc_attachments first (FKs to vocs via voc_id),
+    // then vocs, then AA, then MS.
+    await dbHandle.pool.query(
+      `delete from voc.voc_attachments
+        where storage_key like $1 || '/%'`,
+      [WORKSPACE_ID],
+    );
     await dbHandle.pool.query(
       `delete from voc.vocs
         where primary_managed_system_id in (
@@ -263,10 +325,17 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       description_rich_content: paragraphDoc('same'),
     };
     const r1 = await postVoc(app, reporter, body, key);
+    const auditBeforeReplay = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
+    );
     const r2 = await postVoc(app, reporter, body, key);
+    const auditAfterReplay = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
+    );
     expect(r1.statusCode).toBe(201);
     expect(r2.statusCode).toBe(201);
     expect(r1.json().id).toBe(r2.json().id);
+    expect(auditAfterReplay.rows[0]?.n).toBe(auditBeforeReplay.rows[0]?.n);
     const count = await dbHandle.pool.query<{ n: number }>(
       `select count(*)::int as n from voc.vocs where primary_managed_system_id = $1`,
       [msId],
@@ -514,11 +583,12 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   //   - node-type / mark-type / shape failures → 'disallowed_node'
   //   - bad attr key → 'disallowed_attr_key'
   //   - bad attr value (URL scheme, UUID, length, etc.) → 'invalid_attr_value'
+  //   - missing required attr → 'missing_required_attr'
   it.each<
     [
       string,
       () => unknown,
-      'rich_content.external_image_forbidden' | 'rich_content.disallowed_node',
+      'rich_content.external_image_forbidden' | 'rich_content.disallowed_node' | 'rich_content.invalid_attr_value',
       string,
     ]
   >([
@@ -557,7 +627,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
           },
         ],
       }),
-      'rich_content.disallowed_node',
+      'rich_content.invalid_attr_value',
       'invalid_attr_value',
     ],
     [
@@ -630,14 +700,14 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       randomUUID(),
     );
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('rich_content.disallowed_node');
+    expect(res.json().code).toBe('rich_content.disallowed_attr');
     expect(res.json().detail?.fields?.[0]?.path).toEqual(['description_rich_content']);
     expect(res.json().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
     expect(res.json().detail?.hint).toMatch(/attrs\.onclick$/);
   });
 
-  // ── 13. attachments: [] accepted ──────────────────────────────────────
-  it('attachments: [] → 201', async () => {
+  // ── 13. attachment_ids: [] accepted ───────────────────────────────────
+  it('attachment_ids: [] → 201 (PLAN-22 C7b)', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-voc-atte', 'AttE MS');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -648,18 +718,83 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         primary_managed_system_id: msId,
         title: 'x',
         description_rich_content: paragraphDoc('a'),
-        attachments: [],
+        attachment_ids: [],
       },
       randomUUID(),
     );
     expect(res.statusCode).toBe(201);
   });
 
-  // ── 14. attachments with ref → 422 unsupported ───────────────────────
-  it('attachments with ref → 422 attachment.unsupported_pending_storage_slice', async () => {
+  // ── 14a. attachment_ids with valid owned unlinked rows → 201 + linked ──
+  it('attachment_ids with valid owned unlinked rows → 201 + linked (PLAN-22 C7b)', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
-    const msId = await createMs(app, admin, 'it-voc-attr', 'AttR MS');
+    const msId = await createMs(app, admin, 'it-voc-attok', 'AttOk MS');
     const reporter = await loginAs(app, 'mock-user-1');
+
+    // Seed two unlinked attachment rows owned by the reporter.
+    const a1 = await seedAttachment(
+      dbHandle,
+      reporterActorId,
+      'attok-1',
+      'image/png',
+    );
+    const a2 = await seedAttachment(
+      dbHandle,
+      reporterActorId,
+      'attok-2',
+      'image/png',
+    );
+
+    const res = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'with attachments',
+        description_rich_content: paragraphDoc('a'),
+        attachment_ids: [a1, a2],
+      },
+      randomUUID(),
+    );
+    expect(res.statusCode).toBe(201);
+    const vocId = res.json().id as string;
+
+    // Both rows now point at voc_id + carry linked_at.
+    const linked = await dbHandle.pool.query<{
+      id: string;
+      voc_id: string;
+      linked_at: Date | null;
+    }>(
+      `select id, voc_id, linked_at from voc.voc_attachments where id = any($1)`,
+      [[a1, a2]],
+    );
+    expect(linked.rows.length).toBe(2);
+    for (const r of linked.rows) {
+      expect(r.voc_id).toBe(vocId);
+      expect(r.linked_at).not.toBeNull();
+    }
+  });
+
+  // ── 14b. attachment_ids owned by another actor → 422 validation.failed ─
+  it('attachment_ids referencing other-actor rows → 422 validation.failed (PLAN-22 C7b)', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-voc-attowner', 'AttOwner MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+
+    // Resolve a DIFFERENT actor id (admin) and seed under that actor.
+    const adminActorRow = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
+      [WORKSPACE_ID],
+    );
+    const adminActorId = adminActorRow.rows[0]?.id;
+    if (!adminActorId) throw new Error('admin actor not seeded');
+    const aWrongOwner = await seedAttachment(
+      dbHandle,
+      adminActorId,
+      'attowner-1',
+      'image/png',
+    );
+
     const res = await postVoc(
       app,
       reporter,
@@ -667,22 +802,65 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         primary_managed_system_id: msId,
         title: 'x',
         description_rich_content: paragraphDoc('a'),
-        attachments: [
-          {
-            id: randomUUID(),
-            name: 'a.png',
-            size_bytes: 1,
-            mime_type: 'image/png',
-            storage_uri: 's3://x/y',
-          },
-        ],
+        attachment_ids: [aWrongOwner],
       },
       randomUUID(),
     );
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('attachment.unsupported_pending_storage_slice');
-    expect(res.json().detail?.fields?.[0]?.path).toEqual(['attachments']);
-    expect(res.json().detail?.fields?.[0]?.code).toBe('unsupported');
+    expect(res.json().code).toBe('validation.failed');
+    expect(res.json().detail?.fields?.[0]?.path).toEqual(['attachment_ids', 0]);
+    expect(res.json().detail?.fields?.[0]?.code).toBe('invalid');
+
+    // Row remains unlinked (tx rolled back).
+    const after = await dbHandle.pool.query<{ voc_id: string | null; linked_at: Date | null }>(
+      `select voc_id, linked_at from voc.voc_attachments where id = $1`,
+      [aWrongOwner],
+    );
+    expect(after.rows[0]?.voc_id).toBeNull();
+    expect(after.rows[0]?.linked_at).toBeNull();
+  });
+
+  // ── 14c. attachment_ids referencing already-linked rows → 422 ─────────
+  it('attachment_ids referencing already-linked rows → 422 validation.failed (PLAN-22 C7b)', async () => {
+    const admin = await loginAs(app, 'mock-admin-1');
+    const msId = await createMs(app, admin, 'it-voc-attlinked', 'AttLinked MS');
+    const reporter = await loginAs(app, 'mock-user-1');
+
+    // Seed an attachment + first VOC creation links it.
+    const a = await seedAttachment(
+      dbHandle,
+      reporterActorId,
+      'attlinked-1',
+      'image/png',
+    );
+    const first = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'first',
+        description_rich_content: paragraphDoc('a'),
+        attachment_ids: [a],
+      },
+      randomUUID(),
+    );
+    expect(first.statusCode).toBe(201);
+
+    // Second create that references the now-linked row → 422.
+    const second = await postVoc(
+      app,
+      reporter,
+      {
+        primary_managed_system_id: msId,
+        title: 'second',
+        description_rich_content: paragraphDoc('b'),
+        attachment_ids: [a],
+      },
+      randomUUID(),
+    );
+    expect(second.statusCode).toBe(422);
+    expect(second.json().code).toBe('validation.failed');
+    expect(second.json().detail?.fields?.[0]?.path).toEqual(['attachment_ids', 0]);
   });
 
   // ── 15. Audit row written on success ──────────────────────────────────
@@ -833,11 +1011,12 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   // the managed_systems row (acquiring FOR NO KEY UPDATE), then we issue
   // POST /vocs in parallel — the create handler reaches lockManagedSystem
   // and BLOCKS on the conflicting row lock. We wait for the handler to
-  // park at the lock, then COMMIT the archive; the unblocked SELECT FOR
-  // UPDATE sees archived_at populated and the service throws
-  // conflict.parent_archived. Without this test a regression that drops
-  // FOR UPDATE from lockManagedSystem would be undetectable in CI; case
-  // #9 only exercises the post-archive read path, not the locking semantics.
+  // park at the lock by polling pg_locks from a third connection, then COMMIT
+  // the archive; the unblocked SELECT FOR UPDATE sees archived_at populated
+  // and the service throws conflict.parent_archived. Without this test a
+  // regression that drops FOR UPDATE from lockManagedSystem would be
+  // undetectable in CI; case #9 only exercises the post-archive read path,
+  // not the locking semantics.
   // Findings: adversarial review API-C-1, DB-B-4.
   it.skipIf(!MIGRATE_URL)(
     'concurrent archive race → 409 conflict.parent_archived (FOR UPDATE)',
@@ -855,6 +1034,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
       if (!adminActorId) throw new Error('admin actor not found');
 
       const racer = await dbHandle.pool.connect();
+      let postPromise: Promise<Awaited<ReturnType<typeof postVoc>>> | null = null;
       try {
         await racer.query('BEGIN');
         // Take a row-level lock (FOR NO KEY UPDATE) on the MS row but do
@@ -869,24 +1049,27 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
 
         // Fire the POST /vocs in parallel — it will park inside the
         // service transaction at lockManagedSystem's FOR UPDATE.
-        const postPromise = postVoc(
-          app,
-          reporter,
-          {
-            primary_managed_system_id: msId,
-            title: 'race',
-            description_rich_content: paragraphDoc('a'),
-          },
-          randomUUID(),
+        postPromise = Promise.resolve(
+          postVoc(
+            app,
+            reporter,
+            {
+              primary_managed_system_id: msId,
+              title: 'race',
+              description_rich_content: paragraphDoc('a'),
+            },
+            randomUUID(),
+          ),
         );
 
-        // Give the POST handler time to reach lockManagedSystem and block
-        // on the row lock. 200ms is generous on a local pg; we cannot
-        // observe the wait directly, but if it has not parked yet the
-        // subsequent COMMIT simply makes the row already-archived which
-        // still yields conflict.parent_archived — the assertion below
-        // remains correct either way.
-        await new Promise((r) => setTimeout(r, 200));
+        // Observe the blocked SELECT FOR UPDATE from a third connection before
+        // releasing the archive transaction. If FOR UPDATE is removed from
+        // lockManagedSystem, this wait times out instead of accepting a
+        // post-archive conflict as equivalent coverage.
+        await waitForManagedSystemLockWait(dbHandle, {
+          timeoutMs: 2000,
+          pollIntervalMs: 25,
+        });
 
         // Release the lock; the parked SELECT FOR UPDATE now proceeds,
         // sees archived_at populated, and the service rejects with
@@ -907,6 +1090,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
         } catch {
           /* ignore */
         }
+        await postPromise?.catch(() => undefined);
         throw err;
       } finally {
         racer.release();

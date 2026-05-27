@@ -5,6 +5,7 @@
 // enum CHECK. Uses DATABASE_URL_MIGRATE so the migrate role can insert into
 // tables that the app role might not reach during boot.
 
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 
@@ -27,6 +28,7 @@ describe.skipIf(!runIntegration)('Slice 3 vocs table', () => {
   let workspaceId: string;
   let msId: string;
   let actorId: string;
+  const transientCounterWorkspaceIds: string[] = [];
 
   beforeAll(async () => {
     handle = createDb(MIGRATE_URL);
@@ -62,6 +64,17 @@ describe.skipIf(!runIntegration)('Slice 3 vocs table', () => {
     await handle.pool.query(
       `delete from voc.vocs where title like 'test-voc-foundation-%'`,
     );
+    if (transientCounterWorkspaceIds.length > 0) {
+      try {
+        await handle.pool.query(
+          'delete from voc.workspace_display_counters where workspace_id = any($1::uuid[])',
+          [transientCounterWorkspaceIds],
+        );
+      } catch {
+        // The pre-0017 schema has no counter table; the red test failure is
+        // reported by assertions below, not cleanup.
+      }
+    }
     await handle.close();
   });
 
@@ -109,6 +122,51 @@ describe.skipIf(!runIntegration)('Slice 3 vocs table', () => {
     const nums = ids.map((s) => Number(s.replace('VOC-', '')));
     expect(nums[1]).toBe(nums[0]! + 1);
     expect(nums[2]).toBe(nums[1]! + 1);
+  });
+
+  it('display_id counters are contiguous and independent per workspace', async () => {
+    const wsA = randomUUID();
+    const wsB = randomUUID();
+    transientCounterWorkspaceIds.push(wsA, wsB);
+
+    const nextDisplayId = async (workspace: string) => {
+      const result = await handle.pool.query<{ display_id: string }>(
+        'select voc.next_voc_display_id($1::uuid) as display_id',
+        [workspace],
+      );
+      return result.rows[0]?.display_id ?? '';
+    };
+
+    const ids = [
+      await nextDisplayId(wsA),
+      await nextDisplayId(wsB),
+      await nextDisplayId(wsA),
+      await nextDisplayId(wsB),
+    ];
+
+    expect([ids[0], ids[2]]).toEqual(['VOC-1000', 'VOC-1001']);
+    expect([ids[1], ids[3]]).toEqual(['VOC-1000', 'VOC-1001']);
+  });
+
+  it('display_id counter serializes concurrent calls within one workspace', async () => {
+    const workspace = randomUUID();
+    transientCounterWorkspaceIds.push(workspace);
+
+    const ids = await Promise.all(
+      Array.from({ length: 12 }, async () => {
+        const result = await handle.pool.query<{ display_id: string }>(
+          'select voc.next_voc_display_id($1::uuid) as display_id',
+          [workspace],
+        );
+        return result.rows[0]?.display_id ?? '';
+      }),
+    );
+
+    const nums = ids
+      .map((id) => Number(id.replace('VOC-', '')))
+      .sort((a, b) => a - b);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(nums).toEqual(Array.from({ length: 12 }, (_, i) => 1000 + i));
   });
 
   it('rejects analytics_area_id whose managed_system_id does not match primary_managed_system_id', async () => {
@@ -424,7 +482,7 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
 
   afterAll(async () => {
     await handle.pool.query(
-      `delete from voc.voc_attachments where storage_uri like 's3://test-task5/%'`,
+      `delete from voc.voc_attachments where storage_key like 's3://test-task5/%'`,
     );
     await handle.pool.query(
       `delete from voc.vocs where title = 'test-voc-foundation-attachments'`,
@@ -432,12 +490,12 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
     await handle.close();
   });
 
-  it('rejects both voc_id and comment_id populated (voc_attachments_subject_xor)', async () => {
+  it('rejects both voc_id and comment_id populated (voc_attachments_subject_not_both, post-0012)', async () => {
     await expect(
       handle.pool.query(
         `insert into voc.voc_attachments (
            voc_id, comment_id, comment_kind,
-           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+           name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
          ) values (
            $1, $2, 'internal_comment',
            'test.pdf', 1024, 'application/pdf',
@@ -446,7 +504,7 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
         [vocId, commentId, actorId],
       ),
     ).rejects.toMatchObject({
-      message: expect.stringContaining('voc_attachments_subject_xor'),
+      message: expect.stringContaining('voc_attachments_subject_not_both'),
     });
   });
 
@@ -455,7 +513,7 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
       handle.pool.query(
         `insert into voc.voc_attachments (
            voc_id, comment_kind,
-           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+           name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
          ) values (
            $1, 'public_update',
            'test.pdf', 1024, 'application/pdf',
@@ -471,7 +529,7 @@ describe.skipIf(!runIntegration)('Slice 3 voc_attachments stub', () => {
   it('accepts voc-scoped attachment (voc_id only, no comment_id/kind)', async () => {
     const result = await handle.pool.query<{ id: string }>(
       `insert into voc.voc_attachments (
-         voc_id, name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         voc_id, name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
        ) values (
          $1, 'attachment.pdf', 2048, 'application/pdf',
          's3://test-task5/voc-scoped.pdf', $2
@@ -630,7 +688,7 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
       migrateHandle.pool.query(
         `insert into voc.voc_attachments (
            comment_id, comment_kind,
-           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+           name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
          ) values (
            $1, 'internal_comment',
            'ghost.pdf', 512, 'application/pdf',
@@ -666,7 +724,7 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
       migrateHandle.pool.query(
         `insert into voc.voc_attachments (
            comment_id, comment_kind,
-           name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+           name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
          ) values (
            $1, 'internal_comment',
            'mismatch.pdf', 512, 'application/pdf',
@@ -679,12 +737,16 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
     });
   });
 
-  // IM-03: archive-over-delete — UPDATE archived_at works; fops_app DELETE is rejected.
-  it('voc_attachments archive write succeeds; fops_app DELETE is rejected', async () => {
+  // IM-03 (revised by migration 0016): archive-over-delete remains the rule
+  // for user-initiated paths and is enforced at the service layer. The DB
+  // GRANT DELETE was restored in 0016 so the internal purge worker
+  // (purge-unlinked-attachments.ts, queue core.attachments_purge) can reclaim
+  // truly orphaned rows whose backing S3 objects are also being reclaimed.
+  it('voc_attachments archive write succeeds (DB-layer assertion)', async () => {
     // Insert an attachment via migrate role.
     const att = await migrateHandle.pool.query<{ id: string }>(
       `insert into voc.voc_attachments (
-         voc_id, name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         voc_id, name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
        ) values (
          $1, 'archive-test.pdf', 1024, 'application/pdf',
          's3://test-0011/archive-test.pdf', $2
@@ -701,25 +763,29 @@ describe.skipIf(!runIntegration)('Slice 3 #12 integrity followups (migration 001
         [actorId, attId],
       ),
     ).resolves.toBeDefined();
+  });
 
-    // fops_app must not be able to DELETE from voc_attachments.
-    const att2 = await migrateHandle.pool.query<{ id: string }>(
+  // 0016: fops_app holds DELETE for the internal purge worker. The
+  // archive-over-delete invariant for user paths is asserted by the
+  // attachments service layer tests, not at the GRANT level.
+  it('voc_attachments DELETE is permitted for fops_app (purge-worker path)', async () => {
+    const att = await migrateHandle.pool.query<{ id: string }>(
       `insert into voc.voc_attachments (
-         voc_id, name, size_bytes, mime_type, storage_uri, uploaded_by_actor_id
+         voc_id, name, size_bytes, mime_type, storage_key, uploaded_by_actor_id
        ) values (
          $1, 'delete-test.pdf', 512, 'application/pdf',
          's3://test-0011/delete-test.pdf', $2
        ) returning id`,
       [vocId, actorId],
     );
-    const att2Id = att2.rows[0]?.id ?? '';
-    expect(att2Id).not.toBe('');
+    const attId = att.rows[0]?.id ?? '';
+    expect(attId).not.toBe('');
 
     await expect(
       appHandle.pool.query(
         `delete from voc.voc_attachments where id = $1`,
-        [att2Id],
+        [attId],
       ),
-    ).rejects.toMatchObject({ message: expect.stringMatching(/permission denied/i) });
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 });

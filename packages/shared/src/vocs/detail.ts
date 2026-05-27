@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { LinkedAttachmentSchema } from './attachment.js';
 import { conversationEntrySchema } from './conversation.js';
 import { reporterFacingStatusEnumSchema, vocListItemSchema } from './list-item.js';
 
@@ -37,6 +38,12 @@ export const vocDetailEnvelopeSchema = vocListItemSchema.extend({
   }),
   // Seed data from voc_permission_decisions_seed_fixture; opaque at this layer.
   permission_decisions: z.record(z.string(), z.unknown()),
+  // PLAN-22 §Bug-1 (2026-05-22): linked attachments on the VOC body. Pre-
+  // existing rows in `voc.voc_attachments` with `voc_id = $vocId AND
+  // archived_at IS NULL`. Always present — defaults to [] when none.
+  // Per-comment attachments live on `conversation_entry.attachments` on each
+  // `conversation_timeline[]` entry.
+  attachments: z.array(LinkedAttachmentSchema),
 });
 export type VocDetailEnvelope = z.infer<typeof vocDetailEnvelopeSchema>;
 

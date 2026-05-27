@@ -70,10 +70,18 @@ const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
 
   // rich_content.*
   'rich_content.disallowed_node':          { tone: 'error', message: '허용되지 않는 콘텐츠 요소가 포함되어 있습니다.' },
+  'rich_content.disallowed_attr':          { tone: 'error', message: '허용되지 않는 콘텐츠 속성이 포함되어 있습니다.' },
+  'rich_content.invalid_attr_value':       { tone: 'error', message: '콘텐츠 속성 값이 올바르지 않습니다.' },
+  'rich_content.missing_required_attr':    { tone: 'error', message: '필수 콘텐츠 속성이 누락되었습니다.' },
   'rich_content.external_image_forbidden': { tone: 'error', message: '외부 이미지 링크는 허용되지 않습니다.' },
 
-  // attachment.*
-  'attachment.unsupported_pending_storage_slice': { tone: 'warning', message: '첨부 파일은 다음 단계에서 지원됩니다.' },
+  // attachment.* (PLAN-22 C5 — pending_storage_slice row retired; BE may still emit it
+  // transiently while C4 lands and it falls back to the generic envelope copy by design).
+  'attachment.too_large':        { tone: 'error', message: '첨부 파일 크기가 허용 한도를 초과했습니다.' },
+  'attachment.unsupported_type': { tone: 'error', message: '허용되지 않는 파일 형식입니다.' },
+
+  // storage.*
+  'storage.unavailable': { tone: 'error', message: '파일 저장소에 접근할 수 없습니다. 잠시 후 다시 시도해 주세요.' },
 
   // reporter_facing_status.*
   'reporter_facing_status.invalid_transition': { tone: 'warning', message: '허용되지 않는 상태 전환입니다.' },

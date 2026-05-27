@@ -33,7 +33,8 @@ import { SourceContextSegmented } from './SourceContextSegmented';
 import { AttachmentDropzone } from './AttachmentDropzone';
 import { ReporterCard } from './ReporterCard';
 import { SeverityDisclaimerCard } from './SeverityDisclaimerCard';
-import { VocDescriptionToolbar } from './VocDescriptionToolbar';
+import { vocDescriptionToolbar } from './VocDescriptionToolbar';
+import { uploadAttachment } from '@/lib/api/attachments';
 
 export interface VocCreateScreenProps {
   initialManagedSystemId?: string;
@@ -53,7 +54,9 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
       description_rich_content: emptyTipTapDoc(),
       analytics_area_id: undefined,
       source_context: 'direct_use',
-      attachments: [],
+      // PLAN-22 C7b: wire shape renamed `attachments` → `attachment_ids`.
+      // C7a will wire the dropzone state through here.
+      attachment_ids: [],
     },
     mode: 'onBlur',
   });
@@ -65,6 +68,17 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
   }, [isDirty, onDirtyChange]);
 
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
+
+  // C6: track server-side attachment ids + whether any row is mid-upload.
+  // We do NOT use react-hook-form state for these because the AttachmentDropzone
+  // is the source of truth (it owns per-row state machine + Idempotency-Keys).
+  const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
+  const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
+  // PLAN-22 §Bug-3 (2026-05-22): error rows block submit AND surface a visible
+  // inline alert above the action bar. Without this users hit "submit looks
+  // disabled with no explanation" when they drop an oversize/unsupported file.
+  const [attachmentErrorCount, setAttachmentErrorCount] = React.useState(0);
+  const hasAttachmentErrors = attachmentErrorCount > 0;
 
   const mutation = useVocCreateMutation({
     idempotencyKey,
@@ -145,7 +159,14 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
   const isSubmitting = mutation.isPending;
 
   function handleSubmit(body: CreateVocRequest): void {
-    mutation.mutate(body);
+    // C6: include attachment_ids[] for successfully-uploaded rows. The
+    // shared CreateVocRequest schema still carries the legacy `attachments`
+    // shape (AttachmentRef[]) which C7 will reconcile to id-only; until then
+    // we attach the id-list as an extra field passed through to the wire.
+    const withAttachments = { ...body, attachment_ids: attachmentIds } as CreateVocRequest & {
+      attachment_ids: string[];
+    };
+    mutation.mutate(withAttachments);
   }
 
   return (
@@ -283,7 +304,22 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                   onChange={(doc) => field.onChange(doc)}
                   placeholder="VOC 내용을 자세히 적어주세요"
                   minHeight={160}
-                  toolbar={VocDescriptionToolbar}
+                  toolbar={vocDescriptionToolbar({
+                    onAttachError: (err) => {
+                      const msg =
+                        err instanceof Error ? err.message : '첨부 업로드에 실패했습니다';
+                      toast.error(msg);
+                    },
+                  })}
+                  onAttach={async (file) => {
+                    const result = await uploadAttachment(file);
+                    return {
+                      attachment_id: result.id,
+                      name: result.name,
+                      size_bytes: result.size_bytes,
+                      mime_type: result.mime_type,
+                    };
+                  }}
                 />
               )}
             />
@@ -294,8 +330,13 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
             )}
           </div>
 
-          {/* Attachments (visible but disabled) */}
-          <AttachmentDropzone testId="attachment-dropzone" />
+          {/* Attachments — active multi-file upload (C6). */}
+          <AttachmentDropzone
+            testId="attachment-dropzone"
+            onChange={setAttachmentIds}
+            onUploadingChange={setAttachmentsUploading}
+            onErrorCountChange={setAttachmentErrorCount}
+          />
         </form>
 
         {/* Right column */}
@@ -304,6 +345,21 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
           <SeverityDisclaimerCard />
         </div>
       </div>
+
+      {/* PLAN-22 §Bug-3: inline submit-blocked alert. Visible above the action
+          bar whenever any attachment row is in error state. Disable-by-itself
+          would surface no explanation — the alert is the user-facing
+          counterpart to the disabled button. Korean copy mirrors the
+          prototype's tone. */}
+      {hasAttachmentErrors && (
+        <div
+          role="alert"
+          data-testid="attachment-submit-blocked-alert"
+          className="sticky bottom-[56px] mx-6 mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
+          첨부 파일에 오류가 있어 제출할 수 없습니다. 빨간색으로 표시된 파일을 제거하거나 다른 파일로 교체해 주세요.
+        </div>
+      )}
 
       {/* Sticky bottom action bar */}
       <div className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex justify-end gap-3">
@@ -318,7 +374,12 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
         <Button
           type="submit"
           form="voc-create-form"
-          disabled={!form.formState.isValid || isSubmitting}
+          disabled={
+            !form.formState.isValid ||
+            isSubmitting ||
+            attachmentsUploading ||
+            hasAttachmentErrors
+          }
         >
           VOC 제출
         </Button>

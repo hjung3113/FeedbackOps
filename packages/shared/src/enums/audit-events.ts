@@ -15,6 +15,7 @@
 
 import { z } from 'zod';
 
+import { attachmentUploadedDetailSchema } from '../audit/attachments.js';
 import {
   vocCreatedDetailSchema,
   vocTriageCommittedDetailSchema,
@@ -55,6 +56,8 @@ export const AUDIT_EVENT_TYPES = [
   'voc_triage_postponed',
   // Slice 3 #17: Reporter pre-triage description edit.
   'voc_description_edited',
+  // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
+  'attachment_uploaded',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -165,4 +168,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   voc_triage_postponed: vocTriagePostponedDetailSchema,
   // Slice 3 #17: Reporter pre-triage description edit.
   voc_description_edited: vocDescriptionEditedDetailSchema,
+  // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
+  attachment_uploaded: attachmentUploadedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

@@ -242,6 +242,13 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
           )`,
       [WORKSPACE_ID],
     );
+    // PLAN-22 C7b: clean voc_attachments before vocs (FK cascade safe but
+    // explicit to also remove unlinked rows seeded by the new tests).
+    await dbHandle.pool.query(
+      `delete from voc.voc_attachments
+        where storage_key like $1 || '/%'`,
+      [WORKSPACE_ID],
+    );
     await dbHandle.pool.query(
       `delete from voc.vocs
         where primary_managed_system_id in (
@@ -341,7 +348,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     const res = await patchDescription(app, reporter, voc.id, {
       title: 'updated title',
       description_rich_content: paragraphDoc('updated content'),
-      attachments: [],
+      attachment_ids: [],
     }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
 
     expect(res.statusCode).toBe(200);
@@ -414,7 +421,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
   });
 
   // Case 4: empty attachments when current is also empty — no diff
-  it('case 4: attachments: [] when current is [] → no attachments diff; if title unchanged → no audit', async () => {
+  it('case 4: attachment_ids: [] when current is [] → no attachments diff; if title unchanged → no audit', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-attach-noop', 'Attach Noop');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -424,10 +431,10 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
       description_rich_content: paragraphDoc('same body'),
     }, randomUUID());
 
-    // Send title same value + attachments: [] — only attachments in body
+    // Send title same value + attachment_ids: [] — only attachments in body
     // but title is unchanged and description is unchanged, so empty diff.
     const res = await patchDescription(app, reporter, voc.id, {
-      attachments: [],
+      attachment_ids: [],
     }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
 
     expect(res.statusCode).toBe(200);
@@ -668,10 +675,11 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
     expect(res.json().code).toBe('validation.failed');
   });
 
-  // Case 15: non-empty attachments
-  it('case 15: non-empty attachments → 422 attachment.unsupported_pending_storage_slice', async () => {
+  // Case 15: attachment_ids linking (PLAN-22 C7b — was: legacy non-empty
+  // attachments → 422 attachment.unsupported_pending_storage_slice).
+  it('case 15: attachment_ids with valid owned unlinked rows → 200 + linked (PLAN-22 C7b)', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
-    const msId = await createMs(app, admin, 'it-pd-attach-unsup', 'Attach Unsupported');
+    const msId = await createMs(app, admin, 'it-pd-attach-link', 'Attach Link');
     const reporter = await loginAs(app, 'mock-user-1');
     const voc = await postVoc(app, reporter, {
       primary_managed_system_id: msId,
@@ -679,18 +687,36 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
       description_rich_content: paragraphDoc('x'),
     }, randomUUID());
 
+    // Seed an unlinked attachment owned by the reporter.
+    const reporterActorRow = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.actors where external_id = 'mock-user-1' and workspace_id = $1`,
+      [WORKSPACE_ID],
+    );
+    const reporterActorId = reporterActorRow.rows[0]?.id;
+    if (!reporterActorId) throw new Error('reporter actor not seeded');
+    const attachmentId = randomUUID();
+    const storageKey = `${WORKSPACE_ID}/${attachmentId}/file-${randomUUID()}.txt`;
+    await dbHandle.pool.query(
+      `insert into voc.voc_attachments
+         (id, voc_id, comment_id, comment_kind, name, size_bytes, mime_type,
+          storage_key, uploaded_by_actor_id, linked_at)
+       values ($1, null, null, null, 'file.txt', 100, 'text/plain', $2, $3, null)`,
+      [attachmentId, storageKey, reporterActorId],
+    );
+
     const res = await patchDescription(app, reporter, voc.id, {
-      attachments: [{
-        id: randomUUID(),
-        name: 'file.txt',
-        size_bytes: 100,
-        mime_type: 'text/plain',
-        storage_uri: 'gs://bucket/file.txt',
-      }],
+      attachment_ids: [attachmentId],
     }, { idempotencyKey: randomUUID(), ifMatch: voc.updated_at });
 
-    expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('attachment.unsupported_pending_storage_slice');
+    expect(res.statusCode).toBe(200);
+
+    // Attachment row linked to the voc.
+    const row = await dbHandle.pool.query<{ voc_id: string; linked_at: Date | null }>(
+      `select voc_id, linked_at from voc.voc_attachments where id = $1`,
+      [attachmentId],
+    );
+    expect(row.rows[0]?.voc_id).toBe(voc.id);
+    expect(row.rows[0]?.linked_at).not.toBeNull();
   });
 
   // ── Sanitizer ───────────────────────────────────────────────────────────
@@ -725,7 +751,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
   });
 
   // Case 17: javascript link rejected
-  it('case 17: description_rich_content with javascript: href → 422 rich_content.disallowed_node', async () => {
+  it('case 17: description_rich_content with javascript: href → 422 rich_content.invalid_attr_value', async () => {
     const admin = await loginAs(app, 'mock-admin-1');
     const msId = await createMs(app, admin, 'it-pd-js-link', 'JS Link');
     const reporter = await loginAs(app, 'mock-user-1');
@@ -757,7 +783,7 @@ describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
 
     expect(res.statusCode).toBe(422);
     const body = res.json();
-    expect(body.code).toBe('rich_content.disallowed_node');
+    expect(body.code).toBe('rich_content.invalid_attr_value');
     // post-#23: fields_code differentiates value-failure from key-failure
     expect(body.detail?.fields?.[0]?.code).toBe('invalid_attr_value');
   });

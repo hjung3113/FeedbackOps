@@ -15,14 +15,14 @@
 // check + idempotency lookup because the outer service already performed
 // both for the parent operation.
 
-import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import type { DatabaseError } from 'pg';
 
 import type { AuditEventType } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
 import { analyticsAreas, managedSystems } from '../../db/schema/core.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
@@ -216,126 +216,107 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
   ): Promise<ServiceResult<AnalyticsAreaDto>> {
     if (!AA_SLUG_REGEX.test(body.slug)) {
       throw new HttpError('validation.failed', 'slug must match lower-kebab pattern', {
-        field: 'slug',
-        pattern: AA_SLUG_REGEX.source,
+        fields: [{ path: ['slug'], code: 'invalid_slug_format' }],
       });
     }
     const requestHash = hashRequestBody(body);
 
     return await db.transaction(async (tx) => {
       if (options.idempotencyKey) {
-        // S-001: serialise concurrent first-time retries with the same
-        // (actor_id, key) so the loser blocks until the winner commits and
-        // then replays the stored response instead of colliding on the
-        // domain unique constraint. See ADR-0015 "Race surface" amendment.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${actor.actor_id}), hashtext(${options.idempotencyKey}))`,
-        );
-        const hit = await idempotencyService.lookup(
+        return idempotencyService.runIdempotent(
           tx,
           actor.actor_id,
           options.idempotencyKey,
           requestHash,
-        );
-        if (hit.kind === 'match') {
-          return { status: hit.status, body: hit.body as AnalyticsAreaDto };
-        }
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with a different request body',
-          );
-        }
-      }
-
-      await requireWorkspaceAdmin(checkService, actor, tx);
-
-      // Parent MS must exist, share the workspace, and not be archived.
-      // ADR-0019 Section E: lock the parent MS row inside this tx so a
-      // concurrent `archiveManagedSystem` (which also UPDATEs this row
-      // and runs the cascade) serialises against us. Without the lock,
-      // `READ COMMITTED` lets the archive tx commit between our parent
-      // read and our AA INSERT, leaving an active AA under an archived
-      // parent — the exact state Section B Q1/Q2 has to clean up.
-      const msRows = await tx
-        .select({
-          id: managedSystems.id,
-          workspaceId: managedSystems.workspaceId,
-          archivedAt: managedSystems.archivedAt,
-        })
-        .from(managedSystems)
-        .where(eq(managedSystems.id, body.managed_system_id))
-        .for('update')
-        .limit(1);
-      const ms = msRows[0];
-      if (!ms || ms.workspaceId !== actor.workspace_id) {
-        throw new HttpError('not_found.record', 'managed_system not found in workspace');
-      }
-      if (ms.archivedAt !== null) {
-        throw new HttpError(
-          'conflict.parent_archived',
-          'cannot register an Analytics Area under an archived Managed System',
-          { managed_system_id: body.managed_system_id },
+          () => registerAnalyticsAreaOnce(tx, actor, body),
         );
       }
 
-      let inserted: Row;
-      try {
-        const rows = await tx
-          .insert(analyticsAreas)
-          .values({
-            workspaceId: actor.workspace_id,
-            managedSystemId: body.managed_system_id,
-            slug: body.slug,
-            name: body.name,
-            ownerTeamId: body.owner_team_id ?? null,
-          })
-          .returning();
-        const row = rows[0];
-        if (!row) {
-          throw new HttpError('internal.unexpected', 'analytics_areas insert returned no row');
-        }
-        inserted = row;
-      } catch (err) {
-        const pgErr = err as DatabaseError;
-        if (pgErr?.code === '23505') {
-          throw new HttpError('conflict.duplicate_slug', 'slug already in use under this MS', {
-            slug: body.slug,
-            managed_system_id: body.managed_system_id,
-          });
-        }
-        throw err;
-      }
-
-      await auditService.record(tx, {
-        workspace_id: actor.workspace_id,
-        actor_id: actor.actor_id,
-        event_type: REGISTERED,
-        subject_type: 'analytics_area',
-        subject_id: inserted.id,
-        summary: `Analytics Area registered: ${inserted.slug}`,
-        detail: {
-          workspace_id: actor.workspace_id,
-          managed_system_id: inserted.managedSystemId,
-          slug: inserted.slug,
-          name: inserted.name,
-          owner_team_id: inserted.ownerTeamId,
-        },
-      });
-
-      const dto = toDto(inserted);
-      if (options.idempotencyKey) {
-        await idempotencyService.record(
-          tx,
-          actor.actor_id,
-          options.idempotencyKey,
-          requestHash,
-          201,
-          dto,
-        );
-      }
-      return { status: 201, body: dto };
+      return registerAnalyticsAreaOnce(tx, actor, body);
     });
+  }
+
+  async function registerAnalyticsAreaOnce(
+    tx: Tx,
+    actor: ActorContext,
+    body: RegisterAnalyticsAreaBody,
+  ): Promise<ServiceResult<AnalyticsAreaDto>> {
+    await requireWorkspaceAdmin(checkService, actor, tx);
+
+    // Parent MS must exist, share the workspace, and not be archived.
+    // ADR-0019 Section E: lock the parent MS row inside this tx so a
+    // concurrent `archiveManagedSystem` (which also UPDATEs this row
+    // and runs the cascade) serialises against us. Without the lock,
+    // `READ COMMITTED` lets the archive tx commit between our parent
+    // read and our AA INSERT, leaving an active AA under an archived
+    // parent — the exact state Section B Q1/Q2 has to clean up.
+    const msRows = await tx
+      .select({
+        id: managedSystems.id,
+        workspaceId: managedSystems.workspaceId,
+        archivedAt: managedSystems.archivedAt,
+      })
+      .from(managedSystems)
+      .where(eq(managedSystems.id, body.managed_system_id))
+      .for('update')
+      .limit(1);
+    const ms = msRows[0];
+    if (!ms || ms.workspaceId !== actor.workspace_id) {
+      throw new HttpError('not_found.record', 'managed_system not found in workspace');
+    }
+    if (ms.archivedAt !== null) {
+      throw new HttpError(
+        'conflict.parent_archived',
+        'cannot register an Analytics Area under an archived Managed System',
+        { fields: [{ path: ['managed_system_id'], code: 'parent_archived' }] },
+      );
+    }
+
+    let inserted: Row;
+    try {
+      const rows = await tx
+        .insert(analyticsAreas)
+        .values({
+          workspaceId: actor.workspace_id,
+          managedSystemId: body.managed_system_id,
+          slug: body.slug,
+          name: body.name,
+          ownerTeamId: body.owner_team_id ?? null,
+        })
+        .returning();
+      const row = rows[0];
+      if (!row) {
+        throw new HttpError('internal.unexpected', 'analytics_areas insert returned no row');
+      }
+      inserted = row;
+    } catch (err) {
+      const pgErr = err as DatabaseError;
+      if (pgErr?.code === '23505') {
+        throw new HttpError('conflict.duplicate_slug', 'slug already in use under this MS', {
+          fields: [{ path: ['slug'], code: 'duplicate_slug' }],
+        });
+      }
+      throw err;
+    }
+
+    await auditService.record(tx, {
+      workspace_id: actor.workspace_id,
+      actor_id: actor.actor_id,
+      event_type: REGISTERED,
+      subject_type: 'analytics_area',
+      subject_id: inserted.id,
+      summary: `Analytics Area registered: ${inserted.slug}`,
+      detail: {
+        workspace_id: actor.workspace_id,
+        managed_system_id: inserted.managedSystemId,
+        slug: inserted.slug,
+        name: inserted.name,
+        owner_team_id: inserted.ownerTeamId,
+      },
+    });
+
+    const dto = toDto(inserted);
+    return { status: 201, body: dto };
   }
 
   async function updateAnalyticsArea(
@@ -363,6 +344,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
           throw new HttpError(
             'conflict.idempotency_key_reuse',
             'Idempotency-Key reused with a different request body',
+            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
           );
         }
       }
@@ -384,6 +366,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         throw new HttpError(
           'conflict.record_archived',
           'analytics_area is archived and cannot be updated',
+          { fields: [{ path: ['id'], code: 'record_archived' }] },
         );
       }
 
@@ -412,6 +395,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
         throw new HttpError(
           'conflict.parent_archived',
           'parent managed_system is archived; analytics_area cannot be updated (ADR-0019 Section B Q1)',
+          { fields: [{ path: ['managed_system_id'], code: 'parent_archived' }] },
         );
       }
 
@@ -507,6 +491,7 @@ export function createAnalyticsAreaService(deps: AnalyticsAreaServiceDeps) {
           throw new HttpError(
             'conflict.idempotency_key_reuse',
             'Idempotency-Key reused with a different request body',
+            { fields: [{ path: ['headers', 'idempotency-key'], code: 'idempotency_key_reuse' }] },
           );
         }
       }

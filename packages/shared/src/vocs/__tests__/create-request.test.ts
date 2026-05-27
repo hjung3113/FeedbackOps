@@ -16,8 +16,36 @@ describe('createVocRequestSchema', () => {
     expect(createVocRequestSchema.parse(VALID).source_context).toBe('direct_use');
   });
 
-  it('accepts empty attachments array', () => {
-    expect(createVocRequestSchema.parse({ ...VALID, attachments: [] }).attachments).toEqual([]);
+  it('accepts empty attachment_ids array (PLAN-22 C7b)', () => {
+    expect(
+      createVocRequestSchema.parse({ ...VALID, attachment_ids: [] }).attachment_ids,
+    ).toEqual([]);
+  });
+
+  it('accepts up to 10 attachment_ids', () => {
+    const ten = Array.from(
+      { length: 10 },
+      (_, i) => `00000000-0000-4000-8000-${(100 + i).toString().padStart(12, '0')}`,
+    );
+    expect(
+      createVocRequestSchema.parse({ ...VALID, attachment_ids: ten }).attachment_ids,
+    ).toHaveLength(10);
+  });
+
+  it('rejects > 10 attachment_ids', () => {
+    const eleven = Array.from(
+      { length: 11 },
+      (_, i) => `00000000-0000-4000-8000-${(200 + i).toString().padStart(12, '0')}`,
+    );
+    expect(() =>
+      createVocRequestSchema.parse({ ...VALID, attachment_ids: eleven }),
+    ).toThrow();
+  });
+
+  it('rejects non-uuid attachment_ids', () => {
+    expect(() =>
+      createVocRequestSchema.parse({ ...VALID, attachment_ids: ['not-a-uuid'] }),
+    ).toThrow();
   });
 
   it('rejects title > 200 chars', () => {

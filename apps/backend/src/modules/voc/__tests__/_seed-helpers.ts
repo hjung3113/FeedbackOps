@@ -259,6 +259,52 @@ export async function insertReporterReply(
   return id;
 }
 
+// PLAN-22 §Bug-1 (2026-05-22): direct insert of a linked attachment row
+// for the GET /vocs/:id and GET /vocs/:id/conversation tests. Bypasses the
+// POST /attachments + linkAttachments pipeline (those are exercised in the
+// attachments suite). `parent` chooses which FK is populated.
+export async function insertLinkedAttachment(
+  dbHandle: DbHandle,
+  workspaceId: string,
+  parent:
+    | { kind: 'voc'; vocId: string }
+    | { kind: 'public_update' | 'reporter_reply' | 'internal_comment'; commentId: string },
+  uploaderActorId: string,
+  opts: { name?: string; sizeBytes?: number; mimeType?: string; archived?: boolean } = {},
+): Promise<{ id: string }> {
+  const {
+    name = 'shot.png',
+    sizeBytes = 1024,
+    mimeType = 'image/png',
+    archived = false,
+  } = opts;
+  const storageKey = `${workspaceId}/${randomUUID()}/${name}`;
+  const vocIdArg = parent.kind === 'voc' ? parent.vocId : null;
+  const commentIdArg = parent.kind === 'voc' ? null : parent.commentId;
+  const commentKindArg = parent.kind === 'voc' ? null : parent.kind;
+  const res = await dbHandle.pool.query<{ id: string }>(
+    `insert into voc.voc_attachments
+       (voc_id, comment_id, comment_kind, name, size_bytes, mime_type,
+        storage_key, uploaded_by_actor_id, linked_at, archived_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)
+     returning id`,
+    [
+      vocIdArg,
+      commentIdArg,
+      commentKindArg,
+      name,
+      sizeBytes,
+      mimeType,
+      storageKey,
+      uploaderActorId,
+      archived ? new Date() : null,
+    ],
+  );
+  const id = res.rows[0]?.id;
+  if (!id) throw new Error('insertLinkedAttachment: no id returned');
+  return { id };
+}
+
 export async function insertInternalComment(
   dbHandle: DbHandle,
   vocId: string,
@@ -382,6 +428,14 @@ export async function cleanupReadTestTables(
          )
       )`,
     [`${msSlugPrefix}%`, workspaceId],
+  );
+
+  // 2b. PLAN-22 C7b — clean voc_attachments rows by storage_key workspace
+  //     prefix. Rows linked via voc_id cascade with the VOC delete below;
+  //     this catches unlinked + comment-linked rows seeded by C7b tests.
+  await dbHandle.pool.query(
+    `delete from voc.voc_attachments where storage_key like $1 || '/%'`,
+    [workspaceId],
   );
 
   // 3. Delete VOCs — conversation tables cascade automatically (ON DELETE CASCADE).

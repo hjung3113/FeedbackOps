@@ -26,6 +26,7 @@
 - Managed System scope is a filter/defaulting context, not duplicated navigation.
 - Use Role Level labels: Admin, Developer, and User. Backend capability checks remain authoritative.
 - Keep Public Update, Reporter Reply, and Internal Comment as separate communication surfaces.
+- `WorkbenchShell.toolbar` is optional. High-density screens (e.g. VOC Triage) may omit it and express route identity via an inline kicker as the first child of the route-owned toolbar. When doing so, the inner toolbar MUST remain 50px (ADR-0020 §2 rhythm). See ADR-0020 §Amendment and `.review/PROTOTYPE-TO-PACK17.md §toolbar-kicker`.
 
 ## Component Intake
 
@@ -40,4 +41,49 @@
 ## Verification
 
 - Test route restore, selected detail panels, blocked permission states, cross-system pending/error flows, and status badge separation when touched.
-- Screenshot-check desktop, tablet, and mobile for layout changes.
+- Screenshot-check desktop 1440 for layout changes. Tablet and mobile are OOS until responsive lands.
+
+## Prototype-First (BLOCKING)
+
+`docs/design-prototype/` is the spec — see root `AGENTS.md` → Prototype Is The Spec. Frontend-specific enforcement:
+
+- **Every FE chunk brief MUST quote the prototype path being implemented** (`screen-<feature>.jsx` + relevant `data.js` keys + baseline screenshot path). A brief without these three is rejected.
+- **First action of any FE chunk:** open the prototype file, open the baseline PNG, write a 5-line "matching plan" listing the shells, sections, copy keys, and interactions being mirrored. Embed that plan in the PR description.
+- **No invention.** If the prototype is silent on a behavior or visual decision, stop and ask — do not fill the gap with framework defaults or personal taste. Document the resolution in PR body.
+
+## Page-Level Pixel-Diff (CP-pixel, BLOCKING)
+
+Every page-level FE issue (route mount, full screen) runs a structured Playwright pixel-diff against the prototype baseline before PR merge. Component-only issues are exempt.
+
+**Steps:**
+
+1. Boot dev server + DB seed; authenticate via mock-login.
+2. Capture target page with Playwright MCP at desktop 1440. Capture both the empty-state and the populated-state if the route has both.
+3. Place impl screenshot side-by-side with `docs/design-prototype/screenshots/final-baselines/<page>.png` in the report HTML.
+4. **Enumerate every visible difference** in a structured table — no eyeballing, no "looks close". Required columns:
+   - **Region** (e.g. `header.title`, `list.row.severity-cell`, `panel.action-footer`)
+   - **Category** (`token` / `spacing` / `hierarchy` / `typography` / `chrome` / `copy` / `interaction-affordance` / `data-shape`)
+   - **Prototype** (verbatim quote / pixel value / token name)
+   - **Impl** (verbatim quote / pixel value / token name)
+   - **Severity** (HIGH = wrong content/copy/hierarchy; MEDIUM = noticeable token/spacing drift; LOW = sub-pixel rhythm)
+   - **Resolution** (`fix-now` / `defer-with-issue#` / `intentional-per-ADR-N`)
+5. **Gating:**
+   - Any HIGH or any **copy** category mismatch → blocks merge. Fix in the same PR.
+   - ≥3 MEDIUM, or any MEDIUM in critical regions (primary action, header, status badges) → fix in the same PR.
+   - ≤2 LOW with no HIGH/MEDIUM → merge OK with inline note.
+6. Recapture after fixes. The merged PR carries the **post-fix** diff report, not the initial one.
+
+**Outputs:**
+
+- `.review/SLICE-N-<issue>-pixel-diff.html` — side-by-side report with the structured diff table embedded.
+- PR body checklist must include: `[ ] pixel-diff table complete (HIGH=N MEDIUM=N LOW=N)` with the actual counts.
+
+**Scope:** only when a prototype baseline exists. If absent, state "no prototype baseline" in PR body, capture a fresh screenshot, and queue a prototype refresh follow-up issue — do not silently ship UI without a baseline.
+
+## Prototype Copy Authority
+
+See root `AGENTS.md` → Prototype Is The Spec for full rules. Frontend reminders:
+
+- Quote labels from `screen-*.jsx` and `data.js` exactly. Korean and English may mix freely per surface; copy the reference verbatim regardless of language.
+- Section headers like `Triage (Read only)` stay as-is.
+- Do not blanket-translate either direction — but per-surface variance (e.g. `BODY` label in detail panel coexisting with `설명` in create form) is allowed when the reference design/screenshot shows it that way.

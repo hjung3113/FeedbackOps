@@ -17,7 +17,7 @@ Every non-2xx response carries this body:
 
 - `code` — stable, dotted, lowercase. Lives in `packages/shared/src/errors/codes.ts` as a Zod enum. Both backend and frontend import it; adding a new code is a single PR that updates the enum and the i18n catalog together.
 - `message` — internal English string for logs, audit summary lines, and developer-facing error overlays. Frontend uses the `code` for user-visible copy via i18next, **not** this string.
-- `detail` — code-specific structured payload. Schema for each `code` is defined alongside the enum so the frontend can narrow types.
+- `detail` — code-specific structured payload. Schema for each `code` is defined alongside the enum so the frontend can narrow types. Backend emitters use a closed `DetailShape` union in `apps/backend/src/lib/errors.ts`; adding a new detail payload shape requires extending that union instead of passing arbitrary records.
 - `requestable_permission` — present only on permission-family errors when surfacing it is safe (see "Permission errors" below).
 
 HTTP status comes from a table mapping `code` family → status:
@@ -39,10 +39,15 @@ A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler r
 
 **Slice 3 #13 adds five codes to the closed enum:**
 - `voc.severity_not_user_settable` (422) — request body contained `severity`; severity is set during triage only.
-- `validation.unexpected_field` (422) — request body contained a forbidden server-resolved field (`reporter_id`, `reporter_facing_status`, `triage_state`, `owner_user_id`, `owner_team_id`, `display_id`). `detail.field` carries the offending path.
-- `rich_content.disallowed_node` (422) — sanitizer rejected a node, mark, or `link.href` scheme outside the per-surface allowlist.
+- `validation.unexpected_field` (422) — request body contained a forbidden server-resolved field (`reporter_id`, `reporter_facing_status`, `triage_state`, `owner_user_id`, `owner_team_id`, `display_id`). `detail.fields` carries the offending path.
+- `rich_content.disallowed_node` (422) — sanitizer rejected a node, mark, structural shape, or leaf-node content outside the per-surface allowlist.
 - `rich_content.external_image_forbidden` (422) — sanitizer rejected an `image` node (Slice 3 prohibits external images on every surface).
 - `attachment.unsupported_pending_storage_slice` (422) — request supplied non-empty `attachments[]`; the attachment upload endpoint ships in a later slice (#22).
+
+**Issue #43 / F-ADR-0012-ATTR-CODE promotes sanitizer attr failures to first-class codes:**
+- `rich_content.disallowed_attr` (422) — sanitizer rejected an unknown attr key on an otherwise-allowed node or mark. `detail.fields[].code` remains `disallowed_attr_key`, and the sanitizer hint carries the attr path.
+- `rich_content.invalid_attr_value` (422) — sanitizer rejected a present attr whose value failed its schema, including invalid URL scheme, invalid UUID, over-length string, or URL credentials. `detail.fields[].code` remains `invalid_attr_value`.
+- `rich_content.missing_required_attr` (422) — sanitizer rejected an otherwise-allowed node or mark because a required attr was absent. `detail.fields[].code` is `missing_required_attr`.
 
 **Slice 3 #16 adds two codes to the closed enum:**
 - `reporter_facing_status.invalid_transition` (422) — the requested `next_reporter_facing_status` is not reachable from the current status per the `reporter_facing_status_transitions` seed table. `detail.reason` carries the human-readable gate text.
@@ -55,7 +60,13 @@ A non-error 4xx with no domain meaning (e.g. malformed JSON before the handler r
 - `unexpected_field` — paired with `validation.unexpected_field` / `voc.severity_not_user_settable` when a server-resolved field appears in the request body.
 - `parent_archived` — paired with `conflict.parent_archived` when the referenced parent (MS or AA) is archived; carries the offending field path so the frontend can bind the message to the picker input.
 - `external_image_forbidden` and `disallowed_node` — paired with the rich-content sanitizer rejections (Slice 3 #13 — `rich_content.*`).
+- `disallowed_attr_key`, `invalid_attr_value`, and `missing_required_attr` — paired with rich-content attr sanitizer rejections (Issue #43 — `rich_content.disallowed_attr`, `rich_content.invalid_attr_value`, `rich_content.missing_required_attr`).
 - `unsupported` — paired with `attachment.unsupported_pending_storage_slice` (Slice 3 #13 — `attachment.*`).
+
+**Issue #26 extends the same `detail.fields` contract to Managed Systems and Analytics Areas:**
+- `invalid_slug_format` — paired with slug-pattern validation on MS/AA create; error details never expose raw regex sources.
+- `duplicate_slug` — paired with `conflict.duplicate_slug` on MS/AA create so create forms can bind the conflict to `slug`.
+- `immutable_field`, `mutually_exclusive`, `record_archived`, and `idempotency_key_reuse` — paired with the corresponding MS/AA 422/409 guards.
 
 ## Code naming
 
@@ -75,6 +86,10 @@ task_request.scope_mismatch
 attachment.too_large
 attachment.unsupported_type
 rich_content.external_image_forbidden
+rich_content.disallowed_node
+rich_content.disallowed_attr
+rich_content.invalid_attr_value
+rich_content.missing_required_attr
 entity_link.cross_workspace_forbidden
 entity_link.relation_type_unknown
 reporter_facing_status.invalid_transition
@@ -100,15 +115,15 @@ The complete list lives in code, not in this ADR; this is the shape it must foll
   "message": "Validation failed for create_voc",
   "detail": {
     "fields": [
-      { "path": "title",            "code": "required",        "message": "title is required" },
-      { "path": "description.body", "code": "max_length",      "message": "description body exceeds 10000 characters" },
-      { "path": "analytics_area_id","code": "out_of_scope",    "message": "Analytics Area must belong to the selected Managed System" }
+      { "path": ["title"],             "code": "required",        "message": "title is required" },
+      { "path": ["description", "body"], "code": "max_length",    "message": "description body exceeds 10000 characters" },
+      { "path": ["analytics_area_id"], "code": "out_of_scope",    "message": "Analytics Area must belong to the selected Managed System" }
     ]
   }
 }
 ```
 
-`path` is a dotted path matching the Zod schema in `packages/shared`. `code` is a smaller, validation-only enum (`required | invalid_type | invalid_format | min_length | max_length | min_value | max_value | unknown_enum | out_of_scope | custom`). React Hook Form maps `path` to its field state.
+`path` is a string array matching the Zod schema path in `packages/shared`. `code` is a smaller, validation-only enum (`required | invalid_type | invalid_format | min_length | max_length | min_value | max_value | unknown_enum | out_of_scope | custom`, plus domain-specific stable codes listed above). React Hook Form maps `path.join('.')` to its field state.
 
 RFC 7807 Problem Details was rejected because it has no native `code` field, no native validation-fields shape, and would have us inventing custom `urn:` types to recover what we already get from a domain-named code.
 
@@ -148,6 +163,7 @@ Domain errors that happen during an audited action emit an audit row with `event
 
 - One envelope shape across the entire API.
 - `code` enum lives in `packages/shared` and is imported by both apps; adding a code is a single PR touching enum, i18n catalog, and (for permission codes) the requestable-permission table.
+- `detail` is a closed backend union covering emitted field errors, rate-limit retry metadata, resource identity, capability/reason payloads, requestable-permission details, stale-write timestamps, and triage-state conflicts.
 - `detail.fields` is the only validation error shape.
 - `requestable_permission` is conditional, never automatic.
 

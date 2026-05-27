@@ -90,17 +90,25 @@ describe('sanitizeTipTap (public-update)', () => {
 describe('sanitizeTipTap (reporter-reply)', () => {
   const surface = 'reporter-reply' as const;
 
-  it('accepts paragraph with bold + italic + code + link marks', () => {
+  it('accepts paragraph with bold + italic + link marks', () => {
     const res = sanitizeTipTap({
       surface,
       doc: doc(p('hello', [
         { type: 'bold' },
         { type: 'italic' },
-        { type: 'code' },
         { type: 'link', attrs: { href: 'https://example.com' } },
       ])),
     });
     expect(res.ok).toBe(true);
+  });
+
+  it('rejects code mark', () => {
+    const res = sanitizeTipTap({
+      surface,
+      doc: doc(p('code', [{ type: 'code' }])),
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe('rich_content.disallowed_node');
   });
 
   it('accepts attachmentRef node', () => {
@@ -125,7 +133,7 @@ describe('sanitizeTipTap (reporter-reply)', () => {
       doc: doc(p('x', [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }])),
     });
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error.code).toBe('rich_content.disallowed_node');
+    if (!res.ok) expect(res.error.code).toBe('rich_content.invalid_attr_value');
   });
 
   it('rejects mention node (not on reporter-reply surface)', () => {
@@ -190,7 +198,7 @@ describe('sanitizeTipTap (internal-comment)', () => {
       doc: doc(p('x', [{ type: 'link', attrs: { href: 'javascript:void(0)' } }])),
     });
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error.code).toBe('rich_content.disallowed_node');
+    if (!res.ok) expect(res.error.code).toBe('rich_content.invalid_attr_value');
   });
 
   it('rejects image node with external_image_forbidden', () => {
@@ -221,6 +229,15 @@ describe('surface allowlist drift assertions', () => {
     for (const key of nodeAttrKeys) {
       expect(allowlist.nodes.has(key),
         `surface '${surface}': nodeAttrs key '${key}' not in nodes set`,
+      ).toBe(true);
+    }
+  });
+
+  it.each(SURFACES)('%s: every leafNodes entry must be in nodes set', (surface) => {
+    const allowlist = SURFACE_ALLOWLISTS[surface];
+    for (const key of allowlist.leafNodes) {
+      expect(allowlist.nodes.has(key),
+        `surface '${surface}': leafNodes entry '${key}' not in nodes set`,
       ).toBe(true);
     }
   });

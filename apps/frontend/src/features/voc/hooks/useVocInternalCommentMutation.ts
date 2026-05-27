@@ -20,6 +20,11 @@ export interface InternalCommentBody {
   body_rich_content: TipTapDoc;
   /** Deduplicated list of mentioned actor IDs. Extracted by extractMentions(). */
   mentions: string[];
+  /**
+   * PLAN-22 C7a (D1): widened body field — FE list of uploaded attachment ids
+   * from <ComposerAttachmentDropzone>. BE schema reconciled in C7b.
+   */
+  attachment_ids?: string[];
 }
 
 export interface InternalCommentVars {

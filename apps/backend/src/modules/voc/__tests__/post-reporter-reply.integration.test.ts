@@ -204,38 +204,81 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
     ).rejects.toThrow(/reporter/i);
   });
 
-  // ── attachments: [{...}] → 422 attachment.unsupported_pending_storage_slice ──
+  // ── attachment_ids linking (PLAN-22 C7b) ─────────────────────────────────
 
-  it('attachments: [{...}] → 422 attachment.unsupported_pending_storage_slice', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-att`, 'Att MS');
-    const voc = await insertVoc(msId, 'Att VOC');
+  it('attachment_ids with valid owned unlinked row → 201 + linked to reporter_reply (PLAN-22 C7b)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-attok`, 'AttOk MS');
+    const voc = await insertVoc(msId, 'AttOk VOC');
+
+    // Seed unlinked attachment owned by the reporter.
+    const attachmentId = randomUUID();
+    const storageKey = `${WORKSPACE_ID}/${attachmentId}/file-${randomUUID()}.pdf`;
+    await dbHandle.pool.query(
+      `insert into voc.voc_attachments
+         (id, voc_id, comment_id, comment_kind, name, size_bytes, mime_type,
+          storage_key, uploaded_by_actor_id, linked_at)
+       values ($1, null, null, null, 'reply-file.pdf', 1024, 'application/pdf', $2, $3, null)`,
+      [attachmentId, storageKey, reporterId],
+    );
 
     const res = await postReporterReply(reporterCookie, voc.id, {
-      body_rich_content: paragraphDoc('body'),
-      attachments: [{ id: randomUUID(), filename: 'file.pdf', mime_type: 'application/pdf', size_bytes: 1024 }],
+      body_rich_content: paragraphDoc('body with attachment'),
+      attachment_ids: [attachmentId],
     });
+    expect(res.statusCode).toBe(201);
+    const replyId = res.json<{ reporter_reply: { id: string } }>().reporter_reply.id;
 
-    expect(res.statusCode).toBe(422);
-    expect(res.json<{ code: string }>().code).toBe('attachment.unsupported_pending_storage_slice');
+    const linked = await dbHandle.pool.query<{
+      comment_id: string;
+      comment_kind: string;
+      linked_at: Date | null;
+    }>(
+      `select comment_id, comment_kind, linked_at from voc.voc_attachments where id = $1`,
+      [attachmentId],
+    );
+    expect(linked.rows[0]?.comment_id).toBe(replyId);
+    expect(linked.rows[0]?.comment_kind).toBe('reporter_reply');
+    expect(linked.rows[0]?.linked_at).not.toBeNull();
   });
 
-  // ── attachments: [] → 201 ──
-
-  it('attachments: [] → 201 (empty array accepted)', async () => {
+  it('attachment_ids: [] → 201 (PLAN-22 C7b empty array accepted)', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-attemt`, 'Att Empty MS');
     const voc = await insertVoc(msId, 'Att Empty VOC');
 
     const res = await postReporterReply(reporterCookie, voc.id, {
-      body_rich_content: paragraphDoc('body with empty attachments'),
-      attachments: [],
+      body_rich_content: paragraphDoc('body with empty attachment_ids'),
+      attachment_ids: [],
     });
 
     expect(res.statusCode).toBe(201);
   });
 
-  // ── body containing attachmentRef node → 422 ──
+  it('attachment_ids referencing other-actor row → 422 validation.failed (PLAN-22 C7b)', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-attwr`, 'AttWr MS');
+    const voc = await insertVoc(msId, 'AttWr VOC');
 
-  it('body with attachmentRef node → 422 attachment.unsupported_pending_storage_slice', async () => {
+    // Seed attachment owned by admin (not the reporter).
+    const aId = randomUUID();
+    const storageKey = `${WORKSPACE_ID}/${aId}/wr-${randomUUID()}.pdf`;
+    await dbHandle.pool.query(
+      `insert into voc.voc_attachments
+         (id, voc_id, comment_id, comment_kind, name, size_bytes, mime_type,
+          storage_key, uploaded_by_actor_id, linked_at)
+       values ($1, null, null, null, 'wr.pdf', 1024, 'application/pdf', $2, $3, null)`,
+      [aId, storageKey, adminActorId],
+    );
+
+    const res = await postReporterReply(reporterCookie, voc.id, {
+      body_rich_content: paragraphDoc('body'),
+      attachment_ids: [aId],
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ code: string }>().code).toBe('validation.failed');
+  });
+
+  // ── body containing attachmentRef node → 201 (PLAN-22 C7b: sanitizer-gated) ──
+
+  it('body with attachmentRef node → 201 (PLAN-22 C7b: sanitizer allows the node, decoration-only)', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-attref`, 'AttRef MS');
     const voc = await insertVoc(msId, 'AttRef VOC');
 
@@ -251,8 +294,10 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
       body_rich_content: bodyWithRef,
     });
 
-    expect(res.statusCode).toBe(422);
-    expect(res.json<{ code: string }>().code).toBe('attachment.unsupported_pending_storage_slice');
+    // PLAN-22 C7b: sanitizer (allowlist) permits attachmentRef on
+    // `reporter-reply` surface. Body-level node carries no link semantics —
+    // link path is envelope `attachment_ids[]` only.
+    expect(res.statusCode).toBe(201);
   });
 
   // ── Sanitizer attr-injection (#23) ────────────────────────────────────
@@ -276,7 +321,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
     });
 
     expect(res.statusCode).toBe(422);
-    expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_node');
+    expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_attr');
     expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.path).toEqual(['body_rich_content']);
     expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
     expect(res.json<{ detail: { hint: string } }>().detail?.hint).toMatch(/attrs\.onclick$/);

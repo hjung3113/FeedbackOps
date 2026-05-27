@@ -37,7 +37,7 @@ const UPDATED_AT = '2026-05-01T00:00:00.000Z';
 const SUCCESS_VARS: EditDescriptionVars = {
   vocId: VOC_ID,
   ifMatch: UPDATED_AT,
-  body: { title: 'Updated title', attachments: [] },
+  body: { title: 'Updated title', attachment_ids: [] },
 };
 
 // ── 1. Success: correct body + headers sent ────────────────────────────────

@@ -9,15 +9,17 @@
 //
 // Mirrors PublicUpdateToolbar button pattern for visual consistency.
 
-import type { TipTapEditor } from '@fops/ui';
-import { cn } from '@fops/ui';
-import { Bold, Italic, Link, Paperclip } from 'lucide-react';
+import { AttachButton, cn, type TipTapEditor } from '@fops/ui';
+import { Bold, Italic, Link } from 'lucide-react';
 import type * as React from 'react';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface ReporterReplyToolbarProps {
   editor: TipTapEditor | null;
+  /** PLAN-22 C8: wired through RichEditor toolbar API; hidden when omitted. */
+  onAttach?: (file: File) => Promise<unknown>;
+  onAttachError?: (err: unknown) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -61,7 +63,11 @@ function ToolbarButton({
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ReporterReplyToolbar({ editor }: ReporterReplyToolbarProps): React.ReactElement {
+export function ReporterReplyToolbar({
+  editor,
+  onAttach,
+  onAttachError,
+}: ReporterReplyToolbarProps): React.ReactElement {
   const disabled = editor === null;
 
   function toggleLink() {
@@ -108,19 +114,20 @@ export function ReporterReplyToolbar({ editor }: ReporterReplyToolbarProps): Rea
         <Link size={14} />
       </ToolbarButton>
 
-      {/* Attach: rendered but DOM disabled (attachment-deferral — ships in #22) */}
-      <button
-        type="button"
-        disabled={true}
-        title="Attach (not yet available)"
-        aria-label="Attach"
-        className={cn(
-          'inline-flex items-center justify-center h-7 w-7 rounded text-text-secondary',
-          'disabled:cursor-not-allowed disabled:opacity-40',
-        )}
-      >
-        <Paperclip size={14} />
-      </button>
+      {/* Attach — PLAN-22 C8. Wired through RichEditor toolbar API. */}
+      {onAttach ? (
+        <AttachButton
+          data-testid="reporter-reply-attach"
+          disabled={disabled}
+          onPick={async (file) => {
+            try {
+              await onAttach(file);
+            } catch (e) {
+              onAttachError?.(e);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -399,7 +399,7 @@ POST /vocs/:id/internal-comments
 | Audit event | `voc_description_edited` with `changes: { title?: {from, to}, description_rich_content?: {from_hash, to_hash}, attachments?: {from, to} }` (per-field shape; non-empty required). |
 | Idempotency hash | Includes `vocId`, `ifMatch`, route, and request body — a retry with a refreshed `If-Match` (post-409 refetch) produces a new hash; client must mint a fresh `Idempotency-Key` for each distinct `If-Match` value (same caveat as `PATCH /vocs/:id`). |
 | Rate limit | 30/min per actor — dedicated `reporterEdit` bucket, separate from the 10/min `mutation` tier. |
-| Error codes | `validation.failed` · `validation.unexpected_field` · `permission.denied` · `not_found.record` · `conflict.triage_already_committed` (new in #17) · `conflict.stale_write` · `conflict.record_archived` · `conflict.parent_archived` · `conflict.idempotency_key_reuse` · `rich_content.disallowed_node` · `rich_content.external_image_forbidden` · `attachment.unsupported_pending_storage_slice` · `rate_limited.actor` |
+| Error codes | `validation.failed` · `validation.unexpected_field` · `permission.denied` · `not_found.record` · `conflict.triage_already_committed` (new in #17) · `conflict.stale_write` · `conflict.record_archived` · `conflict.parent_archived` · `conflict.idempotency_key_reuse` · `rich_content.disallowed_node` · `rich_content.disallowed_attr` · `rich_content.invalid_attr_value` · `rich_content.missing_required_attr` · `rich_content.external_image_forbidden` · `attachment.unsupported_pending_storage_slice` · `rate_limited.actor` |
 
 ### VOC Cluster
 
@@ -475,16 +475,54 @@ GET /analytics-areas
 POST /analytics-areas
 PATCH /analytics-areas/:id
 POST /analytics-areas/:id/archive
+GET /actors?workspace=current
+GET /actors/resolve?actor_ids=<csv-uuid>&team_ids=<csv-uuid>
+```
+
+`GET /actors/resolve` (Slice 3 #87) — workspace-scoped bulk identity lookup for
+owner chips. Any session may read (low sensitivity, like `GET /actors`). Each id
+must be a UUID; up to 200 per list. Ids outside the caller's workspace or
+unknown are silently dropped (no cross-workspace identity leak). Empty/absent
+lists yield empty arrays. Response:
+
+```json
+{
+  "actors": [{ "id": "uuid", "display_name": "string", "email": "string" }],
+  "teams": [{ "id": "uuid", "name": "string" }]
+}
 ```
 
 ### Permission
 
 ```text
 POST /permission-requests
-GET /permission-requests
+GET /permission-requests          # admin-only workspace list (#87)
+GET /permission-requests/mine     # caller's open requests
 POST /permission-requests/:id/approve
 POST /permission-requests/:id/reject
 POST /permission-requests/:id/revoke
+```
+
+`GET /permission-requests` (Slice 3 #87) — admin-only workspace-wide list of
+open (`pending` | `needs_more_info`) requests, plus a `count`. Guarded by the
+`workspace.admin` capability (mirrors the managed-systems mutation gate); a
+non-admin caller receives `permission.denied` → `403`. Response:
+
+```json
+{
+  "requests": [
+    {
+      "id": "uuid",
+      "requester_actor_id": "uuid",
+      "requested_capability": "string",
+      "requested_managed_system_id": "uuid | null",
+      "reason": "string",
+      "status": "pending | needs_more_info",
+      "created_at": "iso8601"
+    }
+  ],
+  "count": 0
+}
 ```
 
 ### Entity Links

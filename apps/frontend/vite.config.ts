@@ -37,6 +37,13 @@ export default defineConfig({
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
       },
+      // Slice 3 #22: POST /attachments (multipart upload) + GET
+      // /attachments/:id/download (streaming). No FE-route collision; forward
+      // root path unconditionally.
+      '/attachments': 'http://127.0.0.1:3011',
+      // Post-#21 drift fix: GET /actors?workspace=current for Triage
+      // OwnerPicker. No FE-route collision; forward root path unconditionally.
+      '/actors': 'http://127.0.0.1:3011',
     },
   },
 });

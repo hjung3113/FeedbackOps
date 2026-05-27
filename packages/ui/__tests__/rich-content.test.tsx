@@ -2,6 +2,12 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { RichContentRenderer, RichEditor, type TipTapDoc } from '../src/index';
 
+// UUIDs are required by the shared allowlist (PLAN-22 C9) — the FE sanitizer
+// drops mention/attachmentRef nodes whose required id attrs fail UUID shape,
+// matching the server contract. Test fixtures use real UUIDs accordingly.
+const ACTOR_UUID = '11111111-1111-1111-1111-111111111111';
+const ATTACHMENT_UUID = '22222222-2222-2222-2222-222222222222';
+
 const sampleDoc: TipTapDoc = {
   type: 'doc',
   content: [
@@ -9,7 +15,7 @@ const sampleDoc: TipTapDoc = {
       type: 'paragraph',
       content: [
         { type: 'text', text: 'Hello ' },
-        { type: 'mention', attrs: { actor_id: 'u1' } },
+        { type: 'mention', attrs: { actor_id: ACTOR_UUID } },
         { type: 'text', text: ' world.' },
       ],
     },
@@ -18,15 +24,15 @@ const sampleDoc: TipTapDoc = {
 
 describe('RichEditor', () => {
   it('mounts with surface prop and renders initial value', () => {
-    render(<RichEditor surface="voc-description" value={sampleDoc} />);
-    const root = document.querySelector('[data-surface="voc-description"]');
+    render(<RichEditor surface="internal-comment" value={sampleDoc} />);
+    const root = document.querySelector('[data-surface="internal-comment"]');
     expect(root).toBeInTheDocument();
   });
 
   it('respects disabled prop', () => {
-    render(<RichEditor surface="voc-description" value={sampleDoc} disabled />);
+    render(<RichEditor surface="internal-comment" value={sampleDoc} disabled />);
     // Editor instance is editable=false; assertion via attribute
-    const root = document.querySelector('[data-surface="voc-description"]');
+    const root = document.querySelector('[data-surface="internal-comment"]');
     expect(root).toBeInTheDocument();
     // The ProseMirror div should have contenteditable=false when disabled
     const editorDiv = root?.querySelector('[contenteditable]');
@@ -57,14 +63,15 @@ describe('RichEditor', () => {
 describe('RichContentRenderer mode handling', () => {
   it('mode="reporter_visible" strips mention nodes', () => {
     render(<RichContentRenderer doc={sampleDoc} mode="reporter_visible" />);
-    expect(screen.queryByText(/@u1/)).not.toBeInTheDocument();
+    // Strict mode strips the mention node entirely; only literal text survives.
+    expect(document.querySelector('[data-type="mention"]')).toBeNull();
     expect(screen.getByText(/Hello/)).toBeInTheDocument();
     expect(screen.getByText(/world/)).toBeInTheDocument();
   });
 
   it('mode="internal" preserves mention nodes', () => {
     render(<RichContentRenderer doc={sampleDoc} mode="internal" />);
-    expect(screen.getByText(/@u1/)).toBeInTheDocument();
+    expect(document.querySelector('[data-type="mention"]')).toBeInTheDocument();
   });
 });
 
@@ -75,7 +82,7 @@ describe('attachmentRef + mention extension round-trip', () => {
       content: [
         {
           type: 'attachmentRef',
-          attrs: { id: 'a1' },
+          attrs: { id: ATTACHMENT_UUID },
         },
       ],
     };
@@ -83,7 +90,7 @@ describe('attachmentRef + mention extension round-trip', () => {
     const el = document.querySelector('[data-type="attachment-ref"]');
     expect(el).toBeInTheDocument();
     // Canonical attrs: only id. No name, sizeBytes, mimeType (display via runtime registry #19+).
-    expect(el?.getAttribute('id')).toBe('a1');
+    expect(el?.getAttribute('id')).toBe(ATTACHMENT_UUID);
     expect(el?.getAttribute('data-size-bytes')).toBeNull();
     expect(el?.getAttribute('name')).toBeNull();
     expect(el?.getAttribute('mimetype')).toBeNull();
@@ -94,7 +101,7 @@ describe('attachmentRef + mention extension round-trip', () => {
     const el = document.querySelector('[data-type="mention"]');
     expect(el).toBeInTheDocument();
     // Canonical: actor_id only. Label comes from runtime user registry (#19+).
-    expect(el?.textContent).toContain('@u1');
+    expect(el?.getAttribute('actor_id')).toBe(ACTOR_UUID);
     expect(el?.getAttribute('label')).toBeNull();
   });
 });

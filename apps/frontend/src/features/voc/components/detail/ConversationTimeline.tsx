@@ -34,18 +34,18 @@ export function ConversationTimeline({ voc }: ConversationTimelineProps): React.
     <div>
       <PanelSectionTitle>대화</PanelSectionTitle>
       <Tabs defaultValue="public" className="w-full">
-        <TabsList className="mx-4">
+        <TabsList>
           <TabsTrigger value="public">공개</TabsTrigger>
           <TabsTrigger value="internal">내부</TabsTrigger>
         </TabsList>
-        <TabsContent value="public" className="px-4">
+        <TabsContent value="public">
           <PublicTimeline
             vocId={voc.id}
             inline={publicEntries}
             hasMore={voc.conversation_page.has_more}
           />
         </TabsContent>
-        <TabsContent value="internal" className="px-4">
+        <TabsContent value="internal">
           <InternalTimeline
             vocId={voc.id}
             inline={internalEntries}

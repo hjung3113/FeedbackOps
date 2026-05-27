@@ -13,6 +13,16 @@ Four small but load-bearing decisions that the engineering skills and reviewers 
 - Per-Actor Sensitive Permission use:   5 requests / minute (Task Request Self-Approval, Permission Request decisions)
 ```
 
+Authenticated rate-limit buckets are resolved in `onRequest` from the opaque
+session cookie via a read-only session lookup, because `req.session` is only
+populated later by route `preHandler`s. The lookup is fronted by a per-process
+LRU cache keyed by `sha256(session_cookie)` with a 30-second TTL and 1000-entry
+cap, so hot authenticated traffic does not spend one pool checkout per request
+before route handlers run. Raw session tokens are not cache keys. If that lookup
+fails or the session is not active, rate limiting falls back to the per-IP
+anonymous bucket and logs a warn event instead of failing the request. Cross-pod
+session-revoke staleness is bounded by the 30-second cache TTL.
+
 Limit responses use the ADR-0012 envelope: `{ code: 'rate_limited.actor', message: '...', detail: { retry_after_seconds } }`. The response also carries `Retry-After` so generic HTTP clients honor it.
 
 Rate-limit decisions are **not** audited (volume; would drown the audit log). They are logged at `warn` level so spikes are still visible in the company log collector (per ADR-0013).
@@ -91,6 +101,24 @@ A periodic pg-boss job purges rows older than 24h. The header is honored on all 
 AGENTS.md already states "application services own transactions, permissions, audits, **idempotency**, and cross-system commands." This ADR is the implementation contract for that responsibility.
 
 DB-constraint-only idempotency was rejected: it surfaces as `409 conflict.duplicate_key` to clients that legitimately retry on network timeout, forcing each client to re-handle the conflict differently per endpoint.
+
+### Response-body cap (DB-C-1 amendment, 2026-05-24)
+
+`core.idempotency_keys.response_body` is a cache field, not durable domain
+history. To keep the mutation hot path from turning rich VOC envelopes into
+unbounded OLTP table growth, the application caps cached response bodies at
+16 KiB (`16 * 1024` serialized JSON bytes).
+
+If the response exceeds the cap, the mutation still succeeds, but the
+idempotency row stores an explicit skipped-body marker instead of the full
+body. The stored request hash is also marked as skipped so a later retry with
+the same idempotency key follows the existing `409 conflict.idempotency_key_reuse`
+path rather than replaying an incomplete response. Normal-size responses keep
+the original request hash and continue to replay verbatim.
+
+The retention policy remains the existing pg-boss `core.idempotency_purge`
+schedule: delete rows where `created_at < now() - interval '24 hours'`.
+No schema change is required for this amendment.
 
 ### Race surface (S-001 amendment, 2026-05-17)
 

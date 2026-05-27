@@ -1,5 +1,6 @@
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import { errorCodeSchema } from '@fops/shared';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
@@ -14,6 +15,7 @@ import { z } from 'zod';
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
+import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import { SESSION_COOKIE_NAME } from './middleware/require-session.js';
 import {
@@ -21,6 +23,7 @@ import {
   createAnalyticsAreaService,
 } from './modules/analytics-areas/index.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
+import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
@@ -40,6 +43,10 @@ import {
   createVocService,
   vocRoutes,
 } from './modules/voc/index.js';
+import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
+import { createAttachmentsService } from './modules/attachments/service.js';
+import { getStorage } from './lib/storage/factory.js';
+import type { StorageBackend } from './lib/storage/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -52,6 +59,12 @@ export interface BuildServerOptions {
    * background jobs may omit it.
    */
   boss?: PgBoss;
+  /**
+   * Optional storage backend override. Used by integration tests to inject a
+   * mock instead of constructing the real S3-compat backend from env. In
+   * production this is undefined and `getStorage()` builds the singleton.
+   */
+  storage?: StorageBackend;
 }
 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
@@ -134,6 +147,16 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // ── @fastify/cookie ─ session cookie codec ──────────────────────────
   await app.register(cookie);
 
+  // ── @fastify/multipart ─ PLAN-22 C3a ────────────────────────────────
+  // 25 MiB cap (D-06). Limits are global — only POST /attachments accepts
+  // multipart today; other routes still validate as JSON.
+  await app.register(multipart, {
+    limits: {
+      fileSize: MAX_ATTACHMENT_BYTES,
+      files: 1,
+    },
+  });
+
   // ── @fastify/rate-limit ─ ADR-0015:7-18 ─────────────────────────────
   // Postgres-backed via our custom store. The global tier is per-Actor when
   // authenticated (100/min) or per-IP when not (50/min); the route-level
@@ -141,12 +164,47 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // routes that need them. `/health` is exempt via `allowList`.
   const sessionService = createSessionService({ db: dbHandle.db, workspaceId });
 
+  // Adversarial review API-C-2: `@fastify/rate-limit` runs as an
+  // `onRequest` hook, which fires BEFORE the `requireSession` preHandler
+  // that populates `req.session`. The prior keyGenerator therefore always
+  // observed `undefined` and fell back to `req.ip`, collapsing all users
+  // behind a shared NAT into one bucket. We resolve the session cookie
+  // inline before bucket selection so the per-actor bucket is the
+  // workspace+actor identity when a valid session cookie is present, and
+  // `req.ip` only for unauthenticated traffic.
+  const rateLimitActorCache = createRateLimitActorCache();
+  const resolveRateLimitActorKey = async (req: FastifyRequest): Promise<string> => {
+    const raw = req.cookies?.[SESSION_COOKIE_NAME];
+    const token = typeof raw === 'string' ? raw : undefined;
+    if (token) {
+      const cachedIdentity = rateLimitActorCache.get(token);
+      if (cachedIdentity) {
+        return `${cachedIdentity.workspace_id}:${cachedIdentity.actor_id}`;
+      }
+
+      try {
+        const identity = await sessionService.lookupActorIdByToken(token);
+        if (identity) {
+          rateLimitActorCache.set(token, identity);
+          return `${identity.workspace_id}:${identity.actor_id}`;
+        }
+      } catch (err) {
+        req.log?.warn?.({ err }, 'rate-limit actor lookup failed; falling back to ip');
+      }
+    }
+    return req.ip;
+  };
+
+  const actorAwareKeyGenerator = async (req: FastifyRequest): Promise<string> => {
+    return resolveRateLimitActorKey(req);
+  };
+
   await app.register(rateLimit, {
     global: true,
-    max: (req) => (req.session?.actor_id ? 100 : 50),
+    max: (req, key) => (key === req.ip ? 50 : 100),
     timeWindow: '1 minute',
     allowList: (req) => req.url === '/health',
-    keyGenerator: (req) => req.session?.actor_id ?? req.ip,
+    keyGenerator: actorAwareKeyGenerator,
     store: createPgRateLimitStore(dbHandle.pool, 'global') as never,
     errorResponseBuilder: (_req, ctx) => ({
       code: 'rate_limited.actor',
@@ -170,40 +228,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // mutation handlers will attach in later slices. Slice 1 #3 has no
   // consumer of the sensitive tier — the plumbing is in place so #4/#5
   // pick it up without touching server.ts again.
-  //
-  // Adversarial review API-C-2: `@fastify/rate-limit` runs as an
-  // `onRequest` hook, which fires BEFORE the `requireSession` preHandler
-  // that populates `req.session`. The prior keyGenerator therefore always
-  // observed `undefined` and fell back to `req.ip`, collapsing all users
-  // behind a shared NAT into one bucket. We resolve the session cookie
-  // inline (one DB lookup per mutation) so the per-actor bucket is the
-  // actor's actor_id when a valid session cookie is present, and `req.ip`
-  // only for unauthenticated traffic.
-  const mutationKeyGenerator = async (req: FastifyRequest): Promise<string> => {
-    const raw = req.cookies?.[SESSION_COOKIE_NAME];
-    const token = typeof raw === 'string' ? raw : undefined;
-    if (token) {
-      try {
-        const actorId = await sessionService.lookupActorIdByToken(token);
-        if (actorId) return actorId;
-      } catch (err) {
-        req.log?.warn?.({ err }, 'rate-limit actor lookup failed; falling back to ip');
-      }
-    }
-    return req.ip;
-  };
-
   app.decorate('rateLimitConfig', {
     mutation: {
       max: 10,
       timeWindow: '1 minute',
-      keyGenerator: mutationKeyGenerator,
+      keyGenerator: actorAwareKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'mutation') as never,
     },
     sensitive: {
       max: 5,
       timeWindow: '1 minute',
-      keyGenerator: mutationKeyGenerator,
+      keyGenerator: actorAwareKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'sensitive') as never,
     },
     // TODO(F18 follow-up): add admin bypass for the read tier once the
@@ -211,7 +246,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     read: {
       max: 300,
       timeWindow: '1 minute',
-      keyGenerator: mutationKeyGenerator,
+      keyGenerator: actorAwareKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'read') as never,
     },
     // Slice 3 #17 — Reporter pre-triage edit (PATCH /vocs/:id/description).
@@ -221,8 +256,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     reporterEdit: {
       max: 30,
       timeWindow: '1 minute',
-      keyGenerator: mutationKeyGenerator,
+      keyGenerator: actorAwareKeyGenerator,
       store: createPgRateLimitStore(dbHandle.pool, 'reporter_edit') as never,
+    },
+    // PLAN-22 C3a — POST /attachments. 20/min per actor. Admin bypass is a
+    // documented follow-up: it depends on the same admin-role helper called
+    // out for the read tier above; once that lands, both tiers gain `skip`.
+    attachmentMutation: {
+      max: 20,
+      timeWindow: '1 minute',
+      keyGenerator: actorAwareKeyGenerator,
+      store: createPgRateLimitStore(dbHandle.pool, 'attachment_mutation') as never,
     },
   });
 
@@ -313,6 +357,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     nodeEnv: config.NODE_ENV,
   });
 
+  // ── GET /actors — workspace actor list (post-#21 drift fix) ─────────────
+  // FE Triage OwnerPicker (`useWorkspaceActors`) calls this; the route was
+  // never registered alongside #21's FE work, leaving the assignee picker
+  // silently empty in dev. Registered after authRoutes so requireSession is
+  // available.
+  await app.register(listActorsRoutes, {
+    db: dbHandle.db,
+    sessionService,
+    workspaceId,
+  });
+
   // ── Permissions module — slice 1 issue #4 ───────────────────────────────
   // Registered AFTER auth so requireSession is available on its routes.
   const checkService = createCheckService({ db: dbHandle.db });
@@ -393,6 +448,25 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
       reporterEdit: app.rateLimitConfig.reporterEdit,
+    },
+  });
+
+  // ── Attachments module — Slice 3 #22 / PLAN-22 C3a + C3b ────────────────
+  const attachmentsStorage = opts.storage ?? getStorage();
+  const attachmentsService = createAttachmentsService({
+    storage: attachmentsStorage,
+    auditService,
+    db: dbHandle.db,
+    vocReadService,
+  });
+  await app.register(attachmentsRoutes, {
+    db: dbHandle.db,
+    sessionService,
+    attachmentsService,
+    idempotencyService,
+    workspaceId,
+    rateLimitConfig: {
+      attachmentMutation: app.rateLimitConfig.attachmentMutation,
     },
   });
 

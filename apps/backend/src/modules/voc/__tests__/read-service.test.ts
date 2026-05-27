@@ -86,6 +86,10 @@ vi.mock('../repo-read.js', async (importOriginal) => {
     selectConversationPage: vi.fn(),
     outOfScopeSummary: vi.fn(),
     selectPermissionDecisionsSeed: vi.fn(),
+    // PLAN-22 §Bug-1 (2026-05-22): new attachment read projections.
+    selectVocAttachments: vi.fn(),
+    selectAttachmentsForComments: vi.fn(),
+    selectVocAttachmentCounts: vi.fn(),
   };
 });
 
@@ -127,6 +131,9 @@ describe('listVocs', () => {
       nextCursor: null,
     });
     vi.mocked(repoRead.outOfScopeSummary).mockResolvedValue(null);
+    // PLAN-22 §Bug-1: default empty maps so tests not explicitly testing
+    // attachments don't blow up on undefined.
+    vi.mocked(repoRead.selectVocAttachmentCounts).mockResolvedValue(new Map());
   });
 
   it('view=my with managed_system_id=all → 422', async () => {
@@ -310,6 +317,9 @@ describe('getVocDetail', () => {
       nextCursor: null,
     });
     vi.mocked(repoRead.selectPermissionDecisionsSeed).mockResolvedValue(null);
+    // PLAN-22 §Bug-1: default to empty so unrelated tests don't crash.
+    vi.mocked(repoRead.selectVocAttachments).mockResolvedValue([]);
+    vi.mocked(repoRead.selectAttachmentsForComments).mockResolvedValue(new Map());
     vi.mocked(transitions.nextReporterStates).mockResolvedValue({
       allowed: ['reviewing'],
       forbidden: {},
@@ -471,6 +481,8 @@ describe('getConversation', () => {
       hasMore: false,
       nextCursor: null,
     });
+    // PLAN-22 §Bug-1: default empty.
+    vi.mocked(repoRead.selectAttachmentsForComments).mockResolvedValue(new Map());
   });
 
   it('403 when actor in summary-only state (effectiveScope only)', async () => {
@@ -546,6 +558,23 @@ describe('getConversation', () => {
         query: { cursor: 'not-valid-json!!!', limit: 50 },
       }),
     ).rejects.toMatchObject({ code: 'validation.failed' });
+  });
+
+  it('PLAN-22 Bug-2: first-page (no cursor) does not throw and forwards undefined to repo', async () => {
+    const convMock = vi.mocked(repoRead.selectConversationPage);
+    convMock.mockClear();
+    convMock.mockResolvedValue({ entries: [], hasMore: false, nextCursor: null });
+
+    const { svc } = makeService();
+    const result = await svc.getConversation({
+      actor,
+      vocId: baseRow.id,
+      query: { limit: 50 },
+    });
+    expect(result.items).toEqual([]);
+    expect(convMock).toHaveBeenCalledTimes(1);
+    // cursor must NOT be present on the repo args when undefined at the wire.
+    expect(convMock.mock.calls[0]![1].cursor).toBeUndefined();
   });
 
   it('M5: cursor with valid base64+JSON but wrong field types → 422 invalid_cursor', async () => {

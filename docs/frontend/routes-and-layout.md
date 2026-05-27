@@ -79,6 +79,12 @@ Admin:
 - Primary nav includes Admin, Managed System Registry, Analytics Areas, Permission Requests, and settings.
 ```
 
+Current sidebar entries are grouped with the prototype section labels `VOC`,
+`VIEWS`, and `MANAGED SYSTEMS`. The current slice exposes only Inbox and + New
+VOC under `VOC`, Triage and My VOCs under `VIEWS`, and Managed Systems and
+Analytics Areas under `MANAGED SYSTEMS`; count badges, global Managed System
+scope selection, and future work routes are outside this sidebar slice.
+
 Routes may exist without being visible in navigation. Direct route access must restore AppShell and render allowed content, summary-visible content, request-access state, not_found, or permission_denied according to backend response.
 
 ## Home Queue Contract

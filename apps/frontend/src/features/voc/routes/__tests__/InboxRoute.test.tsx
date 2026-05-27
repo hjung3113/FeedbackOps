@@ -7,9 +7,9 @@
 //   - clicking a row calls navigate with `selected` URL param
 //   - VocDetailPanel is mounted when `selected` is set
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -55,6 +55,7 @@ const MOCK_VOC_ITEMS = [
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     similar_count: 0,
+    attachment_count: 0,
   },
   {
     id: '00000000-0000-0000-0000-000000000002',
@@ -72,6 +73,7 @@ const MOCK_VOC_ITEMS = [
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     similar_count: 0,
+    attachment_count: 0,
   },
   {
     id: '00000000-0000-0000-0000-000000000003',
@@ -89,6 +91,7 @@ const MOCK_VOC_ITEMS = [
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     similar_count: 0,
+    attachment_count: 0,
   },
 ];
 
@@ -208,9 +211,9 @@ describe('useInboxRoute', () => {
     await waitFor(() => {
       expect(screen.getByTestId('voc-detail-panel-stub')).toBeInTheDocument();
     });
-    expect(
-      screen.getByTestId('voc-detail-panel-stub').getAttribute('data-voc-id'),
-    ).toBe('00000000-0000-0000-0000-000000000001');
+    expect(screen.getByTestId('voc-detail-panel-stub').getAttribute('data-voc-id')).toBe(
+      '00000000-0000-0000-0000-000000000001',
+    );
   });
 
   it('clears VocDetailPanel when selected is not set', async () => {
@@ -227,7 +230,8 @@ describe('useInboxRoute', () => {
     render(<InboxTestHarness view="inbox" />);
 
     await waitFor(() => {
-      expect(screen.getByText('미트리아지')).toBeInTheDocument();
+      // Tab labels mirror the prototype (English): Untriaged / High / Unassigned / Similar / No link.
+      expect(screen.getByText('Untriaged')).toBeInTheDocument();
     });
   });
 
@@ -237,6 +241,51 @@ describe('useInboxRoute', () => {
 
     await waitFor(() => {
       expect(screen.getByText('My VOCs')).toBeInTheDocument();
+    });
+  });
+
+  // ── Filter-key round-trip regression (#89) ──────────────────────────────────
+  //
+  // Bug: the status filter category declared key `filter.reporter_facing_status`
+  // while the URL read/write used `filter.reporterStatus`, so the URL key and the
+  // ListFilterButton key were two different names bridged by hand-rolled
+  // translation. This test pins BOTH directions to the single unified key
+  // `filter.reporterStatus`:
+  //   (read)  a status value in the URL marks the matching popover option checked
+  //   (write) toggling a status option writes back under `filter.reporterStatus`
+  describe('status filter-key round-trip', () => {
+    it('reads filter.reporterStatus from the URL into the filter popover (checked)', async () => {
+      searchState = { view: 'inbox', 'filter.reporterStatus': 'reviewing' };
+      render(<InboxTestHarness view="inbox" />);
+
+      // Open the filter popover.
+      fireEvent.click(await screen.findByRole('button', { name: /필터/ }));
+
+      // The 검토중 option must be checked because the URL key matches the
+      // category key. A mismatch would leave it unchecked.
+      await waitFor(() => {
+        const checkbox = screen.getByRole('checkbox', { name: '검토중' });
+        expect(checkbox).toHaveAttribute('data-state', 'checked');
+      });
+    });
+
+    it('writes a toggled status filter back under filter.reporterStatus', async () => {
+      searchState = { view: 'inbox' };
+      render(<InboxTestHarness view="inbox" />);
+
+      fireEvent.click(await screen.findByRole('button', { name: /필터/ }));
+      fireEvent.click(await screen.findByRole('checkbox', { name: '접수됨' }));
+
+      expect(navigateMock).toHaveBeenCalled();
+      const call = navigateMock.mock.calls.at(-1)?.[0] as {
+        to: string;
+        search: (prev: Record<string, unknown>) => Record<string, unknown>;
+      };
+      const result = call.search({});
+      // The unified key is present and carries the toggled value.
+      expect(result['filter.reporterStatus']).toBe('received');
+      // The legacy/long-form key must NOT leak into the URL.
+      expect(result).not.toHaveProperty('filter.reporter_facing_status');
     });
   });
 });

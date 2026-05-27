@@ -52,5 +52,10 @@ export const vocListItemSchema = z.object({
   updated_at: z.string().datetime(),
   // Slice 3: always 0 — real aggregate deferred until Cluster table ships (F20).
   similar_count: z.number().int().min(0),
+  // PLAN-22 §Bug-1 (2026-05-22): count of active (non-archived) attachments
+  // linked to this VOC. Computed via subquery in listVocs to keep the row
+  // shape flat — FE renders a paperclip + count chip in the inbox without
+  // having to JOIN the attachment list per row.
+  attachment_count: z.number().int().min(0),
 });
 export type VocListItem = z.infer<typeof vocListItemSchema>;

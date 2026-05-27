@@ -9,7 +9,7 @@ import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecisio
 import { useMe } from '@/lib/auth/useMe';
 
 import { DetailHeader } from './DetailHeader';
-import { IdentitySection } from './IdentitySection';
+import { IdentitySection, IdentityMetadataStrip } from './IdentitySection';
 import { TriageBlock } from './TriageBlock';
 import { DescriptionSection } from './DescriptionSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
@@ -192,10 +192,15 @@ function FullDetailView({
         {/* Section nav — sticky anchor tabs (prototype: screen-voc.jsx:191) */}
         <DetailPanelSectionNav sections={DETAIL_SECTIONS} scrollRef={scrollRef} />
 
-        <div ref={scrollRef} className="flex flex-col flex-1 min-h-0 overflow-y-auto pb-16">
+        <div ref={scrollRef} className="flex flex-col flex-1 min-h-0 overflow-y-auto pt-7 px-6 pb-16">
           <div data-anchor="overview"><IdentitySection voc={voc} /></div>
           <div data-anchor="triage"><TriageBlock voc={voc} /></div>
-          <div data-anchor="description"><DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} /></div>
+          <div data-anchor="description">
+            <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
+            {/* Relocated metadata strip — severity/managed-system/AA/source-context
+                chips moved out of the title block per .review/title-reference.png */}
+            <IdentityMetadataStrip voc={voc} />
+          </div>
           <div data-anchor="trail"><LinkedExecutionSection voc={voc} /><LinkedEntityTrailSection /></div>
           <div data-anchor="conversation"><ConversationTimeline voc={voc} /></div>
           <div data-anchor="internal" />

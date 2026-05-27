@@ -57,7 +57,7 @@ Production uses TanStack Router (`apps/frontend/src/routes/`) with query-param s
 |---|---|---|---|---|---|---|---|---|---|
 | R-VOC-INBOX | `/vocs?view=inbox` | `apps/frontend/src/features/voc/routes/InboxRoute.tsx` → `<VocInboxScreen>` | `view=inbox` | `managedSystem=:msId\|all`, `selected=:vocId`, `tab=untriaged\|high\|unassigned\|similar\|no-link`, `filter.severity=…`, `filter.reporterStatus=…`, `filter.owner=assigned\|unassigned`, `sort=createdAt:desc\|severity:asc\|status:asc` | `<VocDetailPanel>` when `selected=` resolves | Skeleton rows (10) in `<VocList>`; detail panel skeleton sections | "큐가 비었습니다" — `<EmptyState>` with `+ New VOC` CTA | Toast on list fetch fail; `<ErrorState>` row with retry | If actor has no VOC read capability for any MS in scope → render `<PermissionBlockedPanel state="blocked_not_requestable">` instead of the list |
 | R-VOC-MY | `/vocs?view=my` | Same screen, `reporter_id=me` server filter | `view=my` | `selected=:vocId` | `<VocDetailPanel>` | Same | "내가 제출한 VOC가 없습니다" + Submit CTA | Same | Always available to authenticated actor |
-| R-VOC-TRIAGE | `/vocs?view=triage` | `apps/frontend/src/features/voc/routes/TriageRoute.tsx` → `<VocTriageScreen>` | `view=triage` | `triage=unassigned\|untriaged\|high\|waiting`, `managedSystem=:msId\|all`, `selected=:vocId` | `<TriagePanel>` (always — single-pane decision flow) | Skeleton expanded rows + panel skeleton | "모든 VOC를 triage 처리했습니다" — `<TriageEmpty>` | Toast on per-action failure; rollback optimistic state | Requires VOC triage capability (Admin or same-MS Developer). Out-of-scope VOCs surface a `<PermissionBlockedPanel state="summary_visible">` peek above the queue per backend `out_of_scope_summary` envelope. |
+| R-VOC-TRIAGE | `/vocs?view=triage` | `apps/frontend/src/features/voc/routes/TriageRoute.tsx` → `<VocTriageScreen>` | `view=triage` | `triage=unassigned\|untriaged\|high\|waiting`, `managedSystem=:msId\|all`, `selected=:vocId` | `<TriagePanel>` (always — single-pane decision flow) | Skeleton expanded rows + panel skeleton | "모든 VOC를 triage 처리했습니다" — `<TriageEmpty>` | Toast on per-action failure; rollback optimistic state | Requires VOC triage capability (Admin or same-MS Developer). Out-of-scope VOCs surface a `<PermissionBlockedPanel state="summary_visible">` peek above the queue per backend `out_of_scope_summary` envelope. **Layout (V1 inline kicker, 2026-05-21):** `WorkbenchShell` renders without `toolbar` prop; route identity ("Console · Triage") is the first child of `VocTriageScreen`'s own 50px toolbar. ShellHeader is absent for this route only. Pixel-diff baseline `voc-triage-console.png` is stale (shows removed 50px header); re-capture is a follow-up. |
 | R-VOC-CREATE | `/vocs?action=create` | `apps/frontend/src/features/voc/routes/CreateRoute.tsx` → `<VocCreateScreen>` | `action=create` | `managedSystem=:msId` (seeds picker), `prefill=…` (future) | none (full-page form) | Skeleton form | n/a | Field-level `<FormError>` from `code='validation.failed'`; toast on transport failure; `<DirtyConfirmation>` modal on navigate-away | Any AD-authenticated Actor may submit (FR-VOC-001). Workspace + MS submission eligibility enforced server-side; the picker hides MSs the actor cannot submit to. |
 | R-VOC-DETAIL | `/vocs?view=inbox&selected=:vocId` (no standalone page in Slice 3) | `<VocDetailPanel>` mounts inside whichever list route owns selection | `selected=:vocId` | — | n/a (panel itself) | Panel skeleton blocks | n/a | If `GET /vocs/:id` returns `404 not_found.record` → render `<DetailPanelNotFound>` with "선택을 해제" CTA; if `403 permission.denied` → `<PermissionBlockedPanel state="denied">` | If actor lacks read permission on the targeted VOC, route still resolves but panel shows blocked state per `permission_decision` envelope. |
 
@@ -82,7 +82,7 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
 | `<DetailPanelHeader kind="voc" id … extras>` | `<DetailPanelHeader>` in `packages/ui/src/panel/` (custom — no shadcn equivalent) | none (Tailwind + `lucide-react` for icons) | `kind: 'voc' \| 'finding' \| 'task' \| ...10 kinds`, `id: string`, `onClose: () => void`, `extras?: ReactNode` | One color band per kind, bound to `--surface-card-elevated` + kind-specific accent token (voc uses `--color-aether-blue` accent stripe) |
-| `<PanelTitleBlock>` | `<PanelTitleBlock>` in `packages/ui/src/panel/` | none | `title: string`, `children: ReactNode` (badges row) | Default; long-title truncation via Tailwind `line-clamp-2` |
+| `<PanelTitleBlock>` | `<PanelTitleBlock>` in `packages/ui/src/panel/` | none | `title: string`, `badges?: ReactNode`, `className?: string`, `size?: 'lg' \| 'xl'` (default `'lg'`) | `size='lg'`: `text-lg font-semibold tracking-tight leading-[1.35]` (prototype `.panel-title`, VOC detail and triage default). `size='xl'`: `text-xl font-bold tracking-tight` (legacy opt-in only). `children` prop does not exist — use `badges` slot. |
 | `<NestedTextBlock>` | `<NestedTextBlock>` in `packages/ui/src/panel/` | none | `padding?: number`, `children: ReactNode` | Default only |
 | `<FieldRow>` | `<FieldRow>` in `packages/ui/src/panel/` | none | `label: string`, `children: ReactNode` | Default |
 | `<PanelSectionTitle>` | `<PanelSectionTitle>` in `packages/ui/src/panel/` | none | `children: ReactNode`, `action?: ReactNode` | Default |
@@ -138,6 +138,16 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 | `<ComposerReplyPreview>` (inside modal) | `<ComposerReplyPreview>` in `features/voc/components/detail/` | none | `voc`, `owner`, `reporter`, `draftDoc` | with-body · empty-body |
 | `<PreviewModal>` | `<PreviewModal>` in `packages/ui/src/feedback/` | shadcn `<Dialog>` (size `lg`) | `open`, `onClose`, `title`, `children` | open · closed |
 
+### 3.5b Detail panel body card + attachment chips (PLAN-22 §Bug-1/2/3, 2026-05-22)
+
+| Prototype surface | Production component | Composition | State variants |
+|---|---|---|---|
+| BODY card (description) | `<DescriptionSection>` in `features/voc/components/detail/` | BODY label + `bg-surface-card-elevated` rounded card · `<RichContentRenderer doc=voc.description_rich_content mode="internal">` · `<AttachmentChipList attachments=voc.attachments>` rendered below the card when non-empty · `<EditDescriptionModal>` opener (reporter-on-own-VOC only) | empty body → `설명 없음` · with body → rich render · attachments=[] → no chip list · attachments[].length>0 → horizontal chip row |
+| Conversation entry body | `<TimelineEntry>` in `features/voc/components/detail/` | actor `<UserChip>` + kind `<OutlineBadge>` · `<RichContentRenderer>` · `<AttachmentChipList attachments=entry.attachments>` below the body · optional status-transition pair | public/reporter_reply/internal_comment all read `entry.attachments[]` |
+| Attachment chip | `<AttachmentChip>` in `features/voc/components/detail/` | `<Paperclip>` icon + truncated filename + `formatFileSize(size_bytes)` rendered as `<a href="/attachments/:id/download" download={name}>`. Same-tab navigation; BE's `Content-Disposition: attachment` makes the browser save. | default · hover (`bg-surface-card-elevated`) |
+| Existing attachments in EditDescriptionModal | `<EditDescriptionModal>` `voc.attachments` slot | When `voc.attachments?.length > 0`, render `기존 첨부` label + `<AttachmentChipList>` above the active `<AttachmentDropzone>`. **PATCH is additive**: only NEW upload ids land in `attachment_ids[]`; existing rows are NOT re-sent (BE `linkAttachments` rejects already-linked ids). Remove affordance deferred — chips are read-only this slice. | hydrated (chips visible) · empty (dropzone-only) |
+| `formatFileSize(bytes)` util | `apps/frontend/src/features/voc/lib/format-file-size.ts` | Single source of truth — previously duplicated in `<AttachmentDropzone>` and `<ComposerAttachmentDropzone>`. Returns `0 B` · `<n> B` · `<n.n> KB` · `<n.n> MB`. | n/a |
+
 ### 3.6 Status + signal badges
 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
@@ -181,7 +191,8 @@ Prototype mock entity → production DTO. **snake_case at HTTP boundary, camelCa
 
 | Prototype `Voc` field (`data.js`) | Production HTTP field (`docs/design/15-data-contracts.md`) | Frontend camelCase | Notes / gaps |
 |---|---|---|---|
-| `id` (e.g. `VOC-2814`) | `id: uuid` | `id: string` | Prototype uses readable slugs; production uses UUID v7. Display slugs (`VOC-####`) are derived server-side or rendered via `useVocDisplayId(id)`. **GAP:** the display-slug rendering rule is not yet documented (see §10 Q-DISPLAYID). |
+| `id` (e.g. `VOC-2814`) | `id: uuid` | `id: string` | Prototype uses readable slugs; production uses UUID v7 as the canonical object id. |
+| `id` (display slug) | `display_id: text` | `displayId: string` | Backend assigns `VOC-####` via `next_voc_display_id(workspace_id)`. The counter is per workspace, so each workspace has an independent contiguous sequence starting at `VOC-1000`; uniqueness is `(workspace_id, display_id)`. |
 | `title` | `title: text` | `title: string` | — |
 | `description` (plain string) | `description_rich_content: rich_content` (TipTap JSON, ADR-0011) | `descriptionRichContent: TipTapDoc` | Prototype stores plain text; production stores TipTap JSON in `jsonb`. Render via `<RichContentRenderer doc={descriptionRichContent}>`. |
 | `reporter` (`u-1`) | `reporter_id: uuid` | `reporterId: string` | Resolved via `useActor(reporterId)` hook; backend may inline `reporter: ActorRef` envelope on `GET /vocs/:id`. |
@@ -245,7 +256,7 @@ interface PendingAttachment {
   name: string;
   size: number;                 // bytes
   mimeType: string;
-  serverAttachmentId?: string;  // populated after PUT /attachments returns
+  serverAttachmentId?: string;  // populated after POST /attachments returns
   uploadState: 'pending' | 'uploading' | 'uploaded' | 'failed';
   errorCode?: string;           // 'attachment.too_large' | 'attachment.unsupported_type'
 }
@@ -380,7 +391,9 @@ function usePermissionDecision(
 | `public-update` | Bold, Italic, List | "Reporter-facing status가 변경됩니다. 공개 안전한 표현인지 한 번 더 확인하세요." | "리포터에게 노출됩니다. 첨부 · 외부 링크 · @멘션은 사용할 수 없습니다." |
 | `internal-comment` | Bold, Italic, Code, List, Link, @Mention, Attach | "팀원에게만 보입니다. 코드 블록 · @멘션을 자유롭게 사용하세요." | none |
 
-Backend sanitization is authoritative (ADR-0011): the editor enforces the toolbar allowlist client-side as UX guidance only. The server rejects nodes/marks outside the surface allowlist with `code: 'rich_content.disallowed_node'` (added to ADR-0012 in Slice 3 #13).
+Backend sanitization is authoritative (ADR-0011): the editor enforces the toolbar allowlist client-side as UX guidance only. The server rejects nodes/marks outside the surface allowlist with `code: 'rich_content.disallowed_node'` (added to ADR-0012 in Slice 3 #13). Attribute failures use first-class codes: `rich_content.disallowed_attr` for unknown attr keys, `rich_content.invalid_attr_value` for schema failures, and `rich_content.missing_required_attr` for absent required attrs. The shared allowlist contract also declares atomic `leafNodes`; `attachmentRef` and `mention` must be rejected with `rich_content.disallowed_node` when they carry non-empty `content[]`. FE/BE parity is pinned by the canonical corpus in `packages/shared/src/rich-content/fixtures.ts`; backend tests consume it directly, while `@fops/ui` keeps an ADR-0016-compliant local mirror plus drift/sanitize-on-render tests.
+
+The canonical surface → rich-editor extension capability map lives in `packages/shared/src/rich-content/allowlist.ts`. `apps/backend/src/lib/rich-content/surface-allowlists.ts` may re-export it, while `packages/ui/src/rich-content/allowlist-local.ts` mirrors it locally because ADR-0016 forbids `@fops/ui` from importing `@fops/shared`.
 
 Attachment uploads from inside the editor and from the Create form dropzone share the same backend interface (per ADR-0011 §Inline Attachments). The frontend abstraction: `useAttachmentUpload({ vocId?: string, scope: 'voc' | 'comment' })`.
 
@@ -578,10 +591,10 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 |---|---|
 | Method / Path | `POST /vocs` |
 | Headers | `Content-Type: application/json`, `Idempotency-Key: <uuidv4>` (required from frontend — prevents double-submit on Create), session cookie (`fops_session`, HttpOnly + SameSite=Lax — set by `POST /auth/mock-login` or production OIDC handler) |
-| Request body | `{ primary_managed_system_id, title, description_rich_content: TipTapDoc, analytics_area_id?, source_context?, attachments?: AttachmentRef[] }` |
+| Request body | `{ primary_managed_system_id, title, description_rich_content: TipTapDoc, analytics_area_id?, source_context?, attachment_ids?: string[] }` (PLAN-22 C7b — `attachments: AttachmentRef[]` retired; `attachment_ids[]` references pre-uploaded `voc.voc_attachments` rows linked in the same tx) |
 | Forbidden fields | `reporter_id`, `severity`, `reporter_facing_status`, `triage_state`, `owner_user_id`, `owner_team_id`, `display_id` (per `packages/shared/src/vocs/create-request.ts FORBIDDEN_CREATE_FIELDS`) — client validation drops them before send |
 | Success response | `201 Created` with full VOC envelope including server-resolved `reporter_id`, `triage_state: 'untriaged'`, `reporter_facing_status: 'received'`, `next_actions`, `permission_decisions` |
-| Error codes (ADR-0012) | `validation.failed` (422) · `validation.unexpected_field` (422 — forbidden server-resolved field in body) · `validation.malformed_idempotency_key` (422 — Idempotency-Key header present but not UUIDv4) · `voc.severity_not_user_settable` (422) · `permission.denied` (403) · `not_found.record` (404 on referenced MS or AA) · `conflict.parent_archived` (409 if MS or AA is archived, per ADR-0019 Section A/B) · `conflict.idempotency_key_reuse` (409) · `rate_limited.actor` (429) · `rich_content.disallowed_node` (422) · `rich_content.external_image_forbidden` (422) · `attachment.unsupported_pending_storage_slice` (422 — Slice 3 only; replaced by `attachment.too_large` / `attachment.unsupported_type` when #22 attachment upload lands) |
+| Error codes (ADR-0012) | `validation.failed` (422) · `validation.unexpected_field` (422 — forbidden server-resolved field in body) · `validation.malformed_idempotency_key` (422 — Idempotency-Key header present but not UUIDv4) · `voc.severity_not_user_settable` (422) · `permission.denied` (403) · `not_found.record` (404 on referenced MS or AA) · `conflict.parent_archived` (409 if MS or AA is archived, per ADR-0019 Section A/B) · `conflict.idempotency_key_reuse` (409) · `rate_limited.actor` (429) · `rich_content.disallowed_node` (422) · `rich_content.disallowed_attr` (422) · `rich_content.invalid_attr_value` (422) · `rich_content.missing_required_attr` (422) · `rich_content.external_image_forbidden` (422) · `attachment.too_large` (422 — file exceeds 25 MB) · `attachment.unsupported_type` (422 — disallowed MIME) · `storage.unavailable` (502 — upstream storage failure) |
 | Idempotency (ADR-0015) | Required from client; same key + same body returns the stored 201 verbatim; same key + different body returns `409 conflict.idempotency_key_reuse` |
 | tx-scoped checks (ADR-0019 Section E pattern) | Service `createVoc` runs in a single tx; `SELECT … FOR UPDATE` on the parent MS row (and AA row, when present) to serialize against archive transactions. Per `apps/backend/AGENTS.md` Layer Rules: mutation service receives `Tx` not `Pool`. |
 | Audit events | `voc_created` with `{ voc_id, primary_managed_system_id, analytics_area_id?, reporter_id, source_context }` |
@@ -602,9 +615,12 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 | Property | Value |
 |---|---|
 | Method / Path | `GET /vocs/:id` |
-| Response | `VocDetailEnvelope` = `{ ...VocFields, next_actions, next_reporter_states, reporter_status_gate?, permission_decisions, linked_execution: { finding?, task? }, conversation_timeline?: ConversationEntry[] }` |
+| Response | `VocDetailEnvelope` = `{ ...VocFields, next_actions, next_reporter_states, reporter_status_gate?, permission_decisions, linked_execution: { finding?, task? }, conversation_timeline: ConversationEntry[], attachments: LinkedAttachment[], attachment_count }` |
+| `attachments[]` (PLAN-22 §Bug-1) | Always present; `[]` when none. Each item: `{ id, name, size_bytes, mime_type, uploaded_by_actor_id, created_at, linked_at }`. `storage_key`/`storage_uri` NOT exposed — clients reference by `id` and download via `GET /attachments/:id/download`. Archived rows excluded. |
+| `ConversationEntry.attachments[]` (PLAN-22 §Bug-1) | Same shape as `attachments[]`. Always present on every entry on `conversation_timeline[]` AND on `GET /vocs/:id/conversation` items. `[]` when the entry has no linked rows. |
+| `attachment_count` on list rows | `GET /vocs` includes `attachment_count: number` on each `VocListItem` (subquery, no full JOIN). Used by inbox to render a paperclip + count chip. |
 | Errors | `not_found.record` (404) · `permission.denied` (403; backend may instead return summary envelope w/ permission_decision) |
-| Conversation pagination | If `conversation_timeline.has_more`, fetch via `GET /vocs/:id/conversation?cursor=`. **GAP:** decide whether timeline is inlined or always paginated — S3-002. |
+| Conversation pagination | If `conversation_timeline.has_more`, fetch via `GET /vocs/:id/conversation?cursor=`. **`cursor` is optional** (PLAN-22 §Bug-2): the endpoint accepts a first-page call (no cursor) and treats it as "start from oldest". The FE infinite-query hook issues its first GET without a cursor by design. Subsequent calls carry the encoded `{ createdAt, id }` cursor returned from the previous page. |
 
 ### 8.4 `PATCH /vocs/:id` — Triage commit / metadata edit
 
@@ -640,7 +656,7 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 | Method / Path | `POST /vocs/:id/reporter-replies` |
 | Headers | `Idempotency-Key: <uuidv4>` |
 | Permission | Reporter on their own VOC only |
-| Request body | `{ body_rich_content: TipTapDoc, attachments?: AttachmentRef[] }` |
+| Request body | `{ body_rich_content: TipTapDoc, attachment_ids?: string[] }` (PLAN-22 C7b) |
 | Side effect | May return Waiting Reporter VOCs to the follow-up queue (per API contract); **must not** auto-change `reporter_facing_status` |
 | Errors | `permission.denied` (non-reporter) · `validation.failed` · `rich_content.external_image_forbidden` · `conflict.record_archived` |
 | Audit events | `reporter_reply_created` |
@@ -691,7 +707,7 @@ These block specific routes/components and must be resolved before the correspon
 | Q4 (AA owner vs MS default owner precedence) | ~~When the actor creates a VOC, multiple default-owner rules may apply…~~ **RESOLVED 2026-05-17 (Slice 3 #13):** `POST /vocs` does NOT resolve any default owner. `owner_user_id` and `owner_team_id` are NULL on the created VOC; ownership is assigned during manual triage in #14 (`PATCH /vocs/:id`). Triage "Owner 없음" wording stays accurate. Revisit if/when default-owner policy ships in a later slice. | Triage row meta; Triage panel Owner picker initial value | Backend (precedence rule lives in service code) | ✅ RESOLVED (Slice 3 #13) |
 | Q5 (VOC Cluster scope in Slice 3) | Cluster confirm / dismiss is in the Triage panel mockup, but cluster CRUD lives in Slice 3+. Slice 3 VOC must either render the cluster section read-only (showing `similar_count` and an out-of-scope CTA) or commit cluster_decision through `PATCH /vocs/:id`. | Triage panel `Cluster 추천` section | PM (Slice 3 vs Slice 3+ scoping) | Before S3-002 |
 | Q6 (dev/test seed) | Production needs deterministic VOC seed data for E2E + integration tests. The prototype's `Vocs` fixture is the design intent; backend issue S3-001 must commit a parallel seed (or fixture loader) that hydrates `permission_decisions` envelopes in the same shape the frontend consumes. | E2E (Playwright?) tests in S3-008; integration tests in S3-001..S3-005 | Backend test lead | Before S3-008 |
-| Q-DISPLAYID (newly surfaced) | The prototype renders `VOC-2814` as the human id. Production uses UUID v7. Who renders the display slug — backend (`display_id` column) or frontend (formatter that hashes UUID prefix)? Affects URLs (`/vocs?selected=<uuid-or-slug>`), command palette ("Open VOC-2814"), copy-link semantics. | All routes (URL shape) + command palette + copy-link | Backend + Frontend lead | Before S3-002 |
+| Q-DISPLAYID | ~~The prototype renders `VOC-2814` as the human id. Production uses UUID v7. Who renders the display slug — backend (`display_id` column) or frontend (formatter that hashes UUID prefix)?~~ **RESOLVED 2026-05-24 (Issue #34):** backend owns `display_id`, generated by `next_voc_display_id(workspace_id)` from a per-workspace counter. URLs still select by canonical UUID; command palette and visible labels render `display_id`. | All routes (URL shape) + command palette + copy-link | Backend + Frontend lead | ✅ RESOLVED |
 | Q-SEVRETRIAGE (newly surfaced) | Can severity change after triage commits, or is it locked? `docs/design/04-voc-system.md:117` says "severity is assigned during triage" but does not forbid retriage. Affects `PATCH /vocs/:id` allowed-fields list and the Detail panel "변경" button next to Severity. | Detail panel Triage block | PM | Before S3-002 |
 | Q-CONVPAGINATION (newly surfaced) | Is `conversation_timeline` inlined on `GET /vocs/:id` or always paginated via `GET /vocs/:id/conversation`? Affects panel initial load size and timeline rendering. | Detail panel public + internal timelines | Backend | Before S3-002 |
 | Q-STATUSGATECODE (newly surfaced) | The linked-Task gate (e.g. cannot mark `resolved` until task `released`) — does the backend return `reporter_facing_status.invalid_transition` (existing in ADR-0012 enum) or a new `reporter_facing_status.gate_blocked`? Affects error-mapper i18n keys. | Public Update composer error rendering | Backend + ADR-0012 maintainer | Before S3-002 |

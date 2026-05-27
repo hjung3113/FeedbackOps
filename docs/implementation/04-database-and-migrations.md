@@ -122,6 +122,15 @@ VOC status.
 - Large spreadsheet-like data belongs in attachments, not oversized rich-content tables.
 ```
 
+### Archive over delete on `voc.voc_attachments` (migration 0016)
+
+Migration `0016_grant_app_delete_voc_attachments.sql` grants `DELETE ON voc.voc_attachments TO fops_app`. The grant exists strictly to let the **hourly `core.attachments_purge` worker** reclaim unlinked attachment rows older than 24h (rows with `voc_id IS NULL AND comment_id IS NULL`). It is **not** a relaxation of the project-wide "archive over hard delete" rule:
+
+- **User-initiated paths** (Triage Console "remove attachment", EditDescriptionModal, etc.) MUST go through the service-layer archive: set `archived_at = now()`, `archived_by_actor_id = caller`. They never issue a `DELETE`.
+- **The purge worker** is the only legitimate row-deleter, and only against truly orphaned uploads that were never linked to a parent VOC or comment.
+
+The archive-over-delete invariant is enforced in `apps/backend/src/modules/attachments/service.ts` (and surrounding tests), not by withholding the DB grant. Adding new code paths that issue `DELETE FROM voc.voc_attachments` requires explicit ADR-level justification — the purge worker is the lone exception.
+
 ## Index Requirements
 
 ```text

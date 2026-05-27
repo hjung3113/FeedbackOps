@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest';
+import { invalidDocs, validDocs } from '@fops/shared';
 import { sanitizeTipTap } from '../sanitize.js';
 import type { RichContentFieldsCode } from '../sanitize.js';
+
+describe('sanitizeTipTap canonical rich-content fixtures', () => {
+  for (const [surfaceName, docs] of Object.entries(validDocs)) {
+    it.each(docs)('%s accepts canonical valid fixture %#', (docFixture) => {
+      const res = sanitizeTipTap({ surface: surfaceName as never, doc: docFixture });
+      expect(res.ok).toBe(true);
+    });
+  }
+
+  for (const [surfaceName, docs] of Object.entries(invalidDocs)) {
+    it.each(docs)('%s rejects canonical invalid fixture %# with expected top-level code', (fixture) => {
+      const res = sanitizeTipTap({ surface: surfaceName as never, doc: fixture.doc });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error.code).toBe(fixture.expectedCode);
+      }
+    });
+  }
+});
 
 const surface = 'voc-description' as const;
 
@@ -55,7 +75,7 @@ describe('sanitizeTipTap (voc-description)', () => {
       doc: doc(p('x', [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }])),
     });
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error.code).toBe('rich_content.disallowed_node');
+    if (!res.ok) expect(res.error.code).toBe('rich_content.invalid_attr_value');
   });
 
   it('rejects data: link href', () => {
@@ -100,6 +120,12 @@ function mentionDoc(attrs: Record<string, unknown>) {
   return {
     type: 'doc' as const,
     content: [{ type: 'mention', attrs }],
+  };
+}
+function leafNodeDoc(type: 'attachmentRef' | 'mention', attrs: Record<string, unknown>, content?: unknown[]) {
+  return {
+    type: 'doc' as const,
+    content: [{ type, attrs, ...(content !== undefined ? { content } : {}) }],
   };
 }
 function codeBlockDoc(attrs?: Record<string, unknown>) {
@@ -193,6 +219,35 @@ describe('attr allowlist — positive cases', () => {
   });
 });
 
+describe('leaf node enforcement', () => {
+  it.each([
+    ['voc-description', 'attachmentRef', { id: VALID_UUID }],
+    ['reporter-reply', 'attachmentRef', { id: VALID_UUID }],
+    ['internal-comment', 'attachmentRef', { id: VALID_UUID_2 }],
+    ['internal-comment', 'mention', { actor_id: VALID_UUID }],
+  ] as const)('%s rejects %s with non-empty content[]', (surfaceName, type, attrs) => {
+    const res = sanitizeTipTap({
+      surface: surfaceName,
+      doc: leafNodeDoc(type, attrs, [{ type: 'text', text: 'drift' }]),
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.reason).toMatch(/leaf node/);
+    }
+  });
+
+  it.each([
+    ['voc-description', 'attachmentRef', { id: VALID_UUID }],
+    ['reporter-reply', 'attachmentRef', { id: VALID_UUID }],
+    ['internal-comment', 'attachmentRef', { id: VALID_UUID_2 }],
+    ['internal-comment', 'mention', { actor_id: VALID_UUID }],
+  ] as const)('%s accepts %s with absent or empty content[]', (surfaceName, type, attrs) => {
+    expect(sanitizeTipTap({ surface: surfaceName, doc: leafNodeDoc(type, attrs) }).ok).toBe(true);
+    expect(sanitizeTipTap({ surface: surfaceName, doc: leafNodeDoc(type, attrs, []) }).ok).toBe(true);
+  });
+});
+
 describe('attr allowlist — canonical output', () => {
   it('unknown top-level field on paragraph is dropped', () => {
     const res = sanitizeTipTap({
@@ -232,8 +287,8 @@ describe('attr allowlist — negative: disallowed keys', () => {
         surface: 'voc-description',
         doc: { type: 'doc', content: [{ type: 'paragraph', attrs: { align: 'left' } }] } as never,
       },
-      undefined,
-      'attrs',
+      'disallowed_attr_key',
+      'attrs.align',
     ],
     [
       'link mark with extra target key',
@@ -252,11 +307,11 @@ describe('attr allowlist — negative: disallowed keys', () => {
       'disallowed_attr_key',
       'attrs.label',
     ],
-  ])('%s → 422 disallowed_attr_key, path ends %s', (_label, _surf, args, expectedFieldsCode, pathSuffix) => {
+  ])('%s → 422 disallowed_attr, path ends %s', (_label, _surf, args, expectedFieldsCode, pathSuffix) => {
     const res = sanitizeTipTap(args);
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.code).toBe('rich_content.disallowed_attr');
       expect(res.error.fields_code).toBe(expectedFieldsCode);
       expect(res.error.path).toBeDefined();
       expect(res.error.path).toContain(pathSuffix);
@@ -275,7 +330,7 @@ describe('attr allowlist — negative: invalid values', () => {
     const res = sanitizeTipTap({ surface: 'voc-description', doc: attachmentDoc(attrs) });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.code).toBe('rich_content.invalid_attr_value');
       expect(res.error.fields_code).toBe('invalid_attr_value');
       expect(res.error.path).toContain('attrs.id');
     }
@@ -290,7 +345,7 @@ describe('attr allowlist — negative: invalid values', () => {
     const res = sanitizeTipTap({ surface: 'internal-comment', doc: mentionDoc(attrs) });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.code).toBe('rich_content.invalid_attr_value');
       expect(res.error.fields_code).toBe('invalid_attr_value');
       expect(res.error.path).toContain('attrs.actor_id');
     }
@@ -300,7 +355,7 @@ describe('attr allowlist — negative: invalid values', () => {
     const res = sanitizeTipTap({ surface: 'voc-description', doc: linkDoc({ href: 'javascript:alert(1)' }) });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.code).toBe('rich_content.invalid_attr_value');
       expect(res.error.fields_code).toBe('invalid_attr_value');
     }
   });
@@ -312,7 +367,7 @@ describe('attr allowlist — negative: invalid values', () => {
     });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.code).toBe('rich_content.invalid_attr_value');
       expect(res.error.fields_code).toBe('invalid_attr_value');
     }
   });
@@ -321,7 +376,7 @@ describe('attr allowlist — negative: invalid values', () => {
     const res = sanitizeTipTap({ surface: 'voc-description', doc: linkDoc({ href: 'not a url' }) });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.code).toBe('rich_content.invalid_attr_value');
       expect(res.error.fields_code).toBe('invalid_attr_value');
     }
   });
@@ -335,7 +390,7 @@ describe('attr allowlist — negative: invalid values', () => {
     const res = sanitizeTipTap({ surface: 'voc-description', doc: linkDoc({ href }) });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.code).toBe('rich_content.invalid_attr_value');
       expect(res.error.fields_code).toBe('invalid_attr_value');
     }
   });
@@ -346,7 +401,7 @@ describe('attr allowlist — negative: invalid values', () => {
     const res = sanitizeTipTap({ surface: 'voc-description', doc: linkDoc({ href: 'java%73cript:alert(1)' }) });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.code).toBe('rich_content.invalid_attr_value');
       expect(res.error.fields_code).toBe('invalid_attr_value');
     }
   });
@@ -371,7 +426,7 @@ describe('attr allowlist — negative: invalid values', () => {
     });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
+      expect(res.error.code).toBe('rich_content.invalid_attr_value');
       expect(res.error.fields_code).toBe('invalid_attr_value');
       expect(res.error.path).toContain('attrs.language');
     }
@@ -397,22 +452,22 @@ describe('attr allowlist — negative: attrs shape', () => {
 });
 
 describe('attr allowlist — missing required keys', () => {
-  it('attachmentRef missing id → 422 invalid_attr_value', () => {
+  it('attachmentRef missing id → 422 missing_required_attr', () => {
     const res = sanitizeTipTap({ surface: 'voc-description', doc: attachmentDoc({}) });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
-      expect(res.error.fields_code).toBe('invalid_attr_value');
+      expect(res.error.code).toBe('rich_content.missing_required_attr');
+      expect(res.error.fields_code).toBe('missing_required_attr');
       expect(res.error.path).toContain('attrs.id');
     }
   });
 
-  it('link mark missing href → 422 invalid_attr_value', () => {
+  it('link mark missing href → 422 missing_required_attr', () => {
     const res = sanitizeTipTap({ surface: 'voc-description', doc: linkDoc({}) });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.error.code).toBe('rich_content.disallowed_node');
-      expect(res.error.fields_code).toBe('invalid_attr_value');
+      expect(res.error.code).toBe('rich_content.missing_required_attr');
+      expect(res.error.fields_code).toBe('missing_required_attr');
       expect(res.error.path).toContain('attrs.href');
     }
   });

@@ -1,12 +1,7 @@
-// TriageSummaryCard.test.tsx — TDD RED tests for the Triage 결과 미리보기 card.
-// Prototype ref: screen-voc-create.jsx:543-569
-// FieldRow rows: Severity, Owner, Analytics Area, Cluster state.
-
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { TriageSummaryCard } from '../TriageSummaryCard';
 import type { TriagePanelLocalState } from '../../../hooks/useTriagePanelState';
+import { TriageSummaryCard } from '../TriageSummaryCard';
 
 const BASE_STATE: TriagePanelLocalState = {
   severity: null,
@@ -37,5 +32,28 @@ describe('TriageSummaryCard', () => {
     const actorMap = new Map([['u-1', { display_name: '김철수' }]]);
     render(<TriageSummaryCard panelState={state} actorMap={actorMap} />);
     expect(screen.getByText('김철수')).toBeInTheDocument();
+  });
+
+  // Prototype ref: screen-voc-create.jsx:561-567 — "Reporter status 변경" row.
+  it('omits the reporter-status transition row when currentReporterStatus is undefined', () => {
+    render(<TriageSummaryCard panelState={BASE_STATE} />);
+    expect(screen.queryByTestId('reporter-status-transition')).not.toBeInTheDocument();
+  });
+
+  it('renders current → reviewing when an owner is NOT staged', () => {
+    render(<TriageSummaryCard panelState={BASE_STATE} currentReporterStatus="received" />);
+    const row = screen.getByTestId('reporter-status-transition');
+    expect(row).toBeInTheDocument();
+    // current 접수됨 → target 검토 중 (no owner)
+    expect(row).toHaveTextContent('접수됨');
+    expect(row).toHaveTextContent('검토 중');
+  });
+
+  it('renders current → assigned when an owner IS staged', () => {
+    const state = { ...BASE_STATE, ownerUserId: 'u-1' };
+    render(<TriageSummaryCard panelState={state} currentReporterStatus="received" />);
+    const row = screen.getByTestId('reporter-status-transition');
+    // current 접수됨 → target 담당자 배정됨 (owner present)
+    expect(row).toHaveTextContent('담당자 배정됨');
   });
 });

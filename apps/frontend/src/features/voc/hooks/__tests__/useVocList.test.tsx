@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { ReactNode } from 'react';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { useVocList } from '../useVocList';
 
@@ -82,6 +82,28 @@ describe('useVocList', () => {
     expect(capturedUrl).toContain('tab=untriaged');
     expect(capturedUrl).toContain('filter.severity=high%2Ccritical');
     expect(capturedUrl).toContain('sort=created_at%3Adesc');
+  });
+
+  test('translates the unified filter.reporterStatus key to the backend param filter.reporter_facing_status (#89)', async () => {
+    let capturedUrl = '';
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      capturedUrl = typeof input === 'string' ? input : input.toString();
+      return jsonResponse({ items: [], next_cursor: undefined });
+    }) as typeof globalThis.fetch;
+
+    const { result } = renderHook(
+      () =>
+        useVocList({
+          view: 'inbox',
+          filters: { 'filter.reporterStatus': ['reviewing'] },
+        }),
+      { wrapper: makeWrapper() },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    // Backend expects the long-form param.
+    expect(capturedUrl).toContain('filter.reporter_facing_status=reviewing');
+    // The UI/URL key must NOT be sent verbatim.
+    expect(capturedUrl).not.toContain('filter.reporterStatus');
   });
 
   test('returns error state on network failure', async () => {

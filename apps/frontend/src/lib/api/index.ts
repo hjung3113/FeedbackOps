@@ -4,5 +4,7 @@ export * from './useIdempotencyKey';
 export * from './client';
 export * from './auth';
 export * from './permissions';
+export * from './actors';
 export * from './managed-systems';
 export * from './analytics-areas';
+export * from './attachments';

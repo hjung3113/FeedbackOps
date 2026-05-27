@@ -3,9 +3,13 @@ import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
 import { type Editor, EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
+import StarterKit, { type StarterKitOptions } from '@tiptap/starter-kit';
 import * as React from 'react';
 import { cn } from '../utils/cn';
+import {
+  getExtensionsForSurface,
+  type UIRichContentExtensionCapability,
+} from './allowlist-local';
 import { AttachmentRef } from './extensions/attachmentRef';
 import { Mention } from './extensions/mention';
 
@@ -19,6 +23,34 @@ export type RichEditorSurface =
   | 'reporter-reply'
   | 'public-update'
   | 'internal-comment';
+
+/**
+ * Result of a successful attachment upload — the strict envelope returned
+ * by POST /attachments (mirrors @fops/shared AttachmentCreated, kept loose
+ * here so packages/ui has no shared-domain import). PLAN-22 C8.
+ */
+export interface RichEditorAttachmentResult {
+  attachment_id: string;
+  name: string;
+  size_bytes: number;
+  mime_type: string;
+}
+
+/**
+ * Helper bag passed to the toolbar render-prop. Surface toolbars use
+ * `attach(file)` to upload + insert in one step; the editor wires the
+ * AttachmentRef node insertion on the consumer's behalf so toolbars stay
+ * free of TipTap node-schema knowledge.
+ */
+export interface RichEditorToolbarApi {
+  /**
+   * Uploads `file` via the injected `onAttach` and, on resolve, inserts an
+   * `attachmentRef` node at the current cursor position carrying
+   * `{ id, name, size_bytes, mime_type }`. On failure, re-throws so the
+   * caller can surface a toast (PLAN-22 C8 acceptance).
+   */
+  attach: (file: File) => Promise<RichEditorAttachmentResult>;
+}
 
 export interface RichEditorProps {
   surface: RichEditorSurface;
@@ -34,7 +66,20 @@ export interface RichEditorProps {
   disabled?: boolean;
   minHeight?: string | number;
   className?: string;
-  toolbar?: (editor: Editor | null) => React.ReactNode;
+  /**
+   * Toolbar render-prop. Receives the live editor + a toolbar API helper
+   * (PLAN-22 C8). If `onAttach` is not provided, `toolbarApi.attach` rejects
+   * synchronously — toolbars should hide Attach when the surface does not
+   * inject an uploader.
+   */
+  toolbar?: (editor: Editor | null, toolbarApi: RichEditorToolbarApi) => React.ReactNode;
+  /**
+   * Uploads a single picked file to the attachments service and returns the
+   * created-attachment envelope (PLAN-22 C8). The editor will insert an
+   * `attachmentRef` node carrying `{ attachment_id, name, size_bytes,
+   * mime_type }` on success. Errors propagate to the caller.
+   */
+  onAttach?: (file: File) => Promise<RichEditorAttachmentResult>;
 }
 
 export function RichEditor({
@@ -47,21 +92,15 @@ export function RichEditor({
   minHeight,
   className,
   toolbar,
+  onAttach,
 }: RichEditorProps) {
+  const extensions = React.useMemo(
+    () => buildExtensionsForSurface(surface, placeholder ?? ''),
+    [surface, placeholder],
+  );
+
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        // ADR-0011: image extension is NOT registered. Users cannot author images client-side; backend is authoritative.
-        // Disable built-ins that we configure separately below to avoid duplicate extension warnings.
-        link: false,
-        underline: false,
-      }),
-      Link.configure({ openOnClick: false }),
-      Underline,
-      Placeholder.configure({ placeholder: placeholder ?? '' }),
-      AttachmentRef,
-      Mention,
-    ],
+    extensions,
     // value can be null (explicit clear); fall through to defaultValue / empty doc.
     content: (value ?? defaultValue ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as TipTapDoc,
     editable: !disabled,
@@ -105,6 +144,44 @@ export function RichEditor({
     editor.setEditable(!disabled);
   }, [editor, disabled]);
 
+  // Stable toolbar API. `attach` uploads via the injected `onAttach`, and on
+  // resolve inserts an `attachmentRef` node at the current selection carrying
+  // the four spec attrs. On failure we re-throw so the caller can toast — the
+  // editor stays in its prior state (no partial node inserted).
+  const onAttachRef = React.useRef(onAttach);
+  React.useEffect(() => {
+    onAttachRef.current = onAttach;
+  }, [onAttach]);
+
+  const toolbarApi = React.useMemo<RichEditorToolbarApi>(
+    () => ({
+      attach: async (file: File) => {
+        const uploader = onAttachRef.current;
+        if (!uploader) {
+          throw new Error('RichEditor: onAttach is not configured for this surface');
+        }
+        const result = await uploader(file);
+        if (editor) {
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'attachmentRef',
+              attrs: {
+                id: result.attachment_id,
+                name: result.name,
+                size_bytes: result.size_bytes,
+                mime_type: result.mime_type,
+              },
+            })
+            .run();
+        }
+        return result;
+      },
+    }),
+    [editor],
+  );
+
   return (
     <div
       className={cn(
@@ -113,7 +190,7 @@ export function RichEditor({
       )}
       data-surface={surface}
     >
-      {toolbar?.(editor)}
+      {toolbar?.(editor, toolbarApi)}
       <EditorContent
         editor={editor}
         className="prose prose-sm max-w-none px-3 py-2 focus:outline-none"
@@ -125,4 +202,42 @@ export function RichEditor({
       />
     </div>
   );
+}
+
+function buildExtensionsForSurface(surface: RichEditorSurface, placeholder: string) {
+  const capabilitySet = new Set<UIRichContentExtensionCapability>(getExtensionsForSurface(surface));
+  const has = (capability: UIRichContentExtensionCapability): boolean =>
+    capabilitySet.has(capability);
+
+  // ADR-0011: image extension is NOT registered. Users cannot author images client-side; backend is authoritative.
+  // Disable built-ins not in the surface capability map, plus built-ins configured separately below. A capability that
+  // IS present is left at StarterKit's default (enabled) by OMITTING the key — never set to `undefined`, which
+  // `exactOptionalPropertyTypes` rejects for an optional prop.
+  const starterKitOptions: Partial<StarterKitOptions> = {
+    blockquote: false,
+    codeBlock: false,
+    hardBreak: false,
+    heading: false,
+    horizontalRule: false,
+    link: false,
+    strike: false,
+    underline: false,
+  };
+  if (!has('bold')) starterKitOptions.bold = false;
+  if (!has('italic')) starterKitOptions.italic = false;
+  if (!has('code')) starterKitOptions.code = false;
+  if (!has('list')) {
+    starterKitOptions.bulletList = false;
+    starterKitOptions.orderedList = false;
+    starterKitOptions.listItem = false;
+  }
+
+  return [
+    StarterKit.configure(starterKitOptions),
+    ...(has('link') ? [Link.configure({ openOnClick: false })] : []),
+    ...(has('underline') ? [Underline] : []),
+    Placeholder.configure({ placeholder }),
+    ...(has('attachmentRef') ? [AttachmentRef] : []),
+    ...(has('mention') ? [Mention] : []),
+  ];
 }

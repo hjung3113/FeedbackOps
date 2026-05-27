@@ -29,6 +29,7 @@ const PUBLIC_ENTRY: ConversationEntry = {
   body_rich_content: {},
   created_at: '2026-05-01T00:00:00Z',
   visibility: 'public',
+  attachments: [],
 };
 
 const REPORTER_REPLY_ENTRY: ConversationEntry = {
@@ -38,6 +39,7 @@ const REPORTER_REPLY_ENTRY: ConversationEntry = {
   body_rich_content: {},
   created_at: '2026-05-01T01:00:00Z',
   visibility: 'reporter',
+  attachments: [],
 };
 
 const INTERNAL_ENTRY: ConversationEntry = {
@@ -47,6 +49,7 @@ const INTERNAL_ENTRY: ConversationEntry = {
   body_rich_content: {},
   created_at: '2026-05-01T02:00:00Z',
   visibility: 'internal',
+  attachments: [],
 };
 
 beforeEach(() => {
