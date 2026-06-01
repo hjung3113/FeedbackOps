@@ -15,10 +15,6 @@
 
 import { z } from 'zod';
 
-import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
-import { HttpError } from '../../lib/errors.js';
-import type { CheckService } from '../permissions/check-service.js';
 import type {
   ConversationEntry,
   GetConversationQuery,
@@ -28,17 +24,23 @@ import type {
   VocListItem,
   VocSummaryEnvelope,
 } from '@fops/shared';
+import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
+import { HttpError } from '../../lib/errors.js';
+import type { EntityLinksService } from '../entity-links/index.js';
+import type { CheckService } from '../permissions/check-service.js';
 
 import { decodeCursor, encodeCursor } from './cursor.js';
 import type { ConversationRow, Scope, VocReadRow } from './repo-read.js';
 import * as repoRead from './repo-read.js';
-import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
+import { type ReporterFacingStatus, nextReporterStates } from './transitions.js';
 
 // ── Public interface ─────────────────────────────────────────────────────────
 
 export interface VocReadServiceDeps {
   db: Db;
   checkService: CheckService;
+  entityLinksService: EntityLinksService;
 }
 
 export interface ReadActorContext {
@@ -515,6 +517,10 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       repoRead.selectVocAttachments(deps.db, actor.workspace_id, vocId),
       repoRead.selectAttachmentsForComments(deps.db, actor.workspace_id, commentIds),
     ]);
+    const links = await deps.entityLinksService.listLinks({
+      actor,
+      endpoint: { type: 'voc', id: vocId },
+    });
 
     const conversationTimeline = mapConversationRowsWithAttachments(
       convResult.entries,
@@ -566,6 +572,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
         forbidden: nextStates.forbidden as Record<VocDetailEnvelope['reporter_facing_status'], string>,
       },
       linked_execution: { findingRef: null, taskRef: null },
+      links,
       conversation_timeline: conversationTimeline,
       // conversation_page.cursor uses exactOptionalPropertyTypes: build without key when absent.
       conversation_page: convNextCursor !== undefined
@@ -708,6 +715,10 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       repoRead.selectVocAttachments(tx, actor.workspace_id, vocId),
       repoRead.selectAttachmentsForComments(tx, actor.workspace_id, commentIds),
     ]);
+    const links = await deps.entityLinksService.listLinks({
+      actor,
+      endpoint: { type: 'voc', id: vocId },
+    });
 
     const conversationTimeline = mapConversationRowsWithAttachments(
       convResult.entries,
@@ -755,6 +766,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
         forbidden: nextStates.forbidden as Record<VocDetailEnvelope['reporter_facing_status'], string>,
       },
       linked_execution: { findingRef: null, taskRef: null },
+      links,
       conversation_timeline: conversationTimeline,
       conversation_page: convNextCursor !== undefined
         ? { cursor: convNextCursor, has_more: convResult.hasMore }

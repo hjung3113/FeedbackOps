@@ -57,6 +57,17 @@ getInternalSummary(id)
 listExpectedLinks(id)
 ```
 
+Slice 4.1 tracer registry (#112):
+
+```text
+voc -> voc
+- relation_type: related_to
+- resolver: voc.vocs(id, workspace_id, primary_managed_system_id)
+- create authz: actor must have voc.read on both source and target Managed Systems
+- read authz: focused endpoint must be readable; the opposite endpoint is emitted
+  as visibility_state=allowed when readable and visibility_state=hidden when not
+```
+
 ## Visibility Enforcement
 
 ```text

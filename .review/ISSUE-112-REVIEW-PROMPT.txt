@@ -1,0 +1,31 @@
+You are REVIEWER for FeedbackOps issue #112 (Slice 4.1 entity_links VOC↔VOC related_to tracer). Adversarial read-only review of the uncommitted diff in this worktree against the dispatch contract in .review/ISSUE-112-PROMPT.txt.
+
+Check, in this order:
+
+1. **Contract adherence** — Does the implementation match every "Required design points" item in the dispatch prompt? Table columns, constraints, unique partial index, composite indexes, GRANTs (fops_app INSERT+SELECT only, no UPDATE/DELETE in this slice), audit_log emit, both-side permission via per-type resolver, visibility decision allowed/hidden with target_id stripped on hidden, VOC detail no-link replacement.
+2. **Scope discipline** — Any FORBIDDEN paths touched? (apps/frontend/**, packages/shared/src/permissions/**, packages/shared/src/auth/**, new findings table, detach endpoints, additional relation types, FR-LINK-003 missing-link queries, visibility tokens beyond what's required.)
+3. **Role-bleed / hidden deviations** — Search for anything that diverges from the prompt without a .review/ISSUE-112-DEVIATIONS.md entry. Known case: packages/shared/src/vocs/detail.ts made `links` field OPTIONAL. Evaluate: is this a benign Slice 3 compatibility move or does it weaken the contract? Should it block, request changes, or be accepted with a written DEVIATIONS entry?
+4. **Test coverage** — Do the integration tests in apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts cover the 7 cases listed in the prompt? Are any cases missing or weak (e.g. the 404 existence-leak guard genuinely asserts 404 not 403, the hidden-state test asserts target_id is absent, the unique-index test confirms no duplicate active rows)?
+5. **Permission authority** — Confirm `entity_links.managed_system_id` is denormalized for filtering only and NOT the authority for target permission. Target permission must come from resolving the target VOC and checking actor scope on the target VOC's `primary_managed_system_id`.
+6. **Audit + transactionality** — POST wraps insert + audit_log emit in a single transaction; failure of either rolls both back.
+7. **Existence-leak** — When actor lacks target scope, POST returns 404 (not 403); GET hides target_id.
+
+Output ONLY a JSON object with this exact shape (no prose before/after):
+
+{
+  "verdict": "approve" | "request_changes" | "block",
+  "summary": "one sentence",
+  "findings": [
+    {
+      "severity": "block" | "major" | "minor" | "nit",
+      "area": "contract|scope|deviation|tests|authz|audit|other",
+      "file": "path:line or path",
+      "issue": "what is wrong, in one sentence",
+      "fix": "concrete fix in one sentence"
+    }
+  ],
+  "deviations_acceptable_with_doc": [ "short description of deviations the conductor should record in DEVIATIONS.md before commit" ],
+  "must_fix_before_commit": [ "short description of blocking items" ]
+}
+
+Keep findings to actual issues, not nitpicks. If nothing blocks, verdict=approve with deviations_acceptable_with_doc populated for known acceptable deviations.
