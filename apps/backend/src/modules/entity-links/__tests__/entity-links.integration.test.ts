@@ -60,6 +60,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
   });
 
   beforeEach(async () => {
+    await dbHandle.pool.query('delete from core.rate_limits');
     await cleanupEntityLinkFixtures();
   });
 
