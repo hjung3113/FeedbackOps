@@ -1,4 +1,4 @@
-// POST/GET /entity-links integration tests — Slice 4.1 issue #112.
+// POST/GET/PATCH /entity-links integration tests — Slice 4.1 #112 + Slice 4.2 #113.
 //
 // Gate: DATABASE_URL + WORKSPACE_ID + DATABASE_URL_MIGRATE. The migrate role is
 // required because core.entity_links is append-only to fops_app.
@@ -82,7 +82,9 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from core.audit_log where workspace_id = $1 and event_type = 'entity_link.created'`,
+      `delete from core.audit_log
+        where workspace_id = $1
+          and event_type in ('entity_link.created', 'entity_link.detached')`,
       [WORKSPACE_ID],
     );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
@@ -137,6 +139,18 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         relation_type: 'related_to',
         ...extra,
       },
+    });
+  }
+
+  async function patchEntityLink(cookie: string, linkId: string, payload: Record<string, unknown>) {
+    return await app.inject({
+      method: 'PATCH',
+      url: `/entity-links/${linkId}`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'content-type': 'application/json',
+      },
+      payload,
     });
   }
 
@@ -301,5 +315,170 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(
       body.links?.some((link) => link.id === linkId && link.visibility_state === 'allowed'),
     ).toBe(true);
+  });
+
+  it('PATCH detaches an active related_to link, preserves the row, and audits the detach', async () => {
+    const { sourceVoc, targetVoc } = await seedVocPair();
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    const res = await patchEntityLink(adminCookie, linkId, { reason: 'No longer relevant' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ id: string; status: string; detached_at: string | null }>();
+    expect(body).toMatchObject({ id: linkId, status: 'detached' });
+    expect(body.detached_at).toEqual(expect.any(String));
+
+    const linkRows = await dbHandle.pool.query<{
+      status: string;
+      detached_by: string | null;
+      detach_reason: string | null;
+      detached_at: Date | null;
+    }>(
+      `select status, detached_by, detach_reason, detached_at
+        from core.entity_links
+        where id = $1`,
+      [linkId],
+    );
+    expect(linkRows.rowCount).toBe(1);
+    expect(linkRows.rows[0]).toMatchObject({
+      status: 'detached',
+      detached_by: adminActorId,
+      detach_reason: 'No longer relevant',
+    });
+    expect(linkRows.rows[0]?.detached_at).toBeInstanceOf(Date);
+
+    const auditRows = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+      `select detail from core.audit_log
+        where event_type = 'entity_link.detached' and subject_id = $1`,
+      [linkId],
+    );
+    expect(auditRows.rowCount).toBe(1);
+    expect(auditRows.rows[0]?.detail).toMatchObject({
+      link_id: linkId,
+      source: { type: 'voc', id: sourceVoc.id },
+      target: { type: 'voc', id: targetVoc.id },
+      relation_type: 'related_to',
+      reason: 'No longer relevant',
+    });
+  });
+
+  it('after detach, GET /entity-links and VOC detail Links tab omit the detached link', async () => {
+    const { sourceVoc, targetVoc } = await seedVocPair();
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    const detach = await patchEntityLink(adminCookie, linkId, { reason: 'Superseded' });
+    expect(detach.statusCode).toBe(200);
+
+    const list = await app.inject({
+      method: 'GET',
+      url: `/entity-links?source_type=voc&source_id=${sourceVoc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(list.statusCode).toBe(200);
+    expect(
+      list.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId),
+    ).toBe(false);
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/vocs/${sourceVoc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(detail.statusCode).toBe(200);
+    const body = detail.json<{ links?: Array<{ id: string }> }>();
+    expect(body.links?.some((link) => link.id === linkId)).toBe(false);
+  });
+
+  it('PATCH on an already-detached link returns 409', async () => {
+    const { sourceVoc, targetVoc } = await seedVocPair();
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    const first = await patchEntityLink(adminCookie, linkId, { reason: 'Initial detach' });
+    expect(first.statusCode).toBe(200);
+
+    const second = await patchEntityLink(adminCookie, linkId, { reason: 'Again' });
+    expect(second.statusCode).toBe(409);
+    expect(second.json<{ code: string }>().code).toBe('conflict.stale_write');
+  });
+
+  it('PATCH returns 404 when actor lacks scope on the target endpoint', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    const { id: devId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('detach404'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const res = await patchEntityLink(devCookie, linkId, { reason: 'No scope' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('PATCH returns 404 for an already-detached link when actor lacks target scope', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    const detach = await patchEntityLink(adminCookie, linkId, { reason: 'Authorized detach' });
+    expect(detach.statusCode).toBe(200);
+
+    const { id: devId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('detached404'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const res = await patchEntityLink(devCookie, linkId, { reason: 'No target scope' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('PATCH rejects missing or empty detach reason', async () => {
+    const { sourceVoc, targetVoc } = await seedVocPair();
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    for (const payload of [{}, { reason: '' }, { reason: '   ' }]) {
+      const res = await patchEntityLink(adminCookie, linkId, payload);
+      expect(res.statusCode).toBe(422);
+      expect(res.json<{ code: string }>().code).toBe('validation.failed');
+    }
+  });
+
+  it('detach frees the active unique slot so the same VOC pair can be linked again', async () => {
+    const { sourceVoc, targetVoc } = await seedVocPair();
+    const first = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(first.statusCode).toBe(201);
+    const firstId = first.json<{ id: string }>().id;
+
+    const detach = await patchEntityLink(adminCookie, firstId, { reason: 'Relink needed' });
+    expect(detach.statusCode).toBe(200);
+
+    const second = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(second.statusCode).toBe(201);
+    expect(second.json<{ id: string }>().id).not.toBe(firstId);
+
+    const count = await dbHandle.pool.query<{ active: number; detached: number }>(
+      `select
+          count(*) filter (where status = 'active')::int as active,
+          count(*) filter (where status = 'detached')::int as detached
+        from core.entity_links
+        where source_id = $1 and target_id = $2`,
+      [sourceVoc.id, targetVoc.id],
+    );
+    expect(count.rows[0]).toMatchObject({ active: 1, detached: 1 });
   });
 });

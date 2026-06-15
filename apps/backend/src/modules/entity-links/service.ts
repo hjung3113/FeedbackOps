@@ -1,4 +1,4 @@
-import type { EntityLinkDto, EntityLinkRef } from '@fops/shared';
+import type { DetachedEntityLinkResponse, EntityLinkDto, EntityLinkRef } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
@@ -6,9 +6,11 @@ import type { AuditService } from '../core/audit/audit-service.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   type EntityLinkRow,
+  detachVocRelatedToLink,
   insertActiveVocRelatedToLink,
   resolveVocEndpoint,
   selectActiveLinksForEndpoint,
+  selectEntityLinkById,
 } from './repo.js';
 
 export interface EntityLinksActor {
@@ -48,6 +50,17 @@ function toHiddenDto(row: EntityLinkRow): EntityLinkDto {
     target_type: row.target_type,
     relation_type: row.relation_type,
     visibility_state: 'hidden',
+  };
+}
+
+function toDetachedResponse(row: EntityLinkRow): DetachedEntityLinkResponse {
+  if (row.status !== 'detached' || row.detached_at === null) {
+    throw new HttpError('internal.unexpected', 'detached entity link row missing detach fields');
+  }
+  return {
+    id: row.id,
+    status: 'detached',
+    detached_at: row.detached_at.toISOString(),
   };
 }
 
@@ -192,7 +205,82 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     return items;
   }
 
-  return { createLink, listLinks };
+  async function detachLink(args: {
+    actor: EntityLinksActor;
+    linkId: string;
+    reason: string;
+  }): Promise<DetachedEntityLinkResponse> {
+    const { actor, linkId, reason } = args;
+
+    const link = await selectEntityLinkById(deps.db, {
+      workspaceId: actor.workspace_id,
+      linkId,
+    });
+    if (!link) {
+      throw new HttpError('not_found.record', 'entity link not found');
+    }
+    if (
+      link.source_type !== 'voc' ||
+      link.target_type !== 'voc' ||
+      link.relation_type !== 'related_to'
+    ) {
+      throw new HttpError('validation.failed', 'unsupported entity link tuple', {
+        fields: [{ path: [], code: 'unsupported_tuple' }],
+      });
+    }
+    const [sourceRow, targetRow] = await Promise.all([
+      resolveVocEndpoint(deps.db, actor.workspace_id, link.source_id),
+      resolveVocEndpoint(deps.db, actor.workspace_id, link.target_id),
+    ]);
+    if (!sourceRow || !targetRow) {
+      throw new HttpError('not_found.record', 'entity link endpoint not found');
+    }
+
+    const [sourceAllowed, targetAllowed] = await Promise.all([
+      assertVocReadScope(deps, actor, sourceRow.managed_system_id),
+      assertVocReadScope(deps, actor, targetRow.managed_system_id),
+    ]);
+    if (!sourceAllowed || !targetAllowed) {
+      throw new HttpError('not_found.record', 'entity link not found');
+    }
+    if (link.status !== 'active') {
+      throw new HttpError('conflict.stale_write', 'entity link is no longer active');
+    }
+
+    const detached = await deps.db.transaction(async (tx) => {
+      const updated = await detachVocRelatedToLink(tx, {
+        workspaceId: actor.workspace_id,
+        linkId,
+        actorId: actor.actor_id,
+        reason,
+      });
+      if (!updated) {
+        throw new HttpError('conflict.stale_write', 'entity link is no longer active');
+      }
+
+      await deps.auditService.record(tx, {
+        workspace_id: actor.workspace_id,
+        actor_id: actor.actor_id,
+        event_type: 'entity_link.detached',
+        subject_type: 'entity_link',
+        subject_id: updated.id,
+        summary: 'Entity link detached',
+        detail: {
+          link_id: updated.id,
+          source: { type: updated.source_type, id: updated.source_id },
+          target: { type: updated.target_type, id: updated.target_id },
+          relation_type: updated.relation_type,
+          reason,
+        },
+      });
+
+      return updated;
+    });
+
+    return toDetachedResponse(detached);
+  }
+
+  return { createLink, listLinks, detachLink };
 }
 
 export type EntityLinksService = ReturnType<typeof createEntityLinksService>;
