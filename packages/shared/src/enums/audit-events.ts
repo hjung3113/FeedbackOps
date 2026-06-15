@@ -17,18 +17,18 @@ import { z } from 'zod';
 
 import { attachmentUploadedDetailSchema } from '../audit/attachments.js';
 import {
-  vocCreatedDetailSchema,
-  vocTriageCommittedDetailSchema,
-  vocSeveritySetDetailSchema,
-  vocOwnerAssignedDetailSchema,
-  vocAnalyticsAreaLinkedDetailSchema,
-  vocClusterDecisionRecordedDetailSchema,
+  internalCommentCreatedDetailSchema,
   publicUpdateCreatedDetailSchema,
   reporterFacingStatusChangedDetailSchema,
   reporterReplyCreatedDetailSchema,
-  internalCommentCreatedDetailSchema,
-  vocTriagePostponedDetailSchema,
+  vocAnalyticsAreaLinkedDetailSchema,
+  vocClusterDecisionRecordedDetailSchema,
+  vocCreatedDetailSchema,
   vocDescriptionEditedDetailSchema,
+  vocOwnerAssignedDetailSchema,
+  vocSeveritySetDetailSchema,
+  vocTriageCommittedDetailSchema,
+  vocTriagePostponedDetailSchema,
 } from '../audit/voc.js';
 
 export const AUDIT_EVENT_TYPES = [
@@ -58,6 +58,8 @@ export const AUDIT_EVENT_TYPES = [
   'voc_description_edited',
   // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
   'attachment_uploaded',
+  // Slice 4.1 #112: canonical entity link creation tracer.
+  'entity_link.created',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -145,6 +147,21 @@ export const analyticsAreaArchivedDetailSchema = z.object({
 });
 export type AnalyticsAreaArchivedDetail = z.infer<typeof analyticsAreaArchivedDetailSchema>;
 
+export const entityLinkCreatedDetailSchema = z.object({
+  link_id: z.string().uuid(),
+  source: z.object({
+    type: z.literal('voc'),
+    id: z.string().uuid(),
+  }),
+  target: z.object({
+    type: z.literal('voc'),
+    id: z.string().uuid(),
+  }),
+  relation_type: z.literal('related_to'),
+  visibility: z.literal('internal_only'),
+});
+export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
@@ -170,4 +187,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   voc_description_edited: vocDescriptionEditedDetailSchema,
   // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
   attachment_uploaded: attachmentUploadedDetailSchema,
+  // Slice 4.1 #112.
+  'entity_link.created': entityLinkCreatedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

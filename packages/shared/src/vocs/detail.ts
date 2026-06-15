@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { entityLinkDtoSchema } from '../entity-links.js';
 import { LinkedAttachmentSchema } from './attachment.js';
 import { conversationEntrySchema } from './conversation.js';
 import { reporterFacingStatusEnumSchema, vocListItemSchema } from './list-item.js';
@@ -29,6 +30,9 @@ export const vocDetailEnvelopeSchema = vocListItemSchema.extend({
     findingRef: z.null(),
     taskRef: z.null(),
   }),
+  // Slice 4.1 #112: backend-decided Links tab rows from core.entity_links.
+  // Optional so existing Slice 3 consumers and fixtures remain source-compatible.
+  links: z.array(entityLinkDtoSchema).optional(),
   // Hybrid inline conversations: first 50 entries inline; pagination tail via
   // GET /vocs/:id/conversation. Slice 3: conversation POSTs ship in #16.
   conversation_timeline: z.array(conversationEntrySchema),

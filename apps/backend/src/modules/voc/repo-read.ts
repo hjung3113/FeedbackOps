@@ -14,7 +14,7 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
+import { entityLinks } from '../../db/schema/core.js';
 import {
   vocInternalComments,
   vocPermissionDecisionsSeedFixture,
@@ -22,6 +22,7 @@ import {
   vocReporterReplies,
   vocs,
 } from '../../db/schema/voc.js';
+import type { Tx } from '../../db/tx.js';
 import { allManagedSystemIds } from '../core/managed-systems/read-projections.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 import { actorScopeForCapability } from '../permissions/scope-service.js';
@@ -239,8 +240,18 @@ export async function listVocsForRead(
     // Only valid for triage view; no extra clause beyond the triage_state filter
     // since service layer validates view=triage for this tab.
     wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
+  } else if (tab === 'no-link') {
+    wheres.push(sql`NOT EXISTS (
+      SELECT 1
+      FROM ${entityLinks} el
+      WHERE el.workspace_id = ${workspaceId}
+        AND el.status = 'active'
+        AND (
+          (el.source_type = 'voc' AND el.source_id = ${vocs.id})
+          OR (el.target_type = 'voc' AND el.target_id = ${vocs.id})
+        )
+    )`);
   }
-  // tab='no-link' → no extra clause (entity_links absent in Slice 3).
 
   // Scalar column filters.
   if (filterSeverity && filterSeverity.length > 0) {

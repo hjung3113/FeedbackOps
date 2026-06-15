@@ -22,6 +22,11 @@ core.entity_links
 - created_at
 ```
 
+Slice 4.1 tracer (#112) implements the first production path: VOC → VOC
+`related_to` links with `visibility='internal_only'` and lifecycle
+`status='active'`. It also adds `managed_system_id`, `updated_at`, uniqueness
+for active links, and active source/target lookup indexes.
+
 ## Relation Types
 
 Common:
@@ -33,6 +38,9 @@ Common:
 - validates
 - follow_up_for
 ```
+
+For Slice 4.1, `related_to` is enabled only for VOC↔VOC links. Additional
+entity pairs remain deferred to later slices.
 
 VOC:
 
@@ -72,6 +80,11 @@ Explicitly excluded:
 VOC only. It must respect Managed System scope, target visibility, policy, and
 anonymous response protections. It must not imply Survey Response to VOC
 conversion.
+
+Slice 4.1 tracer (#112): production support starts with VOC↔VOC `related_to`
+links only. The tracer creates `core.entity_links` rows with `status='active'`,
+`visibility='internal_only'`, and backend-decided read visibility of `allowed`
+or `hidden`.
 
 ## Visibility
 
@@ -138,6 +151,10 @@ Acceptance Criteria:
 - Linked-object UI visibility is backend-decided as allowed, hidden, summary_visible, request_access, or denied.
 - Frontend must not synthesize linked-object summaries from raw data that the actor cannot otherwise read.
 ```
+
+Slice 4.1 exposes only `allowed` and `hidden` visibility states for VOC↔VOC
+`related_to` reads. Hidden rows carry only link id, endpoint types,
+relation_type, and visibility_state.
 
 ### FR-LINK-003: Support Dashboard Missing-Link Queries
 

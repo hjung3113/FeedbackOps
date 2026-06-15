@@ -108,7 +108,11 @@ function makeService(checkDecision: Decision = allowDecision) {
   const checkService = {
     checkCapability: vi.fn().mockResolvedValue(checkDecision),
   } as unknown as VocReadServiceDeps['checkService'];
-  return { svc: createVocReadService({ db, checkService }), checkService };
+  const entityLinksService = {
+    createLink: vi.fn(),
+    listLinks: vi.fn().mockResolvedValue([]),
+  } as unknown as NonNullable<VocReadServiceDeps['entityLinksService']>;
+  return { svc: createVocReadService({ db, checkService, entityLinksService }), checkService };
 }
 
 // ── listVocs tests ────────────────────────────────────────────────────────────

@@ -1,0 +1,3022 @@
+OpenAI Codex v0.135.0
+--------
+workdir: /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 019e83c3-6984-71b3-acd0-d74fd66b80e3
+--------
+user
+You are REVIEWER for FeedbackOps issue #112 (Slice 4.1 entity_links VOC↔VOC related_to tracer). Adversarial read-only review of the uncommitted diff in this worktree against the dispatch contract in .review/ISSUE-112-PROMPT.txt.
+
+Check, in this order:
+
+1. **Contract adherence** — Does the implementation match every "Required design points" item in the dispatch prompt? Table columns, constraints, unique partial index, composite indexes, GRANTs (fops_app INSERT+SELECT only, no UPDATE/DELETE in this slice), audit_log emit, both-side permission via per-type resolver, visibility decision allowed/hidden with target_id stripped on hidden, VOC detail no-link replacement.
+2. **Scope discipline** — Any FORBIDDEN paths touched? (apps/frontend/**, packages/shared/src/permissions/**, packages/shared/src/auth/**, new findings table, detach endpoints, additional relation types, FR-LINK-003 missing-link queries, visibility tokens beyond what's required.)
+3. **Role-bleed / hidden deviations** — Search for anything that diverges from the prompt without a .review/ISSUE-112-DEVIATIONS.md entry. Known case: packages/shared/src/vocs/detail.ts made `links` field OPTIONAL. Evaluate: is this a benign Slice 3 compatibility move or does it weaken the contract? Should it block, request changes, or be accepted with a written DEVIATIONS entry?
+4. **Test coverage** — Do the integration tests in apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts cover the 7 cases listed in the prompt? Are any cases missing or weak (e.g. the 404 existence-leak guard genuinely asserts 404 not 403, the hidden-state test asserts target_id is absent, the unique-index test confirms no duplicate active rows)?
+5. **Permission authority** — Confirm `entity_links.managed_system_id` is denormalized for filtering only and NOT the authority for target permission. Target permission must come from resolving the target VOC and checking actor scope on the target VOC's `primary_managed_system_id`.
+6. **Audit + transactionality** — POST wraps insert + audit_log emit in a single transaction; failure of either rolls both back.
+7. **Existence-leak** — When actor lacks target scope, POST returns 404 (not 403); GET hides target_id.
+
+Output ONLY a JSON object with this exact shape (no prose before/after):
+
+{
+  "verdict": "approve" | "request_changes" | "block",
+  "summary": "one sentence",
+  "findings": [
+    {
+      "severity": "block" | "major" | "minor" | "nit",
+      "area": "contract|scope|deviation|tests|authz|audit|other",
+      "file": "path:line or path",
+      "issue": "what is wrong, in one sentence",
+      "fix": "concrete fix in one sentence"
+    }
+  ],
+  "deviations_acceptable_with_doc": [ "short description of deviations the conductor should record in DEVIATIONS.md before commit" ],
+  "must_fix_before_commit": [ "short description of blocking items" ]
+}
+
+Keep findings to actual issues, not nitpicks. If nothing blocks, verdict=approve with deviations_acceptable_with_doc populated for known acceptable deviations.
+hook: SessionStart
+hook: SessionStart Failed
+hook: UserPromptSubmit
+hook: UserPromptSubmit Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "sed -n '1,220p' /Users/hyojung/.codex/plugins/cache/openai-curated/superpowers/b197a8c5/skills/using-superpowers/SKILL.md" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+---
+name: using-superpowers
+description: Use when starting any conversation - establishes how to find and use skills, requiring Skill tool invocation before ANY response including clarifying questions
+---
+
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, skip this skill.
+</SUBAGENT-STOP>
+
+<EXTREMELY-IMPORTANT>
+If you think there is even a 1% chance a skill might apply to what you are doing, you ABSOLUTELY MUST invoke the skill.
+
+IF A SKILL APPLIES TO YOUR TASK, YOU DO NOT HAVE A CHOICE. YOU MUST USE IT.
+
+This is not negotiable. This is not optional. You cannot rationalize your way out of this.
+</EXTREMELY-IMPORTANT>
+
+## Instruction Priority
+
+Superpowers skills override default system prompt behavior, but **user instructions always take precedence**:
+
+1. **User's explicit instructions** (CLAUDE.md, GEMINI.md, AGENTS.md, direct requests) — highest priority
+2. **Superpowers skills** — override default system behavior where they conflict
+3. **Default system prompt** — lowest priority
+
+If CLAUDE.md, GEMINI.md, or AGENTS.md says "don't use TDD" and a skill says "always use TDD," follow the user's instructions. The user is in control.
+
+## How to Access Skills
+
+**In Claude Code:** Use the `Skill` tool. When you invoke a skill, its content is loaded and presented to you—follow it directly. Never use the Read tool on skill files.
+
+**In Copilot CLI:** Use the `skill` tool. Skills are auto-discovered from installed plugins. The `skill` tool works the same as Claude Code's `Skill` tool.
+
+**In Gemini CLI:** Skills activate via the `activate_skill` tool. Gemini loads skill metadata at session start and activates the full content on demand.
+
+**In other environments:** Check your platform's documentation for how skills are loaded.
+
+## Platform Adaptation
+
+Skills use Claude Code tool names. Non-CC platforms: see `references/copilot-tools.md` (Copilot CLI), `references/codex-tools.md` (Codex) for tool equivalents. Gemini CLI users get the tool mapping loaded automatically via GEMINI.md.
+
+# Using Skills
+
+## The Rule
+
+**Invoke relevant or requested skills BEFORE any response or action.** Even a 1% chance a skill might apply means that you should invoke the skill to check. If an invoked skill turns out to be wrong for the situation, you don't need to use it.
+
+```dot
+digraph skill_flow {
+    "User message received" [shape=doublecircle];
+    "About to EnterPlanMode?" [shape=doublecircle];
+    "Already brainstormed?" [shape=diamond];
+    "Invoke brainstorming skill" [shape=box];
+    "Might any skill apply?" [shape=diamond];
+    "Invoke Skill tool" [shape=box];
+    "Announce: 'Using [skill] to [purpose]'" [shape=box];
+    "Has checklist?" [shape=diamond];
+    "Create TodoWrite todo per item" [shape=box];
+    "Follow skill exactly" [shape=box];
+    "Respond (including clarifications)" [shape=doublecircle];
+
+    "About to EnterPlanMode?" -> "Already brainstormed?";
+    "Already brainstormed?" -> "Invoke brainstorming skill" [label="no"];
+    "Already brainstormed?" -> "Might any skill apply?" [label="yes"];
+    "Invoke brainstorming skill" -> "Might any skill apply?";
+
+    "User message received" -> "Might any skill apply?";
+    "Might any skill apply?" -> "Invoke Skill tool" [label="yes, even 1%"];
+    "Might any skill apply?" -> "Respond (including clarifications)" [label="definitely not"];
+    "Invoke Skill tool" -> "Announce: 'Using [skill] to [purpose]'";
+    "Announce: 'Using [skill] to [purpose]'" -> "Has checklist?";
+    "Has checklist?" -> "Create TodoWrite todo per item" [label="yes"];
+    "Has checklist?" -> "Follow skill exactly" [label="no"];
+    "Create TodoWrite todo per item" -> "Follow skill exactly";
+}
+```
+
+## Red Flags
+
+These thoughts mean STOP—you're rationalizing:
+
+| Thought | Reality |
+|---------|---------|
+| "This is just a simple question" | Questions are tasks. Check for skills. |
+| "I need more context first" | Skill check comes BEFORE clarifying questions. |
+| "Let me explore the codebase first" | Skills tell you HOW to explore. Check first. |
+| "I can check git/files quickly" | Files lack conversation context. Check for skills. |
+| "Let me gather information first" | Skills tell you HOW to gather information. |
+| "This doesn't need a formal skill" | If a skill exists, use it. |
+| "I remember this skill" | Skills evolve. Read current version. |
+| "This doesn't count as a task" | Action = task. Check for skills. |
+| "The skill is overkill" | Simple things become complex. Use it. |
+| "I'll just do this one thing first" | Check BEFORE doing anything. |
+| "This feels productive" | Undisciplined action wastes time. Skills prevent this. |
+| "I know what that means" | Knowing the concept ≠ using the skill. Invoke it. |
+
+## Skill Priority
+
+When multiple skills could apply, use this order:
+
+1. **Process skills first** (brainstorming, debugging) - these determine HOW to approach the task
+2. **Implementation skills second** (frontend-design, mcp-builder) - these guide execution
+
+"Let's build X" → brainstorming first, then implementation skills.
+"Fix this bug" → debugging first, then domain-specific skills.
+
+## Skill Types
+
+**Rigid** (TDD, debugging): Follow exactly. Don't adapt away discipline.
+
+**Flexible** (patterns): Adapt principles to context.
+
+The skill itself tells you which.
+
+## User Instructions
+
+Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'rg -n "ISSUE-112|entity_links|DEVIATIONS|112" /Users/hyojung/.codex/memories/MEMORY.md' in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ exited 2 in 0ms:
+rg: /Users/hyojung/.codex/memories/MEMORY.md: IO error for operation on /Users/hyojung/.codex/memories/MEMORY.md: No such file or directory (os error 2)
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "sed -n '1,260p' .review/ISSUE-112-PROMPT.txt" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+# Issue #112 — Slice 4.1 · entity_links VOC↔VOC related_to tracer
+
+You are CODEX. Implement this issue end-to-end. Sandbox = workspace-write, NO network. The DB is unreachable from the sandbox; tests run OUTSIDE by VERIFIER. Do NOT attempt to run the DB, migrations, or tests yourself — only static checks (pnpm typecheck, lint) inside the sandbox.
+
+## Goal
+
+Tracer bullet establishing `core.entity_links` as the canonical polymorphic loose-coupling join table, plus `POST/GET /entity-links` endpoints, plus replacing the VOC detail Links "no-link" placeholder. ONE relation type (`related_to`), direction **VOC → VOC**, both ends are real `voc.vocs` rows. The endpoint enforces the actor has permission on BOTH source and target managed-system scope, emits an audit_log event on create, and visibility is backend-decided as `allowed` or `hidden` (FR-LINK-002).
+
+Spec sources (read these first):
+- docs/design/11-entity-linking.md — FR-LINK-001 (create), FR-LINK-002 (visibility), schema draft, relation list
+- docs/implementation/06-entity-linking-contract.md — per-type resolvers, both-side authz pattern
+- docs/design/14-api-draft.md §"Entity Link APIs" — POST/GET/PATCH/DELETE /entity-links
+- apps/backend/src/db/schema/core.ts — existing core table pattern (auditLog, workspaces, managedSystems)
+- apps/backend/src/modules/voc/{routes.ts,service.ts,repo.ts,repo-read.ts,index.ts} — existing module skeleton
+- apps/backend/src/modules/voc/repo-read.ts:~243 — the "no-link" branch you must replace
+- apps/backend/migrations/0017_voc_per_workspace_display_counter.sql — recent migration style
+- packages/shared/src/{vocs,enums,audit}/ — shared type patterns
+
+## Strict scope — ABORT with a blocker artifact if your touch set escapes these bounds
+
+If you discover the change must touch anything OUTSIDE the lists below, STOP, write `.review/ISSUE-112-BLOCKER.json` with a real `reason_code` and a concrete `blocking_fact` (a quoted file:line or contract clause that forced the escape — NOT example wording), and exit non-zero without committing.
+
+ALLOWED to create/edit:
+- `apps/backend/migrations/0018_entity_links.sql` (new — created by hand; do NOT run `drizzle-kit generate` or `migrate`)
+- `apps/backend/migrations/meta/0018_snapshot.json` + `_journal.json` update — only if you must satisfy the meta journal. If unsure, leave meta alone and let a human regenerate.
+- `apps/backend/src/db/schema/core.ts` (add `entityLinks` table)
+- `apps/backend/src/db/schema/index.ts` (export only if pattern requires)
+- `apps/backend/src/modules/entity-links/` (new module: `routes.ts`, `service.ts`, `repo.ts`, `index.ts`, `__tests__/`)
+- `apps/backend/src/modules/voc/repo-read.ts` (replace the `'no-link'` branch only)
+- `apps/backend/src/modules/voc/read-service.ts` (only if the shape change requires it)
+- `apps/backend/src/modules/voc/__tests__/` (update VOC detail link-tab tests if existing tests cover the no-link branch)
+- `apps/backend/src/app.ts` or wherever module routes are wired (register `/entity-links` routes)
+- `packages/shared/src/entity-links.ts` (new — shared types for relation_type, visibility, status, link DTO)
+- `packages/shared/src/index.ts` (export)
+- `packages/shared/src/enums/audit-events.ts` (add `entity_link.created` event token)
+- Doc-sync (same commit; per project doc-sync discipline):
+  - `docs/design/11-entity-linking.md` — note "Slice 4.1 tracer = VOC↔VOC `related_to` per #112"
+  - `docs/implementation/06-entity-linking-contract.md` — register the VOC↔VOC `related_to` resolver pair
+- `.review/ISSUE-112-DEVIATIONS.md` (any deliberate deviations from this prompt, with reason)
+
+FORBIDDEN — touching any of these is a scope escape, abort with blocker:
+- `packages/shared/src/permissions/*` — reuse existing permission helpers, do NOT add new capabilities
+- `packages/shared/src/auth/*`
+- `packages/shared/src/vocs/*` shape changes that break Slice 3 consumers (additions OK only if strictly required for the Links tab DTO)
+- Any FE code (`apps/frontend/**`) — #114 owns `/integration/links` UI; this issue is backend + the VOC detail backend payload only
+- A new `findings` table (Slice 5)
+- Detach endpoints `PATCH/DELETE /entity-links/:id` (#113)
+- Additional relation types beyond `related_to` (deferred)
+- Visibility tokens beyond what the schema enum requires; in this slice only `internal_only` may be CREATED, and reads return only `allowed`/`hidden` (#115 owns the rest)
+- FR-LINK-003 missing-link queries (Slice 7)
+
+## Required design points
+
+### `core.entity_links` table
+
+Columns (mirror docs/design/11-entity-linking.md §"Data Model Draft" + add the lifecycle status):
+- `id uuid pk default gen_random_uuid()`
+- `workspace_id uuid not null` (FK → `core.workspaces.id`)
+- `source_type text not null`, `source_id uuid not null`
+- `target_type text not null`, `target_id uuid not null`
+- `relation_type text not null`
+- `visibility text not null default 'internal_only'`
+- `status text not null default 'active'` — enum domain `active|stale|detached|revoked` (only `active` is produced by this slice; `stale` populated later by Slice 7, others by #113)
+- `managed_system_id uuid not null` (denormalized for filtering/audit/default visibility; NOT the authority for target permission)
+- `created_by uuid not null` (FK → `core.actors.id`), `created_at timestamptz not null default now()`
+- `updated_at timestamptz` (nullable until first transition; reserved for #113)
+
+Constraints + indexes:
+- CHECK constraints on enum domains (relation_type ∈ {'related_to'} for now — extensible later; visibility ∈ the 4 spec tokens; status ∈ the 4 lifecycle tokens; source_type/target_type in a small allowed set including at least 'voc')
+- Unique partial index `(workspace_id, source_type, source_id, target_type, target_id, relation_type) WHERE status='active'` — prevents duplicate active links
+- Composite indexes `(workspace_id, source_type, source_id) WHERE status='active'` and the symmetric `(workspace_id, target_type, target_id) WHERE status='active'` for fast lookup from either endpoint (FR-LINK-003 will reuse these)
+- `(workspace_id, managed_system_id, status)` for the audit UI later
+- GRANTs: `fops_app` gets INSERT + SELECT (UPDATE deferred until #113 needs it; DELETE never — no hard delete)
+
+### `POST /entity-links`
+
+Request DTO: `{ source: {type, id}, target: {type, id}, relation_type, visibility? }`. In this slice the server REJECTS anything other than `source.type='voc'`, `target.type='voc'`, `relation_type='related_to'`, `visibility ∈ {undefined, 'internal_only'}` (default `internal_only`). Reject self-link (source equals target).
+
+Authorization (the heart of the tracer):
+- Look up source VOC and target VOC (per-type resolver pattern — register a `voc` resolver that returns `{workspace_id, managed_system_id}` or 404).
+- Both rows MUST be in the actor's workspace; cross-workspace = 404 (do not leak existence).
+- Actor MUST have the existing VOC-read capability on BOTH `managed_system_id`s (reuse whatever permission helper the VOC read path uses today; if VOC routes use a `requireMSScope` middleware, use the same).
+- If either check fails on the target, return 404 (not 403) — do not leak that the target exists.
+- Set `entity_links.managed_system_id` to source's `managed_system_id` (denormalized).
+
+Side effects: emit audit_log event `entity_link.created` with payload `{ link_id, source, target, relation_type, visibility }`. Wrap insert + audit in a single transaction.
+
+Idempotency: NOT required in this slice (no Idempotency-Key contract). The unique partial index handles double-clicks; on conflict, return the existing active link with 200 (or 409 — pick one and stick with it, document in DEVIATIONS if you pick 409).
+
+### `GET /entity-links`
+
+Query: `?source_type=voc&source_id=<uuid>` (the VOC detail tab consumer's shape). MAY also accept `?target_type&target_id`. Returns active links the actor may see.
+
+Visibility decision: for each link the actor would otherwise see, check the actor's scope on the OTHER endpoint's `managed_system_id`. If the actor has scope → emit the row with `visibility_state: 'allowed'`. If not → emit a stub row with `visibility_state: 'hidden'` carrying only `{id, source_type, target_type, relation_type, visibility_state}` (NEVER `source_id`/`target_id` of the hidden side, NEVER any synthesized summary). This is the FR-LINK-002 contract surface for this tracer.
+
+### VOC detail integration
+
+In `apps/backend/src/modules/voc/repo-read.ts` near line 243, the comment reads `tab='no-link' → no extra clause (entity_links absent in Slice 3).` Replace that branch with a query that joins `entity_links` (or calls into the entity-links repo) and returns the focused VOC's active links in BOTH directions (where focused VOC is source OR target) with the visibility decision above applied. The `links` tab DTO returned to the FE must match the shared DTO in `packages/shared/src/entity-links.ts`. Do NOT add FE code.
+
+## Tests (vitest, integration, run by VERIFIER outside sandbox)
+
+Place in `apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts` (mirror the VOC test setup pattern in `apps/backend/src/modules/voc/__tests__/_seed-helpers.ts`).
+
+Must cover:
+1. POST creates an active VOC↔VOC `related_to` link when actor has scope on both VOCs; row exists; audit_log row exists with `entity_link.created`.
+2. POST returns 404 when actor lacks scope on the target VOC (existence-leak guard).
+3. POST rejects self-link (source==target).
+4. POST rejects unsupported relation_type / source_type / target_type / visibility values.
+5. POST against the unique partial index returns the existing active link without duplicating (or 409 per your choice).
+6. GET by source returns links with `visibility_state: 'allowed'` for in-scope targets and `'hidden'` (with target_id stripped) for out-of-scope targets.
+7. VOC detail read for a VOC with an active outbound `related_to` link returns it on the links tab (replacing the empty 'no-link' shape); the test that previously asserted the empty shape must be updated, not deleted.
+
+## Working procedure
+
+1. Read the spec sources listed above and grep the existing VOC module to mirror its permission middleware + audit emit pattern.
+2. Write the migration SQL by hand. Match the style of `0017_voc_per_workspace_display_counter.sql` (header comment, idempotent guards if used elsewhere, explicit GRANTs).
+3. Add the drizzle table definition in `core.ts`. Do NOT run `drizzle-kit generate`/`migrate` (no DB access; the migration SQL is the source of truth).
+4. Build the shared types in `packages/shared/src/entity-links.ts` and export.
+5. Implement the module (routes/service/repo) with the per-type resolver registry.
+6. Wire the routes in the app entry.
+7. Replace the VOC detail no-link branch.
+8. Write the integration tests above.
+9. Run `pnpm -w typecheck` and `pnpm -w lint` (or the project equivalents). Fix any new errors you introduce; do NOT fix pre-existing baseline errors.
+10. Doc-sync in the SAME commit: update `docs/design/11-entity-linking.md` and `docs/implementation/06-entity-linking-contract.md` as listed.
+11. Commit with message style matching recent commits (`feat(#112): …`).
+12. Push to `feature/112-entity-links-evidence` (the worktree's branch). Do NOT open a PR; the conductor handles that after VERIFY.
+
+If at any point you find a forced scope escape or a contract ambiguity that the spec sources don't resolve, write `.review/ISSUE-112-BLOCKER.json` with `{ "reason_code": "<short_token>", "blocking_fact": "<file:line or quoted clause that forced this>", "what_was_attempted": "<one sentence>", "what_is_blocking": "<one sentence>" }` and exit non-zero. Do NOT improvise around the gap.
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "find .review -maxdepth 1 -type f -name '*112*' -print" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+.review/ISSUE-112-REVIEW-PROMPT.txt
+.review/ISSUE-112-PROMPT.txt
+.review/ISSUE-112-REVIEW.raw.txt
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git status --short' in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-zRUsK8qN' (errno=Operation not permitted)
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-p7xuHS4O' (errno=Operation not permitted)
+ M apps/backend/src/db/schema/core.ts
+ M apps/backend/src/modules/voc/__tests__/read-service.test.ts
+ M apps/backend/src/modules/voc/read-service.ts
+ M apps/backend/src/modules/voc/repo-read.ts
+ M apps/backend/src/server.ts
+ M docs/design/11-entity-linking.md
+ M docs/implementation/06-entity-linking-contract.md
+ M packages/shared/src/enums/audit-events.ts
+ M packages/shared/src/index.ts
+ M packages/shared/src/vocs/detail.ts
+?? .review/ISSUE-112-PROMPT.txt
+?? .review/ISSUE-112-REVIEW-PROMPT.txt
+?? .review/ISSUE-112-REVIEW.raw.txt
+?? apps/backend/migrations/0018_entity_links.sql
+?? apps/backend/src/modules/entity-links/
+?? packages/shared/src/entity-links.ts
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git diff --name-status' in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-o59irWeE' (errno=Operation not permitted)
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-t1hliKt7' (errno=Operation not permitted)
+M	apps/backend/src/db/schema/core.ts
+M	apps/backend/src/modules/voc/__tests__/read-service.test.ts
+M	apps/backend/src/modules/voc/read-service.ts
+M	apps/backend/src/modules/voc/repo-read.ts
+M	apps/backend/src/server.ts
+M	docs/design/11-entity-linking.md
+M	docs/implementation/06-entity-linking-contract.md
+M	packages/shared/src/enums/audit-events.ts
+M	packages/shared/src/index.ts
+M	packages/shared/src/vocs/detail.ts
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc 'find apps/backend/src/modules/entity-links -type f -maxdepth 3 -print | sort' in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts
+apps/backend/src/modules/entity-links/index.ts
+apps/backend/src/modules/entity-links/repo.ts
+apps/backend/src/modules/entity-links/routes.ts
+apps/backend/src/modules/entity-links/service.ts
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git diff -- apps/backend/migrations/0018_entity_links.sql apps/backend/src/db/schema/core.ts packages/shared/src/entity-links.ts packages/shared/src/enums/audit-events.ts packages/shared/src/index.ts packages/shared/src/vocs/detail.ts apps/backend/src/server.ts' in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-cqxLf6pX' (errno=Operation not permitted)
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-CDhj9Lu6' (errno=Operation not permitted)
+diff --git a/apps/backend/src/db/schema/core.ts b/apps/backend/src/db/schema/core.ts
+index bcec85f..a1cdbaa 100644
+--- a/apps/backend/src/db/schema/core.ts
++++ b/apps/backend/src/db/schema/core.ts
+@@ -280,6 +280,69 @@ export const analyticsAreas = coreSchema.table(
+   }),
+ );
+ 
++// ─────────────────────────────────────────────────────────────────────────
++// core.entity_links — Slice 4.1 tracer. Canonical polymorphic relationship
++// table; this slice permits only active VOC↔VOC related_to links.
++// ─────────────────────────────────────────────────────────────────────────
++export const entityLinks = coreSchema.table(
++  'entity_links',
++  {
++    id: uuid('id').primaryKey().defaultRandom(),
++    workspaceId: uuid('workspace_id')
++      .notNull()
++      .references(() => workspaces.id),
++    sourceType: text('source_type').notNull(),
++    sourceId: uuid('source_id').notNull(),
++    targetType: text('target_type').notNull(),
++    targetId: uuid('target_id').notNull(),
++    relationType: text('relation_type').notNull(),
++    visibility: text('visibility').notNull().default('internal_only'),
++    status: text('status').notNull().default('active'),
++    managedSystemId: uuid('managed_system_id')
++      .notNull()
++      .references(() => managedSystems.id),
++    createdBy: uuid('created_by')
++      .notNull()
++      .references(() => actors.id),
++    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
++    updatedAt: timestamp('updated_at', { withTimezone: true }),
++  },
++  (t) => ({
++    relationTypeCheck: check(
++      'entity_links_relation_type_check',
++      sql`${t.relationType} in ('related_to')`,
++    ),
++    visibilityCheck: check(
++      'entity_links_visibility_check',
++      sql`${t.visibility} in ('internal_only','summary_visible','visible_to_reporter','admin_only')`,
++    ),
++    statusCheck: check(
++      'entity_links_status_check',
++      sql`${t.status} in ('active','stale','detached','revoked')`,
++    ),
++    sourceTypeCheck: check('entity_links_source_type_check', sql`${t.sourceType} in ('voc')`),
++    targetTypeCheck: check('entity_links_target_type_check', sql`${t.targetType} in ('voc')`),
++    notSelfCheck: check(
++      'entity_links_not_self_check',
++      sql`not (${t.sourceType} = ${t.targetType} and ${t.sourceId} = ${t.targetId})`,
++    ),
++    activeUniqueIdx: uniqueIndex('entity_links_active_unique_idx')
++      .on(t.workspaceId, t.sourceType, t.sourceId, t.targetType, t.targetId, t.relationType)
++      .where(sql`${t.status} = 'active'`),
++    activeSourceIdx: index('entity_links_active_source_idx')
++      .on(t.workspaceId, t.sourceType, t.sourceId)
++      .where(sql`${t.status} = 'active'`),
++    activeTargetIdx: index('entity_links_active_target_idx')
++      .on(t.workspaceId, t.targetType, t.targetId)
++      .where(sql`${t.status} = 'active'`),
++    workspaceMsStatusIdx: index('entity_links_workspace_ms_status_idx').on(
++      t.workspaceId,
++      t.managedSystemId,
++      t.status,
++    ),
++  }),
++);
++
+ export const idempotencyKeys = coreSchema.table(
+   'idempotency_keys',
+   {
+diff --git a/apps/backend/src/server.ts b/apps/backend/src/server.ts
+index eee45bb..b5a2775 100644
+--- a/apps/backend/src/server.ts
++++ b/apps/backend/src/server.ts
+@@ -17,17 +17,22 @@ import type { DbHandle } from './db/client.js';
+ import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
+ import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
+ import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
++import { getStorage } from './lib/storage/factory.js';
++import type { StorageBackend } from './lib/storage/index.js';
+ import { SESSION_COOKIE_NAME } from './middleware/require-session.js';
+ import {
+   analyticsAreasRoutes,
+   createAnalyticsAreaService,
+ } from './modules/analytics-areas/index.js';
+-import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
++import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
++import { createAttachmentsService } from './modules/attachments/service.js';
+ import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
++import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
+ import { authRoutes } from './modules/auth/routes.js';
+ import { createSessionService } from './modules/auth/session-service.js';
+ import { createAuditService } from './modules/core/audit/index.js';
+ import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
++import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
+ import {
+   createManagedSystemService,
+   managedSystemsRoutes,
+@@ -43,10 +48,6 @@ import {
+   createVocService,
+   vocRoutes,
+ } from './modules/voc/index.js';
+-import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
+-import { createAttachmentsService } from './modules/attachments/service.js';
+-import { getStorage } from './lib/storage/factory.js';
+-import type { StorageBackend } from './lib/storage/index.js';
+ 
+ export interface BuildServerOptions {
+   config: AppConfig;
+@@ -113,8 +114,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
+     // be bounded to the operator-configured hop count. Default 0 outside
+     // prod (identical to `trustProxy: false`); prod operators set
+     // `TRUSTED_PROXY_HOPS=1` when a single ingress terminates TLS.
+-    trustProxy:
+-      config.NODE_ENV === 'production' ? Math.max(config.TRUSTED_PROXY_HOPS, 0) : false,
++    trustProxy: config.NODE_ENV === 'production' ? Math.max(config.TRUSTED_PROXY_HOPS, 0) : false,
+   }).withTypeProvider<ZodTypeProvider>();
+ 
+   app.setValidatorCompiler(validatorCompiler);
+@@ -421,6 +421,22 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
+     },
+   });
+ 
++  // ── Entity Links module — Slice 4.1 issue #112 ────────────────────────────
++  const entityLinksService = createEntityLinksService({
++    db: dbHandle.db,
++    checkService,
++    auditService,
++  });
++  await app.register(entityLinksRoutes, {
++    sessionService,
++    entityLinksService,
++    workspaceId,
++    rateLimitConfig: {
++      mutation: app.rateLimitConfig.mutation,
++      read: app.rateLimitConfig.read,
++    },
++  });
++
+   // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
+   const vocService = createVocService({
+     db: dbHandle.db,
+@@ -430,6 +446,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
+   const vocReadService = createVocReadService({
+     db: dbHandle.db,
+     checkService,
++    entityLinksService,
+   });
+   const conversationService = createConversationService({
+     auditService,
+diff --git a/packages/shared/src/enums/audit-events.ts b/packages/shared/src/enums/audit-events.ts
+index 086c1e6..fefda94 100644
+--- a/packages/shared/src/enums/audit-events.ts
++++ b/packages/shared/src/enums/audit-events.ts
+@@ -17,18 +17,18 @@ import { z } from 'zod';
+ 
+ import { attachmentUploadedDetailSchema } from '../audit/attachments.js';
+ import {
+-  vocCreatedDetailSchema,
+-  vocTriageCommittedDetailSchema,
+-  vocSeveritySetDetailSchema,
+-  vocOwnerAssignedDetailSchema,
+-  vocAnalyticsAreaLinkedDetailSchema,
+-  vocClusterDecisionRecordedDetailSchema,
++  internalCommentCreatedDetailSchema,
+   publicUpdateCreatedDetailSchema,
+   reporterFacingStatusChangedDetailSchema,
+   reporterReplyCreatedDetailSchema,
+-  internalCommentCreatedDetailSchema,
+-  vocTriagePostponedDetailSchema,
++  vocAnalyticsAreaLinkedDetailSchema,
++  vocClusterDecisionRecordedDetailSchema,
++  vocCreatedDetailSchema,
+   vocDescriptionEditedDetailSchema,
++  vocOwnerAssignedDetailSchema,
++  vocSeveritySetDetailSchema,
++  vocTriageCommittedDetailSchema,
++  vocTriagePostponedDetailSchema,
+ } from '../audit/voc.js';
+ 
+ export const AUDIT_EVENT_TYPES = [
+@@ -58,6 +58,8 @@ export const AUDIT_EVENT_TYPES = [
+   'voc_description_edited',
+   // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
+   'attachment_uploaded',
++  // Slice 4.1 #112: canonical entity link creation tracer.
++  'entity_link.created',
+ ] as const;
+ export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
+ 
+@@ -145,6 +147,21 @@ export const analyticsAreaArchivedDetailSchema = z.object({
+ });
+ export type AnalyticsAreaArchivedDetail = z.infer<typeof analyticsAreaArchivedDetailSchema>;
+ 
++export const entityLinkCreatedDetailSchema = z.object({
++  link_id: z.string().uuid(),
++  source: z.object({
++    type: z.literal('voc'),
++    id: z.string().uuid(),
++  }),
++  target: z.object({
++    type: z.literal('voc'),
++    id: z.string().uuid(),
++  }),
++  relation_type: z.literal('related_to'),
++  visibility: z.literal('internal_only'),
++});
++export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
++
+ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
+   permission_requested: permissionRequestedDetailSchema,
+   managed_system_registered: managedSystemRegisteredDetailSchema,
+@@ -170,4 +187,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
+   voc_description_edited: vocDescriptionEditedDetailSchema,
+   // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
+   attachment_uploaded: attachmentUploadedDetailSchema,
++  // Slice 4.1 #112.
++  'entity_link.created': entityLinkCreatedDetailSchema,
+ } as const satisfies Record<AuditEventType, z.ZodTypeAny>;
+diff --git a/packages/shared/src/index.ts b/packages/shared/src/index.ts
+index 0e91fe9..315fa7d 100644
+--- a/packages/shared/src/index.ts
++++ b/packages/shared/src/index.ts
+@@ -5,9 +5,11 @@ export * from './enums/index.js';
+ export * from './enums/capabilities.js';
+ export * from './enums/audit-events.js';
+ export * from './errors/codes.js';
++export * from './entity-links.js';
+ export * from './permissions/index.js';
+ export * from './audit/voc.js';
+ export * from './audit/attachments.js';
++export * from './entity-links.js';
+ export * from './vocs/index.js';
+ export * from './rich-content/index.js';
+ export * from './auth/list-actors.js';
+diff --git a/packages/shared/src/vocs/detail.ts b/packages/shared/src/vocs/detail.ts
+index 513e335..a6b59fc 100644
+--- a/packages/shared/src/vocs/detail.ts
++++ b/packages/shared/src/vocs/detail.ts
+@@ -1,5 +1,6 @@
+ import { z } from 'zod';
+ 
++import { entityLinkDtoSchema } from '../entity-links.js';
+ import { LinkedAttachmentSchema } from './attachment.js';
+ import { conversationEntrySchema } from './conversation.js';
+ import { reporterFacingStatusEnumSchema, vocListItemSchema } from './list-item.js';
+@@ -29,6 +30,9 @@ export const vocDetailEnvelopeSchema = vocListItemSchema.extend({
+     findingRef: z.null(),
+     taskRef: z.null(),
+   }),
++  // Slice 4.1 #112: backend-decided Links tab rows from core.entity_links.
++  // Optional so existing Slice 3 consumers and fixtures remain source-compatible.
++  links: z.array(entityLinkDtoSchema).optional(),
+   // Hybrid inline conversations: first 50 entries inline; pagination tail via
+   // GET /vocs/:id/conversation. Slice 3: conversation POSTs ship in #16.
+   conversation_timeline: z.array(conversationEntrySchema),
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "test -f .review/ISSUE-112-DEVIATIONS.md && sed -n '1,220p' .review/ISSUE-112-DEVIATIONS.md || true" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git diff -- apps/backend/src/modules/voc/repo-read.ts apps/backend/src/modules/voc/read-service.ts apps/backend/src/modules/voc/__tests__/read-service.test.ts' in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-VxuOKMgr' (errno=Operation not permitted)
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-kCqbPw8Z' (errno=Operation not permitted)
+diff --git a/apps/backend/src/modules/voc/__tests__/read-service.test.ts b/apps/backend/src/modules/voc/__tests__/read-service.test.ts
+index e89bee5..03491c5 100644
+--- a/apps/backend/src/modules/voc/__tests__/read-service.test.ts
++++ b/apps/backend/src/modules/voc/__tests__/read-service.test.ts
+@@ -108,7 +108,11 @@ function makeService(checkDecision: Decision = allowDecision) {
+   const checkService = {
+     checkCapability: vi.fn().mockResolvedValue(checkDecision),
+   } as unknown as VocReadServiceDeps['checkService'];
+-  return { svc: createVocReadService({ db, checkService }), checkService };
++  const entityLinksService = {
++    createLink: vi.fn(),
++    listLinks: vi.fn().mockResolvedValue([]),
++  } as unknown as NonNullable<VocReadServiceDeps['entityLinksService']>;
++  return { svc: createVocReadService({ db, checkService, entityLinksService }), checkService };
+ }
+ 
+ // ── listVocs tests ────────────────────────────────────────────────────────────
+diff --git a/apps/backend/src/modules/voc/read-service.ts b/apps/backend/src/modules/voc/read-service.ts
+index 0bdd203..561788d 100644
+--- a/apps/backend/src/modules/voc/read-service.ts
++++ b/apps/backend/src/modules/voc/read-service.ts
+@@ -15,10 +15,6 @@
+ 
+ import { z } from 'zod';
+ 
+-import type { Db } from '../../db/client.js';
+-import type { Tx } from '../../db/tx.js';
+-import { HttpError } from '../../lib/errors.js';
+-import type { CheckService } from '../permissions/check-service.js';
+ import type {
+   ConversationEntry,
+   GetConversationQuery,
+@@ -28,17 +24,23 @@ import type {
+   VocListItem,
+   VocSummaryEnvelope,
+ } from '@fops/shared';
++import type { Db } from '../../db/client.js';
++import type { Tx } from '../../db/tx.js';
++import { HttpError } from '../../lib/errors.js';
++import type { EntityLinksService } from '../entity-links/index.js';
++import type { CheckService } from '../permissions/check-service.js';
+ 
+ import { decodeCursor, encodeCursor } from './cursor.js';
+ import type { ConversationRow, Scope, VocReadRow } from './repo-read.js';
+ import * as repoRead from './repo-read.js';
+-import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
++import { type ReporterFacingStatus, nextReporterStates } from './transitions.js';
+ 
+ // ── Public interface ─────────────────────────────────────────────────────────
+ 
+ export interface VocReadServiceDeps {
+   db: Db;
+   checkService: CheckService;
++  entityLinksService: EntityLinksService;
+ }
+ 
+ export interface ReadActorContext {
+@@ -515,6 +517,10 @@ export function createVocReadService(deps: VocReadServiceDeps) {
+       repoRead.selectVocAttachments(deps.db, actor.workspace_id, vocId),
+       repoRead.selectAttachmentsForComments(deps.db, actor.workspace_id, commentIds),
+     ]);
++    const links = await deps.entityLinksService.listLinks({
++      actor,
++      endpoint: { type: 'voc', id: vocId },
++    });
+ 
+     const conversationTimeline = mapConversationRowsWithAttachments(
+       convResult.entries,
+@@ -566,6 +572,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
+         forbidden: nextStates.forbidden as Record<VocDetailEnvelope['reporter_facing_status'], string>,
+       },
+       linked_execution: { findingRef: null, taskRef: null },
++      links,
+       conversation_timeline: conversationTimeline,
+       // conversation_page.cursor uses exactOptionalPropertyTypes: build without key when absent.
+       conversation_page: convNextCursor !== undefined
+@@ -708,6 +715,10 @@ export function createVocReadService(deps: VocReadServiceDeps) {
+       repoRead.selectVocAttachments(tx, actor.workspace_id, vocId),
+       repoRead.selectAttachmentsForComments(tx, actor.workspace_id, commentIds),
+     ]);
++    const links = await deps.entityLinksService.listLinks({
++      actor,
++      endpoint: { type: 'voc', id: vocId },
++    });
+ 
+     const conversationTimeline = mapConversationRowsWithAttachments(
+       convResult.entries,
+@@ -755,6 +766,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
+         forbidden: nextStates.forbidden as Record<VocDetailEnvelope['reporter_facing_status'], string>,
+       },
+       linked_execution: { findingRef: null, taskRef: null },
++      links,
+       conversation_timeline: conversationTimeline,
+       conversation_page: convNextCursor !== undefined
+         ? { cursor: convNextCursor, has_more: convResult.hasMore }
+diff --git a/apps/backend/src/modules/voc/repo-read.ts b/apps/backend/src/modules/voc/repo-read.ts
+index 46628d7..5bbdad1 100644
+--- a/apps/backend/src/modules/voc/repo-read.ts
++++ b/apps/backend/src/modules/voc/repo-read.ts
+@@ -14,7 +14,7 @@
+ import { sql } from 'drizzle-orm';
+ 
+ import type { Db } from '../../db/client.js';
+-import type { Tx } from '../../db/tx.js';
++import { entityLinks } from '../../db/schema/core.js';
+ import {
+   vocInternalComments,
+   vocPermissionDecisionsSeedFixture,
+@@ -22,6 +22,7 @@ import {
+   vocReporterReplies,
+   vocs,
+ } from '../../db/schema/voc.js';
++import type { Tx } from '../../db/tx.js';
+ import { allManagedSystemIds } from '../core/managed-systems/read-projections.js';
+ import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
+ import { actorScopeForCapability } from '../permissions/scope-service.js';
+@@ -239,8 +240,18 @@ export async function listVocsForRead(
+     // Only valid for triage view; no extra clause beyond the triage_state filter
+     // since service layer validates view=triage for this tab.
+     wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
++  } else if (tab === 'no-link') {
++    wheres.push(sql`NOT EXISTS (
++      SELECT 1
++      FROM ${entityLinks} el
++      WHERE el.workspace_id = ${workspaceId}
++        AND el.status = 'active'
++        AND (
++          (el.source_type = 'voc' AND el.source_id = ${vocs.id})
++          OR (el.target_type = 'voc' AND el.target_id = ${vocs.id})
++        )
++    )`);
+   }
+-  // tab='no-link' → no extra clause (entity_links absent in Slice 3).
+ 
+   // Scalar column filters.
+   if (filterSeverity && filterSeverity.length > 0) {
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/backend/migrations/0018_entity_links.sql | sed -n '1,240p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+exec
+/bin/zsh -lc "nl -ba packages/shared/src/entity-links.ts | sed -n '1,240p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+     1	-- Issue #112: Slice 4.1 entity_links VOC↔VOC related_to tracer.
+     2	-- Establishes core.entity_links as the canonical polymorphic loose-coupling
+     3	-- join table. This slice creates only active VOC -> VOC related_to links;
+     4	-- later slices expand relation/status handling and detach transitions.
+     5	
+     6	CREATE TABLE IF NOT EXISTS "core"."entity_links" (
+     7	  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     8	  "workspace_id" uuid NOT NULL REFERENCES "core"."workspaces"("id"),
+     9	  "source_type" text NOT NULL,
+    10	  "source_id" uuid NOT NULL,
+    11	  "target_type" text NOT NULL,
+    12	  "target_id" uuid NOT NULL,
+    13	  "relation_type" text NOT NULL,
+    14	  "visibility" text NOT NULL DEFAULT 'internal_only',
+    15	  "status" text NOT NULL DEFAULT 'active',
+    16	  "managed_system_id" uuid NOT NULL REFERENCES "core"."managed_systems"("id"),
+    17	  "created_by" uuid NOT NULL REFERENCES "core"."actors"("id"),
+    18	  "created_at" timestamptz NOT NULL DEFAULT now(),
+    19	  "updated_at" timestamptz,
+    20	  CONSTRAINT "entity_links_relation_type_check"
+    21	    CHECK ("relation_type" IN ('related_to')),
+    22	  CONSTRAINT "entity_links_visibility_check"
+    23	    CHECK ("visibility" IN ('internal_only','summary_visible','visible_to_reporter','admin_only')),
+    24	  CONSTRAINT "entity_links_status_check"
+    25	    CHECK ("status" IN ('active','stale','detached','revoked')),
+    26	  CONSTRAINT "entity_links_source_type_check"
+    27	    CHECK ("source_type" IN ('voc')),
+    28	  CONSTRAINT "entity_links_target_type_check"
+    29	    CHECK ("target_type" IN ('voc')),
+    30	  CONSTRAINT "entity_links_not_self_check"
+    31	    CHECK (NOT ("source_type" = "target_type" AND "source_id" = "target_id"))
+    32	);
+    33	--> statement-breakpoint
+    34	
+    35	CREATE UNIQUE INDEX IF NOT EXISTS "entity_links_active_unique_idx"
+    36	  ON "core"."entity_links"
+    37	  ("workspace_id", "source_type", "source_id", "target_type", "target_id", "relation_type")
+    38	  WHERE "status" = 'active';
+    39	--> statement-breakpoint
+    40	
+    41	CREATE INDEX IF NOT EXISTS "entity_links_active_source_idx"
+    42	  ON "core"."entity_links" ("workspace_id", "source_type", "source_id")
+    43	  WHERE "status" = 'active';
+    44	--> statement-breakpoint
+    45	
+    46	CREATE INDEX IF NOT EXISTS "entity_links_active_target_idx"
+    47	  ON "core"."entity_links" ("workspace_id", "target_type", "target_id")
+    48	  WHERE "status" = 'active';
+    49	--> statement-breakpoint
+    50	
+    51	CREATE INDEX IF NOT EXISTS "entity_links_workspace_ms_status_idx"
+    52	  ON "core"."entity_links" ("workspace_id", "managed_system_id", "status");
+    53	--> statement-breakpoint
+    54	
+    55	GRANT INSERT, SELECT ON "core"."entity_links" TO fops_app;
+
+ succeeded in 0ms:
+     1	import { z } from 'zod';
+     2	
+     3	export const entityLinkEntityTypeSchema = z.enum(['voc']);
+     4	export type EntityLinkEntityType = z.infer<typeof entityLinkEntityTypeSchema>;
+     5	
+     6	export const entityLinkRelationTypeSchema = z.enum(['related_to']);
+     7	export type EntityLinkRelationType = z.infer<typeof entityLinkRelationTypeSchema>;
+     8	
+     9	export const entityLinkVisibilitySchema = z.enum([
+    10	  'internal_only',
+    11	  'summary_visible',
+    12	  'visible_to_reporter',
+    13	  'admin_only',
+    14	]);
+    15	export type EntityLinkVisibility = z.infer<typeof entityLinkVisibilitySchema>;
+    16	
+    17	export const creatableEntityLinkVisibilitySchema = z.literal('internal_only');
+    18	
+    19	export const entityLinkStatusSchema = z.enum(['active', 'stale', 'detached', 'revoked']);
+    20	export type EntityLinkStatus = z.infer<typeof entityLinkStatusSchema>;
+    21	
+    22	export const entityLinkVisibilityStateSchema = z.enum(['allowed', 'hidden']);
+    23	export type EntityLinkVisibilityState = z.infer<typeof entityLinkVisibilityStateSchema>;
+    24	
+    25	export const entityLinkRefSchema = z.object({
+    26	  type: entityLinkEntityTypeSchema,
+    27	  id: z.string().uuid(),
+    28	});
+    29	export type EntityLinkRef = z.infer<typeof entityLinkRefSchema>;
+    30	
+    31	export const createEntityLinkRequestSchema = z
+    32	  .object({
+    33	    source: entityLinkRefSchema,
+    34	    target: entityLinkRefSchema,
+    35	    relation_type: entityLinkRelationTypeSchema,
+    36	    visibility: creatableEntityLinkVisibilitySchema.optional(),
+    37	  })
+    38	  .strict();
+    39	export type CreateEntityLinkRequest = z.infer<typeof createEntityLinkRequestSchema>;
+    40	
+    41	export const listEntityLinksQuerySchema = z
+    42	  .object({
+    43	    source_type: entityLinkEntityTypeSchema.optional(),
+    44	    source_id: z.string().uuid().optional(),
+    45	    target_type: entityLinkEntityTypeSchema.optional(),
+    46	    target_id: z.string().uuid().optional(),
+    47	  })
+    48	  .strict()
+    49	  .superRefine((value, ctx) => {
+    50	    const hasSource = value.source_type !== undefined || value.source_id !== undefined;
+    51	    const hasTarget = value.target_type !== undefined || value.target_id !== undefined;
+    52	    if (hasSource && (value.source_type === undefined || value.source_id === undefined)) {
+    53	      ctx.addIssue({
+    54	        code: z.ZodIssueCode.custom,
+    55	        path: ['source_id'],
+    56	        message: 'source_type and source_id must be provided together',
+    57	      });
+    58	    }
+    59	    if (hasTarget && (value.target_type === undefined || value.target_id === undefined)) {
+    60	      ctx.addIssue({
+    61	        code: z.ZodIssueCode.custom,
+    62	        path: ['target_id'],
+    63	        message: 'target_type and target_id must be provided together',
+    64	      });
+    65	    }
+    66	    if (hasSource === hasTarget) {
+    67	      ctx.addIssue({
+    68	        code: z.ZodIssueCode.custom,
+    69	        path: [],
+    70	        message: 'provide exactly one source or target endpoint',
+    71	      });
+    72	    }
+    73	  });
+    74	export type ListEntityLinksQuery = z.infer<typeof listEntityLinksQuerySchema>;
+    75	
+    76	export const allowedEntityLinkSchema = z.object({
+    77	  id: z.string().uuid(),
+    78	  source_type: entityLinkEntityTypeSchema,
+    79	  source_id: z.string().uuid(),
+    80	  target_type: entityLinkEntityTypeSchema,
+    81	  target_id: z.string().uuid(),
+    82	  relation_type: entityLinkRelationTypeSchema,
+    83	  visibility: entityLinkVisibilitySchema,
+    84	  status: entityLinkStatusSchema,
+    85	  managed_system_id: z.string().uuid(),
+    86	  created_by: z.string().uuid(),
+    87	  created_at: z.string().datetime(),
+    88	  updated_at: z.string().datetime().nullable(),
+    89	  visibility_state: z.literal('allowed'),
+    90	});
+    91	
+    92	export const hiddenEntityLinkSchema = z.object({
+    93	  id: z.string().uuid(),
+    94	  source_type: entityLinkEntityTypeSchema,
+    95	  target_type: entityLinkEntityTypeSchema,
+    96	  relation_type: entityLinkRelationTypeSchema,
+    97	  visibility_state: z.literal('hidden'),
+    98	});
+    99	
+   100	export const entityLinkDtoSchema = z.discriminatedUnion('visibility_state', [
+   101	  allowedEntityLinkSchema,
+   102	  hiddenEntityLinkSchema,
+   103	]);
+   104	export type EntityLinkDto = z.infer<typeof entityLinkDtoSchema>;
+   105	
+   106	export const listEntityLinksResponseSchema = z.object({
+   107	  items: z.array(entityLinkDtoSchema),
+   108	});
+   109	export type ListEntityLinksResponse = z.infer<typeof listEntityLinksResponseSchema>;
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/entity-links/repo.ts | sed -n '1,360p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+     1	import { sql } from 'drizzle-orm';
+     2	
+     3	import type { Db } from '../../db/client.js';
+     4	import { vocs } from '../../db/schema/voc.js';
+     5	import type { Tx } from '../../db/tx.js';
+     6	
+     7	export interface LinkEndpointRow {
+     8	  workspace_id: string;
+     9	  managed_system_id: string;
+    10	}
+    11	
+    12	export interface EntityLinkRow {
+    13	  id: string;
+    14	  workspace_id: string;
+    15	  source_type: 'voc';
+    16	  source_id: string;
+    17	  target_type: 'voc';
+    18	  target_id: string;
+    19	  relation_type: 'related_to';
+    20	  visibility: 'internal_only' | 'summary_visible' | 'visible_to_reporter' | 'admin_only';
+    21	  status: 'active' | 'stale' | 'detached' | 'revoked';
+    22	  managed_system_id: string;
+    23	  created_by: string;
+    24	  created_at: Date;
+    25	  updated_at: Date | null;
+    26	}
+    27	
+    28	function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
+    29	  return {
+    30	    id: row.id as string,
+    31	    workspace_id: row.workspace_id as string,
+    32	    source_type: row.source_type as 'voc',
+    33	    source_id: row.source_id as string,
+    34	    target_type: row.target_type as 'voc',
+    35	    target_id: row.target_id as string,
+    36	    relation_type: row.relation_type as 'related_to',
+    37	    visibility: row.visibility as EntityLinkRow['visibility'],
+    38	    status: row.status as EntityLinkRow['status'],
+    39	    managed_system_id: row.managed_system_id as string,
+    40	    created_by: row.created_by as string,
+    41	    created_at:
+    42	      row.created_at instanceof Date ? row.created_at : new Date(row.created_at as string),
+    43	    updated_at:
+    44	      row.updated_at === null || row.updated_at === undefined
+    45	        ? null
+    46	        : row.updated_at instanceof Date
+    47	          ? row.updated_at
+    48	          : new Date(row.updated_at as string),
+    49	  };
+    50	}
+    51	
+    52	export async function resolveVocEndpoint(
+    53	  db: Db | Tx,
+    54	  workspaceId: string,
+    55	  vocId: string,
+    56	): Promise<LinkEndpointRow | null> {
+    57	  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    58	    SELECT workspace_id, primary_managed_system_id AS managed_system_id
+    59	    FROM ${vocs}
+    60	    WHERE id = ${vocId}
+    61	      AND workspace_id = ${workspaceId}
+    62	      AND archived_at IS NULL
+    63	  `);
+    64	  const row = result.rows[0];
+    65	  if (!row) return null;
+    66	  return {
+    67	    workspace_id: row.workspace_id as string,
+    68	    managed_system_id: row.managed_system_id as string,
+    69	  };
+    70	}
+    71	
+    72	export async function insertActiveVocRelatedToLink(
+    73	  tx: Tx,
+    74	  input: {
+    75	    workspaceId: string;
+    76	    sourceId: string;
+    77	    targetId: string;
+    78	    managedSystemId: string;
+    79	    createdBy: string;
+    80	    visibility: 'internal_only';
+    81	  },
+    82	): Promise<{ row: EntityLinkRow; inserted: boolean }> {
+    83	  const inserted = await (tx as Db).execute<Record<string, unknown>>(sql`
+    84	    INSERT INTO core.entity_links (
+    85	      workspace_id, source_type, source_id, target_type, target_id,
+    86	      relation_type, visibility, status, managed_system_id, created_by
+    87	    )
+    88	    VALUES (
+    89	      ${input.workspaceId}, 'voc', ${input.sourceId}, 'voc', ${input.targetId},
+    90	      'related_to', ${input.visibility}, 'active', ${input.managedSystemId}, ${input.createdBy}
+    91	    )
+    92	    ON CONFLICT (
+    93	      workspace_id, source_type, source_id, target_type, target_id, relation_type
+    94	    ) WHERE status = 'active'
+    95	    DO NOTHING
+    96	    RETURNING
+    97	      id, workspace_id, source_type, source_id, target_type, target_id,
+    98	      relation_type, visibility, status, managed_system_id, created_by,
+    99	      created_at, updated_at
+   100	  `);
+   101	  const insertedRow = inserted.rows[0];
+   102	  if (insertedRow) return { row: mapEntityLinkRow(insertedRow), inserted: true };
+   103	
+   104	  const existing = await selectActiveVocRelatedToLink(tx, {
+   105	    workspaceId: input.workspaceId,
+   106	    sourceId: input.sourceId,
+   107	    targetId: input.targetId,
+   108	  });
+   109	  if (!existing) {
+   110	    throw new Error('entity link conflict did not return existing active row');
+   111	  }
+   112	  return { row: existing, inserted: false };
+   113	}
+   114	
+   115	export async function selectActiveVocRelatedToLink(
+   116	  db: Db | Tx,
+   117	  input: { workspaceId: string; sourceId: string; targetId: string },
+   118	): Promise<EntityLinkRow | null> {
+   119	  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+   120	    SELECT
+   121	      id, workspace_id, source_type, source_id, target_type, target_id,
+   122	      relation_type, visibility, status, managed_system_id, created_by,
+   123	      created_at, updated_at
+   124	    FROM core.entity_links
+   125	    WHERE workspace_id = ${input.workspaceId}
+   126	      AND source_type = 'voc'
+   127	      AND source_id = ${input.sourceId}
+   128	      AND target_type = 'voc'
+   129	      AND target_id = ${input.targetId}
+   130	      AND relation_type = 'related_to'
+   131	      AND status = 'active'
+   132	    LIMIT 1
+   133	  `);
+   134	  const row = result.rows[0];
+   135	  return row ? mapEntityLinkRow(row) : null;
+   136	}
+   137	
+   138	export async function selectActiveLinksForEndpoint(
+   139	  db: Db | Tx,
+   140	  input: {
+   141	    workspaceId: string;
+   142	    endpointType: 'voc';
+   143	    endpointId: string;
+   144	    side?: 'source' | 'target';
+   145	  },
+   146	): Promise<EntityLinkRow[]> {
+   147	  const sidePredicate =
+   148	    input.side === 'source'
+   149	      ? sql`source_type = ${input.endpointType} AND source_id = ${input.endpointId}`
+   150	      : input.side === 'target'
+   151	        ? sql`target_type = ${input.endpointType} AND target_id = ${input.endpointId}`
+   152	        : sql`(
+   153	            (source_type = ${input.endpointType} AND source_id = ${input.endpointId})
+   154	            OR (target_type = ${input.endpointType} AND target_id = ${input.endpointId})
+   155	          )`;
+   156	
+   157	  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+   158	    SELECT
+   159	      id, workspace_id, source_type, source_id, target_type, target_id,
+   160	      relation_type, visibility, status, managed_system_id, created_by,
+   161	      created_at, updated_at
+   162	    FROM core.entity_links
+   163	    WHERE workspace_id = ${input.workspaceId}
+   164	      AND status = 'active'
+   165	      AND ${sidePredicate}
+   166	    ORDER BY created_at DESC, id DESC
+   167	  `);
+   168	  return result.rows.map(mapEntityLinkRow);
+   169	}
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/entity-links/service.ts | sed -n '1,320p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+     1	import type { EntityLinkDto, EntityLinkRef } from '@fops/shared';
+     2	
+     3	import type { Db } from '../../db/client.js';
+     4	import { HttpError } from '../../lib/errors.js';
+     5	import type { AuditService } from '../core/audit/audit-service.js';
+     6	import type { CheckService } from '../permissions/check-service.js';
+     7	import {
+     8	  type EntityLinkRow,
+     9	  insertActiveVocRelatedToLink,
+    10	  resolveVocEndpoint,
+    11	  selectActiveLinksForEndpoint,
+    12	} from './repo.js';
+    13	
+    14	export interface EntityLinksActor {
+    15	  actor_id: string;
+    16	  workspace_id: string;
+    17	  role_level: 'admin' | 'developer' | 'user';
+    18	}
+    19	
+    20	export interface EntityLinksServiceDeps {
+    21	  db: Db;
+    22	  checkService: CheckService;
+    23	  auditService: AuditService;
+    24	}
+    25	
+    26	function toAllowedDto(row: EntityLinkRow): EntityLinkDto {
+    27	  return {
+    28	    id: row.id,
+    29	    source_type: row.source_type,
+    30	    source_id: row.source_id,
+    31	    target_type: row.target_type,
+    32	    target_id: row.target_id,
+    33	    relation_type: row.relation_type,
+    34	    visibility: row.visibility,
+    35	    status: row.status,
+    36	    managed_system_id: row.managed_system_id,
+    37	    created_by: row.created_by,
+    38	    created_at: row.created_at.toISOString(),
+    39	    updated_at: row.updated_at ? row.updated_at.toISOString() : null,
+    40	    visibility_state: 'allowed',
+    41	  };
+    42	}
+    43	
+    44	function toHiddenDto(row: EntityLinkRow): EntityLinkDto {
+    45	  return {
+    46	    id: row.id,
+    47	    source_type: row.source_type,
+    48	    target_type: row.target_type,
+    49	    relation_type: row.relation_type,
+    50	    visibility_state: 'hidden',
+    51	  };
+    52	}
+    53	
+    54	async function assertVocReadScope(
+    55	  deps: Pick<EntityLinksServiceDeps, 'checkService'>,
+    56	  actor: EntityLinksActor,
+    57	  managedSystemId: string,
+    58	): Promise<boolean> {
+    59	  const decision = await deps.checkService.checkCapability(actor, 'voc.read', {
+    60	    workspace_id: actor.workspace_id,
+    61	    managed_system_id: managedSystemId,
+    62	  });
+    63	  return decision.allow;
+    64	}
+    65	
+    66	export function createEntityLinksService(deps: EntityLinksServiceDeps) {
+    67	  async function createLink(args: {
+    68	    actor: EntityLinksActor;
+    69	    source: EntityLinkRef;
+    70	    target: EntityLinkRef;
+    71	    relation_type: 'related_to';
+    72	    visibility?: 'internal_only';
+    73	  }): Promise<{ link: EntityLinkDto; status: 200 | 201 }> {
+    74	    const { actor, source, target } = args;
+    75	    const visibility = args.visibility ?? 'internal_only';
+    76	
+    77	    if (source.type !== 'voc' || target.type !== 'voc' || args.relation_type !== 'related_to') {
+    78	      throw new HttpError('validation.failed', 'unsupported entity link tuple', {
+    79	        fields: [{ path: [], code: 'unsupported_tuple' }],
+    80	      });
+    81	    }
+    82	    if (visibility !== 'internal_only') {
+    83	      throw new HttpError('validation.failed', 'unsupported visibility', {
+    84	        fields: [{ path: ['visibility'], code: 'unsupported_visibility' }],
+    85	      });
+    86	    }
+    87	    if (source.id === target.id) {
+    88	      throw new HttpError('validation.failed', 'entity link source and target must differ', {
+    89	        fields: [{ path: ['target', 'id'], code: 'self_link' }],
+    90	      });
+    91	    }
+    92	
+    93	    const [sourceRow, targetRow] = await Promise.all([
+    94	      resolveVocEndpoint(deps.db, actor.workspace_id, source.id),
+    95	      resolveVocEndpoint(deps.db, actor.workspace_id, target.id),
+    96	    ]);
+    97	    if (!sourceRow || !targetRow) {
+    98	      throw new HttpError('not_found.record', 'entity link endpoint not found');
+    99	    }
+   100	
+   101	    const sourceAllowed = await assertVocReadScope(deps, actor, sourceRow.managed_system_id);
+   102	    if (!sourceAllowed) {
+   103	      throw new HttpError('permission.denied', 'missing source VOC read scope');
+   104	    }
+   105	
+   106	    const targetAllowed = await assertVocReadScope(deps, actor, targetRow.managed_system_id);
+   107	    if (!targetAllowed) {
+   108	      throw new HttpError('not_found.record', 'entity link endpoint not found');
+   109	    }
+   110	
+   111	    const result = await deps.db.transaction(async (tx) => {
+   112	      const inserted = await insertActiveVocRelatedToLink(tx, {
+   113	        workspaceId: actor.workspace_id,
+   114	        sourceId: source.id,
+   115	        targetId: target.id,
+   116	        managedSystemId: sourceRow.managed_system_id,
+   117	        createdBy: actor.actor_id,
+   118	        visibility,
+   119	      });
+   120	
+   121	      if (inserted.inserted) {
+   122	        await deps.auditService.record(tx, {
+   123	          workspace_id: actor.workspace_id,
+   124	          actor_id: actor.actor_id,
+   125	          event_type: 'entity_link.created',
+   126	          subject_type: 'entity_link',
+   127	          subject_id: inserted.row.id,
+   128	          summary: 'Entity link created',
+   129	          detail: {
+   130	            link_id: inserted.row.id,
+   131	            source,
+   132	            target,
+   133	            relation_type: args.relation_type,
+   134	            visibility,
+   135	          },
+   136	        });
+   137	      }
+   138	
+   139	      return inserted;
+   140	    });
+   141	
+   142	    return { link: toAllowedDto(result.row), status: result.inserted ? 201 : 200 };
+   143	  }
+   144	
+   145	  async function listLinks(args: {
+   146	    actor: EntityLinksActor;
+   147	    endpoint: EntityLinkRef;
+   148	    side?: 'source' | 'target';
+   149	  }): Promise<EntityLinkDto[]> {
+   150	    const { actor, endpoint, side } = args;
+   151	    if (endpoint.type !== 'voc') {
+   152	      throw new HttpError('validation.failed', 'unsupported entity type', {
+   153	        fields: [{ path: ['type'], code: 'unsupported_entity_type' }],
+   154	      });
+   155	    }
+   156	
+   157	    const focus = await resolveVocEndpoint(deps.db, actor.workspace_id, endpoint.id);
+   158	    if (!focus) {
+   159	      throw new HttpError('not_found.record', 'entity link endpoint not found');
+   160	    }
+   161	    const focusAllowed = await assertVocReadScope(deps, actor, focus.managed_system_id);
+   162	    if (!focusAllowed) {
+   163	      throw new HttpError('not_found.record', 'entity link endpoint not found');
+   164	    }
+   165	
+   166	    const listArgs = {
+   167	      workspaceId: actor.workspace_id,
+   168	      endpointType: endpoint.type,
+   169	      endpointId: endpoint.id,
+   170	    };
+   171	    const rows = await selectActiveLinksForEndpoint(
+   172	      deps.db,
+   173	      side === undefined ? listArgs : { ...listArgs, side },
+   174	    );
+   175	
+   176	    const resolvedByVocId = new Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>();
+   177	    const items: EntityLinkDto[] = [];
+   178	    for (const row of rows) {
+   179	      const otherId = row.source_id === endpoint.id ? row.target_id : row.source_id;
+   180	      let other = resolvedByVocId.get(otherId);
+   181	      if (other === undefined) {
+   182	        other = await resolveVocEndpoint(deps.db, actor.workspace_id, otherId);
+   183	        resolvedByVocId.set(otherId, other);
+   184	      }
+   185	      if (!other) {
+   186	        items.push(toHiddenDto(row));
+   187	        continue;
+   188	      }
+   189	      const otherAllowed = await assertVocReadScope(deps, actor, other.managed_system_id);
+   190	      items.push(otherAllowed ? toAllowedDto(row) : toHiddenDto(row));
+   191	    }
+   192	    return items;
+   193	  }
+   194	
+   195	  return { createLink, listLinks };
+   196	}
+   197	
+   198	export type EntityLinksService = ReturnType<typeof createEntityLinksService>;
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/entity-links/index.ts | sed -n '1,160p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+     1	export { entityLinksRoutes, type EntityLinksRoutesOptions } from './routes.js';
+     2	export {
+     3	  createEntityLinksService,
+     4	  type EntityLinksService,
+     5	  type EntityLinksServiceDeps,
+     6	  type EntityLinksActor,
+     7	} from './service.js';
+     8	export type { EntityLinkRow, LinkEndpointRow } from './repo.js';
+
+hook: PostToolUse
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/entity-links/routes.ts | sed -n '1,320p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+     1	import type { FastifyPluginAsync } from 'fastify';
+     2	
+     3	import { createEntityLinkRequestSchema, listEntityLinksQuerySchema } from '@fops/shared';
+     4	
+     5	import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+     6	import { requireSession } from '../../middleware/require-session.js';
+     7	import { requireWorkspace } from '../../middleware/require-workspace.js';
+     8	import type { SessionService } from '../auth/session-service.js';
+     9	import type { EntityLinksService } from './service.js';
+    10	
+    11	export interface EntityLinksRoutesOptions {
+    12	  sessionService: SessionService;
+    13	  entityLinksService: EntityLinksService;
+    14	  workspaceId: string;
+    15	  rateLimitConfig?: {
+    16	    mutation: Record<string, unknown>;
+    17	    read?: Record<string, unknown>;
+    18	  };
+    19	}
+    20	
+    21	export const entityLinksRoutes: FastifyPluginAsync<EntityLinksRoutesOptions> = async (
+    22	  app,
+    23	  opts,
+    24	) => {
+    25	  const { sessionService, entityLinksService, workspaceId, rateLimitConfig } = opts;
+    26	
+    27	  app.route({
+    28	    method: 'POST',
+    29	    url: '/entity-links',
+    30	    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    31	    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    32	    handler: async (req, reply) => {
+    33	      const sess = req.session;
+    34	      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+    35	
+    36	      const parsed = createEntityLinkRequestSchema.safeParse(req.body ?? {});
+    37	      if (!parsed.success) {
+    38	        return sendError(reply, 'validation.failed', 'invalid request body', {
+    39	          fields: fieldsFromZodIssues(parsed.error.issues),
+    40	        });
+    41	      }
+    42	
+    43	      const createArgs = {
+    44	        actor: {
+    45	          actor_id: sess.actor_id,
+    46	          workspace_id: sess.workspace_id,
+    47	          role_level: sess.role_level,
+    48	        },
+    49	        source: parsed.data.source,
+    50	        target: parsed.data.target,
+    51	        relation_type: parsed.data.relation_type,
+    52	      };
+    53	      const result = await entityLinksService.createLink(
+    54	        parsed.data.visibility === undefined
+    55	          ? createArgs
+    56	          : { ...createArgs, visibility: parsed.data.visibility },
+    57	      );
+    58	      return reply.code(result.status).send(result.link);
+    59	    },
+    60	  });
+    61	
+    62	  app.route({
+    63	    method: 'GET',
+    64	    url: '/entity-links',
+    65	    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    66	    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    67	    handler: async (req, reply) => {
+    68	      const sess = req.session;
+    69	      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+    70	
+    71	      const parsed = listEntityLinksQuerySchema.safeParse(req.query);
+    72	      if (!parsed.success) {
+    73	        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+    74	          fields: fieldsFromZodIssues(parsed.error.issues),
+    75	        });
+    76	      }
+    77	
+    78	      const data = parsed.data;
+    79	      let endpoint: { type: 'voc'; id: string };
+    80	      let side: 'source' | 'target';
+    81	      if (data.source_type !== undefined && data.source_id !== undefined) {
+    82	        endpoint = { type: data.source_type, id: data.source_id };
+    83	        side = 'source';
+    84	      } else if (data.target_type !== undefined && data.target_id !== undefined) {
+    85	        endpoint = { type: data.target_type, id: data.target_id };
+    86	        side = 'target';
+    87	      } else {
+    88	        throw new HttpError('internal.unexpected', 'validated entity link query lost endpoint');
+    89	      }
+    90	
+    91	      const items = await entityLinksService.listLinks({
+    92	        actor: {
+    93	          actor_id: sess.actor_id,
+    94	          workspace_id: sess.workspace_id,
+    95	          role_level: sess.role_level,
+    96	        },
+    97	        endpoint,
+    98	        side,
+    99	      });
+   100	      return reply.code(200).send({ items });
+   101	    },
+   102	  });
+   103	};
+
+hook: PostToolUse
+hook: PostToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts | sed -n '1,420p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+     1	// POST/GET /entity-links integration tests — Slice 4.1 issue #112.
+     2	//
+     3	// Gate: DATABASE_URL + WORKSPACE_ID + DATABASE_URL_MIGRATE. The migrate role is
+     4	// required because core.entity_links is append-only to fops_app.
+     5	
+     6	import type { FastifyInstance } from 'fastify';
+     7	import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+     8	
+     9	import { loadConfig } from '../../../config.js';
+    10	import { type DbHandle, createDb } from '../../../db/client.js';
+    11	import { buildServer } from '../../../server.js';
+    12	import {
+    13	  SESSION_COOKIE_NAME,
+    14	  cleanupReadTestTables,
+    15	  grantCapability,
+    16	  insertDevActor,
+    17	  insertMsDirectly,
+    18	  insertVocDirectly,
+    19	  loginAs,
+    20	  uid,
+    21	} from '../../voc/__tests__/_seed-helpers.js';
+    22	
+    23	const APP_URL = process.env.DATABASE_URL ?? '';
+    24	const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
+    25	const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
+    26	const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
+    27	
+    28	const SLUG_PREFIX = 'it-links';
+    29	
+    30	describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
+    31	  let dbHandle: DbHandle;
+    32	  let migrateHandle: DbHandle;
+    33	  let app: FastifyInstance;
+    34	  let adminCookie: string;
+    35	  let adminActorId: string;
+    36	  let reporterId: string;
+    37	
+    38	  beforeAll(async () => {
+    39	    process.env.NODE_ENV = 'test';
+    40	    dbHandle = createDb(APP_URL);
+    41	    migrateHandle = createDb(MIGRATE_URL);
+    42	    app = await buildServer({ config: loadConfig(), dbHandle });
+    43	    await app.ready();
+    44	
+    45	    adminCookie = await loginAs(app, 'mock-admin-1');
+    46	    const admin = await dbHandle.pool.query<{ id: string }>(
+    47	      `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
+    48	      [WORKSPACE_ID],
+    49	    );
+    50	    adminActorId = admin.rows[0]?.id ?? '';
+    51	    if (!adminActorId) throw new Error('mock-admin-1 not found');
+    52	
+    53	    await loginAs(app, 'mock-user-1');
+    54	    const reporter = await dbHandle.pool.query<{ id: string }>(
+    55	      `select id from core.actors where external_id = 'mock-user-1' and workspace_id = $1`,
+    56	      [WORKSPACE_ID],
+    57	    );
+    58	    reporterId = reporter.rows[0]?.id ?? '';
+    59	    if (!reporterId) throw new Error('mock-user-1 not found');
+    60	  });
+    61	
+    62	  beforeEach(async () => {
+    63	    await cleanupEntityLinkFixtures();
+    64	  });
+    65	
+    66	  afterAll(async () => {
+    67	    await cleanupEntityLinkFixtures();
+    68	    await app?.close();
+    69	    await dbHandle?.close();
+    70	    await migrateHandle?.close();
+    71	  });
+    72	
+    73	  async function cleanupEntityLinkFixtures(): Promise<void> {
+    74	    if (!migrateHandle) return;
+    75	    await migrateHandle.pool.query(
+    76	      `delete from core.entity_links
+    77	        where workspace_id = $1
+    78	          and managed_system_id in (
+    79	            select id from core.managed_systems where workspace_id = $1 and slug like $2
+    80	          )`,
+    81	      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    82	    );
+    83	    await migrateHandle.pool.query(
+    84	      `delete from core.audit_log where workspace_id = $1 and event_type = 'entity_link.created'`,
+    85	      [WORKSPACE_ID],
+    86	    );
+    87	    await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
+    88	  }
+    89	
+    90	  async function seedVocPair(): Promise<{
+    91	    msA: string;
+    92	    msB: string;
+    93	    sourceVoc: { id: string };
+    94	    targetVoc: { id: string };
+    95	  }> {
+    96	    const msA = await insertMsDirectly(
+    97	      dbHandle,
+    98	      WORKSPACE_ID,
+    99	      `${uid(SLUG_PREFIX)}-a`,
+   100	      'Links MS-A',
+   101	    );
+   102	    const msB = await insertMsDirectly(
+   103	      dbHandle,
+   104	      WORKSPACE_ID,
+   105	      `${uid(SLUG_PREFIX)}-b`,
+   106	      'Links MS-B',
+   107	    );
+   108	    const sourceVoc = await insertVocDirectly(
+   109	      dbHandle,
+   110	      WORKSPACE_ID,
+   111	      msA,
+   112	      reporterId,
+   113	      'Link Source VOC',
+   114	    );
+   115	    const targetVoc = await insertVocDirectly(
+   116	      dbHandle,
+   117	      WORKSPACE_ID,
+   118	      msB,
+   119	      reporterId,
+   120	      'Link Target VOC',
+   121	    );
+   122	    return { msA, msB, sourceVoc, targetVoc };
+   123	  }
+   124	
+   125	  async function postEntityLink(cookie: string, sourceId: string, targetId: string, extra = {}) {
+   126	    return app.inject({
+   127	      method: 'POST',
+   128	      url: '/entity-links',
+   129	      headers: {
+   130	        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+   131	        'content-type': 'application/json',
+   132	      },
+   133	      payload: {
+   134	        source: { type: 'voc', id: sourceId },
+   135	        target: { type: 'voc', id: targetId },
+   136	        relation_type: 'related_to',
+   137	        ...extra,
+   138	      },
+   139	    });
+   140	  }
+   141	
+   142	  it('POST creates an active VOC↔VOC related_to link and audit row', async () => {
+   143	    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+   144	
+   145	    const res = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+   146	    expect(res.statusCode).toBe(201);
+   147	    const body = res.json<{ id: string; visibility_state: string; managed_system_id: string }>();
+   148	    expect(body.visibility_state).toBe('allowed');
+   149	    expect(body.managed_system_id).toBe(msA);
+   150	
+   151	    const linkRows = await dbHandle.pool.query<{ n: number }>(
+   152	      `select count(*)::int as n from core.entity_links
+   153	        where id = $1 and status = 'active' and relation_type = 'related_to'`,
+   154	      [body.id],
+   155	    );
+   156	    expect(linkRows.rows[0]?.n).toBe(1);
+   157	
+   158	    const auditRows = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+   159	      `select detail from core.audit_log
+   160	        where event_type = 'entity_link.created' and subject_id = $1`,
+   161	      [body.id],
+   162	    );
+   163	    expect(auditRows.rowCount).toBe(1);
+   164	    expect(auditRows.rows[0]?.detail).toMatchObject({
+   165	      link_id: body.id,
+   166	      relation_type: 'related_to',
+   167	      visibility: 'internal_only',
+   168	    });
+   169	  });
+   170	
+   171	  it('POST returns 404 when actor lacks scope on the target VOC', async () => {
+   172	    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+   173	    const { id: devId, externalId } = await insertDevActor(
+   174	      dbHandle,
+   175	      WORKSPACE_ID,
+   176	      uid('target404'),
+   177	    );
+   178	    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
+   179	    const devCookie = await loginAs(app, externalId);
+   180	
+   181	    const res = await postEntityLink(devCookie, sourceVoc.id, targetVoc.id);
+   182	    expect(res.statusCode).toBe(404);
+   183	  });
+   184	
+   185	  it('POST rejects self-link', async () => {
+   186	    const { sourceVoc } = await seedVocPair();
+   187	    const res = await postEntityLink(adminCookie, sourceVoc.id, sourceVoc.id);
+   188	    expect(res.statusCode).toBe(422);
+   189	    expect(res.json<{ code: string }>().code).toBe('validation.failed');
+   190	  });
+   191	
+   192	  it('POST rejects unsupported relation_type, source_type, target_type, and visibility', async () => {
+   193	    const { sourceVoc, targetVoc } = await seedVocPair();
+   194	    const cases = [
+   195	      { relation_type: 'evidence_of' },
+   196	      { source: { type: 'finding', id: sourceVoc.id } },
+   197	      { target: { type: 'task', id: targetVoc.id } },
+   198	      { visibility: 'summary_visible' },
+   199	    ];
+   200	
+   201	    for (const extra of cases) {
+   202	      const res = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id, extra);
+   203	      expect(res.statusCode).toBe(422);
+   204	      expect(res.json<{ code: string }>().code).toBe('validation.failed');
+   205	    }
+   206	  });
+   207	
+   208	  it('POST duplicate returns the existing active link without duplicating', async () => {
+   209	    const { sourceVoc, targetVoc } = await seedVocPair();
+   210	    const first = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+   211	    expect(first.statusCode).toBe(201);
+   212	    const firstId = first.json<{ id: string }>().id;
+   213	
+   214	    const second = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+   215	    expect(second.statusCode).toBe(200);
+   216	    expect(second.json<{ id: string }>().id).toBe(firstId);
+   217	
+   218	    const count = await dbHandle.pool.query<{ n: number }>(
+   219	      `select count(*)::int as n from core.entity_links
+   220	        where source_id = $1 and target_id = $2 and status = 'active'`,
+   221	      [sourceVoc.id, targetVoc.id],
+   222	    );
+   223	    expect(count.rows[0]?.n).toBe(1);
+   224	  });
+   225	
+   226	  it('GET by source returns allowed rows and hidden stubs for out-of-scope targets', async () => {
+   227	    const msA = await insertMsDirectly(
+   228	      dbHandle,
+   229	      WORKSPACE_ID,
+   230	      `${uid(SLUG_PREFIX)}-geta`,
+   231	      'Links GET MS-A',
+   232	    );
+   233	    const msB = await insertMsDirectly(
+   234	      dbHandle,
+   235	      WORKSPACE_ID,
+   236	      `${uid(SLUG_PREFIX)}-getb`,
+   237	      'Links GET MS-B',
+   238	    );
+   239	    const sourceVoc = await insertVocDirectly(
+   240	      dbHandle,
+   241	      WORKSPACE_ID,
+   242	      msA,
+   243	      reporterId,
+   244	      'GET Source VOC',
+   245	    );
+   246	    const allowedTarget = await insertVocDirectly(
+   247	      dbHandle,
+   248	      WORKSPACE_ID,
+   249	      msA,
+   250	      reporterId,
+   251	      'GET Allowed Target',
+   252	    );
+   253	    const hiddenTarget = await insertVocDirectly(
+   254	      dbHandle,
+   255	      WORKSPACE_ID,
+   256	      msB,
+   257	      reporterId,
+   258	      'GET Hidden Target',
+   259	    );
+   260	
+   261	    await postEntityLink(adminCookie, sourceVoc.id, allowedTarget.id);
+   262	    await postEntityLink(adminCookie, sourceVoc.id, hiddenTarget.id);
+   263	
+   264	    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('getsrc'));
+   265	    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
+   266	    const devCookie = await loginAs(app, externalId);
+   267	
+   268	    const res = await app.inject({
+   269	      method: 'GET',
+   270	      url: `/entity-links?source_type=voc&source_id=${sourceVoc.id}`,
+   271	      headers: { cookie: `${SESSION_COOKIE_NAME}=${devCookie}` },
+   272	    });
+   273	    expect(res.statusCode).toBe(200);
+   274	    const body = res.json<{ items: Array<Record<string, unknown>> }>();
+   275	    expect(body.items).toHaveLength(2);
+   276	    expect(
+   277	      body.items.some(
+   278	        (item) => item.visibility_state === 'allowed' && item.target_id === allowedTarget.id,
+   279	      ),
+   280	    ).toBe(true);
+   281	    const hidden = body.items.find((item) => item.visibility_state === 'hidden');
+   282	    expect(hidden).toBeDefined();
+   283	    expect(hidden?.target_id).toBeUndefined();
+   284	    expect(hidden?.source_id).toBeUndefined();
+   285	  });
+   286	
+   287	  it('VOC detail returns active outbound related_to links on the Links tab payload', async () => {
+   288	    const { sourceVoc, targetVoc } = await seedVocPair();
+   289	    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+   290	    expect(create.statusCode).toBe(201);
+   291	    const linkId = create.json<{ id: string }>().id;
+   292	
+   293	    const res = await app.inject({
+   294	      method: 'GET',
+   295	      url: `/vocs/${sourceVoc.id}`,
+   296	      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+   297	    });
+   298	    expect(res.statusCode).toBe(200);
+   299	    const body = res.json<{ links?: Array<{ id: string; visibility_state: string }> }>();
+   300	    expect(
+   301	      body.links?.some((link) => link.id === linkId && link.visibility_state === 'allowed'),
+   302	    ).toBe(true);
+   303	  });
+   304	});
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "rg -n \"checkCapability\\(.*voc.read|voc.read|requireMSScope|actorScopeForCapability\" apps/backend/src/modules/voc apps/backend/src/modules/permissions apps/backend/src/modules/entity-links -g '*.ts'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+apps/backend/src/modules/entity-links/service.ts:59:  const decision = await deps.checkService.checkCapability(actor, 'voc.read', {
+apps/backend/src/modules/permissions/check-service.ts:208:    // admin role implicitly satisfies voc.triage and voc.read (workspace-wide);
+apps/backend/src/modules/permissions/check-service.ts:214:      capability === 'voc.read'
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:178:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:265:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
+apps/backend/src/modules/permissions/scope-service.ts:12://   actorScopeForCapability → multi-MS scope resolution for read-model filtering
+apps/backend/src/modules/permissions/scope-service.ts:47:export async function actorScopeForCapability(
+apps/backend/src/modules/voc/read-service.ts:1:// apps/backend/src/modules/voc/read-service.ts
+apps/backend/src/modules/voc/read-service.ts:292:            'voc.read capability required; developer needs MS-scoped grant',
+apps/backend/src/modules/voc/read-service.ts:296:                permission: 'voc.read',
+apps/backend/src/modules/voc/read-service.ts:304:          'no voc.read scope for actor',
+apps/backend/src/modules/voc/read-service.ts:315:            'managed_system_id not in voc.read scope',
+apps/backend/src/modules/voc/read-service.ts:319:                permission: 'voc.read',
+apps/backend/src/modules/voc/read-service.ts:463:        'voc.read',
+apps/backend/src/modules/voc/read-service.ts:472:            permission: 'voc.read',
+apps/backend/src/modules/voc/read-service.ts:624:      throw new HttpError('permission.denied', 'conversation not available without voc.read scope');
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:100:  it('AC1b: developer with voc.read on MS-A only sees only MS-A VOCs in view=inbox', async () => {
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:104:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msAId, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:239:  it('AC8: developer with voc.read but no voc.triage → 403 on view=triage', async () => {
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:242:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:489:  it('AC20: out_of_scope_summary — actor with voc.read on MS-A, voc.triage on MS-B', async () => {
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:493:    // voc.read on MS-A only (so MS-A is in readScope)
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:494:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msAId, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:622:  it('B1a: actor with voc.read grant + active MS-scoped deny → view=inbox returns empty for that MS', async () => {
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:625:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:626:    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:651:  it('B1c: developer with workspace-wide voc.read grant + MS-scoped deny on MS-A → view=inbox excludes MS-A VOCs', async () => {
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:656:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', null, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:658:    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msAId, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:677:  it('B1d: developer with workspace-wide voc.read + MS-scoped deny on MS-A → GET /vocs/:id on MS-A VOC → 404', async () => {
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:680:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', null, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:681:    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msAId, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:696:  it('B1e: developer with workspace-wide voc.triage + workspace-wide voc.read + MS-scoped triage deny on MS-A → view=triage excludes MS-A VOCs', async () => {
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:700:    // Both voc.read and voc.triage workspace-wide grants. MS-scoped deny on voc.triage for MS-A.
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:703:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', null, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:724:  it('B1b: actor with voc.read grant + workspace-wide deny → view=inbox → 403 (scope collapses to empty)', async () => {
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:727:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts:729:    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', null, adminActorId);
+apps/backend/src/modules/voc/repo-read.ts:11://   calls actorScopeForCapability() from scope-service.ts; it MUST NOT import
+apps/backend/src/modules/voc/repo-read.ts:28:import { actorScopeForCapability } from '../permissions/scope-service.js';
+apps/backend/src/modules/voc/repo-read.ts:45: * Effective scope: union of voc.read and voc.triage grants for the actor.
+apps/backend/src/modules/voc/repo-read.ts:50: * surface. Restricting to voc.read ∪ voc.triage bounds the effective
+apps/backend/src/modules/voc/repo-read.ts:63:    actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read'),
+apps/backend/src/modules/voc/repo-read.ts:64:    actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage'),
+apps/backend/src/modules/voc/repo-read.ts:75: * voc.read scope. Admin → 'all'. Otherwise: workspace-wide voc.read grant →
+apps/backend/src/modules/voc/repo-read.ts:76: * 'all'; MS-scoped voc.read grants → scoped list. Empty list → scoped:[].
+apps/backend/src/modules/voc/repo-read.ts:82:  return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read');
+apps/backend/src/modules/voc/repo-read.ts:90:  return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage');
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:245:  // ── AC7: Developer with voc.read AND voc.triage sees all 3 kinds ─────────
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:247:  it('AC7: developer with voc.read AND voc.triage sees all 3 conversation kinds', async () => {
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:250:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:275:  // ── AC8: Developer with voc.read only (no triage) — B2 fix ──────────────
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:279:  it('AC8: developer with voc.read only (not reporter) → public_updates ONLY; NO reporter_replies, NO internal_comments (B2 fix)', async () => {
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:282:    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:358:  it('AC10: developer with voc.triage on MS (no voc.read) → 200 SUMMARY envelope with request_access', async () => {
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:361:    // voc.triage but NOT voc.read → effectiveScope=MS, readScope=empty → SUMMARY
+apps/backend/src/modules/voc/__tests__/repo-read.integration.test.ts:260:  it('actorReadScope: developer with workspace-wide voc.read → all', async () => {
+apps/backend/src/modules/voc/__tests__/repo-read.integration.test.ts:262:    await grantCapability(handle, WORKSPACE_ID, devId, 'voc.read', null, adminActorId);
+apps/backend/src/modules/voc/__tests__/repo-read.integration.test.ts:271:  it('actorReadScope: developer with MS-scoped voc.read → scoped:[msId]', async () => {
+apps/backend/src/modules/voc/__tests__/repo-read.integration.test.ts:274:    await grantCapability(handle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+apps/backend/src/modules/voc/__tests__/get-conversation.integration.test.ts:343:  it('AC7: actor in summary-only state (voc.triage, no voc.read) → 403 permission.denied on conversation endpoint', async () => {
+apps/backend/src/modules/voc/__tests__/read-service.test.ts:600:  it('M1: effective_scope is union of voc.read and voc.triage — actor with only triage grant sees summary territory', async () => {
+apps/backend/src/modules/voc/__tests__/read-service.test.ts:601:    // When actor has voc.triage but no voc.read, effectiveScope includes the MS
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "rg -n \"record\\(tx|class.*Audit|createAuditService|auditService.record|core.audit_log|audit_log\" apps/backend/src/modules apps/backend/src/lib packages/shared/src -g '*.ts'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+apps/backend/src/modules/entity-links/service.ts:122:        await deps.auditService.record(tx, {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:84:      `delete from core.audit_log where workspace_id = $1 and event_type = 'entity_link.created'`,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:159:      `select detail from core.audit_log
+apps/backend/src/modules/voc/service.ts:165:    await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/service.ts:390:      await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/service.ts:400:        await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/service.ts:411:        await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/service.ts:426:        await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/service.ts:543:      await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/service.ts:556:      await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/service.ts:573:      await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/service.ts:590:      await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/service.ts:856:    await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/conversation-service.ts:342:    await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/conversation-service.ts:359:      await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/conversation-service.ts:483:    await deps.auditService.record(tx, {
+apps/backend/src/modules/voc/conversation-service.ts:640:    await deps.auditService.record(tx, {
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:77:        `delete from core.audit_log where event_type in ('managed_system_registered','managed_system_updated','managed_system_archived')`,
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:102:        `delete from core.audit_log where event_type in ('managed_system_registered','managed_system_updated','managed_system_archived')`,
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:109:  it('admin POST → 201 + audit_log managed_system_registered row', async () => {
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:124:      `select event_type, subject_id, detail from core.audit_log
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:140:    // Review H5: a capability gate that fired AFTER writing audit_log
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:142:    // anywhere: domain table, audit_log, and idempotency_keys.
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:162:      `select count(*)::int as n from core.audit_log where event_type = 'managed_system_registered' and workspace_id = $1`,
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:243:      `select count(*)::int as n from core.audit_log where event_type = 'managed_system_registered' and workspace_id = $1`,
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:270:      `select count(*)::int as n from core.audit_log where event_type = 'managed_system_updated'`,
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:292:      `select count(*)::int as n from core.audit_log where event_type = 'managed_system_updated'`,
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:315:      `select detail from core.audit_log where event_type = 'managed_system_updated' and subject_id = $1`,
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:352:      `select count(*)::int as n from core.audit_log where event_type = 'managed_system_archived' and subject_id = $1`,
+apps/backend/src/modules/managed-systems/__tests__/managed-system.integration.test.ts:559:      `select count(*)::int as n from core.audit_log where event_type = 'managed_system_updated' and subject_id = $1`,
+apps/backend/src/modules/attachments/service.ts:124:    await deps.auditService.record(tx, {
+apps/backend/src/modules/managed-systems/__tests__/register.advisory-lock.integration.test.ts:78:        `delete from core.audit_log where event_type = 'managed_system_registered' and created_at >= $1`,
+apps/backend/src/modules/managed-systems/__tests__/register.advisory-lock.integration.test.ts:100:        `delete from core.audit_log where event_type = 'managed_system_registered' and created_at >= $1`,
+apps/backend/src/modules/managed-systems/__tests__/register.advisory-lock.integration.test.ts:138:      `select count(*)::int as n from core.audit_log
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:7://   * fops_migrate pool for core.audit_log cleanup (fops_app cannot DELETE).
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:205:        `delete from core.audit_log
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:329:      `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:333:      `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:886:        `select subject_id, detail from core.audit_log
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:912:          `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:939:          `select count(*)::int as n from core.audit_log where event_type = 'voc_created'`,
+apps/backend/src/modules/core/jobs/idempotency-purge.ts:7:// Why no audit row: ADR-0008 audit_log is for *domain* mutations. This is
+apps/backend/src/modules/auth/session-service.ts:3:// Slice 1 #3 has no audits yet (the audit_log writer lands with the first
+apps/backend/src/modules/managed-systems/managed-system-service.ts:13://      guarantees fops_app can INSERT-only on core.audit_log).
+apps/backend/src/modules/managed-systems/managed-system-service.ts:221:      await auditService.record(tx, {
+apps/backend/src/modules/managed-systems/managed-system-service.ts:394:      await auditService.record(tx, {
+apps/backend/src/modules/managed-systems/managed-system-service.ts:505:      await auditService.record(tx, {
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:16:import { createAuditService } from '../../core/audit/audit-service.js';
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:64:  // permission_requests, audit_log, idempotency_keys, and integration-test
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:65:  // sessions. audit_log is INSERT-only for fops_app — delete as fops_migrate.
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:75:    // audit_log: revoke prevents UPDATE/DELETE on fops_app. Use the
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:81:      await ops.pool.query(`delete from core.audit_log where event_type = 'permission_requested'`);
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:116:      `select event_type, subject_type, subject_id from core.audit_log
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:205:      `select count(*)::int as n from core.audit_log where workspace_id = $1 and event_type = 'permission_requested'`,
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:441:    const realAudit = createAuditService();
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:445:        input: Parameters<ReturnType<typeof createAuditService>['record']>[1],
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:447:        await realAudit.record(tx as never, input);
+apps/backend/src/modules/permissions/__tests__/create-request.integration.test.ts:484:        `select count(*)::int as n from core.audit_log where workspace_id = $1 and event_type = 'permission_requested'`,
+apps/backend/src/modules/voc/__tests__/post-public-update.integration.test.ts:47:      `select event_type, detail from core.audit_log where subject_id = $1 order by created_at asc`,
+apps/backend/src/modules/voc/__tests__/post-public-update.integration.test.ts:61:      `delete from core.audit_log
+apps/backend/src/modules/permissions/request-service.ts:207:      await auditService.record(tx, {
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:205:      `select detail from core.audit_log where subject_id = $1 and event_type = $2 order by created_at asc limit 1`,
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:220:      `select count(*) as n from core.audit_log where subject_id = $1 and event_type = $2`,
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:289:        `delete from core.audit_log
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:6://   * fops_migrate pool for core.audit_log cleanup.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:199:      `select event_type from core.audit_log where subject_id = $1 order by created_at asc`,
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:215:      `select detail from core.audit_log where subject_id = $1 and event_type = $2 order by created_at asc limit 1`,
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:281:        `delete from core.audit_log
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:337:          `select count(*)::int as n from core.audit_log
+apps/backend/src/modules/attachments/__tests__/post-attachments-happy.integration.test.ts:156:      `delete from core.audit_log where event_type = 'attachment_uploaded'`,
+apps/backend/src/modules/attachments/__tests__/post-attachments-happy.integration.test.ts:261:      `select count(*)::int as n from core.audit_log where event_type = 'attachment_uploaded'`,
+apps/backend/src/modules/attachments/__tests__/post-attachments-happy.integration.test.ts:274:      `select count(*)::int as n from core.audit_log where event_type = 'attachment_uploaded'`,
+apps/backend/src/modules/attachments/__tests__/post-attachments-happy.integration.test.ts:336:         from core.audit_log
+apps/backend/src/modules/voc/routes.ts:235:        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 200, envelope);
+apps/backend/src/modules/voc/routes.ts:327:        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 200, envelope);
+apps/backend/src/modules/voc/routes.ts:513:        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
+apps/backend/src/modules/voc/routes.ts:568:        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
+apps/backend/src/modules/voc/routes.ts:623:        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
+apps/backend/src/modules/core/audit/index.ts:2:  createAuditService,
+apps/backend/src/modules/voc/__tests__/post-reporter-reply.integration.test.ts:41:      `select event_type, detail from core.audit_log where subject_id = $1 order by created_at asc`,
+apps/backend/src/modules/voc/__tests__/post-reporter-reply.integration.test.ts:55:      `delete from core.audit_log
+apps/backend/src/modules/voc/__tests__/post-internal-comment.integration.test.ts:42:      `select event_type, detail from core.audit_log where subject_id = $1 order by created_at asc`,
+apps/backend/src/modules/voc/__tests__/post-internal-comment.integration.test.ts:56:      `delete from core.audit_log
+apps/backend/src/modules/core/audit/audit-service.ts:5://   * Every domain mutation that produces an audit_log row MUST commit the
+apps/backend/src/modules/core/audit/audit-service.ts:37:export function createAuditService() {
+apps/backend/src/modules/core/audit/audit-service.ts:38:  async function record(tx: Tx, input: AuditRecordInput): Promise<void> {
+apps/backend/src/modules/core/audit/audit-service.ts:59:export type AuditService = ReturnType<typeof createAuditService>;
+apps/backend/src/modules/core/idempotency/idempotency-service.ts:145:    await record(tx, actorId, key, requestHash, response.status, response.body);
+apps/backend/src/modules/core/jobs/rate-limits-purge.ts:11:// Why no audit row: ADR-0008 audit_log is for *domain* mutations. This is
+apps/backend/src/modules/analytics-areas/analytics-area-service.ts:156:  await auditService.record(tx, {
+apps/backend/src/modules/analytics-areas/analytics-area-service.ts:302:    await auditService.record(tx, {
+apps/backend/src/modules/analytics-areas/analytics-area-service.ts:445:      await auditService.record(tx, {
+apps/backend/src/modules/analytics-areas/__tests__/cascade.rollback.unit.test.ts:7:// around `auditService.record`, so the error naturally propagates; this
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:100:        `delete from core.audit_log where event_type in ('managed_system_registered','managed_system_updated','managed_system_archived','analytics_area_registered','analytics_area_updated','analytics_area_archived')`,
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:123:        `delete from core.audit_log
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:145:      `select detail from core.audit_log where event_type = 'analytics_area_registered'`,
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:295:      `select count(*)::int as n from core.audit_log where event_type = 'analytics_area_updated'`,
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:308:      `select detail from core.audit_log where event_type = 'analytics_area_updated' and subject_id = $1`,
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:336:      `select detail from core.audit_log where event_type = 'analytics_area_archived' and subject_id = $1`,
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:352:      `select count(*)::int as n from core.audit_log where event_type = 'analytics_area_archived' and subject_id = $1`,
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:385:      `select detail from core.audit_log where event_type = 'managed_system_archived' and subject_id = $1`,
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:396:      `select subject_id, detail from core.audit_log where event_type = 'analytics_area_archived'`,
+apps/backend/src/modules/analytics-areas/__tests__/analytics-area.integration.test.ts:630:      `select count(*)::int as n from core.audit_log where event_type = 'analytics_area_registered' and workspace_id = $1`,
+apps/backend/src/modules/analytics-areas/__tests__/cross-workspace.integration.test.ts:29:import { createAuditService } from '../../core/audit/audit-service.js';
+apps/backend/src/modules/analytics-areas/__tests__/cross-workspace.integration.test.ts:67:      const auditService = createAuditService();
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'rg -n "export const auditLog|auditLog" apps/backend/src/db/schema/core.ts' in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+112:export const auditLog = coreSchema.table(
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "rg -n \"type Tx|export type Tx|transaction\" apps/backend/src/db -g '*.ts'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+apps/backend/src/db/tx.ts:1:// Canonical transaction handle. Service code that performs mutations MUST
+apps/backend/src/db/tx.ts:2:// accept `Tx` so it can be invoked inside an open transaction; passing the
+apps/backend/src/db/tx.ts:22:export type Tx = Db | DrizzleTx;
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/core/audit/audit-service.ts | sed -n '1,110p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+     1	// Audit application service. Owned by the Core module per
+     2	// docs/implementation/02-domain-module-boundaries.md:32-42.
+     3	//
+     4	// Contract (ADR-0008):
+     5	//   * Every domain mutation that produces an audit_log row MUST commit the
+     6	//     row in the SAME transaction as the underlying mutation. To enforce
+     7	//     this at compile time, the only public API takes a Drizzle transaction
+     8	//     handle as its first parameter. There is no `record-without-tx` variant.
+     9	//   * `event_type` is constrained to the AUDIT_EVENT_TYPES enum (ADR-0008:53).
+    10	//     Unknown event_type → thrown error; this is a programmer error, not a
+    11	//     user-facing 422.
+    12	//   * `detail` is validated against the per-event-type schema in
+    13	//     AUDIT_EVENT_DETAIL_SCHEMAS. A malformed detail throws; the application
+    14	//     service that emitted the audit is responsible for shaping it correctly.
+    15	
+    16	import {
+    17	  AUDIT_EVENT_DETAIL_SCHEMAS,
+    18	  type AuditEventType,
+    19	  auditEventTypeSchema,
+    20	} from '@fops/shared';
+    21	
+    22	import type { Tx } from '../../../db/tx.js';
+    23	import { auditLog } from '../../../db/schema/core.js';
+    24	
+    25	export type { Tx };
+    26	
+    27	export interface AuditRecordInput {
+    28	  workspace_id: string;
+    29	  actor_id: string;
+    30	  event_type: AuditEventType;
+    31	  subject_type: string;
+    32	  subject_id: string;
+    33	  summary: string;
+    34	  detail: Record<string, unknown>;
+    35	}
+    36	
+    37	export function createAuditService() {
+    38	  async function record(tx: Tx, input: AuditRecordInput): Promise<void> {
+    39	    // Validate event_type against the closed enum. Throws on unknown.
+    40	    const eventType = auditEventTypeSchema.parse(input.event_type);
+    41	    // Validate detail against the per-event schema. Throws on shape error.
+    42	    const schema = AUDIT_EVENT_DETAIL_SCHEMAS[eventType];
+    43	    const detail = schema.parse(input.detail);
+    44	
+    45	    await tx.insert(auditLog).values({
+    46	      workspaceId: input.workspace_id,
+    47	      actorId: input.actor_id,
+    48	      eventType,
+    49	      subjectType: input.subject_type,
+    50	      subjectId: input.subject_id,
+    51	      summary: input.summary,
+    52	      detail: detail as object,
+    53	    });
+    54	  }
+    55	
+    56	  return { record };
+    57	}
+    58	
+    59	export type AuditService = ReturnType<typeof createAuditService>;
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/voc/read-service.ts | sed -n '250,335p;440,485p;500,580p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+   250	      throw new HttpError('validation.failed', 'managed_system_id=all not allowed for view=my', {
+   251	        fields: [{ path: ['managed_system_id'], code: 'invalid' }],
+   252	      });
+   253	    }
+   254	
+   255	    // ── 6. Resolve scopes (skip triageScope for non-triage views) ─────────────
+   256	    let readScope: Scope;
+   257	    let effectiveScope: Scope;
+   258	    let triageScope: Scope | undefined;
+   259	
+   260	    if (view === 'triage') {
+   261	      [readScope, effectiveScope, triageScope] = await Promise.all([
+   262	        repoRead.actorReadScope(deps.db, actor),
+   263	        repoRead.actorEffectiveScope(deps.db, actor),
+   264	        repoRead.actorTriageScope(deps.db, actor),
+   265	      ]);
+   266	    } else {
+   267	      [readScope, effectiveScope] = await Promise.all([
+   268	        repoRead.actorReadScope(deps.db, actor),
+   269	        repoRead.actorEffectiveScope(deps.db, actor),
+   270	      ]);
+   271	    }
+   272	
+   273	    // ── 7. View-specific scope validation + scope filter selection ─────────────
+   274	    let scopeFilter: Scope;
+   275	    let actorIdForMyFilter: string | undefined;
+   276	
+   277	    if (view === 'my') {
+   278	      // No scope filter for 'my' view (reporter_id filter is applied in repo).
+   279	      // Allow managed_system_id=<uuid> narrowing.
+   280	      if (managed_system_id && managed_system_id !== 'all') {
+   281	        scopeFilter = { kind: 'scoped', managedSystemIds: [managed_system_id] };
+   282	      } else {
+   283	        scopeFilter = { kind: 'all' };
+   284	      }
+   285	      actorIdForMyFilter = actor.actor_id;
+   286	    } else if (view === 'inbox') {
+   287	      // Validate read scope is non-empty.
+   288	      if (readScope.kind === 'scoped' && readScope.managedSystemIds.length === 0) {
+   289	        if (actor.role_level === 'developer') {
+   290	          throw new HttpError(
+   291	            'permission.scope_required',
+   292	            'voc.read capability required; developer needs MS-scoped grant',
+   293	            {
+   294	              requiredScope: [],
+   295	              requestable_permission: {
+   296	                permission: 'voc.read',
+   297	                managed_system_id: null,
+   298	              },
+   299	            },
+   300	          );
+   301	        }
+   302	        throw new HttpError(
+   303	          'permission.denied',
+   304	          'no voc.read scope for actor',
+   305	          { reason: 'no_grant' },
+   306	        );
+   307	      }
+   308	
+   309	      // managed_system_id narrowing for inbox view.
+   310	      if (managed_system_id && managed_system_id !== 'all') {
+   311	        // Must be in actor's read scope.
+   312	        if (!msInScope(readScope, managed_system_id)) {
+   313	          throw new HttpError(
+   314	            'permission.scope_required',
+   315	            'managed_system_id not in voc.read scope',
+   316	            {
+   317	              requiredScope: [managed_system_id],
+   318	              requestable_permission: {
+   319	                permission: 'voc.read',
+   320	                managed_system_id,
+   321	              },
+   322	            },
+   323	          );
+   324	        }
+   325	        scopeFilter = { kind: 'scoped', managedSystemIds: [managed_system_id] };
+   326	      } else {
+   327	        scopeFilter = readScope;
+   328	      }
+   329	    } else {
+   330	      // view === 'triage'
+   331	      const tScope = triageScope!;
+   332	      const intersected = intersectScopes(readScope, tScope);
+   333	      if (intersected.kind === 'scoped' && intersected.managedSystemIds.length === 0) {
+   334	        throw new HttpError(
+   335	          'permission.denied',
+   440	      repoRead.actorEffectiveScope(deps.db, actor),
+   441	      repoRead.actorTriageScope(deps.db, actor),
+   442	    ]);
+   443	
+   444	    // ── 3. Compute access flags ──────────────────────────────────────────────
+   445	    const isReporter = row.reporterId === actor.actor_id;
+   446	    const primaryMs = row.primaryManagedSystemId;
+   447	    const msInReadScope = msInScope(readScope, primaryMs);
+   448	    const msInEffectiveScope = msInScope(effectiveScope, primaryMs);
+   449	    const canTriage = msInScope(triageScope, primaryMs);
+   450	
+   451	    // ── 4. Access matrix ─────────────────────────────────────────────────────
+   452	    const etag = `W/"${row.updatedAt.toISOString()}"`;
+   453	
+   454	    if (!msInReadScope && !isReporter && !msInEffectiveScope) {
+   455	      // 404 to prevent existence probe.
+   456	      throw new HttpError('not_found.record', 'VOC not found');
+   457	    }
+   458	
+   459	    if (!msInReadScope && !isReporter && msInEffectiveScope) {
+   460	      // ── SUMMARY path ────────────────────────────────────────────────────
+   461	      const decision = await deps.checkService.checkCapability(
+   462	        { actor_id: actor.actor_id, workspace_id: actor.workspace_id, role_level: actor.role_level },
+   463	        'voc.read',
+   464	        { workspace_id: actor.workspace_id, managed_system_id: primaryMs },
+   465	      );
+   466	
+   467	      let selfDecision: Record<string, unknown>;
+   468	      if (!decision.allow && decision.reason === 'no_grant') {
+   469	        selfDecision = {
+   470	          state: 'request_access',
+   471	          requestable_permission: {
+   472	            permission: 'voc.read',
+   473	            managed_system_id: primaryMs,
+   474	            reason_required: false,
+   475	          },
+   476	        };
+   477	      } else if (!decision.allow) {
+   478	        selfDecision = {
+   479	          state: 'blocked_not_requestable',
+   480	          reason: decision.reason,
+   481	        };
+   482	      } else {
+   483	        // Should not reach here (actor has read access → msInReadScope would be true).
+   484	        // Guard: treat as blocked to avoid data leak.
+   485	        selfDecision = { state: 'blocked_not_requestable', reason: 'unknown' };
+   500	    // ── FULL path (msInReadScope || isReporter) ────────────────────────────
+   501	
+   502	    // ── 5. Load inline conversation (first 50 entries) ───────────────────────
+   503	    const convResult = await repoRead.selectConversationPage(deps.db, {
+   504	      workspaceId: actor.workspace_id,
+   505	      vocId,
+   506	      actorId: actor.actor_id,
+   507	      canTriage,
+   508	      isReporter,
+   509	      limit: 50,
+   510	    });
+   511	
+   512	    // ── 5b. PLAN-22 §Bug-1: VOC-body attachments + per-comment attachments ──
+   513	    // Fetched in parallel — one query for VOC-body attachments, one bulk
+   514	    // query for ALL inline comment-attached rows (no N+1).
+   515	    const commentIds = convResult.entries.map((e) => e.id);
+   516	    const [vocAttRows, commentAttachmentsMap] = await Promise.all([
+   517	      repoRead.selectVocAttachments(deps.db, actor.workspace_id, vocId),
+   518	      repoRead.selectAttachmentsForComments(deps.db, actor.workspace_id, commentIds),
+   519	    ]);
+   520	    const links = await deps.entityLinksService.listLinks({
+   521	      actor,
+   522	      endpoint: { type: 'voc', id: vocId },
+   523	    });
+   524	
+   525	    const conversationTimeline = mapConversationRowsWithAttachments(
+   526	      convResult.entries,
+   527	      commentAttachmentsMap,
+   528	    );
+   529	    let convNextCursor: string | undefined;
+   530	    if (convResult.hasMore && convResult.nextCursor) {
+   531	      convNextCursor = encodeConversationCursor(convResult.nextCursor);
+   532	    }
+   533	
+   534	    // ── 6. Next reporter states ──────────────────────────────────────────────
+   535	    const nextStates = await nextReporterStates(
+   536	      row.reporterFacingStatus as ReporterFacingStatus,
+   537	      deps.db,
+   538	    );
+   539	
+   540	    // ── 7. Permission decisions seed ─────────────────────────────────────────
+   541	    const permissionDecisionsSeed = await repoRead.selectPermissionDecisionsSeed(deps.db, actor.workspace_id, vocId);
+   542	
+   543	    const permissionDecisions: Record<string, unknown> =
+   544	      permissionDecisionsSeed !== null && typeof permissionDecisionsSeed === 'object'
+   545	        ? (permissionDecisionsSeed as Record<string, unknown>)
+   546	        : {};
+   547	
+   548	    // ── 8. Compose full envelope ─────────────────────────────────────────────
+   549	    const envelope: VocDetailEnvelope = {
+   550	      id: row.id,
+   551	      display_id: row.displayId,
+   552	      title: row.title,
+   553	      primary_managed_system_id: primaryMs,
+   554	      analytics_area_id: row.analyticsAreaId,
+   555	      reporter_id: row.reporterId,
+   556	      owner_user_id: row.ownerUserId,
+   557	      owner_team_id: row.ownerTeamId,
+   558	      severity: row.severity,
+   559	      reporter_facing_status: row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
+   560	      triage_state: row.triageState as VocDetailEnvelope['triage_state'],
+   561	      source_context: row.sourceContext as VocDetailEnvelope['source_context'],
+   562	      created_at: row.createdAt.toISOString(),
+   563	      updated_at: row.updatedAt.toISOString(),
+   564	      similar_count: 0,
+   565	      // PLAN-22 §Bug-1: detail row also carries attachment_count (matches the
+   566	      // shared schema which extends vocListItemSchema).
+   567	      attachment_count: vocAttRows.length,
+   568	      description_rich_content: row.descriptionRichContent,
+   569	      next_actions: [],
+   570	      next_reporter_states: {
+   571	        allowed: nextStates.allowed,
+   572	        forbidden: nextStates.forbidden as Record<VocDetailEnvelope['reporter_facing_status'], string>,
+   573	      },
+   574	      linked_execution: { findingRef: null, taskRef: null },
+   575	      links,
+   576	      conversation_timeline: conversationTimeline,
+   577	      // conversation_page.cursor uses exactOptionalPropertyTypes: build without key when absent.
+   578	      conversation_page: convNextCursor !== undefined
+   579	        ? { cursor: convNextCursor, has_more: convResult.hasMore }
+   580	        : { has_more: convResult.hasMore },
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/permissions/check-service.ts | sed -n '180,235p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+   180	        }
+   181	        return { allow: true, via: 'managed_system_scope', grant_id: row.id };
+   182	      }
+   183	    }
+   184	
+   185	    // If we saw a revoked or expired grant earlier and nothing else allowed,
+   186	    // surface that distinct reason. Revoked takes precedence over expired
+   187	    // because revocation is an intentional action vs. passive expiry.
+   188	    if (sawRevoked) {
+   189	      return { allow: false, reason: 'grant_revoked', requestable: null };
+   190	    }
+   191	    if (sawExpired) {
+   192	      return { allow: false, reason: 'grant_expired', requestable: null };
+   193	    }
+   194	
+   195	    // (6) requestable computation (Slice 1): no explicit deny here, so the
+   196	    // actor MAY request workspace-only scope on this capability. Slice 2
+   197	    // extends with MS scope candidates.
+   198	    const requestable: RequestableScope[] = [{ workspace_id: actor.workspace_id }];
+   199	    return { allow: false, reason: 'no_grant', requestable };
+   200	  }
+   201	
+   202	  return { checkCapability };
+   203	}
+   204	
+   205	function roleSatisfies(roleLevel: string, capability: Capability): boolean {
+   206	  // role_level is stored lower-case (core.actors CHECK constraint).
+   207	  if (roleLevel === 'admin') {
+   208	    // admin role implicitly satisfies voc.triage and voc.read (workspace-wide);
+   209	    // developer/user need MS-scoped grants for those capabilities.
+   210	    return (
+   211	      capability === 'workspace.read' ||
+   212	      capability === 'workspace.admin' ||
+   213	      capability === 'voc.triage' ||
+   214	      capability === 'voc.read'
+   215	    );
+   216	  }
+   217	  if (roleLevel === 'user') {
+   218	    return capability === 'workspace.read';
+   219	  }
+   220	  // 'developer' has no implicit Slice 1 capabilities; needs MS scope.
+   221	  return false;
+   222	}
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/db/tx.ts | sed -n '1,80p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+     1	// Canonical transaction handle. Service code that performs mutations MUST
+     2	// accept `Tx` so it can be invoked inside an open transaction; passing the
+     3	// pool-backed `Db` here would silently break read-then-write atomicity
+     4	// (see S-002 / S-006 in .review/USER-VERIFICATION-CHECKLIST.md).
+     5	
+     6	import type { ExtractTablesWithRelations } from 'drizzle-orm';
+     7	import type { NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
+     8	import type { PgTransaction } from 'drizzle-orm/pg-core';
+     9	
+    10	import * as core from './schema/core.js';
+    11	import * as permission from './schema/permission.js';
+    12	import * as voc from './schema/voc.js';
+    13	import type { Db } from './client.js';
+    14	
+    15	const schema = { ...core, ...permission, ...voc };
+    16	
+    17	type Schema = typeof schema;
+    18	type TablesWithRelations = ExtractTablesWithRelations<Schema>;
+    19	
+    20	export type DrizzleTx = PgTransaction<NodePgQueryResultHKT, Schema, TablesWithRelations>;
+    21	
+    22	export type Tx = Db | DrizzleTx;
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc 'rg -n "summary_visible|visible_to_reporter|admin_only|detached|revoked|stale|PATCH|DELETE|findings|finding|missing|FR-LINK-003|visibility_state|target_id|source_id" apps/backend/src/modules/entity-links apps/backend/src/modules/voc packages/shared/src/entity-links.ts packages/shared/src/vocs/detail.ts apps/backend/migrations/0018_entity_links.sql docs/design/11-entity-linking.md docs/implementation/06-entity-linking-contract.md' in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+packages/shared/src/vocs/detail.ts:30:    findingRef: z.null(),
+apps/backend/migrations/0018_entity_links.sql:10:  "source_id" uuid NOT NULL,
+apps/backend/migrations/0018_entity_links.sql:12:  "target_id" uuid NOT NULL,
+apps/backend/migrations/0018_entity_links.sql:23:    CHECK ("visibility" IN ('internal_only','summary_visible','visible_to_reporter','admin_only')),
+apps/backend/migrations/0018_entity_links.sql:25:    CHECK ("status" IN ('active','stale','detached','revoked')),
+apps/backend/migrations/0018_entity_links.sql:31:    CHECK (NOT ("source_type" = "target_type" AND "source_id" = "target_id"))
+apps/backend/migrations/0018_entity_links.sql:37:  ("workspace_id", "source_type", "source_id", "target_type", "target_id", "relation_type")
+apps/backend/migrations/0018_entity_links.sql:41:CREATE INDEX IF NOT EXISTS "entity_links_active_source_idx"
+apps/backend/migrations/0018_entity_links.sql:42:  ON "core"."entity_links" ("workspace_id", "source_type", "source_id")
+apps/backend/migrations/0018_entity_links.sql:46:CREATE INDEX IF NOT EXISTS "entity_links_active_target_idx"
+apps/backend/migrations/0018_entity_links.sql:47:  ON "core"."entity_links" ("workspace_id", "target_type", "target_id")
+docs/implementation/06-entity-linking-contract.md:68:  as visibility_state=allowed when readable and visibility_state=hidden when not
+docs/implementation/06-entity-linking-contract.md:77:summary_visible
+docs/implementation/06-entity-linking-contract.md:83:visible_to_reporter
+docs/implementation/06-entity-linking-contract.md:86:admin_only
+docs/implementation/06-entity-linking-contract.md:97:Dashboard may query entity links to detect records missing relation types expected by workspace policy, Managed System policy, severity rules, or explicit workflow configuration:
+docs/design/11-entity-linking.md:16:- source_id
+docs/design/11-entity-linking.md:18:- target_id
+docs/design/11-entity-linking.md:50:- created_finding
+docs/design/11-entity-linking.md:57:- generated_finding
+docs/design/11-entity-linking.md:93:- summary_visible
+docs/design/11-entity-linking.md:94:- visible_to_reporter
+docs/design/11-entity-linking.md:95:- admin_only
+docs/design/11-entity-linking.md:98:`summary_visible` requires a system-specific summary contract.
+docs/design/11-entity-linking.md:135:- The entity_link is marked inactive, detached, or revoked with actor, reason,
+docs/design/11-entity-linking.md:148:- summary_visible exposes only the target system's summary contract.
+docs/design/11-entity-linking.md:149:- admin_only is restricted to Admin.
+docs/design/11-entity-linking.md:151:- Linked-object UI visibility is backend-decided as allowed, hidden, summary_visible, request_access, or denied.
+docs/design/11-entity-linking.md:157:relation_type, and visibility_state.
+docs/design/11-entity-linking.md:159:### FR-LINK-003: Support Dashboard Missing-Link Queries
+docs/design/11-entity-linking.md:167:- Dashboard can query records missing relation types expected by workspace policy, Managed System policy, severity rules, or explicit workflow configuration.
+docs/design/11-entity-linking.md:168:- Dashboard can detect stale or missing workflow links without treating every unlinked record as incomplete.
+docs/design/11-entity-linking.md:187:- 08-dashboard-system.md depends on missing-link queries.
+packages/shared/src/entity-links.ts:11:  'summary_visible',
+packages/shared/src/entity-links.ts:12:  'visible_to_reporter',
+packages/shared/src/entity-links.ts:13:  'admin_only',
+packages/shared/src/entity-links.ts:19:export const entityLinkStatusSchema = z.enum(['active', 'stale', 'detached', 'revoked']);
+packages/shared/src/entity-links.ts:44:    source_id: z.string().uuid().optional(),
+packages/shared/src/entity-links.ts:46:    target_id: z.string().uuid().optional(),
+packages/shared/src/entity-links.ts:50:    const hasSource = value.source_type !== undefined || value.source_id !== undefined;
+packages/shared/src/entity-links.ts:51:    const hasTarget = value.target_type !== undefined || value.target_id !== undefined;
+packages/shared/src/entity-links.ts:52:    if (hasSource && (value.source_type === undefined || value.source_id === undefined)) {
+packages/shared/src/entity-links.ts:55:        path: ['source_id'],
+packages/shared/src/entity-links.ts:56:        message: 'source_type and source_id must be provided together',
+packages/shared/src/entity-links.ts:59:    if (hasTarget && (value.target_type === undefined || value.target_id === undefined)) {
+packages/shared/src/entity-links.ts:62:        path: ['target_id'],
+packages/shared/src/entity-links.ts:63:        message: 'target_type and target_id must be provided together',
+packages/shared/src/entity-links.ts:79:  source_id: z.string().uuid(),
+packages/shared/src/entity-links.ts:81:  target_id: z.string().uuid(),
+packages/shared/src/entity-links.ts:89:  visibility_state: z.literal('allowed'),
+packages/shared/src/entity-links.ts:97:  visibility_state: z.literal('hidden'),
+packages/shared/src/entity-links.ts:100:export const entityLinkDtoSchema = z.discriminatedUnion('visibility_state', [
+apps/backend/src/modules/entity-links/service.ts:30:    source_id: row.source_id,
+apps/backend/src/modules/entity-links/service.ts:32:    target_id: row.target_id,
+apps/backend/src/modules/entity-links/service.ts:40:    visibility_state: 'allowed',
+apps/backend/src/modules/entity-links/service.ts:50:    visibility_state: 'hidden',
+apps/backend/src/modules/entity-links/service.ts:103:      throw new HttpError('permission.denied', 'missing source VOC read scope');
+apps/backend/src/modules/entity-links/service.ts:179:      const otherId = row.source_id === endpoint.id ? row.target_id : row.source_id;
+apps/backend/src/modules/entity-links/routes.ts:34:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/entity-links/routes.ts:69:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/entity-links/routes.ts:81:      if (data.source_type !== undefined && data.source_id !== undefined) {
+apps/backend/src/modules/entity-links/routes.ts:82:        endpoint = { type: data.source_type, id: data.source_id };
+apps/backend/src/modules/entity-links/routes.ts:84:      } else if (data.target_type !== undefined && data.target_id !== undefined) {
+apps/backend/src/modules/entity-links/routes.ts:85:        endpoint = { type: data.target_type, id: data.target_id };
+apps/backend/src/modules/entity-links/repo.ts:16:  source_id: string;
+apps/backend/src/modules/entity-links/repo.ts:18:  target_id: string;
+apps/backend/src/modules/entity-links/repo.ts:20:  visibility: 'internal_only' | 'summary_visible' | 'visible_to_reporter' | 'admin_only';
+apps/backend/src/modules/entity-links/repo.ts:21:  status: 'active' | 'stale' | 'detached' | 'revoked';
+apps/backend/src/modules/entity-links/repo.ts:33:    source_id: row.source_id as string,
+apps/backend/src/modules/entity-links/repo.ts:35:    target_id: row.target_id as string,
+apps/backend/src/modules/entity-links/repo.ts:85:      workspace_id, source_type, source_id, target_type, target_id,
+apps/backend/src/modules/entity-links/repo.ts:93:      workspace_id, source_type, source_id, target_type, target_id, relation_type
+apps/backend/src/modules/entity-links/repo.ts:97:      id, workspace_id, source_type, source_id, target_type, target_id,
+apps/backend/src/modules/entity-links/repo.ts:121:      id, workspace_id, source_type, source_id, target_type, target_id,
+apps/backend/src/modules/entity-links/repo.ts:127:      AND source_id = ${input.sourceId}
+apps/backend/src/modules/entity-links/repo.ts:129:      AND target_id = ${input.targetId}
+apps/backend/src/modules/entity-links/repo.ts:149:      ? sql`source_type = ${input.endpointType} AND source_id = ${input.endpointId}`
+apps/backend/src/modules/entity-links/repo.ts:151:        ? sql`target_type = ${input.endpointType} AND target_id = ${input.endpointId}`
+apps/backend/src/modules/entity-links/repo.ts:153:            (source_type = ${input.endpointType} AND source_id = ${input.endpointId})
+apps/backend/src/modules/entity-links/repo.ts:154:            OR (target_type = ${input.endpointType} AND target_id = ${input.endpointId})
+apps/backend/src/modules/entity-links/repo.ts:159:      id, workspace_id, source_type, source_id, target_type, target_id,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:147:    const body = res.json<{ id: string; visibility_state: string; managed_system_id: string }>();
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:148:    expect(body.visibility_state).toBe('allowed');
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:196:      { source: { type: 'finding', id: sourceVoc.id } },
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:198:      { visibility: 'summary_visible' },
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:220:        where source_id = $1 and target_id = $2 and status = 'active'`,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:270:      url: `/entity-links?source_type=voc&source_id=${sourceVoc.id}`,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:278:        (item) => item.visibility_state === 'allowed' && item.target_id === allowedTarget.id,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:281:    const hidden = body.items.find((item) => item.visibility_state === 'hidden');
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:283:    expect(hidden?.target_id).toBeUndefined();
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:284:    expect(hidden?.source_id).toBeUndefined();
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:299:    const body = res.json<{ links?: Array<{ id: string; visibility_state: string }> }>();
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:301:      body.links?.some((link) => link.id === linkId && link.visibility_state === 'allowed'),
+apps/backend/src/modules/voc/read-service.ts:574:      linked_execution: { findingRef: null, taskRef: null },
+apps/backend/src/modules/voc/read-service.ts:768:      linked_execution: { findingRef: null, taskRef: null },
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:7://   * fops_migrate pool for core.audit_log cleanup (fops_app cannot DELETE).
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:378:  it('missing Idempotency-Key → 422 validation.failed with header path', async () => {
+apps/backend/src/modules/voc/__tests__/create-voc.integration.test.ts:586:  //   - missing required attr → 'missing_required_attr'
+apps/backend/src/modules/voc/conversation-service.ts:563:    //    Reject malformed mention nodes (missing / non-string / non-UUID attrs.actor_id)
+apps/backend/src/modules/voc/service.ts:230:    // previous ordering (stale_write before permission deny) leaked
+apps/backend/src/modules/voc/service.ts:261:      // explicit_deny / grant_revoked / grant_expired → generic denied.
+apps/backend/src/modules/voc/service.ts:270:    // leak to unauthorised actors; only authorised actors see 409 stale_write detail).
+apps/backend/src/modules/voc/service.ts:272:      throw new HttpError('conflict.stale_write', 'voc updated_at does not match If-Match', {
+apps/backend/src/modules/voc/service.ts:361:        throw new HttpError('validation.failed', 'cannot have both owner_user_id and owner_team_id set; explicitly clear the other owner in the same PATCH', {
+apps/backend/src/modules/voc/service.ts:489:      throw new HttpError('validation.failed', 'cannot have both owner_user_id and owner_team_id set; explicitly clear the other owner in the same PATCH', {
+apps/backend/src/modules/voc/service.ts:508:      // timestamp so the column doesn't carry a stale "postponed since X" value
+apps/backend/src/modules/voc/service.ts:681:  // PATCH /vocs/:id/description — Reporter-only, pre-triage-only edit.
+apps/backend/src/modules/voc/service.ts:686:  //   4. If-Match compare → 409 conflict.stale_write
+apps/backend/src/modules/voc/service.ts:730:      throw new HttpError('conflict.stale_write', 'voc updated_at does not match If-Match', {
+apps/backend/src/modules/voc/repo-read.ts:250:          (el.source_type = 'voc' AND el.source_id = ${vocs.id})
+apps/backend/src/modules/voc/repo-read.ts:251:          OR (el.target_type = 'voc' AND el.target_id = ${vocs.id})
+apps/backend/src/modules/voc/repo.ts:77:// Acquires a FOR UPDATE row lock on voc.vocs for the PATCH triage flow.
+apps/backend/src/modules/voc/cursor.ts:16:// Mismatches are rejected as invalid_cursor to prevent stale cursors from
+apps/backend/src/modules/voc/__tests__/transitions.integration.test.ts:18:  // Visible in vitest output when env is missing — prevents CI silent-green.
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:115:    expect(body.linked_execution).toEqual({ findingRef: null, taskRef: null });
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:453:  it('AC14: stale If-None-Match → 200 + new envelope + new etag', async () => {
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:454:    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-stale-etag`, 'Stale ETag MS');
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:457:    const staleEtag = 'W/"1970-01-01T00:00:00.000Z"';
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:464:        'if-none-match': staleEtag,
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:470:    expect(newEtag).not.toBe(staleEtag);
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:512:    // Multi-value If-None-Match with stale + current ETags.
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts:518:        'if-none-match': `"stale-etag", ${etag}`,
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:1:// PATCH /vocs/:id/description integration tests — Slice 3 #17 acceptance coverage.
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:106:    method: 'PATCH',
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:229:describe.skipIf(!runIntegration)('PATCH /vocs/:id/description (#17)', () => {
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:793:  // Case 18: missing If-Match
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:794:  it('case 18: missing If-Match → 422 validation.failed with fields[0].path=[headers,if-match]', async () => {
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:816:  it('case 19: If-Match mismatch → 409 conflict.stale_write with detail.current_updated_at', async () => {
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:818:    const msId = await createMs(app, admin, 'it-pd-stale', 'Stale');
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:834:    expect(body.code).toBe('conflict.stale_write');
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:852:    // Admin commits triage directly via SQL (simulates concurrent admin PATCH)
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:866:  // Case 21: stale If-Match race (sequential simulation)
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:867:  it('case 21: second PATCH with stale If-Match → 409 conflict.stale_write', async () => {
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:869:    const msId = await createMs(app, admin, 'it-pd-race-stale', 'Race Stale');
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:884:    // Second edit with original (now stale) If-Match
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:887:      ifMatch: voc.updated_at, // stale
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:890:    expect(res2.json().code).toBe('conflict.stale_write');
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:980:  // Case 25: 30 PATCHes succeed; 31st → 429 rate_limited.actor.
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:983:  it('case 25: 30 PATCHes succeed, 31st → 429 rate_limited.actor', async () => {
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:1018:  // Case 26: Reporter + stale If-Match + already-triaged → state check fires first
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:1019:  it('case 26: Reporter + stale If-Match + triaged VOC → 409 conflict.triage_already_committed (state before If-Match)', async () => {
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:1034:      ifMatch: bogus, // stale
+apps/backend/src/modules/voc/__tests__/patch-description.integration.test.ts:1037:    // triage_already_committed fires before stale_write (per plan §ordering)
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:377:  revokedByActorId: string,
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:380:    `update permission.permission_denies set revoked_at = now(), revoked_by_actor_id = $2 where id = $1`,
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:381:    [denyId, revokedByActorId],
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:391: *   2. voc_permission_decisions_seed_fixture (fops_app has DELETE on this table)
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:393: *      have ON DELETE CASCADE on voc_id, so cascade automatically. fops_app has no
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:394: *      DELETE on conversation tables; they are append-only at the product layer.
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:421:  // 2. Clean permission decisions seed fixture (fops_app has DELETE).
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:441:  // 3. Delete VOCs — conversation tables cascade automatically (ON DELETE CASCADE).
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:442:  //    fops_app has DELETE on voc.vocs, but NOT on conversation tables.
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts:466:  // concurrent PATCH/POST suites sharing the same DB (pool=forks) are not affected.
+apps/backend/src/modules/voc/__tests__/get-conversation.integration.test.ts:252:  // without a cursor. The previous "missing cursor → 422" contract caused a
+apps/backend/src/modules/voc/__tests__/repo-read.integration.test.ts:206:      `DELETE FROM permission.permission_grants
+apps/backend/src/modules/voc/__tests__/repo-read.integration.test.ts:212:      `DELETE FROM voc.vocs
+apps/backend/src/modules/voc/__tests__/repo-read.integration.test.ts:219:      `DELETE FROM core.managed_systems WHERE slug LIKE $1`,
+apps/backend/src/modules/voc/__tests__/repo-read.integration.test.ts:223:      `DELETE FROM core.sessions WHERE actor_id IN (SELECT id FROM core.actors WHERE external_id LIKE $1)`,
+apps/backend/src/modules/voc/__tests__/repo-read.integration.test.ts:227:      `DELETE FROM core.actors WHERE external_id LIKE $1 AND workspace_id = $2`,
+apps/backend/src/modules/voc/__tests__/post-internal-comment.integration.test.ts:360:      mentions: [adminActorId], // missing devId2
+apps/backend/src/modules/voc/routes.ts:12:  FORBIDDEN_PATCH_FIELDS,
+apps/backend/src/modules/voc/routes.ts:13:  FORBIDDEN_PATCH_FIELD_ERROR_CODES,
+apps/backend/src/modules/voc/routes.ts:95:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/voc/routes.ts:142:  // PATCH /vocs/:id — Slice 3 #14 triage-commit route.
+apps/backend/src/modules/voc/routes.ts:145:    method: 'PATCH',
+apps/backend/src/modules/voc/routes.ts:151:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/voc/routes.ts:171:      for (const f of FORBIDDEN_PATCH_FIELDS) {
+apps/backend/src/modules/voc/routes.ts:173:          const code = FORBIDDEN_PATCH_FIELD_ERROR_CODES[f];
+apps/backend/src/modules/voc/routes.ts:174:          return sendError(reply, code, `${f} cannot be set via PATCH /vocs/:id`, {
+apps/backend/src/modules/voc/routes.ts:195:      // fresh If-Match (e.g. after a 409 stale_write → refetch → retry)
+apps/backend/src/modules/voc/routes.ts:242:  // ── PATCH /vocs/:id/description — Slice 3 #17 Reporter pre-triage edit ───
+apps/backend/src/modules/voc/routes.ts:249:    method: 'PATCH',
+apps/backend/src/modules/voc/routes.ts:257:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/voc/routes.ts:277:      // See C10 note on PATCH /vocs/:id — case-sensitive; .strict() catches
+apps/backend/src/modules/voc/routes.ts:282:          return sendError(reply, code, `${f} cannot be set via PATCH /vocs/:id/description`, {
+apps/backend/src/modules/voc/routes.ts:296:      // 5. Idempotency frame (same pattern as PATCH /vocs/:id).
+apps/backend/src/modules/voc/routes.ts:339:  // across pages. Frontend stale-while-revalidate (TanStack Query) masks this;
+apps/backend/src/modules/voc/routes.ts:350:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/voc/routes.ts:381:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/voc/routes.ts:430:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/voc/routes.ts:471:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/voc/routes.ts:529:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/voc/routes.ts:584:      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+apps/backend/src/modules/voc/__tests__/cursor.test.ts:55:  it('throws on valid JSON missing required fields', () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1:// PATCH /vocs/:id integration tests — Slice 3 #14 acceptance coverage.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:125:  return app.inject({ method: 'PATCH', url: `/vocs/${vocId}`, headers, payload: body });
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:169:// Revokes a permission grant by setting revoked_at now().
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:173:  revokedByActorId: string,
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:177:        set revoked_at = now(), revoked_by_actor_id = $2, revoked_reason = 'test'
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:179:    [grantId, revokedByActorId],
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:224:describe.skipIf(!runIntegration)('PATCH /vocs/:id (#14)', () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:332:    // with voc_* event types should reference missing voc rows.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:357:  // ── 1. Happy path: full triage commit in one PATCH ──────────────────────
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:358:  it('admin PATCH severity+owner+AA+triage_state=triaged → 200 + four audit rows', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:404:      // POST /vocs writes a `voc_created` audit row first; assert PATCH-emitted
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:426:  // ── 2. If-Match missing → 422 ─────────────────────────────────────────
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:427:  // Spec says 400 for missing header; we deviate to 422 to match ADR-0012
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:429:  it('PATCH without If-Match → 422 validation.failed with fields[0].path=[headers,if-match]', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:448:  // ── 3. If-Match mismatch → 409 conflict.stale_write ───────────────────
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:449:  // C3: uses admin so the permission check passes and only the stale_write
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:452:  it('admin PATCH with stale If-Match → 409 conflict.stale_write + current_updated_at', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:454:    const msId = await createMs(app, admin, 'it-patch-stale', 'Stale MS');
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:474:    expect(body.code).toBe('conflict.stale_write');
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:508:    // Must be 403 from permission check — NOT 409 from stale_write.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:516:  // ── 4. Severity retriage: two PATCHes with different severities ────────
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:517:  it('retriage: PATCH high then critical → voc_severity_set×2, voc_triage_committed×1', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:528:    // First PATCH: set severity=high + triage_state=triaged.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:539:    // Second PATCH: retriage with severity=critical only.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:562:  it('PATCH { severity: null } on high-severity VOC → 200, voc_severity_set(from=high,to=null)', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:573:    // First PATCH: set severity=high.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:585:    // Second PATCH: clear severity back to null.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:606:  // whose severity is null, PATCHing { severity: null } must be a no-op: 200,
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:610:  it('PATCH { severity: null } on null-severity VOC → 200, no voc_severity_set audit row (C7)', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:637:      // Only voc_created from POST — no voc_severity_set for the no-op PATCH.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:643:  it('PATCH reporter_facing_status → 422 voc.reporter_status_via_public_update_only', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:667:  it('PATCH title → 422 validation.unexpected_field with fields[0].path=[title]', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:693:  it('PATCH description_rich_content → 422 validation.unexpected_field', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:717:  it('PATCH cluster_decision → 422 validation.unexpected_field', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:741:  it('PATCH display_id → 422 validation.unexpected_field', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:765:  it('PATCH { postpone_review: true } → 200, postponed_at non-null, triage_state=untriaged, voc_triage_postponed audit', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:805:  it('PATCH { postpone_review, severity, owner_user_id, analytics_area_id } → 200, audit order: [postponed,severity_set,owner_assigned,aa_linked]', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:839:      // voc_created is the first row; then our four from this PATCH.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:851:  it('PATCH { postpone_review: true, triage_state: triaged } → 422 validation.failed', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:875:  it('PATCH { postpone_review: true } on triaged VOC → 422 validation.failed invalid_state', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:914:  // Without C5 the column keeps a stale timestamp; downstream readers would
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:916:  it('postpone then PATCH triage_state=triaged → triage_state_review_postponed_at IS NULL', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:927:    // First PATCH: postpone the VOC.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:946:    // Second PATCH: triage the VOC (moving away from untriaged).
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:966:  it('PATCH both owner_user_id and owner_team_id → 422 validation.failed', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:989:  // ── 11b. Resolved-value owner mutex: row has owner_user_id, PATCH sends only owner_team_id → 422 ──
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:995:  it('row has owner_user_id set, PATCH sends only { owner_team_id } → 422 validation.failed (not 500)', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1006:    // First PATCH: assign owner_user_id.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1017:    // Second PATCH: send only owner_team_id (non-existent UUID) without clearing owner_user_id.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1040:  it('PATCH analytics_area_id from different MS → 422 validation.failed out_of_scope', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1058:    // PATCH with AA-B (belongs to MS-B) — must fail cross-MS guard.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1075:  it('PATCH archived VOC → 409 conflict.record_archived', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1101:  it('PATCH when parent MS is archived → 409 conflict.parent_archived', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1134:  it('developer without MS-scoped grant PATCH → 403 permission.scope_required with envelope', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1166:  // ── 16. Permission revocation race: grant revoked mid-session → 403 ────
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1172:  // the permission recheck entirely would return 200 here. The revoked-grant
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1173:  // path returns `permission.denied` (reason: grant_revoked), not
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1176:  it('revoked grant → second PATCH returns 403 permission.denied (reason: grant_revoked)', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1191:    // First PATCH: grant is active → 200.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1202:    // Revoke the grant — next tx will see it revoked.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1205:    // Second PATCH: grant is revoked → 403 permission.denied.
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1206:    // F1: revoked grant → permission.denied (not scope_required, which
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1217:    expect(res2.json().detail.reason).toBe('grant_revoked');
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1221:  it('PATCH body {} (no changes) → 200, audit row count unchanged', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1260:  // ── 18. Concurrent PATCH stale_write (real lock contention via Promise.all) ──
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1261:  // Both PATCHes are fired concurrently with the same If-Match. SELECT FOR
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1265:  // if it were removed from selectVocForUpdate (repo.ts) the second PATCH
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1269:  it('two concurrent PATCHes with same If-Match: one 200, one 409 conflict.stale_write', async () => {
+apps/backend/src/modules/voc/__tests__/patch-voc.integration.test.ts:1290:    expect(loser.json().code).toBe('conflict.stale_write');
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git diff --name-only && find apps/backend/src/modules/entity-links packages/shared/src -type f | sort' in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-PVorY1Q0' (errno=Operation not permitted)
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-W2wS4IfO' (errno=Operation not permitted)
+apps/backend/src/db/schema/core.ts
+apps/backend/src/modules/voc/__tests__/read-service.test.ts
+apps/backend/src/modules/voc/read-service.ts
+apps/backend/src/modules/voc/repo-read.ts
+apps/backend/src/server.ts
+docs/design/11-entity-linking.md
+docs/implementation/06-entity-linking-contract.md
+packages/shared/src/enums/audit-events.ts
+packages/shared/src/index.ts
+packages/shared/src/vocs/detail.ts
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts
+apps/backend/src/modules/entity-links/index.ts
+apps/backend/src/modules/entity-links/repo.ts
+apps/backend/src/modules/entity-links/routes.ts
+apps/backend/src/modules/entity-links/service.ts
+packages/shared/src/audit/__tests__/attachments-audit-schemas.test.ts
+packages/shared/src/audit/__tests__/voc-audit-schemas.test.ts
+packages/shared/src/audit/attachments.ts
+packages/shared/src/audit/voc.ts
+packages/shared/src/auth/__tests__/list-actors.test.ts
+packages/shared/src/auth/list-actors.ts
+packages/shared/src/entity-links.ts
+packages/shared/src/enums/audit-events.ts
+packages/shared/src/enums/capabilities.ts
+packages/shared/src/enums/index.ts
+packages/shared/src/errors/__tests__/codes.test.ts
+packages/shared/src/errors/__tests__/retired-codes-gate.test.ts
+packages/shared/src/errors/codes.ts
+packages/shared/src/index.ts
+packages/shared/src/permissions/__tests__/permission-decision.test.ts
+packages/shared/src/permissions/index.ts
+packages/shared/src/rich-content/__tests__/allowlist.test.ts
+packages/shared/src/rich-content/__tests__/fixtures.test.ts
+packages/shared/src/rich-content/allowlist.ts
+packages/shared/src/rich-content/fixtures.ts
+packages/shared/src/rich-content/index.ts
+packages/shared/src/vocs/__tests__/attachment.test.ts
+packages/shared/src/vocs/__tests__/conversation-query.test.ts
+packages/shared/src/vocs/__tests__/conversation.test.ts
+packages/shared/src/vocs/__tests__/create-request.test.ts
+packages/shared/src/vocs/__tests__/detail.test.ts
+packages/shared/src/vocs/__tests__/edit-description-request.test.ts
+packages/shared/src/vocs/__tests__/internal-comment-request.test.ts
+packages/shared/src/vocs/__tests__/list-item.test.ts
+packages/shared/src/vocs/__tests__/list-query.test.ts
+packages/shared/src/vocs/__tests__/patch-request.test.ts
+packages/shared/src/vocs/__tests__/public-update-request.test.ts
+packages/shared/src/vocs/__tests__/reporter-reply-request.test.ts
+packages/shared/src/vocs/attachment.ts
+packages/shared/src/vocs/conversation-query.ts
+packages/shared/src/vocs/conversation.ts
+packages/shared/src/vocs/create-request.ts
+packages/shared/src/vocs/detail.ts
+packages/shared/src/vocs/edit-description-request.ts
+packages/shared/src/vocs/index.ts
+packages/shared/src/vocs/internal-comment-request.ts
+packages/shared/src/vocs/list-item.ts
+packages/shared/src/vocs/list-query.ts
+packages/shared/src/vocs/patch-request.ts
+packages/shared/src/vocs/public-update-request.ts
+packages/shared/src/vocs/reporter-reply-request.ts
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'rg -n "packages/shared/src/permissions|packages/shared/src/auth|apps/frontend|src/permissions|src/auth|findings|FR-LINK-003|PATCH /entity-links|DELETE /entity-links|relation_type.*(?!related_to)" .review/ISSUE-112-DEVIATIONS.md apps/backend/src/modules/entity-links apps/backend/src/modules/voc packages/shared/src docs -g '"'*.*'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ exited 2 in 0ms:
+rg: regex parse error:
+    (?:packages/shared/src/permissions|packages/shared/src/auth|apps/frontend|src/permissions|src/auth|findings|FR-LINK-003|PATCH /entity-links|DELETE /entity-links|relation_type.*(?!related_to))
+                                                                                                                                                                                    ^^^
+error: look-around, including look-ahead and look-behind, is not supported
+
+Consider enabling PCRE2 with the --pcre2 flag, which can handle backreferences
+and look-around.
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba packages/shared/src/index.ts | sed -n '1,30p'; nl -ba packages/shared/src/vocs/detail.ts | sed -n '1,45p'; nl -ba apps/backend/src/db/schema/core.ts | sed -n '280,360p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+     1	// Single source of truth for shared API types, zod schemas, and enum constants.
+     2	// Apps consume from @fops/shared. Slice 0 is intentionally empty; Slice 1 fills
+     3	// in core.Workspace, core.Actor, core.RoleLevel, core.PermissionScope.
+     4	export * from './enums/index.js';
+     5	export * from './enums/capabilities.js';
+     6	export * from './enums/audit-events.js';
+     7	export * from './errors/codes.js';
+     8	export * from './entity-links.js';
+     9	export * from './permissions/index.js';
+    10	export * from './audit/voc.js';
+    11	export * from './audit/attachments.js';
+    12	export * from './entity-links.js';
+    13	export * from './vocs/index.js';
+    14	export * from './rich-content/index.js';
+    15	export * from './auth/list-actors.js';
+     1	import { z } from 'zod';
+     2	
+     3	import { entityLinkDtoSchema } from '../entity-links.js';
+     4	import { LinkedAttachmentSchema } from './attachment.js';
+     5	import { conversationEntrySchema } from './conversation.js';
+     6	import { reporterFacingStatusEnumSchema, vocListItemSchema } from './list-item.js';
+     7	
+     8	export const vocDetailEnvelopeSchema = vocListItemSchema.extend({
+     9	  // TipTap doc — opaque jsonb; backend validates structure.
+    10	  description_rich_content: z.unknown(),
+    11	  // No action items in Slice 3; kept as opaque array for future shape.
+    12	  next_actions: z.array(z.unknown()),
+    13	  // Allowed next reporter states from the current status; forbidden map carries
+    14	  // the reason string per transition (from transition table seed data).
+    15	  next_reporter_states: z.object({
+    16	    allowed: z.array(reporterFacingStatusEnumSchema),
+    17	    forbidden: z.record(reporterFacingStatusEnumSchema, z.string()),
+    18	  }),
+    19	  // Optional gate: present when a linked-task state blocks a reporter status transition.
+    20	  // Frontend uses this to surface amber <Callout> + disable Publish.
+    21	  // See docs/frontend/specs/voc.md §5.10 item 4.
+    22	  reporter_status_gate: z
+    23	    .object({
+    24	      blocking_for: z.array(reporterFacingStatusEnumSchema),
+    25	      reason: z.string(),
+    26	    })
+    27	    .optional(),
+    28	  // Slice 3: entity_links table absent (Slice 4); always null.
+    29	  linked_execution: z.object({
+    30	    findingRef: z.null(),
+    31	    taskRef: z.null(),
+    32	  }),
+    33	  // Slice 4.1 #112: backend-decided Links tab rows from core.entity_links.
+    34	  // Optional so existing Slice 3 consumers and fixtures remain source-compatible.
+    35	  links: z.array(entityLinkDtoSchema).optional(),
+    36	  // Hybrid inline conversations: first 50 entries inline; pagination tail via
+    37	  // GET /vocs/:id/conversation. Slice 3: conversation POSTs ship in #16.
+    38	  conversation_timeline: z.array(conversationEntrySchema),
+    39	  conversation_page: z.object({
+    40	    cursor: z.string().optional(),
+    41	    has_more: z.boolean(),
+    42	  }),
+    43	  // Seed data from voc_permission_decisions_seed_fixture; opaque at this layer.
+    44	  permission_decisions: z.record(z.string(), z.unknown()),
+    45	  // PLAN-22 §Bug-1 (2026-05-22): linked attachments on the VOC body. Pre-
+   280	  }),
+   281	);
+   282	
+   283	// ─────────────────────────────────────────────────────────────────────────
+   284	// core.entity_links — Slice 4.1 tracer. Canonical polymorphic relationship
+   285	// table; this slice permits only active VOC↔VOC related_to links.
+   286	// ─────────────────────────────────────────────────────────────────────────
+   287	export const entityLinks = coreSchema.table(
+   288	  'entity_links',
+   289	  {
+   290	    id: uuid('id').primaryKey().defaultRandom(),
+   291	    workspaceId: uuid('workspace_id')
+   292	      .notNull()
+   293	      .references(() => workspaces.id),
+   294	    sourceType: text('source_type').notNull(),
+   295	    sourceId: uuid('source_id').notNull(),
+   296	    targetType: text('target_type').notNull(),
+   297	    targetId: uuid('target_id').notNull(),
+   298	    relationType: text('relation_type').notNull(),
+   299	    visibility: text('visibility').notNull().default('internal_only'),
+   300	    status: text('status').notNull().default('active'),
+   301	    managedSystemId: uuid('managed_system_id')
+   302	      .notNull()
+   303	      .references(() => managedSystems.id),
+   304	    createdBy: uuid('created_by')
+   305	      .notNull()
+   306	      .references(() => actors.id),
+   307	    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+   308	    updatedAt: timestamp('updated_at', { withTimezone: true }),
+   309	  },
+   310	  (t) => ({
+   311	    relationTypeCheck: check(
+   312	      'entity_links_relation_type_check',
+   313	      sql`${t.relationType} in ('related_to')`,
+   314	    ),
+   315	    visibilityCheck: check(
+   316	      'entity_links_visibility_check',
+   317	      sql`${t.visibility} in ('internal_only','summary_visible','visible_to_reporter','admin_only')`,
+   318	    ),
+   319	    statusCheck: check(
+   320	      'entity_links_status_check',
+   321	      sql`${t.status} in ('active','stale','detached','revoked')`,
+   322	    ),
+   323	    sourceTypeCheck: check('entity_links_source_type_check', sql`${t.sourceType} in ('voc')`),
+   324	    targetTypeCheck: check('entity_links_target_type_check', sql`${t.targetType} in ('voc')`),
+   325	    notSelfCheck: check(
+   326	      'entity_links_not_self_check',
+   327	      sql`not (${t.sourceType} = ${t.targetType} and ${t.sourceId} = ${t.targetId})`,
+   328	    ),
+   329	    activeUniqueIdx: uniqueIndex('entity_links_active_unique_idx')
+   330	      .on(t.workspaceId, t.sourceType, t.sourceId, t.targetType, t.targetId, t.relationType)
+   331	      .where(sql`${t.status} = 'active'`),
+   332	    activeSourceIdx: index('entity_links_active_source_idx')
+   333	      .on(t.workspaceId, t.sourceType, t.sourceId)
+   334	      .where(sql`${t.status} = 'active'`),
+   335	    activeTargetIdx: index('entity_links_active_target_idx')
+   336	      .on(t.workspaceId, t.targetType, t.targetId)
+   337	      .where(sql`${t.status} = 'active'`),
+   338	    workspaceMsStatusIdx: index('entity_links_workspace_ms_status_idx').on(
+   339	      t.workspaceId,
+   340	      t.managedSystemId,
+   341	      t.status,
+   342	    ),
+   343	  }),
+   344	);
+   345	
+   346	export const idempotencyKeys = coreSchema.table(
+   347	  'idempotency_keys',
+   348	  {
+   349	    actorId: uuid('actor_id')
+   350	      .notNull()
+   351	      .references(() => actors.id),
+   352	    key: uuid('key').notNull(),
+   353	    requestHash: text('request_hash').notNull(),
+   354	    responseStatus: integer('response_status').notNull(),
+   355	    responseBody: jsonb('response_body').notNull(),
+   356	    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+   357	  },
+   358	  (t) => ({
+   359	    pk: primaryKey({ columns: [t.actorId, t.key] }),
+   360	    createdAtIdx: index('idempotency_keys_created_at_idx').on(t.createdAt),
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "rg -n \"entityLinksService|createVocReadService\\(\" apps/backend/src -g '*.ts'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+apps/backend/src/server.ts:425:  const entityLinksService = createEntityLinksService({
+apps/backend/src/server.ts:432:    entityLinksService,
+apps/backend/src/server.ts:446:  const vocReadService = createVocReadService({
+apps/backend/src/server.ts:449:    entityLinksService,
+apps/backend/src/modules/entity-links/routes.ts:13:  entityLinksService: EntityLinksService;
+apps/backend/src/modules/entity-links/routes.ts:25:  const { sessionService, entityLinksService, workspaceId, rateLimitConfig } = opts;
+apps/backend/src/modules/entity-links/routes.ts:53:      const result = await entityLinksService.createLink(
+apps/backend/src/modules/entity-links/routes.ts:91:      const items = await entityLinksService.listLinks({
+apps/backend/src/modules/voc/read-service.ts:43:  entityLinksService: EntityLinksService;
+apps/backend/src/modules/voc/read-service.ts:193:export function createVocReadService(deps: VocReadServiceDeps) {
+apps/backend/src/modules/voc/read-service.ts:520:    const links = await deps.entityLinksService.listLinks({
+apps/backend/src/modules/voc/read-service.ts:718:    const links = await deps.entityLinksService.listLinks({
+apps/backend/src/modules/voc/__tests__/read-service.test.ts:111:  const entityLinksService = {
+apps/backend/src/modules/voc/__tests__/read-service.test.ts:114:  } as unknown as NonNullable<VocReadServiceDeps['entityLinksService']>;
+apps/backend/src/modules/voc/__tests__/read-service.test.ts:115:  return { svc: createVocReadService({ db, checkService, entityLinksService }), checkService };
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "git diff -- docs/design/11-entity-linking.md docs/implementation/06-entity-linking-contract.md | sed -n '1,260p'" in /Users/hyojung/Desktop/2026/wt-112-entity-links-evidence
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-CPws61If' (errno=Operation not permitted)
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+git: error: couldn't create cache file '/tmp/xcrun_db-OliOKsnN' (errno=Operation not permitted)
+diff --git a/docs/design/11-entity-linking.md b/docs/design/11-entity-linking.md
+index 9929d85..1cc1e32 100644
+--- a/docs/design/11-entity-linking.md
++++ b/docs/design/11-entity-linking.md
+@@ -22,6 +22,11 @@ core.entity_links
+ - created_at
+ ```
+ 
++Slice 4.1 tracer (#112) implements the first production path: VOC → VOC
++`related_to` links with `visibility='internal_only'` and lifecycle
++`status='active'`. It also adds `managed_system_id`, `updated_at`, uniqueness
++for active links, and active source/target lookup indexes.
++
+ ## Relation Types
+ 
+ Common:
+@@ -34,6 +39,9 @@ Common:
+ - follow_up_for
+ ```
+ 
++For Slice 4.1, `related_to` is enabled only for VOC↔VOC links. Additional
++entity pairs remain deferred to later slices.
++
+ VOC:
+ 
+ ```text
+@@ -73,6 +81,11 @@ VOC only. It must respect Managed System scope, target visibility, policy, and
+ anonymous response protections. It must not imply Survey Response to VOC
+ conversion.
+ 
++Slice 4.1 tracer (#112): production support starts with VOC↔VOC `related_to`
++links only. The tracer creates `core.entity_links` rows with `status='active'`,
++`visibility='internal_only'`, and backend-decided read visibility of `allowed`
++or `hidden`.
++
+ ## Visibility
+ 
+ ```text
+@@ -139,6 +152,10 @@ Acceptance Criteria:
+ - Frontend must not synthesize linked-object summaries from raw data that the actor cannot otherwise read.
+ ```
+ 
++Slice 4.1 exposes only `allowed` and `hidden` visibility states for VOC↔VOC
++`related_to` reads. Hidden rows carry only link id, endpoint types,
++relation_type, and visibility_state.
++
+ ### FR-LINK-003: Support Dashboard Missing-Link Queries
+ 
+ Priority: MUST
+diff --git a/docs/implementation/06-entity-linking-contract.md b/docs/implementation/06-entity-linking-contract.md
+index 1baebc3..ef5356b 100644
+--- a/docs/implementation/06-entity-linking-contract.md
++++ b/docs/implementation/06-entity-linking-contract.md
+@@ -57,6 +57,17 @@ getInternalSummary(id)
+ listExpectedLinks(id)
+ ```
+ 
++Slice 4.1 tracer registry (#112):
++
++```text
++voc -> voc
++- relation_type: related_to
++- resolver: voc.vocs(id, workspace_id, primary_managed_system_id)
++- create authz: actor must have voc.read on both source and target Managed Systems
++- read authz: focused endpoint must be readable; the opposite endpoint is emitted
++  as visibility_state=allowed when readable and visibility_state=hidden when not
++```
++
+ ## Visibility Enforcement
+ 
+ ```text
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+codex
+{
+  "verdict": "approve",
+  "summary": "Implementation adheres to the #112 dispatch contract with one acceptable compatibility deviation that should be documented before commit.",
+  "findings": [],
+  "deviations_acceptable_with_doc": [
+    "packages/shared/src/vocs/detail.ts makes the new VOC detail links field optional; this is acceptable as a Slice 3 compatibility move because the backend now populates links on full detail reads, but it should be recorded in .review/ISSUE-112-DEVIATIONS.md."
+  ],
+  "must_fix_before_commit": []
+}
+hook: Stop
+hook: Stop
+hook: Stop Failed
+hook: Stop Failed
+tokens used
+73,486
+{
+  "verdict": "approve",
+  "summary": "Implementation adheres to the #112 dispatch contract with one acceptable compatibility deviation that should be documented before commit.",
+  "findings": [],
+  "deviations_acceptable_with_doc": [
+    "packages/shared/src/vocs/detail.ts makes the new VOC detail links field optional; this is acceptable as a Slice 3 compatibility move because the backend now populates links on full detail reads, but it should be recorded in .review/ISSUE-112-DEVIATIONS.md."
+  ],
+  "must_fix_before_commit": []
+}
