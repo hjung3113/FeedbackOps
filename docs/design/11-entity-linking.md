@@ -86,6 +86,12 @@ links only. The tracer creates `core.entity_links` rows with `status='active'`,
 `visibility='internal_only'`, and backend-decided read visibility of `allowed`
 or `hidden`.
 
+Slice 4.2 detach lifecycle (#113): production support detaches only existing
+active VOC↔VOC `related_to` links via `PATCH /entity-links/:id` with a required
+non-empty reason. Detach transitions `status` to `detached`, records
+`detached_by`, `detach_reason`, and `detached_at`, and preserves the row; hard
+delete and `DELETE /entity-links/:id` are intentionally not used.
+
 ## Visibility
 
 ```text
@@ -136,6 +142,10 @@ Acceptance Criteria:
   and timestamp.
 - Sensitive detach actions are audited.
 ```
+
+Slice 4.2 (#113) implements this for VOC↔VOC `related_to` as `detached` only.
+`revoked` remains reserved for future admin/policy flows and `stale` remains
+deferred.
 
 ### FR-LINK-002: Enforce Visibility
 

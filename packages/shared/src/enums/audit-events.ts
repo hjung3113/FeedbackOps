@@ -60,6 +60,8 @@ export const AUDIT_EVENT_TYPES = [
   'attachment_uploaded',
   // Slice 4.1 #112: canonical entity link creation tracer.
   'entity_link.created',
+  // Slice 4.2 #113: audited soft detach lifecycle.
+  'entity_link.detached',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -162,6 +164,21 @@ export const entityLinkCreatedDetailSchema = z.object({
 });
 export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
 
+export const entityLinkDetachedDetailSchema = z.object({
+  link_id: z.string().uuid(),
+  source: z.object({
+    type: z.literal('voc'),
+    id: z.string().uuid(),
+  }),
+  target: z.object({
+    type: z.literal('voc'),
+    id: z.string().uuid(),
+  }),
+  relation_type: z.literal('related_to'),
+  reason: z.string().min(1),
+});
+export type EntityLinkDetachedDetail = z.infer<typeof entityLinkDetachedDetailSchema>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
@@ -189,4 +206,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   attachment_uploaded: attachmentUploadedDetailSchema,
   // Slice 4.1 #112.
   'entity_link.created': entityLinkCreatedDetailSchema,
+  // Slice 4.2 #113.
+  'entity_link.detached': entityLinkDetachedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;
