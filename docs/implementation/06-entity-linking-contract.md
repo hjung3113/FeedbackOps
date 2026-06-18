@@ -68,6 +68,26 @@ voc -> voc
   as visibility_state=allowed when readable and visibility_state=hidden when not
 ```
 
+## Link Detach Validation
+
+Slice 4.2 detach lifecycle (#113):
+
+```text
+PATCH /entity-links/:id
+- request body: { reason: string } where reason is required, trimmed, and non-empty
+- supported transition: active -> detached only
+- authz: actor must have the same voc.read capability used by link creation on
+  both source and target VOC Managed Systems
+- not found / cross-workspace / missing scope on either endpoint: 404
+- already detached, revoked, stale, or lost update race: 409
+- side effects in one transaction: update status/detach metadata and append
+  audit_log event_type entity_link.detached
+- hard delete is forbidden; fops_app has UPDATE but not DELETE on core.entity_links
+```
+
+Because the active uniqueness constraint is partial (`WHERE status='active'`),
+detaching a link intentionally frees the same VOC pair to be linked again later.
+
 ## Visibility Enforcement
 
 ```text

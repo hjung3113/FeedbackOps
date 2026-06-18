@@ -1,0 +1,78 @@
+# Issue #113 — Slice 4.2 · Entity link detach lifecycle (end-to-end)
+
+You are CODEX. Sandbox = workspace-write, NO network. DB unreachable from sandbox; VERIFIER runs tests outside. Do NOT run migrations/tests/DB yourself — only static checks (typecheck/lint).
+
+## Goal
+
+Authorized SOFT detach of an entity link: a Developer detaches an active link, the row is PRESERVED (no hard delete) with status→`detached` plus actor/reason/timestamp, an audit event fires, and the VOC detail Links tab stops listing it (active-only filter already drops non-active rows). Implements FR-LINK-001A from `docs/design/11-entity-linking.md`.
+
+Builds directly on #112 (merged): `core.entity_links` exists; module `apps/backend/src/modules/entity-links/` has routes.ts (POST+GET), service.ts (`createEntityLinksService`), repo.ts (`resolveVocEndpoint`, `insertActiveVocRelatedToLink`, `selectActiveVocRelatedToLink`, `selectActiveLinksForEndpoint`). Shared types in `packages/shared/src/entity-links.ts` (`entityLinkStatusSchema` already includes `detached`/`revoked`). Migration 0018 granted fops_app INSERT+SELECT only and the active unique/lookup indexes are partial `WHERE status='active'`.
+
+## Design decisions (locked — do not re-litigate; the API draft lists both PATCH and DELETE, we choose PATCH)
+
+- **Verb: `PATCH /entity-links/:id`** with body `{ reason: string }` (reason required, non-empty, trimmed). The endpoint's only supported action this slice is detach (active→detached). DELETE is NOT used — the row persists, so DELETE would be a lie.
+- **Status: `detached` only.** `revoked` stays reserved for admin/policy flows (later slice). `stale` is Slice 7. Do not produce them here.
+- **Detaching the partial unique index:** because the unique index is `WHERE status='active'`, transitioning to `detached` frees the slot — a later active link of the same pair becomes possible. This is intended; do not change the index.
+
+## Migration 0019 (hand-written, like 0018)
+
+Create `apps/backend/migrations/0019_entity_link_detach.sql`:
+- `ALTER TABLE core.entity_links ADD COLUMN detached_by uuid REFERENCES core.actors(id)` (nullable)
+- `ADD COLUMN detach_reason text` (nullable)
+- `ADD COLUMN detached_at timestamptz` (nullable)
+- `GRANT UPDATE ON core.entity_links TO fops_app;` (detach is an UPDATE; fops_app had INSERT+SELECT only). Still NO DELETE grant — hard delete stays impossible.
+- Header comment in the style of 0018.
+
+Then register 0019 in the drizzle meta journal so `drizzle-kit migrate` applies it. IMPORTANT (learned on #112): `drizzle-kit generate` hits a pre-existing 0003/0004 snapshot collision and the hand-written SQL has GRANTs that generate won't emit. Mirror exactly how 0018 was registered: hand-add the `_journal.json` entry (idx 19, tag `0019_entity_link_detach`) and hand-write `apps/backend/migrations/meta/0019_snapshot.json` reflecting the post-0019 schema (the three new columns on entity_links). Update `src/db/schema/core.ts` entityLinks table to add the three columns so the snapshot/schema stay in sync. See `.review/ISSUE-112-META-NOTES.md` (in git history of develop) if you need the exact technique.
+
+## Endpoint behavior
+
+`PATCH /entity-links/:id`:
+- Resolve the link by id within the actor's workspace. Not found / cross-workspace → 404.
+- If link status != 'active' → 409 (already detached/revoked) OR idempotent 200 returning current state — pick 409 and document in DEVIATIONS if you prefer; default to 409 `conflict`.
+- Authorization (same both-side rule as create): actor must hold the SAME VOC-read capability used by POST on BOTH the source and target endpoints' managed systems. If actor lacks scope on either → 404 (existence-leak guard, consistent with #112). Reuse the exact permission helper POST uses — do NOT invent a new capability.
+- Transition in ONE transaction: `UPDATE ... SET status='detached', detached_by=<actor>, detach_reason=<reason>, detached_at=now(), updated_at=now() WHERE id=:id AND status='active'`; if 0 rows updated (lost race) → 409. Emit audit_log `entity_link.detached` with `{ link_id, source, target, relation_type, reason }`. Add the `entity_link.detached` token to `packages/shared/src/enums/audit-events.ts` + its detail schema (mirror `entity_link.created`).
+- Response: 200 with the detached link's id + status (+ detached_at). No body that leaks the other endpoint if actor somehow shouldn't see it (but they passed both-side check, so full ok).
+
+VOC detail Links tab: NO code change needed if `selectActiveLinksForEndpoint` already filters `status='active'` (detached rows auto-drop). VERIFY this is true; if the VOC-detail query does NOT filter on active, add the filter. Either way a detached link must NOT appear on the Links tab.
+
+## Strict scope — ABORT with `.review/ISSUE-113-BLOCKER.json` (real reason_code + blocking_fact) if the touch set escapes
+
+ALLOWED:
+- `apps/backend/migrations/0019_entity_link_detach.sql` (new), `apps/backend/migrations/meta/_journal.json`, `apps/backend/migrations/meta/0019_snapshot.json` (new)
+- `apps/backend/src/db/schema/core.ts` (add 3 columns to entityLinks)
+- `apps/backend/src/modules/entity-links/{routes.ts,service.ts,repo.ts,index.ts}` (add PATCH + detach repo fn + service method)
+- `apps/backend/src/modules/entity-links/__tests__/` (add detach tests; do not weaken existing #112 tests)
+- `apps/backend/src/modules/voc/repo-read.ts` or `read-service.ts` ONLY if the links query needs an explicit `status='active'` filter added
+- `packages/shared/src/entity-links.ts` (detach request schema + detached link response shape), `packages/shared/src/index.ts`, `packages/shared/src/enums/audit-events.ts`
+- Doc-sync (same commit): `docs/design/11-entity-linking.md` (note FR-LINK-001A detach = PATCH, detached-only, #113) + `docs/implementation/06-entity-linking-contract.md`
+- `.review/ISSUE-113-DEVIATIONS.md`
+
+FORBIDDEN (abort if forced):
+- `packages/shared/src/permissions/*`, `auth/*` — reuse existing helpers
+- `apps/frontend/**` (#114 owns UI)
+- new findings table; relation types beyond `related_to`; producing `revoked`/`stale`; visibility tokens beyond #112's `allowed`/`hidden`; FR-LINK-003 queries
+- hard delete of any entity_links row, or granting fops_app DELETE
+
+## Tests (vitest integration; mirror `apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts` setup — note `migrateHandle` (fops_migrate) is used for teardown DELETEs since fops_app cannot delete)
+
+1. PATCH detaches an active related_to link → 200; DB row STILL EXISTS with status='detached', detached_by/detach_reason/detached_at set; audit_log has `entity_link.detached`.
+2. After detach, GET /entity-links by source and the VOC detail Links tab do NOT list the detached link.
+3. PATCH on an already-detached link → 409.
+4. PATCH when actor lacks scope on the target endpoint → 404 (existence-leak guard).
+5. PATCH with empty/missing reason → 422.
+6. Detach frees the active-unique slot: after detaching A→B, a new POST A→B related_to succeeds (proves the partial unique index works as intended).
+
+## Procedure
+
+1. Read #112's module (routes/service/repo) + 0018 SQL + `.review/ISSUE-112-DEVIATIONS.md` to mirror patterns (permission helper, audit emit, transaction wrapping).
+2. Write migration 0019 SQL by hand + register in meta journal/snapshot (mirror 0018 technique). Add the 3 columns to `core.ts`.
+3. Shared types: detach request `{ reason }` + audit event token.
+4. repo: `detachVocRelatedToLink(...)`; service: detach method; routes: PATCH handler.
+5. Verify VOC-detail links query filters active.
+6. Tests above.
+7. `pnpm -w typecheck` + lint; fix only NEW errors.
+8. Doc-sync in the same commit.
+9. Commit on branch `feature/113-entity-link-detach`: `feat(#113): entity link detach lifecycle (PATCH /entity-links/:id)`. Do NOT push.
+
+If a forced scope escape or unresolved spec ambiguity: write `.review/ISSUE-113-BLOCKER.json` `{reason_code, blocking_fact (quoted file:line/clause), what_was_attempted, what_is_blocking}` and exit non-zero. Do not improvise.

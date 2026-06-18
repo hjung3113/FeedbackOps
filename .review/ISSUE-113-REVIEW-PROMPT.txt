@@ -1,0 +1,20 @@
+You are REVIEWER for FeedbackOps issue #113 (Slice 4.2 entity link detach lifecycle). Adversarial read-only review of the uncommitted diff against the contract in .review/ISSUE-113-PROMPT.txt and the deviations in .review/ISSUE-113-DEVIATIONS.md.
+
+Check in order:
+1. Contract adherence — PATCH /entity-links/:id soft-detach (active→detached), row PRESERVED (no hard delete), detached_by/detach_reason/detached_at set, updated_at set, single transaction, audit entity_link.detached emitted. Migration 0019 adds 3 columns + GRANT UPDATE to fops_app (and NO DELETE grant). Journal/snapshot registered for 0019 (mirror 0018 technique). core.ts entityLinks has the 3 new columns.
+2. Both-side permission — detach requires the SAME VOC-read capability POST uses on BOTH endpoints' managed systems; out-of-scope target → 404 (existence-leak guard, not 403). Confirm it reuses the existing helper, not a new capability.
+3. Active-only visibility — confirm a detached link no longer appears on GET /entity-links and the VOC detail Links tab (selectActiveLinksForEndpoint filters status='active'). If the VOC-detail query was NOT already active-filtered, confirm a filter was added.
+4. Partial unique index — detaching frees the WHERE status='active' slot; a new active POST of the same pair must succeed (test 6). Confirm no index change.
+5. Scope discipline — no forbidden paths (permissions/*, auth/*, apps/frontend/**, findings table, revoked/stale production, DELETE grant, hard delete). 
+6. Deviation D1 — 409 uses existing `conflict.stale_write` because errors/codes.ts is out of scope. Judge: acceptable, or does it block / need a different code?
+7. Tests — do the 6 cases in the prompt exist and genuinely assert (row persists with metadata after detach; audit row; detached link absent from GET + VOC detail; already-detached→409; missing/empty reason→422; out-of-scope→404; re-POST after detach succeeds)? Note any missing/weak case. Confirm teardown uses migrateHandle (fops_migrate) for DELETEs since fops_app cannot delete.
+
+Output ONLY this JSON (no prose around it):
+{
+  "verdict": "approve" | "request_changes" | "block",
+  "summary": "one sentence",
+  "findings": [ { "severity":"block|major|minor|nit", "area":"contract|scope|deviation|tests|authz|audit|migration|other", "file":"path:line", "issue":"one sentence", "fix":"one sentence" } ],
+  "deviations_acceptable_with_doc": [ "..." ],
+  "must_fix_before_commit": [ "..." ]
+}
+If nothing blocks, verdict=approve.

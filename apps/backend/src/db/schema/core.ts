@@ -306,6 +306,9 @@ export const entityLinks = coreSchema.table(
       .references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }),
+    detachedBy: uuid('detached_by').references(() => actors.id),
+    detachReason: text('detach_reason'),
+    detachedAt: timestamp('detached_at', { withTimezone: true }),
   },
   (t) => ({
     relationTypeCheck: check(

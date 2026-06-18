@@ -38,6 +38,13 @@ export const createEntityLinkRequestSchema = z
   .strict();
 export type CreateEntityLinkRequest = z.infer<typeof createEntityLinkRequestSchema>;
 
+export const detachEntityLinkRequestSchema = z
+  .object({
+    reason: z.string().trim().min(1),
+  })
+  .strict();
+export type DetachEntityLinkRequest = z.infer<typeof detachEntityLinkRequestSchema>;
+
 export const listEntityLinksQuerySchema = z
   .object({
     source_type: entityLinkEntityTypeSchema.optional(),
@@ -107,3 +114,10 @@ export const listEntityLinksResponseSchema = z.object({
   items: z.array(entityLinkDtoSchema),
 });
 export type ListEntityLinksResponse = z.infer<typeof listEntityLinksResponseSchema>;
+
+export const detachedEntityLinkResponseSchema = z.object({
+  id: z.string().uuid(),
+  status: z.literal('detached'),
+  detached_at: z.string().datetime(),
+});
+export type DetachedEntityLinkResponse = z.infer<typeof detachedEntityLinkResponseSchema>;

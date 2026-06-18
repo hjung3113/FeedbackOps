@@ -23,6 +23,9 @@ export interface EntityLinkRow {
   created_by: string;
   created_at: Date;
   updated_at: Date | null;
+  detached_by: string | null;
+  detach_reason: string | null;
+  detached_at: Date | null;
 }
 
 function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
@@ -46,6 +49,14 @@ function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
         : row.updated_at instanceof Date
           ? row.updated_at
           : new Date(row.updated_at as string),
+    detached_by: (row.detached_by as string | null) ?? null,
+    detach_reason: (row.detach_reason as string | null) ?? null,
+    detached_at:
+      row.detached_at === null || row.detached_at === undefined
+        ? null
+        : row.detached_at instanceof Date
+          ? row.detached_at
+          : new Date(row.detached_at as string),
   };
 }
 
@@ -96,7 +107,7 @@ export async function insertActiveVocRelatedToLink(
     RETURNING
       id, workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by,
-      created_at, updated_at
+      created_at, updated_at, detached_by, detach_reason, detached_at
   `);
   const insertedRow = inserted.rows[0];
   if (insertedRow) return { row: mapEntityLinkRow(insertedRow), inserted: true };
@@ -120,7 +131,7 @@ export async function selectActiveVocRelatedToLink(
     SELECT
       id, workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by,
-      created_at, updated_at
+      created_at, updated_at, detached_by, detach_reason, detached_at
     FROM core.entity_links
     WHERE workspace_id = ${input.workspaceId}
       AND source_type = 'voc'
@@ -158,7 +169,7 @@ export async function selectActiveLinksForEndpoint(
     SELECT
       id, workspace_id, source_type, source_id, target_type, target_id,
       relation_type, visibility, status, managed_system_id, created_by,
-      created_at, updated_at
+      created_at, updated_at, detached_by, detach_reason, detached_at
     FROM core.entity_links
     WHERE workspace_id = ${input.workspaceId}
       AND status = 'active'
@@ -166,4 +177,51 @@ export async function selectActiveLinksForEndpoint(
     ORDER BY created_at DESC, id DESC
   `);
   return result.rows.map(mapEntityLinkRow);
+}
+
+export async function selectEntityLinkById(
+  db: Db | Tx,
+  input: { workspaceId: string; linkId: string },
+): Promise<EntityLinkRow | null> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT
+      id, workspace_id, source_type, source_id, target_type, target_id,
+      relation_type, visibility, status, managed_system_id, created_by,
+      created_at, updated_at, detached_by, detach_reason, detached_at
+    FROM core.entity_links
+    WHERE workspace_id = ${input.workspaceId}
+      AND id = ${input.linkId}
+    LIMIT 1
+  `);
+  const row = result.rows[0];
+  return row ? mapEntityLinkRow(row) : null;
+}
+
+export async function detachVocRelatedToLink(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    linkId: string;
+    actorId: string;
+    reason: string;
+  },
+): Promise<EntityLinkRow | null> {
+  const updated = await (tx as Db).execute<Record<string, unknown>>(sql`
+    UPDATE core.entity_links
+    SET
+      status = 'detached',
+      detached_by = ${input.actorId},
+      detach_reason = ${input.reason},
+      detached_at = now(),
+      updated_at = now()
+    WHERE workspace_id = ${input.workspaceId}
+      AND id = ${input.linkId}
+      AND status = 'active'
+    RETURNING
+      id, workspace_id, source_type, source_id, target_type, target_id,
+      relation_type, visibility, status, managed_system_id, created_by,
+      created_at, updated_at, detached_by, detach_reason, detached_at
+  `);
+  const row = updated.rows[0];
+  return row ? mapEntityLinkRow(row) : null;
 }

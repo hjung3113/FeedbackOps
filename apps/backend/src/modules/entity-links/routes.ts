@@ -1,6 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 
-import { createEntityLinkRequestSchema, listEntityLinksQuerySchema } from '@fops/shared';
+import {
+  createEntityLinkRequestSchema,
+  detachEntityLinkRequestSchema,
+  listEntityLinksQuerySchema,
+} from '@fops/shared';
 
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
@@ -23,6 +28,7 @@ export const entityLinksRoutes: FastifyPluginAsync<EntityLinksRoutesOptions> = a
   opts,
 ) => {
   const { sessionService, entityLinksService, workspaceId, rateLimitConfig } = opts;
+  const entityLinkParamsSchema = z.object({ id: z.string().uuid() }).strict();
 
   app.route({
     method: 'POST',
@@ -98,6 +104,42 @@ export const entityLinksRoutes: FastifyPluginAsync<EntityLinksRoutesOptions> = a
         side,
       });
       return reply.code(200).send({ items });
+    },
+  });
+
+  app.route({
+    method: 'PATCH',
+    url: '/entity-links/:id',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const parsedParams = entityLinkParamsSchema.safeParse(req.params);
+      if (!parsedParams.success) {
+        return sendError(reply, 'validation.failed', 'invalid route parameters', {
+          fields: fieldsFromZodIssues(parsedParams.error.issues),
+        });
+      }
+
+      const parsed = detachEntityLinkRequestSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      const link = await entityLinksService.detachLink({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        linkId: parsedParams.data.id,
+        reason: parsed.data.reason,
+      });
+      return reply.code(200).send(link);
     },
   });
 };
