@@ -88,6 +88,13 @@
   --confidence-medium: var(--color-cyan-spark);
   --confidence-high: var(--color-emerald);
 
+  /* --- Managed System identity tokens (prototype data.js scope marks) --- */
+  --managed-system-tableau: 94 106 210;  /* #5e6ad2 */
+  --managed-system-power-bi: 242 196 109; /* #f2c46d */
+  --managed-system-looker: 2 184 204;    /* #02b8cc */
+  --managed-system-metabase: 39 166 68;  /* #27a644 */
+  --managed-system-default: var(--color-aether-blue);
+
   /* --- Layout tokens --- */
   --sidebar-width: 240px;
   --sidebar-width-collapsed: 56px;
@@ -153,6 +160,7 @@
   --text-heading: 24px;
   --text-heading-lg: 32px;
   --text-display: 48px;
+  --text-system-mark: 8px;
 
   /* --- Typography: leading --- */
   --leading-tight: 1.2;

@@ -67,6 +67,16 @@ describe('<VocDescriptionToolbar>', () => {
     expect(VOC_DESCRIPTION_TOOLBAR).toHaveLength(7);
   });
 
+  it('renders the VOC body label at the right edge of the toolbar', () => {
+    const { editor } = makeEditorMock();
+    const element = VocDescriptionToolbar(editor);
+    render(element!);
+
+    const label = screen.getByText('VOC 본문');
+    expect(label).toBeInTheDocument();
+    expect(label).toHaveClass('ml-auto');
+  });
+
   it('all buttons (including PLAN-22 C8 attach) are enabled', () => {
     const { editor } = makeEditorMock();
     const element = VocDescriptionToolbar(editor);

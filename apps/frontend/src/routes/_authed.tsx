@@ -27,7 +27,7 @@ const SIDEBAR_ENTRIES = [
   },
   {
     id: 'create',
-    label: '+ New VOC',
+    label: 'New VOC',
     href: '/vocs?action=create',
     section: 'VOC',
     icon: <Plus className="h-4 w-4" />,

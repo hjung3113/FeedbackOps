@@ -97,6 +97,13 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--confidence-medium',  raw: 'var(--color-cyan-spark)' },
   { tokenName: '--confidence-high',    raw: 'var(--color-emerald)' },
 
+  // --- Managed System identity tokens ---
+  { tokenName: '--managed-system-tableau',  hex: '#5e6ad2', rgb: '94 106 210' },
+  { tokenName: '--managed-system-power-bi', hex: '#f2c46d', rgb: '242 196 109' },
+  { tokenName: '--managed-system-looker',   hex: '#02b8cc', rgb: '2 184 204' },
+  { tokenName: '--managed-system-metabase', hex: '#27a644', rgb: '39 166 68' },
+  { tokenName: '--managed-system-default',  raw: 'var(--color-aether-blue)' },
+
   // --- Layout tokens ---
   { tokenName: '--sidebar-width',           raw: '240px' },
   { tokenName: '--sidebar-width-collapsed', raw: '56px' },
@@ -104,6 +111,11 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--detail-panel-width',      raw: '440px' },
   { tokenName: '--toolbar-height',          raw: '50px' },
   { tokenName: '--topbar-height',           raw: '50px' },
+  { tokenName: '--entity-link-inventory-min-width',       raw: '1040px' },
+  { tokenName: '--entity-link-inventory-narrow-col-width', raw: '104px' },
+  { tokenName: '--entity-link-inventory-row-height',      raw: '52px' },
+  { tokenName: '--entity-link-object-row-grid',           raw: '24px auto 1fr auto' },
+  { tokenName: '--entity-link-object-id-min-width',       raw: '64px' },
   { tokenName: '--row-height-compact',      raw: '44px' },
   { tokenName: '--row-height-default',      raw: '60px' },
   { tokenName: '--row-height-expanded',     raw: '96px' },
@@ -157,6 +169,7 @@ export const PACK_17_TOKENS: TokenEntry[] = [
   { tokenName: '--text-heading',    raw: '24px' },
   { tokenName: '--text-heading-lg', raw: '32px' },
   { tokenName: '--text-display',    raw: '48px' },
+  { tokenName: '--text-system-mark', raw: '8px' },
 
   // --- Typography: leading ---
   { tokenName: '--leading-tight',   raw: '1.2' },

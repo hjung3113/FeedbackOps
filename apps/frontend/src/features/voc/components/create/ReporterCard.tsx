@@ -22,9 +22,12 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
 
   if (isLoading) {
     return (
-      <Card className={cn('p-4', className)}>
+      <Card className={cn('p-3.5', className)}>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-text-muted">
+          Reporter
+        </div>
         <CardContent className="flex items-center gap-3 p-0">
-          <Skeleton className="h-10 w-10 rounded-full" />
+          <Skeleton className="h-8 w-8 rounded-full" />
           <div className="flex flex-col gap-1.5">
             <Skeleton className="h-4 w-28" />
             <Skeleton className="h-3 w-20" />
@@ -44,14 +47,17 @@ export function ReporterCard({ className }: ReporterCardProps): React.ReactEleme
   // TODO: workspace name when Slice 4 exposes /workspaces/me
 
   return (
-    <Card className={cn('p-4', className)}>
-      <CardContent className="flex items-center gap-3 p-0">
-        <Avatar>
+    <Card className={cn('p-3.5', className)}>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-normal text-text-muted">
+        Reporter
+      </div>
+      <CardContent className="flex items-center gap-2.5 p-0">
+        <Avatar className="h-8 w-8">
           <AvatarFallback>{initial}</AvatarFallback>
         </Avatar>
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-medium text-text-primary">{actor.display_name}</span>
-          <span className="text-xs text-text-muted">{actor.role_level}</span>
+          <span className="text-xs text-text-muted">Role: {actor.role_level}</span>
         </div>
       </CardContent>
     </Card>

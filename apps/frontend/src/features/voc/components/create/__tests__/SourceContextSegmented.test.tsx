@@ -17,6 +17,21 @@ describe('<SourceContextSegmented>', () => {
     expect(screen.getByText('이해관계자 요청')).toBeInTheDocument();
   });
 
+  it('renders as a compact icon segmented control instead of full-width tabs', () => {
+    render(
+      <SourceContextSegmented
+        value="direct_use"
+        onChange={() => {}}
+        testId="source-context-segmented"
+      />,
+    );
+
+    const control = screen.getByTestId('source-context-segmented');
+    expect(control.querySelector('[data-testid="source-context-list"]')).toHaveClass('inline-flex');
+    expect(control.querySelector('[data-testid="source-context-icon-direct_use"]')).toBeInTheDocument();
+    expect(control.querySelector('[data-testid="source-context-icon-proxy_report"]')).toBeInTheDocument();
+  });
+
   it('fires onChange with "proxy_report" when that tab is clicked', () => {
     const onChange = vi.fn();
     render(

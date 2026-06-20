@@ -37,6 +37,16 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 | Deep Violet | `#3157d5` | `--color-deep-violet` | Background accents in specific content blocks, indicating a distinct informational category. |
 | Amethyst | `#6a8dff` | `--color-amethyst` | Another variant of violet for backgrounds, used interchangeably with Deep Violet for visual diversity. |
 
+### Managed System Identity Tokens
+
+| Name | Value | Token | Role |
+|------|-------|-------|------|
+| Tableau Scope | `#5e6ad2` | `--managed-system-tableau` | Compact `TB` scope mark background. |
+| Power BI Scope | `#f2c46d` | `--managed-system-power-bi` | Compact `PB` scope mark background. |
+| Looker Scope | `#02b8cc` | `--managed-system-looker` | Compact `LK` scope mark background. |
+| Metabase Scope | `#27a644` | `--managed-system-metabase` | Compact `MB` scope mark background. |
+| Default Scope | `#1428a0` | `--managed-system-default` | Fallback compact Managed System mark background. |
+
 ## Tokens — Typography
 
 ### Inter Variable — Primary UI typeface for all content including headings, body text, and interactive elements. Its variable weights provide a clean, modern aesthetic with strong technical readability. · `--font-inter-variable`
