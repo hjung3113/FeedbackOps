@@ -87,6 +87,14 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
           and event_type in ('entity_link.created', 'entity_link.detached')`,
       [WORKSPACE_ID],
     );
+    await migrateHandle.pool.query(
+      `delete from permission.permission_grants
+        where workspace_id = $1
+          and managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
   }
 
@@ -123,6 +131,33 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       'Link Target VOC',
     );
     return { msA, msB, sourceVoc, targetVoc };
+  }
+
+  async function seedEntityLinkDirectly(input: {
+    sourceId: string;
+    targetId: string;
+    managedSystemId: string;
+    visibility: 'internal_only' | 'summary_visible' | 'visible_to_reporter' | 'admin_only';
+  }): Promise<string> {
+    const res = await migrateHandle.pool.query<{ id: string }>(
+      `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        )
+       values ($1, 'voc', $2, 'voc', $3, 'related_to', $4, 'active', $5, $6)
+       returning id`,
+      [
+        WORKSPACE_ID,
+        input.sourceId,
+        input.targetId,
+        input.visibility,
+        input.managedSystemId,
+        adminActorId,
+      ],
+    );
+    const id = res.rows[0]?.id;
+    if (!id) throw new Error(`seedEntityLinkDirectly failed for ${input.visibility}`);
+    return id;
   }
 
   async function postEntityLink(cookie: string, sourceId: string, targetId: string, extra = {}) {
@@ -212,13 +247,12 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
 
-  it('POST rejects unsupported relation_type, source_type, target_type, and visibility', async () => {
+  it('POST rejects unsupported relation_type, source_type, and target_type', async () => {
     const { sourceVoc, targetVoc } = await seedVocPair();
     const cases = [
       { relation_type: 'evidence_of' },
       { source: { type: 'finding', id: sourceVoc.id } },
       { target: { type: 'task', id: targetVoc.id } },
-      { visibility: 'summary_visible' },
     ];
 
     for (const extra of cases) {
@@ -226,6 +260,17 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       expect(res.statusCode).toBe(422);
       expect(res.json<{ code: string }>().code).toBe('validation.failed');
     }
+  });
+
+  it('POST refuses to create a non-internal_only link', async () => {
+    const { sourceVoc, targetVoc } = await seedVocPair();
+
+    const res = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id, {
+      visibility: 'summary_visible',
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
 
   it('POST duplicate returns the existing active link without duplicating', async () => {
@@ -538,6 +583,111 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     });
     expect(hiddenRow?.source_id).toBeUndefined();
     expect(hiddenRow?.target_id).toBeUndefined();
+  });
+
+  it('GET read paths enforce the stored visibility matrix for seeded non-creatable rows', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-matrixa`,
+      'Visibility Matrix MS-A',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Matrix Source VOC',
+    );
+    const targets = await Promise.all(
+      ['internal_only', 'summary_visible', 'visible_to_reporter', 'admin_only'].map((visibility) =>
+        insertVocDirectly(dbHandle, WORKSPACE_ID, msA, reporterId, `Matrix Target ${visibility}`),
+      ),
+    );
+    const [internalTarget, summaryTarget, reporterTarget, adminTarget] = targets;
+    if (!internalTarget || !summaryTarget || !reporterTarget || !adminTarget) {
+      throw new Error('visibility matrix target seed failed');
+    }
+    const ids = {
+      internal_only: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetId: internalTarget.id,
+        managedSystemId: msA,
+        visibility: 'internal_only',
+      }),
+      summary_visible: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetId: summaryTarget.id,
+        managedSystemId: msA,
+        visibility: 'summary_visible',
+      }),
+      visible_to_reporter: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetId: reporterTarget.id,
+        managedSystemId: msA,
+        visibility: 'visible_to_reporter',
+      }),
+      admin_only: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetId: adminTarget.id,
+        managedSystemId: msA,
+        visibility: 'admin_only',
+      }),
+    };
+
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('matrix'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, reporterId, 'voc.read', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+    const reporterCookie = await loginAs(app, 'mock-user-1');
+
+    const admin = await getEntityLinks(adminCookie, `?source_type=voc&source_id=${sourceVoc.id}`);
+    expect(admin.statusCode).toBe(200);
+    expect(
+      Object.fromEntries(
+        admin
+          .json<{ items: Array<{ id: string; visibility_state: string }> }>()
+          .items.filter((item) => Object.values(ids).includes(item.id))
+          .map((item) => [item.id, item.visibility_state]),
+      ),
+    ).toEqual({
+      [ids.internal_only]: 'allowed',
+      [ids.summary_visible]: 'allowed',
+      [ids.visible_to_reporter]: 'allowed',
+      [ids.admin_only]: 'allowed',
+    });
+
+    const developer = await getEntityLinks(devCookie, '?scope=workspace');
+    expect(developer.statusCode).toBe(200);
+    expect(
+      Object.fromEntries(
+        developer
+          .json<{ items: Array<{ id: string; visibility_state: string }> }>()
+          .items.filter((item) => Object.values(ids).includes(item.id))
+          .map((item) => [item.id, item.visibility_state]),
+      ),
+    ).toEqual({
+      [ids.internal_only]: 'allowed',
+      [ids.summary_visible]: 'allowed',
+      [ids.visible_to_reporter]: 'allowed',
+      [ids.admin_only]: 'denied',
+    });
+
+    const reporter = await getEntityLinks(reporterCookie, '?scope=workspace');
+    expect(reporter.statusCode).toBe(200);
+    expect(
+      Object.fromEntries(
+        reporter
+          .json<{ items: Array<{ id: string; visibility_state: string }> }>()
+          .items.filter((item) => Object.values(ids).includes(item.id))
+          .map((item) => [item.id, item.visibility_state]),
+      ),
+    ).toEqual({
+      [ids.internal_only]: 'hidden',
+      [ids.summary_visible]: 'hidden',
+      [ids.visible_to_reporter]: 'allowed',
+      [ids.admin_only]: 'hidden',
+    });
   });
 
   it('GET endpoint mode still requires exactly one endpoint and returns active links only', async () => {

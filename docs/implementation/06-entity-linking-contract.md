@@ -108,6 +108,13 @@ detaching a link intentionally frees the same VOC pair to be linked again later.
 
 ## Visibility Enforcement
 
+ADR-0023 (Slice 4.4 #115) locks the per-(stored visibility × actor) decision
+table, the `hidden`/`denied` boundary, both-side enforcement, the `request_access`
+deferral for VOC↔VOC, and the canonical summary/forbidden-field lists. The
+`evaluateLinkVisibility` pure function in the backend entity-links module is the
+single decision point; the read DTO gains `summary_visible` and `denied` variants
+(not `request_access`).
+
 ```text
 internal_only
 - hidden from Reporter and User unless separately authorized.

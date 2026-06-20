@@ -1,11 +1,19 @@
-import type { DetachedEntityLinkResponse, EntityLinkDto, EntityLinkRef } from '@fops/shared';
+import type {
+  DetachedEntityLinkResponse,
+  EntityLinkDto,
+  EntityLinkRef,
+  EntityLinkVisibilityState,
+  TaskReporterSummary,
+} from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { type LinkVisibilityDecision, evaluateLinkVisibility } from './evaluate-visibility.js';
 import {
   type EntityLinkRow,
+  type LinkEndpointRow,
   detachVocRelatedToLink,
   insertActiveVocRelatedToLink,
   resolveVocEndpoint,
@@ -44,7 +52,10 @@ function toAllowedDto(row: EntityLinkRow): EntityLinkDto {
   };
 }
 
-function toHiddenDto(row: EntityLinkRow): EntityLinkDto {
+function toAuditMetadataDto(
+  row: EntityLinkRow,
+  visibilityState: Extract<EntityLinkVisibilityState, 'hidden' | 'denied'>,
+): EntityLinkDto {
   return {
     id: row.id,
     source_type: row.source_type,
@@ -55,8 +66,38 @@ function toHiddenDto(row: EntityLinkRow): EntityLinkDto {
     created_by: row.created_by,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at ? row.updated_at.toISOString() : null,
-    visibility_state: 'hidden',
+    visibility_state: visibilityState,
   };
+}
+
+function toSummaryVisibleDto(row: EntityLinkRow, summary: TaskReporterSummary): EntityLinkDto {
+  return {
+    id: row.id,
+    source_type: row.source_type,
+    target_type: row.target_type,
+    relation_type: row.relation_type,
+    status: row.status,
+    managed_system_id: row.managed_system_id,
+    created_by: row.created_by,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at ? row.updated_at.toISOString() : null,
+    visibility_state: 'summary_visible',
+    summary,
+  };
+}
+
+function toDtoForDecision(
+  row: EntityLinkRow,
+  decision: LinkVisibilityDecision,
+  summary?: TaskReporterSummary,
+): EntityLinkDto {
+  if (decision === 'allowed') return toAllowedDto(row);
+  if (decision === 'hidden' || decision === 'denied') return toAuditMetadataDto(row, decision);
+  if (summary !== undefined) return toSummaryVisibleDto(row, summary);
+  throw new HttpError(
+    'internal.unexpected',
+    'summary-visible entity link decision missing summary resolver',
+  );
 }
 
 function toDetachedResponse(row: EntityLinkRow): DetachedEntityLinkResponse {
@@ -82,30 +123,53 @@ async function assertVocReadScope(
   return decision.allow;
 }
 
-async function canReadBothEndpoints(
+async function resolveEndpointForRow(
+  deps: Pick<EntityLinksServiceDeps, 'db'>,
+  actor: EntityLinksActor,
+  vocId: string,
+  resolvedByVocId: Map<string, LinkEndpointRow | null>,
+): Promise<LinkEndpointRow | null> {
+  if (resolvedByVocId.has(vocId)) return resolvedByVocId.get(vocId) ?? null;
+  const endpoint = await resolveVocEndpoint(deps.db, actor.workspace_id, vocId);
+  resolvedByVocId.set(vocId, endpoint);
+  return endpoint;
+}
+
+async function evaluateRowVisibility(
   deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
   actor: EntityLinksActor,
   row: EntityLinkRow,
-  resolvedByVocId: Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>,
-): Promise<boolean> {
-  let source = resolvedByVocId.get(row.source_id);
-  if (source === undefined && !resolvedByVocId.has(row.source_id)) {
-    source = await resolveVocEndpoint(deps.db, actor.workspace_id, row.source_id);
-    resolvedByVocId.set(row.source_id, source);
+  resolvedByVocId: Map<string, LinkEndpointRow | null>,
+): Promise<LinkVisibilityDecision> {
+  if (
+    row.source_type !== 'voc' ||
+    row.target_type !== 'voc' ||
+    row.relation_type !== 'related_to'
+  ) {
+    return 'hidden';
   }
 
-  let target = resolvedByVocId.get(row.target_id);
-  if (target === undefined && !resolvedByVocId.has(row.target_id)) {
-    target = await resolveVocEndpoint(deps.db, actor.workspace_id, row.target_id);
-    resolvedByVocId.set(row.target_id, target);
-  }
-
-  if (!source || !target) return false;
-  const [sourceAllowed, targetAllowed] = await Promise.all([
-    assertVocReadScope(deps, actor, source.managed_system_id),
-    assertVocReadScope(deps, actor, target.managed_system_id),
+  const [source, target] = await Promise.all([
+    resolveEndpointForRow(deps, actor, row.source_id, resolvedByVocId),
+    resolveEndpointForRow(deps, actor, row.target_id, resolvedByVocId),
   ]);
-  return sourceAllowed && targetAllowed;
+  const [sourceReadable, targetReadable] = await Promise.all([
+    source ? assertVocReadScope(deps, actor, source.managed_system_id) : Promise.resolve(false),
+    target ? assertVocReadScope(deps, actor, target.managed_system_id) : Promise.resolve(false),
+  ]);
+
+  return evaluateLinkVisibility({
+    visibility: row.visibility,
+    actorContext: {
+      actor_id: actor.actor_id,
+      role_level: actor.role_level,
+    },
+    sourceReadable,
+    targetReadable,
+    targetSummaryAvailable: false,
+    sourceReporterId: source?.reporter_id ?? null,
+    targetReporterId: target?.reporter_id ?? null,
+  });
 }
 
 export function createEntityLinksService(deps: EntityLinksServiceDeps) {
@@ -218,21 +282,11 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       side === undefined ? listArgs : { ...listArgs, side },
     );
 
-    const resolvedByVocId = new Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>();
+    const resolvedByVocId = new Map<string, LinkEndpointRow | null>([[endpoint.id, focus]]);
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
-      const otherId = row.source_id === endpoint.id ? row.target_id : row.source_id;
-      let other = resolvedByVocId.get(otherId);
-      if (other === undefined) {
-        other = await resolveVocEndpoint(deps.db, actor.workspace_id, otherId);
-        resolvedByVocId.set(otherId, other);
-      }
-      if (!other) {
-        items.push(toHiddenDto(row));
-        continue;
-      }
-      const otherAllowed = await assertVocReadScope(deps, actor, other.managed_system_id);
-      items.push(otherAllowed ? toAllowedDto(row) : toHiddenDto(row));
+      const decision = await evaluateRowVisibility(deps, actor, row, resolvedByVocId);
+      items.push(toDtoForDecision(row, decision));
     }
     return items;
   }
@@ -251,19 +305,11 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
     });
 
-    const resolvedByVocId = new Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>();
+    const resolvedByVocId = new Map<string, LinkEndpointRow | null>();
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
-      if (
-        row.source_type !== 'voc' ||
-        row.target_type !== 'voc' ||
-        row.relation_type !== 'related_to'
-      ) {
-        items.push(toHiddenDto(row));
-        continue;
-      }
-      const allowed = await canReadBothEndpoints(deps, actor, row, resolvedByVocId);
-      items.push(allowed ? toAllowedDto(row) : toHiddenDto(row));
+      const decision = await evaluateRowVisibility(deps, actor, row, resolvedByVocId);
+      items.push(toDtoForDecision(row, decision));
     }
     return items;
   }
