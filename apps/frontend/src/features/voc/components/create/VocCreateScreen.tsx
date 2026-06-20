@@ -36,6 +36,8 @@ import { SeverityDisclaimerCard } from './SeverityDisclaimerCard';
 import { vocDescriptionToolbar } from './VocDescriptionToolbar';
 import { uploadAttachment } from '@/lib/api/attachments';
 
+const SECTION_LABEL_CLASS = 'text-xs font-semibold uppercase tracking-wide text-text-muted';
+
 export interface VocCreateScreenProps {
   initialManagedSystemId?: string;
   onCancel: () => void;
@@ -246,7 +248,12 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
 
             {/* Source Context */}
             <div className="flex flex-col gap-2">
-              <FieldLabel>Source Context</FieldLabel>
+              <FieldLabel
+                className={SECTION_LABEL_CLASS}
+                tip="기본은 Direct Use. 다른 팀원·고객사 경험을 대신 등록할 때는 Proxy Report."
+              >
+                SOURCE
+              </FieldLabel>
               <Controller
                 control={form.control}
                 name="source_context"
@@ -264,8 +271,13 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
 
             {/* Managed System */}
             <div className="flex flex-col gap-2">
-              <FieldLabel required htmlFor="primary_managed_system_id">
-                Managed System
+              <FieldLabel
+                required
+                htmlFor="primary_managed_system_id"
+                className={SECTION_LABEL_CLASS}
+                tip="제출 후 변경할 수 없습니다. 어느 시스템에 대한 VOC인지 정확히 골라주세요."
+              >
+                MANAGED SYSTEM
               </FieldLabel>
               {msQuery.isLoading ? (
                 <div className="flex flex-wrap gap-2">
@@ -308,7 +320,13 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
 
             {/* Analytics Area */}
             <div className="mt-4 flex flex-col gap-2">
-              <FieldLabel htmlFor="analytics_area_id">Analytics Area</FieldLabel>
+              <FieldLabel
+                htmlFor="analytics_area_id"
+                className={SECTION_LABEL_CLASS}
+                tip="선택사항. 선택한 Managed System 안의 분석 영역만 고를 수 있어요."
+              >
+                ANALYTICS AREA
+              </FieldLabel>
               {selectedMs && aaQuery.isLoading ? (
                 <div className="flex flex-wrap gap-2">
                   <Skeleton className="h-8 w-24" />

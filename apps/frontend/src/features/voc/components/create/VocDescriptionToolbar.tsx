@@ -29,7 +29,7 @@ import {
 } from './rich-toolbar-voc-description';
 
 interface ToolbarButtonSpec {
-  icon: React.ComponentType<{ size?: number }>;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
   label: string;
   isActive?: (editor: Editor) => boolean;
   onClick?: (editor: Editor) => void;
@@ -102,19 +102,25 @@ export function vocDescriptionToolbar(opts?: {
           {VOC_DESCRIPTION_TOOLBAR.map((item) => {
             if (item.id === 'attach') {
               return (
-                <AttachButton
-                  key={item.id}
-                  data-testid="voc-toolbar-attach"
-                  label={item.tooltip ?? '첨부 파일 추가'}
-                  disabled={item.disabled === true}
-                  onPick={async (file) => {
-                    try {
-                      await api.attach(file);
-                    } catch (e) {
-                      opts?.onAttachError?.(e);
-                    }
-                  }}
-                />
+                <React.Fragment key={item.id}>
+                  <span
+                    className="mx-1 h-4 w-px bg-border-subtle"
+                    aria-hidden="true"
+                    data-testid="voc-toolbar-separator"
+                  />
+                  <AttachButton
+                    data-testid="voc-toolbar-attach"
+                    label={item.tooltip ?? '첨부 파일 추가'}
+                    disabled={item.disabled === true}
+                    onPick={async (file) => {
+                      try {
+                        await api.attach(file);
+                      } catch (e) {
+                        opts?.onAttachError?.(e);
+                      }
+                    }}
+                  />
+                </React.Fragment>
               );
             }
             const spec = BUTTONS[item.id];
@@ -137,19 +143,22 @@ export function vocDescriptionToolbar(opts?: {
                     onClick={handleClick}
                     data-testid={`voc-toolbar-${item.id}`}
                     className={cn(
-                      'inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors',
+                      'inline-flex h-7 w-7 items-center justify-center rounded-sm text-text-muted transition-colors',
                       'hover:bg-surface-card hover:text-text-primary',
                       'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-text-muted',
                       active && 'bg-surface-card text-accent-primary',
                     )}
                   >
-                    <Icon size={13} />
+                    <Icon size={13} strokeWidth={2} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>{tooltip}</TooltipContent>
               </Tooltip>
             );
           })}
+          <span className="ml-auto text-xs font-semibold uppercase tracking-wide text-text-muted">
+            VOC 본문
+          </span>
         </div>
       </TooltipProvider>
     );
