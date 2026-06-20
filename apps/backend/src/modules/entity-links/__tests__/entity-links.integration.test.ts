@@ -154,6 +154,14 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     });
   }
 
+  async function getEntityLinks(cookie: string, query: string) {
+    return app.inject({
+      method: 'GET',
+      url: `/entity-links${query}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+  }
+
   it('POST creates an active VOC↔VOC related_to link and audit row', async () => {
     const { msA, sourceVoc, targetVoc } = await seedVocPair();
 
@@ -390,6 +398,182 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(detail.statusCode).toBe(200);
     const body = detail.json<{ links?: Array<{ id: string }> }>();
     expect(body.links?.some((link) => link.id === linkId)).toBe(false);
+  });
+
+  it('GET workspace inventory returns active and detached rows newest-first', async () => {
+    const firstPair = await seedVocPair();
+    const secondPair = await seedVocPair();
+
+    const oldActive = await postEntityLink(
+      adminCookie,
+      firstPair.sourceVoc.id,
+      firstPair.targetVoc.id,
+    );
+    expect(oldActive.statusCode).toBe(201);
+    const oldActiveId = oldActive.json<{ id: string }>().id;
+
+    const newerDetached = await postEntityLink(
+      adminCookie,
+      secondPair.sourceVoc.id,
+      secondPair.targetVoc.id,
+    );
+    expect(newerDetached.statusCode).toBe(201);
+    const newerDetachedId = newerDetached.json<{ id: string }>().id;
+    const detach = await patchEntityLink(adminCookie, newerDetachedId, {
+      reason: 'Inventory fixture',
+    });
+    expect(detach.statusCode).toBe(200);
+
+    await migrateHandle.pool.query(
+      `update core.entity_links
+        set created_at = case
+          when id = $1 then now() - interval '2 hours'
+          when id = $2 then now() - interval '1 hour'
+          else created_at
+        end
+        where id in ($1, $2)`,
+      [oldActiveId, newerDetachedId],
+    );
+
+    const res = await getEntityLinks(adminCookie, '?scope=workspace');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      items: Array<{ id: string; status: string; visibility_state: string }>;
+    }>();
+    const fixtureItems = body.items.filter((item) =>
+      [oldActiveId, newerDetachedId].includes(item.id),
+    );
+    expect(fixtureItems.map((item) => item.id)).toEqual([newerDetachedId, oldActiveId]);
+    expect(fixtureItems.map((item) => item.status).sort()).toEqual(['active', 'detached']);
+    expect(fixtureItems.every((item) => item.visibility_state === 'allowed')).toBe(true);
+  });
+
+  it('GET workspace inventory status filter narrows to detached rows', async () => {
+    const firstPair = await seedVocPair();
+    const secondPair = await seedVocPair();
+    const active = await postEntityLink(
+      adminCookie,
+      firstPair.sourceVoc.id,
+      firstPair.targetVoc.id,
+    );
+    expect(active.statusCode).toBe(201);
+
+    const detached = await postEntityLink(
+      adminCookie,
+      secondPair.sourceVoc.id,
+      secondPair.targetVoc.id,
+    );
+    expect(detached.statusCode).toBe(201);
+    const detachedId = detached.json<{ id: string }>().id;
+    const detach = await patchEntityLink(adminCookie, detachedId, { reason: 'Status filter' });
+    expect(detach.statusCode).toBe(200);
+
+    const res = await getEntityLinks(adminCookie, '?scope=workspace&status=detached');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: Array<{ id: string; status: string }> }>();
+    expect(body.items.some((item) => item.id === detachedId)).toBe(true);
+    expect(body.items.every((item) => item.status === 'detached')).toBe(true);
+  });
+
+  it('GET workspace inventory emits hidden stubs when actor lacks either endpoint scope', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-inva`,
+      'Inventory MS-A',
+    );
+    const msB = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-invb`,
+      'Inventory MS-B',
+    );
+    const visibleSource = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Inventory Visible Source',
+    );
+    const visibleTarget = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Inventory Visible Target',
+    );
+    const hiddenTarget = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msB,
+      reporterId,
+      'Inventory Hidden Target',
+    );
+
+    const allowed = await postEntityLink(adminCookie, visibleSource.id, visibleTarget.id);
+    expect(allowed.statusCode).toBe(201);
+    const hidden = await postEntityLink(adminCookie, visibleSource.id, hiddenTarget.id);
+    expect(hidden.statusCode).toBe(201);
+    const allowedId = allowed.json<{ id: string }>().id;
+    const hiddenId = hidden.json<{ id: string }>().id;
+
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('invvis'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const res = await getEntityLinks(devCookie, '?scope=workspace');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: Array<Record<string, unknown>> }>();
+    const allowedRow = body.items.find((item) => item.id === allowedId);
+    const hiddenRow = body.items.find((item) => item.id === hiddenId);
+    expect(allowedRow).toMatchObject({
+      visibility_state: 'allowed',
+      source_id: visibleSource.id,
+      target_id: visibleTarget.id,
+    });
+    expect(hiddenRow).toMatchObject({
+      visibility_state: 'hidden',
+      status: 'active',
+      relation_type: 'related_to',
+    });
+    expect(hiddenRow?.source_id).toBeUndefined();
+    expect(hiddenRow?.target_id).toBeUndefined();
+  });
+
+  it('GET endpoint mode still requires exactly one endpoint and returns active links only', async () => {
+    const { sourceVoc, targetVoc } = await seedVocPair();
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    const beforeDetach = await getEntityLinks(
+      adminCookie,
+      `?source_type=voc&source_id=${sourceVoc.id}`,
+    );
+    expect(beforeDetach.statusCode).toBe(200);
+    expect(
+      beforeDetach
+        .json<{ items: Array<{ id: string }> }>()
+        .items.some((item) => item.id === linkId),
+    ).toBe(true);
+
+    const detach = await patchEntityLink(adminCookie, linkId, { reason: 'Regression' });
+    expect(detach.statusCode).toBe(200);
+
+    const afterDetach = await getEntityLinks(
+      adminCookie,
+      `?source_type=voc&source_id=${sourceVoc.id}`,
+    );
+    expect(afterDetach.statusCode).toBe(200);
+    expect(
+      afterDetach.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId),
+    ).toBe(false);
+
+    const invalid = await getEntityLinks(
+      adminCookie,
+      `?source_type=voc&source_id=${sourceVoc.id}&target_type=voc&target_id=${targetVoc.id}`,
+    );
+    expect(invalid.statusCode).toBe(422);
   });
 
   it('PATCH on an already-detached link returns 409', async () => {

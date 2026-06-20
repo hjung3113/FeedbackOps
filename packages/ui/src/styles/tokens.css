@@ -95,6 +95,9 @@
   --detail-panel-width: 440px;
   --toolbar-height: 50px;
   --topbar-height: 50px;
+  --entity-link-inventory-min-width: 1040px;
+  --entity-link-inventory-narrow-col-width: 104px;
+  --entity-link-inventory-row-height: 52px;
   --row-height-compact: 44px;
   --row-height-default: 60px;
   --row-height-expanded: 96px;

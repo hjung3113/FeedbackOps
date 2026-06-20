@@ -1,0 +1,68 @@
+# Issue #114 — Slice 4.3 · /integration/links audit inventory UI
+
+You are CODEX. Sandbox = workspace-write, NO network. DB + browser unreachable from sandbox; VERIFIER/VISUAL run outside. Do static checks only (typecheck/lint). Build on #112 + #113 (merged): `core.entity_links` with active/detached rows, module `apps/backend/src/modules/entity-links/`, shared types in `packages/shared/src/entity-links.ts`.
+
+## Goal
+
+The `/integration/links` ops audit surface: a read-only workspace-wide inventory table of entity links (active / stale / detached / revoked) with status + type filters, mirroring `docs/design-prototype/screen-entity-links.jsx` within 1px at desktop 1440. Two layers:
+
+1. **Backend** — extend the entity-links list to a workspace-wide inventory mode (the current `GET /entity-links` REQUIRES exactly one endpoint via `listEntityLinksQuerySchema` superRefine and returns active-only; an inventory needs neither).
+2. **Frontend** — new TanStack route `/integration/links` rendering the inventory table + filters, consuming the backend.
+
+READ FIRST: `docs/design-prototype/screen-entity-links.jsx` (the visual spec — columns, density, `LinkStatusBadge` colors, `EntityRelationRow` source→target stem, toolbar/filter layout, Korean strings), `docs/design-prototype/screenshots/final-baselines/integration-links.png` (pixel baseline), `apps/frontend/src/routes/_authed/vocs.tsx` (route + zod `.strict()` search-schema pattern), `packages/ui/src/layout/ListShell.tsx`, an existing feature route under `apps/frontend/src/features/voc/routes/`, `apps/frontend/src/lib/api.ts` (apiClient), DESIGN.md + ADR-0020/0021 + `apps/frontend/AGENTS.md` (Pack 17 tokens, shell taxonomy, prototype-is-spec).
+
+## Backend contract
+
+Extend GET /entity-links to support an INVENTORY mode (workspace-wide) IN ADDITION TO the existing endpoint-scoped mode — do not break #112/#113 callers (VOC detail uses endpoint mode):
+
+- New query shape: `?scope=workspace` (or: when NO source/target endpoint is given, default to workspace inventory) + optional `status` filter (one or many of `active|stale|detached|revoked`; default = all) + optional `relation_type` filter (`related_to` for now) + optional `managed_system_id` filter. Keep `.strict()`. Update `listEntityLinksQuerySchema` so endpoint-mode and inventory-mode are both valid and mutually-exclusive-where-required; preserve the existing endpoint-pair superRefine for endpoint mode.
+- Repo: add `selectLinksByWorkspace(db, { workspaceId, statuses?, relationType?, managedSystemId? })` returning rows across ALL statuses (not the active-only partial-index path). Order newest-first (created_at desc) — match the prototype's recency ordering.
+- Visibility (FR-LINK-002, same as #112): for each row, the actor must hold `voc.read` on BOTH endpoints' managed systems to see it as `allowed`; otherwise emit the `hidden` stub (no source_id/target_id of the hidden side, no synthesized summary). Inventory must NOT leak out-of-scope links as fully readable. Reuse the existing both-side helper.
+- Response: reuse `entityLinkDtoSchema` discriminated union (`allowed`/`hidden`) + include the fields the table needs (id, source/target refs when allowed, relation_type, managed_system_id or slug, status, created_by, created_at, updated_at). If the DTO lacks `status`/`created_by`/timestamps, EXTEND the shared DTO additively (do not break existing consumers — VOC detail).
+- NO migration (no schema change). NO new capability.
+
+## Frontend contract
+
+- Route: `apps/frontend/src/routes/_authed/integration/links.tsx` (TanStack file route), zod `.strict()` search schema for `status` + `type` + `managedSystem` filters (mirror the vocs.tsx pattern). Shell: ListShell (ADR-0020 — this is a list surface; do NOT invent a new shell).
+- Feature content under `apps/frontend/src/features/integration/` (currently only AGENTS.md/CLAUDE.md — greenfield): a route component + inventory table + status/type filter controls. Fetch via apiClient + @tanstack/react-query.
+- Table mirrors `screen-entity-links.jsx`: checkbox col (visual only — bulk actions are out of scope), mono link id, source→target relation stem (reuse/port `EntityRelationRow` if a shared one exists; else build per prototype), `LinkStatusBadge` (active/stale/detached/revoked with the exact prototype colors via Pack 17 tokens — NO raw hex; if a token is missing add it to DESIGN.md + tokens.css first), managed system, created_by, created/updated timestamps. Match column widths, density, 8px gaps, 50px header.
+- Status filter offers all 4 statuses (even though real data currently only has active/detached — stale is Slice 7, revoked unused); type filter offers `related_to`. Wire to backend query params.
+- `hidden` rows render a permission-limited treatment (reuse `PermissionBlockedPanel`/badge pattern) — never synthesize the hidden endpoint.
+- Empty state: terse Korean string + one-line, no decorative illustration (DESIGN.md). Use the prototype's empty copy if it has one; else a short Korean string consistent with other empty states (e.g. '링크가 없습니다').
+- One primary action per toolbar (apps/frontend/AGENTS.md). This surface is read-only audit — no primary mutate action needed; filters are secondary controls.
+
+## Scope fence — ABORT with `.review/ISSUE-114-BLOCKER.json` (real reason_code + blocking_fact) if forced wider
+
+ALLOWED: `apps/backend/src/modules/entity-links/{routes.ts,service.ts,repo.ts,index.ts,__tests__}`, `packages/shared/src/entity-links.ts` + `index.ts` (additive DTO/query changes only), `apps/frontend/src/routes/_authed/integration/links.tsx`, `apps/frontend/src/features/integration/**`, `packages/ui/**` ONLY if a genuinely shared primitive is needed AND a second consumer exists (per apps/frontend/AGENTS.md "extract after 2nd consumer" — otherwise keep it in the feature), `packages/ui/src/styles/tokens.css` + DESIGN.md if a status-badge token is missing, doc-sync (`docs/design/11-entity-linking.md`, `docs/implementation/06-entity-linking-contract.md`), `.review/ISSUE-114-DEVIATIONS.md`.
+
+FORBIDDEN (abort): `permissions/*`, `auth/*`, any migration / schema change to entity_links, new findings table, relation types beyond `related_to`, PRODUCING stale/revoked data, detach mutation FROM this table (read-only this slice — #113 owns detach; bulk-action checkbox is visual-only), FR-LINK-003 dashboard queries.
+
+## Tests
+
+Backend (vitest integration, mirror `apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts`; teardown DELETEs use migrateHandle/fops_migrate):
+1. Inventory mode returns workspace links across statuses (seed active + detached) newest-first.
+2. Status filter narrows correctly (e.g. `status=detached` returns only detached).
+3. Visibility: an out-of-scope actor gets `hidden` stubs (no endpoint ids) for links outside their scope; in-scope rows are `allowed`.
+4. Endpoint mode (the #112 shape) still works unchanged (regression).
+
+Frontend (vitest + Testing Library, mirror existing route tests under `apps/frontend/src/routes/__tests__/` / feature tests):
+5. `/integration/links` renders the table with seeded/mock links, status badges, and the filter controls.
+6. Empty state renders the Korean string when no links.
+7. Changing the status filter updates the query (assert the request param or the rendered subset).
+
+## Pixel-diff (VISUAL will run; you prepare for it)
+
+A baseline exists: `docs/design-prototype/screenshots/final-baselines/integration-links.png`. NOTE the prototype mock shows relation types (evidence_of/executes/public_update_of) and managed systems (powerbi/tableau/looker) that our real backend does NOT have yet — only `related_to` VOC↔VOC active/detached links exist. So row CONTENT will differ from the baseline; LAYOUT / columns / badges / filter chrome / density / tokens must match within 1px. Write `.review/ISSUE-114-PIXEL-NOTES.md` enumerating expected content deltas (real sparse data vs mock) vs layout that must match, so the VISUAL reviewer classifies content-deltas as expected and only flags layout/copy/token mismatches.
+
+## Procedure
+
+1. Read the references above (prototype + baseline + vocs.tsx + ListShell + AGENTS/DESIGN/ADR).
+2. Backend: extend query schema + repo `selectLinksByWorkspace` + service inventory method + route handler; keep endpoint mode intact.
+3. Shared DTO: additively add status/created_by/timestamps if missing.
+4. FE: route + feature components + filters + badges + empty state, Pack 17 tokens only.
+5. Tests 1-7.
+6. `pnpm -w typecheck` + `pnpm -w lint`; fix only NEW errors.
+7. Doc-sync same commit. Write `.review/ISSUE-114-PIXEL-NOTES.md`.
+8. Commit on `feature/114-integration-links-ui`: `feat(#114): /integration/links audit inventory UI`. Do NOT push.
+
+If forced scope escape or unresolved prototype ambiguity (prototype silent on a behavior): write `.review/ISSUE-114-BLOCKER.json` and exit non-zero. Do NOT fill silence with framework defaults — the prototype is the spec; when it's silent, STOP.

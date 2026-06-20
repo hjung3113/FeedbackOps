@@ -179,6 +179,38 @@ export async function selectActiveLinksForEndpoint(
   return result.rows.map(mapEntityLinkRow);
 }
 
+export async function selectLinksByWorkspace(
+  db: Db | Tx,
+  input: {
+    workspaceId: string;
+    statuses?: EntityLinkRow['status'][];
+    relationType?: EntityLinkRow['relation_type'];
+    managedSystemId?: string;
+  },
+): Promise<EntityLinkRow[]> {
+  const predicates = [sql`workspace_id = ${input.workspaceId}`];
+  if (input.statuses !== undefined && input.statuses.length > 0) {
+    predicates.push(sql`status::text = ANY(${input.statuses})`);
+  }
+  if (input.relationType !== undefined) {
+    predicates.push(sql`relation_type = ${input.relationType}`);
+  }
+  if (input.managedSystemId !== undefined) {
+    predicates.push(sql`managed_system_id = ${input.managedSystemId}`);
+  }
+
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT
+      id, workspace_id, source_type, source_id, target_type, target_id,
+      relation_type, visibility, status, managed_system_id, created_by,
+      created_at, updated_at, detached_by, detach_reason, detached_at
+    FROM core.entity_links
+    WHERE ${sql.join(predicates, sql` AND `)}
+    ORDER BY created_at DESC, id DESC
+  `);
+  return result.rows.map(mapEntityLinkRow);
+}
+
 export async function selectEntityLinkById(
   db: Db | Tx,
   input: { workspaceId: string; linkId: string },

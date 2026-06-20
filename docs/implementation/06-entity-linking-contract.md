@@ -68,6 +68,24 @@ voc -> voc
   as visibility_state=allowed when readable and visibility_state=hidden when not
 ```
 
+Slice 4.3 workspace inventory (#114):
+
+```text
+GET /entity-links?scope=workspace
+- default inventory mode is also used when no source or target endpoint is
+  supplied.
+- endpoint mode and workspace inventory mode are mutually exclusive.
+- optional filters: status=active|stale|detached|revoked, relation_type=related_to,
+  managed_system_id=<uuid>
+- order: created_at DESC, id DESC
+- response: { items: EntityLinkDto[] }
+- authz: every row checks voc.read on both endpoints' Managed Systems.
+  Rows are visibility_state=allowed only when both endpoints are readable;
+  otherwise they are visibility_state=hidden.
+- hidden inventory rows expose audit metadata but never source_id, target_id, or
+  synthesized endpoint summaries.
+```
+
 ## Link Detach Validation
 
 Slice 4.2 detach lifecycle (#113):
