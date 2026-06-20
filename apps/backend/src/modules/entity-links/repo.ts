@@ -60,6 +60,12 @@ function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
   };
 }
 
+function sqlTextArray(values: string[]): ReturnType<typeof sql> {
+  if (values.length === 0) return sql`ARRAY[]::text[]`;
+  const items = values.map((value) => sql`${value}::text`);
+  return sql`ARRAY[${sql.join(items, sql`, `)}]::text[]`;
+}
+
 export async function resolveVocEndpoint(
   db: Db | Tx,
   workspaceId: string,
@@ -190,7 +196,7 @@ export async function selectLinksByWorkspace(
 ): Promise<EntityLinkRow[]> {
   const predicates = [sql`workspace_id = ${input.workspaceId}`];
   if (input.statuses !== undefined && input.statuses.length > 0) {
-    predicates.push(sql`status::text = ANY(${input.statuses})`);
+    predicates.push(sql`status::text = ANY(${sqlTextArray(input.statuses)})`);
   }
   if (input.relationType !== undefined) {
     predicates.push(sql`relation_type = ${input.relationType}`);
