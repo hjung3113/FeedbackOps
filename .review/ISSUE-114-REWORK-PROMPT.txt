@@ -1,0 +1,38 @@
+You are CODEX. Sandbox = workspace-write, no network. Scope: FRONTEND row-layout rework on #114 to match the prototype (Release Captain decision: card object-rows, not a columnar table). Do NOT commit.
+
+## Why
+
+VISUAL check against `docs/design-prototype/screenshots/final-baselines/integration-links.png` found the current implementation renders a COLUMNAR DATA TABLE (header row: ID/RELATION/STATUS/MANAGED SYSTEM/CREATED BY/CREATED/UPDATED). The prototype `docs/design-prototype/screen-entity-links.jsx` is a HEADERLESS OBJECT-ROW (card list). Design Principle 3 (Prototype Is The Spec, mirror within 1px) requires the object-row layout. The user has approved reworking to match.
+
+## Required changes (frontend only)
+
+### 1. Replace the table with prototype object-rows
+
+Read `docs/design-prototype/screen-entity-links.jsx` `EntityLinkRow` (around lines 144-182). Each row is a CSS grid `gridTemplateColumns: '24px auto 1fr auto'`:
+- col 1 (24px): checkbox (visual-only, keep as-is — bulk actions still out of scope)
+- col 2 (auto): mono link id (`className="mono text-xs muted"`, minWidth ~64)
+- col 3 (1fr): `row-body` = TWO stacked lines:
+  - `row-title`: the source→target relation stem (`EntityRelationRow` — you already have an `EntityRelationRow` component; reuse it, `compact`, transparent background) followed by the `LinkStatusBadge`
+  - `row-meta`: `ManagedSystemPill` · dot · `by {createdBy name}` · dot · `updated {updatedAt}` (use the existing dot separator style; render real created_by name + relative/short timestamp consistent with other Slice 3 surfaces)
+- col 4 (auto): `row-trailing` — leave EMPTY for active/detached in this slice (the prototype's per-row Refresh/more buttons are detach/refresh actions = out of #114 read-only scope). Do not add row action buttons.
+
+Remove the `<table>`/`<thead>` column-header structure entirely. No column headers — the prototype has none. Keep the data accessible (each row should still expose its fields to the existing tests; update the FE tests that assert on table columns to assert on the object-row content instead — do not weaken coverage, just match the new DOM).
+
+Match prototype density: row vertical rhythm, 8px gaps, the `object-row` selected/hover treatment. Pack 17 tokens only — NO raw px/hex (reuse the named tokens you added, add more named tokens to tokens.css + DESIGN.md if a precise prototype dimension has no token).
+
+### 2. Tab counts
+
+The prototype tabs show counts: `All 9 / Active 5 / Stale 2 / Detached 1 / Revoked 1`. Add the per-status count next to each tab label, sourced from the inventory response (compute counts from the loaded workspace links, or a lightweight count — do NOT add a new backend endpoint; deriving from the already-fetched `status=all` result set is fine). When data is empty, show no count or 0 consistent with the prototype.
+
+## Explicitly OUT of scope (document in `.review/ISSUE-114-REWORK-NOTES.md` as deferred, NOT implemented)
+
+These prototype elements belong to other slices / are not part of #114's read-only audit table — DO NOT build them:
+- The right-hand detail panel (Overview/Endpoints/Properties/Detach) — link drill-down is a separate concern; #113 owns detach.
+- The Integration-specific left sidebar (Action dashboard / Findings / Evidence / Coverage / Entity links nav + Recovery/Coverage queue sections) — those nav targets are unbuilt future slices; the page reuses the existing app sidebar.
+- The "Select actionable / Live / Last refreshed just now" live-refresh toolbar — live polling is out of scope; keep the current search/필터/Refresh controls.
+
+## Scope fence
+ALLOWED: `apps/frontend/src/features/integration/**`, `apps/frontend/src/routes/_authed/integration/**`, `packages/ui/src/styles/tokens.css` + `DESIGN.md` (named tokens only), the integration FE tests. FORBIDDEN: backend, shared, migration, the detail panel / sidebar / live toolbar above. Abort with `.review/ISSUE-114-REWORK-BLOCKER.json` if forced wider.
+
+## After
+Run `pnpm --filter frontend exec vitest run src/features/integration src/routes/_authed/integration` and fix the FE tests to match the new object-row DOM. Verify no raw px/hex: `grep -rnE "\[[0-9]+px\]|\[#[0-9a-fA-F]{3,8}\]" apps/frontend/src/features/integration apps/frontend/src/routes/_authed/integration` returns nothing. Do NOT commit. Write `.review/ISSUE-114-REWORK-NOTES.md` (what changed + deferred items).

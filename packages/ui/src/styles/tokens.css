@@ -98,6 +98,8 @@
   --entity-link-inventory-min-width: 1040px;
   --entity-link-inventory-narrow-col-width: 104px;
   --entity-link-inventory-row-height: 52px;
+  --entity-link-object-row-grid: 24px auto 1fr auto;
+  --entity-link-object-id-min-width: 64px;
   --row-height-compact: 44px;
   --row-height-default: 60px;
   --row-height-expanded: 96px;

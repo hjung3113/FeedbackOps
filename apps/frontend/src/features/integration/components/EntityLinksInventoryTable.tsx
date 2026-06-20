@@ -79,76 +79,44 @@ export function EntityLinksInventoryTable({
   }
 
   return (
-    <table
+    <div
       aria-label="Entity link inventory"
-      className="table-fixed"
-      style={{ minWidth: 'var(--entity-link-inventory-min-width)' }}
+      role="list"
+      className="min-w-full"
     >
-      <colgroup>
-        <col className="w-10" />
-        <col style={{ width: 'var(--entity-link-inventory-narrow-col-width)' }} />
-        <col />
-        <col style={{ width: 'var(--entity-link-inventory-narrow-col-width)' }} />
-        <col className="w-48" />
-        <col className="w-40" />
-        <col className="w-32" />
-        <col className="w-32" />
-      </colgroup>
-      <thead>
-        <tr
-          className="h-10 border-b border-border-subtle bg-surface-canvas text-left font-semibold uppercase tracking-wide text-text-muted"
-          style={{ fontSize: 'var(--text-tiny)' }}
-        >
-          <th className="px-4" scope="col">
-            <span className="sr-only">Select</span>
-          </th>
-          <th className="px-2" scope="col">
-            ID
-          </th>
-          <th className="px-2" scope="col">
-            Relation
-          </th>
-          <th className="px-2" scope="col">
-            Status
-          </th>
-          <th className="px-2" scope="col">
-            Managed System
-          </th>
-          <th className="px-2" scope="col">
-            Created by
-          </th>
-          <th className="px-2" scope="col">
-            Created
-          </th>
-          <th className="px-2" scope="col">
-            Updated
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((link) => {
-          const managedSystem = managedSystemsById[link.managed_system_id];
-          const actor = actorsById[link.created_by];
-          return (
-            <tr
-              key={link.id}
-              style={{ height: 'var(--entity-link-inventory-row-height)' }}
-              className={cn(
-                'border-b border-border-subtle text-sm hover:bg-surface-row-hover',
-                link.visibility_state === 'hidden' && 'bg-surface-blocked/60',
-              )}
+      {items.map((link) => {
+        const managedSystem = managedSystemsById[link.managed_system_id];
+        const actor = actorsById[link.created_by];
+        return (
+          <div
+            key={link.id}
+            role="listitem"
+            className={cn(
+              'grid min-h-row-default items-center gap-3 border-b border-border-subtle px-5 py-2.5 text-sm hover:bg-surface-row-hover',
+              link.visibility_state === 'hidden' && 'bg-surface-blocked/60',
+            )}
+            style={{ gridTemplateColumns: 'var(--entity-link-object-row-grid)' }}
+          >
+            <div
+              className="flex items-center"
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
             >
-              <td className="px-4">
-                <Checkbox aria-label={`${shortId(link.id)} 선택`} />
-              </td>
-              <td className="px-2 font-mono text-xs text-text-muted">{shortId(link.id)}</td>
-              <td className="px-2">
-                <EntityRelationRow link={link} />
-              </td>
-              <td className="px-2">
+              <Checkbox aria-label={`${shortId(link.id)} 선택`} />
+            </div>
+            <span
+              className="font-mono text-xs text-text-muted"
+              style={{ minWidth: 'var(--entity-link-object-id-min-width)' }}
+            >
+              {shortId(link.id)}
+            </span>
+            <div className="flex min-w-0 flex-col justify-center gap-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <EntityRelationRow link={link} compact />
                 <LinkStatusBadge status={link.status} />
-              </td>
-              <td className="px-2">
+              </div>
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-text-muted">
                 {managedSystem !== undefined ? (
                   <ManagedSystemPill
                     name={managedSystem.name}
@@ -162,16 +130,25 @@ export function EntityLinksInventoryTable({
                     {shortId(link.managed_system_id)}
                   </span>
                 )}
-              </td>
-              <td className="truncate px-2 text-xs text-text-secondary">
-                {actor?.display_name ?? shortId(link.created_by)}
-              </td>
-              <td className="px-2 text-xs text-text-muted">{formatTimestamp(link.created_at)}</td>
-              <td className="px-2 text-xs text-text-muted">{formatTimestamp(link.updated_at)}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                <RowDot />
+                <span>by {actor?.display_name ?? shortId(link.created_by)}</span>
+                <RowDot />
+                <span>updated {formatTimestamp(link.updated_at)}</span>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2" aria-hidden="true" />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RowDot() {
+  return (
+    <span
+      className="inline-block h-0.5 w-0.5 shrink-0 rounded-full bg-text-muted/60"
+      aria-hidden="true"
+    />
   );
 }

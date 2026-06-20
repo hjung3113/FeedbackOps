@@ -139,7 +139,7 @@ describe('integration links route', () => {
     });
   });
 
-  test('renders inventory table, status badges, hidden row, and filter controls', async () => {
+  test('renders headerless object rows with status counts, badges, hidden row, and filter controls', async () => {
     const urls: string[] = [];
     stubFetch(urls);
     const { router, qc } = buildHarness('/integration/links');
@@ -151,14 +151,22 @@ describe('integration links route', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Active' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Detached' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'All 2' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Active 1' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Detached 1' })).toBeInTheDocument();
       expect(screen.getByText(LINK_A.slice(0, 8))).toBeInTheDocument();
       expect(screen.getByText(LINK_B.slice(0, 8))).toBeInTheDocument();
       expect(screen.getByText('권한 제한')).toBeInTheDocument();
+      expect(screen.getAllByText('by 운영자')).toHaveLength(2);
+      expect(screen.getAllByText(/updated/)).toHaveLength(2);
       expect(screen.getByText('필터')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Entity link 검색…')).toBeInTheDocument();
     });
+    expect(screen.getByRole('list', { name: 'Entity link inventory' })).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.queryByRole('table', { name: 'Entity link inventory' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Relation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Managed System' })).not.toBeInTheDocument();
     expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
     expect(urls.some((url) => url.includes('/entity-links?scope=workspace'))).toBe(true);
   });
@@ -191,7 +199,7 @@ describe('integration links route', () => {
     );
 
     await screen.findByText('권한 제한');
-    await userEvent.click(screen.getByRole('tab', { name: 'Detached' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Detached 1' }));
 
     await waitFor(() => {
       expect(urls.some((url) => url.includes('status=detached'))).toBe(true);

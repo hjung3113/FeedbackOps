@@ -25,6 +25,8 @@ const STATUS_TABS: ListToolbarTab[] = [
   { value: 'revoked', label: 'Revoked' },
 ];
 
+const STATUS_TAB_VALUES: StatusFilter[] = ['active', 'stale', 'detached', 'revoked'];
+
 const FILTER_CATEGORIES = [
   {
     key: 'type',
@@ -45,6 +47,11 @@ export function LinksRoute() {
 
   const inventory = useEntityLinkInventory({
     ...(search.status !== undefined ? { status: search.status } : {}),
+    ...(search.type !== undefined ? { relationType: search.type } : {}),
+    ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+  });
+
+  const countInventory = useEntityLinkInventory({
     ...(search.type !== undefined ? { relationType: search.type } : {}),
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
   });
@@ -91,13 +98,31 @@ export function LinksRoute() {
     return out;
   }, [actorsQuery.data]);
 
+  const statusTabs = React.useMemo<ListToolbarTab[]>(() => {
+    const items = countInventory.data?.items ?? [];
+    const counts = new Map<string, number>([['all', items.length]]);
+    for (const status of STATUS_TAB_VALUES) {
+      counts.set(
+        status,
+        items.filter((link) => link.status === status).length,
+      );
+    }
+    return STATUS_TABS.map((tab) => ({
+      ...tab,
+      badgeCount: counts.get(tab.value) ?? 0,
+    }));
+  }, [countInventory.data?.items]);
+
   function handleStatusChange(next: string): void {
     void navigate({
       to: '/integration/links',
-      search: (prev: LinksSearch) => ({
-        ...prev,
-        status: next === 'all' ? undefined : (next as StatusFilter),
-      }),
+      search: (prev) => {
+        if (next === 'all') {
+          const { status: _status, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, status: next as StatusFilter };
+      },
     });
   }
 
@@ -105,14 +130,20 @@ export function LinksRoute() {
     const type = next.type?.[0] as EntityLinkRelationType | undefined;
     void navigate({
       to: '/integration/links',
-      search: (prev: LinksSearch) => ({ ...prev, type }),
+      search: (prev) => {
+        if (type === undefined) {
+          const { type: _type, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, type };
+      },
     });
   }
 
   return (
     <>
       <ListToolbar
-        tabs={STATUS_TABS}
+        tabs={statusTabs}
         activeTab={activeTab}
         onTabChange={handleStatusChange}
         action={
