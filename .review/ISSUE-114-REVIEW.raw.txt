@@ -1,0 +1,3003 @@
+Reading additional input from stdin...
+OpenAI Codex v0.139.0
+--------
+workdir: /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 019ee424-b900-7441-bf9a-d27d03808867
+--------
+user
+You are REVIEWER for FeedbackOps issue #114 (Slice 4.3 /integration/links audit inventory UI). Adversarial read-only review of the uncommitted diff vs .review/ISSUE-114-PROMPT.txt + deviations in .review/ISSUE-114-DEVIATIONS.md.
+
+Check in order:
+1. Backend list extension — GET /entity-links gains a workspace-wide inventory mode (no endpoint required) with status/relation_type/managed_system filters, WITHOUT breaking the #112 endpoint-scoped mode (VOC detail caller) or its superRefine. New repo fn returns rows across ALL statuses newest-first. Confirm endpoint mode regression test still present.
+2. Visibility (FR-LINK-002) — inventory enforces both-side voc.read per row; out-of-scope rows return `hidden` stubs with NO source_id/target_id of the hidden side and no synthesized summary. Reuses the existing both-side helper, no new capability. This is the critical security check — verify the inventory query path does NOT leak out-of-scope link endpoints.
+3. Shared DTO — status/created_by/timestamps added ADDITIVELY (VOC detail consumer not broken).
+4. FE prototype fidelity — route /integration/links uses ListShell (ADR-0020, no new shell), Pack 17 tokens only (NO raw hex/px — grep the new FE files for `#` hex and raw px), LinkStatusBadge colors via tokens, source→target stem, status+type filters wired to backend query, Korean empty state with no decorative illustration, one-primary-action toolbar. Flag any raw hex/px or invented shell.
+5. Scope — no forbidden touches (permissions/*, auth/*, migration, findings, relation types beyond related_to, producing stale/revoked, detach mutation from table, bulk actions). Checkbox is visual-only.
+6. Deviations — judge each in DEVIATIONS.md acceptable or blocking.
+7. Tests — backend (inventory across statuses, status filter, visibility hidden-stub, endpoint-mode regression) + FE (table renders, empty state, filter changes query). Note missing/weak cases. Backend teardown uses migrateHandle (fops_migrate).
+
+Output ONLY this JSON:
+{ "verdict":"approve|request_changes|block", "summary":"one sentence", "findings":[{"severity":"block|major|minor|nit","area":"backend|frontend|visibility|scope|tokens|tests|deviation|other","file":"path:line","issue":"one sentence","fix":"one sentence"}], "deviations_acceptable_with_doc":["..."], "must_fix_before_commit":["..."] }
+If nothing blocks, verdict=approve.
+hook: SessionStart
+hook: SessionStart Failed
+hook: UserPromptSubmit
+hook: UserPromptSubmit Failed
+codex
+I’m using the review posture plus the repo’s read-only rules. I’ll inspect the issue prompt, deviations, and diff without editing, then verify the security and prototype constraints against the changed files.
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "sed -n '1,240p' .review/ISSUE-114-DEVIATIONS.md" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+exec
+/bin/zsh -lc "sed -n '1,240p' .review/ISSUE-114-PROMPT.txt" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+# Issue #114 Deviations
+
+Prototype source: `docs/design-prototype/screen-entity-links.jsx`
+
+## Intentional
+
+- Detail panel actions from the prototype are not implemented. This slice is a read-only audit inventory; detach and refresh mutations are out of scope.
+- Bulk action bar from the prototype is not implemented. The checkbox column is visual-only per the issue scope.
+- Relation type filter only exposes `related_to`. Other prototype relation types are mock/future vocabulary, not production-supported in Slice 4.3.
+- Managed System pills render real names when the registry query resolves them, but no colored mark is synthesized in this feature. The production API has no mark/color field, and there is no second Integration consumer that justifies promoting a shared scope-mark helper.
+- Hidden rows render a compact permission-limited badge instead of endpoint summaries. Backend hidden DTOs intentionally omit source_id and target_id.
+
+ succeeded in 0ms:
+# Issue #114 — Slice 4.3 · /integration/links audit inventory UI
+
+You are CODEX. Sandbox = workspace-write, NO network. DB + browser unreachable from sandbox; VERIFIER/VISUAL run outside. Do static checks only (typecheck/lint). Build on #112 + #113 (merged): `core.entity_links` with active/detached rows, module `apps/backend/src/modules/entity-links/`, shared types in `packages/shared/src/entity-links.ts`.
+
+## Goal
+
+The `/integration/links` ops audit surface: a read-only workspace-wide inventory table of entity links (active / stale / detached / revoked) with status + type filters, mirroring `docs/design-prototype/screen-entity-links.jsx` within 1px at desktop 1440. Two layers:
+
+1. **Backend** — extend the entity-links list to a workspace-wide inventory mode (the current `GET /entity-links` REQUIRES exactly one endpoint via `listEntityLinksQuerySchema` superRefine and returns active-only; an inventory needs neither).
+2. **Frontend** — new TanStack route `/integration/links` rendering the inventory table + filters, consuming the backend.
+
+READ FIRST: `docs/design-prototype/screen-entity-links.jsx` (the visual spec — columns, density, `LinkStatusBadge` colors, `EntityRelationRow` source→target stem, toolbar/filter layout, Korean strings), `docs/design-prototype/screenshots/final-baselines/integration-links.png` (pixel baseline), `apps/frontend/src/routes/_authed/vocs.tsx` (route + zod `.strict()` search-schema pattern), `packages/ui/src/layout/ListShell.tsx`, an existing feature route under `apps/frontend/src/features/voc/routes/`, `apps/frontend/src/lib/api.ts` (apiClient), DESIGN.md + ADR-0020/0021 + `apps/frontend/AGENTS.md` (Pack 17 tokens, shell taxonomy, prototype-is-spec).
+
+## Backend contract
+
+Extend GET /entity-links to support an INVENTORY mode (workspace-wide) IN ADDITION TO the existing endpoint-scoped mode — do not break #112/#113 callers (VOC detail uses endpoint mode):
+
+- New query shape: `?scope=workspace` (or: when NO source/target endpoint is given, default to workspace inventory) + optional `status` filter (one or many of `active|stale|detached|revoked`; default = all) + optional `relation_type` filter (`related_to` for now) + optional `managed_system_id` filter. Keep `.strict()`. Update `listEntityLinksQuerySchema` so endpoint-mode and inventory-mode are both valid and mutually-exclusive-where-required; preserve the existing endpoint-pair superRefine for endpoint mode.
+- Repo: add `selectLinksByWorkspace(db, { workspaceId, statuses?, relationType?, managedSystemId? })` returning rows across ALL statuses (not the active-only partial-index path). Order newest-first (created_at desc) — match the prototype's recency ordering.
+- Visibility (FR-LINK-002, same as #112): for each row, the actor must hold `voc.read` on BOTH endpoints' managed systems to see it as `allowed`; otherwise emit the `hidden` stub (no source_id/target_id of the hidden side, no synthesized summary). Inventory must NOT leak out-of-scope links as fully readable. Reuse the existing both-side helper.
+- Response: reuse `entityLinkDtoSchema` discriminated union (`allowed`/`hidden`) + include the fields the table needs (id, source/target refs when allowed, relation_type, managed_system_id or slug, status, created_by, created_at, updated_at). If the DTO lacks `status`/`created_by`/timestamps, EXTEND the shared DTO additively (do not break existing consumers — VOC detail).
+- NO migration (no schema change). NO new capability.
+
+## Frontend contract
+
+- Route: `apps/frontend/src/routes/_authed/integration/links.tsx` (TanStack file route), zod `.strict()` search schema for `status` + `type` + `managedSystem` filters (mirror the vocs.tsx pattern). Shell: ListShell (ADR-0020 — this is a list surface; do NOT invent a new shell).
+- Feature content under `apps/frontend/src/features/integration/` (currently only AGENTS.md/CLAUDE.md — greenfield): a route component + inventory table + status/type filter controls. Fetch via apiClient + @tanstack/react-query.
+- Table mirrors `screen-entity-links.jsx`: checkbox col (visual only — bulk actions are out of scope), mono link id, source→target relation stem (reuse/port `EntityRelationRow` if a shared one exists; else build per prototype), `LinkStatusBadge` (active/stale/detached/revoked with the exact prototype colors via Pack 17 tokens — NO raw hex; if a token is missing add it to DESIGN.md + tokens.css first), managed system, created_by, created/updated timestamps. Match column widths, density, 8px gaps, 50px header.
+- Status filter offers all 4 statuses (even though real data currently only has active/detached — stale is Slice 7, revoked unused); type filter offers `related_to`. Wire to backend query params.
+- `hidden` rows render a permission-limited treatment (reuse `PermissionBlockedPanel`/badge pattern) — never synthesize the hidden endpoint.
+- Empty state: terse Korean string + one-line, no decorative illustration (DESIGN.md). Use the prototype's empty copy if it has one; else a short Korean string consistent with other empty states (e.g. '링크가 없습니다').
+- One primary action per toolbar (apps/frontend/AGENTS.md). This surface is read-only audit — no primary mutate action needed; filters are secondary controls.
+
+## Scope fence — ABORT with `.review/ISSUE-114-BLOCKER.json` (real reason_code + blocking_fact) if forced wider
+
+ALLOWED: `apps/backend/src/modules/entity-links/{routes.ts,service.ts,repo.ts,index.ts,__tests__}`, `packages/shared/src/entity-links.ts` + `index.ts` (additive DTO/query changes only), `apps/frontend/src/routes/_authed/integration/links.tsx`, `apps/frontend/src/features/integration/**`, `packages/ui/**` ONLY if a genuinely shared primitive is needed AND a second consumer exists (per apps/frontend/AGENTS.md "extract after 2nd consumer" — otherwise keep it in the feature), `packages/ui/src/styles/tokens.css` + DESIGN.md if a status-badge token is missing, doc-sync (`docs/design/11-entity-linking.md`, `docs/implementation/06-entity-linking-contract.md`), `.review/ISSUE-114-DEVIATIONS.md`.
+
+FORBIDDEN (abort): `permissions/*`, `auth/*`, any migration / schema change to entity_links, new findings table, relation types beyond `related_to`, PRODUCING stale/revoked data, detach mutation FROM this table (read-only this slice — #113 owns detach; bulk-action checkbox is visual-only), FR-LINK-003 dashboard queries.
+
+## Tests
+
+Backend (vitest integration, mirror `apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts`; teardown DELETEs use migrateHandle/fops_migrate):
+1. Inventory mode returns workspace links across statuses (seed active + detached) newest-first.
+2. Status filter narrows correctly (e.g. `status=detached` returns only detached).
+3. Visibility: an out-of-scope actor gets `hidden` stubs (no endpoint ids) for links outside their scope; in-scope rows are `allowed`.
+4. Endpoint mode (the #112 shape) still works unchanged (regression).
+
+Frontend (vitest + Testing Library, mirror existing route tests under `apps/frontend/src/routes/__tests__/` / feature tests):
+5. `/integration/links` renders the table with seeded/mock links, status badges, and the filter controls.
+6. Empty state renders the Korean string when no links.
+7. Changing the status filter updates the query (assert the request param or the rendered subset).
+
+## Pixel-diff (VISUAL will run; you prepare for it)
+
+A baseline exists: `docs/design-prototype/screenshots/final-baselines/integration-links.png`. NOTE the prototype mock shows relation types (evidence_of/executes/public_update_of) and managed systems (powerbi/tableau/looker) that our real backend does NOT have yet — only `related_to` VOC↔VOC active/detached links exist. So row CONTENT will differ from the baseline; LAYOUT / columns / badges / filter chrome / density / tokens must match within 1px. Write `.review/ISSUE-114-PIXEL-NOTES.md` enumerating expected content deltas (real sparse data vs mock) vs layout that must match, so the VISUAL reviewer classifies content-deltas as expected and only flags layout/copy/token mismatches.
+
+## Procedure
+
+1. Read the references above (prototype + baseline + vocs.tsx + ListShell + AGENTS/DESIGN/ADR).
+2. Backend: extend query schema + repo `selectLinksByWorkspace` + service inventory method + route handler; keep endpoint mode intact.
+3. Shared DTO: additively add status/created_by/timestamps if missing.
+4. FE: route + feature components + filters + badges + empty state, Pack 17 tokens only.
+5. Tests 1-7.
+6. `pnpm -w typecheck` + `pnpm -w lint`; fix only NEW errors.
+7. Doc-sync same commit. Write `.review/ISSUE-114-PIXEL-NOTES.md`.
+8. Commit on `feature/114-integration-links-ui`: `feat(#114): /integration/links audit inventory UI`. Do NOT push.
+
+If forced scope escape or unresolved prototype ambiguity (prototype silent on a behavior): write `.review/ISSUE-114-BLOCKER.json` and exit non-zero. Do NOT fill silence with framework defaults — the prototype is the spec; when it's silent, STOP.
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git diff --stat' in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+ .../__tests__/entity-links.integration.test.ts     | 184 +++++++++++++++++++++
+ apps/backend/src/modules/entity-links/repo.ts      |  32 ++++
+ apps/backend/src/modules/entity-links/routes.ts    |  19 +++
+ apps/backend/src/modules/entity-links/service.ts   |  65 +++++++-
+ docs/design/11-entity-linking.md                   |  13 +-
+ docs/implementation/06-entity-linking-contract.md  |  18 ++
+ packages/shared/src/entity-links.ts                |  39 ++++-
+ 7 files changed, 366 insertions(+), 4 deletions(-)
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git status --short' in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+ M apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts
+ M apps/backend/src/modules/entity-links/repo.ts
+ M apps/backend/src/modules/entity-links/routes.ts
+ M apps/backend/src/modules/entity-links/service.ts
+ M docs/design/11-entity-linking.md
+ M docs/implementation/06-entity-linking-contract.md
+ M packages/shared/src/entity-links.ts
+?? .review/ISSUE-114-DEVIATIONS.md
+?? .review/ISSUE-114-PIXEL-NOTES.md
+?? .review/ISSUE-114-PROMPT.txt
+?? .review/ISSUE-114-REVIEW-PROMPT.txt
+?? .review/ISSUE-114-REVIEW.raw.txt
+?? apps/frontend/src/features/integration/components/
+?? apps/frontend/src/features/integration/hooks/
+?? apps/frontend/src/features/integration/routes/
+?? apps/frontend/src/routes/_authed/integration/
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+codex
+The diff is broader than the stat suggests because the frontend files are untracked, so I’m reading both tracked diffs and the new route/component/tests directly. Key risk areas are the route schema split, hidden DTO construction, and whether untracked frontend styling slipped raw values in.
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc 'find apps/frontend/src/features/integration apps/frontend/src/routes/_authed/integration -type f -maxdepth 5 -print' in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx
+apps/frontend/src/features/integration/components/LinkStatusBadge.tsx
+apps/frontend/src/features/integration/components/EntityRelationRow.tsx
+apps/frontend/src/features/integration/hooks/useEntityLinkInventory.ts
+apps/frontend/src/features/integration/AGENTS.md
+apps/frontend/src/features/integration/routes/LinksRoute.tsx
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx
+apps/frontend/src/features/integration/CLAUDE.md
+apps/frontend/src/routes/_authed/integration/links.tsx
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git diff -- apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts' in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+diff --git a/apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts b/apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts
+index 8b29559..2510d22 100644
+--- a/apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts
++++ b/apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts
+@@ -154,6 +154,14 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
+     });
+   }
+ 
++  async function getEntityLinks(cookie: string, query: string) {
++    return app.inject({
++      method: 'GET',
++      url: `/entity-links${query}`,
++      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
++    });
++  }
++
+   it('POST creates an active VOC↔VOC related_to link and audit row', async () => {
+     const { msA, sourceVoc, targetVoc } = await seedVocPair();
+ 
+@@ -392,6 +400,182 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
+     expect(body.links?.some((link) => link.id === linkId)).toBe(false);
+   });
+ 
++  it('GET workspace inventory returns active and detached rows newest-first', async () => {
++    const firstPair = await seedVocPair();
++    const secondPair = await seedVocPair();
++
++    const oldActive = await postEntityLink(
++      adminCookie,
++      firstPair.sourceVoc.id,
++      firstPair.targetVoc.id,
++    );
++    expect(oldActive.statusCode).toBe(201);
++    const oldActiveId = oldActive.json<{ id: string }>().id;
++
++    const newerDetached = await postEntityLink(
++      adminCookie,
++      secondPair.sourceVoc.id,
++      secondPair.targetVoc.id,
++    );
++    expect(newerDetached.statusCode).toBe(201);
++    const newerDetachedId = newerDetached.json<{ id: string }>().id;
++    const detach = await patchEntityLink(adminCookie, newerDetachedId, {
++      reason: 'Inventory fixture',
++    });
++    expect(detach.statusCode).toBe(200);
++
++    await migrateHandle.pool.query(
++      `update core.entity_links
++        set created_at = case
++          when id = $1 then now() - interval '2 hours'
++          when id = $2 then now() - interval '1 hour'
++          else created_at
++        end
++        where id in ($1, $2)`,
++      [oldActiveId, newerDetachedId],
++    );
++
++    const res = await getEntityLinks(adminCookie, '?scope=workspace');
++    expect(res.statusCode).toBe(200);
++    const body = res.json<{
++      items: Array<{ id: string; status: string; visibility_state: string }>;
++    }>();
++    const fixtureItems = body.items.filter((item) =>
++      [oldActiveId, newerDetachedId].includes(item.id),
++    );
++    expect(fixtureItems.map((item) => item.id)).toEqual([newerDetachedId, oldActiveId]);
++    expect(fixtureItems.map((item) => item.status).sort()).toEqual(['active', 'detached']);
++    expect(fixtureItems.every((item) => item.visibility_state === 'allowed')).toBe(true);
++  });
++
++  it('GET workspace inventory status filter narrows to detached rows', async () => {
++    const firstPair = await seedVocPair();
++    const secondPair = await seedVocPair();
++    const active = await postEntityLink(
++      adminCookie,
++      firstPair.sourceVoc.id,
++      firstPair.targetVoc.id,
++    );
++    expect(active.statusCode).toBe(201);
++
++    const detached = await postEntityLink(
++      adminCookie,
++      secondPair.sourceVoc.id,
++      secondPair.targetVoc.id,
++    );
++    expect(detached.statusCode).toBe(201);
++    const detachedId = detached.json<{ id: string }>().id;
++    const detach = await patchEntityLink(adminCookie, detachedId, { reason: 'Status filter' });
++    expect(detach.statusCode).toBe(200);
++
++    const res = await getEntityLinks(adminCookie, '?scope=workspace&status=detached');
++    expect(res.statusCode).toBe(200);
++    const body = res.json<{ items: Array<{ id: string; status: string }> }>();
++    expect(body.items.some((item) => item.id === detachedId)).toBe(true);
++    expect(body.items.every((item) => item.status === 'detached')).toBe(true);
++  });
++
++  it('GET workspace inventory emits hidden stubs when actor lacks either endpoint scope', async () => {
++    const msA = await insertMsDirectly(
++      dbHandle,
++      WORKSPACE_ID,
++      `${uid(SLUG_PREFIX)}-inva`,
++      'Inventory MS-A',
++    );
++    const msB = await insertMsDirectly(
++      dbHandle,
++      WORKSPACE_ID,
++      `${uid(SLUG_PREFIX)}-invb`,
++      'Inventory MS-B',
++    );
++    const visibleSource = await insertVocDirectly(
++      dbHandle,
++      WORKSPACE_ID,
++      msA,
++      reporterId,
++      'Inventory Visible Source',
++    );
++    const visibleTarget = await insertVocDirectly(
++      dbHandle,
++      WORKSPACE_ID,
++      msA,
++      reporterId,
++      'Inventory Visible Target',
++    );
++    const hiddenTarget = await insertVocDirectly(
++      dbHandle,
++      WORKSPACE_ID,
++      msB,
++      reporterId,
++      'Inventory Hidden Target',
++    );
++
++    const allowed = await postEntityLink(adminCookie, visibleSource.id, visibleTarget.id);
++    expect(allowed.statusCode).toBe(201);
++    const hidden = await postEntityLink(adminCookie, visibleSource.id, hiddenTarget.id);
++    expect(hidden.statusCode).toBe(201);
++    const allowedId = allowed.json<{ id: string }>().id;
++    const hiddenId = hidden.json<{ id: string }>().id;
++
++    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('invvis'));
++    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
++    const devCookie = await loginAs(app, externalId);
++
++    const res = await getEntityLinks(devCookie, '?scope=workspace');
++    expect(res.statusCode).toBe(200);
++    const body = res.json<{ items: Array<Record<string, unknown>> }>();
++    const allowedRow = body.items.find((item) => item.id === allowedId);
++    const hiddenRow = body.items.find((item) => item.id === hiddenId);
++    expect(allowedRow).toMatchObject({
++      visibility_state: 'allowed',
++      source_id: visibleSource.id,
++      target_id: visibleTarget.id,
++    });
++    expect(hiddenRow).toMatchObject({
++      visibility_state: 'hidden',
++      status: 'active',
++      relation_type: 'related_to',
++    });
++    expect(hiddenRow?.source_id).toBeUndefined();
++    expect(hiddenRow?.target_id).toBeUndefined();
++  });
++
++  it('GET endpoint mode still requires exactly one endpoint and returns active links only', async () => {
++    const { sourceVoc, targetVoc } = await seedVocPair();
++    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
++    expect(create.statusCode).toBe(201);
++    const linkId = create.json<{ id: string }>().id;
++
++    const beforeDetach = await getEntityLinks(
++      adminCookie,
++      `?source_type=voc&source_id=${sourceVoc.id}`,
++    );
++    expect(beforeDetach.statusCode).toBe(200);
++    expect(
++      beforeDetach
++        .json<{ items: Array<{ id: string }> }>()
++        .items.some((item) => item.id === linkId),
++    ).toBe(true);
++
++    const detach = await patchEntityLink(adminCookie, linkId, { reason: 'Regression' });
++    expect(detach.statusCode).toBe(200);
++
++    const afterDetach = await getEntityLinks(
++      adminCookie,
++      `?source_type=voc&source_id=${sourceVoc.id}`,
++    );
++    expect(afterDetach.statusCode).toBe(200);
++    expect(
++      afterDetach.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId),
++    ).toBe(false);
++
++    const invalid = await getEntityLinks(
++      adminCookie,
++      `?source_type=voc&source_id=${sourceVoc.id}&target_type=voc&target_id=${targetVoc.id}`,
++    );
++    expect(invalid.statusCode).toBe(422);
++  });
++
+   it('PATCH on an already-detached link returns 409', async () => {
+     const { sourceVoc, targetVoc } = await seedVocPair();
+     const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'git diff -- apps/backend/src/modules/entity-links/routes.ts apps/backend/src/modules/entity-links/service.ts apps/backend/src/modules/entity-links/repo.ts packages/shared/src/entity-links.ts' in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+diff --git a/apps/backend/src/modules/entity-links/repo.ts b/apps/backend/src/modules/entity-links/repo.ts
+index 02b2748..afbf0af 100644
+--- a/apps/backend/src/modules/entity-links/repo.ts
++++ b/apps/backend/src/modules/entity-links/repo.ts
+@@ -179,6 +179,38 @@ export async function selectActiveLinksForEndpoint(
+   return result.rows.map(mapEntityLinkRow);
+ }
+ 
++export async function selectLinksByWorkspace(
++  db: Db | Tx,
++  input: {
++    workspaceId: string;
++    statuses?: EntityLinkRow['status'][];
++    relationType?: EntityLinkRow['relation_type'];
++    managedSystemId?: string;
++  },
++): Promise<EntityLinkRow[]> {
++  const predicates = [sql`workspace_id = ${input.workspaceId}`];
++  if (input.statuses !== undefined && input.statuses.length > 0) {
++    predicates.push(sql`status::text = ANY(${input.statuses})`);
++  }
++  if (input.relationType !== undefined) {
++    predicates.push(sql`relation_type = ${input.relationType}`);
++  }
++  if (input.managedSystemId !== undefined) {
++    predicates.push(sql`managed_system_id = ${input.managedSystemId}`);
++  }
++
++  const result = await (db as Db).execute<Record<string, unknown>>(sql`
++    SELECT
++      id, workspace_id, source_type, source_id, target_type, target_id,
++      relation_type, visibility, status, managed_system_id, created_by,
++      created_at, updated_at, detached_by, detach_reason, detached_at
++    FROM core.entity_links
++    WHERE ${sql.join(predicates, sql` AND `)}
++    ORDER BY created_at DESC, id DESC
++  `);
++  return result.rows.map(mapEntityLinkRow);
++}
++
+ export async function selectEntityLinkById(
+   db: Db | Tx,
+   input: { workspaceId: string; linkId: string },
+diff --git a/apps/backend/src/modules/entity-links/routes.ts b/apps/backend/src/modules/entity-links/routes.ts
+index 7e1c643..6e2a6b1 100644
+--- a/apps/backend/src/modules/entity-links/routes.ts
++++ b/apps/backend/src/modules/entity-links/routes.ts
+@@ -82,6 +82,25 @@ export const entityLinksRoutes: FastifyPluginAsync<EntityLinksRoutesOptions> = a
+       }
+ 
+       const data = parsed.data;
++      const hasSource = data.source_type !== undefined && data.source_id !== undefined;
++      const hasTarget = data.target_type !== undefined && data.target_id !== undefined;
++      const isInventoryMode = data.scope === 'workspace' || (!hasSource && !hasTarget);
++      if (isInventoryMode) {
++        const items = await entityLinksService.listInventoryLinks({
++          actor: {
++            actor_id: sess.actor_id,
++            workspace_id: sess.workspace_id,
++            role_level: sess.role_level,
++          },
++          ...(data.status !== undefined ? { statuses: data.status } : {}),
++          ...(data.relation_type !== undefined ? { relationType: data.relation_type } : {}),
++          ...(data.managed_system_id !== undefined
++            ? { managedSystemId: data.managed_system_id }
++            : {}),
++        });
++        return reply.code(200).send({ items });
++      }
++
+       let endpoint: { type: 'voc'; id: string };
+       let side: 'source' | 'target';
+       if (data.source_type !== undefined && data.source_id !== undefined) {
+diff --git a/apps/backend/src/modules/entity-links/service.ts b/apps/backend/src/modules/entity-links/service.ts
+index 2c5c043..a6fae8f 100644
+--- a/apps/backend/src/modules/entity-links/service.ts
++++ b/apps/backend/src/modules/entity-links/service.ts
+@@ -11,6 +11,7 @@ import {
+   resolveVocEndpoint,
+   selectActiveLinksForEndpoint,
+   selectEntityLinkById,
++  selectLinksByWorkspace,
+ } from './repo.js';
+ 
+ export interface EntityLinksActor {
+@@ -49,6 +50,11 @@ function toHiddenDto(row: EntityLinkRow): EntityLinkDto {
+     source_type: row.source_type,
+     target_type: row.target_type,
+     relation_type: row.relation_type,
++    status: row.status,
++    managed_system_id: row.managed_system_id,
++    created_by: row.created_by,
++    created_at: row.created_at.toISOString(),
++    updated_at: row.updated_at ? row.updated_at.toISOString() : null,
+     visibility_state: 'hidden',
+   };
+ }
+@@ -76,6 +82,32 @@ async function assertVocReadScope(
+   return decision.allow;
+ }
+ 
++async function canReadBothEndpoints(
++  deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
++  actor: EntityLinksActor,
++  row: EntityLinkRow,
++  resolvedByVocId: Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>,
++): Promise<boolean> {
++  let source = resolvedByVocId.get(row.source_id);
++  if (source === undefined && !resolvedByVocId.has(row.source_id)) {
++    source = await resolveVocEndpoint(deps.db, actor.workspace_id, row.source_id);
++    resolvedByVocId.set(row.source_id, source);
++  }
++
++  let target = resolvedByVocId.get(row.target_id);
++  if (target === undefined && !resolvedByVocId.has(row.target_id)) {
++    target = await resolveVocEndpoint(deps.db, actor.workspace_id, row.target_id);
++    resolvedByVocId.set(row.target_id, target);
++  }
++
++  if (!source || !target) return false;
++  const [sourceAllowed, targetAllowed] = await Promise.all([
++    assertVocReadScope(deps, actor, source.managed_system_id),
++    assertVocReadScope(deps, actor, target.managed_system_id),
++  ]);
++  return sourceAllowed && targetAllowed;
++}
++
+ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
+   async function createLink(args: {
+     actor: EntityLinksActor;
+@@ -205,6 +237,37 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
+     return items;
+   }
+ 
++  async function listInventoryLinks(args: {
++    actor: EntityLinksActor;
++    statuses?: EntityLinkRow['status'][];
++    relationType?: 'related_to';
++    managedSystemId?: string;
++  }): Promise<EntityLinkDto[]> {
++    const { actor } = args;
++    const rows = await selectLinksByWorkspace(deps.db, {
++      workspaceId: actor.workspace_id,
++      ...(args.statuses !== undefined ? { statuses: args.statuses } : {}),
++      ...(args.relationType !== undefined ? { relationType: args.relationType } : {}),
++      ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
++    });
++
++    const resolvedByVocId = new Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>();
++    const items: EntityLinkDto[] = [];
++    for (const row of rows) {
++      if (
++        row.source_type !== 'voc' ||
++        row.target_type !== 'voc' ||
++        row.relation_type !== 'related_to'
++      ) {
++        items.push(toHiddenDto(row));
++        continue;
++      }
++      const allowed = await canReadBothEndpoints(deps, actor, row, resolvedByVocId);
++      items.push(allowed ? toAllowedDto(row) : toHiddenDto(row));
++    }
++    return items;
++  }
++
+   async function detachLink(args: {
+     actor: EntityLinksActor;
+     linkId: string;
+@@ -280,7 +343,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
+     return toDetachedResponse(detached);
+   }
+ 
+-  return { createLink, listLinks, detachLink };
++  return { createLink, listLinks, listInventoryLinks, detachLink };
+ }
+ 
+ export type EntityLinksService = ReturnType<typeof createEntityLinksService>;
+diff --git a/packages/shared/src/entity-links.ts b/packages/shared/src/entity-links.ts
+index 5da3f74..6f16d29 100644
+--- a/packages/shared/src/entity-links.ts
++++ b/packages/shared/src/entity-links.ts
+@@ -45,17 +45,49 @@ export const detachEntityLinkRequestSchema = z
+   .strict();
+ export type DetachEntityLinkRequest = z.infer<typeof detachEntityLinkRequestSchema>;
+ 
++const csvEntityLinkStatusSchema = z
++  .union([entityLinkStatusSchema, z.array(entityLinkStatusSchema)])
++  .optional()
++  .transform((value) => {
++    if (value === undefined) return undefined;
++    return Array.isArray(value) ? value : [value];
++  });
++
+ export const listEntityLinksQuerySchema = z
+   .object({
++    scope: z.literal('workspace').optional(),
+     source_type: entityLinkEntityTypeSchema.optional(),
+     source_id: z.string().uuid().optional(),
+     target_type: entityLinkEntityTypeSchema.optional(),
+     target_id: z.string().uuid().optional(),
++    status: csvEntityLinkStatusSchema,
++    relation_type: entityLinkRelationTypeSchema.optional(),
++    managed_system_id: z.string().uuid().optional(),
+   })
+   .strict()
+   .superRefine((value, ctx) => {
+     const hasSource = value.source_type !== undefined || value.source_id !== undefined;
+     const hasTarget = value.target_type !== undefined || value.target_id !== undefined;
++    const hasEndpoint = hasSource || hasTarget;
++    const hasInventoryFilter =
++      value.status !== undefined ||
++      value.relation_type !== undefined ||
++      value.managed_system_id !== undefined;
++
++    if (value.scope === 'workspace' && hasEndpoint) {
++      ctx.addIssue({
++        code: z.ZodIssueCode.custom,
++        path: ['scope'],
++        message: 'workspace scope cannot be combined with source or target endpoint',
++      });
++    }
++    if (value.scope !== 'workspace' && hasInventoryFilter && hasEndpoint) {
++      ctx.addIssue({
++        code: z.ZodIssueCode.custom,
++        path: [],
++        message: 'inventory filters require workspace scope',
++      });
++    }
+     if (hasSource && (value.source_type === undefined || value.source_id === undefined)) {
+       ctx.addIssue({
+         code: z.ZodIssueCode.custom,
+@@ -70,7 +102,7 @@ export const listEntityLinksQuerySchema = z
+         message: 'target_type and target_id must be provided together',
+       });
+     }
+-    if (hasSource === hasTarget) {
++    if (value.scope !== 'workspace' && hasEndpoint && hasSource === hasTarget) {
+       ctx.addIssue({
+         code: z.ZodIssueCode.custom,
+         path: [],
+@@ -101,6 +133,11 @@ export const hiddenEntityLinkSchema = z.object({
+   source_type: entityLinkEntityTypeSchema,
+   target_type: entityLinkEntityTypeSchema,
+   relation_type: entityLinkRelationTypeSchema,
++  status: entityLinkStatusSchema,
++  managed_system_id: z.string().uuid(),
++  created_by: z.string().uuid(),
++  created_at: z.string().datetime(),
++  updated_at: z.string().datetime().nullable(),
+   visibility_state: z.literal('hidden'),
+ });
+ 
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'rg --files apps/frontend/src/features/integration apps/frontend/src/routes/_authed/integration' in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+apps/frontend/src/features/integration/CLAUDE.md
+apps/frontend/src/routes/_authed/integration/links.tsx
+apps/frontend/src/features/integration/hooks/useEntityLinkInventory.ts
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx
+apps/frontend/src/features/integration/routes/LinksRoute.tsx
+apps/frontend/src/features/integration/AGENTS.md
+apps/frontend/src/features/integration/components/EntityRelationRow.tsx
+apps/frontend/src/features/integration/components/LinkStatusBadge.tsx
+apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+codex
+Backend inventory mode exists and the endpoint-mode regression test is present. The main thing I’m checking now is whether the hidden row shape is truly non-leaking and whether the frontend contract is actually wired to the backend rather than only rendered locally.
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/entity-links/service.ts | sed -n '1,390p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+exec
+/bin/zsh -lc "nl -ba packages/shared/src/entity-links.ts | sed -n '1,220p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	import { z } from 'zod';
+     2	
+     3	export const entityLinkEntityTypeSchema = z.enum(['voc']);
+     4	export type EntityLinkEntityType = z.infer<typeof entityLinkEntityTypeSchema>;
+     5	
+     6	export const entityLinkRelationTypeSchema = z.enum(['related_to']);
+     7	export type EntityLinkRelationType = z.infer<typeof entityLinkRelationTypeSchema>;
+     8	
+     9	export const entityLinkVisibilitySchema = z.enum([
+    10	  'internal_only',
+    11	  'summary_visible',
+    12	  'visible_to_reporter',
+    13	  'admin_only',
+    14	]);
+    15	export type EntityLinkVisibility = z.infer<typeof entityLinkVisibilitySchema>;
+    16	
+    17	export const creatableEntityLinkVisibilitySchema = z.literal('internal_only');
+    18	
+    19	export const entityLinkStatusSchema = z.enum(['active', 'stale', 'detached', 'revoked']);
+    20	export type EntityLinkStatus = z.infer<typeof entityLinkStatusSchema>;
+    21	
+    22	export const entityLinkVisibilityStateSchema = z.enum(['allowed', 'hidden']);
+    23	export type EntityLinkVisibilityState = z.infer<typeof entityLinkVisibilityStateSchema>;
+    24	
+    25	export const entityLinkRefSchema = z.object({
+    26	  type: entityLinkEntityTypeSchema,
+    27	  id: z.string().uuid(),
+    28	});
+    29	export type EntityLinkRef = z.infer<typeof entityLinkRefSchema>;
+    30	
+    31	export const createEntityLinkRequestSchema = z
+    32	  .object({
+    33	    source: entityLinkRefSchema,
+    34	    target: entityLinkRefSchema,
+    35	    relation_type: entityLinkRelationTypeSchema,
+    36	    visibility: creatableEntityLinkVisibilitySchema.optional(),
+    37	  })
+    38	  .strict();
+    39	export type CreateEntityLinkRequest = z.infer<typeof createEntityLinkRequestSchema>;
+    40	
+    41	export const detachEntityLinkRequestSchema = z
+    42	  .object({
+    43	    reason: z.string().trim().min(1),
+    44	  })
+    45	  .strict();
+    46	export type DetachEntityLinkRequest = z.infer<typeof detachEntityLinkRequestSchema>;
+    47	
+    48	const csvEntityLinkStatusSchema = z
+    49	  .union([entityLinkStatusSchema, z.array(entityLinkStatusSchema)])
+    50	  .optional()
+    51	  .transform((value) => {
+    52	    if (value === undefined) return undefined;
+    53	    return Array.isArray(value) ? value : [value];
+    54	  });
+    55	
+    56	export const listEntityLinksQuerySchema = z
+    57	  .object({
+    58	    scope: z.literal('workspace').optional(),
+    59	    source_type: entityLinkEntityTypeSchema.optional(),
+    60	    source_id: z.string().uuid().optional(),
+    61	    target_type: entityLinkEntityTypeSchema.optional(),
+    62	    target_id: z.string().uuid().optional(),
+    63	    status: csvEntityLinkStatusSchema,
+    64	    relation_type: entityLinkRelationTypeSchema.optional(),
+    65	    managed_system_id: z.string().uuid().optional(),
+    66	  })
+    67	  .strict()
+    68	  .superRefine((value, ctx) => {
+    69	    const hasSource = value.source_type !== undefined || value.source_id !== undefined;
+    70	    const hasTarget = value.target_type !== undefined || value.target_id !== undefined;
+    71	    const hasEndpoint = hasSource || hasTarget;
+    72	    const hasInventoryFilter =
+    73	      value.status !== undefined ||
+    74	      value.relation_type !== undefined ||
+    75	      value.managed_system_id !== undefined;
+    76	
+    77	    if (value.scope === 'workspace' && hasEndpoint) {
+    78	      ctx.addIssue({
+    79	        code: z.ZodIssueCode.custom,
+    80	        path: ['scope'],
+    81	        message: 'workspace scope cannot be combined with source or target endpoint',
+    82	      });
+    83	    }
+    84	    if (value.scope !== 'workspace' && hasInventoryFilter && hasEndpoint) {
+    85	      ctx.addIssue({
+    86	        code: z.ZodIssueCode.custom,
+    87	        path: [],
+    88	        message: 'inventory filters require workspace scope',
+    89	      });
+    90	    }
+    91	    if (hasSource && (value.source_type === undefined || value.source_id === undefined)) {
+    92	      ctx.addIssue({
+    93	        code: z.ZodIssueCode.custom,
+    94	        path: ['source_id'],
+    95	        message: 'source_type and source_id must be provided together',
+    96	      });
+    97	    }
+    98	    if (hasTarget && (value.target_type === undefined || value.target_id === undefined)) {
+    99	      ctx.addIssue({
+   100	        code: z.ZodIssueCode.custom,
+   101	        path: ['target_id'],
+   102	        message: 'target_type and target_id must be provided together',
+   103	      });
+   104	    }
+   105	    if (value.scope !== 'workspace' && hasEndpoint && hasSource === hasTarget) {
+   106	      ctx.addIssue({
+   107	        code: z.ZodIssueCode.custom,
+   108	        path: [],
+   109	        message: 'provide exactly one source or target endpoint',
+   110	      });
+   111	    }
+   112	  });
+   113	export type ListEntityLinksQuery = z.infer<typeof listEntityLinksQuerySchema>;
+   114	
+   115	export const allowedEntityLinkSchema = z.object({
+   116	  id: z.string().uuid(),
+   117	  source_type: entityLinkEntityTypeSchema,
+   118	  source_id: z.string().uuid(),
+   119	  target_type: entityLinkEntityTypeSchema,
+   120	  target_id: z.string().uuid(),
+   121	  relation_type: entityLinkRelationTypeSchema,
+   122	  visibility: entityLinkVisibilitySchema,
+   123	  status: entityLinkStatusSchema,
+   124	  managed_system_id: z.string().uuid(),
+   125	  created_by: z.string().uuid(),
+   126	  created_at: z.string().datetime(),
+   127	  updated_at: z.string().datetime().nullable(),
+   128	  visibility_state: z.literal('allowed'),
+   129	});
+   130	
+   131	export const hiddenEntityLinkSchema = z.object({
+   132	  id: z.string().uuid(),
+   133	  source_type: entityLinkEntityTypeSchema,
+   134	  target_type: entityLinkEntityTypeSchema,
+   135	  relation_type: entityLinkRelationTypeSchema,
+   136	  status: entityLinkStatusSchema,
+   137	  managed_system_id: z.string().uuid(),
+   138	  created_by: z.string().uuid(),
+   139	  created_at: z.string().datetime(),
+   140	  updated_at: z.string().datetime().nullable(),
+   141	  visibility_state: z.literal('hidden'),
+   142	});
+   143	
+   144	export const entityLinkDtoSchema = z.discriminatedUnion('visibility_state', [
+   145	  allowedEntityLinkSchema,
+   146	  hiddenEntityLinkSchema,
+   147	]);
+   148	export type EntityLinkDto = z.infer<typeof entityLinkDtoSchema>;
+   149	
+   150	export const listEntityLinksResponseSchema = z.object({
+   151	  items: z.array(entityLinkDtoSchema),
+   152	});
+   153	export type ListEntityLinksResponse = z.infer<typeof listEntityLinksResponseSchema>;
+   154	
+   155	export const detachedEntityLinkResponseSchema = z.object({
+   156	  id: z.string().uuid(),
+   157	  status: z.literal('detached'),
+   158	  detached_at: z.string().datetime(),
+   159	});
+   160	export type DetachedEntityLinkResponse = z.infer<typeof detachedEntityLinkResponseSchema>;
+
+ succeeded in 0ms:
+     1	import type { DetachedEntityLinkResponse, EntityLinkDto, EntityLinkRef } from '@fops/shared';
+     2	
+     3	import type { Db } from '../../db/client.js';
+     4	import { HttpError } from '../../lib/errors.js';
+     5	import type { AuditService } from '../core/audit/audit-service.js';
+     6	import type { CheckService } from '../permissions/check-service.js';
+     7	import {
+     8	  type EntityLinkRow,
+     9	  detachVocRelatedToLink,
+    10	  insertActiveVocRelatedToLink,
+    11	  resolveVocEndpoint,
+    12	  selectActiveLinksForEndpoint,
+    13	  selectEntityLinkById,
+    14	  selectLinksByWorkspace,
+    15	} from './repo.js';
+    16	
+    17	export interface EntityLinksActor {
+    18	  actor_id: string;
+    19	  workspace_id: string;
+    20	  role_level: 'admin' | 'developer' | 'user';
+    21	}
+    22	
+    23	export interface EntityLinksServiceDeps {
+    24	  db: Db;
+    25	  checkService: CheckService;
+    26	  auditService: AuditService;
+    27	}
+    28	
+    29	function toAllowedDto(row: EntityLinkRow): EntityLinkDto {
+    30	  return {
+    31	    id: row.id,
+    32	    source_type: row.source_type,
+    33	    source_id: row.source_id,
+    34	    target_type: row.target_type,
+    35	    target_id: row.target_id,
+    36	    relation_type: row.relation_type,
+    37	    visibility: row.visibility,
+    38	    status: row.status,
+    39	    managed_system_id: row.managed_system_id,
+    40	    created_by: row.created_by,
+    41	    created_at: row.created_at.toISOString(),
+    42	    updated_at: row.updated_at ? row.updated_at.toISOString() : null,
+    43	    visibility_state: 'allowed',
+    44	  };
+    45	}
+    46	
+    47	function toHiddenDto(row: EntityLinkRow): EntityLinkDto {
+    48	  return {
+    49	    id: row.id,
+    50	    source_type: row.source_type,
+    51	    target_type: row.target_type,
+    52	    relation_type: row.relation_type,
+    53	    status: row.status,
+    54	    managed_system_id: row.managed_system_id,
+    55	    created_by: row.created_by,
+    56	    created_at: row.created_at.toISOString(),
+    57	    updated_at: row.updated_at ? row.updated_at.toISOString() : null,
+    58	    visibility_state: 'hidden',
+    59	  };
+    60	}
+    61	
+    62	function toDetachedResponse(row: EntityLinkRow): DetachedEntityLinkResponse {
+    63	  if (row.status !== 'detached' || row.detached_at === null) {
+    64	    throw new HttpError('internal.unexpected', 'detached entity link row missing detach fields');
+    65	  }
+    66	  return {
+    67	    id: row.id,
+    68	    status: 'detached',
+    69	    detached_at: row.detached_at.toISOString(),
+    70	  };
+    71	}
+    72	
+    73	async function assertVocReadScope(
+    74	  deps: Pick<EntityLinksServiceDeps, 'checkService'>,
+    75	  actor: EntityLinksActor,
+    76	  managedSystemId: string,
+    77	): Promise<boolean> {
+    78	  const decision = await deps.checkService.checkCapability(actor, 'voc.read', {
+    79	    workspace_id: actor.workspace_id,
+    80	    managed_system_id: managedSystemId,
+    81	  });
+    82	  return decision.allow;
+    83	}
+    84	
+    85	async function canReadBothEndpoints(
+    86	  deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
+    87	  actor: EntityLinksActor,
+    88	  row: EntityLinkRow,
+    89	  resolvedByVocId: Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>,
+    90	): Promise<boolean> {
+    91	  let source = resolvedByVocId.get(row.source_id);
+    92	  if (source === undefined && !resolvedByVocId.has(row.source_id)) {
+    93	    source = await resolveVocEndpoint(deps.db, actor.workspace_id, row.source_id);
+    94	    resolvedByVocId.set(row.source_id, source);
+    95	  }
+    96	
+    97	  let target = resolvedByVocId.get(row.target_id);
+    98	  if (target === undefined && !resolvedByVocId.has(row.target_id)) {
+    99	    target = await resolveVocEndpoint(deps.db, actor.workspace_id, row.target_id);
+   100	    resolvedByVocId.set(row.target_id, target);
+   101	  }
+   102	
+   103	  if (!source || !target) return false;
+   104	  const [sourceAllowed, targetAllowed] = await Promise.all([
+   105	    assertVocReadScope(deps, actor, source.managed_system_id),
+   106	    assertVocReadScope(deps, actor, target.managed_system_id),
+   107	  ]);
+   108	  return sourceAllowed && targetAllowed;
+   109	}
+   110	
+   111	export function createEntityLinksService(deps: EntityLinksServiceDeps) {
+   112	  async function createLink(args: {
+   113	    actor: EntityLinksActor;
+   114	    source: EntityLinkRef;
+   115	    target: EntityLinkRef;
+   116	    relation_type: 'related_to';
+   117	    visibility?: 'internal_only';
+   118	  }): Promise<{ link: EntityLinkDto; status: 200 | 201 }> {
+   119	    const { actor, source, target } = args;
+   120	    const visibility = args.visibility ?? 'internal_only';
+   121	
+   122	    if (source.type !== 'voc' || target.type !== 'voc' || args.relation_type !== 'related_to') {
+   123	      throw new HttpError('validation.failed', 'unsupported entity link tuple', {
+   124	        fields: [{ path: [], code: 'unsupported_tuple' }],
+   125	      });
+   126	    }
+   127	    if (visibility !== 'internal_only') {
+   128	      throw new HttpError('validation.failed', 'unsupported visibility', {
+   129	        fields: [{ path: ['visibility'], code: 'unsupported_visibility' }],
+   130	      });
+   131	    }
+   132	    if (source.id === target.id) {
+   133	      throw new HttpError('validation.failed', 'entity link source and target must differ', {
+   134	        fields: [{ path: ['target', 'id'], code: 'self_link' }],
+   135	      });
+   136	    }
+   137	
+   138	    const [sourceRow, targetRow] = await Promise.all([
+   139	      resolveVocEndpoint(deps.db, actor.workspace_id, source.id),
+   140	      resolveVocEndpoint(deps.db, actor.workspace_id, target.id),
+   141	    ]);
+   142	    if (!sourceRow || !targetRow) {
+   143	      throw new HttpError('not_found.record', 'entity link endpoint not found');
+   144	    }
+   145	
+   146	    const sourceAllowed = await assertVocReadScope(deps, actor, sourceRow.managed_system_id);
+   147	    if (!sourceAllowed) {
+   148	      throw new HttpError('permission.denied', 'missing source VOC read scope');
+   149	    }
+   150	
+   151	    const targetAllowed = await assertVocReadScope(deps, actor, targetRow.managed_system_id);
+   152	    if (!targetAllowed) {
+   153	      throw new HttpError('not_found.record', 'entity link endpoint not found');
+   154	    }
+   155	
+   156	    const result = await deps.db.transaction(async (tx) => {
+   157	      const inserted = await insertActiveVocRelatedToLink(tx, {
+   158	        workspaceId: actor.workspace_id,
+   159	        sourceId: source.id,
+   160	        targetId: target.id,
+   161	        managedSystemId: sourceRow.managed_system_id,
+   162	        createdBy: actor.actor_id,
+   163	        visibility,
+   164	      });
+   165	
+   166	      if (inserted.inserted) {
+   167	        await deps.auditService.record(tx, {
+   168	          workspace_id: actor.workspace_id,
+   169	          actor_id: actor.actor_id,
+   170	          event_type: 'entity_link.created',
+   171	          subject_type: 'entity_link',
+   172	          subject_id: inserted.row.id,
+   173	          summary: 'Entity link created',
+   174	          detail: {
+   175	            link_id: inserted.row.id,
+   176	            source,
+   177	            target,
+   178	            relation_type: args.relation_type,
+   179	            visibility,
+   180	          },
+   181	        });
+   182	      }
+   183	
+   184	      return inserted;
+   185	    });
+   186	
+   187	    return { link: toAllowedDto(result.row), status: result.inserted ? 201 : 200 };
+   188	  }
+   189	
+   190	  async function listLinks(args: {
+   191	    actor: EntityLinksActor;
+   192	    endpoint: EntityLinkRef;
+   193	    side?: 'source' | 'target';
+   194	  }): Promise<EntityLinkDto[]> {
+   195	    const { actor, endpoint, side } = args;
+   196	    if (endpoint.type !== 'voc') {
+   197	      throw new HttpError('validation.failed', 'unsupported entity type', {
+   198	        fields: [{ path: ['type'], code: 'unsupported_entity_type' }],
+   199	      });
+   200	    }
+   201	
+   202	    const focus = await resolveVocEndpoint(deps.db, actor.workspace_id, endpoint.id);
+   203	    if (!focus) {
+   204	      throw new HttpError('not_found.record', 'entity link endpoint not found');
+   205	    }
+   206	    const focusAllowed = await assertVocReadScope(deps, actor, focus.managed_system_id);
+   207	    if (!focusAllowed) {
+   208	      throw new HttpError('not_found.record', 'entity link endpoint not found');
+   209	    }
+   210	
+   211	    const listArgs = {
+   212	      workspaceId: actor.workspace_id,
+   213	      endpointType: endpoint.type,
+   214	      endpointId: endpoint.id,
+   215	    };
+   216	    const rows = await selectActiveLinksForEndpoint(
+   217	      deps.db,
+   218	      side === undefined ? listArgs : { ...listArgs, side },
+   219	    );
+   220	
+   221	    const resolvedByVocId = new Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>();
+   222	    const items: EntityLinkDto[] = [];
+   223	    for (const row of rows) {
+   224	      const otherId = row.source_id === endpoint.id ? row.target_id : row.source_id;
+   225	      let other = resolvedByVocId.get(otherId);
+   226	      if (other === undefined) {
+   227	        other = await resolveVocEndpoint(deps.db, actor.workspace_id, otherId);
+   228	        resolvedByVocId.set(otherId, other);
+   229	      }
+   230	      if (!other) {
+   231	        items.push(toHiddenDto(row));
+   232	        continue;
+   233	      }
+   234	      const otherAllowed = await assertVocReadScope(deps, actor, other.managed_system_id);
+   235	      items.push(otherAllowed ? toAllowedDto(row) : toHiddenDto(row));
+   236	    }
+   237	    return items;
+   238	  }
+   239	
+   240	  async function listInventoryLinks(args: {
+   241	    actor: EntityLinksActor;
+   242	    statuses?: EntityLinkRow['status'][];
+   243	    relationType?: 'related_to';
+   244	    managedSystemId?: string;
+   245	  }): Promise<EntityLinkDto[]> {
+   246	    const { actor } = args;
+   247	    const rows = await selectLinksByWorkspace(deps.db, {
+   248	      workspaceId: actor.workspace_id,
+   249	      ...(args.statuses !== undefined ? { statuses: args.statuses } : {}),
+   250	      ...(args.relationType !== undefined ? { relationType: args.relationType } : {}),
+   251	      ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
+   252	    });
+   253	
+   254	    const resolvedByVocId = new Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>();
+   255	    const items: EntityLinkDto[] = [];
+   256	    for (const row of rows) {
+   257	      if (
+   258	        row.source_type !== 'voc' ||
+   259	        row.target_type !== 'voc' ||
+   260	        row.relation_type !== 'related_to'
+   261	      ) {
+   262	        items.push(toHiddenDto(row));
+   263	        continue;
+   264	      }
+   265	      const allowed = await canReadBothEndpoints(deps, actor, row, resolvedByVocId);
+   266	      items.push(allowed ? toAllowedDto(row) : toHiddenDto(row));
+   267	    }
+   268	    return items;
+   269	  }
+   270	
+   271	  async function detachLink(args: {
+   272	    actor: EntityLinksActor;
+   273	    linkId: string;
+   274	    reason: string;
+   275	  }): Promise<DetachedEntityLinkResponse> {
+   276	    const { actor, linkId, reason } = args;
+   277	
+   278	    const link = await selectEntityLinkById(deps.db, {
+   279	      workspaceId: actor.workspace_id,
+   280	      linkId,
+   281	    });
+   282	    if (!link) {
+   283	      throw new HttpError('not_found.record', 'entity link not found');
+   284	    }
+   285	    if (
+   286	      link.source_type !== 'voc' ||
+   287	      link.target_type !== 'voc' ||
+   288	      link.relation_type !== 'related_to'
+   289	    ) {
+   290	      throw new HttpError('validation.failed', 'unsupported entity link tuple', {
+   291	        fields: [{ path: [], code: 'unsupported_tuple' }],
+   292	      });
+   293	    }
+   294	    const [sourceRow, targetRow] = await Promise.all([
+   295	      resolveVocEndpoint(deps.db, actor.workspace_id, link.source_id),
+   296	      resolveVocEndpoint(deps.db, actor.workspace_id, link.target_id),
+   297	    ]);
+   298	    if (!sourceRow || !targetRow) {
+   299	      throw new HttpError('not_found.record', 'entity link endpoint not found');
+   300	    }
+   301	
+   302	    const [sourceAllowed, targetAllowed] = await Promise.all([
+   303	      assertVocReadScope(deps, actor, sourceRow.managed_system_id),
+   304	      assertVocReadScope(deps, actor, targetRow.managed_system_id),
+   305	    ]);
+   306	    if (!sourceAllowed || !targetAllowed) {
+   307	      throw new HttpError('not_found.record', 'entity link not found');
+   308	    }
+   309	    if (link.status !== 'active') {
+   310	      throw new HttpError('conflict.stale_write', 'entity link is no longer active');
+   311	    }
+   312	
+   313	    const detached = await deps.db.transaction(async (tx) => {
+   314	      const updated = await detachVocRelatedToLink(tx, {
+   315	        workspaceId: actor.workspace_id,
+   316	        linkId,
+   317	        actorId: actor.actor_id,
+   318	        reason,
+   319	      });
+   320	      if (!updated) {
+   321	        throw new HttpError('conflict.stale_write', 'entity link is no longer active');
+   322	      }
+   323	
+   324	      await deps.auditService.record(tx, {
+   325	        workspace_id: actor.workspace_id,
+   326	        actor_id: actor.actor_id,
+   327	        event_type: 'entity_link.detached',
+   328	        subject_type: 'entity_link',
+   329	        subject_id: updated.id,
+   330	        summary: 'Entity link detached',
+   331	        detail: {
+   332	          link_id: updated.id,
+   333	          source: { type: updated.source_type, id: updated.source_id },
+   334	          target: { type: updated.target_type, id: updated.target_id },
+   335	          relation_type: updated.relation_type,
+   336	          reason,
+   337	        },
+   338	      });
+   339	
+   340	      return updated;
+   341	    });
+   342	
+   343	    return toDetachedResponse(detached);
+   344	  }
+   345	
+   346	  return { createLink, listLinks, listInventoryLinks, detachLink };
+   347	}
+   348	
+   349	export type EntityLinksService = ReturnType<typeof createEntityLinksService>;
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx | sed -n '1,320p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+exec
+/bin/zsh -lc "nl -ba apps/frontend/src/features/integration/routes/LinksRoute.tsx | sed -n '1,260p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	import type { EntityLinkDto } from '@fops/shared';
+     2	import { Checkbox, ManagedSystemPill, PermissionBlockedPanel, cn } from '@fops/ui';
+     3	import { EntityRelationRow } from './EntityRelationRow';
+     4	import { LinkStatusBadge } from './LinkStatusBadge';
+     5	
+     6	export interface ManagedSystemPresentation {
+     7	  name: string;
+     8	  mark?: string;
+     9	  archived?: boolean;
+    10	}
+    11	
+    12	export interface ActorPresentation {
+    13	  display_name: string;
+    14	}
+    15	
+    16	export interface EntityLinksInventoryTableProps {
+    17	  items: EntityLinkDto[];
+    18	  loading?: boolean;
+    19	  error?: Error | null;
+    20	  managedSystemsById?: Record<string, ManagedSystemPresentation>;
+    21	  actorsById?: Record<string, ActorPresentation>;
+    22	  onRetry?: () => void;
+    23	}
+    24	
+    25	function shortId(id: string): string {
+    26	  return id.slice(0, 8);
+    27	}
+    28	
+    29	function formatTimestamp(raw: string | null): string {
+    30	  if (raw === null) return '-';
+    31	  const date = new Date(raw);
+    32	  if (Number.isNaN(date.getTime())) return raw;
+    33	  return new Intl.DateTimeFormat('ko-KR', {
+    34	    month: '2-digit',
+    35	    day: '2-digit',
+    36	    hour: '2-digit',
+    37	    minute: '2-digit',
+    38	  }).format(date);
+    39	}
+    40	
+    41	export function EntityLinksInventoryTable({
+    42	  items,
+    43	  loading,
+    44	  error,
+    45	  managedSystemsById = {},
+    46	  actorsById = {},
+    47	  onRetry,
+    48	}: EntityLinksInventoryTableProps) {
+    49	  if (loading === true) {
+    50	    return <div className="p-6 text-sm text-text-muted">Loading entity_links…</div>;
+    51	  }
+    52	
+    53	  if (error != null) {
+    54	    return (
+    55	      <PermissionBlockedPanel
+    56	        state="denied"
+    57	        category="Entity links"
+    58	        reason={error.message}
+    59	        className="m-4"
+    60	        {...(onRetry !== undefined
+    61	          ? {
+    62	              summary: (
+    63	                <button type="button" onClick={onRetry}>
+    64	                  다시 시도
+    65	                </button>
+    66	              ),
+    67	            }
+    68	          : {})}
+    69	      />
+    70	    );
+    71	  }
+    72	
+    73	  if (items.length === 0) {
+    74	    return (
+    75	      <div className="p-6 text-center text-sm text-text-muted">
+    76	        해당 상태의 entity_link 가 없습니다.
+    77	      </div>
+    78	    );
+    79	  }
+    80	
+    81	  return (
+    82	    <table aria-label="Entity link inventory" className="min-w-[1040px] table-fixed">
+    83	      <colgroup>
+    84	        <col className="w-10" />
+    85	        <col className="w-[104px]" />
+    86	        <col />
+    87	        <col className="w-[104px]" />
+    88	        <col className="w-48" />
+    89	        <col className="w-40" />
+    90	        <col className="w-32" />
+    91	        <col className="w-32" />
+    92	      </colgroup>
+    93	      <thead>
+    94	        <tr className="h-10 border-b border-border-subtle bg-surface-canvas text-left text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+    95	          <th className="px-4" scope="col">
+    96	            <span className="sr-only">Select</span>
+    97	          </th>
+    98	          <th className="px-2" scope="col">
+    99	            ID
+   100	          </th>
+   101	          <th className="px-2" scope="col">
+   102	            Relation
+   103	          </th>
+   104	          <th className="px-2" scope="col">
+   105	            Status
+   106	          </th>
+   107	          <th className="px-2" scope="col">
+   108	            Managed System
+   109	          </th>
+   110	          <th className="px-2" scope="col">
+   111	            Created by
+   112	          </th>
+   113	          <th className="px-2" scope="col">
+   114	            Created
+   115	          </th>
+   116	          <th className="px-2" scope="col">
+   117	            Updated
+   118	          </th>
+   119	        </tr>
+   120	      </thead>
+   121	      <tbody>
+   122	        {items.map((link) => {
+   123	          const managedSystem = managedSystemsById[link.managed_system_id];
+   124	          const actor = actorsById[link.created_by];
+   125	          return (
+   126	            <tr
+   127	              key={link.id}
+   128	              className={cn(
+   129	                'h-[52px] border-b border-border-subtle text-sm hover:bg-surface-row-hover',
+   130	                link.visibility_state === 'hidden' && 'bg-surface-blocked/60',
+   131	              )}
+   132	            >
+   133	              <td className="px-4">
+   134	                <Checkbox aria-label={`${shortId(link.id)} 선택`} />
+   135	              </td>
+   136	              <td className="px-2 font-mono text-xs text-text-muted">{shortId(link.id)}</td>
+   137	              <td className="px-2">
+   138	                <EntityRelationRow link={link} />
+   139	              </td>
+   140	              <td className="px-2">
+   141	                <LinkStatusBadge status={link.status} />
+   142	              </td>
+   143	              <td className="px-2">
+   144	                {managedSystem !== undefined ? (
+   145	                  <ManagedSystemPill
+   146	                    name={managedSystem.name}
+   147	                    {...(managedSystem.mark !== undefined ? { mark: managedSystem.mark } : {})}
+   148	                    {...(managedSystem.archived !== undefined
+   149	                      ? { archived: managedSystem.archived }
+   150	                      : {})}
+   151	                  />
+   152	                ) : (
+   153	                  <span className="font-mono text-xs text-text-muted">
+   154	                    {shortId(link.managed_system_id)}
+   155	                  </span>
+   156	                )}
+   157	              </td>
+   158	              <td className="truncate px-2 text-xs text-text-secondary">
+   159	                {actor?.display_name ?? shortId(link.created_by)}
+   160	              </td>
+   161	              <td className="px-2 text-xs text-text-muted">{formatTimestamp(link.created_at)}</td>
+   162	              <td className="px-2 text-xs text-text-muted">{formatTimestamp(link.updated_at)}</td>
+   163	            </tr>
+   164	          );
+   165	        })}
+   166	      </tbody>
+   167	    </table>
+   168	  );
+   169	}
+
+ succeeded in 0ms:
+     1	import { resolveActors } from '@/lib/api';
+     2	import { fetchManagedSystems } from '@/lib/api/managed-systems';
+     3	import type { EntityLinkRelationType, EntityLinkStatus } from '@fops/shared';
+     4	import { Button, ListFilterButton, ListToolbar, type ListToolbarTab, SearchInput } from '@fops/ui';
+     5	import { useQuery } from '@tanstack/react-query';
+     6	import { useNavigate, useSearch } from '@tanstack/react-router';
+     7	import { RefreshCw } from 'lucide-react';
+     8	import * as React from 'react';
+     9	import { EntityLinksInventoryTable } from '../components/EntityLinksInventoryTable';
+    10	import { useEntityLinkInventory } from '../hooks/useEntityLinkInventory';
+    11	
+    12	type StatusFilter = EntityLinkStatus;
+    13	
+    14	interface LinksSearch {
+    15	  status?: StatusFilter;
+    16	  type?: EntityLinkRelationType;
+    17	  managedSystem?: string;
+    18	}
+    19	
+    20	const STATUS_TABS: ListToolbarTab[] = [
+    21	  { value: 'all', label: 'All' },
+    22	  { value: 'active', label: 'Active' },
+    23	  { value: 'stale', label: 'Stale', urgent: true },
+    24	  { value: 'detached', label: 'Detached' },
+    25	  { value: 'revoked', label: 'Revoked' },
+    26	];
+    27	
+    28	const FILTER_CATEGORIES = [
+    29	  {
+    30	    key: 'type',
+    31	    label: 'Rel type',
+    32	    options: [{ value: 'related_to', label: 'related_to' }],
+    33	  },
+    34	];
+    35	
+    36	export function LinksRoute() {
+    37	  const search = useSearch({ strict: false }) as LinksSearch;
+    38	  const navigate = useNavigate();
+    39	
+    40	  const activeTab = search.status ?? 'all';
+    41	  const currentFilters = React.useMemo(
+    42	    () => (search.type !== undefined ? { type: [search.type] } : {}),
+    43	    [search.type],
+    44	  );
+    45	
+    46	  const inventory = useEntityLinkInventory({
+    47	    ...(search.status !== undefined ? { status: search.status } : {}),
+    48	    ...(search.type !== undefined ? { relationType: search.type } : {}),
+    49	    ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+    50	  });
+    51	
+    52	  const managedSystemsQuery = useQuery({
+    53	    queryKey: ['managed-systems', 'all'] as const,
+    54	    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
+    55	    staleTime: 10 * 60 * 1000,
+    56	  });
+    57	
+    58	  const actorIds = React.useMemo(
+    59	    () => [
+    60	      ...new Set(
+    61	        (inventory.data?.items ?? [])
+    62	          .map((item) => item.created_by)
+    63	          .filter((id): id is string => typeof id === 'string'),
+    64	      ),
+    65	    ],
+    66	    [inventory.data?.items],
+    67	  );
+    68	  const actorsQuery = useQuery({
+    69	    queryKey: ['actors-resolve', actorIds, []] as const,
+    70	    queryFn: ({ signal }) => resolveActors({ actorIds }, signal),
+    71	    enabled: actorIds.length > 0,
+    72	    staleTime: 10 * 60 * 1000,
+    73	  });
+    74	
+    75	  const managedSystemsById = React.useMemo(() => {
+    76	    const out: Record<string, { name: string; archived: boolean }> = {};
+    77	    for (const ms of managedSystemsQuery.data?.items ?? []) {
+    78	      out[ms.id] = {
+    79	        name: ms.name,
+    80	        archived: ms.archived_at !== null,
+    81	      };
+    82	    }
+    83	    return out;
+    84	  }, [managedSystemsQuery.data]);
+    85	
+    86	  const actorsById = React.useMemo(() => {
+    87	    const out: Record<string, { display_name: string }> = {};
+    88	    for (const actor of actorsQuery.data?.actors ?? []) {
+    89	      out[actor.id] = { display_name: actor.display_name };
+    90	    }
+    91	    return out;
+    92	  }, [actorsQuery.data]);
+    93	
+    94	  function handleStatusChange(next: string): void {
+    95	    void navigate({
+    96	      to: '/integration/links',
+    97	      search: (prev: LinksSearch) => ({
+    98	        ...prev,
+    99	        status: next === 'all' ? undefined : (next as StatusFilter),
+   100	      }),
+   101	    });
+   102	  }
+   103	
+   104	  function handleFiltersChange(next: Record<string, string[]>): void {
+   105	    const type = next.type?.[0] as EntityLinkRelationType | undefined;
+   106	    void navigate({
+   107	      to: '/integration/links',
+   108	      search: (prev: LinksSearch) => ({ ...prev, type }),
+   109	    });
+   110	  }
+   111	
+   112	  return (
+   113	    <>
+   114	      <ListToolbar
+   115	        tabs={STATUS_TABS}
+   116	        activeTab={activeTab}
+   117	        onTabChange={handleStatusChange}
+   118	        action={
+   119	          <div className="flex items-center gap-2">
+   120	            <SearchInput placeholder="Entity link 검색…" />
+   121	            <ListFilterButton
+   122	              categories={FILTER_CATEGORIES}
+   123	              values={currentFilters}
+   124	              onChange={handleFiltersChange}
+   125	            />
+   126	            {search.managedSystem !== undefined && search.managedSystem !== 'all' && (
+   127	              <span className="rounded border border-border-subtle px-2 py-1 font-mono text-xs text-text-muted">
+   128	                {search.managedSystem.slice(0, 8)}
+   129	              </span>
+   130	            )}
+   131	            <Button
+   132	              variant="subtle"
+   133	              size="sm"
+   134	              className="gap-1.5"
+   135	              onClick={() => {
+   136	                void inventory.refetch();
+   137	              }}
+   138	            >
+   139	              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+   140	              Refresh
+   141	            </Button>
+   142	          </div>
+   143	        }
+   144	      />
+   145	      <EntityLinksInventoryTable
+   146	        items={inventory.data?.items ?? []}
+   147	        loading={inventory.isLoading}
+   148	        error={inventory.error ?? null}
+   149	        managedSystemsById={managedSystemsById}
+   150	        actorsById={actorsById}
+   151	        onRetry={() => {
+   152	          void inventory.refetch();
+   153	        }}
+   154	      />
+   155	    </>
+   156	  );
+   157	}
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/frontend/src/features/integration/hooks/useEntityLinkInventory.ts | sed -n '1,220p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+exec
+/bin/zsh -lc "nl -ba apps/frontend/src/features/integration/components/LinkStatusBadge.tsx | sed -n '1,220p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	import { apiClient } from '@/lib/api';
+     2	import type { EntityLinkDto, EntityLinkRelationType, EntityLinkStatus } from '@fops/shared';
+     3	import { type UseQueryResult, useQuery } from '@tanstack/react-query';
+     4	
+     5	export interface EntityLinkInventoryParams {
+     6	  status?: EntityLinkStatus;
+     7	  relationType?: EntityLinkRelationType;
+     8	  managedSystemId?: string;
+     9	}
+    10	
+    11	export interface EntityLinkInventoryPage {
+    12	  items: EntityLinkDto[];
+    13	}
+    14	
+    15	export function useEntityLinkInventory(
+    16	  params: EntityLinkInventoryParams,
+    17	): UseQueryResult<EntityLinkInventoryPage> {
+    18	  const { status, relationType, managedSystemId } = params;
+    19	
+    20	  return useQuery({
+    21	    queryKey: ['entity-links', 'inventory', status, relationType, managedSystemId] as const,
+    22	    queryFn: async ({ signal }) => {
+    23	      const qs = new URLSearchParams();
+    24	      qs.set('scope', 'workspace');
+    25	      if (status !== undefined) qs.set('status', status);
+    26	      if (relationType !== undefined) qs.set('relation_type', relationType);
+    27	      if (managedSystemId !== undefined && managedSystemId !== 'all') {
+    28	        qs.set('managed_system_id', managedSystemId);
+    29	      }
+    30	
+    31	      const res = await apiClient<EntityLinkInventoryPage>(
+    32	        'GET',
+    33	        `/entity-links?${qs.toString()}`,
+    34	        { signal },
+    35	      );
+    36	      return res.data;
+    37	    },
+    38	    staleTime: 30_000,
+    39	    retry: 1,
+    40	  });
+    41	}
+
+ succeeded in 0ms:
+     1	import type { EntityLinkStatus } from '@fops/shared';
+     2	import { cn } from '@fops/ui';
+     3	
+     4	const STATUS_META: Record<EntityLinkStatus, { label: string; className: string }> = {
+     5	  active: {
+     6	    label: 'Active',
+     7	    className: 'bg-[rgb(var(--text-success)/0.12)] text-text-success',
+     8	  },
+     9	  stale: {
+    10	    label: 'Stale',
+    11	    className: 'bg-[rgb(var(--text-warning)/0.12)] text-text-warning',
+    12	  },
+    13	  detached: {
+    14	    label: 'Detached',
+    15	    className: 'bg-[rgb(var(--text-muted)/0.12)] text-text-muted',
+    16	  },
+    17	  revoked: {
+    18	    label: 'Revoked',
+    19	    className: 'bg-[rgb(var(--text-danger)/0.12)] text-text-danger',
+    20	  },
+    21	};
+    22	
+    23	export function LinkStatusBadge({ status }: { status: EntityLinkStatus }) {
+    24	  const meta = STATUS_META[status];
+    25	  return (
+    26	    <span
+    27	      className={cn(
+    28	        'inline-flex h-5 items-center rounded px-1.5 text-[11px] font-medium leading-none',
+    29	        meta.className,
+    30	      )}
+    31	    >
+    32	      {meta.label}
+    33	    </span>
+    34	  );
+    35	}
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba apps/frontend/src/routes/_authed/integration/links.tsx | sed -n '1,220p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	import { LinksRoute } from '@/features/integration/routes/LinksRoute';
+     2	import { ListShell } from '@fops/ui';
+     3	import { createFileRoute } from '@tanstack/react-router';
+     4	import { z } from 'zod';
+     5	
+     6	export const integrationLinksSearchSchema = z
+     7	  .object({
+     8	    status: z.enum(['active', 'stale', 'detached', 'revoked']).optional(),
+     9	    type: z.enum(['related_to']).optional(),
+    10	    managedSystem: z.string().optional(),
+    11	  })
+    12	  .strict();
+    13	
+    14	export const Route = createFileRoute('/_authed/integration/links')({
+    15	  validateSearch: (raw) => integrationLinksSearchSchema.parse(raw),
+    16	  component: IntegrationLinksRouteShell,
+    17	});
+    18	
+    19	export function IntegrationLinksRouteShell() {
+    20	  return <ListShell list={<LinksRoute />} />;
+    21	}
+
+exec
+/bin/zsh -lc "nl -ba apps/frontend/src/features/integration/components/EntityRelationRow.tsx | sed -n '1,240p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	import type { EntityLinkDto } from '@fops/shared';
+     2	import { EntityIconBadge } from '@fops/ui';
+     3	import { ArrowRight, Lock } from 'lucide-react';
+     4	
+     5	function shortId(id: string): string {
+     6	  return id.slice(0, 8);
+     7	}
+     8	
+     9	export function EntityRelationRow({ link }: { link: EntityLinkDto }) {
+    10	  if (link.visibility_state === 'hidden') {
+    11	    return (
+    12	      <div className="inline-flex min-w-0 items-center gap-2">
+    13	        <span className="inline-flex items-center gap-1 rounded border border-border-subtle bg-surface-blocked px-2 py-0.5 text-xs font-medium text-text-muted">
+    14	          <Lock className="h-3 w-3" aria-hidden="true" />
+    15	          권한 제한
+    16	        </span>
+    17	        <span className="font-mono text-xs text-text-muted">{link.relation_type}</span>
+    18	      </div>
+    19	    );
+    20	  }
+    21	
+    22	  return (
+    23	    <div className="inline-flex min-w-0 flex-wrap items-center gap-2">
+    24	      <span className="inline-flex min-w-0 items-center gap-1.5">
+    25	        <EntityIconBadge type={link.source_type} size={18} />
+    26	        <span className="font-mono text-xs text-text-primary">{shortId(link.source_id)}</span>
+    27	      </span>
+    28	      <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+    29	        <ArrowRight className="h-3 w-3" aria-hidden="true" />
+    30	        {link.relation_type}
+    31	        <ArrowRight className="h-3 w-3" aria-hidden="true" />
+    32	      </span>
+    33	      <span className="inline-flex min-w-0 items-center gap-1.5">
+    34	        <EntityIconBadge type={link.target_type} size={18} />
+    35	        <span className="font-mono text-xs text-text-primary">{shortId(link.target_id)}</span>
+    36	      </span>
+    37	    </div>
+    38	  );
+    39	}
+
+hook: PostToolUse
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx | sed -n '1,320p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+     2	import {
+     3	  Outlet,
+     4	  RouterProvider,
+     5	  createMemoryHistory,
+     6	  createRootRoute,
+     7	  createRoute,
+     8	  createRouter,
+     9	} from '@tanstack/react-router';
+    10	import { render, screen, waitFor } from '@testing-library/react';
+    11	import userEvent from '@testing-library/user-event';
+    12	import { afterEach, describe, expect, test, vi } from 'vitest';
+    13	
+    14	import {
+    15	  IntegrationLinksRouteShell,
+    16	  integrationLinksSearchSchema,
+    17	} from '../../../../routes/_authed/integration/links';
+    18	
+    19	const LINK_A = '11111111-0000-0000-0000-0000000000a1';
+    20	const LINK_B = '22222222-0000-0000-0000-0000000000b1';
+    21	const VOC_A = '33333333-0000-0000-0000-0000000000a1';
+    22	const VOC_B = '44444444-0000-0000-0000-0000000000b1';
+    23	const VOC_C = '55555555-0000-0000-0000-0000000000c1';
+    24	const VOC_D = '66666666-0000-0000-0000-0000000000d1';
+    25	const MS_A = '77777777-0000-0000-0000-0000000000a1';
+    26	const ACTOR_A = '88888888-0000-0000-0000-0000000000a1';
+    27	
+    28	const ALL_LINKS = [
+    29	  {
+    30	    id: LINK_A,
+    31	    source_type: 'voc',
+    32	    source_id: VOC_A,
+    33	    target_type: 'voc',
+    34	    target_id: VOC_B,
+    35	    relation_type: 'related_to',
+    36	    visibility: 'internal_only',
+    37	    status: 'active',
+    38	    managed_system_id: MS_A,
+    39	    created_by: ACTOR_A,
+    40	    created_at: '2026-06-18T01:00:00.000Z',
+    41	    updated_at: '2026-06-18T01:00:00.000Z',
+    42	    visibility_state: 'allowed',
+    43	  },
+    44	  {
+    45	    id: LINK_B,
+    46	    source_type: 'voc',
+    47	    source_id: VOC_C,
+    48	    target_type: 'voc',
+    49	    target_id: VOC_D,
+    50	    relation_type: 'related_to',
+    51	    status: 'detached',
+    52	    managed_system_id: MS_A,
+    53	    created_by: ACTOR_A,
+    54	    created_at: '2026-06-18T00:00:00.000Z',
+    55	    updated_at: '2026-06-18T00:30:00.000Z',
+    56	    visibility_state: 'hidden',
+    57	  },
+    58	] as const;
+    59	
+    60	function buildHarness(initialPath: string) {
+    61	  const rootRoute = createRootRoute({ component: () => <Outlet /> });
+    62	  const route = createRoute({
+    63	    getParentRoute: () => rootRoute,
+    64	    path: '/integration/links',
+    65	    validateSearch: (raw) => integrationLinksSearchSchema.parse(raw),
+    66	    component: IntegrationLinksRouteShell,
+    67	  });
+    68	  const router = createRouter({
+    69	    routeTree: rootRoute.addChildren([route]),
+    70	    history: createMemoryHistory({ initialEntries: [initialPath] }),
+    71	  });
+    72	  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    73	  return { router, qc };
+    74	}
+    75	
+    76	function stubFetch(capturedUrls: string[]) {
+    77	  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    78	    const url = typeof input === 'string' ? input : input.toString();
+    79	    capturedUrls.push(url);
+    80	    if (url.includes('/entity-links')) {
+    81	      const parsed = new URL(url, 'http://localhost');
+    82	      const status = parsed.searchParams.get('status');
+    83	      const items =
+    84	        status === null ? ALL_LINKS : ALL_LINKS.filter((link) => link.status === status);
+    85	      return new Response(JSON.stringify({ items }), {
+    86	        status: 200,
+    87	        headers: { 'content-type': 'application/json' },
+    88	      });
+    89	    }
+    90	    if (url.includes('/managed-systems')) {
+    91	      return new Response(
+    92	        JSON.stringify({
+    93	          items: [
+    94	            {
+    95	              id: MS_A,
+    96	              workspace_id: '40000000-0000-0000-0000-0000000000a1',
+    97	              slug: 'powerbi',
+    98	              name: 'Power BI',
+    99	              external_key: null,
+   100	              default_owner_actor_id: null,
+   101	              default_owner_team_id: null,
+   102	              archived_at: null,
+   103	              archived_by_actor_id: null,
+   104	              created_at: '2026-06-18T00:00:00.000Z',
+   105	              updated_at: '2026-06-18T00:00:00.000Z',
+   106	            },
+   107	          ],
+   108	          total: 1,
+   109	        }),
+   110	        { status: 200, headers: { 'content-type': 'application/json' } },
+   111	      );
+   112	    }
+   113	    if (url.includes('/actors/resolve')) {
+   114	      return new Response(
+   115	        JSON.stringify({
+   116	          actors: [{ id: ACTOR_A, display_name: '운영자', email: 'ops@example.test' }],
+   117	          teams: [],
+   118	        }),
+   119	        { status: 200, headers: { 'content-type': 'application/json' } },
+   120	      );
+   121	    }
+   122	    return new Response('not mocked', { status: 500 });
+   123	  }) as typeof globalThis.fetch;
+   124	}
+   125	
+   126	describe('integration links route', () => {
+   127	  const originalFetch = globalThis.fetch;
+   128	
+   129	  afterEach(() => {
+   130	    globalThis.fetch = originalFetch;
+   131	    vi.restoreAllMocks();
+   132	  });
+   133	
+   134	  test('strict search schema rejects unknown keys', () => {
+   135	    expect(() => integrationLinksSearchSchema.parse({ status: 'active', onload: 'x' })).toThrow();
+   136	    expect(integrationLinksSearchSchema.parse({ status: 'detached', type: 'related_to' })).toEqual({
+   137	      status: 'detached',
+   138	      type: 'related_to',
+   139	    });
+   140	  });
+   141	
+   142	  test('renders inventory table, status badges, hidden row, and filter controls', async () => {
+   143	    const urls: string[] = [];
+   144	    stubFetch(urls);
+   145	    const { router, qc } = buildHarness('/integration/links');
+   146	
+   147	    render(
+   148	      <QueryClientProvider client={qc}>
+   149	        <RouterProvider router={router} />
+   150	      </QueryClientProvider>,
+   151	    );
+   152	
+   153	    await waitFor(() => {
+   154	      expect(screen.getByRole('tab', { name: 'Active' })).toBeInTheDocument();
+   155	      expect(screen.getByRole('tab', { name: 'Detached' })).toBeInTheDocument();
+   156	      expect(screen.getByText(LINK_A.slice(0, 8))).toBeInTheDocument();
+   157	      expect(screen.getByText(LINK_B.slice(0, 8))).toBeInTheDocument();
+   158	      expect(screen.getByText('권한 제한')).toBeInTheDocument();
+   159	      expect(screen.getByText('필터')).toBeInTheDocument();
+   160	      expect(screen.getByPlaceholderText('Entity link 검색…')).toBeInTheDocument();
+   161	    });
+   162	    expect(document.querySelector('[data-shell="list"]')).not.toBeNull();
+   163	    expect(urls.some((url) => url.includes('/entity-links?scope=workspace'))).toBe(true);
+   164	  });
+   165	
+   166	  test('renders Korean empty state for no matching rows', async () => {
+   167	    const urls: string[] = [];
+   168	    stubFetch(urls);
+   169	    const { router, qc } = buildHarness('/integration/links?status=revoked');
+   170	
+   171	    render(
+   172	      <QueryClientProvider client={qc}>
+   173	        <RouterProvider router={router} />
+   174	      </QueryClientProvider>,
+   175	    );
+   176	
+   177	    await waitFor(() => {
+   178	      expect(screen.getByText('해당 상태의 entity_link 가 없습니다.')).toBeInTheDocument();
+   179	    });
+   180	  });
+   181	
+   182	  test('changing status tab updates the request status param and rendered subset', async () => {
+   183	    const urls: string[] = [];
+   184	    stubFetch(urls);
+   185	    const { router, qc } = buildHarness('/integration/links');
+   186	
+   187	    render(
+   188	      <QueryClientProvider client={qc}>
+   189	        <RouterProvider router={router} />
+   190	      </QueryClientProvider>,
+   191	    );
+   192	
+   193	    await screen.findByText('권한 제한');
+   194	    await userEvent.click(screen.getByRole('tab', { name: 'Detached' }));
+   195	
+   196	    await waitFor(() => {
+   197	      expect(urls.some((url) => url.includes('status=detached'))).toBe(true);
+   198	      expect(screen.queryByText(LINK_A.slice(0, 8))).not.toBeInTheDocument();
+   199	      expect(screen.getByText(LINK_B.slice(0, 8))).toBeInTheDocument();
+   200	      expect(screen.getByText('권한 제한')).toBeInTheDocument();
+   201	    });
+   202	  });
+   203	});
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "rg -n \"#[0-9A-Fa-f]{3,8}|\\[[0-9.]+px\\]|\\b[0-9]+px\\b|style=\\{\\{\" apps/frontend/src/features/integration apps/frontend/src/routes/_authed/integration" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+exec
+/bin/zsh -lc 'rg -n "detach|bulk|stale|revoked|permissions|auth|migration|finding|evidence_of|executes|public_update_of|relation_type" apps/backend/src/modules/entity-links packages/shared/src/entity-links.ts apps/frontend/src/features/integration apps/frontend/src/routes/_authed/integration docs/design/11-entity-linking.md docs/implementation/06-entity-linking-contract.md' in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+apps/frontend/src/features/integration/components/LinkStatusBadge.tsx:28:        'inline-flex h-5 items-center rounded px-1.5 text-[11px] font-medium leading-none',
+apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx:82:    <table aria-label="Entity link inventory" className="min-w-[1040px] table-fixed">
+apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx:85:        <col className="w-[104px]" />
+apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx:87:        <col className="w-[104px]" />
+apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx:94:        <tr className="h-10 border-b border-border-subtle bg-surface-canvas text-left text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx:129:                'h-[52px] border-b border-border-subtle text-sm hover:bg-surface-row-hover',
+
+ succeeded in 0ms:
+packages/shared/src/entity-links.ts:19:export const entityLinkStatusSchema = z.enum(['active', 'stale', 'detached', 'revoked']);
+packages/shared/src/entity-links.ts:35:    relation_type: entityLinkRelationTypeSchema,
+packages/shared/src/entity-links.ts:41:export const detachEntityLinkRequestSchema = z
+packages/shared/src/entity-links.ts:46:export type DetachEntityLinkRequest = z.infer<typeof detachEntityLinkRequestSchema>;
+packages/shared/src/entity-links.ts:64:    relation_type: entityLinkRelationTypeSchema.optional(),
+packages/shared/src/entity-links.ts:74:      value.relation_type !== undefined ||
+packages/shared/src/entity-links.ts:121:  relation_type: entityLinkRelationTypeSchema,
+packages/shared/src/entity-links.ts:135:  relation_type: entityLinkRelationTypeSchema,
+packages/shared/src/entity-links.ts:155:export const detachedEntityLinkResponseSchema = z.object({
+packages/shared/src/entity-links.ts:157:  status: z.literal('detached'),
+packages/shared/src/entity-links.ts:158:  detached_at: z.string().datetime(),
+packages/shared/src/entity-links.ts:160:export type DetachedEntityLinkResponse = z.infer<typeof detachedEntityLinkResponseSchema>;
+docs/implementation/06-entity-linking-contract.md:12:- relation_type registry
+docs/implementation/06-entity-linking-contract.md:42:- relation_type is allowed for the entity pair
+docs/implementation/06-entity-linking-contract.md:64:- relation_type: related_to
+docs/implementation/06-entity-linking-contract.md:66:- create authz: actor must have voc.read on both source and target Managed Systems
+docs/implementation/06-entity-linking-contract.md:67:- read authz: focused endpoint must be readable; the opposite endpoint is emitted
+docs/implementation/06-entity-linking-contract.md:78:- optional filters: status=active|stale|detached|revoked, relation_type=related_to,
+docs/implementation/06-entity-linking-contract.md:82:- authz: every row checks voc.read on both endpoints' Managed Systems.
+docs/implementation/06-entity-linking-contract.md:91:Slice 4.2 detach lifecycle (#113):
+docs/implementation/06-entity-linking-contract.md:96:- supported transition: active -> detached only
+docs/implementation/06-entity-linking-contract.md:97:- authz: actor must have the same voc.read capability used by link creation on
+docs/implementation/06-entity-linking-contract.md:100:- already detached, revoked, stale, or lost update race: 409
+docs/implementation/06-entity-linking-contract.md:101:- side effects in one transaction: update status/detach metadata and append
+docs/implementation/06-entity-linking-contract.md:102:  audit_log event_type entity_link.detached
+docs/implementation/06-entity-linking-contract.md:107:detaching a link intentionally frees the same VOC pair to be linked again later.
+docs/implementation/06-entity-linking-contract.md:113:- hidden from Reporter and User unless separately authorized.
+docs/implementation/06-entity-linking-contract.md:122:- visible to reporter when source and target permissions allow.
+docs/implementation/06-entity-linking-contract.md:128:Both source and target permissions are checked on read. Reporter-visible
+docs/implementation/06-entity-linking-contract.md:139:- High Severity VOC eligible for follow-up and currently lacks a Finding, Task Request, Task link, or authorized no-follow-up-needed decision
+docs/design/11-entity-linking.md:19:- relation_type
+docs/design/11-entity-linking.md:36:- evidence_of
+docs/design/11-entity-linking.md:50:- created_finding
+docs/design/11-entity-linking.md:57:- generated_finding
+docs/design/11-entity-linking.md:89:Slice 4.2 detach lifecycle (#113): production support detaches only existing
+docs/design/11-entity-linking.md:91:non-empty reason. Detach transitions `status` to `detached`, records
+docs/design/11-entity-linking.md:92:`detached_by`, `detach_reason`, and `detached_at`, and preserves the row; hard
+docs/design/11-entity-linking.md:96:workspace-wide audit inventory across `active`, `stale`, `detached`, and
+docs/design/11-entity-linking.md:97:`revoked` rows, newest first. Filters are read-only: `status`,
+docs/design/11-entity-linking.md:98:`relation_type`, and `managed_system_id`. Production data still only creates
+docs/design/11-entity-linking.md:99:VOC↔VOC `related_to` rows and does not synthesize `stale` or `revoked` rows in
+docs/design/11-entity-linking.md:135:- Link stores relation_type and visibility.
+docs/design/11-entity-linking.md:146:- Authorized users can detach a supported link when policy allows.
+docs/design/11-entity-linking.md:148:- The entity_link is marked inactive, detached, or revoked with actor, reason,
+docs/design/11-entity-linking.md:150:- Sensitive detach actions are audited.
+docs/design/11-entity-linking.md:153:Slice 4.2 (#113) implements this for VOC↔VOC `related_to` as `detached` only.
+docs/design/11-entity-linking.md:154:`revoked` remains reserved for future admin/policy flows and `stale` remains
+docs/design/11-entity-linking.md:167:- Source and target permissions are both respected.
+docs/design/11-entity-linking.md:187:- Dashboard can detect stale or missing workflow links without treating every unlinked record as incomplete.
+apps/frontend/src/features/integration/AGENTS.md:7:It is the UI home for FeedbackOps linking behavior, but it does not own source object lifecycles or backend authorization truth.
+apps/frontend/src/features/integration/AGENTS.md:11:- Owns `/integration`, `/integration/findings`, `/integration/evidence`, `/integration/coverage`, and `/integration/links`.
+apps/backend/src/modules/entity-links/service.ts:6:import type { CheckService } from '../permissions/check-service.js';
+apps/backend/src/modules/entity-links/service.ts:9:  detachVocRelatedToLink,
+apps/backend/src/modules/entity-links/service.ts:36:    relation_type: row.relation_type,
+apps/backend/src/modules/entity-links/service.ts:52:    relation_type: row.relation_type,
+apps/backend/src/modules/entity-links/service.ts:63:  if (row.status !== 'detached' || row.detached_at === null) {
+apps/backend/src/modules/entity-links/service.ts:64:    throw new HttpError('internal.unexpected', 'detached entity link row missing detach fields');
+apps/backend/src/modules/entity-links/service.ts:68:    status: 'detached',
+apps/backend/src/modules/entity-links/service.ts:69:    detached_at: row.detached_at.toISOString(),
+apps/backend/src/modules/entity-links/service.ts:116:    relation_type: 'related_to';
+apps/backend/src/modules/entity-links/service.ts:122:    if (source.type !== 'voc' || target.type !== 'voc' || args.relation_type !== 'related_to') {
+apps/backend/src/modules/entity-links/service.ts:178:            relation_type: args.relation_type,
+apps/backend/src/modules/entity-links/service.ts:260:        row.relation_type !== 'related_to'
+apps/backend/src/modules/entity-links/service.ts:271:  async function detachLink(args: {
+apps/backend/src/modules/entity-links/service.ts:288:      link.relation_type !== 'related_to'
+apps/backend/src/modules/entity-links/service.ts:310:      throw new HttpError('conflict.stale_write', 'entity link is no longer active');
+apps/backend/src/modules/entity-links/service.ts:313:    const detached = await deps.db.transaction(async (tx) => {
+apps/backend/src/modules/entity-links/service.ts:314:      const updated = await detachVocRelatedToLink(tx, {
+apps/backend/src/modules/entity-links/service.ts:321:        throw new HttpError('conflict.stale_write', 'entity link is no longer active');
+apps/backend/src/modules/entity-links/service.ts:327:        event_type: 'entity_link.detached',
+apps/backend/src/modules/entity-links/service.ts:330:        summary: 'Entity link detached',
+apps/backend/src/modules/entity-links/service.ts:335:          relation_type: updated.relation_type,
+apps/backend/src/modules/entity-links/service.ts:343:    return toDetachedResponse(detached);
+apps/backend/src/modules/entity-links/service.ts:346:  return { createLink, listLinks, listInventoryLinks, detachLink };
+apps/frontend/src/routes/_authed/integration/links.tsx:8:    status: z.enum(['active', 'stale', 'detached', 'revoked']).optional(),
+apps/frontend/src/routes/_authed/integration/links.tsx:14:export const Route = createFileRoute('/_authed/integration/links')({
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:17:} from '../../../../routes/_authed/integration/links';
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:35:    relation_type: 'related_to',
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:50:    relation_type: 'related_to',
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:51:    status: 'detached',
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:136:    expect(integrationLinksSearchSchema.parse({ status: 'detached', type: 'related_to' })).toEqual({
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:137:      status: 'detached',
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:169:    const { router, qc } = buildHarness('/integration/links?status=revoked');
+apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:197:      expect(urls.some((url) => url.includes('status=detached'))).toBe(true);
+apps/frontend/src/features/integration/hooks/useEntityLinkInventory.ts:26:      if (relationType !== undefined) qs.set('relation_type', relationType);
+apps/frontend/src/features/integration/hooks/useEntityLinkInventory.ts:38:    staleTime: 30_000,
+apps/backend/src/modules/entity-links/routes.ts:6:  detachEntityLinkRequestSchema,
+apps/backend/src/modules/entity-links/routes.ts:13:import type { SessionService } from '../auth/session-service.js';
+apps/backend/src/modules/entity-links/routes.ts:57:        relation_type: parsed.data.relation_type,
+apps/backend/src/modules/entity-links/routes.ts:96:          ...(data.relation_type !== undefined ? { relationType: data.relation_type } : {}),
+apps/backend/src/modules/entity-links/routes.ts:145:      const parsed = detachEntityLinkRequestSchema.safeParse(req.body ?? {});
+apps/backend/src/modules/entity-links/routes.ts:152:      const link = await entityLinksService.detachLink({
+apps/frontend/src/features/integration/routes/LinksRoute.tsx:23:  { value: 'stale', label: 'Stale', urgent: true },
+apps/frontend/src/features/integration/routes/LinksRoute.tsx:24:  { value: 'detached', label: 'Detached' },
+apps/frontend/src/features/integration/routes/LinksRoute.tsx:25:  { value: 'revoked', label: 'Revoked' },
+apps/frontend/src/features/integration/routes/LinksRoute.tsx:55:    staleTime: 10 * 60 * 1000,
+apps/frontend/src/features/integration/routes/LinksRoute.tsx:72:    staleTime: 10 * 60 * 1000,
+apps/backend/src/modules/entity-links/repo.ts:19:  relation_type: 'related_to';
+apps/backend/src/modules/entity-links/repo.ts:21:  status: 'active' | 'stale' | 'detached' | 'revoked';
+apps/backend/src/modules/entity-links/repo.ts:26:  detached_by: string | null;
+apps/backend/src/modules/entity-links/repo.ts:27:  detach_reason: string | null;
+apps/backend/src/modules/entity-links/repo.ts:28:  detached_at: Date | null;
+apps/backend/src/modules/entity-links/repo.ts:39:    relation_type: row.relation_type as 'related_to',
+apps/backend/src/modules/entity-links/repo.ts:52:    detached_by: (row.detached_by as string | null) ?? null,
+apps/backend/src/modules/entity-links/repo.ts:53:    detach_reason: (row.detach_reason as string | null) ?? null,
+apps/backend/src/modules/entity-links/repo.ts:54:    detached_at:
+apps/backend/src/modules/entity-links/repo.ts:55:      row.detached_at === null || row.detached_at === undefined
+apps/backend/src/modules/entity-links/repo.ts:57:        : row.detached_at instanceof Date
+apps/backend/src/modules/entity-links/repo.ts:58:          ? row.detached_at
+apps/backend/src/modules/entity-links/repo.ts:59:          : new Date(row.detached_at as string),
+apps/backend/src/modules/entity-links/repo.ts:97:      relation_type, visibility, status, managed_system_id, created_by
+apps/backend/src/modules/entity-links/repo.ts:104:      workspace_id, source_type, source_id, target_type, target_id, relation_type
+apps/backend/src/modules/entity-links/repo.ts:109:      relation_type, visibility, status, managed_system_id, created_by,
+apps/backend/src/modules/entity-links/repo.ts:110:      created_at, updated_at, detached_by, detach_reason, detached_at
+apps/backend/src/modules/entity-links/repo.ts:133:      relation_type, visibility, status, managed_system_id, created_by,
+apps/backend/src/modules/entity-links/repo.ts:134:      created_at, updated_at, detached_by, detach_reason, detached_at
+apps/backend/src/modules/entity-links/repo.ts:141:      AND relation_type = 'related_to'
+apps/backend/src/modules/entity-links/repo.ts:171:      relation_type, visibility, status, managed_system_id, created_by,
+apps/backend/src/modules/entity-links/repo.ts:172:      created_at, updated_at, detached_by, detach_reason, detached_at
+apps/backend/src/modules/entity-links/repo.ts:187:    relationType?: EntityLinkRow['relation_type'];
+apps/backend/src/modules/entity-links/repo.ts:196:    predicates.push(sql`relation_type = ${input.relationType}`);
+apps/backend/src/modules/entity-links/repo.ts:205:      relation_type, visibility, status, managed_system_id, created_by,
+apps/backend/src/modules/entity-links/repo.ts:206:      created_at, updated_at, detached_by, detach_reason, detached_at
+apps/backend/src/modules/entity-links/repo.ts:221:      relation_type, visibility, status, managed_system_id, created_by,
+apps/backend/src/modules/entity-links/repo.ts:222:      created_at, updated_at, detached_by, detach_reason, detached_at
+apps/backend/src/modules/entity-links/repo.ts:232:export async function detachVocRelatedToLink(
+apps/backend/src/modules/entity-links/repo.ts:244:      status = 'detached',
+apps/backend/src/modules/entity-links/repo.ts:245:      detached_by = ${input.actorId},
+apps/backend/src/modules/entity-links/repo.ts:246:      detach_reason = ${input.reason},
+apps/backend/src/modules/entity-links/repo.ts:247:      detached_at = now(),
+apps/backend/src/modules/entity-links/repo.ts:254:      relation_type, visibility, status, managed_system_id, created_by,
+apps/backend/src/modules/entity-links/repo.ts:255:      created_at, updated_at, detached_by, detach_reason, detached_at
+apps/frontend/src/features/integration/components/EntityRelationRow.tsx:17:        <span className="font-mono text-xs text-text-muted">{link.relation_type}</span>
+apps/frontend/src/features/integration/components/EntityRelationRow.tsx:30:        {link.relation_type}
+apps/frontend/src/features/integration/components/LinkStatusBadge.tsx:9:  stale: {
+apps/frontend/src/features/integration/components/LinkStatusBadge.tsx:13:  detached: {
+apps/frontend/src/features/integration/components/LinkStatusBadge.tsx:17:  revoked: {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:87:          and event_type in ('entity_link.created', 'entity_link.detached')`,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:139:        relation_type: 'related_to',
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:176:        where id = $1 and status = 'active' and relation_type = 'related_to'`,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:189:      relation_type: 'related_to',
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:215:  it('POST rejects unsupported relation_type, source_type, target_type, and visibility', async () => {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:218:      { relation_type: 'evidence_of' },
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:219:      { source: { type: 'finding', id: sourceVoc.id } },
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:328:  it('PATCH detaches an active related_to link, preserves the row, and audits the detach', async () => {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:336:    const body = res.json<{ id: string; status: string; detached_at: string | null }>();
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:337:    expect(body).toMatchObject({ id: linkId, status: 'detached' });
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:338:    expect(body.detached_at).toEqual(expect.any(String));
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:342:      detached_by: string | null;
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:343:      detach_reason: string | null;
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:344:      detached_at: Date | null;
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:346:      `select status, detached_by, detach_reason, detached_at
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:353:      status: 'detached',
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:354:      detached_by: adminActorId,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:355:      detach_reason: 'No longer relevant',
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:357:    expect(linkRows.rows[0]?.detached_at).toBeInstanceOf(Date);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:361:        where event_type = 'entity_link.detached' and subject_id = $1`,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:369:      relation_type: 'related_to',
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:374:  it('after detach, GET /entity-links and VOC detail Links tab omit the detached link', async () => {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:380:    const detach = await patchEntityLink(adminCookie, linkId, { reason: 'Superseded' });
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:381:    expect(detach.statusCode).toBe(200);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:403:  it('GET workspace inventory returns active and detached rows newest-first', async () => {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:422:    const detach = await patchEntityLink(adminCookie, newerDetachedId, {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:425:    expect(detach.statusCode).toBe(200);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:447:    expect(fixtureItems.map((item) => item.status).sort()).toEqual(['active', 'detached']);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:451:  it('GET workspace inventory status filter narrows to detached rows', async () => {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:461:    const detached = await postEntityLink(
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:466:    expect(detached.statusCode).toBe(201);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:467:    const detachedId = detached.json<{ id: string }>().id;
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:468:    const detach = await patchEntityLink(adminCookie, detachedId, { reason: 'Status filter' });
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:469:    expect(detach.statusCode).toBe(200);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:471:    const res = await getEntityLinks(adminCookie, '?scope=workspace&status=detached');
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:474:    expect(body.items.some((item) => item.id === detachedId)).toBe(true);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:475:    expect(body.items.every((item) => item.status === 'detached')).toBe(true);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:537:      relation_type: 'related_to',
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:560:    const detach = await patchEntityLink(adminCookie, linkId, { reason: 'Regression' });
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:561:    expect(detach.statusCode).toBe(200);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:579:  it('PATCH on an already-detached link returns 409', async () => {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:585:    const first = await patchEntityLink(adminCookie, linkId, { reason: 'Initial detach' });
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:590:    expect(second.json<{ code: string }>().code).toBe('conflict.stale_write');
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:602:      uid('detach404'),
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:611:  it('PATCH returns 404 for an already-detached link when actor lacks target scope', async () => {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:617:    const detach = await patchEntityLink(adminCookie, linkId, { reason: 'Authorized detach' });
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:618:    expect(detach.statusCode).toBe(200);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:623:      uid('detached404'),
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:632:  it('PATCH rejects missing or empty detach reason', async () => {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:645:  it('detach frees the active unique slot so the same VOC pair can be linked again', async () => {
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:651:    const detach = await patchEntityLink(adminCookie, firstId, { reason: 'Relink needed' });
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:652:    expect(detach.statusCode).toBe(200);
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:658:    const count = await dbHandle.pool.query<{ active: number; detached: number }>(
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:661:          count(*) filter (where status = 'detached')::int as detached
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:666:    expect(count.rows[0]).toMatchObject({ active: 1, detached: 1 });
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/entity-links/repo.ts | sed -n '150,230p' && nl -ba apps/backend/src/modules/entity-links/routes.ts | sed -n '60,140p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+   150	  db: Db | Tx,
+   151	  input: {
+   152	    workspaceId: string;
+   153	    endpointType: 'voc';
+   154	    endpointId: string;
+   155	    side?: 'source' | 'target';
+   156	  },
+   157	): Promise<EntityLinkRow[]> {
+   158	  const sidePredicate =
+   159	    input.side === 'source'
+   160	      ? sql`source_type = ${input.endpointType} AND source_id = ${input.endpointId}`
+   161	      : input.side === 'target'
+   162	        ? sql`target_type = ${input.endpointType} AND target_id = ${input.endpointId}`
+   163	        : sql`(
+   164	            (source_type = ${input.endpointType} AND source_id = ${input.endpointId})
+   165	            OR (target_type = ${input.endpointType} AND target_id = ${input.endpointId})
+   166	          )`;
+   167	
+   168	  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+   169	    SELECT
+   170	      id, workspace_id, source_type, source_id, target_type, target_id,
+   171	      relation_type, visibility, status, managed_system_id, created_by,
+   172	      created_at, updated_at, detached_by, detach_reason, detached_at
+   173	    FROM core.entity_links
+   174	    WHERE workspace_id = ${input.workspaceId}
+   175	      AND status = 'active'
+   176	      AND ${sidePredicate}
+   177	    ORDER BY created_at DESC, id DESC
+   178	  `);
+   179	  return result.rows.map(mapEntityLinkRow);
+   180	}
+   181	
+   182	export async function selectLinksByWorkspace(
+   183	  db: Db | Tx,
+   184	  input: {
+   185	    workspaceId: string;
+   186	    statuses?: EntityLinkRow['status'][];
+   187	    relationType?: EntityLinkRow['relation_type'];
+   188	    managedSystemId?: string;
+   189	  },
+   190	): Promise<EntityLinkRow[]> {
+   191	  const predicates = [sql`workspace_id = ${input.workspaceId}`];
+   192	  if (input.statuses !== undefined && input.statuses.length > 0) {
+   193	    predicates.push(sql`status::text = ANY(${input.statuses})`);
+   194	  }
+   195	  if (input.relationType !== undefined) {
+   196	    predicates.push(sql`relation_type = ${input.relationType}`);
+   197	  }
+   198	  if (input.managedSystemId !== undefined) {
+   199	    predicates.push(sql`managed_system_id = ${input.managedSystemId}`);
+   200	  }
+   201	
+   202	  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+   203	    SELECT
+   204	      id, workspace_id, source_type, source_id, target_type, target_id,
+   205	      relation_type, visibility, status, managed_system_id, created_by,
+   206	      created_at, updated_at, detached_by, detach_reason, detached_at
+   207	    FROM core.entity_links
+   208	    WHERE ${sql.join(predicates, sql` AND `)}
+   209	    ORDER BY created_at DESC, id DESC
+   210	  `);
+   211	  return result.rows.map(mapEntityLinkRow);
+   212	}
+   213	
+   214	export async function selectEntityLinkById(
+   215	  db: Db | Tx,
+   216	  input: { workspaceId: string; linkId: string },
+   217	): Promise<EntityLinkRow | null> {
+   218	  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+   219	    SELECT
+   220	      id, workspace_id, source_type, source_id, target_type, target_id,
+   221	      relation_type, visibility, status, managed_system_id, created_by,
+   222	      created_at, updated_at, detached_by, detach_reason, detached_at
+   223	    FROM core.entity_links
+   224	    WHERE workspace_id = ${input.workspaceId}
+   225	      AND id = ${input.linkId}
+   226	    LIMIT 1
+   227	  `);
+   228	  const row = result.rows[0];
+   229	  return row ? mapEntityLinkRow(row) : null;
+   230	}
+    60	        parsed.data.visibility === undefined
+    61	          ? createArgs
+    62	          : { ...createArgs, visibility: parsed.data.visibility },
+    63	      );
+    64	      return reply.code(result.status).send(result.link);
+    65	    },
+    66	  });
+    67	
+    68	  app.route({
+    69	    method: 'GET',
+    70	    url: '/entity-links',
+    71	    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    72	    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    73	    handler: async (req, reply) => {
+    74	      const sess = req.session;
+    75	      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+    76	
+    77	      const parsed = listEntityLinksQuerySchema.safeParse(req.query);
+    78	      if (!parsed.success) {
+    79	        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+    80	          fields: fieldsFromZodIssues(parsed.error.issues),
+    81	        });
+    82	      }
+    83	
+    84	      const data = parsed.data;
+    85	      const hasSource = data.source_type !== undefined && data.source_id !== undefined;
+    86	      const hasTarget = data.target_type !== undefined && data.target_id !== undefined;
+    87	      const isInventoryMode = data.scope === 'workspace' || (!hasSource && !hasTarget);
+    88	      if (isInventoryMode) {
+    89	        const items = await entityLinksService.listInventoryLinks({
+    90	          actor: {
+    91	            actor_id: sess.actor_id,
+    92	            workspace_id: sess.workspace_id,
+    93	            role_level: sess.role_level,
+    94	          },
+    95	          ...(data.status !== undefined ? { statuses: data.status } : {}),
+    96	          ...(data.relation_type !== undefined ? { relationType: data.relation_type } : {}),
+    97	          ...(data.managed_system_id !== undefined
+    98	            ? { managedSystemId: data.managed_system_id }
+    99	            : {}),
+   100	        });
+   101	        return reply.code(200).send({ items });
+   102	      }
+   103	
+   104	      let endpoint: { type: 'voc'; id: string };
+   105	      let side: 'source' | 'target';
+   106	      if (data.source_type !== undefined && data.source_id !== undefined) {
+   107	        endpoint = { type: data.source_type, id: data.source_id };
+   108	        side = 'source';
+   109	      } else if (data.target_type !== undefined && data.target_id !== undefined) {
+   110	        endpoint = { type: data.target_type, id: data.target_id };
+   111	        side = 'target';
+   112	      } else {
+   113	        throw new HttpError('internal.unexpected', 'validated entity link query lost endpoint');
+   114	      }
+   115	
+   116	      const items = await entityLinksService.listLinks({
+   117	        actor: {
+   118	          actor_id: sess.actor_id,
+   119	          workspace_id: sess.workspace_id,
+   120	          role_level: sess.role_level,
+   121	        },
+   122	        endpoint,
+   123	        side,
+   124	      });
+   125	      return reply.code(200).send({ items });
+   126	    },
+   127	  });
+   128	
+   129	  app.route({
+   130	    method: 'PATCH',
+   131	    url: '/entity-links/:id',
+   132	    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+   133	    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+   134	    handler: async (req, reply) => {
+   135	      const sess = req.session;
+   136	      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+   137	
+   138	      const parsedParams = entityLinkParamsSchema.safeParse(req.params);
+   139	      if (!parsedParams.success) {
+   140	        return sendError(reply, 'validation.failed', 'invalid route parameters', {
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts | sed -n '1,120p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	// POST/GET/PATCH /entity-links integration tests — Slice 4.1 #112 + Slice 4.2 #113.
+     2	//
+     3	// Gate: DATABASE_URL + WORKSPACE_ID + DATABASE_URL_MIGRATE. The migrate role is
+     4	// required because core.entity_links is append-only to fops_app.
+     5	
+     6	import type { FastifyInstance } from 'fastify';
+     7	import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+     8	
+     9	import { loadConfig } from '../../../config.js';
+    10	import { type DbHandle, createDb } from '../../../db/client.js';
+    11	import { buildServer } from '../../../server.js';
+    12	import {
+    13	  SESSION_COOKIE_NAME,
+    14	  cleanupReadTestTables,
+    15	  grantCapability,
+    16	  insertDevActor,
+    17	  insertMsDirectly,
+    18	  insertVocDirectly,
+    19	  loginAs,
+    20	  uid,
+    21	} from '../../voc/__tests__/_seed-helpers.js';
+    22	
+    23	const APP_URL = process.env.DATABASE_URL ?? '';
+    24	const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
+    25	const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
+    26	const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
+    27	
+    28	const SLUG_PREFIX = 'it-links';
+    29	
+    30	describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
+    31	  let dbHandle: DbHandle;
+    32	  let migrateHandle: DbHandle;
+    33	  let app: FastifyInstance;
+    34	  let adminCookie: string;
+    35	  let adminActorId: string;
+    36	  let reporterId: string;
+    37	
+    38	  beforeAll(async () => {
+    39	    process.env.NODE_ENV = 'test';
+    40	    dbHandle = createDb(APP_URL);
+    41	    migrateHandle = createDb(MIGRATE_URL);
+    42	    app = await buildServer({ config: loadConfig(), dbHandle });
+    43	    await app.ready();
+    44	
+    45	    adminCookie = await loginAs(app, 'mock-admin-1');
+    46	    const admin = await dbHandle.pool.query<{ id: string }>(
+    47	      `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
+    48	      [WORKSPACE_ID],
+    49	    );
+    50	    adminActorId = admin.rows[0]?.id ?? '';
+    51	    if (!adminActorId) throw new Error('mock-admin-1 not found');
+    52	
+    53	    await loginAs(app, 'mock-user-1');
+    54	    const reporter = await dbHandle.pool.query<{ id: string }>(
+    55	      `select id from core.actors where external_id = 'mock-user-1' and workspace_id = $1`,
+    56	      [WORKSPACE_ID],
+    57	    );
+    58	    reporterId = reporter.rows[0]?.id ?? '';
+    59	    if (!reporterId) throw new Error('mock-user-1 not found');
+    60	  });
+    61	
+    62	  beforeEach(async () => {
+    63	    await dbHandle.pool.query('delete from core.rate_limits');
+    64	    await cleanupEntityLinkFixtures();
+    65	  });
+    66	
+    67	  afterAll(async () => {
+    68	    await cleanupEntityLinkFixtures();
+    69	    await app?.close();
+    70	    await dbHandle?.close();
+    71	    await migrateHandle?.close();
+    72	  });
+    73	
+    74	  async function cleanupEntityLinkFixtures(): Promise<void> {
+    75	    if (!migrateHandle) return;
+    76	    await migrateHandle.pool.query(
+    77	      `delete from core.entity_links
+    78	        where workspace_id = $1
+    79	          and managed_system_id in (
+    80	            select id from core.managed_systems where workspace_id = $1 and slug like $2
+    81	          )`,
+    82	      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    83	    );
+    84	    await migrateHandle.pool.query(
+    85	      `delete from core.audit_log
+    86	        where workspace_id = $1
+    87	          and event_type in ('entity_link.created', 'entity_link.detached')`,
+    88	      [WORKSPACE_ID],
+    89	    );
+    90	    await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
+    91	  }
+    92	
+    93	  async function seedVocPair(): Promise<{
+    94	    msA: string;
+    95	    msB: string;
+    96	    sourceVoc: { id: string };
+    97	    targetVoc: { id: string };
+    98	  }> {
+    99	    const msA = await insertMsDirectly(
+   100	      dbHandle,
+   101	      WORKSPACE_ID,
+   102	      `${uid(SLUG_PREFIX)}-a`,
+   103	      'Links MS-A',
+   104	    );
+   105	    const msB = await insertMsDirectly(
+   106	      dbHandle,
+   107	      WORKSPACE_ID,
+   108	      `${uid(SLUG_PREFIX)}-b`,
+   109	      'Links MS-B',
+   110	    );
+   111	    const sourceVoc = await insertVocDirectly(
+   112	      dbHandle,
+   113	      WORKSPACE_ID,
+   114	      msA,
+   115	      reporterId,
+   116	      'Link Source VOC',
+   117	    );
+   118	    const targetVoc = await insertVocDirectly(
+   119	      dbHandle,
+   120	      WORKSPACE_ID,
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba docs/design/11-entity-linking.md | sed -n '88,108p' && nl -ba docs/implementation/06-entity-linking-contract.md | sed -n '72,88p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+    88	
+    89	Slice 4.2 detach lifecycle (#113): production support detaches only existing
+    90	active VOC↔VOC `related_to` links via `PATCH /entity-links/:id` with a required
+    91	non-empty reason. Detach transitions `status` to `detached`, records
+    92	`detached_by`, `detach_reason`, and `detached_at`, and preserves the row; hard
+    93	delete and `DELETE /entity-links/:id` are intentionally not used.
+    94	
+    95	Slice 4.3 inventory UI (#114): `GET /entity-links?scope=workspace` lists the
+    96	workspace-wide audit inventory across `active`, `stale`, `detached`, and
+    97	`revoked` rows, newest first. Filters are read-only: `status`,
+    98	`relation_type`, and `managed_system_id`. Production data still only creates
+    99	VOC↔VOC `related_to` rows and does not synthesize `stale` or `revoked` rows in
+   100	this slice.
+   101	
+   102	## Visibility
+   103	
+   104	```text
+   105	- internal_only
+   106	- summary_visible
+   107	- visible_to_reporter
+   108	- admin_only
+    72	
+    73	```text
+    74	GET /entity-links?scope=workspace
+    75	- default inventory mode is also used when no source or target endpoint is
+    76	  supplied.
+    77	- endpoint mode and workspace inventory mode are mutually exclusive.
+    78	- optional filters: status=active|stale|detached|revoked, relation_type=related_to,
+    79	  managed_system_id=<uuid>
+    80	- order: created_at DESC, id DESC
+    81	- response: { items: EntityLinkDto[] }
+    82	- authz: every row checks voc.read on both endpoints' Managed Systems.
+    83	  Rows are visibility_state=allowed only when both endpoints are readable;
+    84	  otherwise they are visibility_state=hidden.
+    85	- hidden inventory rows expose audit metadata but never source_id, target_id, or
+    86	  synthesized endpoint summaries.
+    87	```
+    88	
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'rg -n "afterEach|afterAll|DELETE|delete from" apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts' in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+7:import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+63:    await dbHandle.pool.query('delete from core.rate_limits');
+67:  afterAll(async () => {
+77:      `delete from core.entity_links
+85:      `delete from core.audit_log
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+exec
+/bin/zsh -lc 'git diff --name-only && git status --short' in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts
+apps/backend/src/modules/entity-links/repo.ts
+apps/backend/src/modules/entity-links/routes.ts
+apps/backend/src/modules/entity-links/service.ts
+docs/design/11-entity-linking.md
+docs/implementation/06-entity-linking-contract.md
+packages/shared/src/entity-links.ts
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+ M apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts
+ M apps/backend/src/modules/entity-links/repo.ts
+ M apps/backend/src/modules/entity-links/routes.ts
+ M apps/backend/src/modules/entity-links/service.ts
+ M docs/design/11-entity-linking.md
+ M docs/implementation/06-entity-linking-contract.md
+ M packages/shared/src/entity-links.ts
+?? .review/ISSUE-114-DEVIATIONS.md
+?? .review/ISSUE-114-PIXEL-NOTES.md
+?? .review/ISSUE-114-PROMPT.txt
+?? .review/ISSUE-114-REVIEW-PROMPT.txt
+?? .review/ISSUE-114-REVIEW.raw.txt
+?? apps/frontend/src/features/integration/components/
+?? apps/frontend/src/features/integration/hooks/
+?? apps/frontend/src/features/integration/routes/
+?? apps/frontend/src/routes/_authed/integration/
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "rg -n \"function apiClient|export async function apiClient|const apiClient|resolveActors|fetchManagedSystems\" apps/frontend/src/lib/api* apps/frontend/src/lib -g '*.ts'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+apps/frontend/src/lib/api/managed-systems.ts:45:export async function fetchManagedSystems(options?: {
+apps/frontend/src/lib/api/client.ts:31:export async function apiClient<T = unknown>(
+apps/frontend/src/lib/api/actors.ts:23:export async function resolveActors(
+apps/frontend/src/lib/api/actors.ts:23:export async function resolveActors(
+apps/frontend/src/lib/api/managed-systems.ts:45:export async function fetchManagedSystems(options?: {
+apps/frontend/src/lib/api/client.ts:31:export async function apiClient<T = unknown>(
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "rg -n \"ListFilterButton|interface ListFilter|function ListFilter\" packages/ui/src apps/frontend/src -g '*.tsx'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+packages/ui/src/toolbar/ListFilterButton.tsx:18:export interface ListFilterButtonProps {
+packages/ui/src/toolbar/ListFilterButton.tsx:29:export function ListFilterButton({
+packages/ui/src/toolbar/ListFilterButton.tsx:34:}: ListFilterButtonProps) {
+packages/ui/src/toolbar/ListFilterButton.tsx:114:ListFilterButton.displayName = 'ListFilterButton';
+apps/frontend/src/features/voc/routes/__tests__/InboxRoute.test.tsx:251:  // ListFilterButton key were two different names bridged by hand-rolled
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:5:import { ListFilterButton } from '../ListFilterButton.js';
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:6:import type { FilterCategory } from '../ListFilterButton.js';
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:34:describe('ListFilterButton — button label', () => {
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:36:    render(<ListFilterButton categories={categories} values={{}} onChange={() => {}} />);
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:45:      <ListFilterButton
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:56:      <ListFilterButton
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:66:describe('ListFilterButton — popover content', () => {
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:68:    render(<ListFilterButton categories={categories} values={{}} onChange={() => {}} />);
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:75:    render(<ListFilterButton categories={categories} values={{}} onChange={() => {}} />);
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:84:    render(<ListFilterButton categories={categories} values={{}} onChange={onChange} />);
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:97:      <ListFilterButton
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:114:describe('ListFilterButton — 필터 초기화', () => {
+packages/ui/src/toolbar/__tests__/ListFilterButton.test.tsx:119:      <ListFilterButton
+apps/frontend/src/features/voc/routes/InboxRoute.tsx:9:  ListFilterButton,
+apps/frontend/src/features/voc/routes/InboxRoute.tsx:161:  // Parse comma-list filter strings into arrays for ListFilterButton.
+apps/frontend/src/features/voc/routes/InboxRoute.tsx:279:            <ListFilterButton
+apps/frontend/src/features/integration/routes/LinksRoute.tsx:4:import { Button, ListFilterButton, ListToolbar, type ListToolbarTab, SearchInput } from '@fops/ui';
+apps/frontend/src/features/integration/routes/LinksRoute.tsx:121:            <ListFilterButton
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "rg -n \"data-shell=\\\"list\\\"|function ListShell|export.*ListShell\" packages/ui/src/layout packages/ui/src -g '*.tsx'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+packages/ui/src/layout/ListShell.tsx:6:export interface ListShellProps {
+packages/ui/src/layout/ListShell.tsx:22:export function ListShell({ toolbar, list, tabs, detailPanel, className }: ListShellProps) {
+packages/ui/src/layout/ListShell.tsx:27:      data-shell="list"
+packages/ui/src/layout/ListShell.tsx:6:export interface ListShellProps {
+packages/ui/src/layout/ListShell.tsx:22:export function ListShell({ toolbar, list, tabs, detailPanel, className }: ListShellProps) {
+packages/ui/src/layout/ListShell.tsx:27:      data-shell="list"
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba apps/frontend/src/lib/api/index.ts | sed -n '1,200p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	export * from './types';
+     2	export * from './errorMapper';
+     3	export * from './useIdempotencyKey';
+     4	export * from './client';
+     5	export * from './auth';
+     6	export * from './permissions';
+     7	export * from './actors';
+     8	export * from './managed-systems';
+     9	export * from './analytics-areas';
+    10	export * from './attachments';
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba apps/frontend/src/lib/api/client.ts | sed -n '1,120p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	import { ApiError, type ApiErrorEnvelope, type RateLimitInfo } from './types';
+     2	
+     3	export interface ApiClientOptions {
+     4	  body?: unknown;
+     5	  /**
+     6	   * Multipart body. When set, `body` is ignored and Content-Type is NOT set
+     7	   * (browser fills in `multipart/form-data; boundary=...`). Used by
+     8	   * POST /attachments (PLAN-22 C5).
+     9	   */
+    10	  formData?: FormData;
+    11	  idempotencyKey?: string;
+    12	  ifMatch?: string;
+    13	  ifNoneMatch?: string;
+    14	  signal?: AbortSignal;
+    15	  headers?: Record<string, string>;
+    16	}
+    17	
+    18	export interface ApiResponse<T> {
+    19	  status: number;
+    20	  data: T;
+    21	  etag: string | undefined;
+    22	  requestId: string | undefined;
+    23	  rateLimit?: RateLimitInfo;
+    24	  retryAfterSeconds?: number;
+    25	}
+    26	
+    27	// PUT is intentionally excluded: the locked API contract auto-mints Idempotency-Key
+    28	// only for POST/PATCH/DELETE. Include PUT explicitly if a future endpoint opts in.
+    29	const MUTATION_METHODS = new Set(['POST', 'PATCH', 'DELETE']);
+    30	
+    31	export async function apiClient<T = unknown>(
+    32	  method: string,
+    33	  path: string,
+    34	  opts: ApiClientOptions = {},
+    35	): Promise<ApiResponse<T>> {
+    36	  const upper = method.toUpperCase();
+    37	  const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers };
+    38	
+    39	  // Only JSON bodies set Content-Type; multipart leaves it to the browser
+    40	  // so it can append the boundary parameter.
+    41	  if (opts.formData === undefined && opts.body !== undefined) {
+    42	    headers['Content-Type'] = 'application/json';
+    43	  }
+    44	
+    45	  if (MUTATION_METHODS.has(upper)) {
+    46	    headers['Idempotency-Key'] = opts.idempotencyKey ?? mintInlineKey();
+    47	  }
+    48	  if (opts.ifMatch) headers['If-Match'] = opts.ifMatch;
+    49	  if (opts.ifNoneMatch) headers['If-None-Match'] = opts.ifNoneMatch;
+    50	
+    51	  const fetchInit: RequestInit = {
+    52	    method: upper,
+    53	    headers,
+    54	    credentials: 'include',
+    55	  };
+    56	  if (opts.signal != null) fetchInit.signal = opts.signal;
+    57	  if (opts.formData !== undefined) {
+    58	    fetchInit.body = opts.formData;
+    59	  } else if (opts.body !== undefined) {
+    60	    fetchInit.body = JSON.stringify(opts.body);
+    61	  }
+    62	  const res = await fetch(path, fetchInit);
+    63	
+    64	  const etag = res.headers.get('etag') ?? undefined;
+    65	  const requestId = res.headers.get('x-request-id') ?? undefined;
+    66	  const { rateLimit, retryAfterSeconds } = parseRateLimitHeaders(res.headers);
+    67	
+    68	  if (res.status === 304) {
+    69	    const base: ApiResponse<T> = { status: 304, data: undefined as T, etag, requestId };
+    70	    if (rateLimit) base.rateLimit = rateLimit;
+    71	    if (retryAfterSeconds !== undefined) base.retryAfterSeconds = retryAfterSeconds;
+    72	    return base;
+    73	  }
+    74	
+    75	  const text = await res.text();
+    76	  const data = text ? (JSON.parse(text) as unknown) : undefined;
+    77	
+    78	  if (!res.ok) {
+    79	    const envelope: ApiErrorEnvelope =
+    80	      data && typeof data === 'object' && 'code' in data
+    81	        ? (data as ApiErrorEnvelope)
+    82	        : { code: 'internal.unexpected', message: `HTTP ${res.status}` };
+    83	    throw new ApiError(res.status, envelope, requestId, rateLimit, retryAfterSeconds);
+    84	  }
+    85	
+    86	  const base: ApiResponse<T> = { status: res.status, data: data as T, etag, requestId };
+    87	  if (rateLimit) base.rateLimit = rateLimit;
+    88	  if (retryAfterSeconds !== undefined) base.retryAfterSeconds = retryAfterSeconds;
+    89	  return base;
+    90	}
+    91	
+    92	function mintInlineKey(): string {
+    93	  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    94	  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    95	}
+    96	
+    97	// Parses fastify @fastify/rate-limit response headers.
+    98	// `x-ratelimit-reset` is unix epoch seconds; `retry-after` is delta-seconds.
+    99	// All four headers must be present and integer-parseable for rateLimit to be populated;
+   100	// otherwise the field is omitted (callers fall back to generic copy).
+   101	function parseRateLimitHeaders(
+   102	  headers: Headers,
+   103	): { rateLimit?: RateLimitInfo; retryAfterSeconds?: number } {
+   104	  const limit = parseIntHeader(headers.get('x-ratelimit-limit'));
+   105	  const remaining = parseIntHeader(headers.get('x-ratelimit-remaining'));
+   106	  const reset = parseIntHeader(headers.get('x-ratelimit-reset'));
+   107	  const retryAfter = parseIntHeader(headers.get('retry-after'));
+   108	
+   109	  const rateLimit: RateLimitInfo | undefined =
+   110	    limit !== undefined && remaining !== undefined && reset !== undefined
+   111	      ? { limit, remaining, resetAt: new Date(reset * 1000) }
+   112	      : undefined;
+   113	
+   114	  const result: { rateLimit?: RateLimitInfo; retryAfterSeconds?: number } = {};
+   115	  if (rateLimit) result.rateLimit = rateLimit;
+   116	  if (retryAfter !== undefined) result.retryAfterSeconds = retryAfter;
+   117	  return result;
+   118	}
+   119	
+   120	function parseIntHeader(raw: string | null): number | undefined {
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba packages/ui/src/toolbar/ListFilterButton.tsx | sed -n '1,150p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	import * as React from 'react';
+     2	import { cn } from '../utils/cn.js';
+     3	import { Button } from '../components/Button.js';
+     4	import { Badge } from '../components/shadcn/badge.js';
+     5	import {
+     6	  Popover,
+     7	  PopoverContent,
+     8	  PopoverTrigger,
+     9	} from '../components/shadcn/popover.js';
+    10	import { Checkbox } from '../components/shadcn/checkbox.js';
+    11	
+    12	export interface FilterCategory {
+    13	  key: string;
+    14	  label: string;
+    15	  options: { value: string; label: string }[];
+    16	}
+    17	
+    18	export interface ListFilterButtonProps {
+    19	  categories: FilterCategory[];
+    20	  values: Record<string, string[]>;
+    21	  onChange: (next: Record<string, string[]>) => void;
+    22	  className?: string;
+    23	}
+    24	
+    25	function totalCount(values: Record<string, string[]>): number {
+    26	  return Object.values(values).reduce((sum, arr) => sum + arr.length, 0);
+    27	}
+    28	
+    29	export function ListFilterButton({
+    30	  categories,
+    31	  values,
+    32	  onChange,
+    33	  className,
+    34	}: ListFilterButtonProps) {
+    35	  const [open, setOpen] = React.useState(false);
+    36	  const count = totalCount(values);
+    37	
+    38	  function handleToggle(categoryKey: string, optionValue: string, checked: boolean) {
+    39	    const current = values[categoryKey] ?? [];
+    40	    const next = checked
+    41	      ? [...current, optionValue]
+    42	      : current.filter((v) => v !== optionValue);
+    43	
+    44	    const nextValues: Record<string, string[]> = { ...values };
+    45	    if (next.length === 0) {
+    46	      delete nextValues[categoryKey];
+    47	    } else {
+    48	      nextValues[categoryKey] = next;
+    49	    }
+    50	    onChange(nextValues);
+    51	  }
+    52	
+    53	  function handleReset() {
+    54	    onChange({});
+    55	    setOpen(false);
+    56	  }
+    57	
+    58	  return (
+    59	    <Popover open={open} onOpenChange={setOpen}>
+    60	      <PopoverTrigger asChild>
+    61	        <Button variant="outline" size="sm" className={cn('gap-1.5', className)}>
+    62	          필터
+    63	          {count > 0 && (
+    64	            <Badge variant="secondary" className="px-1.5 py-0 text-xs">
+    65	              {count}
+    66	            </Badge>
+    67	          )}
+    68	        </Button>
+    69	      </PopoverTrigger>
+    70	      <PopoverContent align="start" className="w-64 p-3">
+    71	        <div className="flex flex-col gap-4">
+    72	          {categories.map((category) => {
+    73	            const selected = values[category.key] ?? [];
+    74	            return (
+    75	              <div key={category.key} className="flex flex-col gap-2">
+    76	                <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">
+    77	                  {category.label}
+    78	                </p>
+    79	                {category.options.map((option) => {
+    80	                  const isChecked = selected.includes(option.value);
+    81	                  return (
+    82	                    <label
+    83	                      key={option.value}
+    84	                      className="flex items-center gap-2 cursor-pointer text-sm text-text-primary"
+    85	                    >
+    86	                      <Checkbox
+    87	                        checked={isChecked}
+    88	                        onCheckedChange={(checked) =>
+    89	                          handleToggle(category.key, option.value, checked === true)
+    90	                        }
+    91	                      />
+    92	                      {option.label}
+    93	                    </label>
+    94	                  );
+    95	                })}
+    96	              </div>
+    97	            );
+    98	          })}
+    99	        </div>
+   100	        <div className="mt-4 border-t border-border-subtle pt-3">
+   101	          <button
+   102	            type="button"
+   103	            className="text-xs text-accent-primary hover:underline"
+   104	            onClick={handleReset}
+   105	          >
+   106	            필터 초기화
+   107	          </button>
+   108	        </div>
+   109	      </PopoverContent>
+   110	    </Popover>
+   111	  );
+   112	}
+   113	
+   114	ListFilterButton.displayName = 'ListFilterButton';
+
+hook: PostToolUse
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PostToolUse Failed
+hook: PreToolUse
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "node -e \"const path=require('path'); console.log(path.normalize('apps/frontend/src/features/integration/routes/__tests__/../../../../routes/_authed/integration/links'))\"" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+apps/frontend/src/routes/_authed/integration/links
+
+hook: PostToolUse
+hook: PostToolUse Failed
+codex
+One frontend contract issue is confirmed: the new files use Tailwind arbitrary pixel values, which the issue explicitly asked the reviewer to grep and flag. I’m doing one last pass for test gaps and deviation judgment, then I’ll return only the requested JSON.
+hook: PreToolUse
+hook: PreToolUse Failed
+exec
+/bin/zsh -lc "nl -ba packages/ui/src/layout/ListShell.tsx | sed -n '1,100p' && nl -ba apps/frontend/src/features/voc/routes/InboxRoute.tsx | sed -n '240,315p'" in /Users/hyojung/Desktop/2026/wt-114-integration-links-ui
+ succeeded in 0ms:
+     1	import type * as React from 'react';
+     2	import { cn } from '../utils/cn';
+     3	import { ShellHeader, type ShellHeaderProps } from './ShellHeader';
+     4	import { useDetailPanelSlot } from './useDetailPanelSlot';
+     5	
+     6	export interface ListShellProps {
+     7	  /** Toolbar (filter + sort + search). 50px ShellHeader variant="toolbar". */
+     8	  toolbar?: ShellHeaderProps;
+     9	  /** List rows. ListShell does NOT scroll itself — give the list its own overflow. */
+    10	  list: React.ReactNode;
+    11	  /** Optional tabs row below the toolbar (Inbox: untriaged/high/unassigned/…). */
+    12	  tabs?: React.ReactNode;
+    13	  /** Optional detail-panel intent. Forwarded to AppFrame's global slot. */
+    14	  detailPanel?: React.ReactNode;
+    15	  className?: string;
+    16	}
+    17	
+    18	/**
+    19	 * ListShell — filter+list+detail routes (VOC inbox/my, Tasks, Findings, Evidence, Entity Links).
+    20	 * Layout: 50px toolbar + optional tabs + main list. detailPanel forwards to AppFrame slot.
+    21	 */
+    22	export function ListShell({ toolbar, list, tabs, detailPanel, className }: ListShellProps) {
+    23	  useDetailPanelSlot(detailPanel);
+    24	  return (
+    25	    <div
+    26	      className={cn('flex flex-col flex-1 min-h-0 bg-surface-list', className)}
+    27	      data-shell="list"
+    28	    >
+    29	      {toolbar && <ShellHeader {...toolbar} variant="toolbar" />}
+    30	      {tabs && (
+    31	        <div
+    32	          className="flex h-toolbar items-center border-b border-border-subtle px-4 bg-surface-canvas"
+    33	          data-list-shell-tabs=""
+    34	          data-toolbar-height="50"
+    35	        >
+    36	          {tabs}
+    37	        </div>
+    38	      )}
+    39	      <div className="flex-1 min-h-0 overflow-y-auto">{list}</div>
+    40	    </div>
+    41	  );
+    42	}
+   240	  // ShellHeader-based `toolbar` prop. ListShell's `toolbar` prop renders a
+   241	  // ShellHeader which has no Tabs slot; ListToolbar from @fops/ui already owns
+   242	  // both the title/tabs row and the actions row in one sticky component.
+   243	
+   244	  const outOfScopeBanner = vocList.data?.out_of_scope_summary ? (
+   245	    <PermissionBlockedPanel
+   246	      state="summary_visible"
+   247	      category="조회 권한 외 VOC"
+   248	      summary={
+   249	        <div>
+   250	          <p>{vocList.data.out_of_scope_summary.count}건의 VOC를 조회할 수 없습니다.</p>
+   251	          <p className="text-xs text-text-muted">
+   252	            심각도 분포:{' '}
+   253	            {Object.entries(vocList.data.out_of_scope_summary.severity_distribution)
+   254	              .map(([sev, n]) => `${sev}=${String(n)}`)
+   255	              .join(', ')}
+   256	          </p>
+   257	        </div>
+   258	      }
+   259	      className="mx-4 mt-3"
+   260	    />
+   261	  ) : null;
+   262	
+   263	  const list = (
+   264	    <>
+   265	      <ListToolbar
+   266	        {...(view === 'inbox'
+   267	          ? {
+   268	              tabs: INBOX_TABS,
+   269	              activeTab,
+   270	              onTabChange: handleTabChange,
+   271	            }
+   272	          : { title: 'My VOCs' })}
+   273	        action={
+   274	          <div className="flex items-center gap-2">
+   275	            {/* Prototype placeholder verbatim (screen-voc.jsx). value/onChange is
+   276	                deferred: SearchInput is disabled until the search endpoint ships
+   277	                (no live search facet on GET /vocs). */}
+   278	            <SearchInput placeholder="필터, 키워드…" />
+   279	            <ListFilterButton
+   280	              categories={FILTER_CATEGORIES}
+   281	              values={currentFilters}
+   282	              onChange={handleFiltersChange}
+   283	            />
+   284	            <ListSortButton
+   285	              options={SORT_OPTIONS}
+   286	              value={currentSort}
+   287	              defaultValue={DEFAULT_SORT}
+   288	              onChange={handleSortChange}
+   289	            />
+   290	            {/* Prototype: primary Button (not a text link). Label verbatim "New VOC". */}
+   291	            <Button asChild variant="primary" size="sm" className="gap-1.5 whitespace-nowrap">
+   292	              <Link to="/vocs" search={{ action: 'create' }}>
+   293	                <Plus className="h-4 w-4" aria-hidden="true" />
+   294	                New VOC
+   295	              </Link>
+   296	            </Button>
+   297	          </div>
+   298	        }
+   299	      />
+   300	      {outOfScopeBanner}
+   301	      <VocList
+   302	        items={vocList.data?.items ?? []}
+   303	        loading={vocList.isLoading}
+   304	        error={vocList.error ?? null}
+   305	        selectedId={search.selected ?? null}
+   306	        onSelect={handleRowSelect}
+   307	        view={view}
+   308	        onRetry={() => {
+   309	          void vocList.refetch();
+   310	        }}
+   311	      />
+   312	    </>
+   313	  );
+   314	
+   315	  const detailPanel =
+
+hook: PostToolUse
+hook: PostToolUse Failed
+codex
+{"verdict":"request_changes","summary":"Backend inventory behavior and visibility are mostly correct, but the frontend violates the explicit Pack 17 no-raw-px token constraint and has a weak filter test gap.","findings":[{"severity":"major","area":"tokens","file":"apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx:82","issue":"New frontend files use raw arbitrary pixel classes such as min-w-[1040px], w-[104px], text-[11px], and h-[52px], despite the issue explicitly requiring no raw hex/px in new FE files.","fix":"Replace arbitrary pixel values with existing token/scale classes or add named Pack 17 tokens where a precise prototype dimension is required."},{"severity":"minor","area":"tests","file":"apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:182","issue":"The frontend filter-change test only proves the status tab sends status=detached; it does not prove the type filter sends relation_type=related_to even though the route exposes a type filter wired to the backend query.","fix":"Add a test that opens the filter control, selects related_to, and asserts the /entity-links request includes relation_type=related_to."}],"deviations_acceptable_with_doc":["Omitting prototype detail-panel actions is acceptable because this slice is read-only and detach/refresh mutations are out of scope.","Omitting the bulk action bar is acceptable because the checkbox column is visual-only per issue scope.","Restricting the relation type filter to related_to is acceptable because other prototype relation types are mock/future vocabulary, not Slice 4.3 production support.","Rendering real Managed System names without synthesized colored marks is acceptable because the API has no mark/color field and no second Integration consumer justifies a shared helper.","Rendering hidden rows as compact permission-limited badges is acceptable because backend hidden DTOs intentionally omit source_id and target_id."],"must_fix_before_commit":["Remove all raw arbitrary px classes from the new integration links frontend files or replace them with named tokens/approved scale classes.","Add frontend coverage that the type filter changes the backend query to include relation_type=related_to."]}
+hook: Stop
+hook: Stop
+hook: Stop Failed
+hook: Stop Failed
+tokens used
+126,406
+{"verdict":"request_changes","summary":"Backend inventory behavior and visibility are mostly correct, but the frontend violates the explicit Pack 17 no-raw-px token constraint and has a weak filter test gap.","findings":[{"severity":"major","area":"tokens","file":"apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx:82","issue":"New frontend files use raw arbitrary pixel classes such as min-w-[1040px], w-[104px], text-[11px], and h-[52px], despite the issue explicitly requiring no raw hex/px in new FE files.","fix":"Replace arbitrary pixel values with existing token/scale classes or add named Pack 17 tokens where a precise prototype dimension is required."},{"severity":"minor","area":"tests","file":"apps/frontend/src/features/integration/routes/__tests__/LinksRoute.test.tsx:182","issue":"The frontend filter-change test only proves the status tab sends status=detached; it does not prove the type filter sends relation_type=related_to even though the route exposes a type filter wired to the backend query.","fix":"Add a test that opens the filter control, selects related_to, and asserts the /entity-links request includes relation_type=related_to."}],"deviations_acceptable_with_doc":["Omitting prototype detail-panel actions is acceptable because this slice is read-only and detach/refresh mutations are out of scope.","Omitting the bulk action bar is acceptable because the checkbox column is visual-only per issue scope.","Restricting the relation type filter to related_to is acceptable because other prototype relation types are mock/future vocabulary, not Slice 4.3 production support.","Rendering real Managed System names without synthesized colored marks is acceptable because the API has no mark/color field and no second Integration consumer justifies a shared helper.","Rendering hidden rows as compact permission-limited badges is acceptable because backend hidden DTOs intentionally omit source_id and target_id."],"must_fix_before_commit":["Remove all raw arbitrary px classes from the new integration links frontend files or replace them with named tokens/approved scale classes.","Add frontend coverage that the type filter changes the backend query to include relation_type=related_to."]}

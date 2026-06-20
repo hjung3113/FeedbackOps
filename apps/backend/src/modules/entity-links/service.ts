@@ -11,6 +11,7 @@ import {
   resolveVocEndpoint,
   selectActiveLinksForEndpoint,
   selectEntityLinkById,
+  selectLinksByWorkspace,
 } from './repo.js';
 
 export interface EntityLinksActor {
@@ -49,6 +50,11 @@ function toHiddenDto(row: EntityLinkRow): EntityLinkDto {
     source_type: row.source_type,
     target_type: row.target_type,
     relation_type: row.relation_type,
+    status: row.status,
+    managed_system_id: row.managed_system_id,
+    created_by: row.created_by,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at ? row.updated_at.toISOString() : null,
     visibility_state: 'hidden',
   };
 }
@@ -74,6 +80,32 @@ async function assertVocReadScope(
     managed_system_id: managedSystemId,
   });
   return decision.allow;
+}
+
+async function canReadBothEndpoints(
+  deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
+  actor: EntityLinksActor,
+  row: EntityLinkRow,
+  resolvedByVocId: Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>,
+): Promise<boolean> {
+  let source = resolvedByVocId.get(row.source_id);
+  if (source === undefined && !resolvedByVocId.has(row.source_id)) {
+    source = await resolveVocEndpoint(deps.db, actor.workspace_id, row.source_id);
+    resolvedByVocId.set(row.source_id, source);
+  }
+
+  let target = resolvedByVocId.get(row.target_id);
+  if (target === undefined && !resolvedByVocId.has(row.target_id)) {
+    target = await resolveVocEndpoint(deps.db, actor.workspace_id, row.target_id);
+    resolvedByVocId.set(row.target_id, target);
+  }
+
+  if (!source || !target) return false;
+  const [sourceAllowed, targetAllowed] = await Promise.all([
+    assertVocReadScope(deps, actor, source.managed_system_id),
+    assertVocReadScope(deps, actor, target.managed_system_id),
+  ]);
+  return sourceAllowed && targetAllowed;
 }
 
 export function createEntityLinksService(deps: EntityLinksServiceDeps) {
@@ -205,6 +237,37 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     return items;
   }
 
+  async function listInventoryLinks(args: {
+    actor: EntityLinksActor;
+    statuses?: EntityLinkRow['status'][];
+    relationType?: 'related_to';
+    managedSystemId?: string;
+  }): Promise<EntityLinkDto[]> {
+    const { actor } = args;
+    const rows = await selectLinksByWorkspace(deps.db, {
+      workspaceId: actor.workspace_id,
+      ...(args.statuses !== undefined ? { statuses: args.statuses } : {}),
+      ...(args.relationType !== undefined ? { relationType: args.relationType } : {}),
+      ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
+    });
+
+    const resolvedByVocId = new Map<string, Awaited<ReturnType<typeof resolveVocEndpoint>>>();
+    const items: EntityLinkDto[] = [];
+    for (const row of rows) {
+      if (
+        row.source_type !== 'voc' ||
+        row.target_type !== 'voc' ||
+        row.relation_type !== 'related_to'
+      ) {
+        items.push(toHiddenDto(row));
+        continue;
+      }
+      const allowed = await canReadBothEndpoints(deps, actor, row, resolvedByVocId);
+      items.push(allowed ? toAllowedDto(row) : toHiddenDto(row));
+    }
+    return items;
+  }
+
   async function detachLink(args: {
     actor: EntityLinksActor;
     linkId: string;
@@ -280,7 +343,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     return toDetachedResponse(detached);
   }
 
-  return { createLink, listLinks, detachLink };
+  return { createLink, listLinks, listInventoryLinks, detachLink };
 }
 
 export type EntityLinksService = ReturnType<typeof createEntityLinksService>;

@@ -45,17 +45,49 @@ export const detachEntityLinkRequestSchema = z
   .strict();
 export type DetachEntityLinkRequest = z.infer<typeof detachEntityLinkRequestSchema>;
 
+const csvEntityLinkStatusSchema = z
+  .union([entityLinkStatusSchema, z.array(entityLinkStatusSchema)])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    return Array.isArray(value) ? value : [value];
+  });
+
 export const listEntityLinksQuerySchema = z
   .object({
+    scope: z.literal('workspace').optional(),
     source_type: entityLinkEntityTypeSchema.optional(),
     source_id: z.string().uuid().optional(),
     target_type: entityLinkEntityTypeSchema.optional(),
     target_id: z.string().uuid().optional(),
+    status: csvEntityLinkStatusSchema,
+    relation_type: entityLinkRelationTypeSchema.optional(),
+    managed_system_id: z.string().uuid().optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
     const hasSource = value.source_type !== undefined || value.source_id !== undefined;
     const hasTarget = value.target_type !== undefined || value.target_id !== undefined;
+    const hasEndpoint = hasSource || hasTarget;
+    const hasInventoryFilter =
+      value.status !== undefined ||
+      value.relation_type !== undefined ||
+      value.managed_system_id !== undefined;
+
+    if (value.scope === 'workspace' && hasEndpoint) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['scope'],
+        message: 'workspace scope cannot be combined with source or target endpoint',
+      });
+    }
+    if (value.scope !== 'workspace' && hasInventoryFilter && hasEndpoint) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [],
+        message: 'inventory filters require workspace scope',
+      });
+    }
     if (hasSource && (value.source_type === undefined || value.source_id === undefined)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -70,7 +102,7 @@ export const listEntityLinksQuerySchema = z
         message: 'target_type and target_id must be provided together',
       });
     }
-    if (hasSource === hasTarget) {
+    if (value.scope !== 'workspace' && hasEndpoint && hasSource === hasTarget) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: [],
@@ -101,6 +133,11 @@ export const hiddenEntityLinkSchema = z.object({
   source_type: entityLinkEntityTypeSchema,
   target_type: entityLinkEntityTypeSchema,
   relation_type: entityLinkRelationTypeSchema,
+  status: entityLinkStatusSchema,
+  managed_system_id: z.string().uuid(),
+  created_by: z.string().uuid(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime().nullable(),
   visibility_state: z.literal('hidden'),
 });
 

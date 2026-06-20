@@ -92,6 +92,13 @@ non-empty reason. Detach transitions `status` to `detached`, records
 `detached_by`, `detach_reason`, and `detached_at`, and preserves the row; hard
 delete and `DELETE /entity-links/:id` are intentionally not used.
 
+Slice 4.3 inventory UI (#114): `GET /entity-links?scope=workspace` lists the
+workspace-wide audit inventory across `active`, `stale`, `detached`, and
+`revoked` rows, newest first. Filters are read-only: `status`,
+`relation_type`, and `managed_system_id`. Production data still only creates
+VOC↔VOC `related_to` rows and does not synthesize `stale` or `revoked` rows in
+this slice.
+
 ## Visibility
 
 ```text
@@ -163,8 +170,10 @@ Acceptance Criteria:
 ```
 
 Slice 4.1 exposes only `allowed` and `hidden` visibility states for VOC↔VOC
-`related_to` reads. Hidden rows carry only link id, endpoint types,
-relation_type, and visibility_state.
+`related_to` reads. Slice 4.3 extends hidden inventory rows with audit metadata
+needed by the read-only table (`status`, `managed_system_id`, `created_by`,
+`created_at`, `updated_at`) while still omitting source/target endpoint ids and
+any synthesized endpoint summary.
 
 ### FR-LINK-003: Support Dashboard Missing-Link Queries
 

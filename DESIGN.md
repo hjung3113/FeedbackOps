@@ -131,6 +131,7 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 - **Section gap:** 24px
 - **Card padding:** 12px
 - **Element gap:** 8px
+- **Entity link inventory object rows:** headerless 4-column object-row grid (`--entity-link-object-row-grid`: checkbox, id, body, trailing), 64px id stem (`--entity-link-object-id-min-width`), and default 60px row rhythm (`--row-height-default`) to mirror the integration-links prototype density.
 
 ## Components
 

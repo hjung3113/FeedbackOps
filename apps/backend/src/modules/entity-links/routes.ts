@@ -82,6 +82,25 @@ export const entityLinksRoutes: FastifyPluginAsync<EntityLinksRoutesOptions> = a
       }
 
       const data = parsed.data;
+      const hasSource = data.source_type !== undefined && data.source_id !== undefined;
+      const hasTarget = data.target_type !== undefined && data.target_id !== undefined;
+      const isInventoryMode = data.scope === 'workspace' || (!hasSource && !hasTarget);
+      if (isInventoryMode) {
+        const items = await entityLinksService.listInventoryLinks({
+          actor: {
+            actor_id: sess.actor_id,
+            workspace_id: sess.workspace_id,
+            role_level: sess.role_level,
+          },
+          ...(data.status !== undefined ? { statuses: data.status } : {}),
+          ...(data.relation_type !== undefined ? { relationType: data.relation_type } : {}),
+          ...(data.managed_system_id !== undefined
+            ? { managedSystemId: data.managed_system_id }
+            : {}),
+        });
+        return reply.code(200).send({ items });
+      }
+
       let endpoint: { type: 'voc'; id: string };
       let side: 'source' | 'target';
       if (data.source_type !== undefined && data.source_id !== undefined) {
