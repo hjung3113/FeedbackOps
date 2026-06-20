@@ -7,6 +7,7 @@ import type { Tx } from '../../db/tx.js';
 export interface LinkEndpointRow {
   workspace_id: string;
   managed_system_id: string;
+  reporter_id: string;
 }
 
 export interface EntityLinkRow {
@@ -72,7 +73,7 @@ export async function resolveVocEndpoint(
   vocId: string,
 ): Promise<LinkEndpointRow | null> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
-    SELECT workspace_id, primary_managed_system_id AS managed_system_id
+    SELECT workspace_id, primary_managed_system_id AS managed_system_id, reporter_id
     FROM ${vocs}
     WHERE id = ${vocId}
       AND workspace_id = ${workspaceId}
@@ -83,6 +84,7 @@ export async function resolveVocEndpoint(
   return {
     workspace_id: row.workspace_id as string,
     managed_system_id: row.managed_system_id as string,
+    reporter_id: row.reporter_id as string,
   };
 }
 

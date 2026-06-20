@@ -167,6 +167,12 @@ permission_expired
 
 When entity link visibility is `summary_visible`, the target module returns a safe summary.
 
+ADR-0023 is the authoritative summary contract (Slice 4.4 #115): canonical Task
+field list, forbidden-field list, and the decision table. The fields below are
+the canonical list ADR-0023 reconciles to. No `voc` summary exists; `summary_visible`
+is not emitted for a `voc` target, and the runtime `getReporterSummary` resolver
+lands with the first non-VOC link target, not in #115.
+
 Dashboard recovery visibility may be summary-safe even when the underlying
 source object is not fully visible. Gap visibility, source-object visibility,
 source jump visibility, and action visibility are separate backend decisions.

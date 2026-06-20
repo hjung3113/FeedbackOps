@@ -1,0 +1,38 @@
+ROLE: CODEX implementer, sandboxed. Apply THREE scoped fixes to your #115 work in this
+worktree. Authoritative spec remains docs/adr/0023-entity-link-visibility-decision-and-summary-contract.md.
+
+FIX 1 (CONTRACT BUG — evaluate-visibility.ts): The admin_only branch currently returns
+'denied' for every non-admin when both endpoints are readable. That is WRONG. ADR-0023
+Section C requires the admin_only row to be:
+  Reporter(own VOC) -> hidden
+  User              -> hidden
+  Dev in-scope      -> denied   (role_level === 'developer' AND both endpoints readable)
+  Dev out-scope     -> hidden
+  Admin             -> allowed
+So: admin_only => allowed if actor is workspace admin; else 'denied' ONLY when
+actorContext.role_level === 'developer' AND both endpoints readable; else 'hidden'.
+Key the denied cell off role_level, NOT merely "non-admin + both readable". Reporter and
+User must get 'hidden' (never learn an admin_only link exists), even if their readable flags
+are true.
+
+FIX 2 (TESTS — evaluate-visibility.test.ts AND entity-links.integration.test.ts): correct
+the admin_only expected cells to match FIX 1 (reporter=hidden, user=hidden, dev-out=hidden,
+dev-in=denied, admin=allowed). Make the pure matrix test cover the Section C table EXACTLY.
+
+FIX 3 (TEARDOWN FK BUG — entity-links.integration.test.ts): the visibility-matrix fixtures
+you added create core.permission_grants rows (capability grants) referencing the seeded
+core.managed_systems, but the teardown deletes managed_systems without first deleting those
+permission_grants, causing:
+  "update or delete on table managed_systems violates foreign key constraint
+   permission_grants_managed_system_id_managed_systems_id_fk on table permission_grants"
+which fails 6 pre-existing #112 tests in shared teardown. Fix the cleanup so it deletes the
+seeded permission_grants (via the MIGRATE handle, scoped to the test workspace/managed systems
+you created) BEFORE managed_systems are removed. Do not weaken isolation of unrelated rows.
+
+ALLOWED FILES: apps/backend/src/modules/entity-links/evaluate-visibility.ts,
+apps/backend/src/modules/entity-links/__tests__/evaluate-visibility.test.ts,
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts.
+Do NOT touch anything else. If a fix needs a file outside this set, STOP and write
+.review/ISSUE-115-BLOCKER.json with the real reason.
+
+When done, overwrite .review/ISSUE-115-CODEX-DONE.json = {"files":[...],"notes":"<what changed>"}.

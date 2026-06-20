@@ -19,7 +19,12 @@ export const creatableEntityLinkVisibilitySchema = z.literal('internal_only');
 export const entityLinkStatusSchema = z.enum(['active', 'stale', 'detached', 'revoked']);
 export type EntityLinkStatus = z.infer<typeof entityLinkStatusSchema>;
 
-export const entityLinkVisibilityStateSchema = z.enum(['allowed', 'hidden']);
+export const entityLinkVisibilityStateSchema = z.enum([
+  'allowed',
+  'hidden',
+  'summary_visible',
+  'denied',
+]);
 export type EntityLinkVisibilityState = z.infer<typeof entityLinkVisibilityStateSchema>;
 
 export const entityLinkRefSchema = z.object({
@@ -141,9 +146,33 @@ export const hiddenEntityLinkSchema = z.object({
   visibility_state: z.literal('hidden'),
 });
 
+export const deniedEntityLinkSchema = hiddenEntityLinkSchema.extend({
+  visibility_state: z.literal('denied'),
+});
+
+export const taskReporterSummarySchema = z
+  .object({
+    target_type: z.literal('task'),
+    public_title: z.string(),
+    reporter_facing_status: z.string(),
+    owning_team_public_name: z.string().optional(),
+    expected_resolution_date: z.string().optional(),
+    last_public_update_at: z.string().datetime(),
+    public_update_excerpt: z.string().optional(),
+  })
+  .strict();
+export type TaskReporterSummary = z.infer<typeof taskReporterSummarySchema>;
+
+export const summaryVisibleEntityLinkSchema = hiddenEntityLinkSchema.extend({
+  visibility_state: z.literal('summary_visible'),
+  summary: taskReporterSummarySchema,
+});
+
 export const entityLinkDtoSchema = z.discriminatedUnion('visibility_state', [
   allowedEntityLinkSchema,
   hiddenEntityLinkSchema,
+  summaryVisibleEntityLinkSchema,
+  deniedEntityLinkSchema,
 ]);
 export type EntityLinkDto = z.infer<typeof entityLinkDtoSchema>;
 

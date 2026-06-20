@@ -1,0 +1,21 @@
+ROLE: adversarial REVIEWER (read-only). Review the UNCOMMITTED diff in this worktree for
+issue #115 against the signed contract docs/adr/0023-entity-link-visibility-decision-and-summary-contract.md.
+
+Run `git diff` yourself and read the actual changed files. Check, specifically:
+1. CONTRACT FIDELITY: does evaluateLinkVisibility implement the ADR Section C decision table
+   EXACTLY (every stored-token × actor cell), and the Section A hidden/denied boundary
+   (denied ONLY when both endpoints readable + admin_only + non-admin; hidden dominates when
+   either endpoint unreadable)? Flag any cell that deviates.
+2. summary_visible for a voc target must resolve to 'hidden' (no voc summary). Verify no
+   synthesized VOC summary leaks. Verify denied/hidden DTOs expose NO source_id/target_id/summary.
+3. request_access must NOT be added (deferred). POST stays locked to internal_only.
+4. SCOPE/ROLE-BLEED: only the allowed files changed; no migration, no schema, no route-shape
+   change, no frontend. repo.ts change limited to surfacing reporter id.
+5. TEST QUALITY: pure evaluate-visibility.test.ts covers the full matrix; integration test
+   seeds non-internal_only rows via the MIGRATE handle (not the API) AND there is a distinct
+   test asserting POST refuses non-internal_only. Tests must not be vacuous/over-mocked.
+6. Any correctness bug, type error, or leak.
+
+Write your verdict to .review/ISSUE-115-REVIEW.json:
+{"verdict":"pass|changes_requested","blocking":[{"file":"","issue":""}],"notes":"<concise>"}
+Be strict. A contract-table deviation or a summary leak is blocking.

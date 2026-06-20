@@ -1,0 +1,77 @@
+ROLE: CODEX implementer, sandboxed. Implement issue #115 (Slice 4.4 — entity link
+visibility matrix + summary_visible contract) in THIS worktree.
+
+AUTHORITATIVE SPEC: read docs/adr/0023-entity-link-visibility-decision-and-summary-contract.md
+FIRST and implement strictly to it. It is the human-signed contract. The ADR + the
+aligned docs (docs/design/11-entity-linking.md, docs/implementation/05-permission-policy.md,
+06-entity-linking-contract.md) are ALREADY present in this worktree (do not edit them
+unless you find a factual mismatch with what you implement; if so, fix the doc in the
+SAME change — doc-sync).
+
+ALLOWED FILES (touch only these):
+- packages/shared/src/entity-links.ts
+- apps/backend/src/modules/entity-links/service.ts
+- apps/backend/src/modules/entity-links/repo.ts          (only if you must surface a VOC reporter id for the same-reporter rule)
+- apps/backend/src/modules/entity-links/evaluate-visibility.ts   (NEW — the pure evaluator)
+- apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts (extend)
+- apps/backend/src/modules/entity-links/__tests__/evaluate-visibility.test.ts        (NEW — pure unit tests)
+
+DO NOT TOUCH: any migration / drizzle meta / db schema; routes.ts (the wire shape is
+unchanged); frontend; any other module. If your change requires editing a file outside
+the allowed set (a migration, a shared type beyond entity-links.ts, a permission module),
+STOP and write .review/ISSUE-115-BLOCKER.json = {"reason_code":"<code>","blocking_fact":"<the real fact>"}
+with the ACTUAL reason, not this example text.
+
+WHAT TO BUILD (per ADR-0023):
+
+1) packages/shared/src/entity-links.ts — extend the READ DTO discriminated union:
+   - Add a `summary_visible` variant and a `denied` variant. DO NOT add `request_access`
+     (ADR Section B: deferred — unreachable for VOC↔VOC this slice).
+   - `denied` variant exposes the SAME audit-metadata-only fields as the existing `hidden`
+     variant (id, source_type, target_type, relation_type, status, managed_system_id,
+     created_by, created_at, updated_at, visibility_state:'denied'); NO source_id/target_id/summary.
+   - `summary_visible` variant carries a `summary` object. Add a canonical Task reporter-summary
+     zod schema with EXACTLY these fields (ADR Section F):
+       public_title (string), reporter_facing_status (string),
+       owning_team_public_name (string, optional), expected_resolution_date (string, optional),
+       last_public_update_at (string datetime), public_update_excerpt (string, optional).
+     The summary is keyed by `target_type: 'task'`. There is NO `voc` summary member.
+     (Forward contract: this schema exists as the signed spec; no runtime resolver is built.)
+   - Keep `creatableEntityLinkVisibilitySchema = z.literal('internal_only')` UNCHANGED.
+
+2) apps/backend/src/modules/entity-links/evaluate-visibility.ts — a PURE function:
+     evaluateLinkVisibility({ visibility, actorContext, sourceReadable, targetReadable, targetSummaryAvailable })
+       -> 'allowed' | 'hidden' | 'summary_visible' | 'denied'
+   Implement EXACTLY the ADR Section C decision table + Section A hidden/denied boundary:
+     - Either endpoint unreadable -> 'hidden' (existence concealed) — this dominates.
+     - Both readable:
+         internal_only      -> allowed if actor has read on both (in-scope/admin), else hidden
+         summary_visible    -> 'summary_visible' only if targetSummaryAvailable, else 'hidden'
+                               (a voc target has no summary -> hidden)
+         visible_to_reporter-> 'allowed' iff both VOCs share the same reporter, else 'hidden'
+         admin_only         -> 'allowed' if actor is workspace admin; else 'denied' (both readable) 
+     actorContext carries at least { role_level, actor_id }. For same-reporter and admin
+     decisions thread whatever facts you need (you MAY extend resolveVocEndpoint to also
+     return the VOC reporter/created_by if required — that file is in the allowed set).
+   No I/O in this function — readability + summary-availability + reporter facts are passed in.
+
+3) service.ts — route BOTH read paths (listLinks endpoint-mode AND listInventoryLinks)
+   through evaluateLinkVisibility, replacing the inline allowed/hidden branching. Build a
+   DTO mapper per decision: allowed->full DTO, hidden/denied->audit-metadata-only DTO,
+   summary_visible->summary DTO. Endpoint-mode 404 behaviour for an unreadable FOCUS
+   endpoint is unchanged. POST stays locked to internal_only (createLink unchanged).
+
+4) Tests:
+   - evaluate-visibility.test.ts (PURE, no DB): assert every cell of the Section C table —
+     each stored token × actor class (reporter-on-own, user, dev in-scope, dev out-scope, admin)
+     × readability combinations. This is the bulk of coverage and runs without a DB.
+   - entity-links.integration.test.ts: SEED rows of each visibility token directly via the
+     MIGRATE handle (fops_app cannot create non-internal_only — that is the point), then assert
+     the read endpoints return the right visibility_state per actor. ADD a distinct test
+     asserting POST /entity-links REFUSES to create a non-internal_only link (validation.failed),
+     so seeded-row tests are not misread as product behaviour.
+
+CONSTRAINTS: NO DB migration. NO read-path audit. NO getReporterSummary runtime resolver.
+Match surrounding code style. Keep the wire/route shape unchanged.
+
+When done, write .review/ISSUE-115-CODEX-DONE.json = {"files":[...],"notes":"<what you did + any decision>"}.
