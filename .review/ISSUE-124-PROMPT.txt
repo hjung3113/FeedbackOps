@@ -1,0 +1,28 @@
+ROLE: CODEX implementing issue #124 in a sandboxed worktree (no DB/network; VERIFIER proves green outside).
+
+ISSUE #124 — Slice 5: Evidence Highlights backend (table + endpoints + link-evidence + per-highlight source visibility). Builds on #121 (provider registry, finding schema, tuple CHECK) and #122 (findings module, POST /vocs/:id/create-finding) — both merged.
+
+SIGNED CONTRACTS (read first): docs/design/15-data-contracts.md:157-181 (evidence_highlights table + rules), docs/adr/0024-finding-as-entity-link-target-and-provider-registry.md §F (evidence_highlights.finding_id) + §G (evidence visibility ≤ source) + Reopening triggers (evidence_of/link-evidence), docs/implementation/03-api-contracts.md:419-433 (Finding endpoints incl. evidence-highlights + link-evidence), docs/design/05-finding-insight-system.md (FR-FIND-002).
+
+WHAT TO BUILD: preserve evidence fragments on a Finding, and link additional VOC evidence to a Finding via the `evidence_of` relation. Enforce that an Evidence Highlight's (and evidence link's) read visibility cannot exceed its source's.
+
+KEY RULES:
+- evidence_highlights visibility ≤ source visibility (15:180, ADR-0024 §G): a highlight whose SOURCE object is unreadable to the actor must have its quote_or_summary WITHHELD (return the row metadata with the quote redacted/omitted — never the raw quote). "Finding scope implies evidence scope" is FORBIDDEN; check each highlight's source via the provider/source read.
+- evidence_count on finding.findings is maintained in the SAME transaction as every highlight add/remove and stays >= 0.
+- link-evidence creates a (voc -> finding, evidence_of) entity link, internal_only, reusing the #121 registry + tx-taking insert. This requires widening the tuple allowlist to ALSO admit (voc,finding,evidence_of) — at the DB CHECK, the shared relation enum (already has created_finding; add evidence_of if absent), registeredEntityLinkPairSchema/isCreatableTuple, and the entity_link.created audit detail union.
+- Authz: add highlight / link-evidence requires finding.manage on the Finding's MS; read requires finding.read. Source-read for link-evidence follows the #122/ADR-0024 §C rule (voc.read on source MS OR reporter ownership; unreadable -> 404).
+
+SCOPE — files you may touch:
+1. apps/backend/migrations/0021_*.sql (NEW, hand-written + meta journal + 0021_snapshot.json registered like 0020) — CREATE TABLE finding.evidence_highlights per 15:161-174 PLUS finding_id uuid NOT NULL FK -> finding.findings(id) (ADR-0024 §F): id, workspace_id, finding_id, primary_managed_system_id, source_type CHECK in ('voc','survey_response','note'), source_id (CHECK NOT NULL unless source_type='note'), quote_or_summary text NOT NULL, analytics_area_id nullable, sentiment CHECK in ('negative','neutral','positive') nullable, importance CHECK in ('low','medium','high') nullable, created_by, created_at. Grants (fops_app SELECT/INSERT/UPDATE, NOT DELETE; fops_migrate full). Index on (workspace_id, finding_id). ALSO: ALTER the entity_links composite tuple CHECK to add (voc,finding,evidence_of). Study 0020 for the exact tuple-CHECK + journal/snapshot pattern.
+2. apps/backend/src/db/schema/finding.ts — add the evidence_highlights table definition (findingSchema.table).
+3. apps/backend/src/db/schema/core.ts — extend the entity_links tuple CHECK to include (voc,finding,evidence_of).
+4. packages/shared/src/entity-links.ts — add 'evidence_of' to the relation enum (if absent) + the registeredEntityLinkPairSchema (voc,finding,evidence_of). packages/shared/src/enums/audit-events.ts — extend entity_link.created detail union with the evidence_of member; add an evidence_highlight_added audit event + detail schema.
+5. packages/shared/src/findings/* — add EvidenceHighlightDto, AddEvidenceHighlightRequest, LinkEvidenceRequest.
+6. apps/backend/src/modules/findings/ — service + repo + routes for: POST /findings/:id/evidence-highlights (add; maintains evidence_count in txn + audit), GET /findings/:id/evidence-highlights (list with per-highlight source-visibility redaction), POST /findings/:id/link-evidence (create evidence_of link via registry, in txn + audit). finding.read/finding.manage authz.
+7. apps/backend/src/modules/findings/__tests__/evidence-highlights.integration.test.ts (NEW + seed helper) — cover: add highlight (201, evidence_count incremented in same txn); list highlights; PER-HIGHLIGHT SOURCE VISIBILITY (a Developer who can read the Finding but NOT the source VOC sees the highlight row with the quote WITHHELD); link-evidence creates a (voc,finding,evidence_of) link; DB tuple CHECK accepts (voc,finding,evidence_of) and still rejects invalid tuples; authz denials.
+
+ABORT-WITH-BLOCKER (.review/ISSUE-124-BLOCKER.json, real reason_code+blocking_fact) if you must touch files outside the above or a contract is ambiguous.
+
+When done write .review/ISSUE-124-CODEX.json {"issue":124,"status":"done","files_touched":[...],"migration":"0021_...","endpoints":[...],"tests_added":[...],"source_visibility_enforced":true,"evidence_count_in_txn":true,"notes":"..."}.
+
+Style: match findings/voc modules (Fastify, zod from @fops/shared, Drizzle, HttpError + error-code contract, snake_case DB). Minimal reviewable diff.

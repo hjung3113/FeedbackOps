@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
+import { addEvidenceHighlightRequestSchema, linkEvidenceRequestSchema } from '@fops/shared';
+
 import { fieldsFromZodIssues, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
@@ -19,7 +21,7 @@ export interface FindingsRoutesOptions {
   sessionService: SessionService;
   findingsService: FindingsService;
   workspaceId: string;
-  rateLimitConfig?: { read?: Record<string, unknown> };
+  rateLimitConfig?: { mutation?: Record<string, unknown>; read?: Record<string, unknown> };
 }
 
 export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (app, opts) => {
@@ -76,6 +78,102 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
         findingId: id,
       });
       return reply.header('cache-control', 'private, no-cache').code(200).send(result);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/findings/:id/evidence-highlights',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const parsed = addEvidenceHighlightRequestSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const result = await findingsService.addEvidenceHighlight({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        findingId: id,
+        input: parsed.data,
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'GET',
+    url: '/findings/:id/evidence-highlights',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const result = await findingsService.listEvidenceHighlights({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        findingId: id,
+      });
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/findings/:id/link-evidence',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const parsed = linkEvidenceRequestSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const result = await findingsService.linkEvidence({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        findingId: id,
+        input: parsed.data,
+      });
+      return reply.code(result.status).send(result.body);
     },
   });
 };

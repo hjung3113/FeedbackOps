@@ -1,0 +1,30 @@
+{
+  "issue": 124,
+  "status": "done",
+  "files_touched": [
+    "apps/backend/migrations/0021_evidence_highlights.sql",
+    "apps/backend/migrations/meta/_journal.json",
+    "apps/backend/migrations/meta/0021_snapshot.json",
+    "apps/backend/src/db/schema/core.ts",
+    "apps/backend/src/db/schema/finding.ts",
+    "apps/backend/src/modules/findings/repo.ts",
+    "apps/backend/src/modules/findings/routes.ts",
+    "apps/backend/src/modules/findings/service.ts",
+    "apps/backend/src/modules/findings/__tests__/evidence-highlights.integration.test.ts",
+    "packages/shared/src/entity-links.ts",
+    "packages/shared/src/enums/audit-events.ts",
+    "packages/shared/src/findings/index.ts"
+  ],
+  "migration": "0021_evidence_highlights.sql",
+  "endpoints": [
+    "POST /findings/:id/evidence-highlights",
+    "GET /findings/:id/evidence-highlights",
+    "POST /findings/:id/link-evidence"
+  ],
+  "tests_added": [
+    "apps/backend/src/modules/findings/__tests__/evidence-highlights.integration.test.ts"
+  ],
+  "source_visibility_enforced": true,
+  "evidence_count_in_txn": true,
+  "notes": "VOC-backed highlights and link-evidence enforce source VOC readability; unreadable highlight quotes are omitted from list responses. survey_response remains in the table/shared contract but write-time source validation returns validation.failed until the survey response provider exists."
+}

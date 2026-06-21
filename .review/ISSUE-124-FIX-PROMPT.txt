@@ -1,0 +1,15 @@
+ROLE: CODEX fixing a TEST-ISOLATION bug in issue #124 (sandboxed, no DB). VERIFY found 2 failures.
+
+THE BUG: the findings integration tests do NOT clear the PG-backed rate-limit store between tests. The rate limiter store is core.rate_limits (apps/backend/src/lib/rate-limit-pg-store.ts), keyed by `workspace_id:actor_id` (authenticated) or `127.0.0.x` (ip fallback), and is SHARED across app instances on the same DB. When create-finding.integration.test.ts and evidence-highlights.integration.test.ts run in the same vitest process, the admin actor's create-finding mutations accumulate past the per-actor mutation rate limit → POST /vocs/:id/create-finding returns 429 instead of 201. Failing tests: create-finding.integration.test.ts "replays an idempotent create request" and "lists only findings in the Developer finding.read scope" (expected 201, got 429).
+
+THE ESTABLISHED PATTERN (mirror it): apps/backend/src/modules/voc/__tests__/_seed-helpers.ts (~lines 469-490) clears core.rate_limits (and core.idempotency_keys) for the test actor cohort during cleanup:
+  delete from core.rate_limits where key in (select id::text from core.actors where <cohort> and workspace_id=$1) or key like '127.0.0.%';
+Note the rate-limit key for an authenticated actor is `${workspace_id}:${actor_id}` (see resolveRateLimitActorKey in server.ts), so match on that shape, and also clear the 127.0.0.% ip-fallback rows.
+
+REQUIRED FIX (touch ONLY the two findings test files' setup/cleanup — apps/backend/src/modules/findings/__tests__/create-finding.integration.test.ts and evidence-highlights.integration.test.ts; and a shared findings test seed helper if one exists):
+- In each suite's per-test cleanup (the beforeEach/afterEach that already deletes finding rows), ALSO delete core.rate_limits rows for this workspace's actors (key matching `${WORKSPACE_ID}:%` for actor buckets) AND `127.0.0.%` ip-fallback rows, plus core.idempotency_keys for the test actors — so each test starts with a clean rate-limit budget. Use the migrate handle (DDL/DML role) for these deletes, as the existing cleanup does.
+- Do NOT change any production code, the rate-limit config, or the test assertions/expected status codes. Only add the cleanup deletes.
+
+After the fix, both findings test files must pass co-running (create-finding + evidence-highlights) with no 429s.
+
+When done write .review/ISSUE-124-FIX.json {"issue":124,"fix":"clear core.rate_limits + idempotency_keys in findings test cleanup","files":[...]}.

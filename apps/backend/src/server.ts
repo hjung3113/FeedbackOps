@@ -444,6 +444,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     idempotencyService,
+    entityLinksService,
   });
   await app.register(findingsRoutes, {
     sessionService,

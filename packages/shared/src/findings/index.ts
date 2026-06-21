@@ -15,6 +15,15 @@ export type FindingSeverity = z.infer<typeof findingSeveritySchema>;
 export const findingConfidenceSchema = z.enum(['low', 'medium', 'high']);
 export type FindingConfidence = z.infer<typeof findingConfidenceSchema>;
 
+export const evidenceHighlightSourceTypeSchema = z.enum(['voc', 'survey_response', 'note']);
+export type EvidenceHighlightSourceType = z.infer<typeof evidenceHighlightSourceTypeSchema>;
+
+export const evidenceHighlightSentimentSchema = z.enum(['negative', 'neutral', 'positive']);
+export type EvidenceHighlightSentiment = z.infer<typeof evidenceHighlightSentimentSchema>;
+
+export const evidenceHighlightImportanceSchema = z.enum(['low', 'medium', 'high']);
+export type EvidenceHighlightImportance = z.infer<typeof evidenceHighlightImportanceSchema>;
+
 export const createFindingRequestSchema = z
   .object({
     title: z.string().min(1).max(200),
@@ -67,3 +76,57 @@ export const listFindingsResponseSchema = z
   })
   .strict();
 export type ListFindingsResponse = z.infer<typeof listFindingsResponseSchema>;
+
+export const addEvidenceHighlightRequestSchema = z
+  .object({
+    source_type: evidenceHighlightSourceTypeSchema,
+    source_id: z.string().uuid().nullable().optional(),
+    quote_or_summary: z.string().min(1),
+    analytics_area_id: z.string().uuid().nullable().optional(),
+    sentiment: evidenceHighlightSentimentSchema.nullable().optional(),
+    importance: evidenceHighlightImportanceSchema.nullable().optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.source_type !== 'note' && value.source_id == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['source_id'],
+        message: 'source_id is required unless source_type is note',
+      });
+    }
+  });
+export type AddEvidenceHighlightRequest = z.infer<typeof addEvidenceHighlightRequestSchema>;
+
+export const evidenceHighlightDtoSchema = z
+  .object({
+    id: z.string().uuid(),
+    workspace_id: z.string().uuid(),
+    finding_id: z.string().uuid(),
+    primary_managed_system_id: z.string().uuid(),
+    source_type: evidenceHighlightSourceTypeSchema,
+    source_id: z.string().uuid().nullable(),
+    quote_or_summary: z.string().optional(),
+    analytics_area_id: z.string().uuid().nullable(),
+    sentiment: evidenceHighlightSentimentSchema.nullable(),
+    importance: evidenceHighlightImportanceSchema.nullable(),
+    created_by: z.string().uuid(),
+    created_at: z.string().datetime(),
+  })
+  .strict();
+export type EvidenceHighlightDto = z.infer<typeof evidenceHighlightDtoSchema>;
+
+export const listEvidenceHighlightsResponseSchema = z
+  .object({
+    items: z.array(evidenceHighlightDtoSchema),
+  })
+  .strict();
+export type ListEvidenceHighlightsResponse = z.infer<typeof listEvidenceHighlightsResponseSchema>;
+
+export const linkEvidenceRequestSchema = z
+  .object({
+    source_type: z.literal('voc'),
+    source_id: z.string().uuid(),
+  })
+  .strict();
+export type LinkEvidenceRequest = z.infer<typeof linkEvidenceRequestSchema>;

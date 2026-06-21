@@ -64,6 +64,8 @@ export const AUDIT_EVENT_TYPES = [
   'entity_link.detached',
   // Slice 5 #121: Finding created from a source VOC.
   'finding_created_from_voc',
+  // Slice 5 #124: Evidence preserved on a Finding.
+  'evidence_highlight_added',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -176,6 +178,13 @@ export const entityLinkCreatedDetailSchema = z.discriminatedUnion('relation_type
     relation_type: z.literal('created_finding'),
     visibility: z.literal('internal_only'),
   }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('evidence_of'),
+    visibility: z.literal('internal_only'),
+  }),
 ]);
 export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
 
@@ -194,6 +203,13 @@ export const entityLinkDetachedDetailSchema = z.discriminatedUnion('relation_typ
     relation_type: z.literal('created_finding'),
     reason: z.string().min(1),
   }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('evidence_of'),
+    reason: z.string().min(1),
+  }),
 ]);
 export type EntityLinkDetachedDetail = z.infer<typeof entityLinkDetachedDetailSchema>;
 
@@ -204,6 +220,15 @@ export const findingCreatedFromVocDetailSchema = z.object({
   source_type: z.literal('voc'),
 });
 export type FindingCreatedFromVocDetail = z.infer<typeof findingCreatedFromVocDetailSchema>;
+
+export const evidenceHighlightAddedDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  evidence_highlight_id: z.string().uuid(),
+  source_type: z.enum(['voc', 'survey_response', 'note']),
+  source_id: z.string().uuid().nullable(),
+  primary_managed_system_id: z.string().uuid(),
+});
+export type EvidenceHighlightAddedDetail = z.infer<typeof evidenceHighlightAddedDetailSchema>;
 
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
@@ -236,4 +261,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   'entity_link.detached': entityLinkDetachedDetailSchema,
   // Slice 5 #121.
   finding_created_from_voc: findingCreatedFromVocDetailSchema,
+  // Slice 5 #124.
+  evidence_highlight_added: evidenceHighlightAddedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

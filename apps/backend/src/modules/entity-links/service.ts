@@ -9,6 +9,7 @@ import type {
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
@@ -153,11 +154,12 @@ function toDetachedResponse(row: EntityLinkRow): DetachedEntityLinkResponse {
 async function assertVocReadScope(
   deps: Pick<EntityLinksServiceDeps, 'checkService'>,
   actor: EntityLinksActor,
-  managedSystemId: string,
+  subject: LinkEndpointRow,
 ): Promise<boolean> {
+  if (subject.reporter_id && actor.actor_id === subject.reporter_id) return true;
   const decision = await deps.checkService.checkCapability(actor, 'voc.read', {
     workspace_id: actor.workspace_id,
-    managed_system_id: managedSystemId,
+    managed_system_id: subject.managed_system_id,
   });
   return decision.allow;
 }
@@ -197,7 +199,7 @@ const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
     entityType: 'voc',
     assertExists: resolveVocEndpoint,
     getPermissionSubject: resolveVocEndpoint,
-    canRead: (deps, actor, subject) => assertVocReadScope(deps, actor, subject.managed_system_id),
+    canRead: assertVocReadScope,
     getReporterSummary: unavailableReporterSummary,
     getInternalSummary: async () => null,
     listExpectedLinks: async () => [],
@@ -250,7 +252,10 @@ function isCreatableTuple(input: {
       input.relationType === 'related_to') ||
     (input.sourceType === 'voc' &&
       input.targetType === 'finding' &&
-      input.relationType === 'created_finding')
+      input.relationType === 'created_finding') ||
+    (input.sourceType === 'voc' &&
+      input.targetType === 'finding' &&
+      input.relationType === 'evidence_of')
   );
 }
 
@@ -319,6 +324,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     target: EntityLinkRef;
     relation_type: EntityLinkRelationType;
     visibility?: 'internal_only';
+    tx?: Tx;
   }): Promise<{ link: EntityLinkDto; status: 200 | 201 }> {
     const { actor, source, target } = args;
     const visibility = args.visibility ?? 'internal_only';
@@ -345,11 +351,12 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       });
     }
 
+    const db = args.tx ?? deps.db;
     const sourceProvider = providerFor(source.type);
     const targetProvider = providerFor(target.type);
     const [sourceRow, targetRow] = await Promise.all([
-      sourceProvider.assertExists(deps.db, actor.workspace_id, source.id),
-      targetProvider.assertExists(deps.db, actor.workspace_id, target.id),
+      sourceProvider.assertExists(db, actor.workspace_id, source.id),
+      targetProvider.assertExists(db, actor.workspace_id, target.id),
     ]);
     if (!sourceRow || !targetRow) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
@@ -368,7 +375,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
 
-    const result = await deps.db.transaction(async (tx) => {
+    const persist = async (tx: Tx) => {
       const inserted = await insertActiveEntityLink(tx, {
         workspaceId: actor.workspace_id,
         sourceType: source.type,
@@ -400,7 +407,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       }
 
       return inserted;
-    });
+    };
+
+    const result = args.tx ? await persist(args.tx) : await deps.db.transaction(persist);
 
     return { link: toAllowedDto(result.row), status: result.inserted ? 201 : 200 };
   }

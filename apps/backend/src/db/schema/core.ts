@@ -313,7 +313,7 @@ export const entityLinks = coreSchema.table(
   (t) => ({
     tupleCheck: check(
       'entity_links_tuple_check',
-      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'))`,
+      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'), ('voc','finding','evidence_of'))`,
     ),
     visibilityCheck: check(
       'entity_links_visibility_check',
