@@ -99,6 +99,17 @@ workspace-wide audit inventory across `active`, `stale`, `detached`, and
 VOC↔VOC `related_to` rows and does not synthesize `stale` or `revoked` rows in
 this slice.
 
+Slice 5 (Finding From VOC): introduces the **second** production link pair,
+`(voc → finding, created_finding)`, created by `POST /vocs/:id/create-finding`
+(`03-api-contracts.md:346`). It also lands the real **entity-link provider
+registry** (`06-entity-linking-contract.md`) the #112 tracer stubbed by
+hard-coding VOC. ADR-0024 locks Finding read/create authz (`finding.read` /
+`finding.manage`), the `finding`-target visibility row (amending ADR-0023 §C),
+and the composite tuple CHECK admitting only the two production pairs. `finding`
+is a `target_type` only this slice; `created_finding` stays `internal_only`.
+The `evidence_of` relation (for `POST /findings/:id/link-evidence`) and the
+Survey `generated_finding` relation are unchanged by this slice.
+
 ## Visibility
 
 ```text

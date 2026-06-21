@@ -19,6 +19,16 @@ Permission Scope. User is the lowest role level and may submit VOC and access
 their own allowed work. Reporter is the Actor who submitted a specific VOC, not
 a separate role level.
 
+Capability vocabulary is module-prefixed (`{module}.{action}`,
+`packages/shared/src/enums/capabilities.ts`). Slice 5 (ADR-0024) adds
+`finding.read` (read a Finding / its entity links) and `finding.manage`
+(create/update a Finding). Both are Developer-requestable per Managed System and
+are NOT sensitive. Reading or creating a Finding is Admin (workspace) or
+Developer scoped to the Finding's `primary_managed_system_id`; User and Reporter
+never read Findings. Creating a Finding from a VOC additionally requires
+`voc.read` on the source VOC's Managed System (no forging a Finding from an
+unreadable VOC).
+
 ## Permission Check Order
 
 ```text

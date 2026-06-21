@@ -100,5 +100,6 @@ The Frontend renders the backend-decided state (via `PermissionBlockedPanel` whe
 ## Reopening triggers
 
 - A slice introduces a non-VOC link target (Task/Finding) with a reporter summary. That slice implements `getReporterSummary`, makes `summary_visible` reachable, and re-adds `request_access` plus its minimum-requestable-scope candidates — reopening Sections B and F.
+  - **Partially fired by ADR-0024 (Slice 5).** Finding is the first non-VOC link target, but it has **no** reporter-facing summary (`05-finding-insight-system.md:215`, `CONTEXT.md`). ADR-0024 therefore amends Section C (adds the `finding`-target row) and registers a `getReporterSummary` that returns UNAVAILABLE, but does **not** make `summary_visible` reachable, does **not** add a `finding` member to Section F, and does **not** re-add `request_access`. Sections B and F stay as written here until a Finding reporter summary is actually introduced. See `docs/adr/0024-finding-as-entity-link-target-and-provider-registry.md`.
 - Product approves reporter-facing VOC↔VOC visibility. That reopens the `visible_to_reporter` collapse in Section C.
 - `POST /entity-links` is unlocked beyond `internal_only`. That reopens the creation-side note in Section E.

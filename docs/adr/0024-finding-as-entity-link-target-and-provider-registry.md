@@ -1,0 +1,103 @@
+# Finding as entity-link target, provider registry, and the partial ADR-0023 trigger
+
+## Status
+
+Accepted (Slice 5: Finding From VOC). Amends ADR-0023 Section C and annotates its reopening trigger #1.
+
+## Context
+
+ADR-0023 locked the entity-link visibility decision table, the `hidden`/`denied` boundary, the `request_access` deferral, and the canonical Task reporter-summary contract — all for the world that existed at Slice 4.4, where the only linkable endpoint type is `voc` and creation is hard-locked to `internal_only`. ADR-0023 named three reopening triggers; Slice 5 fires the first one (*"A slice introduces a non-VOC link target (Task/Finding) with a reporter summary…"*) **partially**, because Finding is the first non-VOC link target but has **no reporter-facing summary**.
+
+Two facts from the signed contracts shape this ADR:
+
+- `docs/implementation/03-api-contracts.md:346` pins the VOC→Finding creation path: endpoint `POST /vocs/:id/create-finding`, relation_type **`created_finding`**, audit event `finding_created_from_voc`. The casual phrasing "evidence_of VOC→Finding" in prior handoffs was imprecise; `evidence_of` is the *separate* relation used by `POST /findings/:id/link-evidence` (03:427) to attach additional evidence to an existing Finding, and is out of scope for the Slice 5 create tracer.
+- `docs/implementation/06-entity-linking-contract.md:47-58` and `docs/implementation/02-domain-module-boundaries.md:99-120` mandate an **entity-link provider registry** (`assertExists`, `getPermissionSubject`, `getReporterSummary`, `getInternalSummary`, `listExpectedLinks`). The Slice 4.1 tracer (#112) satisfied this contract for `voc` by **hard-coding** VOC resolution and `voc.read` authz throughout the entity-links service rather than building the registry abstraction. Slice 5 is the first multi-type slice, so the registry must now exist for real.
+
+A four-persona adversarial review (`.review/SLICE-5-REVIEW-A.md`, `-B.md`, `SLICE-5-CODEX-C-DATA.out`, `-D-SECURITY.out`) drove the decisions below.
+
+## Decision
+
+### Section A — `created_finding`, not a renamed relation
+
+The VOC→Finding link created by `POST /vocs/:id/create-finding` uses relation_type **`created_finding`** (the registry member already listed in `docs/design/11-entity-linking.md` VOC relations and pinned by `03:346`). No relation is renamed or dropped. The Survey `generated_finding` relation (Slice 8) and the common `evidence_of` relation (used by `link-evidence`, later) are untouched.
+
+**Provenance vs evidence hierarchy are two distinct, non-redundant facts:**
+
+- **Provenance** = `finding.findings.source_type` + `source_id` (direct columns, per `docs/design/15-data-contracts.md:133-134`). These are **immutable after creation** and are the canonical answer to "what was this Finding created from." They satisfy the Slice 5 exit criterion "source link survives reload."
+- **Evidence hierarchy** = `core.entity_links` rows. The `created_finding` row `(source voc → target finding)` is the canonical cross-system link (per `15:151`). Detaching it (future) must **not** rewrite the immutable provenance columns. Drift between the two is a tested invariant.
+
+### Section B — Provider registry (satisfies 06/02)
+
+Entity-links gains a real provider registry keyed by `entity_type`. Each linkable module registers a provider implementing the `06:47-58` interface. Slice 5 registers two:
+
+```
+voc      → resolver voc.vocs(id, workspace_id, primary_managed_system_id)
+           getReporterSummary: n/a (VOC has no link-summary contract — ADR-0023 §C)
+           getInternalSummary: existing VOC read model
+finding  → resolver finding.findings(id, workspace_id, primary_managed_system_id)
+           getReporterSummary: returns UNAVAILABLE  (Section D — Finding has no reporter summary)
+           getInternalSummary: Finding internal read model
+```
+
+The entity-links create/read/detach paths dispatch endpoint resolution and read-authz through the provider, replacing the hard-coded VOC branches. The VOC↔VOC `related_to` behavior locked by #112–#115 is preserved byte-for-byte (asserted by the existing `entity-links.integration.test.ts` matrix, extended — not replaced).
+
+### Section C — Finding read/create authz capabilities
+
+New capabilities (module-prefixed per `packages/shared/src/enums/capabilities.ts`):
+
+- **`finding.read`** — Developer-requestable per Managed System; not sensitive. Read-authz for a `finding` endpoint = Admin (workspace) OR Developer holding `finding.read` on the finding's `primary_managed_system_id`. User and Reporter: never.
+- **`finding.manage`** — create/update Findings; Developer-requestable per Managed System; not sensitive. Create-authz for `POST /vocs/:id/create-finding` = Admin OR Developer holding `finding.manage` on the target Finding's `primary_managed_system_id`.
+
+**Create requires read on the source VOC too** (closes the Codex-D BLOCKER): a Developer may not forge a Finding from a VOC they cannot read. Creation validates, in one transaction (per `06:33-45`): source VOC exists + readable (`voc.read` on its MS), target MS scope compatible, `finding.manage` on target MS, then writes finding + `created_finding` link + audit. Unreadable source → not-found-style failure (no existence leak).
+
+### Section D — ADR-0023 Section C amendment: the `finding` target row
+
+ADR-0023 §C gains a `finding`-target row. Because `POST /entity-links` creatable visibility stays `internal_only` (Section E), and `created_finding` is always created `internal_only`, the realised decision row mirrors the VOC `internal_only` row — **after both-side readability passes** (ADR-0023 §A/§D: any unreadable endpoint ⇒ `hidden` first):
+
+| stored \ actor | Reporter | User | Dev in-scope (both endpoints readable) | Dev out-scope | Admin |
+|---|---|---|---|---|---|
+| `internal_only` (finding target) | hidden | hidden | allowed | hidden | allowed |
+
+Mixed readability (source VOC readable, target Finding not, or vice-versa) ⇒ `hidden`, never `denied` or partial metadata. `summary_visible`/`request_access` remain unreachable for a `finding` target (Section E).
+
+### Section E — Trigger #1 fires only partially; what stays deferred
+
+**Finding has no reporter-facing summary.** `docs/design/05-finding-insight-system.md:215` ("Reporter cannot read internal Finding details by default") and `CONTEXT.md` ("Reporter Summary must not expose Finding detail") establish this. Therefore, in Slice 5:
+
+- `getReporterSummary(findingId)` is implemented as a provider method that **returns UNAVAILABLE** (`targetSummaryAvailable = false`); `evaluateLinkVisibility` already maps that to `hidden` — no evaluator change.
+- `summary_visible` stays **unreachable** for a `finding` target; ADR-0023 §F gains **no** `finding` summary member.
+- `request_access` stays **deferred** (no reporter-petitionable Finding summary exists). ADR-0023 §B is unchanged.
+- The Task reporter-summary contract (ADR-0023 §F) is untouched and remains the canonical forward summary.
+
+**`POST /entity-links` creatable visibility stays `internal_only`** (`creatableEntityLinkVisibilitySchema` unchanged). What changes is the **creatable entity-pair/relation allowlist**: the registry now permits `(voc → finding, created_finding)` in addition to `(voc → voc, related_to)`. This is a POST allowlist expansion (acknowledged here per ADR-0023 §E) but does **not** unlock a richer creatable visibility, so ADR-0023 §E's visibility-creation lock is not reopened.
+
+### Section F — Database shape
+
+- New Postgres schema **`finding`** (matches the per-module `voc` schema pattern; added to `drizzle.config.ts` schemaFilter). Tables `finding.findings` and `finding.evidence_highlights` per `docs/design/15-data-contracts.md:122-174`, with CHECK constraints for every enum, `source_id` nullability tied to `source_type`, `analytics_area_id` ∈ `primary_managed_system_id`, and `evidence_count >= 0`.
+- `evidence_count` is a stored column (contract `15:135` says required) maintained in the same transaction as every evidence mutation; for the create tracer it starts at 0 (no highlights yet — highlights are a follow-on issue).
+- **`entity_links` widening uses a composite tuple CHECK**, not independent value CHECKs: the allowed tuples are exactly `(voc, voc, related_to)` and `(voc, finding, created_finding)`. `finding` is added as a `target_type` only (not `source_type`) this slice. Existing `activeUniqueIdx`, partial source/target indexes, and `notSelfCheck` are preserved; a `workspace_id + relation_type` index is added for the inventory/filter path.
+- Audit: add `finding_created_from_voc` to `AUDIT_EVENT_TYPES` + a detail schema; broaden `entityLinkCreatedDetailSchema` to a discriminated union admitting `{source:voc, target:finding, relation:created_finding, visibility:internal_only}` **additively** (the `voc→voc/related_to` member is preserved so #112/#115 audit tests still pass).
+
+### Section G — Evidence visibility ≤ source visibility
+
+Per `15:180` and `06`, an Evidence Highlight's read visibility cannot exceed its source's. A Developer who can read a Finding but not the source VOC must not see a VOC quote. Each highlight read checks its source object's readability via the provider; unreadable source ⇒ the quote is withheld. (Highlights are a follow-on Slice 5 issue; this rule is locked now so the highlight issue is built against it.)
+
+## Consequences
+
+- The provider-registry refactor is the largest single piece of Slice 5 and a prerequisite for cluster (Slice 5 follow-on), Survey (Slice 8), and Task (Slice 6) link targets — all become additive provider registrations.
+- `evidence_highlights` needs a `finding_id` parent column not present in `15:161-174`; this ADR records the contract addition and `15` is amended in the same change.
+- No reopening of ADR-0023 §B/§F/§E visibility-creation lock. ADR-0023 §C is amended (Section D above) and its trigger #1 is annotated as partially fired.
+
+## Reopening triggers (carried forward + new)
+
+- A slice gives Finding a **reporter-facing summary** (e.g. reporter-visible "a Finding was opened from your VOC"). That implements a real `getReporterSummary` and reopens Sections D/E.
+- `POST /findings/:id/link-evidence` (relation `evidence_of`) or any non-`internal_only` creatable visibility for a finding link reopens Sections E/G.
+- A second non-VOC **source** type for a link (finding as `source_type`) extends the tuple CHECK and the registry.
+
+## Alternatives rejected
+
+- **Rename `created_finding` → `evidence_of`** — rejected: reverses the signed `03:346` behavioral contract and conflates two distinct relations.
+- **Add a second hard-coded `finding` branch instead of the registry** — rejected: accrues the same debt #112 left, and forces cluster/survey/task to re-touch the same code (delivery-persona finding).
+- **Independent value CHECKs on entity_links** — rejected: would admit invalid tuples (`voc→voc evidence_of`, `finding→voc`, `finding→finding`).
+- **Compute `evidence_count` instead of storing** — rejected: `15:135` makes it a required stored field; drift is handled by same-transaction maintenance instead.
+- **Implement a Finding reporter summary now** — rejected: no doc defines one and CONTEXT.md forbids exposing Finding detail to reporters.

@@ -86,6 +86,27 @@ GET /entity-links?scope=workspace
   synthesized endpoint summaries.
 ```
 
+Slice 5 provider registry (Finding From VOC, ADR-0024):
+
+```text
+finding -> registered as a link TARGET type
+- relation_type: created_finding   (voc -> finding), created by POST /vocs/:id/create-finding
+- resolver: finding.findings(id, workspace_id, primary_managed_system_id)
+- create authz: actor needs voc.read on the source VOC's MS AND finding.manage
+  on the target Finding's MS; both checked in one transaction before insert
+- read authz: finding endpoint readable by Admin, or Developer with finding.read
+  on the finding's primary_managed_system_id; User/Reporter never
+- getReporterSummary(finding): returns UNAVAILABLE (Finding has no reporter
+  summary — ADR-0024 §E); summary_visible therefore unreachable for a finding target
+- getInternalSummary(finding): Finding internal read model
+- the #112 hard-coded VOC resolution is refactored into this registry; VOC↔VOC
+  related_to behavior (#112-#115) is preserved unchanged
+```
+
+The composite tuple allowlist after Slice 5 is exactly `(voc,voc,related_to)` and
+`(voc,finding,created_finding)`; independent value CHECKs are forbidden because
+they would admit invalid tuples. Creatable visibility stays `internal_only`.
+
 ## Link Detach Validation
 
 Slice 4.2 detach lifecycle (#113):

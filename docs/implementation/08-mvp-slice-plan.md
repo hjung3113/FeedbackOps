@@ -123,18 +123,29 @@ Exit criteria:
 ## Slice 5: Finding From VOC
 
 ```text
-- create Finding from VOC or VOC Cluster
-- VOC Cluster create, add/remove membership, and confirm
-- evidence highlights
-- source preservation
-- create_finding entity link
+- entity-link provider registry (real, replacing the #112 hard-coded VOC stub)
+- create Finding from a single VOC          (core tracer)
+- findings + evidence_highlights tables (per 15-data-contracts.md)
+- evidence highlights (FR-FIND-002)         (follow-on issue in this milestone)
+- source preservation (immutable findings.source_type/source_id)
+- created_finding entity link (voc -> finding, internal_only)
+- create Finding from VOC Cluster + cluster create/membership/confirm  (split follow-on, this milestone)
 ```
+
+Build order (ADR-0024): provider registry + finding read/manage authz + tuple
+CHECK first, then findings table + `POST /vocs/:id/create-finding` create-with-
+link-in-txn, then Finding Detail UI + Create-Finding CTA, then evidence
+highlights (BE then FE), then the VOC Cluster follow-on. Cluster is **split out
+of the core tracer** (decision D-1, confirmed) but **stays in the Slice 5
+milestone**; `source_type='voc_cluster'` is purely additive so the core design
+admits it without rework.
 
 Exit criteria:
 
 ```text
 - Finding shows why it exists
-- source link survives reload
+- source link survives reload (created_finding link + immutable source columns)
+- Reporter/User cannot read Finding or its link; Dev needs finding.read in scope
 ```
 
 ## Slice 6: Task Request Review And Conversion

@@ -162,6 +162,7 @@ Owner: Finding / Insight
 evidence_highlights
 - id: uuid, required
 - workspace_id: uuid, required
+- finding_id: uuid, required   # parent Finding (added by ADR-0024 §F; POST /findings/:id/evidence-highlights)
 - primary_managed_system_id: uuid, required
 - source_type: enum(voc, survey_response, note), required
 - source_id: uuid, nullable when source_type=note
