@@ -62,6 +62,8 @@ export const AUDIT_EVENT_TYPES = [
   'entity_link.created',
   // Slice 4.2 #113: audited soft detach lifecycle.
   'entity_link.detached',
+  // Slice 5 #121: Finding created from a source VOC.
+  'finding_created_from_voc',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -149,35 +151,59 @@ export const analyticsAreaArchivedDetailSchema = z.object({
 });
 export type AnalyticsAreaArchivedDetail = z.infer<typeof analyticsAreaArchivedDetailSchema>;
 
-export const entityLinkCreatedDetailSchema = z.object({
-  link_id: z.string().uuid(),
-  source: z.object({
-    type: z.literal('voc'),
-    id: z.string().uuid(),
-  }),
-  target: z.object({
-    type: z.literal('voc'),
-    id: z.string().uuid(),
-  }),
-  relation_type: z.literal('related_to'),
-  visibility: z.literal('internal_only'),
+const vocRefDetailSchema = z.object({
+  type: z.literal('voc'),
+  id: z.string().uuid(),
 });
+
+const findingRefDetailSchema = z.object({
+  type: z.literal('finding'),
+  id: z.string().uuid(),
+});
+
+export const entityLinkCreatedDetailSchema = z.discriminatedUnion('relation_type', [
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: vocRefDetailSchema,
+    relation_type: z.literal('related_to'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('created_finding'),
+    visibility: z.literal('internal_only'),
+  }),
+]);
 export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
 
-export const entityLinkDetachedDetailSchema = z.object({
-  link_id: z.string().uuid(),
-  source: z.object({
-    type: z.literal('voc'),
-    id: z.string().uuid(),
+export const entityLinkDetachedDetailSchema = z.discriminatedUnion('relation_type', [
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: vocRefDetailSchema,
+    relation_type: z.literal('related_to'),
+    reason: z.string().min(1),
   }),
-  target: z.object({
-    type: z.literal('voc'),
-    id: z.string().uuid(),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('created_finding'),
+    reason: z.string().min(1),
   }),
-  relation_type: z.literal('related_to'),
-  reason: z.string().min(1),
-});
+]);
 export type EntityLinkDetachedDetail = z.infer<typeof entityLinkDetachedDetailSchema>;
+
+export const findingCreatedFromVocDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  source_voc_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('voc'),
+});
+export type FindingCreatedFromVocDetail = z.infer<typeof findingCreatedFromVocDetailSchema>;
 
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
@@ -208,4 +234,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   'entity_link.created': entityLinkCreatedDetailSchema,
   // Slice 4.2 #113.
   'entity_link.detached': entityLinkDetachedDetailSchema,
+  // Slice 5 #121.
+  finding_created_from_voc: findingCreatedFromVocDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

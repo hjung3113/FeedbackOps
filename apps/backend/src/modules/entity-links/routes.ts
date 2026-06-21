@@ -101,7 +101,7 @@ export const entityLinksRoutes: FastifyPluginAsync<EntityLinksRoutesOptions> = a
         return reply.code(200).send({ items });
       }
 
-      let endpoint: { type: 'voc'; id: string };
+      let endpoint: { type: 'voc' | 'finding'; id: string };
       let side: 'source' | 'target';
       if (data.source_type !== undefined && data.source_id !== undefined) {
         endpoint = { type: data.source_type, id: data.source_id };

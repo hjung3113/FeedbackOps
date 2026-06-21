@@ -141,6 +141,13 @@
       "when": 1781534641945,
       "tag": "0019_entity_link_detach",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1781535641945,
+      "tag": "0020_finding_foundation",
+      "breakpoints": true
     }
   ]
 }

@@ -84,8 +84,16 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     await migrateHandle.pool.query(
       `delete from core.audit_log
         where workspace_id = $1
-          and event_type in ('entity_link.created', 'entity_link.detached')`,
+          and event_type in ('entity_link.created', 'entity_link.detached', 'finding_created_from_voc')`,
       [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
+      `delete from finding.findings
+        where workspace_id = $1
+          and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
       `delete from permission.permission_grants
@@ -134,8 +142,11 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
   }
 
   async function seedEntityLinkDirectly(input: {
+    sourceType?: 'voc';
     sourceId: string;
+    targetType?: 'voc' | 'finding';
     targetId: string;
+    relationType?: 'related_to' | 'created_finding';
     managedSystemId: string;
     visibility: 'internal_only' | 'summary_visible' | 'visible_to_reporter' | 'admin_only';
   }): Promise<string> {
@@ -144,12 +155,15 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
           workspace_id, source_type, source_id, target_type, target_id,
           relation_type, visibility, status, managed_system_id, created_by
         )
-       values ($1, 'voc', $2, 'voc', $3, 'related_to', $4, 'active', $5, $6)
+       values ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9)
        returning id`,
       [
         WORKSPACE_ID,
+        input.sourceType ?? 'voc',
         input.sourceId,
+        input.targetType ?? 'voc',
         input.targetId,
+        input.relationType ?? 'related_to',
         input.visibility,
         input.managedSystemId,
         adminActorId,
@@ -158,6 +172,31 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     const id = res.rows[0]?.id;
     if (!id) throw new Error(`seedEntityLinkDirectly failed for ${input.visibility}`);
     return id;
+  }
+
+  async function seedFindingDirectly(input: {
+    managedSystemId: string;
+    sourceVocId: string;
+    title?: string;
+  }): Promise<{ id: string }> {
+    const res = await migrateHandle.pool.query<{ id: string }>(
+      `insert into finding.findings (
+          workspace_id, primary_managed_system_id, title, summary, source_type,
+          source_id, evidence_count, severity, confidence, status, created_by
+        )
+       values ($1, $2, $3, 'Finding summary', 'voc', $4, 0, 'medium', 'high', 'draft', $5)
+       returning id`,
+      [
+        WORKSPACE_ID,
+        input.managedSystemId,
+        input.title ?? 'Seeded Finding',
+        input.sourceVocId,
+        adminActorId,
+      ],
+    );
+    const id = res.rows[0]?.id;
+    if (!id) throw new Error('seedFindingDirectly failed');
+    return { id };
   }
 
   async function postEntityLink(cookie: string, sourceId: string, targetId: string, extra = {}) {
@@ -247,12 +286,25 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
 
-  it('POST rejects unsupported relation_type, source_type, and target_type', async () => {
-    const { sourceVoc, targetVoc } = await seedVocPair();
+  it('POST accepts VOC→Finding created_finding and still rejects unsupported tuples', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const finding = await seedFindingDirectly({ managedSystemId: msA, sourceVocId: sourceVoc.id });
+
+    const createdFinding = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id, {
+      target: { type: 'finding', id: finding.id },
+      relation_type: 'created_finding',
+    });
+    expect(createdFinding.statusCode).toBe(201);
+    expect(createdFinding.json<{ target_type: string; relation_type: string }>()).toMatchObject({
+      target_type: 'finding',
+      relation_type: 'created_finding',
+    });
+
     const cases = [
       { relation_type: 'evidence_of' },
       { source: { type: 'finding', id: sourceVoc.id } },
-      { target: { type: 'task', id: targetVoc.id } },
+      { target: { type: 'finding', id: finding.id }, relation_type: 'related_to' },
+      { source: { type: 'finding', id: finding.id }, target: { type: 'voc', id: targetVoc.id } },
     ];
 
     for (const extra of cases) {
@@ -688,6 +740,163 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       [ids.visible_to_reporter]: 'allowed',
       [ids.admin_only]: 'hidden',
     });
+  });
+
+  it('GET read paths enforce the ADR-0024 finding target row', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-finda`,
+      'Finding Matrix MS-A',
+    );
+    const msB = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-findb`,
+      'Finding Matrix MS-B',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Finding Matrix Source VOC',
+    );
+    const readableFinding = await seedFindingDirectly({
+      managedSystemId: msA,
+      sourceVocId: sourceVoc.id,
+      title: 'Readable Finding',
+    });
+    const unreadableFinding = await seedFindingDirectly({
+      managedSystemId: msB,
+      sourceVocId: sourceVoc.id,
+      title: 'Unreadable Finding',
+    });
+
+    const allowedId = await seedEntityLinkDirectly({
+      sourceId: sourceVoc.id,
+      targetType: 'finding',
+      targetId: readableFinding.id,
+      relationType: 'created_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+    const mixedId = await seedEntityLinkDirectly({
+      sourceId: sourceVoc.id,
+      targetType: 'finding',
+      targetId: unreadableFinding.id,
+      relationType: 'created_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+
+    const { id: scopedDevId, externalId: scopedDevExternalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('findok'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, scopedDevId, 'voc.read', msA, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, scopedDevId, 'finding.read', msA, adminActorId);
+    const scopedDevCookie = await loginAs(app, scopedDevExternalId);
+
+    const { id: outScopeDevId, externalId: outScopeExternalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('findno'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, outScopeDevId, 'voc.read', msB, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, outScopeDevId, 'finding.read', msB, adminActorId);
+    const outScopeCookie = await loginAs(app, outScopeExternalId);
+    const reporterCookie = await loginAs(app, 'mock-user-1');
+
+    const admin = await getEntityLinks(adminCookie, '?scope=workspace');
+    expect(admin.statusCode).toBe(200);
+    expect(
+      Object.fromEntries(
+        admin
+          .json<{ items: Array<{ id: string; visibility_state: string }> }>()
+          .items.filter((item) => [allowedId, mixedId].includes(item.id))
+          .map((item) => [item.id, item.visibility_state]),
+      ),
+    ).toEqual({
+      [allowedId]: 'allowed',
+      [mixedId]: 'allowed',
+    });
+
+    const developer = await getEntityLinks(scopedDevCookie, '?scope=workspace');
+    expect(developer.statusCode).toBe(200);
+    const developerRows = developer.json<{ items: Array<Record<string, unknown>> }>().items;
+    expect(developerRows.find((item) => item.id === allowedId)).toMatchObject({
+      visibility_state: 'allowed',
+      source_id: sourceVoc.id,
+      target_id: readableFinding.id,
+      target_type: 'finding',
+      relation_type: 'created_finding',
+    });
+    const mixedRow = developerRows.find((item) => item.id === mixedId);
+    expect(mixedRow).toMatchObject({
+      visibility_state: 'hidden',
+      target_type: 'finding',
+      relation_type: 'created_finding',
+    });
+    expect(mixedRow?.source_id).toBeUndefined();
+    expect(mixedRow?.target_id).toBeUndefined();
+
+    const outScope = await getEntityLinks(outScopeCookie, '?scope=workspace');
+    expect(outScope.statusCode).toBe(200);
+    expect(
+      outScope
+        .json<{ items: Array<{ id: string; visibility_state: string }> }>()
+        .items.filter((item) => [allowedId, mixedId].includes(item.id))
+        .every((item) => item.visibility_state === 'hidden'),
+    ).toBe(true);
+
+    const reporter = await getEntityLinks(reporterCookie, '?scope=workspace');
+    expect(reporter.statusCode).toBe(200);
+    expect(
+      reporter
+        .json<{ items: Array<{ id: string; visibility_state: string }> }>()
+        .items.filter((item) => [allowedId, mixedId].includes(item.id))
+        .every((item) => item.visibility_state === 'hidden'),
+    ).toBe(true);
+  });
+
+  it('DB tuple check allows only registered entity-link tuples', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const finding = await seedFindingDirectly({ managedSystemId: msA, sourceVocId: sourceVoc.id });
+
+    await expect(
+      seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetType: 'finding',
+        targetId: finding.id,
+        relationType: 'created_finding',
+        managedSystemId: msA,
+        visibility: 'internal_only',
+      }),
+    ).resolves.toEqual(expect.any(String));
+
+    await expect(
+      migrateHandle.pool.query(
+        `insert into core.entity_links (
+            workspace_id, source_type, source_id, target_type, target_id,
+            relation_type, visibility, status, managed_system_id, created_by
+          )
+         values ($1, 'voc', $2, 'finding', $3, 'related_to', 'internal_only', 'active', $4, $5)`,
+        [WORKSPACE_ID, sourceVoc.id, finding.id, msA, adminActorId],
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      migrateHandle.pool.query(
+        `insert into core.entity_links (
+            workspace_id, source_type, source_id, target_type, target_id,
+            relation_type, visibility, status, managed_system_id, created_by
+          )
+         values ($1, 'finding', $2, 'voc', $3, 'created_finding', 'internal_only', 'active', $4, $5)`,
+        [WORKSPACE_ID, finding.id, targetVoc.id, msA, adminActorId],
+      ),
+    ).rejects.toThrow();
   });
 
   it('GET endpoint mode still requires exactly one endpoint and returns active links only', async () => {

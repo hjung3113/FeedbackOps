@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "artifact_type": "verify_result",
+  "producer_role": "VERIFIER",
+  "issue": 121,
+  "branch": "feature/121-finding-foundation",
+  "head_sha": "aad2f4fbf0f925cef47b2d516ca0dc16c60476eb",
+  "cwd": "/Users/hyojung/Desktop/2026/wt-121-finding-foundation",
+  "verify_cmd": "verify.sh entity-links",
+  "env_profile": "scrubbed",
+  "db_target": {
+    "host": "localhost",
+    "database": "feedbackops_wt121",
+    "role": "fops_app"
+  },
+  "verdict": {
+    "passed": 56,
+    "failed": 0,
+    "pending": 0,
+    "exit_code": 0
+  },
+  "classifier": "PASS",
+  "created_at": "2026-06-21T02:24:08Z"
+}
