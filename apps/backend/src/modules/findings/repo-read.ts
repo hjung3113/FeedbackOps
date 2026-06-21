@@ -28,7 +28,7 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function mapFindingRow(row: Record<string, unknown>): FindingReadRow {
+export function mapFindingRow(row: Record<string, unknown>): FindingReadRow {
   return {
     id: row.id as string,
     workspace_id: row.workspace_id as string,
@@ -66,4 +66,57 @@ export async function findFindingById(
   `);
   const row = result.rows[0];
   return row ? mapFindingRow(row) : null;
+}
+
+export async function listFindingsByWorkspace(
+  db: Db | Tx,
+  input: { workspaceId: string; managedSystemId?: string },
+): Promise<FindingReadRow[]> {
+  const managedSystemPredicate =
+    input.managedSystemId === undefined
+      ? sql`TRUE`
+      : sql`primary_managed_system_id = ${input.managedSystemId}`;
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT
+      id, workspace_id, primary_managed_system_id, title, summary, source_type,
+      source_id, evidence_count, severity, confidence, status, analytics_area_id,
+      linked_task_id, linked_milestone_id, created_by, created_at, updated_at
+    FROM ${findings}
+    WHERE workspace_id = ${input.workspaceId}
+      AND ${managedSystemPredicate}
+    ORDER BY created_at DESC, id DESC
+  `);
+  return result.rows.map(mapFindingRow);
+}
+
+export interface FindingSourceLinkRow {
+  link_id: string;
+  source_type: 'voc';
+  source_id: string;
+  relation_type: 'created_finding';
+}
+
+export async function findCreatedFindingSourceLink(
+  db: Db | Tx,
+  input: { workspaceId: string; findingId: string },
+): Promise<FindingSourceLinkRow | null> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT id AS link_id, source_type, source_id, relation_type
+    FROM core.entity_links
+    WHERE workspace_id = ${input.workspaceId}
+      AND target_type = 'finding'
+      AND target_id = ${input.findingId}
+      AND relation_type = 'created_finding'
+      AND status = 'active'
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  `);
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    link_id: row.link_id as string,
+    source_type: row.source_type as 'voc',
+    source_id: row.source_id as string,
+    relation_type: row.relation_type as 'created_finding',
+  };
 }

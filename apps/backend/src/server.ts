@@ -33,6 +33,7 @@ import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
 import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
+import { createFindingsService, findingsRoutes } from './modules/findings/index.js';
 import {
   createManagedSystemService,
   managedSystemsRoutes,
@@ -437,6 +438,22 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
+  // ── Findings module — Slice 5 issue #122 ─────────────────────────────────
+  const findingsService = createFindingsService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(findingsRoutes, {
+    sessionService,
+    findingsService,
+    workspaceId,
+    rateLimitConfig: {
+      read: app.rateLimitConfig.read,
+    },
+  });
+
   // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
   const vocService = createVocService({
     db: dbHandle.db,
@@ -458,6 +475,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     vocService,
     vocReadService,
+    findingsService,
     conversationService,
     idempotencyService,
     workspaceId,
