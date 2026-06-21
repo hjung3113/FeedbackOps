@@ -48,7 +48,14 @@ New capabilities (module-prefixed per `packages/shared/src/enums/capabilities.ts
 - **`finding.read`** — Developer-requestable per Managed System; not sensitive. Read-authz for a `finding` endpoint = Admin (workspace) OR Developer holding `finding.read` on the finding's `primary_managed_system_id`. User and Reporter: never.
 - **`finding.manage`** — create/update Findings; Developer-requestable per Managed System; not sensitive. Create-authz for `POST /vocs/:id/create-finding` = Admin OR Developer holding `finding.manage` on the target Finding's `primary_managed_system_id`.
 
-**Create requires read on the source VOC too** (closes the Codex-D BLOCKER): a Developer may not forge a Finding from a VOC they cannot read. Creation validates, in one transaction (per `06:33-45`): source VOC exists + readable (`voc.read` on its MS), target MS scope compatible, `finding.manage` on target MS, then writes finding + `created_finding` link + audit. Unreadable source → not-found-style failure (no existence leak).
+**Create requires read on the source VOC too** (closes the Codex-D BLOCKER): a Developer may not forge a Finding from a VOC they cannot read. Creation validates, in one transaction (per `06:33-45`): source VOC exists + readable, target MS scope compatible, `finding.manage` on target MS, then writes finding + `created_finding` link + audit.
+
+**Source-readability and the create-denial status code** (clarified after #122, applying the ADR-0023 hidden/denied boundary to the create path): "can read the source VOC" means the actor can legitimately see that VOC — **`voc.read` on its Managed System OR the actor is the VOC's reporter (ownership)** — not the `voc.read` capability alone. The denial status then follows the §A boundary:
+
+- **Source unreadable** (actor is neither the reporter nor holds `voc.read` on the source MS) → **404 `not_found.record`** (hidden — no existence leak; e.g. a Developer with `finding.manage` on the source MS but no `voc.read`).
+- **Source readable but actor lacks `finding.manage` on the target MS** → **403 `permission.denied`** (denied — the actor can acknowledge the VOC, but may not create a Finding; e.g. the **Reporter on their own VOC**, or a Developer readable on the source but scoped elsewhere for `finding.manage`).
+
+A Reporter therefore receives 403 on their own VOC (they own it, so it is not hidden), never 404. This mirrors ADR-0023 §A: `hidden` when existence must be concealed, `denied` when it may be acknowledged but the action refused.
 
 ### Section D — ADR-0023 Section C amendment: the `finding` target row
 
