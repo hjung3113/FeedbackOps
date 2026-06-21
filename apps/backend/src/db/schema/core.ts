@@ -311,9 +311,9 @@ export const entityLinks = coreSchema.table(
     detachedAt: timestamp('detached_at', { withTimezone: true }),
   },
   (t) => ({
-    relationTypeCheck: check(
-      'entity_links_relation_type_check',
-      sql`${t.relationType} in ('related_to')`,
+    tupleCheck: check(
+      'entity_links_tuple_check',
+      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'))`,
     ),
     visibilityCheck: check(
       'entity_links_visibility_check',
@@ -323,8 +323,6 @@ export const entityLinks = coreSchema.table(
       'entity_links_status_check',
       sql`${t.status} in ('active','stale','detached','revoked')`,
     ),
-    sourceTypeCheck: check('entity_links_source_type_check', sql`${t.sourceType} in ('voc')`),
-    targetTypeCheck: check('entity_links_target_type_check', sql`${t.targetType} in ('voc')`),
     notSelfCheck: check(
       'entity_links_not_self_check',
       sql`not (${t.sourceType} = ${t.targetType} and ${t.sourceId} = ${t.targetId})`,
@@ -342,6 +340,10 @@ export const entityLinks = coreSchema.table(
       t.workspaceId,
       t.managedSystemId,
       t.status,
+    ),
+    workspaceRelationIdx: index('entity_links_workspace_relation_idx').on(
+      t.workspaceId,
+      t.relationType,
     ),
   }),
 );

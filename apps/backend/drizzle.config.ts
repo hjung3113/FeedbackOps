@@ -11,10 +11,15 @@ const migrateUrl =
 export default defineConfig({
   // Point at the per-namespace files directly so drizzle-kit's CJS loader
   // doesn't hit ESM .js suffixes used by NodeNext at runtime.
-  schema: ['./src/db/schema/core.ts', './src/db/schema/permission.ts'],
+  schema: [
+    './src/db/schema/core.ts',
+    './src/db/schema/permission.ts',
+    './src/db/schema/voc.ts',
+    './src/db/schema/finding.ts',
+  ],
   out: './migrations',
   dialect: 'postgresql',
-  schemaFilter: ['core', 'permission'],
+  schemaFilter: ['core', 'permission', 'voc', 'finding'],
   dbCredentials: {
     url: migrateUrl,
   },

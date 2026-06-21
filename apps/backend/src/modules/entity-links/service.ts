@@ -1,7 +1,9 @@
 import type {
   DetachedEntityLinkResponse,
   EntityLinkDto,
+  EntityLinkEntityType,
   EntityLinkRef,
+  EntityLinkRelationType,
   EntityLinkVisibilityState,
   TaskReporterSummary,
 } from '@fops/shared';
@@ -9,13 +11,14 @@ import type {
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
+import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type LinkVisibilityDecision, evaluateLinkVisibility } from './evaluate-visibility.js';
 import {
   type EntityLinkRow,
   type LinkEndpointRow,
-  detachVocRelatedToLink,
-  insertActiveVocRelatedToLink,
+  detachEntityLink,
+  insertActiveEntityLink,
   resolveVocEndpoint,
   selectActiveLinksForEndpoint,
   selectEntityLinkById,
@@ -32,6 +35,42 @@ export interface EntityLinksServiceDeps {
   db: Db;
   checkService: CheckService;
   auditService: AuditService;
+}
+
+type ReporterSummaryResult =
+  | { available: false }
+  | { available: true; summary: TaskReporterSummary };
+
+interface EntityLinkProvider {
+  entityType: EntityLinkEntityType;
+  assertExists(db: Db, workspaceId: string, id: string): Promise<LinkEndpointRow | null>;
+  getPermissionSubject(db: Db, workspaceId: string, id: string): Promise<LinkEndpointRow | null>;
+  canRead(
+    deps: Pick<EntityLinksServiceDeps, 'checkService'>,
+    actor: EntityLinksActor,
+    subject: LinkEndpointRow,
+  ): Promise<boolean>;
+  canCreateTarget?(
+    deps: Pick<EntityLinksServiceDeps, 'checkService'>,
+    actor: EntityLinksActor,
+    subject: LinkEndpointRow,
+  ): Promise<boolean>;
+  getReporterSummary(id: string): Promise<ReporterSummaryResult>;
+  getInternalSummary(db: Db, workspaceId: string, id: string): Promise<unknown | null>;
+  listExpectedLinks(id: string): Promise<EntityLinkRef[]>;
+}
+
+function findingToInternalSummary(row: FindingReadRow): Record<string, unknown> {
+  return {
+    id: row.id,
+    title: row.title,
+    summary: row.summary,
+    severity: row.severity,
+    confidence: row.confidence,
+    status: row.status,
+    primary_managed_system_id: row.primary_managed_system_id,
+    evidence_count: row.evidence_count,
+  };
 }
 
 function toAllowedDto(row: EntityLinkRow): EntityLinkDto {
@@ -123,40 +162,141 @@ async function assertVocReadScope(
   return decision.allow;
 }
 
+async function assertFindingReadScope(
+  deps: Pick<EntityLinksServiceDeps, 'checkService'>,
+  actor: EntityLinksActor,
+  managedSystemId: string,
+): Promise<boolean> {
+  if (actor.role_level === 'admin') return true;
+  const decision = await deps.checkService.checkCapability(actor, 'finding.read', {
+    workspace_id: actor.workspace_id,
+    managed_system_id: managedSystemId,
+  });
+  return decision.allow;
+}
+
+async function assertFindingManageScope(
+  deps: Pick<EntityLinksServiceDeps, 'checkService'>,
+  actor: EntityLinksActor,
+  managedSystemId: string,
+): Promise<boolean> {
+  if (actor.role_level === 'admin') return true;
+  const decision = await deps.checkService.checkCapability(actor, 'finding.manage', {
+    workspace_id: actor.workspace_id,
+    managed_system_id: managedSystemId,
+  });
+  return decision.allow;
+}
+
+const unavailableReporterSummary = async (): Promise<ReporterSummaryResult> => ({
+  available: false,
+});
+
+const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
+  voc: {
+    entityType: 'voc',
+    assertExists: resolveVocEndpoint,
+    getPermissionSubject: resolveVocEndpoint,
+    canRead: (deps, actor, subject) => assertVocReadScope(deps, actor, subject.managed_system_id),
+    getReporterSummary: unavailableReporterSummary,
+    getInternalSummary: async () => null,
+    listExpectedLinks: async () => [],
+  },
+  finding: {
+    entityType: 'finding',
+    assertExists: async (db, workspaceId, id) => {
+      const finding = await findFindingById(db, { workspaceId, findingId: id });
+      if (!finding) return null;
+      return {
+        workspace_id: finding.workspace_id,
+        managed_system_id: finding.primary_managed_system_id,
+        reporter_id: null,
+      };
+    },
+    getPermissionSubject: async (db, workspaceId, id) => {
+      const finding = await findFindingById(db, { workspaceId, findingId: id });
+      if (!finding) return null;
+      return {
+        workspace_id: finding.workspace_id,
+        managed_system_id: finding.primary_managed_system_id,
+        reporter_id: null,
+      };
+    },
+    canRead: (deps, actor, subject) =>
+      assertFindingReadScope(deps, actor, subject.managed_system_id),
+    canCreateTarget: (deps, actor, subject) =>
+      assertFindingManageScope(deps, actor, subject.managed_system_id),
+    getReporterSummary: unavailableReporterSummary,
+    getInternalSummary: async (db, workspaceId, id) => {
+      const finding = await findFindingById(db, { workspaceId, findingId: id });
+      return finding ? findingToInternalSummary(finding) : null;
+    },
+    listExpectedLinks: async () => [],
+  },
+};
+
+function providerFor(type: EntityLinkEntityType): EntityLinkProvider {
+  return entityLinkProviders[type];
+}
+
+function isCreatableTuple(input: {
+  sourceType: EntityLinkEntityType;
+  targetType: EntityLinkEntityType;
+  relationType: EntityLinkRelationType;
+}): boolean {
+  return (
+    (input.sourceType === 'voc' &&
+      input.targetType === 'voc' &&
+      input.relationType === 'related_to') ||
+    (input.sourceType === 'voc' &&
+      input.targetType === 'finding' &&
+      input.relationType === 'created_finding')
+  );
+}
+
 async function resolveEndpointForRow(
   deps: Pick<EntityLinksServiceDeps, 'db'>,
   actor: EntityLinksActor,
-  vocId: string,
-  resolvedByVocId: Map<string, LinkEndpointRow | null>,
+  endpoint: EntityLinkRef,
+  resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
 ): Promise<LinkEndpointRow | null> {
-  if (resolvedByVocId.has(vocId)) return resolvedByVocId.get(vocId) ?? null;
-  const endpoint = await resolveVocEndpoint(deps.db, actor.workspace_id, vocId);
-  resolvedByVocId.set(vocId, endpoint);
-  return endpoint;
+  const key = `${endpoint.type}:${endpoint.id}`;
+  if (resolvedByEndpoint.has(key)) return resolvedByEndpoint.get(key) ?? null;
+  const provider = providerFor(endpoint.type);
+  const row = await provider.getPermissionSubject(deps.db, actor.workspace_id, endpoint.id);
+  resolvedByEndpoint.set(key, row);
+  return row;
 }
 
 async function evaluateRowVisibility(
   deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
   actor: EntityLinksActor,
   row: EntityLinkRow,
-  resolvedByVocId: Map<string, LinkEndpointRow | null>,
+  resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
 ): Promise<LinkVisibilityDecision> {
   if (
-    row.source_type !== 'voc' ||
-    row.target_type !== 'voc' ||
-    row.relation_type !== 'related_to'
+    !isCreatableTuple({
+      sourceType: row.source_type,
+      targetType: row.target_type,
+      relationType: row.relation_type,
+    })
   ) {
     return 'hidden';
   }
 
+  const sourceRef = { type: row.source_type, id: row.source_id };
+  const targetRef = { type: row.target_type, id: row.target_id };
   const [source, target] = await Promise.all([
-    resolveEndpointForRow(deps, actor, row.source_id, resolvedByVocId),
-    resolveEndpointForRow(deps, actor, row.target_id, resolvedByVocId),
+    resolveEndpointForRow(deps, actor, sourceRef, resolvedByEndpoint),
+    resolveEndpointForRow(deps, actor, targetRef, resolvedByEndpoint),
   ]);
+  const sourceProvider = providerFor(row.source_type);
+  const targetProvider = providerFor(row.target_type);
   const [sourceReadable, targetReadable] = await Promise.all([
-    source ? assertVocReadScope(deps, actor, source.managed_system_id) : Promise.resolve(false),
-    target ? assertVocReadScope(deps, actor, target.managed_system_id) : Promise.resolve(false),
+    source ? sourceProvider.canRead(deps, actor, source) : Promise.resolve(false),
+    target ? targetProvider.canRead(deps, actor, target) : Promise.resolve(false),
   ]);
+  const targetSummary = await targetProvider.getReporterSummary(row.target_id);
 
   return evaluateLinkVisibility({
     visibility: row.visibility,
@@ -166,7 +306,7 @@ async function evaluateRowVisibility(
     },
     sourceReadable,
     targetReadable,
-    targetSummaryAvailable: false,
+    targetSummaryAvailable: targetSummary.available,
     sourceReporterId: source?.reporter_id ?? null,
     targetReporterId: target?.reporter_id ?? null,
   });
@@ -177,13 +317,19 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     actor: EntityLinksActor;
     source: EntityLinkRef;
     target: EntityLinkRef;
-    relation_type: 'related_to';
+    relation_type: EntityLinkRelationType;
     visibility?: 'internal_only';
   }): Promise<{ link: EntityLinkDto; status: 200 | 201 }> {
     const { actor, source, target } = args;
     const visibility = args.visibility ?? 'internal_only';
 
-    if (source.type !== 'voc' || target.type !== 'voc' || args.relation_type !== 'related_to') {
+    if (
+      !isCreatableTuple({
+        sourceType: source.type,
+        targetType: target.type,
+        relationType: args.relation_type,
+      })
+    ) {
       throw new HttpError('validation.failed', 'unsupported entity link tuple', {
         fields: [{ path: [], code: 'unsupported_tuple' }],
       });
@@ -199,29 +345,37 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       });
     }
 
+    const sourceProvider = providerFor(source.type);
+    const targetProvider = providerFor(target.type);
     const [sourceRow, targetRow] = await Promise.all([
-      resolveVocEndpoint(deps.db, actor.workspace_id, source.id),
-      resolveVocEndpoint(deps.db, actor.workspace_id, target.id),
+      sourceProvider.assertExists(deps.db, actor.workspace_id, source.id),
+      targetProvider.assertExists(deps.db, actor.workspace_id, target.id),
     ]);
     if (!sourceRow || !targetRow) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
 
-    const sourceAllowed = await assertVocReadScope(deps, actor, sourceRow.managed_system_id);
+    const sourceAllowed = await sourceProvider.canRead(deps, actor, sourceRow);
     if (!sourceAllowed) {
       throw new HttpError('permission.denied', 'missing source VOC read scope');
     }
 
-    const targetAllowed = await assertVocReadScope(deps, actor, targetRow.managed_system_id);
+    const targetAllowed =
+      targetProvider.canCreateTarget !== undefined
+        ? await targetProvider.canCreateTarget(deps, actor, targetRow)
+        : await targetProvider.canRead(deps, actor, targetRow);
     if (!targetAllowed) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
 
     const result = await deps.db.transaction(async (tx) => {
-      const inserted = await insertActiveVocRelatedToLink(tx, {
+      const inserted = await insertActiveEntityLink(tx, {
         workspaceId: actor.workspace_id,
+        sourceType: source.type,
         sourceId: source.id,
+        targetType: target.type,
         targetId: target.id,
+        relationType: args.relation_type,
         managedSystemId: sourceRow.managed_system_id,
         createdBy: actor.actor_id,
         visibility,
@@ -257,17 +411,12 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     side?: 'source' | 'target';
   }): Promise<EntityLinkDto[]> {
     const { actor, endpoint, side } = args;
-    if (endpoint.type !== 'voc') {
-      throw new HttpError('validation.failed', 'unsupported entity type', {
-        fields: [{ path: ['type'], code: 'unsupported_entity_type' }],
-      });
-    }
-
-    const focus = await resolveVocEndpoint(deps.db, actor.workspace_id, endpoint.id);
+    const provider = providerFor(endpoint.type);
+    const focus = await provider.getPermissionSubject(deps.db, actor.workspace_id, endpoint.id);
     if (!focus) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
-    const focusAllowed = await assertVocReadScope(deps, actor, focus.managed_system_id);
+    const focusAllowed = await provider.canRead(deps, actor, focus);
     if (!focusAllowed) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
@@ -282,10 +431,12 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       side === undefined ? listArgs : { ...listArgs, side },
     );
 
-    const resolvedByVocId = new Map<string, LinkEndpointRow | null>([[endpoint.id, focus]]);
+    const resolvedByEndpoint = new Map<string, LinkEndpointRow | null>([
+      [`${endpoint.type}:${endpoint.id}`, focus],
+    ]);
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
-      const decision = await evaluateRowVisibility(deps, actor, row, resolvedByVocId);
+      const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
       items.push(toDtoForDecision(row, decision));
     }
     return items;
@@ -294,7 +445,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
   async function listInventoryLinks(args: {
     actor: EntityLinksActor;
     statuses?: EntityLinkRow['status'][];
-    relationType?: 'related_to';
+    relationType?: EntityLinkRelationType;
     managedSystemId?: string;
   }): Promise<EntityLinkDto[]> {
     const { actor } = args;
@@ -305,10 +456,10 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
     });
 
-    const resolvedByVocId = new Map<string, LinkEndpointRow | null>();
+    const resolvedByEndpoint = new Map<string, LinkEndpointRow | null>();
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
-      const decision = await evaluateRowVisibility(deps, actor, row, resolvedByVocId);
+      const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
       items.push(toDtoForDecision(row, decision));
     }
     return items;
@@ -329,25 +480,29 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       throw new HttpError('not_found.record', 'entity link not found');
     }
     if (
-      link.source_type !== 'voc' ||
-      link.target_type !== 'voc' ||
-      link.relation_type !== 'related_to'
+      !isCreatableTuple({
+        sourceType: link.source_type,
+        targetType: link.target_type,
+        relationType: link.relation_type,
+      })
     ) {
       throw new HttpError('validation.failed', 'unsupported entity link tuple', {
         fields: [{ path: [], code: 'unsupported_tuple' }],
       });
     }
+    const sourceProvider = providerFor(link.source_type);
+    const targetProvider = providerFor(link.target_type);
     const [sourceRow, targetRow] = await Promise.all([
-      resolveVocEndpoint(deps.db, actor.workspace_id, link.source_id),
-      resolveVocEndpoint(deps.db, actor.workspace_id, link.target_id),
+      sourceProvider.getPermissionSubject(deps.db, actor.workspace_id, link.source_id),
+      targetProvider.getPermissionSubject(deps.db, actor.workspace_id, link.target_id),
     ]);
     if (!sourceRow || !targetRow) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
 
     const [sourceAllowed, targetAllowed] = await Promise.all([
-      assertVocReadScope(deps, actor, sourceRow.managed_system_id),
-      assertVocReadScope(deps, actor, targetRow.managed_system_id),
+      sourceProvider.canRead(deps, actor, sourceRow),
+      targetProvider.canRead(deps, actor, targetRow),
     ]);
     if (!sourceAllowed || !targetAllowed) {
       throw new HttpError('not_found.record', 'entity link not found');
@@ -357,7 +512,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     }
 
     const detached = await deps.db.transaction(async (tx) => {
-      const updated = await detachVocRelatedToLink(tx, {
+      const updated = await detachEntityLink(tx, {
         workspaceId: actor.workspace_id,
         linkId,
         actorId: actor.actor_id,

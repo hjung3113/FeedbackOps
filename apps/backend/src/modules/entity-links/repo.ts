@@ -1,5 +1,7 @@
 import { sql } from 'drizzle-orm';
 
+import type { EntityLinkEntityType, EntityLinkRelationType } from '@fops/shared';
+
 import type { Db } from '../../db/client.js';
 import { vocs } from '../../db/schema/voc.js';
 import type { Tx } from '../../db/tx.js';
@@ -7,17 +9,17 @@ import type { Tx } from '../../db/tx.js';
 export interface LinkEndpointRow {
   workspace_id: string;
   managed_system_id: string;
-  reporter_id: string;
+  reporter_id: string | null;
 }
 
 export interface EntityLinkRow {
   id: string;
   workspace_id: string;
-  source_type: 'voc';
+  source_type: EntityLinkEntityType;
   source_id: string;
-  target_type: 'voc';
+  target_type: EntityLinkEntityType;
   target_id: string;
-  relation_type: 'related_to';
+  relation_type: EntityLinkRelationType;
   visibility: 'internal_only' | 'summary_visible' | 'visible_to_reporter' | 'admin_only';
   status: 'active' | 'stale' | 'detached' | 'revoked';
   managed_system_id: string;
@@ -33,11 +35,11 @@ function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
   return {
     id: row.id as string,
     workspace_id: row.workspace_id as string,
-    source_type: row.source_type as 'voc',
+    source_type: row.source_type as EntityLinkEntityType,
     source_id: row.source_id as string,
-    target_type: row.target_type as 'voc',
+    target_type: row.target_type as EntityLinkEntityType,
     target_id: row.target_id as string,
-    relation_type: row.relation_type as 'related_to',
+    relation_type: row.relation_type as EntityLinkRelationType,
     visibility: row.visibility as EntityLinkRow['visibility'],
     status: row.status as EntityLinkRow['status'],
     managed_system_id: row.managed_system_id as string,
@@ -88,12 +90,15 @@ export async function resolveVocEndpoint(
   };
 }
 
-export async function insertActiveVocRelatedToLink(
+export async function insertActiveEntityLink(
   tx: Tx,
   input: {
     workspaceId: string;
+    sourceType: EntityLinkEntityType;
     sourceId: string;
+    targetType: EntityLinkEntityType;
     targetId: string;
+    relationType: EntityLinkRelationType;
     managedSystemId: string;
     createdBy: string;
     visibility: 'internal_only';
@@ -105,8 +110,8 @@ export async function insertActiveVocRelatedToLink(
       relation_type, visibility, status, managed_system_id, created_by
     )
     VALUES (
-      ${input.workspaceId}, 'voc', ${input.sourceId}, 'voc', ${input.targetId},
-      'related_to', ${input.visibility}, 'active', ${input.managedSystemId}, ${input.createdBy}
+      ${input.workspaceId}, ${input.sourceType}, ${input.sourceId}, ${input.targetType}, ${input.targetId},
+      ${input.relationType}, ${input.visibility}, 'active', ${input.managedSystemId}, ${input.createdBy}
     )
     ON CONFLICT (
       workspace_id, source_type, source_id, target_type, target_id, relation_type
@@ -120,10 +125,13 @@ export async function insertActiveVocRelatedToLink(
   const insertedRow = inserted.rows[0];
   if (insertedRow) return { row: mapEntityLinkRow(insertedRow), inserted: true };
 
-  const existing = await selectActiveVocRelatedToLink(tx, {
+  const existing = await selectActiveEntityLink(tx, {
     workspaceId: input.workspaceId,
+    sourceType: input.sourceType,
     sourceId: input.sourceId,
+    targetType: input.targetType,
     targetId: input.targetId,
+    relationType: input.relationType,
   });
   if (!existing) {
     throw new Error('entity link conflict did not return existing active row');
@@ -131,9 +139,16 @@ export async function insertActiveVocRelatedToLink(
   return { row: existing, inserted: false };
 }
 
-export async function selectActiveVocRelatedToLink(
+export async function selectActiveEntityLink(
   db: Db | Tx,
-  input: { workspaceId: string; sourceId: string; targetId: string },
+  input: {
+    workspaceId: string;
+    sourceType: EntityLinkEntityType;
+    sourceId: string;
+    targetType: EntityLinkEntityType;
+    targetId: string;
+    relationType: EntityLinkRelationType;
+  },
 ): Promise<EntityLinkRow | null> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
@@ -142,11 +157,11 @@ export async function selectActiveVocRelatedToLink(
       created_at, updated_at, detached_by, detach_reason, detached_at
     FROM core.entity_links
     WHERE workspace_id = ${input.workspaceId}
-      AND source_type = 'voc'
+      AND source_type = ${input.sourceType}
       AND source_id = ${input.sourceId}
-      AND target_type = 'voc'
+      AND target_type = ${input.targetType}
       AND target_id = ${input.targetId}
-      AND relation_type = 'related_to'
+      AND relation_type = ${input.relationType}
       AND status = 'active'
     LIMIT 1
   `);
@@ -158,7 +173,7 @@ export async function selectActiveLinksForEndpoint(
   db: Db | Tx,
   input: {
     workspaceId: string;
-    endpointType: 'voc';
+    endpointType: EntityLinkEntityType;
     endpointId: string;
     side?: 'source' | 'target';
   },
@@ -237,7 +252,7 @@ export async function selectEntityLinkById(
   return row ? mapEntityLinkRow(row) : null;
 }
 
-export async function detachVocRelatedToLink(
+export async function detachEntityLink(
   tx: Tx,
   input: {
     workspaceId: string;

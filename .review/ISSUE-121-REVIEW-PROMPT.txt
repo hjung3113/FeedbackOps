@@ -1,0 +1,14 @@
+You are an adversarial code REVIEWER (read-only) for issue #121 in this worktree. Read the git diff vs the develop base and judge it against the signed contract docs/adr/0024-finding-as-entity-link-target-and-provider-registry.md and docs/implementation/06-entity-linking-contract.md.
+
+Run: `git diff develop...HEAD` is not available (uncommitted). Use `git --no-pager diff develop -- apps packages` to see the working-tree changes.
+
+Check HARD and report concrete findings (file:line):
+1. TUPLE CHECK: is the entity_links widening a COMPOSITE tuple check allowing EXACTLY (voc,voc,related_to) and (voc,finding,created_finding)? Confirm it REJECTS invalid tuples (voc→voc evidence_of, finding→voc, voc→finding related_to, finding→finding). Independent per-column CHECKs = BLOCKER.
+2. #112-#115 PRESERVATION: is VOC↔VOC related_to behavior unchanged? Did the provider-registry refactor of service.ts alter any existing decision path, error code, or DTO shape for the VOC path? Are existing tests preserved (not gutted)?
+3. PROVIDER REGISTRY: does it match the 06:47-58 interface (assertExists, getPermissionSubject, getReporterSummary, getInternalSummary, listExpectedLinks)? Is finding's getReporterSummary returning UNAVAILABLE (targetSummaryAvailable=false)? Is read-authz for finding = finding.read on the finding's MS (NOT voc.read)? Is `finding` target-only (never source_type)?
+4. MIGRATION 0020: hand-written SQL correct? CREATE SCHEMA finding + grants (fops_app gets SELECT/INSERT/UPDATE but NOT DELETE; fops_migrate full)? finding.findings DDL matches docs/design/15-data-contracts.md:122-145 incl. ALL CHECKs (enums, source_id nullability tied to source_type, evidence_count>=0)? Is the meta journal + 0020_snapshot.json registered consistently (study 0018/0019)? Drop-old-CHECK + add-tuple-CHECK + workspace_relation index present?
+5. SHARED: capabilities finding.read/finding.manage added (non-sensitive)? audit entityLinkCreatedDetailSchema broadened ADDITIVELY (voc→voc member preserved) + finding_created_from_voc added? creatable visibility STILL literal internal_only?
+6. SCOPE/ROLE-BLEED: any file touched outside the #121 scope? Any POST /vocs/:id/create-finding logic leaked in (that's #122)?
+7. CORRECTNESS: any bug that would fail VERIFY or break a downstream issue.
+
+Rank findings BLOCKER/MAJOR/MINOR. Write your verdict to .review/ISSUE-121-REVIEW.json as {"issue":121,"verdict":"approve|approve_with_nits|request_changes","blockers":[...],"major":[...],"minor":[...],"summary":"..."}. Also print a short summary.
