@@ -1,8 +1,0 @@
-{
-  "issue": 124,
-  "fix": "clear core.rate_limits + idempotency_keys in findings test cleanup",
-  "files": [
-    "apps/backend/src/modules/findings/__tests__/create-finding.integration.test.ts",
-    "apps/backend/src/modules/findings/__tests__/evidence-highlights.integration.test.ts"
-  ]
-}

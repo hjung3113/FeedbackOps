@@ -1,2 +1,0 @@
-- 2026-05-23 — Pre-existing TS error in `apps/backend/src/cli/storage-bootstrap.ts:54` (`Type 'ProcessEnv' has no properties in common with type 'StorageEnv'`). Confirmed unrelated to the `/actors` endpoint work via `git stash` reproduction on a clean tree. Out of scope for this branch.
-- 2026-05-23 — Pre-existing FE typecheck errors in `apps/frontend/src/routes/**/*.tsx` (TanStack Router `useNavigate({ from })` arg mismatch — codegen drift in `routeTree.gen.ts`). Confirmed unrelated to the `/actors` endpoint work via `git stash` reproduction. Out of scope.

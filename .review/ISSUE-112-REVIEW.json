@@ -1,9 +1,0 @@
-{
-  "verdict": "approve",
-  "summary": "Implementation adheres to the #112 dispatch contract with one acceptable compatibility deviation that should be documented before commit.",
-  "findings": [],
-  "deviations_acceptable_with_doc": [
-    "packages/shared/src/vocs/detail.ts makes the new VOC detail links field optional; this is acceptable as a Slice 3 compatibility move because the backend now populates links on full detail reads, but it should be recorded in .review/ISSUE-112-DEVIATIONS.md."
-  ],
-  "must_fix_before_commit": []
-}
