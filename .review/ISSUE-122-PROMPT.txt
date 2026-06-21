@@ -1,0 +1,31 @@
+ROLE: You are CODEX, implementing issue #122 in a sandboxed git worktree. You have NO network/DB (migrations/DB tests EPERM) — write code + tests; a VERIFIER proves green outside the sandbox.
+
+ISSUE #122 — Slice 5: Create Finding from VOC (POST /vocs/:id/create-finding) + Finding reads.
+Builds on #121 (already merged): the entity-link provider registry, `finding.findings` table, `finding.read`/`finding.manage` capabilities, `finding_created_from_voc` audit event, and the `(voc,finding,created_finding)` tuple ALREADY EXIST. Do NOT recreate them.
+
+SIGNED CONTRACTS (read first): docs/adr/0024-finding-as-entity-link-target-and-provider-registry.md (§A provenance, §C authz), docs/implementation/03-api-contracts.md:331-433 (source-shaped route rule + Finding endpoints), docs/design/15-data-contracts.md:122-155 (Finding table + rules), docs/design/05-finding-insight-system.md (FR-FIND-001).
+
+WHAT TO BUILD (the Slice 5 tracer): an authorized actor creates a Finding from a single VOC; the Finding persists with an immutable record of its source, plus a `created_finding` entity link, all atomically.
+
+KEY DESIGN RULES:
+- `POST /vocs/:id/create-finding` is SOURCE-SHAPED (03:337-342): the VOC route may PARSE the request but MUST NOT write Finding/entity_link tables directly. It delegates to a Finding application command (cross-system orchestration) that, in ONE transaction, writes: the finding row + the `created_finding` entity link (voc→finding, internal_only) + audit `finding_created_from_voc` + audit `entity_link.created`. Roll back all on any failure.
+- Reuse #121's entity-links tx-taking insert (e.g. `insertActiveEntityLink(tx, …)`) and the registry's creatable-tuple validation — do NOT call a createLink path that opens its own second transaction (atomicity).
+- AUTHZ: create = Admin OR Developer with `finding.manage` on the target Finding's primary_managed_system_id, AND `voc.read` on the SOURCE VOC's managed system. An unreadable source VOC → not-found-style failure (404, no existence leak), NOT 403. Reporter/User → denied.
+- PROVENANCE: findings.source_type='voc', source_id = the route VOC id, set at create and never mutated. evidence_count starts 0.
+- AA RULE: if analytics_area_id is provided in the body, it MUST belong to primary_managed_system_id (reuse the VOC create-service validation pattern exactly); else 422. primary_managed_system_id for the Finding defaults from the source VOC unless explicitly provided (follow 15:152 — primary MS is required).
+- Idempotency + optimistic frame: follow the VOC create/mutation convention (Idempotency-Key header) used by POST /vocs. Match error-code vocabulary.
+
+SCOPE — files you may touch:
+1. packages/shared/src/findings/* (new) — FindingDto, FindingStatus (draft|active|not_actionable|converted|archived), FindingSeverity (low|medium|high|critical), FindingConfidence (low|medium|high), CreateFindingRequest (body: title, summary, severity, optional confidence, optional analytics_area_id, optional primary_managed_system_id; source is the route VOC). Plus a barrel export. Mirror packages/shared/src/vocs/* shape.
+2. apps/backend/src/modules/findings/service.ts (new) — the Finding application command `createFindingFromVoc(...)` (owns the txn, writes finding + created_finding link + both audits, does source-VOC read + finding.manage + AA∈MS checks) and read services (getFinding, listFindings) gated by finding.read.
+3. apps/backend/src/modules/findings/repo.ts / repo-read.ts — extend #121's thin repo with insert + read-model queries (list within actor MS scope; detail).
+4. apps/backend/src/modules/findings/routes.ts (new) — GET /findings, GET /findings/:id (finding.read gated; permission-blocked distinct from 404). Register the plugin in the server.
+5. apps/backend/src/modules/voc/routes.ts — add POST /vocs/:id/create-finding (parse + Idempotency frame + delegate to findings service command; do NOT write finding/link tables here).
+6. apps/backend/src/server (wherever plugins register) — register findingsRoutes.
+7. apps/backend/src/modules/findings/__tests__/create-finding.integration.test.ts (new) + a seed helper — cover: happy path (201, finding + created_finding link + both audit rows written); SOURCE LINK SURVIVES RELOAD (re-fetch GET /findings/:id shows the source VOC via the created_finding link AND the immutable source_type/source_id); authz denials (Reporter 403/denied, out-of-scope Dev denied, unreadable source VOC → 404); AA-not-in-MS → 422; idempotent replay returns the same finding. Also a GET /findings list scoping test.
+
+ABORT-WITH-BLOCKER (.review/ISSUE-122-BLOCKER.json with real reason_code + blocking_fact) if you must touch entity_links schema/migrations (that was #121 — should be unnecessary), packages/shared entity-links, or anything outside the above; or if a contract is ambiguous.
+
+When done write .review/ISSUE-122-CODEX.json: {"issue":122,"status":"done","files_touched":[...],"endpoints":[...],"tests_added":[...],"atomic_txn":true,"source_read_check":true,"notes":"..."}.
+
+Style: match the voc module (Fastify plugin, zod from @fops/shared, Drizzle, snake_case DB / camelCase TS, HttpError + error-code contract). No new migration. Keep the diff minimal + reviewable.

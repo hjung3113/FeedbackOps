@@ -2,15 +2,17 @@
 // HTTP parsing + forbidden-field stripping + idempotency frame; the
 // service owns business rules + audit + transactions.
 
-import type { FastifyPluginAsync } from 'fastify';
 import { sql } from 'drizzle-orm';
+import type { FastifyPluginAsync } from 'fastify';
 
 import {
+  type CreateVocRequest,
   FORBIDDEN_CREATE_FIELDS,
   FORBIDDEN_EDIT_DESCRIPTION_FIELDS,
   FORBIDDEN_EDIT_DESCRIPTION_FIELD_ERROR_CODES,
   FORBIDDEN_PATCH_FIELDS,
   FORBIDDEN_PATCH_FIELD_ERROR_CODES,
+  createFindingRequestSchema,
   createVocRequestSchema,
   editDescriptionRequestSchema,
   getConversationQuerySchema,
@@ -19,7 +21,6 @@ import {
   patchVocRequestSchema,
   publicUpdateRequestSchema,
   reporterReplyRequestSchema,
-  type CreateVocRequest,
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
@@ -29,6 +30,7 @@ import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { FindingsService } from '../findings/index.js';
 import type { ConversationService } from './conversation-service.js';
 import type { ReadActorContext, VocReadService } from './read-service.js';
 import type { VocService } from './service.js';
@@ -36,14 +38,14 @@ import type { VocService } from './service.js';
 const IDEMPOTENCY_KEY_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
-const UUID_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export interface VocRoutesOptions {
   db: Db;
   sessionService: SessionService;
   vocService: VocService;
   vocReadService: VocReadService;
+  findingsService: FindingsService;
   idempotencyService: IdempotencyService;
   conversationService: ConversationService;
   workspaceId: string;
@@ -55,7 +57,17 @@ export interface VocRoutesOptions {
 }
 
 export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts) => {
-  const { db, sessionService, vocService, vocReadService, idempotencyService, conversationService, workspaceId, rateLimitConfig } = opts;
+  const {
+    db,
+    sessionService,
+    vocService,
+    vocReadService,
+    findingsService,
+    idempotencyService,
+    conversationService,
+    workspaceId,
+    rateLimitConfig,
+  } = opts;
 
   function requireIfMatch(headers: Record<string, unknown>): string {
     const raw = headers['if-match'];
@@ -126,14 +138,62 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       // 4. Idempotency + service in one transaction (ADR-0015 protocol).
       const hash = hashRequestBody(rawBody);
       const result = await db.transaction(async (tx) => {
-        return idempotencyService.runIdempotent(tx, sess.actor_id, idempotencyKey, hash, async () => {
-          const envelope = await vocService.createVoc({
-            tx,
-            actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id },
-            input,
-          });
-          return { status: 201, body: envelope };
+        return idempotencyService.runIdempotent(
+          tx,
+          sess.actor_id,
+          idempotencyKey,
+          hash,
+          async () => {
+            const envelope = await vocService.createVoc({
+              tx,
+              actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id },
+              input,
+            });
+            return { status: 201, body: envelope };
+          },
+        );
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/vocs/:id/create-finding',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const params = req.params as { id: string };
+      const vocId = params.id;
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
         });
+      }
+
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = createFindingRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.create_finding' });
+      const result = await findingsService.createFindingFromVoc({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        vocId,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
       });
       return reply.code(result.status).send(result.body);
     },
@@ -250,7 +310,11 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
     url: '/vocs/:id/description',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
     ...(rateLimitConfig
-      ? { config: { rateLimit: (rateLimitConfig.reporterEdit ?? rateLimitConfig.mutation) as never } }
+      ? {
+          config: {
+            rateLimit: (rateLimitConfig.reporterEdit ?? rateLimitConfig.mutation) as never,
+          },
+        }
       : {}),
     handler: async (req, reply) => {
       const sess = req.session;
@@ -363,10 +427,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       };
 
       const result = await vocReadService.listVocs({ actor, query: parsed.data });
-      return reply
-        .header('cache-control', 'private, no-cache')
-        .code(200)
-        .send(result);
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
     },
   });
 
@@ -408,7 +469,11 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         .some((v) => v === '*' || v === etag);
       if (matches) {
         // WHY (M4): 304 must include cache-control per RFC 7234 §4.3.4.
-        return reply.code(304).header('etag', etag).header('cache-control', 'private, no-cache').send();
+        return reply
+          .code(304)
+          .header('etag', etag)
+          .header('cache-control', 'private, no-cache')
+          .send();
       }
 
       return reply
@@ -452,10 +517,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       };
 
       const result = await vocReadService.getConversation({ actor, vocId, query: parsed.data });
-      return reply
-        .header('cache-control', 'private, no-cache')
-        .code(200)
-        .send(result);
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
     },
   });
 
@@ -506,7 +568,11 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         }
         const envelope = await conversationService.postPublicUpdate({
           tx,
-          actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id, role_level: sess.role_level },
+          actor: {
+            actor_id: sess.actor_id,
+            workspace_id: sess.workspace_id,
+            role_level: sess.role_level,
+          },
           vocId,
           input: parsed.data,
         });
@@ -561,7 +627,11 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         }
         const envelope = await conversationService.postReporterReply({
           tx,
-          actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id, role_level: sess.role_level },
+          actor: {
+            actor_id: sess.actor_id,
+            workspace_id: sess.workspace_id,
+            role_level: sess.role_level,
+          },
           vocId,
           input: parsed.data,
         });
@@ -616,7 +686,11 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         }
         const envelope = await conversationService.postInternalComment({
           tx,
-          actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id, role_level: sess.role_level },
+          actor: {
+            actor_id: sess.actor_id,
+            workspace_id: sess.workspace_id,
+            role_level: sess.role_level,
+          },
           vocId,
           input: parsed.data,
         });

@@ -1,0 +1,18 @@
+ROLE: CODEX fixing ONE authz-ordering bug in issue #122 (sandboxed, no DB). VERIFY found it; a read-only REVIEW corroborated it.
+
+THE BUG: apps/backend/src/modules/findings/service.ts (~lines 137-162) checks source-VOC readability as `voc.read` capability BEFORE the role/finding.manage denial. A Reporter on their OWN source VOC has no `voc.read` capability, so they hit `404 not_found.record` instead of `403 permission.denied`. The Reporter owns the VOC — it must NOT be hidden from them.
+
+THE CONTRACT (ADR-0024 §C, just amended — quoted authoritative text):
+"can read the source VOC" = `voc.read` on its Managed System OR the actor IS the VOC's reporter (ownership) — NOT the voc.read capability alone. Denial status follows ADR-0023's hidden/denied boundary:
+- Source UNREADABLE (actor is neither the reporter nor holds voc.read on the source MS) → 404 not_found.record (hidden).
+- Source READABLE but actor lacks finding.manage on the target MS → 403 permission.denied (denied).
+A Reporter therefore gets 403 on their own VOC, never 404.
+
+REQUIRED FIX (minimal, in findings/service.ts; touch the entity-links provider source-read helper ONLY if the readability check lives there):
+- Treat the source VOC as readable when `actor.actor_id === sourceVoc.reporter_id` OR the actor holds voc.read on the source VOC's managed system (existing check). The source VOC row already carries reporter_id (it is resolved before this check).
+- Ordering: (1) resolve source VOC; if NOT readable (per the rule above) → 404 not_found.record. (2) if readable but actor lacks finding.manage on the target MS → 403 permission.denied. (3) proceed to the atomic write.
+- This makes: Reporter-on-own-VOC → 403; Developer with voc.read on source but finding.manage elsewhere → 403; Developer with finding.manage on source MS but no voc.read and not the reporter → 404. (These are exactly the three cases in create-finding.integration.test.ts ~lines 227-267 — do NOT change the test; make the code satisfy it.)
+
+DO NOT change anything else. No schema, no migration, no other behavior. Keep the diff tiny.
+
+When done, append to .review/ISSUE-122-CODEX.json a "fix" note OR write .review/ISSUE-122-FIX.json {"issue":122,"fix":"reporter-ownership source readability + 404/403 ordering","files":[...]}.

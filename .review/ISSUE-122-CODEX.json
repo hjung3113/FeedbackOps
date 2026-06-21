@@ -1,0 +1,31 @@
+{
+  "issue": 122,
+  "status": "done",
+  "files_touched": [
+    "packages/shared/src/findings/index.ts",
+    "packages/shared/src/findings/__tests__/findings.test.ts",
+    "packages/shared/src/index.ts",
+    "apps/backend/src/modules/findings/service.ts",
+    "apps/backend/src/modules/findings/repo.ts",
+    "apps/backend/src/modules/findings/repo-read.ts",
+    "apps/backend/src/modules/findings/routes.ts",
+    "apps/backend/src/modules/findings/index.ts",
+    "apps/backend/src/modules/findings/__tests__/create-finding.integration.test.ts",
+    "apps/backend/src/modules/voc/routes.ts",
+    "apps/backend/src/server.ts",
+    ".review/ISSUE-122-CODEX.json"
+  ],
+  "endpoints": [
+    "POST /vocs/:id/create-finding",
+    "GET /findings",
+    "GET /findings/:id"
+  ],
+  "tests_added": [
+    "apps/backend/src/modules/findings/__tests__/create-finding.integration.test.ts",
+    "packages/shared/src/findings/__tests__/findings.test.ts"
+  ],
+  "atomic_txn": true,
+  "source_read_check": true,
+  "fix": "reporter-ownership source readability + 404/403 ordering",
+  "notes": "Finding service owns the create transaction and idempotency frame; VOC route parses and delegates. Uses tx-scoped insertActiveEntityLink for created_finding. Local DB integration suite is gated/skipped without DATABASE_URL/DATABASE_URL_MIGRATE; backend typecheck remains blocked by pre-existing src/cli/storage-bootstrap.ts StorageEnv mismatch."
+}
