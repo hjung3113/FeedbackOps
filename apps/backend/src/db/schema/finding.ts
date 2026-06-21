@@ -60,3 +60,51 @@ export const findings = findingSchema.table(
     ),
   }),
 );
+
+export const evidenceHighlights = findingSchema.table(
+  'evidence_highlights',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    findingId: uuid('finding_id')
+      .notNull()
+      .references(() => findings.id),
+    primaryManagedSystemId: uuid('primary_managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    sourceType: text('source_type').notNull(),
+    sourceId: uuid('source_id'),
+    quoteOrSummary: text('quote_or_summary').notNull(),
+    analyticsAreaId: uuid('analytics_area_id').references(() => analyticsAreas.id),
+    sentiment: text('sentiment'),
+    importance: text('importance'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => actors.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceFindingIdx: index('evidence_highlights_workspace_finding_idx').on(
+      t.workspaceId,
+      t.findingId,
+    ),
+    sourceTypeCheck: check(
+      'evidence_highlights_source_type_check',
+      sql`${t.sourceType} in ('voc','survey_response','note')`,
+    ),
+    sourceIdRequiredCheck: check(
+      'evidence_highlights_source_id_required_check',
+      sql`${t.sourceType} = 'note' or ${t.sourceId} is not null`,
+    ),
+    sentimentCheck: check(
+      'evidence_highlights_sentiment_check',
+      sql`${t.sentiment} is null or ${t.sentiment} in ('negative','neutral','positive')`,
+    ),
+    importanceCheck: check(
+      'evidence_highlights_importance_check',
+      sql`${t.importance} is null or ${t.importance} in ('low','medium','high')`,
+    ),
+  }),
+);

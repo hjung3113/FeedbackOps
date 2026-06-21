@@ -1,0 +1,10 @@
+{
+  "issue": 124,
+  "fix": "evidence_of first-class in entity-links (isCreatableTuple + read/detach) + link-evidence via registry createLink",
+  "files": [
+    "apps/backend/src/modules/entity-links/service.ts",
+    "apps/backend/src/modules/findings/service.ts",
+    "apps/backend/src/server.ts",
+    "apps/backend/src/modules/findings/__tests__/evidence-highlights.integration.test.ts"
+  ]
+}

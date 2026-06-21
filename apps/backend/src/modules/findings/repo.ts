@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 
+import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import type { FindingReadRow } from './repo-read.js';
 import { mapFindingRow } from './repo-read.js';
@@ -37,6 +38,129 @@ export async function insertFinding(tx: Tx, input: InsertFindingInput): Promise<
   const row = result.rows[0];
   if (!row) throw new Error('insertFinding returned no row');
   return mapFindingRow(row);
+}
+
+export interface EvidenceHighlightRow {
+  id: string;
+  workspace_id: string;
+  finding_id: string;
+  primary_managed_system_id: string;
+  source_type: 'voc' | 'survey_response' | 'note';
+  source_id: string | null;
+  quote_or_summary: string;
+  analytics_area_id: string | null;
+  sentiment: 'negative' | 'neutral' | 'positive' | null;
+  importance: 'low' | 'medium' | 'high' | null;
+  created_by: string;
+  created_at: Date;
+}
+
+function toDate(value: Date | string): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+export function mapEvidenceHighlightRow(row: Record<string, unknown>): EvidenceHighlightRow {
+  return {
+    id: row.id as string,
+    workspace_id: row.workspace_id as string,
+    finding_id: row.finding_id as string,
+    primary_managed_system_id: row.primary_managed_system_id as string,
+    source_type: row.source_type as EvidenceHighlightRow['source_type'],
+    source_id: (row.source_id as string | null) ?? null,
+    quote_or_summary: row.quote_or_summary as string,
+    analytics_area_id: (row.analytics_area_id as string | null) ?? null,
+    sentiment: (row.sentiment as EvidenceHighlightRow['sentiment']) ?? null,
+    importance: (row.importance as EvidenceHighlightRow['importance']) ?? null,
+    created_by: row.created_by as string,
+    created_at: toDate(row.created_at as Date | string),
+  };
+}
+
+export async function lockFindingById(
+  tx: Tx,
+  input: { workspaceId: string; findingId: string },
+): Promise<FindingReadRow | null> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    SELECT
+      id, workspace_id, primary_managed_system_id, title, summary, source_type,
+      source_id, evidence_count, severity, confidence, status, analytics_area_id,
+      linked_task_id, linked_milestone_id, created_by, created_at, updated_at
+    FROM finding.findings
+    WHERE id = ${input.findingId}
+      AND workspace_id = ${input.workspaceId}
+    FOR UPDATE
+  `);
+  const row = result.rows[0];
+  return row ? mapFindingRow(row) : null;
+}
+
+export async function insertEvidenceHighlight(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    findingId: string;
+    primaryManagedSystemId: string;
+    sourceType: 'voc' | 'survey_response' | 'note';
+    sourceId: string | null;
+    quoteOrSummary: string;
+    analyticsAreaId: string | null;
+    sentiment: 'negative' | 'neutral' | 'positive' | null;
+    importance: 'low' | 'medium' | 'high' | null;
+    createdBy: string;
+  },
+): Promise<EvidenceHighlightRow> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    INSERT INTO finding.evidence_highlights (
+      workspace_id, finding_id, primary_managed_system_id, source_type,
+      source_id, quote_or_summary, analytics_area_id, sentiment, importance, created_by
+    )
+    VALUES (
+      ${input.workspaceId}, ${input.findingId}, ${input.primaryManagedSystemId},
+      ${input.sourceType}, ${input.sourceId}, ${input.quoteOrSummary}, ${input.analyticsAreaId},
+      ${input.sentiment}, ${input.importance}, ${input.createdBy}
+    )
+    RETURNING
+      id, workspace_id, finding_id, primary_managed_system_id, source_type,
+      source_id, quote_or_summary, analytics_area_id, sentiment, importance,
+      created_by, created_at
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('insertEvidenceHighlight returned no row');
+  return mapEvidenceHighlightRow(row);
+}
+
+export async function incrementFindingEvidenceCount(
+  tx: Tx,
+  input: { workspaceId: string; findingId: string },
+): Promise<number> {
+  const result = await tx.execute<{ evidence_count: number }>(sql`
+    UPDATE finding.findings
+    SET evidence_count = evidence_count + 1,
+        updated_at = now()
+    WHERE id = ${input.findingId}
+      AND workspace_id = ${input.workspaceId}
+    RETURNING evidence_count
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('incrementFindingEvidenceCount returned no row');
+  return Number(row.evidence_count);
+}
+
+export async function listEvidenceHighlightsByFinding(
+  db: Db | Tx,
+  input: { workspaceId: string; findingId: string },
+): Promise<EvidenceHighlightRow[]> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT
+      id, workspace_id, finding_id, primary_managed_system_id, source_type,
+      source_id, quote_or_summary, analytics_area_id, sentiment, importance,
+      created_by, created_at
+    FROM finding.evidence_highlights
+    WHERE workspace_id = ${input.workspaceId}
+      AND finding_id = ${input.findingId}
+    ORDER BY created_at DESC, id DESC
+  `);
+  return result.rows.map(mapEvidenceHighlightRow);
 }
 
 export { findFindingById } from './repo-read.js';

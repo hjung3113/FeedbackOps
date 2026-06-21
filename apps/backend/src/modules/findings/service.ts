@@ -1,14 +1,20 @@
 import {
+  type AddEvidenceHighlightRequest,
   type CreateFindingRequest,
+  type EvidenceHighlightDto,
   type FindingDto,
+  type LinkEvidenceRequest,
+  type ListEvidenceHighlightsResponse,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
-import { insertActiveEntityLink } from '../entity-links/repo.js';
+import { insertActiveEntityLink, resolveVocEndpoint } from '../entity-links/repo.js';
+import type { EntityLinksService } from '../entity-links/service.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
 import {
@@ -17,7 +23,14 @@ import {
   findFindingById,
   listFindingsByWorkspace,
 } from './repo-read.js';
-import { insertFinding } from './repo.js';
+import {
+  type EvidenceHighlightRow,
+  incrementFindingEvidenceCount,
+  insertEvidenceHighlight,
+  insertFinding,
+  listEvidenceHighlightsByFinding,
+  lockFindingById,
+} from './repo.js';
 
 export interface FindingsActor {
   actor_id: string;
@@ -30,6 +43,7 @@ export interface FindingsServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  entityLinksService: EntityLinksService;
 }
 
 function toDto(
@@ -67,6 +81,26 @@ function toDto(
   };
 }
 
+function evidenceHighlightToDto(
+  row: EvidenceHighlightRow,
+  options: { includeQuote: boolean },
+): EvidenceHighlightDto {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    finding_id: row.finding_id,
+    primary_managed_system_id: row.primary_managed_system_id,
+    source_type: row.source_type,
+    source_id: row.source_id,
+    ...(options.includeQuote ? { quote_or_summary: row.quote_or_summary } : {}),
+    analytics_area_id: row.analytics_area_id,
+    sentiment: row.sentiment,
+    importance: row.importance,
+    created_by: row.created_by,
+    created_at: row.created_at.toISOString(),
+  };
+}
+
 async function canReadSourceVoc(
   deps: Pick<FindingsServiceDeps, 'checkService'>,
   actor: FindingsActor,
@@ -79,6 +113,22 @@ async function canReadSourceVoc(
     actor,
     'voc.read',
     { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
+    options,
+  );
+  return decision.allow;
+}
+
+async function sourceVocReadable(
+  deps: Pick<FindingsServiceDeps, 'checkService'>,
+  actor: FindingsActor,
+  input: { managedSystemId: string; reporterId: string | null },
+  options: Parameters<FindingsServiceDeps['checkService']['checkCapability']>[3],
+): Promise<boolean> {
+  if (input.reporterId && actor.actor_id === input.reporterId) return true;
+  const decision = await deps.checkService.checkCapability(
+    actor,
+    'voc.read',
+    { workspace_id: actor.workspace_id, managed_system_id: input.managedSystemId },
     options,
   );
   return decision.allow;
@@ -277,6 +327,203 @@ export function createFindingsService(deps: FindingsServiceDeps) {
     return toDto(row, source);
   }
 
+  async function assertHighlightSourceReadableForWrite(args: {
+    actor: FindingsActor;
+    tx: Tx;
+    sourceType: AddEvidenceHighlightRequest['source_type'];
+    sourceId: string | null | undefined;
+  }): Promise<void> {
+    if (args.sourceType === 'note') return;
+    if (args.sourceType === 'survey_response') {
+      throw new HttpError('validation.failed', 'survey_response evidence source is not available');
+    }
+    const sourceVoc = await selectVocForUpdate(
+      args.tx,
+      args.actor.workspace_id,
+      args.sourceId ?? '',
+    );
+    if (!sourceVoc || sourceVoc.archivedAt !== null) {
+      throw new HttpError('not_found.record', 'source voc not found');
+    }
+    const readable = await canReadSourceVoc(
+      deps,
+      args.actor,
+      sourceVoc.primaryManagedSystemId,
+      sourceVoc.reporterId,
+      { tx: args.tx },
+    );
+    if (!readable) throw new HttpError('not_found.record', 'source voc not found');
+  }
+
+  async function addEvidenceHighlight(args: {
+    actor: FindingsActor;
+    findingId: string;
+    input: AddEvidenceHighlightRequest;
+  }): Promise<{ status: number; body: EvidenceHighlightDto }> {
+    const { actor, findingId, input } = args;
+
+    return deps.db.transaction(async (tx) => {
+      const finding = await lockFindingById(tx, {
+        workspaceId: actor.workspace_id,
+        findingId,
+      });
+      if (!finding) throw new HttpError('not_found.record', 'finding not found');
+
+      const canManage = await canManageFinding(deps, actor, finding.primary_managed_system_id, {
+        tx,
+      });
+      if (!canManage) {
+        throw new HttpError('permission.denied', 'finding.manage capability required');
+      }
+
+      if (input.analytics_area_id) {
+        const aa = await lockAnalyticsArea(tx, actor.workspace_id, input.analytics_area_id);
+        if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
+        if (aa.managed_system_id !== finding.primary_managed_system_id) {
+          throw new HttpError(
+            'validation.failed',
+            'analytics_area does not belong to managed_system',
+            { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
+          );
+        }
+        if (aa.archived_at !== null) {
+          throw new HttpError('conflict.parent_archived', 'analytics area archived', {
+            fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
+          });
+        }
+      }
+
+      await assertHighlightSourceReadableForWrite({
+        actor,
+        tx,
+        sourceType: input.source_type,
+        sourceId: input.source_id,
+      });
+
+      const row = await insertEvidenceHighlight(tx, {
+        workspaceId: actor.workspace_id,
+        findingId: finding.id,
+        primaryManagedSystemId: finding.primary_managed_system_id,
+        sourceType: input.source_type,
+        sourceId: input.source_id ?? null,
+        quoteOrSummary: input.quote_or_summary,
+        analyticsAreaId: input.analytics_area_id ?? null,
+        sentiment: input.sentiment ?? null,
+        importance: input.importance ?? null,
+        createdBy: actor.actor_id,
+      });
+      await incrementFindingEvidenceCount(tx, {
+        workspaceId: actor.workspace_id,
+        findingId: finding.id,
+      });
+
+      await deps.auditService.record(tx, {
+        workspace_id: actor.workspace_id,
+        actor_id: actor.actor_id,
+        event_type: 'evidence_highlight_added',
+        subject_type: 'finding',
+        subject_id: finding.id,
+        summary: 'Evidence highlight added',
+        detail: {
+          finding_id: finding.id,
+          evidence_highlight_id: row.id,
+          source_type: row.source_type,
+          source_id: row.source_id,
+          primary_managed_system_id: finding.primary_managed_system_id,
+        },
+      });
+
+      return { status: 201, body: evidenceHighlightToDto(row, { includeQuote: true }) };
+    });
+  }
+
+  async function canReadEvidenceHighlightSource(args: {
+    actor: FindingsActor;
+    row: EvidenceHighlightRow;
+  }): Promise<boolean> {
+    if (args.row.source_type === 'note') return true;
+    if (args.row.source_type === 'survey_response') return false;
+    if (!args.row.source_id) return false;
+
+    const source = await resolveVocEndpoint(deps.db, args.actor.workspace_id, args.row.source_id);
+    if (!source) return false;
+    return sourceVocReadable(
+      deps,
+      args.actor,
+      { managedSystemId: source.managed_system_id, reporterId: source.reporter_id },
+      undefined,
+    );
+  }
+
+  async function listEvidenceHighlights(args: {
+    actor: FindingsActor;
+    findingId: string;
+  }): Promise<ListEvidenceHighlightsResponse> {
+    const finding = await findFindingById(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      findingId: args.findingId,
+    });
+    if (!finding) throw new HttpError('not_found.record', 'finding not found');
+
+    const readable = await canReadFinding(deps, args.actor, finding.primary_managed_system_id);
+    if (!readable) throw new HttpError('permission.denied', 'finding.read capability required');
+
+    const rows = await listEvidenceHighlightsByFinding(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      findingId: finding.id,
+    });
+    const items: EvidenceHighlightDto[] = [];
+    for (const row of rows) {
+      const includeQuote = await canReadEvidenceHighlightSource({ actor: args.actor, row });
+      items.push(evidenceHighlightToDto(row, { includeQuote }));
+    }
+    return { items };
+  }
+
+  async function linkEvidence(args: {
+    actor: FindingsActor;
+    findingId: string;
+    input: LinkEvidenceRequest;
+  }): Promise<{ status: number; body: { id: string; relation_type: 'evidence_of' } }> {
+    const { actor, findingId, input } = args;
+
+    return deps.db.transaction(async (tx) => {
+      const finding = await lockFindingById(tx, {
+        workspaceId: actor.workspace_id,
+        findingId,
+      });
+      if (!finding) throw new HttpError('not_found.record', 'finding not found');
+
+      const canManage = await canManageFinding(deps, actor, finding.primary_managed_system_id, {
+        tx,
+      });
+      if (!canManage) {
+        throw new HttpError('permission.denied', 'finding.manage capability required');
+      }
+
+      const result = await deps.entityLinksService
+        .createLink({
+          actor,
+          source: { type: 'voc', id: input.source_id },
+          target: { type: 'finding', id: finding.id },
+          relation_type: 'evidence_of',
+          visibility: 'internal_only',
+          tx,
+        })
+        .catch((err: unknown) => {
+          if (err instanceof HttpError && err.code === 'permission.denied') {
+            throw new HttpError('not_found.record', 'source voc not found');
+          }
+          throw err;
+        });
+
+      return {
+        status: result.status,
+        body: { id: result.link.id, relation_type: 'evidence_of' },
+      };
+    });
+  }
+
   async function listFindings(args: {
     actor: FindingsActor;
     managedSystemId?: string;
@@ -298,7 +545,14 @@ export function createFindingsService(deps: FindingsServiceDeps) {
     return { items };
   }
 
-  return { createFindingFromVoc, getFinding, listFindings };
+  return {
+    createFindingFromVoc,
+    getFinding,
+    listFindings,
+    addEvidenceHighlight,
+    listEvidenceHighlights,
+    linkEvidence,
+  };
 }
 
 export type FindingsService = ReturnType<typeof createFindingsService>;

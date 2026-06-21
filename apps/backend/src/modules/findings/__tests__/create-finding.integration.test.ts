@@ -97,6 +97,24 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
           )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
+    await migrateHandle.pool.query(
+      `delete from core.idempotency_keys
+        where actor_id in (
+          select id from core.actors
+           where workspace_id = $1
+             and (
+               external_id in ('mock-admin-1', 'mock-user-1')
+               or external_id like 'mock-dev-read-%'
+             )
+        )`,
+      [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
+      `delete from core.rate_limits
+        where key like $1 || ':%'
+           or key like '127.0.0.%'`,
+      [WORKSPACE_ID],
+    );
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
   }
 

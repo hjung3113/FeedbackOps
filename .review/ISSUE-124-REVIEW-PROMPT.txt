@@ -1,0 +1,12 @@
+Adversarial read-only REVIEW of issue #124 in this worktree. Inspect changes: `git --no-pager diff develop -- apps packages`. Judge against docs/adr/0024-finding-as-entity-link-target-and-provider-registry.md §F/§G + Reopening, docs/design/15-data-contracts.md:157-181.
+
+Focus HARD on SECURITY/correctness (file:line):
+1. SOURCE VISIBILITY ≤ SOURCE (the critical rule, ADR-0024 §G / 15:180): on GET /findings/:id/evidence-highlights, is each highlight's quote_or_summary WITHHELD when the actor cannot read its source object (e.g. Dev can read the Finding but not the source VOC)? Check the quote isn't leaked via ANY field (raw row, source preview, etc.). Is the readability check the real per-source check (voc.read on source MS OR reporter ownership), not a finding-scope shortcut?
+2. link-evidence: does POST /findings/:id/link-evidence create a (voc,finding,evidence_of) link via the registry + tx insert, with source-VOC read enforced (unreadable→404)? Authz finding.manage on target?
+3. TUPLE CHECK: migration 0021 extends the composite tuple CHECK to add (voc,finding,evidence_of) and still rejects invalid tuples? Migration hand-written + journal/0021_snapshot registered like 0020? Grants correct (fops_app no DELETE)?
+4. evidence_count maintained in the SAME txn as add (and any remove)? Stays >=0?
+5. audit: entity_link.created union extended for evidence_of; evidence_highlight_added event added?
+6. SCOPE/role-bleed: anything outside findings module + entity_links tuple + shared findings/entity-links/audit? 
+7. Any bug failing a downstream issue.
+
+Rank BLOCKER/MAJOR/MINOR. Write .review/ISSUE-124-REVIEW.json {"issue":124,"verdict":"approve|approve_with_nits|request_changes","blockers":[],"major":[],"minor":[],"summary":""} if writable; print the summary.
