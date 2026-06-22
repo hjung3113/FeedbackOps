@@ -2,7 +2,7 @@
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
 import * as React from 'react';
-import { Skeleton, PermissionBlockedPanel, DirtyConfirmation, DetailPanelSectionNav } from '@fops/ui';
+import { Button, Skeleton, PermissionBlockedPanel, DirtyConfirmation, DetailPanelSectionNav } from '@fops/ui';
 import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
@@ -18,6 +18,7 @@ import { ConversationTimeline } from './ConversationTimeline';
 import { ComposerSection } from './ComposerSection';
 import { NextActionFooter } from './NextActionFooter';
 import { DetailPanelNotFound } from './DetailPanelNotFound';
+import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -158,8 +159,13 @@ function FullDetailView({
   // REV-1 #6: track composer dirty state; intercept panel close to show DirtyConfirmation.
   const [composerDirty, setComposerDirty] = React.useState(false);
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
+  const [createFindingOpen, setCreateFindingOpen] = React.useState(false);
   // Scroll container ref for section nav anchor tracking
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  // FE display hint only (ADR-0024 §C): gate button to Admin or Developer.
+  const canCreateFinding =
+    me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
 
   function handleClose() {
     if (composerDirty) {
@@ -208,12 +214,24 @@ function FullDetailView({
         </div>
 
         <NextActionFooter voc={voc} />
+        {canCreateFinding && (
+          <div className="px-4 pb-3 flex justify-end border-t border-border-subtle pt-2">
+            <Button variant="outline" size="sm" onClick={() => setCreateFindingOpen(true)}>
+              Finding 생성
+            </Button>
+          </div>
+        )}
       </div>
 
       <DirtyConfirmation
         open={dirtyConfirmOpen}
         onConfirm={handleDirtyConfirm}
         onCancel={handleDirtyCancel}
+      />
+      <CreateFindingModal
+        vocId={vocId}
+        open={createFindingOpen}
+        onClose={() => setCreateFindingOpen(false)}
       />
     </>
   );

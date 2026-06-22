@@ -34,6 +34,13 @@ export default defineConfig({
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
       },
+      // Slice 5 #123: GET /findings, GET /findings/:id. `/findings` overlaps
+      // with the FE route of the same name, so bypass the proxy for browser
+      // HTML navigations and only forward JSON/XHR requests (mirrors /vocs).
+      '/findings': {
+        target: 'http://127.0.0.1:3011',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
+      },
       '/permission-requests': {
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
