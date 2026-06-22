@@ -9,3 +9,5 @@
 export * from './core.js';
 export * from './permission.js';
 export * from './voc.js';
+export * from './voc-cluster.js';
+export * from './finding.js';

@@ -71,7 +71,7 @@ function toDto(
     ...(source
       ? {
           source: {
-            type: 'voc',
+            type: source.source_type,
             id: source.source_id,
             relation_type: 'created_finding',
             link_id: source.link_id,
