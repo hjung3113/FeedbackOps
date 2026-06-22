@@ -10,7 +10,7 @@ export interface InsertFindingInput {
   primaryManagedSystemId: string;
   title: string;
   summary: string;
-  sourceType: 'voc';
+  sourceType: 'voc' | 'voc_cluster';
   sourceId: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   confidence: 'low' | 'medium' | 'high' | null;

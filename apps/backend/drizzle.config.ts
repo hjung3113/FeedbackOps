@@ -15,11 +15,12 @@ export default defineConfig({
     './src/db/schema/core.ts',
     './src/db/schema/permission.ts',
     './src/db/schema/voc.ts',
+    './src/db/schema/voc-cluster.ts',
     './src/db/schema/finding.ts',
   ],
   out: './migrations',
   dialect: 'postgresql',
-  schemaFilter: ['core', 'permission', 'voc', 'finding'],
+  schemaFilter: ['core', 'permission', 'voc', 'voc_cluster', 'finding'],
   dbCredentials: {
     url: migrateUrl,
   },

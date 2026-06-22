@@ -14,6 +14,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { findVocClusterById } from '../voc-clusters/repo.js';
 import { type LinkVisibilityDecision, evaluateLinkVisibility } from './evaluate-visibility.js';
 import {
   type EntityLinkRow,
@@ -235,6 +236,34 @@ const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
     },
     listExpectedLinks: async () => [],
   },
+  voc_cluster: {
+    entityType: 'voc_cluster',
+    assertExists: async (db, workspaceId, id) => {
+      const cluster = await findVocClusterById(db, { workspaceId, clusterId: id });
+      if (!cluster) return null;
+      return {
+        workspace_id: cluster.workspace_id,
+        managed_system_id: cluster.primary_managed_system_id,
+        reporter_id: null,
+      };
+    },
+    getPermissionSubject: async (db, workspaceId, id) => {
+      const cluster = await findVocClusterById(db, { workspaceId, clusterId: id });
+      if (!cluster) return null;
+      return {
+        workspace_id: cluster.workspace_id,
+        managed_system_id: cluster.primary_managed_system_id,
+        reporter_id: null,
+      };
+    },
+    canRead: (deps, actor, subject) =>
+      assertFindingReadScope(deps, actor, subject.managed_system_id),
+    canCreateTarget: (deps, actor, subject) =>
+      assertFindingManageScope(deps, actor, subject.managed_system_id),
+    getReporterSummary: unavailableReporterSummary,
+    getInternalSummary: async () => null,
+    listExpectedLinks: async () => [],
+  },
 };
 
 function providerFor(type: EntityLinkEntityType): EntityLinkProvider {
@@ -255,7 +284,10 @@ function isCreatableTuple(input: {
       input.relationType === 'created_finding') ||
     (input.sourceType === 'voc' &&
       input.targetType === 'finding' &&
-      input.relationType === 'evidence_of')
+      input.relationType === 'evidence_of') ||
+    (input.sourceType === 'voc_cluster' &&
+      input.targetType === 'finding' &&
+      input.relationType === 'created_finding')
   );
 }
 

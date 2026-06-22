@@ -89,6 +89,33 @@ Mixed readability (source VOC readable, target Finding not, or vice-versa) ⇒ `
 
 Per `15:180` and `06`, an Evidence Highlight's read visibility cannot exceed its source's. A Developer who can read a Finding but not the source VOC must not see a VOC quote. Each highlight read checks its source object's readability via the provider; unreadable source ⇒ the quote is withheld. (Highlights are a follow-on Slice 5 issue; this rule is locked now so the highlight issue is built against it.)
 
+### Section H — VOC Cluster as an additive source (#126, amended in-chunk)
+
+The cluster arm of Slice 5 (decision D-1, additive) lands on top of the registry without
+reopening any locked section:
+
+- **Tuple CHECK widened additively** to admit `(voc_cluster, finding, created_finding)`
+  alongside the existing `(voc, voc, related_to)` and `(voc, finding, created_finding)`.
+  `voc_cluster` is registered as a provider/source type; no existing tuple or provider changes.
+- **No new capability vocabulary.** Cluster authz REUSES the Finding capabilities from Section C:
+  read/list a cluster = Admin OR Developer with `finding.read` on the cluster's
+  `primary_managed_system_id`; create / edit / confirm / member add+remove /
+  `POST /voc-clusters/:id/create-finding` = Admin OR Developer with `finding.manage` on it.
+  Rationale: a cluster is a Finding-synthesis container with no independent read/write surface,
+  so minting `voc_cluster.*` caps would be vocabulary churn for no authz distinction.
+- **`create-finding-from-cluster` mirrors `§C` source-readability**: source-unreadable ⇒ 404
+  (hidden), readable-but-no-`finding.manage` ⇒ 403 (denied). Atomic txn writes finding +
+  one `created_finding` link (cluster→finding) + audit `finding_created_from_voc_cluster`,
+  reusing `insertActiveEntityLink` exactly as the VOC path does.
+- **Idempotency is `Idempotency-Key`-scoped, not source-scoped** — identical to the shipped
+  `POST /vocs/:id/create-finding` (#122): a replay with the same key returns the same finding;
+  distinct keys are distinct intentional creations. "One `created_finding` link per cluster"
+  in #126's acceptance text means one link **per create call**, not one finding per cluster forever.
+- **`FindingSource` widened** to admit `type: 'voc_cluster'` so a cluster-sourced finding returns
+  its source envelope `{ type:'voc_cluster', id, relation_type:'created_finding', link_id }`.
+- Membership is a reference set: cluster member add/remove are audited
+  (`voc_cluster_member_added` / `voc_cluster_member_removed`); VOC records are never merged or mutated.
+
 ## Consequences
 
 - The provider-registry refactor is the largest single piece of Slice 5 and a prerequisite for cluster (Slice 5 follow-on), Survey (Slice 8), and Task (Slice 6) link targets — all become additive provider registrations.

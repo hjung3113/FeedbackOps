@@ -38,7 +38,7 @@ export type CreateFindingRequest = z.infer<typeof createFindingRequestSchema>;
 
 export const findingSourceSchema = z
   .object({
-    type: z.literal('voc'),
+    type: z.enum(['voc', 'voc_cluster']),
     id: z.string().uuid(),
     relation_type: z.literal('created_finding'),
     link_id: z.string().uuid().optional(),

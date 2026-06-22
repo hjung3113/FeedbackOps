@@ -49,6 +49,7 @@ import {
   createVocService,
   vocRoutes,
 } from './modules/voc/index.js';
+import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -451,6 +452,23 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     findingsService,
     workspaceId,
     rateLimitConfig: {
+      read: app.rateLimitConfig.read,
+    },
+  });
+
+  // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
+  const vocClustersService = createVocClustersService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(vocClustersRoutes, {
+    sessionService,
+    vocClustersService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
     },
   });

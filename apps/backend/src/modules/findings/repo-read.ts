@@ -91,7 +91,7 @@ export async function listFindingsByWorkspace(
 
 export interface FindingSourceLinkRow {
   link_id: string;
-  source_type: 'voc';
+  source_type: 'voc' | 'voc_cluster';
   source_id: string;
   relation_type: 'created_finding';
 }
@@ -115,7 +115,7 @@ export async function findCreatedFindingSourceLink(
   if (!row) return null;
   return {
     link_id: row.link_id as string,
-    source_type: row.source_type as 'voc',
+    source_type: row.source_type as 'voc' | 'voc_cluster',
     source_id: row.source_id as string,
     relation_type: row.relation_type as 'created_finding',
   };

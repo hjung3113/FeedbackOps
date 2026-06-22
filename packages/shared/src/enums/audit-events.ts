@@ -64,6 +64,10 @@ export const AUDIT_EVENT_TYPES = [
   'entity_link.detached',
   // Slice 5 #121: Finding created from a source VOC.
   'finding_created_from_voc',
+  // Slice 5 #126: VOC Cluster membership and cluster-created Finding.
+  'voc_cluster_member_added',
+  'voc_cluster_member_removed',
+  'finding_created_from_voc_cluster',
   // Slice 5 #124: Evidence preserved on a Finding.
   'evidence_highlight_added',
 ] as const;
@@ -158,12 +162,17 @@ const vocRefDetailSchema = z.object({
   id: z.string().uuid(),
 });
 
+const vocClusterRefDetailSchema = z.object({
+  type: z.literal('voc_cluster'),
+  id: z.string().uuid(),
+});
+
 const findingRefDetailSchema = z.object({
   type: z.literal('finding'),
   id: z.string().uuid(),
 });
 
-export const entityLinkCreatedDetailSchema = z.discriminatedUnion('relation_type', [
+export const entityLinkCreatedDetailSchema = z.union([
   z.object({
     link_id: z.string().uuid(),
     source: vocRefDetailSchema,
@@ -183,12 +192,19 @@ export const entityLinkCreatedDetailSchema = z.discriminatedUnion('relation_type
     source: vocRefDetailSchema,
     target: findingRefDetailSchema,
     relation_type: z.literal('evidence_of'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocClusterRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('created_finding'),
     visibility: z.literal('internal_only'),
   }),
 ]);
 export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
 
-export const entityLinkDetachedDetailSchema = z.discriminatedUnion('relation_type', [
+export const entityLinkDetachedDetailSchema = z.union([
   z.object({
     link_id: z.string().uuid(),
     source: vocRefDetailSchema,
@@ -208,6 +224,13 @@ export const entityLinkDetachedDetailSchema = z.discriminatedUnion('relation_typ
     source: vocRefDetailSchema,
     target: findingRefDetailSchema,
     relation_type: z.literal('evidence_of'),
+    reason: z.string().min(1),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocClusterRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('created_finding'),
     reason: z.string().min(1),
   }),
 ]);
@@ -220,6 +243,30 @@ export const findingCreatedFromVocDetailSchema = z.object({
   source_type: z.literal('voc'),
 });
 export type FindingCreatedFromVocDetail = z.infer<typeof findingCreatedFromVocDetailSchema>;
+
+export const findingCreatedFromVocClusterDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  source_voc_cluster_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('voc_cluster'),
+});
+export type FindingCreatedFromVocClusterDetail = z.infer<
+  typeof findingCreatedFromVocClusterDetailSchema
+>;
+
+export const vocClusterMemberAddedDetailSchema = z.object({
+  voc_cluster_id: z.string().uuid(),
+  voc_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+});
+export type VocClusterMemberAddedDetail = z.infer<typeof vocClusterMemberAddedDetailSchema>;
+
+export const vocClusterMemberRemovedDetailSchema = z.object({
+  voc_cluster_id: z.string().uuid(),
+  voc_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+});
+export type VocClusterMemberRemovedDetail = z.infer<typeof vocClusterMemberRemovedDetailSchema>;
 
 export const evidenceHighlightAddedDetailSchema = z.object({
   finding_id: z.string().uuid(),
@@ -261,6 +308,10 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   'entity_link.detached': entityLinkDetachedDetailSchema,
   // Slice 5 #121.
   finding_created_from_voc: findingCreatedFromVocDetailSchema,
+  // Slice 5 #126.
+  voc_cluster_member_added: vocClusterMemberAddedDetailSchema,
+  voc_cluster_member_removed: vocClusterMemberRemovedDetailSchema,
+  finding_created_from_voc_cluster: findingCreatedFromVocClusterDetailSchema,
   // Slice 5 #124.
   evidence_highlight_added: evidenceHighlightAddedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

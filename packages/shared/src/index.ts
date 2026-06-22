@@ -11,6 +11,7 @@ export * from './audit/voc.js';
 export * from './audit/attachments.js';
 export * from './entity-links.js';
 export * from './findings/index.js';
+export * from './voc-clusters/index.js';
 export * from './vocs/index.js';
 export * from './rich-content/index.js';
 export * from './auth/list-actors.js';
