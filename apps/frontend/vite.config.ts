@@ -52,6 +52,13 @@ export default defineConfig({
       // Post-#21 drift fix: GET /actors?workspace=current for Triage
       // OwnerPicker. No FE-route collision; forward root path unconditionally.
       '/actors': 'http://127.0.0.1:3011',
+      // Slice 5 #126: GET/POST /voc-clusters + sub-routes. `/voc-clusters` overlaps
+      // with the FE route of the same name, so bypass the proxy for browser
+      // HTML navigations and only forward JSON/XHR requests (mirrors /findings).
+      '/voc-clusters': {
+        target: 'http://127.0.0.1:3011',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
+      },
     },
   },
 });
