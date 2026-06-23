@@ -4,6 +4,9 @@
 
 import * as React from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'sonner';
 import {
   Button,
   PermissionBlockedPanel,
@@ -14,10 +17,39 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  FieldLabel,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
   type SeverityEnum,
 } from '@fops/ui';
+import {
+  addEvidenceHighlightRequestSchema,
+  linkEvidenceRequestSchema,
+  type AddEvidenceHighlightRequest,
+  type EvidenceHighlightDto,
+  type EvidenceHighlightSentiment,
+  type EvidenceHighlightImportance,
+  type EvidenceHighlightSourceType,
+  type FindingDto,
+  type LinkEvidenceRequest,
+} from '@fops/shared';
+import { useIdempotencyKey, errorMapper, type ApiError } from '@/lib/api';
 import { useFindingDetail } from '../../hooks/useFindingDetail';
-import type { FindingDto } from '@fops/shared';
+import { useEvidenceHighlights } from '../../hooks/useEvidenceHighlights';
+import {
+  useAddEvidenceHighlightMutation,
+  useLinkEvidenceMutation,
+} from '../../hooks/useEvidenceMutations';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -88,10 +120,465 @@ const SOURCE_TYPE_LABEL: Record<string, string> = {
   manual: 'Manual',
 };
 
+const EVIDENCE_SOURCE_TYPE_LABEL: Record<EvidenceHighlightSourceType, string> = {
+  voc: 'VOC',
+  survey_response: 'Survey',
+  note: 'Note',
+};
+
 // ── Section divider ──────────────────────────────────────────────────────────
 
 function SectionDivider(): React.ReactElement {
   return <hr className="border-border-subtle" />;
+}
+
+// ── Sentiment / importance badge helpers ─────────────────────────────────────
+
+const SENTIMENT_LABEL: Record<EvidenceHighlightSentiment, string> = {
+  negative: '부정',
+  neutral: '중립',
+  positive: '긍정',
+};
+
+const IMPORTANCE_LABEL: Record<EvidenceHighlightImportance, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+};
+
+// ── Single Evidence Highlight row ────────────────────────────────────────────
+
+interface EvidenceHighlightRowProps {
+  highlight: EvidenceHighlightDto;
+}
+
+function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.ReactElement {
+  // quote_or_summary is OMITTED from the DTO when the source is unreadable (withheld rule).
+  const isWithheld = highlight.quote_or_summary === undefined;
+
+  return (
+    <div
+      className="rounded-md border border-border-subtle bg-surface-card p-4 flex flex-col gap-2"
+      data-testid="evidence-highlight-row"
+      data-evidence-id={highlight.id}
+    >
+      {/* Source reference */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <OutlineBadge data-testid="evidence-source-type">
+          {EVIDENCE_SOURCE_TYPE_LABEL[highlight.source_type]}
+        </OutlineBadge>
+        {highlight.source_id !== null && (
+          <span className="text-xs text-text-muted font-mono" data-testid="evidence-source-id">
+            {highlight.source_id.slice(0, 8)}
+          </span>
+        )}
+        {highlight.sentiment !== null && (
+          <OutlineBadge data-testid="evidence-sentiment">
+            {SENTIMENT_LABEL[highlight.sentiment]}
+          </OutlineBadge>
+        )}
+        {highlight.importance !== null && (
+          <OutlineBadge data-testid="evidence-importance">
+            {IMPORTANCE_LABEL[highlight.importance]}
+          </OutlineBadge>
+        )}
+      </div>
+
+      {/* Quote or withheld state */}
+      {isWithheld ? (
+        <p
+          className="text-sm text-text-muted italic"
+          data-testid="evidence-withheld"
+        >
+          [원문 접근 권한 없음 — 내용이 숨겨졌습니다.]
+        </p>
+      ) : (
+        <p className="text-sm text-text-primary whitespace-pre-wrap" data-testid="evidence-quote">
+          {highlight.quote_or_summary}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Evidence Highlights section (loading / empty / list) ─────────────────────
+
+interface EvidenceHighlightsSectionProps {
+  findingId: string;
+  evidenceCount: number;
+}
+
+function EvidenceHighlightsSection({
+  findingId,
+  evidenceCount,
+}: EvidenceHighlightsSectionProps): React.ReactElement {
+  const { data: highlights, isLoading, isError } = useEvidenceHighlights(findingId);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-2" aria-label="Evidence 불러오는 중">
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-20 w-full" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <p className="text-sm text-feedback-error">Evidence 목록을 불러오지 못했습니다.</p>
+    );
+  }
+
+  const items = highlights ?? [];
+
+  if (items.length === 0) {
+    return (
+      <div
+        className="rounded-md border border-dashed border-border-subtle bg-surface-card p-6 flex flex-col items-center gap-2 text-center"
+        data-testid="evidence-empty-state"
+      >
+        <p className="text-sm text-text-muted">증거 하이라이트가 없습니다.</p>
+        <p className="text-xs text-text-muted">Add Evidence 버튼으로 증거를 추가하세요.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3" data-testid="evidence-highlight-list">
+      {items.map((h) => (
+        <EvidenceHighlightRow key={h.id} highlight={h} />
+      ))}
+    </div>
+  );
+}
+
+// ── Add Evidence modal ────────────────────────────────────────────────────────
+
+interface AddEvidenceModalProps {
+  findingId: string;
+  open: boolean;
+  onClose: () => void;
+}
+
+const SOURCE_TYPE_OPTIONS: { value: EvidenceHighlightSourceType; label: string }[] = [
+  { value: 'voc', label: 'VOC' },
+  { value: 'survey_response', label: 'Survey Response' },
+  { value: 'note', label: 'Note (manual)' },
+];
+
+const SENTIMENT_OPTIONS: { value: EvidenceHighlightSentiment; label: string }[] = [
+  { value: 'negative', label: '부정 (Negative)' },
+  { value: 'neutral', label: '중립 (Neutral)' },
+  { value: 'positive', label: '긍정 (Positive)' },
+];
+
+const IMPORTANCE_OPTIONS: { value: EvidenceHighlightImportance; label: string }[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
+
+function AddEvidenceModal({ findingId, open, onClose }: AddEvidenceModalProps): React.ReactElement {
+  const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
+
+  const form = useForm<AddEvidenceHighlightRequest>({
+    resolver: zodResolver(addEvidenceHighlightRequestSchema),
+    defaultValues: {
+      source_type: 'note',
+      source_id: null,
+      quote_or_summary: '',
+      sentiment: null,
+      importance: null,
+    },
+    mode: 'onBlur',
+  });
+
+  const watchedSourceType = form.watch('source_type');
+
+  const mutation = useAddEvidenceHighlightMutation({
+    findingId,
+    idempotencyKey,
+    onError: (err: ApiError) => {
+      toast.error(errorMapper(err.envelope).message);
+    },
+  });
+
+  function closeAndReset(): void {
+    form.reset();
+    mutation.reset();
+    onClose();
+  }
+
+  function handleSubmit(values: AddEvidenceHighlightRequest): void {
+    mutation.mutate(values, {
+      onSuccess: () => {
+        markConsumed();
+        closeAndReset();
+        toast.success('Evidence가 추가되었습니다.');
+      },
+    });
+  }
+
+  const isSubmitting = mutation.isPending;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) closeAndReset();
+      }}
+    >
+      <DialogContent className="max-w-lg" data-testid="add-evidence-modal">
+        <DialogHeader>
+          <DialogTitle>Evidence 추가</DialogTitle>
+        </DialogHeader>
+
+        <form
+          id="add-evidence-form"
+          onSubmit={form.handleSubmit(handleSubmit)}
+          noValidate
+          className="flex flex-col gap-4"
+        >
+          {/* Source type */}
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel required htmlFor="evidence-source-type">
+              소스 유형
+            </FieldLabel>
+            <Select
+              defaultValue="note"
+              onValueChange={(val) =>
+                form.setValue('source_type', val as EvidenceHighlightSourceType, {
+                  shouldValidate: true,
+                })
+              }
+            >
+              <SelectTrigger id="evidence-source-type" data-testid="evidence-source-type-select">
+                <SelectValue placeholder="소스 유형 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {SOURCE_TYPE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Source ID — required unless source_type === 'note' */}
+          {watchedSourceType !== 'note' && (
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel required htmlFor="evidence-source-id">
+                소스 ID (UUID)
+              </FieldLabel>
+              <Input
+                id="evidence-source-id"
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                {...form.register('source_id')}
+                aria-invalid={Boolean(form.formState.errors.source_id)}
+                data-testid="evidence-source-id-input"
+              />
+              {form.formState.errors.source_id?.message && (
+                <p className="text-xs text-text-danger" role="alert">
+                  {form.formState.errors.source_id.message}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Quote or summary */}
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel required htmlFor="evidence-quote">
+              인용 / 요약
+            </FieldLabel>
+            <Textarea
+              id="evidence-quote"
+              placeholder="핵심 인용문 또는 요약을 입력하세요."
+              rows={4}
+              {...form.register('quote_or_summary')}
+              aria-invalid={Boolean(form.formState.errors.quote_or_summary)}
+              data-testid="evidence-quote-input"
+            />
+            {form.formState.errors.quote_or_summary?.message && (
+              <p className="text-xs text-text-danger" role="alert">
+                {form.formState.errors.quote_or_summary.message}
+              </p>
+            )}
+          </div>
+
+          {/* Sentiment (optional) */}
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel htmlFor="evidence-sentiment">감정 (선택)</FieldLabel>
+            <Select
+              onValueChange={(val) =>
+                form.setValue('sentiment', val as EvidenceHighlightSentiment, {
+                  shouldValidate: true,
+                })
+              }
+            >
+              <SelectTrigger id="evidence-sentiment" data-testid="evidence-sentiment-select">
+                <SelectValue placeholder="선택 안 함" />
+              </SelectTrigger>
+              <SelectContent>
+                {SENTIMENT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Importance (optional) */}
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel htmlFor="evidence-importance">중요도 (선택)</FieldLabel>
+            <Select
+              onValueChange={(val) =>
+                form.setValue('importance', val as EvidenceHighlightImportance, {
+                  shouldValidate: true,
+                })
+              }
+            >
+              <SelectTrigger id="evidence-importance" data-testid="evidence-importance-select">
+                <SelectValue placeholder="선택 안 함" />
+              </SelectTrigger>
+              <SelectContent>
+                {IMPORTANCE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </form>
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
+            취소
+          </Button>
+          <Button
+            type="submit"
+            form="add-evidence-form"
+            disabled={isSubmitting}
+            data-testid="add-evidence-submit"
+          >
+            추가
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Link Existing Evidence modal ──────────────────────────────────────────────
+
+interface LinkEvidenceModalProps {
+  findingId: string;
+  open: boolean;
+  onClose: () => void;
+}
+
+function LinkEvidenceModal({
+  findingId,
+  open,
+  onClose,
+}: LinkEvidenceModalProps): React.ReactElement {
+  const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
+
+  const form = useForm<LinkEvidenceRequest>({
+    resolver: zodResolver(linkEvidenceRequestSchema),
+    defaultValues: {
+      source_type: 'voc',
+      source_id: '',
+    },
+    mode: 'onBlur',
+  });
+
+  const mutation = useLinkEvidenceMutation({
+    findingId,
+    idempotencyKey,
+    onError: (err: ApiError) => {
+      toast.error(errorMapper(err.envelope).message);
+    },
+  });
+
+  function closeAndReset(): void {
+    form.reset();
+    mutation.reset();
+    onClose();
+  }
+
+  function handleSubmit(values: LinkEvidenceRequest): void {
+    mutation.mutate(values, {
+      onSuccess: () => {
+        markConsumed();
+        closeAndReset();
+        toast.success('Evidence가 연결되었습니다.');
+      },
+    });
+  }
+
+  const isSubmitting = mutation.isPending;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) closeAndReset();
+      }}
+    >
+      <DialogContent className="max-w-lg" data-testid="link-evidence-modal">
+        <DialogHeader>
+          <DialogTitle>기존 Evidence 연결</DialogTitle>
+        </DialogHeader>
+
+        <form
+          id="link-evidence-form"
+          onSubmit={form.handleSubmit(handleSubmit)}
+          noValidate
+          className="flex flex-col gap-4"
+        >
+          {/* Source ID */}
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel required htmlFor="link-source-id">
+              VOC ID (UUID)
+            </FieldLabel>
+            <Input
+              id="link-source-id"
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              {...form.register('source_id')}
+              aria-invalid={Boolean(form.formState.errors.source_id)}
+              data-testid="link-evidence-source-id-input"
+            />
+            {form.formState.errors.source_id?.message && (
+              <p className="text-xs text-text-danger" role="alert">
+                {form.formState.errors.source_id.message}
+              </p>
+            )}
+          </div>
+
+          <p className="text-xs text-text-muted">
+            현재 VOC 소스만 연결할 수 있습니다. (source_type: voc)
+          </p>
+        </form>
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
+            취소
+          </Button>
+          <Button
+            type="submit"
+            form="link-evidence-form"
+            disabled={isSubmitting}
+            data-testid="link-evidence-submit"
+          >
+            연결
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ── Full detail view ─────────────────────────────────────────────────────────
@@ -101,6 +588,13 @@ interface FullFindingDetailProps {
 }
 
 function FullFindingDetail({ finding }: FullFindingDetailProps): React.ReactElement {
+  const [addEvidenceOpen, setAddEvidenceOpen] = React.useState(false);
+  const [linkEvidenceOpen, setLinkEvidenceOpen] = React.useState(false);
+
+  // finding.manage gates both CTAs (display hint only — backend is authoritative).
+  // For now: always show, not disabled. The backend enforces permission.
+  const canManage = true;
+
   return (
     <div className="flex flex-col gap-0">
       {/* Header */}
@@ -121,7 +615,7 @@ function FullFindingDetail({ finding }: FullFindingDetailProps): React.ReactElem
 
         <SectionDivider />
 
-        {/* Metadata grid */}
+        {/* Metadata grid — Source Type / Severity / Confidence / Status */}
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <p className="text-xs font-medium text-text-muted uppercase tracking-wide">소스 유형</p>
@@ -141,6 +635,19 @@ function FullFindingDetail({ finding }: FullFindingDetailProps): React.ReactElem
             <p className="text-xs font-medium text-text-muted uppercase tracking-wide">상태</p>
             <OutlineBadge>{finding.status}</OutlineBadge>
           </div>
+        </div>
+
+        <SectionDivider />
+
+        {/* Evidence Highlights — per design/05 layout: after Summary/Source/Severity/Confidence */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-medium text-text-muted uppercase tracking-wide">
+            Evidence Highlights ({finding.evidence_count})
+          </p>
+          <EvidenceHighlightsSection
+            findingId={finding.id}
+            evidenceCount={finding.evidence_count}
+          />
         </div>
 
         <SectionDivider />
@@ -188,34 +695,48 @@ function FullFindingDetail({ finding }: FullFindingDetailProps): React.ReactElem
             <span className="text-sm text-text-muted">—</span>
           )}
         </div>
-
-        <SectionDivider />
-
-        {/* Evidence Highlights — placeholder (#125 fills this) */}
-        <div className="flex flex-col gap-3">
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wide">
-            Evidence Highlights ({finding.evidence_count})
-          </p>
-          <div className="rounded-md border border-dashed border-border-subtle bg-surface-card p-6 flex flex-col items-center gap-2 text-center">
-            <p className="text-sm text-text-muted">증거 하이라이트가 없습니다.</p>
-            <p className="text-xs text-text-muted">Add Evidence 버튼으로 증거를 추가하세요.</p>
-          </div>
-        </div>
       </div>
 
       {/* CTA Footer */}
       <div className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-wrap items-center gap-2">
-        {/* Add Evidence / Link Existing Evidence — active (shell only; #125 wires the form) */}
-        <Button variant="default" size="sm" disabled>
+        {/* Add Evidence — gated to finding.manage; backend authoritative */}
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => setAddEvidenceOpen(true)}
+          disabled={!canManage}
+          data-testid="add-evidence-btn"
+        >
           Add Evidence
         </Button>
-        <Button variant="outline" size="sm" disabled>
+
+        {/* Link Existing Evidence — gated to finding.manage; backend authoritative */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setLinkEvidenceOpen(true)}
+          disabled={!canManage}
+          data-testid="link-evidence-btn"
+        >
           Link Existing Evidence
         </Button>
+
         {/* Request Task / Mark Not Actionable — Slice 6 */}
         <Slice6Cta label="Request Task" />
         <Slice6Cta label="Mark Not Actionable" />
       </div>
+
+      {/* Modals */}
+      <AddEvidenceModal
+        findingId={finding.id}
+        open={addEvidenceOpen}
+        onClose={() => setAddEvidenceOpen(false)}
+      />
+      <LinkEvidenceModal
+        findingId={finding.id}
+        open={linkEvidenceOpen}
+        onClose={() => setLinkEvidenceOpen(false)}
+      />
     </div>
   );
 }
