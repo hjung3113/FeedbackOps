@@ -9,10 +9,16 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import {
   Button,
+  DetailPanelSectionNav,
+  EmptyState,
+  FieldRow,
   PermissionBlockedPanel,
+  PanelSectionTitle,
   Skeleton,
   SeverityBadge,
   OutlineBadge,
+  ManagedSystemPill,
+  UserChip,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -61,7 +67,10 @@ export interface FindingDetailPanelProps {
 
 function FindingDetailSkeleton(): React.ReactElement {
   return (
-    <div className="flex flex-col gap-4 p-6" aria-label="Finding 상세 불러오는 중">
+    <div
+      className="flex flex-col gap-4 p-6"
+      aria-label="Finding 상세 불러오는 중"
+    >
       <Skeleton className="h-7 w-1/2" />
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-3/4" />
@@ -80,15 +89,20 @@ function FindingDetailSkeleton(): React.ReactElement {
 function FindingNotFound(): React.ReactElement {
   const navigate = useNavigate();
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-16 px-6 text-center">
-      <p className="text-base font-semibold text-text-primary">Finding을 찾을 수 없습니다.</p>
-      <p className="text-sm text-text-muted">
-        해당 Finding은 삭제되었거나 접근 권한이 없습니다.
-      </p>
-      <Button variant="outline" size="sm" onClick={() => void navigate({ to: '/vocs' })}>
-        VOC 목록으로
-      </Button>
-    </div>
+    <EmptyState
+      title="Finding을 찾을 수 없습니다."
+      body="해당 Finding은 삭제되었거나 접근 권한이 없습니다."
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void navigate({ to: '/vocs' })}
+        >
+          VOC 목록으로
+        </Button>
+      }
+      className="px-6"
+    />
   );
 }
 
@@ -120,11 +134,54 @@ const SOURCE_TYPE_LABEL: Record<string, string> = {
   manual: 'Manual',
 };
 
-const EVIDENCE_SOURCE_TYPE_LABEL: Record<EvidenceHighlightSourceType, string> = {
-  voc: 'VOC',
-  survey_response: 'Survey',
-  note: 'Note',
+const EVIDENCE_SOURCE_TYPE_LABEL: Record<EvidenceHighlightSourceType, string> =
+  {
+    voc: 'VOC',
+    survey_response: 'Survey',
+    note: 'Note',
+  };
+
+const FINDING_STATUS_LABEL: Record<FindingDto['status'], string> = {
+  draft: '초안',
+  active: '진행 중',
+  not_actionable: '조치 불필요',
+  converted: 'Task 전환됨',
+  archived: '보관됨',
 };
+
+const CONFIDENCE_LABEL: Record<
+  NonNullable<FindingDto['confidence']>,
+  string
+> = {
+  low: '낮음',
+  medium: '중간',
+  high: '높음',
+};
+
+const DETAIL_SECTIONS = [
+  { id: 'summary', label: '요약' },
+  { id: 'metadata', label: '소스/심각도/신뢰도' },
+  { id: 'evidence', label: 'Evidence' },
+  { id: 'managed-system', label: 'Managed System' },
+  { id: 'analytics-area', label: 'Analytics Area' },
+  { id: 'links', label: '연결' },
+];
+
+function shortId(id: string): string {
+  return `${id.slice(0, 8)}…`;
+}
+
+function FitBadge({
+  children,
+  className,
+  ...rest
+}: React.ComponentProps<typeof OutlineBadge>): React.ReactElement {
+  return (
+    <OutlineBadge className={`w-fit self-start ${className ?? ''}`} {...rest}>
+      {children}
+    </OutlineBadge>
+  );
+}
 
 // ── Section divider ──────────────────────────────────────────────────────────
 
@@ -152,7 +209,9 @@ interface EvidenceHighlightRowProps {
   highlight: EvidenceHighlightDto;
 }
 
-function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.ReactElement {
+function EvidenceHighlightRow({
+  highlight,
+}: EvidenceHighlightRowProps): React.ReactElement {
   // quote_or_summary is OMITTED from the DTO when the source is unreadable (withheld rule).
   const isWithheld = highlight.quote_or_summary === undefined;
 
@@ -164,23 +223,26 @@ function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.R
     >
       {/* Source reference */}
       <div className="flex items-center gap-2 flex-wrap">
-        <OutlineBadge data-testid="evidence-source-type">
+        <FitBadge data-testid="evidence-source-type">
           {EVIDENCE_SOURCE_TYPE_LABEL[highlight.source_type]}
-        </OutlineBadge>
+        </FitBadge>
         {highlight.source_id !== null && (
-          <span className="text-xs text-text-muted font-mono" data-testid="evidence-source-id">
+          <span
+            className="text-xs text-text-muted font-mono"
+            data-testid="evidence-source-id"
+          >
             {highlight.source_id.slice(0, 8)}
           </span>
         )}
         {highlight.sentiment !== null && (
-          <OutlineBadge data-testid="evidence-sentiment">
+          <FitBadge data-testid="evidence-sentiment">
             {SENTIMENT_LABEL[highlight.sentiment]}
-          </OutlineBadge>
+          </FitBadge>
         )}
         {highlight.importance !== null && (
-          <OutlineBadge data-testid="evidence-importance">
+          <FitBadge data-testid="evidence-importance">
             {IMPORTANCE_LABEL[highlight.importance]}
-          </OutlineBadge>
+          </FitBadge>
         )}
       </div>
 
@@ -193,7 +255,10 @@ function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.R
           [원문 접근 권한 없음 — 내용이 숨겨졌습니다.]
         </p>
       ) : (
-        <p className="text-sm text-text-primary whitespace-pre-wrap" data-testid="evidence-quote">
+        <p
+          className="text-sm text-text-primary whitespace-pre-wrap"
+          data-testid="evidence-quote"
+        >
           {highlight.quote_or_summary}
         </p>
       )}
@@ -212,7 +277,11 @@ function EvidenceHighlightsSection({
   findingId,
   evidenceCount,
 }: EvidenceHighlightsSectionProps): React.ReactElement {
-  const { data: highlights, isLoading, isError } = useEvidenceHighlights(findingId);
+  const {
+    data: highlights,
+    isLoading,
+    isError,
+  } = useEvidenceHighlights(findingId);
 
   if (isLoading) {
     return (
@@ -225,7 +294,9 @@ function EvidenceHighlightsSection({
 
   if (isError) {
     return (
-      <p className="text-sm text-feedback-error">Evidence 목록을 불러오지 못했습니다.</p>
+      <p className="text-sm text-feedback-error">
+        Evidence 목록을 불러오지 못했습니다.
+      </p>
     );
   }
 
@@ -233,12 +304,13 @@ function EvidenceHighlightsSection({
 
   if (items.length === 0) {
     return (
-      <div
-        className="rounded-md border border-dashed border-border-subtle bg-surface-card p-6 flex flex-col items-center gap-2 text-center"
-        data-testid="evidence-empty-state"
-      >
-        <p className="text-sm text-text-muted">증거 하이라이트가 없습니다.</p>
-        <p className="text-xs text-text-muted">Add Evidence 버튼으로 증거를 추가하세요.</p>
+      <div data-testid="evidence-empty-state">
+        <EmptyState
+          size="sm"
+          title="증거 하이라이트가 없습니다."
+          body="Evidence 추가 버튼으로 증거를 추가하세요."
+          className="rounded-md border border-dashed border-border-subtle bg-surface-card px-6"
+        />
       </div>
     );
   }
@@ -260,25 +332,38 @@ interface AddEvidenceModalProps {
   onClose: () => void;
 }
 
-const SOURCE_TYPE_OPTIONS: { value: EvidenceHighlightSourceType; label: string }[] = [
+const SOURCE_TYPE_OPTIONS: {
+  value: EvidenceHighlightSourceType;
+  label: string;
+}[] = [
   { value: 'voc', label: 'VOC' },
   { value: 'survey_response', label: 'Survey Response' },
   { value: 'note', label: 'Note (manual)' },
 ];
 
-const SENTIMENT_OPTIONS: { value: EvidenceHighlightSentiment; label: string }[] = [
+const SENTIMENT_OPTIONS: {
+  value: EvidenceHighlightSentiment;
+  label: string;
+}[] = [
   { value: 'negative', label: '부정 (Negative)' },
   { value: 'neutral', label: '중립 (Neutral)' },
   { value: 'positive', label: '긍정 (Positive)' },
 ];
 
-const IMPORTANCE_OPTIONS: { value: EvidenceHighlightImportance; label: string }[] = [
+const IMPORTANCE_OPTIONS: {
+  value: EvidenceHighlightImportance;
+  label: string;
+}[] = [
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
 ];
 
-function AddEvidenceModal({ findingId, open, onClose }: AddEvidenceModalProps): React.ReactElement {
+function AddEvidenceModal({
+  findingId,
+  open,
+  onClose,
+}: AddEvidenceModalProps): React.ReactElement {
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const form = useForm<AddEvidenceHighlightRequest>({
@@ -347,12 +432,19 @@ function AddEvidenceModal({ findingId, open, onClose }: AddEvidenceModalProps): 
             <Select
               defaultValue="note"
               onValueChange={(val) =>
-                form.setValue('source_type', val as EvidenceHighlightSourceType, {
-                  shouldValidate: true,
-                })
+                form.setValue(
+                  'source_type',
+                  val as EvidenceHighlightSourceType,
+                  {
+                    shouldValidate: true,
+                  },
+                )
               }
             >
-              <SelectTrigger id="evidence-source-type" data-testid="evidence-source-type-select">
+              <SelectTrigger
+                id="evidence-source-type"
+                data-testid="evidence-source-type-select"
+              >
                 <SelectValue placeholder="소스 유형 선택" />
               </SelectTrigger>
               <SelectContent>
@@ -416,7 +508,10 @@ function AddEvidenceModal({ findingId, open, onClose }: AddEvidenceModalProps): 
                 })
               }
             >
-              <SelectTrigger id="evidence-sentiment" data-testid="evidence-sentiment-select">
+              <SelectTrigger
+                id="evidence-sentiment"
+                data-testid="evidence-sentiment-select"
+              >
                 <SelectValue placeholder="선택 안 함" />
               </SelectTrigger>
               <SelectContent>
@@ -434,12 +529,19 @@ function AddEvidenceModal({ findingId, open, onClose }: AddEvidenceModalProps): 
             <FieldLabel htmlFor="evidence-importance">중요도 (선택)</FieldLabel>
             <Select
               onValueChange={(val) =>
-                form.setValue('importance', val as EvidenceHighlightImportance, {
-                  shouldValidate: true,
-                })
+                form.setValue(
+                  'importance',
+                  val as EvidenceHighlightImportance,
+                  {
+                    shouldValidate: true,
+                  },
+                )
               }
             >
-              <SelectTrigger id="evidence-importance" data-testid="evidence-importance-select">
+              <SelectTrigger
+                id="evidence-importance"
+                data-testid="evidence-importance-select"
+              >
                 <SelectValue placeholder="선택 안 함" />
               </SelectTrigger>
               <SelectContent>
@@ -454,7 +556,12 @@ function AddEvidenceModal({ findingId, open, onClose }: AddEvidenceModalProps): 
         </form>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={closeAndReset}
+            disabled={isSubmitting}
+          >
             취소
           </Button>
           <Button
@@ -564,7 +671,12 @@ function LinkEvidenceModal({
         </form>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={closeAndReset}
+            disabled={isSubmitting}
+          >
             취소
           </Button>
           <Button
@@ -587,143 +699,176 @@ interface FullFindingDetailProps {
   finding: FindingDto;
 }
 
-function FullFindingDetail({ finding }: FullFindingDetailProps): React.ReactElement {
+function FullFindingDetail({
+  finding,
+}: FullFindingDetailProps): React.ReactElement {
   const [addEvidenceOpen, setAddEvidenceOpen] = React.useState(false);
   const [linkEvidenceOpen, setLinkEvidenceOpen] = React.useState(false);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // finding.manage gates both CTAs (display hint only — backend is authoritative).
   // For now: always show, not disabled. The backend enforces permission.
   const canManage = true;
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-border-subtle">
-        <div className="flex items-center gap-2 mb-1">
-          <OutlineBadge>Finding</OutlineBadge>
-          <span className="text-xs text-text-muted">{finding.id.slice(0, 8)}</span>
-        </div>
-        <h1 className="text-xl font-semibold text-text-primary">{finding.title}</h1>
-      </div>
-
-      <div className="flex flex-col gap-6 px-6 py-6">
-        {/* Summary */}
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wide">요약</p>
-          <p className="text-sm text-text-primary whitespace-pre-wrap">{finding.summary}</p>
-        </div>
-
-        <SectionDivider />
-
-        {/* Metadata grid — Source Type / Severity / Confidence / Status */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">소스 유형</p>
-            <OutlineBadge>{SOURCE_TYPE_LABEL[finding.source_type] ?? finding.source_type}</OutlineBadge>
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">심각도</p>
-            <SeverityBadge severity={finding.severity as SeverityEnum} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">신뢰도</p>
-            <span className="text-sm text-text-primary">
-              {finding.confidence ?? <span className="text-text-muted">—</span>}
+    <>
+      <div className="flex h-full flex-col" data-testid="finding-detail-panel">
+        {/* Header */}
+        <div className="shrink-0 border-b border-border-subtle px-6 pt-6 pb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <FitBadge>Finding</FitBadge>
+            <span className="text-xs text-text-muted">
+              {finding.id.slice(0, 8)}
             </span>
           </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">상태</p>
-            <OutlineBadge>{finding.status}</OutlineBadge>
+          <h1 className="text-xl font-semibold text-text-primary">
+            {finding.title}
+          </h1>
+        </div>
+
+        <DetailPanelSectionNav
+          sections={DETAIL_SECTIONS}
+          scrollRef={scrollRef}
+        />
+
+        <div
+          ref={scrollRef}
+          className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-6"
+        >
+          {/* Summary */}
+          <div data-anchor="summary" className="flex flex-col gap-1">
+            <PanelSectionTitle>요약</PanelSectionTitle>
+            <p className="text-sm text-text-primary whitespace-pre-wrap">
+              {finding.summary}
+            </p>
+          </div>
+
+          <SectionDivider />
+
+          {/* Metadata grid — Source Type / Severity / Confidence / Status */}
+          <div data-anchor="metadata" className="flex flex-col gap-2">
+            <PanelSectionTitle>소스 / 심각도 / 신뢰도</PanelSectionTitle>
+            <FieldRow label="소스 유형" className="px-0">
+              <FitBadge>
+                {SOURCE_TYPE_LABEL[finding.source_type] ?? finding.source_type}
+              </FitBadge>
+            </FieldRow>
+            <FieldRow label="심각도" className="px-0">
+              <SeverityBadge severity={finding.severity as SeverityEnum} />
+            </FieldRow>
+            <FieldRow label="신뢰도" className="px-0">
+              {finding.confidence !== null ? (
+                CONFIDENCE_LABEL[finding.confidence]
+              ) : (
+                <span className="text-text-muted">—</span>
+              )}
+            </FieldRow>
+            <FieldRow label="상태" className="px-0">
+              <FitBadge>{FINDING_STATUS_LABEL[finding.status]}</FitBadge>
+            </FieldRow>
+            <FieldRow label="생성자" className="px-0">
+              <UserChip
+                user={{ display_name: `Actor ${shortId(finding.created_by)}` }}
+                size="sm"
+              />
+            </FieldRow>
+          </div>
+
+          <SectionDivider />
+
+          {/* Evidence Highlights — per design/05 layout: after Summary/Source/Severity/Confidence */}
+          <div data-anchor="evidence" className="flex flex-col gap-3">
+            <PanelSectionTitle>
+              Evidence Highlights ({finding.evidence_count})
+            </PanelSectionTitle>
+            <EvidenceHighlightsSection
+              findingId={finding.id}
+              evidenceCount={finding.evidence_count}
+            />
+          </div>
+
+          <SectionDivider />
+
+          {/* Primary Managed System */}
+          <div data-anchor="managed-system" className="flex flex-col gap-2">
+            <PanelSectionTitle>Primary Managed System</PanelSectionTitle>
+            <FieldRow label="Managed System" className="px-0">
+              <ManagedSystemPill
+                name={`Managed System ${shortId(finding.primary_managed_system_id)}`}
+              />
+            </FieldRow>
+          </div>
+
+          {/* Affected Analytics Area */}
+          <div data-anchor="analytics-area" className="flex flex-col gap-2">
+            <PanelSectionTitle>Affected Analytics Area</PanelSectionTitle>
+            <FieldRow label="Analytics Area" className="px-0">
+              {finding.analytics_area_id !== null ? (
+                <FitBadge>
+                  Analytics Area {shortId(finding.analytics_area_id)}
+                </FitBadge>
+              ) : (
+                <span className="text-text-muted">—</span>
+              )}
+            </FieldRow>
+          </div>
+
+          <SectionDivider />
+
+          {/* Linked VOC — why this Finding exists */}
+          <div data-anchor="links" className="flex flex-col gap-2">
+            <PanelSectionTitle>Linked VOC / Task</PanelSectionTitle>
+            <FieldRow label="Linked VOC" className="px-0">
+              {finding.source_type === 'voc' && finding.source_id !== null ? (
+                <Link
+                  to="/vocs"
+                  search={{ view: 'inbox', selected: finding.source_id }}
+                  className="inline-flex items-center gap-1.5 text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
+                >
+                  VOC {shortId(finding.source_id)}
+                </Link>
+              ) : (
+                <span className="text-text-muted">—</span>
+              )}
+            </FieldRow>
+            <FieldRow label="Linked Task" className="px-0">
+              {finding.linked_task_id !== null ? (
+                <FitBadge>Task {shortId(finding.linked_task_id)}</FitBadge>
+              ) : (
+                <span className="text-text-muted">—</span>
+              )}
+            </FieldRow>
           </div>
         </div>
 
-        <SectionDivider />
+        {/* CTA Footer */}
+        <div className="sticky bottom-0 shrink-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-wrap items-center gap-2">
+          {/* Add Evidence — gated to finding.manage; backend authoritative */}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setAddEvidenceOpen(true)}
+            disabled={!canManage}
+            data-testid="add-evidence-btn"
+          >
+            Evidence 추가
+          </Button>
 
-        {/* Evidence Highlights — per design/05 layout: after Summary/Source/Severity/Confidence */}
-        <div className="flex flex-col gap-3">
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wide">
-            Evidence Highlights ({finding.evidence_count})
-          </p>
-          <EvidenceHighlightsSection
-            findingId={finding.id}
-            evidenceCount={finding.evidence_count}
-          />
+          {/* Link Existing Evidence — gated to finding.manage; backend authoritative */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setLinkEvidenceOpen(true)}
+            disabled={!canManage}
+            data-testid="link-evidence-btn"
+          >
+            기존 Evidence 연결
+          </Button>
+
+          {/* Request Task / Mark Not Actionable — Slice 6 */}
+          <Slice6Cta label="Task 요청" />
+          <Slice6Cta label="조치 불필요 표시" />
         </div>
-
-        <SectionDivider />
-
-        {/* Primary Managed System */}
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Primary Managed System</p>
-          <span className="text-sm text-text-primary font-mono">{finding.primary_managed_system_id}</span>
-        </div>
-
-        {/* Affected Analytics Area */}
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Affected Analytics Area</p>
-          {finding.analytics_area_id !== null ? (
-            <span className="text-sm text-text-primary font-mono">{finding.analytics_area_id}</span>
-          ) : (
-            <span className="text-sm text-text-muted">—</span>
-          )}
-        </div>
-
-        <SectionDivider />
-
-        {/* Linked VOC — why this Finding exists */}
-        <div className="flex flex-col gap-2">
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Linked VOC</p>
-          {finding.source_type === 'voc' && finding.source_id !== null ? (
-            <Link
-              to="/vocs"
-              search={{ view: 'inbox', selected: finding.source_id }}
-              className="inline-flex items-center gap-1.5 text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
-            >
-              VOC {finding.source_id.slice(0, 8)}…
-            </Link>
-          ) : (
-            <span className="text-sm text-text-muted">—</span>
-          )}
-        </div>
-
-        {/* Linked Task */}
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Linked Task</p>
-          {finding.linked_task_id !== null ? (
-            <span className="text-sm text-text-primary font-mono">{finding.linked_task_id}</span>
-          ) : (
-            <span className="text-sm text-text-muted">—</span>
-          )}
-        </div>
-      </div>
-
-      {/* CTA Footer */}
-      <div className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-6 py-3 flex flex-wrap items-center gap-2">
-        {/* Add Evidence — gated to finding.manage; backend authoritative */}
-        <Button
-          variant="default"
-          size="sm"
-          onClick={() => setAddEvidenceOpen(true)}
-          disabled={!canManage}
-          data-testid="add-evidence-btn"
-        >
-          Add Evidence
-        </Button>
-
-        {/* Link Existing Evidence — gated to finding.manage; backend authoritative */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setLinkEvidenceOpen(true)}
-          disabled={!canManage}
-          data-testid="link-evidence-btn"
-        >
-          Link Existing Evidence
-        </Button>
-
-        {/* Request Task / Mark Not Actionable — Slice 6 */}
-        <Slice6Cta label="Request Task" />
-        <Slice6Cta label="Mark Not Actionable" />
       </div>
 
       {/* Modals */}
@@ -737,13 +882,15 @@ function FullFindingDetail({ finding }: FullFindingDetailProps): React.ReactElem
         open={linkEvidenceOpen}
         onClose={() => setLinkEvidenceOpen(false)}
       />
-    </div>
+    </>
   );
 }
 
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 
-export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): React.ReactElement {
+export function FindingDetailPanel({
+  findingId,
+}: FindingDetailPanelProps): React.ReactElement {
   const { data, isLoading, isError, error } = useFindingDetail(findingId);
 
   // 1. Loading
@@ -769,7 +916,9 @@ export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): Reac
       return (
         <div className="flex flex-col h-full">
           <div className="h-12 border-b border-border-subtle flex items-center px-6">
-            <span className="text-sm font-medium text-text-primary">Finding 상세</span>
+            <span className="text-sm font-medium text-text-primary">
+              Finding 상세
+            </span>
           </div>
           <div className="flex-1 flex items-center justify-center p-6">
             <PermissionBlockedPanel
@@ -783,7 +932,9 @@ export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): Reac
     }
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-        <p className="text-sm text-feedback-error">데이터를 불러오지 못했습니다.</p>
+        <p className="text-sm text-feedback-error">
+          데이터를 불러오지 못했습니다.
+        </p>
       </div>
     );
   }
@@ -793,9 +944,5 @@ export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): Reac
   }
 
   // 3. Full detail
-  return (
-    <div className="flex flex-col h-full overflow-y-auto" data-testid="finding-detail-panel">
-      <FullFindingDetail finding={data} />
-    </div>
-  );
+  return <FullFindingDetail finding={data} />;
 }
