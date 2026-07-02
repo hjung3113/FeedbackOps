@@ -116,6 +116,27 @@ reopening any locked section:
 - Membership is a reference set: cluster member add/remove are audited
   (`voc_cluster_member_added` / `voc_cluster_member_removed`); VOC records are never merged or mutated.
 
+### Section I — Finding status machine endpoint (#131)
+
+`PATCH /findings/:id` is the user-directed Finding status endpoint. The request body is strict:
+`{ status: "draft" | "active" | "not_actionable" | "converted" | "archived", reason?: string }`.
+
+Only these transitions are enabled in Slice 6:
+
+- `draft` → `active`
+- `draft` → `not_actionable`
+- `active` → `not_actionable`
+- `not_actionable` → `active`
+
+`converted` and `archived` remain valid stored statuses but are not user-directed PATCH targets
+in this slice. `converted` is reserved for the Convert-to-Task slice; `archived` is out of scope.
+Illegal targets or transitions return `422 validation.failed`. A same-status request is a
+successful no-op returning the current Finding DTO.
+
+Authz reuses `finding.manage` on the Finding's `primary_managed_system_id`; no new capability is
+introduced. Successful non-no-op transitions write audit event `finding_status_changed` with
+`finding_id`, `from_status`, `to_status`, `primary_managed_system_id`, and optional `reason`.
+
 ## Consequences
 
 - The provider-registry refactor is the largest single piece of Slice 5 and a prerequisite for cluster (Slice 5 follow-on), Survey (Slice 8), and Task (Slice 6) link targets — all become additive provider registrations.

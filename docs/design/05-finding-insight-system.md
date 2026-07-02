@@ -159,6 +159,20 @@ Acceptance Criteria:
 - Evidence can be shown in Finding Detail and Task Detail.
 ```
 
+### FR-FIND-002A: Manage Finding Status
+
+Priority: MUST
+
+Acceptance Criteria:
+
+```text
+- Admin or same-scope Developer with finding.manage can update Finding status.
+- Slice 6 supports draft -> active, draft -> not_actionable, active -> not_actionable, and not_actionable -> active.
+- converted is reserved for the Convert Finding To Task flow; archived is out of scope for this slice.
+- Same-status updates are safe no-ops and return the current Finding.
+- Status changes are audited with from/to status and optional reason.
+```
+
 ### FR-FIND-003: Convert Finding To Execution Candidate
 
 Priority: SHOULD

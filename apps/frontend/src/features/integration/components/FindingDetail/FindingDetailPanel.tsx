@@ -50,12 +50,15 @@ import {
   type LinkEvidenceRequest,
 } from '@fops/shared';
 import { useIdempotencyKey, errorMapper, type ApiError } from '@/lib/api';
+import { useMe } from '@/lib/auth/useMe';
+import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
 import { useFindingDetail } from '../../hooks/useFindingDetail';
 import { useEvidenceHighlights } from '../../hooks/useEvidenceHighlights';
 import {
   useAddEvidenceHighlightMutation,
   useLinkEvidenceMutation,
 } from '../../hooks/useEvidenceMutations';
+import { useFindingStatusMutation } from '../../hooks/useFindingStatusMutation';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -705,10 +708,44 @@ function FullFindingDetail({
   const [addEvidenceOpen, setAddEvidenceOpen] = React.useState(false);
   const [linkEvidenceOpen, setLinkEvidenceOpen] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const { key: statusIdempotencyKey, markConsumed: markStatusKeyConsumed } =
+    useIdempotencyKey();
+  const { data: me } = useMe();
+  const managePermissionQuery = usePermissionCheck({
+    capability: 'finding.manage',
+    managedSystemId: finding.primary_managed_system_id,
+  });
 
   // finding.manage gates both CTAs (display hint only — backend is authoritative).
-  // For now: always show, not disabled. The backend enforces permission.
-  const canManage = true;
+  const canManage =
+    me?.actor.role_level === 'admin' ||
+    managePermissionQuery.data?.state === 'approved';
+  const statusMutation = useFindingStatusMutation({
+    findingId: finding.id,
+    idempotencyKey: statusIdempotencyKey,
+    onError: (err: ApiError) => {
+      toast.error(errorMapper(err.envelope).message);
+    },
+  });
+
+  function handleMarkNotActionable(): void {
+    statusMutation.mutate(
+      { status: 'not_actionable' },
+      {
+        onSuccess: () => {
+          markStatusKeyConsumed();
+          toast.success('Finding이 조치 불필요로 표시되었습니다.');
+        },
+      },
+    );
+  }
+
+  const markNotActionableDisabled =
+    !canManage ||
+    statusMutation.isPending ||
+    finding.status === 'not_actionable' ||
+    finding.status === 'converted' ||
+    finding.status === 'archived';
 
   return (
     <>
@@ -865,9 +902,17 @@ function FullFindingDetail({
             기존 Evidence 연결
           </Button>
 
-          {/* Request Task / Mark Not Actionable — Slice 6 */}
+          {/* Request Task — Slice 6 Task domain remains disabled. */}
           <Slice6Cta label="Task 요청" />
-          <Slice6Cta label="조치 불필요 표시" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleMarkNotActionable}
+            disabled={markNotActionableDisabled}
+            data-testid="mark-not-actionable-btn"
+          >
+            조치 불필요 표시
+          </Button>
         </div>
       </div>
 

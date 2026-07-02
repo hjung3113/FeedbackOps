@@ -70,6 +70,8 @@ export const AUDIT_EVENT_TYPES = [
   'finding_created_from_voc_cluster',
   // Slice 5 #124: Evidence preserved on a Finding.
   'evidence_highlight_added',
+  // Slice 6 #131: Finding status machine.
+  'finding_status_changed',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -277,6 +279,15 @@ export const evidenceHighlightAddedDetailSchema = z.object({
 });
 export type EvidenceHighlightAddedDetail = z.infer<typeof evidenceHighlightAddedDetailSchema>;
 
+export const findingStatusChangedDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  from_status: z.enum(['draft', 'active', 'not_actionable', 'converted', 'archived']),
+  to_status: z.enum(['draft', 'active', 'not_actionable', 'converted', 'archived']),
+  primary_managed_system_id: z.string().uuid(),
+  reason: z.string().min(1).max(1000).optional(),
+});
+export type FindingStatusChangedDetail = z.infer<typeof findingStatusChangedDetailSchema>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
@@ -314,4 +325,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   finding_created_from_voc_cluster: findingCreatedFromVocClusterDetailSchema,
   // Slice 5 #124.
   evidence_highlight_added: evidenceHighlightAddedDetailSchema,
+  // Slice 6 #131.
+  finding_status_changed: findingStatusChangedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

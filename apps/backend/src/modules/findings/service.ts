@@ -3,8 +3,10 @@ import {
   type CreateFindingRequest,
   type EvidenceHighlightDto,
   type FindingDto,
+  type FindingStatus,
   type LinkEvidenceRequest,
   type ListEvidenceHighlightsResponse,
+  type PatchFindingRequest,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
 
@@ -30,6 +32,7 @@ import {
   insertFinding,
   listEvidenceHighlightsByFinding,
   lockFindingById,
+  updateFindingStatus,
 } from './repo.js';
 
 export interface FindingsActor {
@@ -44,6 +47,24 @@ export interface FindingsServiceDeps {
   checkService: CheckService;
   idempotencyService: IdempotencyService;
   entityLinksService: EntityLinksService;
+}
+
+const USER_DIRECTED_STATUS_TARGETS = ['draft', 'active', 'not_actionable'] as const;
+const ALLOWED_STATUS_TRANSITIONS: Record<
+  (typeof USER_DIRECTED_STATUS_TARGETS)[number],
+  ReadonlyArray<(typeof USER_DIRECTED_STATUS_TARGETS)[number]>
+> = {
+  draft: ['active', 'not_actionable'],
+  active: ['not_actionable'],
+  not_actionable: ['active'],
+};
+
+function isUserDirectedStatusTarget(
+  status: FindingStatus,
+): status is (typeof USER_DIRECTED_STATUS_TARGETS)[number] {
+  return USER_DIRECTED_STATUS_TARGETS.includes(
+    status as (typeof USER_DIRECTED_STATUS_TARGETS)[number],
+  );
 }
 
 function toDto(
@@ -524,6 +545,100 @@ export function createFindingsService(deps: FindingsServiceDeps) {
     });
   }
 
+  async function patchFinding(args: {
+    actor: FindingsActor;
+    findingId: string;
+    input: PatchFindingRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: FindingDto }> {
+    const { actor, findingId, input, idempotencyKey, requestHash } = args;
+
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        actor.actor_id,
+        idempotencyKey,
+        requestHash,
+        async () => {
+          const finding = await lockFindingById(tx, {
+            workspaceId: actor.workspace_id,
+            findingId,
+          });
+          if (!finding) throw new HttpError('not_found.record', 'finding not found');
+
+          const canManage = await canManageFinding(
+            deps,
+            actor,
+            finding.primary_managed_system_id,
+            { tx },
+          );
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          if (!isUserDirectedStatusTarget(input.status)) {
+            throw new HttpError(
+              'validation.failed',
+              'finding status target is not user-directed in this slice',
+              { fields: [{ path: ['status'], code: 'unsupported_target' }] },
+            );
+          }
+
+          const source = await findCreatedFindingSourceLink(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+          });
+
+          if (input.status === finding.status) {
+            return { status: 200, body: toDto(finding, source) };
+          }
+
+          if (!isUserDirectedStatusTarget(finding.status)) {
+            throw new HttpError(
+              'validation.failed',
+              'finding status cannot transition from its current state in this slice',
+              { fields: [{ path: ['status'], code: 'invalid_transition' }] },
+            );
+          }
+
+          const allowedTargets = ALLOWED_STATUS_TRANSITIONS[finding.status];
+          if (!allowedTargets.includes(input.status)) {
+            throw new HttpError('validation.failed', 'invalid finding status transition', {
+              fields: [{ path: ['status'], code: 'invalid_transition' }],
+            });
+          }
+
+          const updated = await updateFindingStatus(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+            status: input.status,
+          });
+
+          const detail: Record<string, unknown> = {
+            finding_id: finding.id,
+            from_status: finding.status,
+            to_status: updated.status,
+            primary_managed_system_id: finding.primary_managed_system_id,
+          };
+          if (input.reason !== undefined) detail.reason = input.reason;
+
+          await deps.auditService.record(tx, {
+            workspace_id: actor.workspace_id,
+            actor_id: actor.actor_id,
+            event_type: 'finding_status_changed',
+            subject_type: 'finding',
+            subject_id: finding.id,
+            summary: 'Finding status changed',
+            detail,
+          });
+
+          return { status: 200, body: toDto(updated, source) };
+        },
+      );
+    });
+  }
+
   async function listFindings(args: {
     actor: FindingsActor;
     managedSystemId?: string;
@@ -552,6 +667,7 @@ export function createFindingsService(deps: FindingsServiceDeps) {
     addEvidenceHighlight,
     listEvidenceHighlights,
     linkEvidence,
+    patchFinding,
   };
 }
 
