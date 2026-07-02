@@ -152,6 +152,7 @@ Rules:
 - primary_managed_system_id is the MVP scope context and must not create a separate app partition.
 - analytics_area_id must belong to primary_managed_system_id when present.
 - Absence of analytics_area_id is valid in MVP.
+- User-directed status changes use `PATCH /findings/:id`; Slice 6 allows only draft -> active, draft -> not_actionable, active -> not_actionable, and not_actionable -> active.
 ```
 
 ## Evidence Highlight

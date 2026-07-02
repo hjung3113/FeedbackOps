@@ -36,6 +36,14 @@ export const createFindingRequestSchema = z
   .strict();
 export type CreateFindingRequest = z.infer<typeof createFindingRequestSchema>;
 
+export const patchFindingRequestSchema = z
+  .object({
+    status: findingStatusSchema,
+    reason: z.string().min(1).max(1000).optional(),
+  })
+  .strict();
+export type PatchFindingRequest = z.infer<typeof patchFindingRequestSchema>;
+
 export const findingSourceSchema = z
   .object({
     type: z.enum(['voc', 'voc_cluster']),

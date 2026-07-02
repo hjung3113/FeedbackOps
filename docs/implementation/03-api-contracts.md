@@ -448,6 +448,14 @@ POST /findings/:id/link-task
 Finding-to-Milestone linking is future cross-system behavior and is not an MVP
 Finding endpoint.
 
+`PATCH /findings/:id` accepts strict body `{ status, reason? }` and returns the
+updated `FindingDto`. Slice 6 supports only `draft -> active`,
+`draft -> not_actionable`, `active -> not_actionable`, and
+`not_actionable -> active`; `converted` and `archived` remain stored statuses but
+are rejected as user-directed targets here. Authz reuses `finding.manage`.
+Successful non-no-op transitions audit `finding_status_changed`; same-status
+requests are `200` no-ops returning the current Finding.
+
 ### Task
 
 ```text
