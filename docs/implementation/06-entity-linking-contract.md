@@ -103,9 +103,32 @@ finding -> registered as a link TARGET type
   related_to behavior (#112-#115) is preserved unchanged
 ```
 
-The composite tuple allowlist after Slice 5 is exactly `(voc,voc,related_to)` and
-`(voc,finding,created_finding)`; independent value CHECKs are forbidden because
-they would admit invalid tuples. Creatable visibility stays `internal_only`.
+The composite tuple allowlist after Slice 5 is exactly `(voc,voc,related_to)`,
+`(voc,finding,created_finding)`, `(voc,finding,evidence_of)`, and
+`(voc_cluster,finding,created_finding)`; independent value CHECKs are forbidden
+because they would admit invalid tuples. Creatable visibility stays
+`internal_only`.
+
+Slice 6 tracer (#132):
+
+```text
+task_request -> registered as a link TARGET type
+- relation_type: requested_task (finding -> task_request), created by
+  POST /findings/:id/request-task
+- resolver: task_request.task_requests(id, workspace_id, primary_managed_system_id)
+- create authz: source Finding must exist/read through the Finding lock path,
+  and actor needs finding.manage on the Finding's primary_managed_system_id
+- read authz: Task Request endpoint uses the same Admin or same-scope Developer
+  finding.read convention until the full Task backstage capability lands
+- getReporterSummary(task_request): returns UNAVAILABLE
+- getInternalSummary(task_request): Task Request internal read model
+```
+
+The composite tuple allowlist after Slice 6 adds exactly:
+
+```text
+(finding, task_request, requested_task)
+```
 
 ## Link Detach Validation
 

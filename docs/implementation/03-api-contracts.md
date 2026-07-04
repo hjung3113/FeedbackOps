@@ -195,6 +195,38 @@ Reporter Summary must not expose raw task status, backlog priority, internal
 comments, individual Developer names, internal due dates, root-cause detail,
 severity, confidence, or private notes.
 
+## Task Request Create From Finding Contract
+
+`POST /findings/:id/request-task`
+
+```text
+requirement_id: FOP-TASK-001
+request body:
+  evidence_summary string required
+  requested_outcome string required
+response body: TaskRequestDto
+auth and permission: authenticated Actor in workspace; finding.manage on the
+  source Finding's primary_managed_system_id. Admin bypass follows the same
+  finding.manage convention used by Finding actions.
+validation errors:
+  - invalid id path param
+  - invalid or unknown Finding
+  - invalid request body
+  - missing or malformed Idempotency-Key
+side effects:
+  - create task_request.task_requests with status pending_review
+  - create active entity link (finding, task_request, requested_task)
+audit events:
+  - task_request_created_from_finding
+  - entity_link.created when the active link row is newly inserted
+managed_system scope: copied from the source Finding
+idempotency behavior: Idempotency-Key required; hash includes body, Finding id,
+  and route identity finding.request_task
+```
+
+This endpoint does not approve, reject, convert to Task, link an existing Task,
+or create Task Requests from VOC / VOC Cluster sources.
+
 ## Next Action Contract
 
 Backend responses for work-object detail and queue rows must provide

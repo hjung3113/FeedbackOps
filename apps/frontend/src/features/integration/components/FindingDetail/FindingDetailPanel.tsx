@@ -40,8 +40,10 @@ import {
 } from '@fops/ui';
 import {
   addEvidenceHighlightRequestSchema,
+  createTaskRequestFromFindingRequestSchema,
   linkEvidenceRequestSchema,
   type AddEvidenceHighlightRequest,
+  type CreateTaskRequestFromFindingRequest,
   type EvidenceHighlightDto,
   type EvidenceHighlightSentiment,
   type EvidenceHighlightImportance,
@@ -59,6 +61,7 @@ import {
   useLinkEvidenceMutation,
 } from '../../hooks/useEvidenceMutations';
 import { useFindingStatusMutation } from '../../hooks/useFindingStatusMutation';
+import { useRequestTaskFromFinding } from '../../hooks/useRequestTaskFromFinding';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -696,6 +699,148 @@ function LinkEvidenceModal({
   );
 }
 
+// ── Request Task modal ───────────────────────────────────────────────────────
+
+interface RequestTaskModalProps {
+  finding: FindingDto;
+  open: boolean;
+  onClose: () => void;
+}
+
+function RequestTaskModal({
+  finding,
+  open,
+  onClose,
+}: RequestTaskModalProps): React.ReactElement {
+  const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
+
+  const form = useForm<CreateTaskRequestFromFindingRequest>({
+    resolver: zodResolver(createTaskRequestFromFindingRequestSchema),
+    defaultValues: {
+      evidence_summary: finding.summary,
+      requested_outcome: '',
+    },
+    mode: 'onBlur',
+  });
+
+  React.useEffect(() => {
+    if (open) {
+      form.reset({
+        evidence_summary: finding.summary,
+        requested_outcome: '',
+      });
+    }
+  }, [finding.id, finding.summary, form, open]);
+
+  const mutation = useRequestTaskFromFinding({
+    findingId: finding.id,
+    idempotencyKey,
+    onError: (err: ApiError) => {
+      toast.error(errorMapper(err.envelope).message);
+    },
+  });
+
+  function closeAndReset(): void {
+    form.reset({
+      evidence_summary: finding.summary,
+      requested_outcome: '',
+    });
+    mutation.reset();
+    onClose();
+  }
+
+  function handleSubmit(values: CreateTaskRequestFromFindingRequest): void {
+    mutation.mutate(values, {
+      onSuccess: () => {
+        markConsumed();
+        closeAndReset();
+        toast.success('Task Request가 생성되었습니다.');
+      },
+    });
+  }
+
+  const isSubmitting = mutation.isPending;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) closeAndReset();
+      }}
+    >
+      <DialogContent className="max-w-lg" data-testid="request-task-modal">
+        <DialogHeader>
+          <DialogTitle>Task 요청</DialogTitle>
+        </DialogHeader>
+
+        <form
+          id="request-task-form"
+          onSubmit={form.handleSubmit(handleSubmit)}
+          noValidate
+          className="flex flex-col gap-4"
+        >
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel required htmlFor="task-request-evidence-summary">
+              Evidence Summary
+            </FieldLabel>
+            <Textarea
+              id="task-request-evidence-summary"
+              rows={5}
+              placeholder="Task 검토자가 볼 근거 요약을 입력하세요."
+              {...form.register('evidence_summary')}
+              aria-invalid={Boolean(form.formState.errors.evidence_summary)}
+              data-testid="request-task-evidence-summary-input"
+            />
+            {form.formState.errors.evidence_summary?.message && (
+              <p className="text-xs text-text-danger" role="alert">
+                {form.formState.errors.evidence_summary.message}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel required htmlFor="task-request-requested-outcome">
+              Requested Outcome
+            </FieldLabel>
+            <Textarea
+              id="task-request-requested-outcome"
+              rows={4}
+              placeholder="기대하는 실행 결과를 입력하세요."
+              {...form.register('requested_outcome')}
+              aria-invalid={Boolean(form.formState.errors.requested_outcome)}
+              data-testid="request-task-requested-outcome-input"
+            />
+            {form.formState.errors.requested_outcome?.message && (
+              <p className="text-xs text-text-danger" role="alert">
+                {form.formState.errors.requested_outcome.message}
+              </p>
+            )}
+          </div>
+        </form>
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={closeAndReset}
+            disabled={isSubmitting}
+          >
+            취소
+          </Button>
+          <Button
+            type="submit"
+            form="request-task-form"
+            disabled={isSubmitting}
+            data-testid="request-task-submit"
+          >
+            요청
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Full detail view ─────────────────────────────────────────────────────────
 
 interface FullFindingDetailProps {
@@ -707,6 +852,7 @@ function FullFindingDetail({
 }: FullFindingDetailProps): React.ReactElement {
   const [addEvidenceOpen, setAddEvidenceOpen] = React.useState(false);
   const [linkEvidenceOpen, setLinkEvidenceOpen] = React.useState(false);
+  const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const { key: statusIdempotencyKey, markConsumed: markStatusKeyConsumed } =
     useIdempotencyKey();
@@ -902,8 +1048,16 @@ function FullFindingDetail({
             기존 Evidence 연결
           </Button>
 
-          {/* Request Task — Slice 6 Task domain remains disabled. */}
-          <Slice6Cta label="Task 요청" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRequestTaskOpen(true)}
+            disabled={!canManage}
+            data-testid="request-task-btn"
+          >
+            Task 요청
+          </Button>
+          <Slice6Cta label="Link Task" />
           <Button
             variant="outline"
             size="sm"
@@ -926,6 +1080,11 @@ function FullFindingDetail({
         findingId={finding.id}
         open={linkEvidenceOpen}
         onClose={() => setLinkEvidenceOpen(false)}
+      />
+      <RequestTaskModal
+        finding={finding}
+        open={requestTaskOpen}
+        onClose={() => setRequestTaskOpen(false)}
       />
     </>
   );

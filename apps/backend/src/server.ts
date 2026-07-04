@@ -49,6 +49,7 @@ import {
   createVocService,
   vocRoutes,
 } from './modules/voc/index.js';
+import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-requests/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
 
 export interface BuildServerOptions {
@@ -453,6 +454,22 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     workspaceId,
     rateLimitConfig: {
       read: app.rateLimitConfig.read,
+    },
+  });
+
+  // ── Task Requests module — Slice 6 issue #132 ─────────────────────────────
+  const taskRequestsService = createTaskRequestsService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(taskRequestsRoutes, {
+    sessionService,
+    taskRequestsService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
     },
   });
 

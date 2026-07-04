@@ -72,6 +72,8 @@ export const AUDIT_EVENT_TYPES = [
   'evidence_highlight_added',
   // Slice 6 #131: Finding status machine.
   'finding_status_changed',
+  // Slice 6 #132: Task Request tracer from Finding.
+  'task_request_created_from_finding',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -174,6 +176,11 @@ const findingRefDetailSchema = z.object({
   id: z.string().uuid(),
 });
 
+const taskRequestRefDetailSchema = z.object({
+  type: z.literal('task_request'),
+  id: z.string().uuid(),
+});
+
 export const entityLinkCreatedDetailSchema = z.union([
   z.object({
     link_id: z.string().uuid(),
@@ -201,6 +208,13 @@ export const entityLinkCreatedDetailSchema = z.union([
     source: vocClusterRefDetailSchema,
     target: findingRefDetailSchema,
     relation_type: z.literal('created_finding'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: findingRefDetailSchema,
+    target: taskRequestRefDetailSchema,
+    relation_type: z.literal('requested_task'),
     visibility: z.literal('internal_only'),
   }),
 ]);
@@ -233,6 +247,13 @@ export const entityLinkDetachedDetailSchema = z.union([
     source: vocClusterRefDetailSchema,
     target: findingRefDetailSchema,
     relation_type: z.literal('created_finding'),
+    reason: z.string().min(1),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: findingRefDetailSchema,
+    target: taskRequestRefDetailSchema,
+    relation_type: z.literal('requested_task'),
     reason: z.string().min(1),
   }),
 ]);
@@ -288,6 +309,16 @@ export const findingStatusChangedDetailSchema = z.object({
 });
 export type FindingStatusChangedDetail = z.infer<typeof findingStatusChangedDetailSchema>;
 
+export const taskRequestCreatedFromFindingDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  source_finding_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('finding'),
+});
+export type TaskRequestCreatedFromFindingDetail = z.infer<
+  typeof taskRequestCreatedFromFindingDetailSchema
+>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
@@ -327,4 +358,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   evidence_highlight_added: evidenceHighlightAddedDetailSchema,
   // Slice 6 #131.
   finding_status_changed: findingStatusChangedDetailSchema,
+  // Slice 6 #132.
+  task_request_created_from_finding: taskRequestCreatedFromFindingDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

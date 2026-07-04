@@ -1,12 +1,18 @@
 import { z } from 'zod';
 
-export const entityLinkEntityTypeSchema = z.enum(['voc', 'finding', 'voc_cluster']);
+export const entityLinkEntityTypeSchema = z.enum([
+  'voc',
+  'finding',
+  'voc_cluster',
+  'task_request',
+]);
 export type EntityLinkEntityType = z.infer<typeof entityLinkEntityTypeSchema>;
 
 export const entityLinkRelationTypeSchema = z.enum([
   'related_to',
   'created_finding',
   'evidence_of',
+  'requested_task',
 ]);
 export type EntityLinkRelationType = z.infer<typeof entityLinkRelationTypeSchema>;
 
@@ -57,6 +63,11 @@ export const registeredEntityLinkPairSchema = z.union([
     source_type: z.literal('voc_cluster'),
     target_type: z.literal('finding'),
     relation_type: z.literal('created_finding'),
+  }),
+  z.object({
+    source_type: z.literal('finding'),
+    target_type: z.literal('task_request'),
+    relation_type: z.literal('requested_task'),
   }),
 ]);
 export type RegisteredEntityLinkPair = z.infer<typeof registeredEntityLinkPairSchema>;

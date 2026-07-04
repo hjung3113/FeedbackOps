@@ -14,6 +14,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { findTaskRequestById, type TaskRequestRow } from '../task-requests/repo.js';
 import { findVocClusterById } from '../voc-clusters/repo.js';
 import { type LinkVisibilityDecision, evaluateLinkVisibility } from './evaluate-visibility.js';
 import {
@@ -72,6 +73,19 @@ function findingToInternalSummary(row: FindingReadRow): Record<string, unknown> 
     status: row.status,
     primary_managed_system_id: row.primary_managed_system_id,
     evidence_count: row.evidence_count,
+  };
+}
+
+function taskRequestToInternalSummary(row: TaskRequestRow): Record<string, unknown> {
+  return {
+    id: row.id,
+    source_type: row.source_type,
+    source_id: row.source_id,
+    evidence_summary: row.evidence_summary,
+    requested_outcome: row.requested_outcome,
+    status: row.status,
+    primary_managed_system_id: row.primary_managed_system_id,
+    requester_actor_id: row.requester_actor_id,
   };
 }
 
@@ -264,6 +278,37 @@ const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
     getInternalSummary: async () => null,
     listExpectedLinks: async () => [],
   },
+  task_request: {
+    entityType: 'task_request',
+    assertExists: async (db, workspaceId, id) => {
+      const request = await findTaskRequestById(db, { workspaceId, taskRequestId: id });
+      if (!request) return null;
+      return {
+        workspace_id: request.workspace_id,
+        managed_system_id: request.primary_managed_system_id,
+        reporter_id: null,
+      };
+    },
+    getPermissionSubject: async (db, workspaceId, id) => {
+      const request = await findTaskRequestById(db, { workspaceId, taskRequestId: id });
+      if (!request) return null;
+      return {
+        workspace_id: request.workspace_id,
+        managed_system_id: request.primary_managed_system_id,
+        reporter_id: null,
+      };
+    },
+    canRead: (deps, actor, subject) =>
+      assertFindingReadScope(deps, actor, subject.managed_system_id),
+    canCreateTarget: (deps, actor, subject) =>
+      assertFindingManageScope(deps, actor, subject.managed_system_id),
+    getReporterSummary: unavailableReporterSummary,
+    getInternalSummary: async (db, workspaceId, id) => {
+      const request = await findTaskRequestById(db, { workspaceId, taskRequestId: id });
+      return request ? taskRequestToInternalSummary(request) : null;
+    },
+    listExpectedLinks: async () => [],
+  },
 };
 
 function providerFor(type: EntityLinkEntityType): EntityLinkProvider {
@@ -287,7 +332,10 @@ function isCreatableTuple(input: {
       input.relationType === 'evidence_of') ||
     (input.sourceType === 'voc_cluster' &&
       input.targetType === 'finding' &&
-      input.relationType === 'created_finding')
+      input.relationType === 'created_finding') ||
+    (input.sourceType === 'finding' &&
+      input.targetType === 'task_request' &&
+      input.relationType === 'requested_task')
   );
 }
 

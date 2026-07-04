@@ -57,6 +57,9 @@ task
 - work_initiatives / projects when future execution grouping is introduced
 - milestones when future execution grouping is introduced
 
+task_request
+- task_requests (Slice 6 tracer namespace for the Task Request review buffer)
+
 survey
 - surveys
 - survey_responses
