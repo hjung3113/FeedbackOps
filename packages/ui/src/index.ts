@@ -94,6 +94,14 @@ export { SearchInput, type SearchInputProps } from './forms/SearchInput';
 // Feedback (Slice 3 #20)
 export { EmptyState, type EmptyStateProps } from './feedback/EmptyState';
 
+// Data primitives (Slice 6 #137)
+export {
+  ObjectRow,
+  type ObjectRowProps,
+  type ObjectRowDensity,
+  type ObjectRowSeverity,
+} from './data/ObjectRow';
+
 // Panel primitives (Slice 3 #20)
 export { DetailPanelHeader, type DetailPanelHeaderProps, type DetailPanelKind } from './panel/DetailPanelHeader';
 export { PanelTitleBlock, type PanelTitleBlockProps } from './panel/PanelTitleBlock';
