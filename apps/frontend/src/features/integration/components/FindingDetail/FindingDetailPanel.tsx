@@ -51,12 +51,17 @@ import {
 import {
   linkTaskToFinding,
   listTasks,
+  getTask,
   useIdempotencyKey,
   errorMapper,
   type ApiError,
 } from '@/lib/api';
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
+import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { useFindingDetail } from '../../hooks/useFindingDetail';
 import { useEvidenceHighlights } from '../../hooks/useEvidenceHighlights';
 import {
@@ -928,6 +933,49 @@ function FullFindingDetail({
   const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
   const [linkTaskOpen, setLinkTaskOpen] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const { actors } = useWorkspaceActors();
+  const actorsById = React.useMemo(
+    () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
+    [actors],
+  );
+  const managedSystemsQuery = useQuery({
+    queryKey: ['managed-systems', 'all'] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
+    staleTime: 10 * 60 * 1000,
+  });
+  const managedSystemsById = React.useMemo(
+    () => new Map((managedSystemsQuery.data?.items ?? []).map((ms) => [ms.id, ms.name])),
+    [managedSystemsQuery.data?.items],
+  );
+  const analyticsAreasQuery = useQuery({
+    queryKey: ['analytics-areas', finding.primary_managed_system_id] as const,
+    queryFn: ({ signal }) =>
+      fetchAnalyticsAreas({
+        managedSystemId: finding.primary_managed_system_id,
+        includeArchived: true,
+        signal,
+      }),
+    staleTime: 10 * 60 * 1000,
+  });
+  const analyticsAreasById = React.useMemo(
+    () => new Map((analyticsAreasQuery.data?.items ?? []).map((area) => [area.id, area.name])),
+    [analyticsAreasQuery.data?.items],
+  );
+  const linkedVocQuery = useVocDetail(
+    finding.source_type === 'voc' ? finding.source_id : null,
+  );
+  const linkedTaskQuery = useQuery({
+    queryKey: ['task', finding.linked_task_id] as const,
+    queryFn: ({ signal }) => getTask(finding.linked_task_id as string, signal),
+    enabled: finding.linked_task_id !== null,
+    staleTime: 30 * 1000,
+  });
+  const linkedVocTitle =
+    linkedVocQuery.data && 'title' in linkedVocQuery.data ? linkedVocQuery.data.title : null;
+  const linkedVocDisplayId =
+    linkedVocQuery.data && 'display_id' in linkedVocQuery.data
+      ? linkedVocQuery.data.display_id
+      : null;
   const { key: statusIdempotencyKey, markConsumed: markStatusKeyConsumed } =
     useIdempotencyKey();
   const { data: me } = useMe();
@@ -1025,7 +1073,7 @@ function FullFindingDetail({
             </FieldRow>
             <FieldRow label="생성자" className="px-0">
               <UserChip
-                user={{ display_name: `Actor ${shortId(finding.created_by)}` }}
+                user={{ display_name: actorsById.get(finding.created_by) ?? 'Finding creator' }}
                 size="sm"
               />
             </FieldRow>
@@ -1051,7 +1099,7 @@ function FullFindingDetail({
             <PanelSectionTitle>Primary Managed System</PanelSectionTitle>
             <FieldRow label="Managed System" className="px-0">
               <ManagedSystemPill
-                name={`Managed System ${shortId(finding.primary_managed_system_id)}`}
+                name={managedSystemsById.get(finding.primary_managed_system_id) ?? 'Managed System'}
               />
             </FieldRow>
           </div>
@@ -1062,7 +1110,7 @@ function FullFindingDetail({
             <FieldRow label="Analytics Area" className="px-0">
               {finding.analytics_area_id !== null ? (
                 <FitBadge>
-                  Analytics Area {shortId(finding.analytics_area_id)}
+                  {analyticsAreasById.get(finding.analytics_area_id) ?? 'Analytics Area'}
                 </FitBadge>
               ) : (
                 <span className="text-text-muted">—</span>
@@ -1082,7 +1130,10 @@ function FullFindingDetail({
                   search={{ view: 'inbox', selected: finding.source_id }}
                   className="inline-flex items-center gap-1.5 text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
                 >
-                  VOC {shortId(finding.source_id)}
+                  <span>{linkedVocTitle ?? 'Linked VOC'}</span>
+                  <span className="font-mono text-xs text-text-muted">
+                    {linkedVocDisplayId ?? shortId(finding.source_id)}
+                  </span>
                 </Link>
               ) : (
                 <span className="text-text-muted">—</span>
@@ -1095,7 +1146,10 @@ function FullFindingDetail({
                   search={{ view: 'backlog', param: finding.linked_task_id }}
                   className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
                 >
-                  Task {shortId(finding.linked_task_id)}
+                  <span>{linkedTaskQuery.data?.title ?? 'Linked task'}</span>
+                  <span className="font-mono text-xs text-text-muted">
+                    {shortId(finding.linked_task_id)}
+                  </span>
                   <span className="text-xs text-text-muted">jump</span>
                 </Link>
               ) : (

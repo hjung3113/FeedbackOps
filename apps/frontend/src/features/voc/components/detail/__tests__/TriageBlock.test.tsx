@@ -26,10 +26,16 @@ describe('<TriageBlock>', () => {
     expect(screen.getByText('Owner 없음')).toBeInTheDocument();
   });
 
-  it('shows owner stub name when owner_user_id is present', () => {
+  it('shows resolved owner display name when owner_user_id is present', () => {
     const ownerId = '00000000-0000-0000-0000-000000000099';
-    render(<TriageBlock voc={{ ...DETAIL_ENVELOPE, owner_user_id: ownerId, owner_team_id: null }} />);
-    expect(screen.getByText(`Actor ${ownerId.slice(0, 8)}`)).toBeInTheDocument();
+    render(
+      <TriageBlock
+        voc={{ ...DETAIL_ENVELOPE, owner_user_id: ownerId, owner_team_id: null }}
+        ownerDisplayName="정담당"
+      />,
+    );
+    expect(screen.getByText('정담당')).toBeInTheDocument();
+    expect(screen.queryByText(`Actor ${ownerId.slice(0, 8)}`)).not.toBeInTheDocument();
   });
 
   it('shows "미지정" in amber text when analytics_area_id is null', () => {
@@ -37,10 +43,16 @@ describe('<TriageBlock>', () => {
     expect(screen.getByText('미지정')).toBeInTheDocument();
   });
 
-  it('shows analytics_area_id slice when present', () => {
+  it('shows analytics area name when present', () => {
     const areaId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-    render(<TriageBlock voc={{ ...DETAIL_ENVELOPE, analytics_area_id: areaId }} />);
-    expect(screen.getByText(areaId.slice(0, 8))).toBeInTheDocument();
+    render(
+      <TriageBlock
+        voc={{ ...DETAIL_ENVELOPE, analytics_area_id: areaId }}
+        analyticsAreaName="결제 경험"
+      />,
+    );
+    expect(screen.getByText('결제 경험')).toBeInTheDocument();
+    expect(screen.queryByText(areaId.slice(0, 8))).not.toBeInTheDocument();
   });
 
   it('renders triage_state value', () => {

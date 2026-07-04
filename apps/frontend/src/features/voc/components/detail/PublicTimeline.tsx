@@ -21,9 +21,15 @@ export interface TimelineProps {
   vocId: string;
   inline: ConversationEntry[];
   hasMore: boolean;
+  actorNamesById?: ReadonlyMap<string, string> | undefined;
 }
 
-export function PublicTimeline({ vocId, inline, hasMore }: TimelineProps): React.ReactElement {
+export function PublicTimeline({
+  vocId,
+  inline,
+  hasMore,
+  actorNamesById,
+}: TimelineProps): React.ReactElement {
   const query = useVocConversation({ vocId });
   // Pages from infinite query: these arrive only after the user clicks 더보기.
   const paginatedEntries: ConversationEntry[] =
@@ -50,13 +56,23 @@ export function PublicTimeline({ vocId, inline, hasMore }: TimelineProps): React
       )}
 
       {paginatedEntries.map((entry) => (
-        <TimelineEntry key={entry.id} entry={entry} />
+        <TimelineEntry
+          key={entry.id}
+          entry={entry}
+          actorDisplayName={actorNamesById?.get(entry.actor_id)}
+        />
       ))}
 
       {inline.length === 0 && paginatedEntries.length === 0 ? (
         <EmptyState size="sm" title="아직 대화가 없습니다." />
       ) : (
-        inline.map((entry) => <TimelineEntry key={entry.id} entry={entry} />)
+        inline.map((entry) => (
+          <TimelineEntry
+            key={entry.id}
+            entry={entry}
+            actorDisplayName={actorNamesById?.get(entry.actor_id)}
+          />
+        ))
       )}
     </div>
   );

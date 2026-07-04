@@ -11,16 +11,20 @@ import {
 } from '@fops/shared';
 import {
   Button,
+  DetailPanelHeader,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   FieldLabel,
+  FieldRow,
   Input,
   Label,
+  ListShell,
+  ManagedSystemPill,
   OutlineBadge,
-  PageShell,
+  PanelSectionTitle,
   Select,
   SelectContent,
   SelectItem,
@@ -44,6 +48,8 @@ import { useCreateFindingFromCluster } from '@/features/voc-cluster/hooks/useCre
 import { useRemoveClusterMember } from '@/features/voc-cluster/hooks/useRemoveClusterMember';
 import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useRequestTaskFromCluster';
 import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
+import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
+import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 
@@ -73,37 +79,109 @@ function SectionDivider(): React.ReactElement {
   return <hr className="border-border-subtle" />;
 }
 
-// ── Page shell ────────────────────────────────────────────────────────────────
+type VocClusterMemberPresentation = VocClusterMemberDto & {
+  display_id?: string | null;
+  title?: string | null;
+};
 
-function VocClusterDetailPage(): React.ReactElement {
+type VocClusterDetailPresentation = {
+  display_id?: string | null;
+  members?: VocClusterMemberPresentation[];
+};
+
+function shortId(id: string): string {
+  return `${id.slice(0, 8)}...`;
+}
+
+function clusterDisplayId(data: { id: string; display_id?: string | null }): string {
+  return data.display_id?.trim() ? data.display_id : shortId(data.id);
+}
+
+function memberDisplay(member: VocClusterMemberPresentation): {
+  primary: string;
+  secondary: string | null;
+} {
+  if (member.title?.trim()) {
+    return {
+      primary: member.title,
+      secondary: member.display_id?.trim() ? member.display_id : shortId(member.voc_id),
+    };
+  }
+  if (member.display_id?.trim()) {
+    return { primary: member.display_id, secondary: shortId(member.voc_id) };
+  }
+  return { primary: 'VOC', secondary: shortId(member.voc_id) };
+}
+
+// ── ListShell route hosts ────────────────────────────────────────────────────
+
+export function VocClusterDetailPage(): React.ReactElement {
   const { clusterId } = Route.useParams();
+  const navigate = useNavigate();
+  const listQuery = useVocClusterList();
+  const clusters = listQuery.data?.items ?? [];
 
   return (
-    <PageShell
-      header={{
-        title: 'VOC 클러스터 상세',
-        subtitle: (
-          <div className="flex items-center gap-2">
+    <ListShell
+      list={
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="border-b border-border-subtle px-4 py-3">
             <Link
               to="/voc-clusters"
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-text-muted hover:bg-surface-card hover:text-text-primary"
+              className="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-1 text-sm text-text-muted hover:bg-surface-card hover:text-text-primary"
             >
               <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
               <span>클러스터 목록</span>
             </Link>
           </div>
-        ),
-      }}
-    >
-      <VocClusterDetailPanel clusterId={clusterId} />
-    </PageShell>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {clusters.map((cluster) => (
+              <button
+                key={cluster.id}
+                type="button"
+                className={`w-full border-b border-border-subtle px-5 py-3 text-left hover:bg-surface-row-hover ${
+                  cluster.id === clusterId ? 'bg-surface-row-selected' : ''
+                }`}
+                onClick={() =>
+                  void navigate({
+                    to: '/voc-clusters/$clusterId',
+                    params: { clusterId: cluster.id },
+                  })
+                }
+              >
+                <span className="block truncate text-sm font-medium text-text-primary">
+                  {cluster.title}
+                </span>
+                <span className="mt-1 block text-xs text-text-muted">
+                  VOC {cluster.members?.length ?? 0}개
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      }
+      detailPanel={
+        <VocClusterDetailPanel
+          clusterId={clusterId}
+          onClose={() => void navigate({ to: '/voc-clusters' })}
+        />
+      }
+    />
   );
 }
 
 // ── Panel ─────────────────────────────────────────────────────────────────────
 
-function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.ReactElement {
+export function VocClusterDetailPanel({
+  clusterId,
+  onClose,
+}: {
+  clusterId: string;
+  onClose?: () => void;
+}): React.ReactElement {
   const { data, isLoading, isError, error } = useVocClusterDetail(clusterId);
+  const presentation = data as (typeof data & VocClusterDetailPresentation) | undefined;
+  const managedSystem = useManagedSystem(data?.primary_managed_system_id);
   const { data: me } = useMe();
   const canMutate = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
 
@@ -161,7 +239,7 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
     );
   }
 
-  const members: VocClusterMemberDto[] = data.members ?? [];
+  const members: VocClusterMemberPresentation[] = presentation?.members ?? [];
 
   function handleConfirm() {
     confirmMutation.mutate(clusterId, {
@@ -186,12 +264,19 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
   }
 
   return (
-    <div className="flex flex-col gap-0" data-testid="cluster-detail-panel">
+    <aside
+      className="flex h-full min-h-0 flex-col bg-surface-detail"
+      data-testid="cluster-detail-panel"
+    >
+      <DetailPanelHeader
+        kind="cluster"
+        id={clusterDisplayId(data)}
+        onClose={onClose ?? (() => void navigate({ to: '/voc-clusters' }))}
+      />
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-border-subtle">
+      <div className="shrink-0 px-6 pt-6 pb-4 border-b border-border-subtle">
         <div className="flex items-center gap-2 mb-1">
           <OutlineBadge>VOC Cluster</OutlineBadge>
-          <span className="text-xs text-text-muted">{data.id.slice(0, 8)}</span>
           <StatusBadge status={data.status} />
         </div>
         <h1 className="text-xl font-semibold text-text-primary" data-testid="cluster-detail-title">
@@ -199,83 +284,84 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
         </h1>
       </div>
 
-      <div className="flex flex-col gap-6 px-6 py-6">
-        {/* Summary */}
-        {data.summary !== null && (
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">요약</p>
-            <p
-              className="text-sm text-text-primary whitespace-pre-wrap"
-              data-testid="cluster-detail-summary"
-            >
-              {data.summary}
-            </p>
-          </div>
-        )}
-
-        <SectionDivider />
-
-        {/* Managed System */}
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wide">
-            Primary Managed System
-          </p>
-          <span
-            className="text-sm font-mono text-text-primary"
-            data-testid="cluster-detail-managed-system"
-          >
-            {data.primary_managed_system_id}
-          </span>
-        </div>
-
-        <SectionDivider />
-
-        {/* Member VOC list */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">
-              멤버 VOC ({members.length})
-            </p>
-            {canMutate && data.status === 'draft' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setAddVocOpen(true)}
-                data-testid="cluster-add-voc-button"
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <div className="flex flex-col gap-6">
+          {/* Summary */}
+          {data.summary !== null && (
+            <div className="flex flex-col gap-1">
+              <PanelSectionTitle>요약</PanelSectionTitle>
+              <p
+                className="text-sm text-text-primary whitespace-pre-wrap"
+                data-testid="cluster-detail-summary"
               >
-                <Plus className="h-3.5 w-3.5" />
-                VOC 추가
-              </Button>
-            )}
-          </div>
-
-          {members.length === 0 ? (
-            <div
-              className="rounded-md border border-dashed border-border-subtle bg-surface-card p-6 flex items-center justify-center text-sm text-text-muted"
-              data-testid="cluster-members-empty"
-            >
-              아직 VOC가 없습니다.
-            </div>
-          ) : (
-            <div
-              data-testid="cluster-members-list"
-              className="overflow-hidden rounded-md border border-border-subtle bg-surface-card"
-            >
-              {members.map((member, i) => (
-                <MemberRow
-                  key={member.voc_id}
-                  member={member}
-                  last={i === members.length - 1}
-                  canRemove={canMutate && data.status === 'draft'}
-                  onRemove={() => handleRemoveMember(member.voc_id)}
-                  isRemoving={
-                    removeMemberMutation.isPending &&
-                    removeMemberMutation.variables?.vocId === member.voc_id
-                  }
-                />
-              ))}
+                {data.summary}
+              </p>
             </div>
           )}
+
+          <SectionDivider />
+
+          {/* Managed System */}
+          <div className="flex flex-col gap-1">
+            <PanelSectionTitle>Primary Managed System</PanelSectionTitle>
+            <FieldRow label="Managed System" className="px-0">
+              <span data-testid="cluster-detail-managed-system">
+                <ManagedSystemPill
+                  name={managedSystem?.name ?? 'Managed System'}
+                  {...(managedSystem?.mark ? { mark: managedSystem.mark } : {})}
+                  {...(managedSystem ? { archived: managedSystem.archived } : {})}
+                />
+              </span>
+            </FieldRow>
+          </div>
+
+          <SectionDivider />
+
+          {/* Member VOC list */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <PanelSectionTitle>멤버 VOC ({members.length})</PanelSectionTitle>
+              {canMutate && data.status === 'draft' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAddVocOpen(true)}
+                  data-testid="cluster-add-voc-button"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  VOC 추가
+                </Button>
+              )}
+            </div>
+
+            {members.length === 0 ? (
+              <div
+                className="rounded-md border border-dashed border-border-subtle bg-surface-card p-6 flex items-center justify-center text-sm text-text-muted"
+                data-testid="cluster-members-empty"
+              >
+                아직 VOC가 없습니다.
+              </div>
+            ) : (
+              <div
+                data-testid="cluster-members-list"
+                className="overflow-hidden rounded-md border border-border-subtle bg-surface-card"
+              >
+                {members.map((member, i) => (
+                  <MemberRow
+                    key={member.voc_id}
+                    member={member}
+                    last={i === members.length - 1}
+                    canRemove={canMutate && data.status === 'draft'}
+                    onRemove={() => handleRemoveMember(member.voc_id)}
+                    isRemoving={
+                      removeMemberMutation.isPending &&
+                      removeMemberMutation.variables?.vocId === member.voc_id
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -354,7 +440,7 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
           }}
         />
       )}
-    </div>
+    </aside>
   );
 }
 
@@ -367,13 +453,14 @@ function MemberRow({
   onRemove,
   isRemoving,
 }: {
-  member: VocClusterMemberDto;
+  member: VocClusterMemberPresentation;
   last: boolean;
   canRemove: boolean;
   onRemove: () => void;
   isRemoving: boolean;
 }): React.ReactElement {
   const addedDate = new Date(member.added_at).toLocaleDateString('ko-KR');
+  const display = memberDisplay(member);
 
   return (
     <div
@@ -387,9 +474,11 @@ function MemberRow({
           className="truncate text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
           data-testid={`cluster-member-link-${member.voc_id}`}
         >
-          VOC {member.voc_id.slice(0, 8)}…
+          {display.primary}
         </Link>
-        <span className="text-xs text-text-muted">추가됨 {addedDate}</span>
+        <span className="text-xs text-text-muted">
+          {display.secondary ? `${display.secondary} · ` : ''}추가됨 {addedDate}
+        </span>
       </div>
       {canRemove && (
         <Button

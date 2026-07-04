@@ -50,6 +50,13 @@ describe('<TimelineEntry>', () => {
     expect(screen.getByText('내부 코멘트')).toBeInTheDocument();
   });
 
+  it('renders resolved actor display_name instead of an Actor id stub', () => {
+    const entry: ConversationEntry = { ...BASE, kind: 'public_update', visibility: 'public' };
+    render(<TimelineEntry entry={entry} actorDisplayName="박운영" />);
+    expect(screen.getByText('박운영')).toBeInTheDocument();
+    expect(screen.queryByText(`Actor ${BASE.actor_id.slice(0, 8)}`)).not.toBeInTheDocument();
+  });
+
   it('renders status transition pair when both status fields present', () => {
     const entry: ConversationEntry = {
       ...BASE,

@@ -70,8 +70,26 @@ describe('<IdentitySection>', () => {
     expect(screen.getByText('방금 전')).toBeInTheDocument();
   });
 
-  it('shows stub display_name when reporter_id does not match me', () => {
-    render(<IdentitySection voc={{ ...DETAIL_ENVELOPE, reporter_id: OTHER_ACTOR_ID }} />);
-    expect(screen.getByText(`Actor ${OTHER_ACTOR_ID.slice(0, 8)}`)).toBeInTheDocument();
+  it('shows resolved reporter display_name when reporter_id does not match me', () => {
+    render(
+      <IdentitySection
+        voc={{ ...DETAIL_ENVELOPE, reporter_id: OTHER_ACTOR_ID }}
+        reporterDisplayName="박운영"
+      />,
+    );
+    expect(screen.getByText('박운영')).toBeInTheDocument();
+    expect(screen.queryByText(`Actor ${OTHER_ACTOR_ID.slice(0, 8)}`)).not.toBeInTheDocument();
+  });
+
+  it('IdentityMetadataStrip renders analytics area name when provided', () => {
+    const areaId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    render(
+      <IdentityMetadataStrip
+        voc={{ ...DETAIL_ENVELOPE, analytics_area_id: areaId }}
+        analyticsAreaName="결제 경험"
+      />,
+    );
+    expect(screen.getByText('결제 경험')).toBeInTheDocument();
+    expect(screen.queryByText(areaId.slice(0, 8))).not.toBeInTheDocument();
   });
 });

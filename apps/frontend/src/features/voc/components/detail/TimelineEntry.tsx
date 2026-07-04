@@ -26,17 +26,20 @@ const KIND_LABELS: Record<ConversationEntry['kind'], string> = {
 
 export interface TimelineEntryProps {
   entry: ConversationEntry;
+  actorDisplayName?: string | undefined;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function TimelineEntry({ entry }: TimelineEntryProps): React.ReactElement {
+export function TimelineEntry({ entry, actorDisplayName }: TimelineEntryProps): React.ReactElement {
   const { data: me } = useMe();
 
   const actorUser: { display_name: string } =
-    me?.actor.id === entry.actor_id
+    actorDisplayName !== undefined
+      ? { display_name: actorDisplayName }
+      : me?.actor.id === entry.actor_id
       ? { display_name: me.actor.display_name }
-      : { display_name: `Actor ${entry.actor_id.slice(0, 8)}` };
+      : { display_name: 'Conversation actor' };
 
   const rendererMode =
     entry.kind === 'internal_comment' ? 'internal' : 'reporter_visible';

@@ -16,7 +16,19 @@ describe('<LinkedExecutionSection>', () => {
 
   it('renders EmptyState when no linkedFinding permission decision', () => {
     render(<LinkedExecutionSection voc={DETAIL_ENVELOPE} />);
-    expect(screen.getByText('아직 연결된 Finding/Task가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('연결된 실행 없음')).toBeInTheDocument();
+    expect(screen.queryByText('(Slice 4/5에서 활성화)')).not.toBeInTheDocument();
+  });
+
+  it('renders linked task title and status when a linked task exists', () => {
+    render(
+      <LinkedExecutionSection
+        voc={DETAIL_ENVELOPE}
+        linkedTask={{ title: '결제 오류 수정', status: 'doing' }}
+      />,
+    );
+    expect(screen.getByText('결제 오류 수정')).toBeInTheDocument();
+    expect(screen.getByText('doing')).toBeInTheDocument();
   });
 
   it('renders PermissionBlockedPanel when linkedFinding decision is present', () => {

@@ -34,6 +34,23 @@ describe('TriageSummaryCard', () => {
     expect(screen.getByText('김철수')).toBeInTheDocument();
   });
 
+  it('uses a neutral owner label when a team id cannot be resolved', () => {
+    const state = { ...BASE_STATE, ownerTeamId: '00000000-0000-0000-0000-000000000099' };
+    render(<TriageSummaryCard panelState={state} />);
+    expect(screen.getByText('Owner team')).toBeInTheDocument();
+    expect(screen.queryByText(/Team 00000000/)).not.toBeInTheDocument();
+  });
+
+  it('shows analytics area name instead of id slice', () => {
+    const state = {
+      ...BASE_STATE,
+      analyticsAreaId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+    };
+    render(<TriageSummaryCard panelState={state} analyticsAreaName="결제 경험" />);
+    expect(screen.getByText('결제 경험')).toBeInTheDocument();
+    expect(screen.queryByText('aaaaaaaa')).not.toBeInTheDocument();
+  });
+
   // Prototype ref: screen-voc-create.jsx:561-567 — "Reporter status 변경" row.
   it('omits the reporter-status transition row when currentReporterStatus is undefined', () => {
     render(<TriageSummaryCard panelState={BASE_STATE} />);

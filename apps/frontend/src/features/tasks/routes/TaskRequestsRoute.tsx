@@ -12,6 +12,7 @@ import {
 } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { useFindingDetail } from '@/features/integration/hooks/useFindingDetail';
 import type { ApiError } from '@/lib/api/types';
 import type { TaskDto, TaskPriority, TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import {
@@ -249,6 +250,9 @@ function TaskRequestPanel({
     enabled: convertOpen,
     staleTime: 10 * 60 * 1000,
   });
+  const sourceFindingQuery = useFindingDetail(
+    item.source_type === 'finding' ? item.source_id : null,
+  );
   const canSelfApprove = currentRole === 'admin' || selfApprovalCheck.data?.state === 'approved';
   const canManage = currentRole === 'admin' || manageCheck.data?.state === 'approved';
   const canApprove = canApproveTaskRequest(item.status);
@@ -294,7 +298,7 @@ function TaskRequestPanel({
           priority: convertPriority,
           assignee_actor_id: convertAssigneeId.trim() || null,
           due_date: convertDueDate.trim() || null,
-          milestone_id: convertMilestoneId.trim() || null,
+          milestone_id: null,
           analytics_area_id: convertAnalyticsAreaId.trim() || null,
         },
         crypto.randomUUID(),
@@ -573,12 +577,10 @@ function TaskRequestPanel({
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-text-muted">
                   Milestone
-                  <input
-                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 font-mono text-sm text-text-primary"
-                    placeholder="optional UUID"
-                    value={convertMilestoneId}
-                    onChange={(event) => setConvertMilestoneId(event.target.value)}
-                  />
+                  <input type="hidden" value={convertMilestoneId} readOnly />
+                  <span className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-muted">
+                    Later slice
+                  </span>
                 </label>
                 <Button
                   type="submit"
@@ -614,7 +616,17 @@ function TaskRequestPanel({
                 <span className="text-xs text-text-muted">FROM</span>
                 <OutlineBadge>Finding</OutlineBadge>
               </div>
-              <div className="font-mono text-xs text-text-secondary">{item.source_id}</div>
+              <div className="flex flex-col gap-1">
+                <div className="text-sm font-medium text-text-primary">
+                  {sourceFindingQuery.data?.title ?? 'Source finding'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <OutlineBadge>{sourceFindingQuery.data?.status ?? 'finding'}</OutlineBadge>
+                  <span className="font-mono text-xs text-text-muted">
+                    {item.source_id.slice(0, 8)}
+                  </span>
+                </div>
+              </div>
               <p className="text-sm leading-6 text-text-muted">{item.evidence_summary}</p>
             </div>
           </section>

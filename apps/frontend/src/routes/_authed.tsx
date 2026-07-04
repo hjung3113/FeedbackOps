@@ -10,20 +10,41 @@
 // INSIDE AppFrame — not here. ADR-0020 §taxonomy lock.
 
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router';
-import { Database, Flag, Inbox, Layers, Plus, User } from 'lucide-react';
+import { Database, Flag, Inbox, Layers, ListTodo, Plus, User } from 'lucide-react';
 import { UnauthenticatedError, fetchMe } from '../lib/api';
 import { AppFrame } from '../lib/layout/AppFrame';
 
 // Sidebar entries locked per Slice 3 #18 spec (C5).
 // Per-feature entries are added in their owning slice (AGENTS.md two-consumer rule).
 // Icons mapped from docs/design-prototype/shell.jsx NAV_TREE.voc + NAV_TREE.admin per #95.
-const SIDEBAR_ENTRIES = [
+export const SIDEBAR_ENTRIES = [
   {
     id: 'inbox',
     label: 'Inbox',
     href: '/vocs?view=inbox',
     section: 'VOC',
     icon: <Inbox className="h-4 w-4" />,
+  },
+  {
+    id: 'triage',
+    label: 'Triage',
+    href: '/vocs?view=triage',
+    section: 'VOC',
+    icon: <Flag className="h-4 w-4" />,
+  },
+  {
+    id: 'my-vocs',
+    label: 'My VOCs',
+    href: '/vocs?view=my',
+    section: 'VOC',
+    icon: <User className="h-4 w-4" />,
+  },
+  {
+    id: 'voc-clusters',
+    label: 'Clusters',
+    href: '/voc-clusters',
+    section: 'VOC',
+    icon: <Layers className="h-4 w-4" />,
   },
   {
     id: 'create',
@@ -33,17 +54,24 @@ const SIDEBAR_ENTRIES = [
     icon: <Plus className="h-4 w-4" />,
   },
   {
-    id: 'triage',
-    label: 'Triage',
-    href: '/vocs?view=triage',
-    section: 'VIEWS',
-    icon: <Flag className="h-4 w-4" />,
+    id: 'task-requests',
+    label: 'Task Requests',
+    href: '/tasks?view=requests',
+    section: 'TASKS',
+    icon: <Inbox className="h-4 w-4" />,
   },
   {
-    id: 'my-vocs',
-    label: 'My VOCs',
-    href: '/vocs?view=my',
-    section: 'VIEWS',
+    id: 'tasks-board',
+    label: 'Tasks',
+    href: '/tasks?view=board',
+    section: 'TASKS',
+    icon: <ListTodo className="h-4 w-4" />,
+  },
+  {
+    id: 'my-tasks',
+    label: 'My Tasks',
+    href: '/tasks?view=my',
+    section: 'TASKS',
     icon: <User className="h-4 w-4" />,
   },
   // Admin entries — existing routes remain reachable via sidebar.
