@@ -217,6 +217,38 @@ Rules:
 - reviewer_id may be resolved from Managed System defaults.
 ```
 
+## Task
+
+Owner: Task
+
+```text
+tasks
+- id: uuid, required
+- workspace_id: uuid, required
+- primary_managed_system_id: uuid, required
+- title: text, required
+- status: enum(backlog, todo, doing, review, done, released, reopened), required
+- priority: enum(low, medium, high, urgent), required
+- assignee_actor_id: uuid, nullable
+- due_date: date, nullable
+- milestone_id: uuid, nullable, no FK until Milestone domain lands
+- analytics_area_id: uuid, nullable
+- source_task_request_id: uuid, nullable
+- created_by: uuid, required
+- created_at: timestamp, required
+- updated_at: timestamp, required
+```
+
+Rules:
+
+```text
+- Converted Task starts in backlog.
+- Conversion and Link Existing Task require an approved Task Request.
+- Conversion audits task_created_from_request.
+- Link Existing Task audits task_linked_to_request.
+- Standalone Tasks are valid with source_task_request_id = null.
+```
+
 ## Permission Request
 
 Owner: Permission / Access
@@ -270,6 +302,10 @@ Rules:
 - relation_type=generated_voc is forbidden.
 - source and target must belong to the same workspace for MVP.
 - visibility is enforced on every read path.
+- Production Task tuples added by ADR-0027:
+  - (task_request, task, converted_to)
+  - (finding, task, requested_task)
+  - (voc, task, evidence_of)
 ```
 
 ## Reporter-Facing VOC Status

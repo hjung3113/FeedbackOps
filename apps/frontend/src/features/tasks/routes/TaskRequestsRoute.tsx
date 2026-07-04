@@ -1,15 +1,19 @@
 import {
   approveTaskRequest,
+  convertTaskRequest,
   fetchMe,
   fetchPermissionCheck,
   fetchTaskRequests,
+  linkExistingTask,
+  listTasks,
   rejectTaskRequest,
   requestMoreEvidenceForTaskRequest,
   resolveActors,
 } from '@/lib/api';
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import type { ApiError } from '@/lib/api/types';
-import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
+import type { TaskDto, TaskPriority, TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
@@ -18,14 +22,14 @@ import {
   FieldRow,
   ListShell,
   ListToolbar,
+  type ListToolbarTab,
   ManagedSystemPill,
   ObjectRow,
+  type ObjectRowSeverity,
   OutlineBadge,
+  type PanelSection,
   PanelSectionTitle,
   PanelTitleBlock,
-  type ListToolbarTab,
-  type ObjectRowSeverity,
-  type PanelSection,
   UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -68,6 +72,7 @@ const STATUS_SEVERITY: Record<TaskRequestStatus, ObjectRowSeverity> = {
 };
 
 const REVIEW_DECISION_STATUSES = ['pending_review', 'needs_more_evidence'] as const;
+const TASK_PRIORITIES: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
 
 export function canApproveTaskRequest(status: TaskRequestStatus): boolean {
   return REVIEW_DECISION_STATUSES.some((allowed) => allowed === status);
@@ -79,6 +84,14 @@ export function canRejectTaskRequest(status: TaskRequestStatus): boolean {
 
 export function canRequestEvidenceForTaskRequest(status: TaskRequestStatus): boolean {
   return status === 'pending_review';
+}
+
+export function canConvertTaskRequest(status: TaskRequestStatus): boolean {
+  return status === 'approved';
+}
+
+export function canLinkExistingTaskRequest(status: TaskRequestStatus): boolean {
+  return status === 'approved';
 }
 
 function formatDate(raw: string): string {
@@ -179,6 +192,25 @@ function TaskRequestPanel({
   const requester = names.actorsById[item.requester_actor_id];
   const reviewer = item.reviewer_actor_id ? names.actorsById[item.reviewer_actor_id] : undefined;
   const isSelfApproval = currentActorId === item.requester_actor_id;
+  const [convertOpen, setConvertOpen] = React.useState(false);
+  const [linkOpen, setLinkOpen] = React.useState(false);
+  const [convertTitle, setConvertTitle] = React.useState(item.requested_outcome);
+  const [convertPriority, setConvertPriority] = React.useState<TaskPriority>('medium');
+  const [convertAssigneeId, setConvertAssigneeId] = React.useState('');
+  const [convertDueDate, setConvertDueDate] = React.useState('');
+  const [convertMilestoneId, setConvertMilestoneId] = React.useState('');
+  const [convertAnalyticsAreaId, setConvertAnalyticsAreaId] = React.useState('');
+
+  React.useEffect(() => {
+    setConvertTitle(item.requested_outcome);
+    setConvertPriority('medium');
+    setConvertAssigneeId('');
+    setConvertDueDate('');
+    setConvertMilestoneId('');
+    setConvertAnalyticsAreaId('');
+    setConvertOpen(false);
+    setLinkOpen(false);
+  }, [item]);
 
   const selfApprovalCheck = useQuery({
     queryKey: ['permission-check', 'task_request.self_approve', item.primary_managed_system_id],
@@ -190,13 +222,46 @@ function TaskRequestPanel({
     enabled: isSelfApproval && currentRole !== 'admin',
     staleTime: 60 * 1000,
   });
-  const canSelfApprove =
-    currentRole === 'admin' || (selfApprovalCheck.data?.state === 'approved' ? true : false);
+  const manageCheck = useQuery({
+    queryKey: ['permission-check', 'finding.manage', item.primary_managed_system_id],
+    queryFn: ({ signal }) =>
+      fetchPermissionCheck('finding.manage', {
+        managedSystemId: item.primary_managed_system_id,
+        signal,
+      }),
+    enabled: currentRole !== 'admin',
+    staleTime: 60 * 1000,
+  });
+  const tasksQuery = useQuery({
+    queryKey: ['tasks', 'backlog-picker'] as const,
+    queryFn: ({ signal }) => listTasks({ signal }),
+    enabled: linkOpen,
+    staleTime: 30 * 1000,
+  });
+  const analyticsAreasQuery = useQuery({
+    queryKey: ['analytics-areas', item.primary_managed_system_id] as const,
+    queryFn: ({ signal }) =>
+      fetchAnalyticsAreas({
+        managedSystemId: item.primary_managed_system_id,
+        includeArchived: false,
+        signal,
+      }),
+    enabled: convertOpen,
+    staleTime: 10 * 60 * 1000,
+  });
+  const canSelfApprove = currentRole === 'admin' || selfApprovalCheck.data?.state === 'approved';
+  const canManage = currentRole === 'admin' || manageCheck.data?.state === 'approved';
   const canApprove = canApproveTaskRequest(item.status);
   const canReject = canRejectTaskRequest(item.status);
   const canRequestEvidence = canRequestEvidenceForTaskRequest(item.status);
+  const canConvert = canConvertTaskRequest(item.status) && canManage;
+  const canLinkExisting = canLinkExistingTaskRequest(item.status) && canManage;
 
-  const decisionMutation = useMutation<TaskRequestDto, ApiError, { action: string; reason?: string; note?: string }>({
+  const decisionMutation = useMutation<
+    TaskRequestDto,
+    ApiError,
+    { action: string; reason?: string; note?: string }
+  >({
     mutationFn: async (vars) => {
       const key = crypto.randomUUID();
       if (vars.action === 'approve') {
@@ -210,6 +275,51 @@ function TaskRequestPanel({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       toast('Task Request updated.');
+    },
+    onError: (err) => {
+      toast.error(err.envelope.message);
+    },
+  });
+
+  const convertMutation = useMutation<TaskDto, Error, void>({
+    mutationFn: async () => {
+      const title = convertTitle.trim();
+      if (title.length === 0) {
+        throw new Error('Title is required.');
+      }
+      return convertTaskRequest(
+        item.id,
+        {
+          title,
+          priority: convertPriority,
+          assignee_actor_id: convertAssigneeId.trim() || null,
+          due_date: convertDueDate.trim() || null,
+          milestone_id: convertMilestoneId.trim() || null,
+          analytics_area_id: convertAnalyticsAreaId.trim() || null,
+        },
+        crypto.randomUUID(),
+      );
+    },
+    onSuccess: (task) => {
+      void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast(`Converted to Task ${task.id.slice(0, 8)}.`);
+      setConvertOpen(false);
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+
+  const linkMutation = useMutation<TaskDto, ApiError, string>({
+    mutationFn: async (taskId) => {
+      return linkExistingTask(item.id, { task_id: taskId }, crypto.randomUUID());
+    },
+    onSuccess: (task) => {
+      void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast(`Linked Task ${task.id.slice(0, 8)}.`);
+      setLinkOpen(false);
     },
     onError: (err) => {
       toast.error(err.envelope.message);
@@ -310,10 +420,18 @@ function TaskRequestPanel({
               Approve
             </Button>
             <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="secondary" size="sm" disabled>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={!canLinkExisting}
+                onClick={() => {
+                  setLinkOpen((open) => !open);
+                  setConvertOpen(false);
+                }}
+              >
                 <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
                 Link existing
-                <span className="rounded border border-border-subtle px-1 text-[10px]">S6-4</span>
               </Button>
               <Button
                 type="button"
@@ -327,11 +445,152 @@ function TaskRequestPanel({
                 Need evidence
               </Button>
             </div>
-            <Button type="button" variant="secondary" size="sm" disabled>
+            {linkOpen && (
+              <div className="max-h-52 overflow-y-auto rounded border border-border-subtle bg-surface-card">
+                {tasksQuery.isLoading && (
+                  <div className="p-3 text-xs text-text-muted">Loading Tasks...</div>
+                )}
+                {tasksQuery.data?.items
+                  .filter(
+                    (task) => task.primary_managed_system_id === item.primary_managed_system_id,
+                  )
+                  .map((task) => (
+                    <ObjectRow
+                      key={task.id}
+                      id={task.id.slice(0, 8)}
+                      title={task.title}
+                      density="compact"
+                      severity="low"
+                      onClick={() => {
+                        if (!linkMutation.isPending) linkMutation.mutate(task.id);
+                      }}
+                      badges={<OutlineBadge>{task.status}</OutlineBadge>}
+                      meta={
+                        <>
+                          <span>{task.priority}</span>
+                          {dot()}
+                          <span>
+                            {task.assignee_actor_id
+                              ? (names.actorsById[task.assignee_actor_id]?.display_name ??
+                                'Assigned')
+                              : 'Unassigned'}
+                          </span>
+                        </>
+                      }
+                    />
+                  ))}
+                {tasksQuery.data?.items.filter(
+                  (task) => task.primary_managed_system_id === item.primary_managed_system_id,
+                ).length === 0 && (
+                  <div className="p-3 text-xs text-text-muted">No in-scope Tasks.</div>
+                )}
+              </div>
+            )}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!canConvert}
+              onClick={() => {
+                setConvertOpen((open) => !open);
+                setLinkOpen(false);
+              }}
+            >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
               Convert to Task
-              <span className="rounded border border-border-subtle px-1 text-[10px]">S6-4</span>
             </Button>
+            {convertOpen && (
+              <form
+                className="flex flex-col gap-2 rounded border border-border-subtle bg-surface-card p-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  convertMutation.mutate();
+                }}
+              >
+                <label className="flex flex-col gap-1 text-xs text-text-muted">
+                  Title
+                  <input
+                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                    value={convertTitle}
+                    maxLength={200}
+                    onChange={(event) => setConvertTitle(event.target.value)}
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-1 text-xs text-text-muted">
+                    Priority
+                    <select
+                      className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                      value={convertPriority}
+                      onChange={(event) => setConvertPriority(event.target.value as TaskPriority)}
+                    >
+                      {TASK_PRIORITIES.map((priority) => (
+                        <option key={priority} value={priority}>
+                          {priority}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-text-muted">
+                    Due date
+                    <input
+                      type="date"
+                      className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                      value={convertDueDate}
+                      onChange={(event) => setConvertDueDate(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <label className="flex flex-col gap-1 text-xs text-text-muted">
+                  Assignee
+                  <select
+                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                    value={convertAssigneeId}
+                    onChange={(event) => setConvertAssigneeId(event.target.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {Object.values(names.actorsById).map((actor) => (
+                      <option key={actor.id} value={actor.id}>
+                        {actor.display_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-text-muted">
+                  Analytics Area
+                  <select
+                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                    value={convertAnalyticsAreaId}
+                    onChange={(event) => setConvertAnalyticsAreaId(event.target.value)}
+                  >
+                    <option value="">None</option>
+                    {analyticsAreasQuery.data?.items.map((area) => (
+                      <option key={area.id} value={area.id}>
+                        {area.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-text-muted">
+                  Milestone
+                  <input
+                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 font-mono text-sm text-text-primary"
+                    placeholder="optional UUID"
+                    value={convertMilestoneId}
+                    onChange={(event) => setConvertMilestoneId(event.target.value)}
+                  />
+                </label>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  loading={convertMutation.isPending}
+                  disabled={!canConvert}
+                >
+                  Convert to Task
+                </Button>
+              </form>
+            )}
             <Button
               type="button"
               variant="destructive"
@@ -395,13 +654,17 @@ function TaskRequestPanel({
           <PanelSectionTitle>Audit</PanelSectionTitle>
           <div className="flex flex-col gap-2 border-l border-border-subtle pl-3">
             <div className="text-xs text-text-muted">
-              <strong className="text-text-secondary">{requester?.display_name ?? 'Unknown'}</strong>
+              <strong className="text-text-secondary">
+                {requester?.display_name ?? 'Unknown'}
+              </strong>
               {' · 요청 작성 · '}
               {formatDate(item.created_at)}
             </div>
             {item.decided_at && (
               <div className="text-xs text-text-muted">
-                <strong className="text-text-secondary">{reviewer?.display_name ?? 'Reviewer'}</strong>
+                <strong className="text-text-secondary">
+                  {reviewer?.display_name ?? 'Reviewer'}
+                </strong>
                 {' · '}
                 {STATUS_LABELS[item.status]}
                 {' · '}
@@ -439,7 +702,9 @@ export function TaskRequestsRoute({ selectedParam }: { selectedParam?: string | 
     () => [
       ...new Set(
         items.flatMap((item) =>
-          [item.requester_actor_id, item.reviewer_actor_id].filter((id): id is string => id !== null),
+          [item.requester_actor_id, item.reviewer_actor_id].filter(
+            (id): id is string => id !== null,
+          ),
         ),
       ),
     ],
@@ -470,7 +735,9 @@ export function TaskRequestsRoute({ selectedParam }: { selectedParam?: string | 
         value: tab.value,
         label: tab.label,
         badgeCount:
-          tab.value === 'all' ? items.length : items.filter((item) => item.status === tab.value).length,
+          tab.value === 'all'
+            ? items.length
+            : items.filter((item) => item.status === tab.value).length,
         urgent: tab.value === 'pending_review',
       })),
     [items],
@@ -489,7 +756,7 @@ export function TaskRequestsRoute({ selectedParam }: { selectedParam?: string | 
   }, [selectedParam]);
 
   const selected = selectedId
-    ? items.find((item) => item.id === selectedId) ?? shown[0] ?? null
+    ? (items.find((item) => item.id === selectedId) ?? shown[0] ?? null)
     : null;
 
   if (taskRequestsQuery.isLoading) {

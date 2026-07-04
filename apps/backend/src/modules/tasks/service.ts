@@ -1,0 +1,361 @@
+import {
+  type ConvertTaskRequestRequest,
+  type LinkExistingTaskRequest,
+  type ListTasksQuery,
+  type TaskDto,
+  registeredEntityLinkPairSchema,
+} from '@fops/shared';
+
+import type { Db } from '../../db/client.js';
+import { HttpError } from '../../lib/errors.js';
+import type { AuditService } from '../core/audit/audit-service.js';
+import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import {
+  type EntityLinkRow,
+  insertActiveEntityLink,
+  selectActiveLinksForEndpoint,
+} from '../entity-links/repo.js';
+import type { CheckService } from '../permissions/check-service.js';
+import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
+import {
+  type TaskRow,
+  insertTask,
+  listTasksByWorkspace,
+  lockTaskById,
+  markTaskRequestConverted,
+} from './repo.js';
+
+export interface TasksActor {
+  actor_id: string;
+  workspace_id: string;
+  role_level: 'admin' | 'developer' | 'user';
+}
+
+export interface TasksServiceDeps {
+  db: Db;
+  auditService: AuditService;
+  checkService: CheckService;
+  idempotencyService: IdempotencyService;
+}
+
+function taskToDto(row: TaskRow): TaskDto {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    primary_managed_system_id: row.primary_managed_system_id,
+    title: row.title,
+    status: row.status,
+    priority: row.priority,
+    assignee_actor_id: row.assignee_actor_id,
+    due_date: row.due_date,
+    milestone_id: row.milestone_id,
+    analytics_area_id: row.analytics_area_id,
+    source_task_request_id: row.source_task_request_id,
+    created_by: row.created_by,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
+  };
+}
+
+async function canManageFinding(
+  deps: Pick<TasksServiceDeps, 'checkService'>,
+  actor: TasksActor,
+  managedSystemId: string,
+  options: Parameters<TasksServiceDeps['checkService']['checkCapability']>[3],
+): Promise<boolean> {
+  if (actor.role_level === 'admin') return true;
+  if (actor.role_level !== 'developer') return false;
+  const decision = await deps.checkService.checkCapability(
+    actor,
+    'finding.manage',
+    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
+    options,
+  );
+  return decision.allow;
+}
+
+function assertApproved(taskRequest: TaskRequestRow): void {
+  if (taskRequest.status !== 'approved') {
+    throw new HttpError('validation.failed', 'task request must be approved before conversion', {
+      fields: [{ path: ['status'], code: 'not_approved' }],
+    });
+  }
+}
+
+async function preserveSourceLinks(args: {
+  tx: Parameters<TasksServiceDeps['auditService']['record']>[0];
+  actor: TasksActor;
+  taskRequest: TaskRequestRow;
+  task: TaskRow;
+}): Promise<EntityLinkRow[]> {
+  const preserved: EntityLinkRow[] = [];
+
+  const requestTuple = registeredEntityLinkPairSchema.parse({
+    source_type: 'task_request',
+    target_type: 'task',
+    relation_type: 'converted_to',
+  });
+  const requestLink = await insertActiveEntityLink(args.tx, {
+    workspaceId: args.actor.workspace_id,
+    sourceType: requestTuple.source_type,
+    sourceId: args.taskRequest.id,
+    targetType: requestTuple.target_type,
+    targetId: args.task.id,
+    relationType: requestTuple.relation_type,
+    managedSystemId: args.task.primary_managed_system_id,
+    createdBy: args.actor.actor_id,
+    visibility: 'internal_only',
+  });
+  preserved.push(requestLink.row);
+
+  const sourceLinks = await selectActiveLinksForEndpoint(args.tx, {
+    workspaceId: args.actor.workspace_id,
+    endpointType: 'task_request',
+    endpointId: args.taskRequest.id,
+    side: 'target',
+  });
+  const findingLink = sourceLinks.find(
+    (link) => link.source_type === 'finding' && link.relation_type === 'requested_task',
+  );
+  if (findingLink) {
+    const findingTuple = registeredEntityLinkPairSchema.parse({
+      source_type: 'finding',
+      target_type: 'task',
+      relation_type: 'requested_task',
+    });
+    const taskFindingLink = await insertActiveEntityLink(args.tx, {
+      workspaceId: args.actor.workspace_id,
+      sourceType: findingTuple.source_type,
+      sourceId: findingLink.source_id,
+      targetType: findingTuple.target_type,
+      targetId: args.task.id,
+      relationType: findingTuple.relation_type,
+      managedSystemId: args.task.primary_managed_system_id,
+      createdBy: args.actor.actor_id,
+      visibility: 'internal_only',
+    });
+    preserved.push(taskFindingLink.row);
+
+    const evidenceLinks = await selectActiveLinksForEndpoint(args.tx, {
+      workspaceId: args.actor.workspace_id,
+      endpointType: 'finding',
+      endpointId: findingLink.source_id,
+      side: 'target',
+    });
+    for (const evidenceLink of evidenceLinks) {
+      if (evidenceLink.source_type !== 'voc' || evidenceLink.relation_type !== 'evidence_of') {
+        continue;
+      }
+      const evidenceTuple = registeredEntityLinkPairSchema.parse({
+        source_type: 'voc',
+        target_type: 'task',
+        relation_type: 'evidence_of',
+      });
+      const taskEvidenceLink = await insertActiveEntityLink(args.tx, {
+        workspaceId: args.actor.workspace_id,
+        sourceType: evidenceTuple.source_type,
+        sourceId: evidenceLink.source_id,
+        targetType: evidenceTuple.target_type,
+        targetId: args.task.id,
+        relationType: evidenceTuple.relation_type,
+        managedSystemId: args.task.primary_managed_system_id,
+        createdBy: args.actor.actor_id,
+        visibility: 'internal_only',
+      });
+      preserved.push(taskEvidenceLink.row);
+    }
+  }
+
+  return preserved;
+}
+
+export function createTasksService(deps: TasksServiceDeps) {
+  async function convertTaskRequest(args: {
+    actor: TasksActor;
+    taskRequestId: string;
+    input: ConvertTaskRequestRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: TaskDto }> {
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const taskRequest = await lockTaskRequestById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskRequestId: args.taskRequestId,
+          });
+          if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
+
+          const canManage = await canManageFinding(
+            deps,
+            args.actor,
+            taskRequest.primary_managed_system_id,
+            { tx },
+          );
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+          assertApproved(taskRequest);
+
+          const task = await insertTask(tx, {
+            workspaceId: args.actor.workspace_id,
+            primaryManagedSystemId: taskRequest.primary_managed_system_id,
+            title: args.input.title,
+            priority: args.input.priority,
+            assigneeActorId: args.input.assignee_actor_id ?? null,
+            dueDate: args.input.due_date ?? null,
+            milestoneId: args.input.milestone_id ?? null,
+            analyticsAreaId: args.input.analytics_area_id ?? null,
+            sourceTaskRequestId: taskRequest.id,
+            createdBy: args.actor.actor_id,
+          });
+
+          const preservedLinks = await preserveSourceLinks({
+            tx,
+            actor: args.actor,
+            taskRequest,
+            task,
+          });
+
+          await markTaskRequestConverted(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskRequestId: taskRequest.id,
+          });
+
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_created_from_request',
+            subject_type: 'task',
+            subject_id: task.id,
+            summary: 'Task created from approved Task Request',
+            detail: {
+              task_id: task.id,
+              source_task_request_id: taskRequest.id,
+              primary_managed_system_id: task.primary_managed_system_id,
+              preserved_links: preservedLinks.map((link) => link.id),
+            },
+          });
+
+          return { status: 201, body: taskToDto(task) };
+        },
+      );
+    });
+  }
+
+  async function linkExistingTask(args: {
+    actor: TasksActor;
+    taskRequestId: string;
+    input: LinkExistingTaskRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: TaskDto }> {
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const taskRequest = await lockTaskRequestById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskRequestId: args.taskRequestId,
+          });
+          if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
+
+          const canManage = await canManageFinding(
+            deps,
+            args.actor,
+            taskRequest.primary_managed_system_id,
+            { tx },
+          );
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+          assertApproved(taskRequest);
+
+          const task = await lockTaskById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: args.input.task_id,
+          });
+          if (!task) throw new HttpError('not_found.record', 'task not found');
+          if (task.primary_managed_system_id !== taskRequest.primary_managed_system_id) {
+            throw new HttpError('permission.denied', 'task is outside task request scope');
+          }
+
+          const tuple = registeredEntityLinkPairSchema.parse({
+            source_type: 'task_request',
+            target_type: 'task',
+            relation_type: 'converted_to',
+          });
+          await insertActiveEntityLink(tx, {
+            workspaceId: args.actor.workspace_id,
+            sourceType: tuple.source_type,
+            sourceId: taskRequest.id,
+            targetType: tuple.target_type,
+            targetId: task.id,
+            relationType: tuple.relation_type,
+            managedSystemId: task.primary_managed_system_id,
+            createdBy: args.actor.actor_id,
+            visibility: 'internal_only',
+          });
+
+          await markTaskRequestConverted(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskRequestId: taskRequest.id,
+          });
+
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_linked_to_request',
+            subject_type: 'task',
+            subject_id: task.id,
+            summary: 'Existing Task linked to approved Task Request',
+            detail: {
+              task_id: task.id,
+              task_request_id: taskRequest.id,
+            },
+          });
+
+          return { status: 200, body: taskToDto(task) };
+        },
+      );
+    });
+  }
+
+  async function listTasks(args: {
+    actor: TasksActor;
+    query: ListTasksQuery;
+  }): Promise<{ items: TaskDto[] }> {
+    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+    const assigneeActorId =
+      args.query.assignee === 'me' ? args.actor.actor_id : args.query.assignee;
+    const rows = await listTasksByWorkspace(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      ...(args.query.status !== undefined ? { status: args.query.status } : {}),
+      ...(assigneeActorId !== undefined ? { assigneeActorId } : {}),
+    });
+    const items: TaskDto[] = [];
+    for (const row of rows) {
+      const canManage = await canManageFinding(deps, args.actor, row.primary_managed_system_id, {});
+      if (!canManage) continue;
+      items.push(taskToDto(row));
+    }
+    return { items };
+  }
+
+  return {
+    convertTaskRequest,
+    linkExistingTask,
+    listTasks,
+  };
+}
+
+export type TasksService = ReturnType<typeof createTasksService>;
