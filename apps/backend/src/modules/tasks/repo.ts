@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 
-import type { TaskPriority, TaskStatus } from '@fops/shared';
+import type { TaskDetailSource, TaskPriority, TaskStatus } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -136,6 +136,54 @@ export async function listTasksByWorkspace(
      ORDER BY updated_at DESC, id DESC
   `);
   return result.rows.map(mapTaskRow);
+}
+
+export async function resolveTaskSource(
+  db: Db | Tx,
+  input: { workspaceId: string; sourceTaskRequestId: string },
+): Promise<TaskDetailSource | null> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT
+      tr.id AS task_request_id,
+      tr.status AS task_request_status,
+      f.id AS finding_id,
+      f.title AS finding_title,
+      f.summary AS finding_summary,
+      f.evidence_count AS finding_evidence_count
+    FROM task_request.task_requests tr
+    LEFT JOIN core.entity_links el
+      ON el.workspace_id = tr.workspace_id
+     AND el.source_type = 'finding'
+     AND el.target_type = 'task_request'
+     AND el.target_id = tr.id
+     AND el.relation_type = 'requested_task'
+     AND el.status = 'active'
+    LEFT JOIN finding.findings f
+      ON f.workspace_id = tr.workspace_id
+     AND f.id = el.source_id
+    WHERE tr.workspace_id = ${input.workspaceId}
+      AND tr.id = ${input.sourceTaskRequestId}
+    ORDER BY el.created_at DESC NULLS LAST, el.id DESC NULLS LAST
+    LIMIT 1
+  `);
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const source: TaskDetailSource = {
+    task_request: {
+      id: row.task_request_id as string,
+      status: row.task_request_status as NonNullable<TaskDetailSource['task_request']>['status'],
+    },
+  };
+  if (row.finding_id) {
+    source.finding = {
+      id: row.finding_id as string,
+      title: row.finding_title as string,
+      summary: row.finding_summary as string,
+      evidence_count: Number(row.finding_evidence_count),
+    };
+  }
+  return source;
 }
 
 export async function markTaskRequestConverted(

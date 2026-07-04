@@ -36,6 +36,41 @@ export const taskDtoSchema = z
   .strict();
 export type TaskDto = z.infer<typeof taskDtoSchema>;
 
+export const taskDetailSourceSchema = z
+  .object({
+    task_request: z
+      .object({
+        id: z.string().uuid(),
+        status: z.enum([
+          'pending_review',
+          'approved',
+          'rejected',
+          'needs_more_evidence',
+          'converted',
+        ]),
+      })
+      .strict()
+      .optional(),
+    finding: z
+      .object({
+        id: z.string().uuid(),
+        title: z.string(),
+        summary: z.string(),
+        evidence_count: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type TaskDetailSource = z.infer<typeof taskDetailSourceSchema>;
+
+export const taskDetailDtoSchema = taskDtoSchema
+  .extend({
+    source: taskDetailSourceSchema.nullable(),
+  })
+  .strict();
+export type TaskDetailDto = z.infer<typeof taskDetailDtoSchema>;
+
 export const convertTaskRequestRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(200),

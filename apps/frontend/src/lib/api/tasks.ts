@@ -1,6 +1,9 @@
 import type {
   ConvertTaskRequestRequest,
+  FindingDto,
   LinkExistingTaskRequest,
+  LinkTaskRequest,
+  TaskDetailDto,
   TaskDto,
   TaskStatus,
 } from '@fops/shared';
@@ -24,6 +27,13 @@ export async function listTasks(
   return res.data;
 }
 
+export async function getTask(id: string, signal?: AbortSignal): Promise<TaskDetailDto> {
+  const res = await apiClient<TaskDetailDto>('GET', `/tasks/${id}`, {
+    ...(signal !== undefined ? { signal } : {}),
+  });
+  return res.data;
+}
+
 export async function convertTaskRequest(
   id: string,
   body: ConvertTaskRequestRequest,
@@ -42,6 +52,18 @@ export async function linkExistingTask(
   idempotencyKey: string,
 ): Promise<TaskDto> {
   const res = await apiClient<TaskDto>('POST', `/task-requests/${id}/link-task`, {
+    body,
+    idempotencyKey,
+  });
+  return res.data;
+}
+
+export async function linkTaskToFinding(
+  findingId: string,
+  body: LinkTaskRequest,
+  idempotencyKey: string,
+): Promise<FindingDto> {
+  const res = await apiClient<FindingDto>('POST', `/findings/${findingId}/link-task`, {
     body,
     idempotencyKey,
   });

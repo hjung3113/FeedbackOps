@@ -249,6 +249,31 @@ Rules:
 - Standalone Tasks are valid with source_task_request_id = null.
 ```
 
+TaskDetailDto extends TaskDto with:
+
+```text
+source: null | {
+  task_request?: {
+    id: uuid
+    status: pending_review | approved | rejected | needs_more_evidence | converted
+  }
+  finding?: {
+    id: uuid
+    title: string
+    summary: string
+    evidence_count: number
+  }
+}
+```
+
+Rules:
+
+```text
+- source is null for standalone Tasks.
+- source.task_request is derived from source_task_request_id.
+- source.finding is derived from the active (finding, task_request, requested_task) link.
+```
+
 ## Permission Request
 
 Owner: Permission / Access

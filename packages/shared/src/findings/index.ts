@@ -44,6 +44,13 @@ export const patchFindingRequestSchema = z
   .strict();
 export type PatchFindingRequest = z.infer<typeof patchFindingRequestSchema>;
 
+export const linkTaskRequestSchema = z
+  .object({
+    task_id: z.string().uuid(),
+  })
+  .strict();
+export type LinkTaskRequest = z.infer<typeof linkTaskRequestSchema>;
+
 export const findingSourceSchema = z
   .object({
     type: z.enum(['voc', 'voc_cluster']),

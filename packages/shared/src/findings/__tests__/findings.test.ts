@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { createFindingRequestSchema, findingDtoSchema, findingStatusSchema } from '../index.js';
+import {
+  createFindingRequestSchema,
+  findingDtoSchema,
+  findingStatusSchema,
+  linkTaskRequestSchema,
+} from '../index.js';
 
 const U1 = '01919b8c-0000-7000-8000-000000000001';
 const U2 = '01919b8c-0000-7000-8000-000000000002';
@@ -72,4 +77,14 @@ describe('findingStatusSchema', () => {
       expect(findingStatusSchema.parse(status)).toBe(status);
     },
   );
+});
+
+describe('linkTaskRequestSchema', () => {
+  it('accepts the Finding Link Task body shape', () => {
+    expect(linkTaskRequestSchema.parse({ task_id: U1 })).toEqual({ task_id: U1 });
+  });
+
+  it('rejects undeclared fields', () => {
+    expect(() => linkTaskRequestSchema.parse({ task_id: U1, finding_id: U2 })).toThrow();
+  });
 });

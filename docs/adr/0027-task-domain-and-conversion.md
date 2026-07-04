@@ -63,9 +63,10 @@ Entity Links add exactly these production tuples:
 
 `('task_request','task','converted_to')` records which approved request produced
 or satisfied the Task. `('finding','task','requested_task')` preserves source
-Finding context on newly converted Tasks. `('voc','task','evidence_of')`
-preserves VOC evidence where it is cheaply derivable from existing Finding
-evidence links.
+Finding context on newly converted Tasks and is also reused by
+`POST /findings/:id/link-task` when an authorized user links an existing Task
+directly from Finding Detail. `('voc','task','evidence_of')` preserves VOC
+evidence where it is cheaply derivable from existing Finding evidence links.
 
 Milestone remains deferred. `task.tasks.milestone_id` is a nullable UUID
 placeholder with no FK until FR-TASK-004 introduces the Milestone table.
@@ -79,4 +80,7 @@ but standalone `POST /tasks` is not introduced by this issue.
 - Approval, conversion, and link-existing remain separate audited decisions.
 - Task Request conversion preserves source context through `entity_links`, not a
   convenience `converted_task_id` column.
+- Finding direct link to existing Task uses the existing
+  `(finding, task, requested_task)` tuple plus `findings.linked_task_id`; no new
+  entity-link tuple or migration is introduced.
 - Future standalone Task creation must use the same Task table and status enum.

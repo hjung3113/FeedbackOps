@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   addEvidenceHighlightRequestSchema,
   linkEvidenceRequestSchema,
+  linkTaskRequestSchema,
   patchFindingRequestSchema,
 } from '@fops/shared';
 
@@ -236,6 +237,46 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
         },
         findingId: id,
         input: parsed.data,
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/findings/:id/link-task',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = linkTaskRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const hash = hashRequestBody({ ...rawBody, findingId: id, route: 'finding.link_task' });
+      const result = await findingsService.linkTask({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        findingId: id,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
       });
       return reply.code(result.status).send(result.body);
     },
