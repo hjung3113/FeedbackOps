@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   canApproveTaskRequest,
+  canConvertTaskRequest,
+  canLinkExistingTaskRequest,
   canRejectTaskRequest,
   canRequestEvidenceForTaskRequest,
 } from './TaskRequestsRoute';
@@ -28,5 +30,14 @@ describe('TaskRequestsRoute decision gating', () => {
     expect(canRequestEvidenceForTaskRequest('approved')).toBe(false);
     expect(canRequestEvidenceForTaskRequest('rejected')).toBe(false);
     expect(canRequestEvidenceForTaskRequest('converted')).toBe(false);
+  });
+
+  it('only allows convert and link-existing from approved', () => {
+    expect(canConvertTaskRequest('approved')).toBe(true);
+    expect(canLinkExistingTaskRequest('approved')).toBe(true);
+    expect(canConvertTaskRequest('pending_review')).toBe(false);
+    expect(canLinkExistingTaskRequest('needs_more_evidence')).toBe(false);
+    expect(canConvertTaskRequest('converted')).toBe(false);
+    expect(canLinkExistingTaskRequest('rejected')).toBe(false);
   });
 });

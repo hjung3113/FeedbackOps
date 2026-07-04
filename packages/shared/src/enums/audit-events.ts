@@ -79,6 +79,9 @@ export const AUDIT_EVENT_TYPES = [
   'task_request_rejected',
   'task_request_needs_more_evidence',
   'task_request_self_approval_denied',
+  // Slice 6 #134: Task conversion/link-existing decisions.
+  'task_created_from_request',
+  'task_linked_to_request',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -186,6 +189,11 @@ const taskRequestRefDetailSchema = z.object({
   id: z.string().uuid(),
 });
 
+const taskRefDetailSchema = z.object({
+  type: z.literal('task'),
+  id: z.string().uuid(),
+});
+
 export const entityLinkCreatedDetailSchema = z.union([
   z.object({
     link_id: z.string().uuid(),
@@ -220,6 +228,27 @@ export const entityLinkCreatedDetailSchema = z.union([
     source: findingRefDetailSchema,
     target: taskRequestRefDetailSchema,
     relation_type: z.literal('requested_task'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: taskRequestRefDetailSchema,
+    target: taskRefDetailSchema,
+    relation_type: z.literal('converted_to'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: findingRefDetailSchema,
+    target: taskRefDetailSchema,
+    relation_type: z.literal('requested_task'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: taskRefDetailSchema,
+    relation_type: z.literal('evidence_of'),
     visibility: z.literal('internal_only'),
   }),
 ]);
@@ -354,6 +383,20 @@ export type TaskRequestSelfApprovalDeniedDetail = z.infer<
   typeof taskRequestSelfApprovalDeniedDetailSchema
 >;
 
+export const taskCreatedFromRequestDetailSchema = z.object({
+  task_id: z.string().uuid(),
+  source_task_request_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  preserved_links: z.array(z.string().uuid()),
+});
+export type TaskCreatedFromRequestDetail = z.infer<typeof taskCreatedFromRequestDetailSchema>;
+
+export const taskLinkedToRequestDetailSchema = z.object({
+  task_id: z.string().uuid(),
+  task_request_id: z.string().uuid(),
+});
+export type TaskLinkedToRequestDetail = z.infer<typeof taskLinkedToRequestDetailSchema>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
@@ -400,4 +443,7 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_request_rejected: taskRequestDecisionDetailSchema,
   task_request_needs_more_evidence: taskRequestDecisionDetailSchema,
   task_request_self_approval_denied: taskRequestSelfApprovalDeniedDetailSchema,
+  // Slice 6 #134.
+  task_created_from_request: taskCreatedFromRequestDetailSchema,
+  task_linked_to_request: taskLinkedToRequestDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

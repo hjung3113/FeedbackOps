@@ -281,6 +281,72 @@ audit events:
 These endpoints do not create Task rows, convert to Task, or link existing
 Tasks. Conversion and link-existing-Task remain issue #134.
 
+## Task Conversion Contract
+
+`POST /task-requests/:id/convert`
+
+```text
+requirement_id: FOP-TASK-002 / FOP-TASK-003
+request body:
+  title string required min 1 max 200
+  priority optional low|medium|high|urgent default medium
+  assignee_actor_id optional nullable uuid
+  due_date optional nullable ISO date
+  milestone_id optional nullable uuid
+  analytics_area_id optional nullable uuid
+response body: TaskDto
+auth and permission: Admin or Developer with finding.manage on the Task
+  Request primary_managed_system_id. Admin bypass follows the Finding actions
+  convention.
+validation errors:
+  - non-approved Task Request: 422 validation.failed with not_approved on status
+side effects:
+  - create task.tasks with status backlog and source_task_request_id
+  - create active entity link (task_request, task, converted_to)
+  - preserve (finding, task, requested_task)
+  - preserve (voc, task, evidence_of) when derived from existing Finding evidence
+  - update Task Request status to converted
+audit events:
+  - task_created_from_request
+idempotency behavior: Idempotency-Key required; hash includes body, Task
+  Request id, and route identity task_request.convert
+```
+
+`POST /task-requests/:id/link-task`
+
+```text
+request body:
+  task_id uuid required
+response body: TaskDto
+auth and permission: same as conversion
+validation:
+  - Task Request must be approved
+  - target Task must exist in the same workspace and Primary Managed System
+side effects:
+  - create active entity link (task_request, task, converted_to)
+  - update Task Request status to converted
+audit events:
+  - task_linked_to_request
+idempotency behavior: Idempotency-Key required; hash includes body, Task
+  Request id, and route identity task_request.link_task
+```
+
+`GET /tasks`
+
+```text
+query:
+  status optional backlog|todo|doing|review|done|released|reopened
+  assignee optional uuid or me
+response body: { items: TaskDto[] }
+auth and permission: Admin or Developer. Admin sees all workspace Tasks.
+  Developer rows are filtered by finding.manage on primary_managed_system_id.
+  User is denied.
+sort: updated_at DESC
+```
+
+Standalone `POST /tasks` is deferred by issue #134 even though standalone Tasks
+are a valid nullable-source data shape.
+
 ## Next Action Contract
 
 Backend responses for work-object detail and queue rows must provide
@@ -435,6 +501,8 @@ events, and dashboard repair signals.
 | `POST /vocs/:id/request-task` | FOP-TASK-001 | VOC | Task Request | `requested_task` | task_request_created_from_voc | moves VOC follow-up to pending execution review | creating Task directly from VOC follow-up |
 | `POST /findings/:id/request-task` | FOP-TASK-001 | Finding | Task Request | `requested_task` | task_request_created_from_finding | moves Finding to pending execution review | creating Task without review when review is required |
 | `POST /survey-findings/:id/request-task` | FOP-SURVEY-005 | Finding | Task Request | `requested_task` | task_request_created_from_survey_finding | moves survey-derived Finding to pending execution review | Survey Response creates VOC |
+| `POST /task-requests/:id/convert` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_created_from_request | satisfies approved execution candidate | folding conversion into approval |
+| `POST /task-requests/:id/link-task` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_linked_to_request | satisfies approved execution candidate with existing work | creating duplicate Task when suitable Task exists |
 | `POST /permission-requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_request_approved | may restore blocked object visibility | bypassing explicit deny checks |
 | `POST /permission-requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Deny | none | permission_request_rejected | keeps or creates permission-blocked state | exposing full restricted object |
 
@@ -446,7 +514,7 @@ capability within that scope. Self-approval requires a reason and must audit
 Approval and conversion are separate domain events. The API may expose an
 approve-and-convert convenience flow, but it must record both
 `task_request_approved` and `task_created_from_request` or
-`task_request_linked_existing_task` as separate audit/side-effect events.
+`task_linked_to_request` as separate audit/side-effect events.
 Approved Task Requests may remain in `approved` state until converted or linked
 to an existing Task.
 Converted Tasks start in Backlog by default. Backlog Tasks may have assignees,
@@ -551,12 +619,12 @@ GET /task-requests/:id
 POST /task-requests/:id/approve
 POST /task-requests/:id/reject
 POST /task-requests/:id/request-more-evidence
-POST /task-requests/:id/convert-to-task
-POST /task-requests/:id/link-existing-task
+POST /task-requests/:id/convert
+POST /task-requests/:id/link-task
 
 GET /tasks
 GET /tasks/:id
-POST /tasks
+POST /tasks    # deferred in issue #134
 PATCH /tasks/:id
 ```
 

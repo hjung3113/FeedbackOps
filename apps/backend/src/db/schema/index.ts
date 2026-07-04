@@ -12,3 +12,4 @@ export * from './voc.js';
 export * from './voc-cluster.js';
 export * from './finding.js';
 export * from './task-request.js';
+export * from './task.js';

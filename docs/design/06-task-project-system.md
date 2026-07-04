@@ -154,8 +154,43 @@ Side effects are atomic:
 ```
 
 Authorization reuses `finding.manage` for the Finding's Primary Managed
-System. VOC and VOC Cluster Task Request sources, review decisions, conversion
-to Task, and Link Existing Task are deferred.
+System. VOC and VOC Cluster Task Request sources are deferred. Review decisions
+land in ADR-0026; conversion to Task and Link Existing Task land in ADR-0027.
+
+### Slice 6 Conversion Contract: Task Request To Task
+
+`POST /task-requests/:id/convert` converts only an approved Task Request into a
+Backlog Task. The request body finalizes execution fields:
+
+```text
+title required
+priority optional default medium
+assignee_actor_id optional nullable
+due_date optional nullable ISO date
+milestone_id optional nullable UUID placeholder
+analytics_area_id optional nullable
+```
+
+Side effects are atomic:
+
+```text
+- insert task.tasks with status backlog
+- preserve entity_links:
+  - (task_request, task, converted_to)
+  - (finding, task, requested_task)
+  - (voc, task, evidence_of) when existing Finding evidence links make this cheap
+- update task_request.task_requests.status to converted
+- audit task_created_from_request
+```
+
+`POST /task-requests/:id/link-task` is the alternative path when suitable work
+already exists. It requires an approved request and an existing Task in the same
+workspace and Primary Managed System. It creates `(task_request, task,
+converted_to)`, marks the request `converted`, and audits
+`task_linked_to_request`.
+
+Standalone Tasks remain a valid data shape through nullable
+`source_task_request_id`. Standalone `POST /tasks` is deferred.
 
 ## Key Workflows
 
@@ -333,6 +368,7 @@ Developer discussion from the Gantt.
 - Admin can manage Task Requests and Tasks.
 - Developer can manage Task Requests and Tasks within their Managed System scope.
 - Access to one Managed System does not grant access to sibling Managed Systems unless permission scope explicitly includes them.
+- Conversion and Link Existing Task reuse `finding.manage` on the Primary Managed System until a later Task-specific capability is approved.
 ```
 
 ## Cross-System Dependencies

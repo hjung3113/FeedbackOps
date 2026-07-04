@@ -29,7 +29,9 @@ never read Findings. Creating a Finding from a VOC additionally requires
 `voc.read` on the source VOC's Managed System (no forging a Finding from an
 unreadable VOC). Slice 6 issue #133 adds `task_request.self_approve` for
 same-requester Task Request approval. It is Developer-requestable per Managed
-System and sensitive.
+System and sensitive. Slice 6 issue #134 introduces Task conversion and
+Link Existing Task without a new capability; both reuse `finding.manage` on the
+Task Request or Task Primary Managed System, with Admin bypass.
 
 ## Permission Check Order
 
@@ -177,6 +179,8 @@ task_request_approved
 task_request_rejected
 task_request_needs_more_evidence
 task_request_self_approval_denied
+task_created_from_request
+task_linked_to_request
 ```
 
 ## Summary-Visible Contract
