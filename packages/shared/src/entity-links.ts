@@ -72,6 +72,16 @@ export const registeredEntityLinkPairSchema = z.union([
     relation_type: z.literal('requested_task'),
   }),
   z.object({
+    source_type: z.literal('voc'),
+    target_type: z.literal('task_request'),
+    relation_type: z.literal('requested_task'),
+  }),
+  z.object({
+    source_type: z.literal('voc_cluster'),
+    target_type: z.literal('task_request'),
+    relation_type: z.literal('requested_task'),
+  }),
+  z.object({
     source_type: z.literal('task_request'),
     target_type: z.literal('task'),
     relation_type: z.literal('converted_to'),

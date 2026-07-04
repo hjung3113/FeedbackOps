@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   addVocClusterMemberRequestSchema,
   createFindingFromVocClusterRequestSchema,
+  createTaskRequestFromVocClusterRequestSchema,
   createVocClusterRequestSchema,
   updateVocClusterRequestSchema,
 } from '@fops/shared';
@@ -13,6 +14,7 @@ import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
+import type { TaskRequestsService } from '../task-requests/index.js';
 import type { VocClustersActor } from './service.js';
 import type { VocClustersService } from './service.js';
 
@@ -23,6 +25,7 @@ const IDEMPOTENCY_KEY_REGEX =
 export interface VocClustersRoutesOptions {
   sessionService: SessionService;
   vocClustersService: VocClustersService;
+  taskRequestsService: TaskRequestsService;
   workspaceId: string;
   rateLimitConfig?: { mutation?: Record<string, unknown>; read?: Record<string, unknown> };
 }
@@ -36,10 +39,7 @@ function requireIdempotencyKey(headers: Record<string, unknown>): string {
     });
   }
   if (!IDEMPOTENCY_KEY_REGEX.test(headerKey)) {
-    throw new HttpError(
-      'validation.malformed_idempotency_key',
-      'Idempotency-Key must be a UUIDv4',
-    );
+    throw new HttpError('validation.malformed_idempotency_key', 'Idempotency-Key must be a UUIDv4');
   }
   return headerKey;
 }
@@ -52,7 +52,8 @@ export const vocClustersRoutes: FastifyPluginAsync<VocClustersRoutesOptions> = a
   app,
   opts,
 ) => {
-  const { sessionService, vocClustersService, workspaceId, rateLimitConfig } = opts;
+  const { sessionService, vocClustersService, taskRequestsService, workspaceId, rateLimitConfig } =
+    opts;
 
   app.route({
     method: 'POST',
@@ -264,8 +265,56 @@ export const vocClustersRoutes: FastifyPluginAsync<VocClustersRoutesOptions> = a
           fields: fieldsFromZodIssues(parsed.error.issues),
         });
       }
-      const hash = hashRequestBody({ ...rawBody, clusterId: id, route: 'voc_cluster.create_finding' });
+      const hash = hashRequestBody({
+        ...rawBody,
+        clusterId: id,
+        route: 'voc_cluster.create_finding',
+      });
       const result = await vocClustersService.createFindingFromCluster({
+        actor: actorFromSession({
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        }),
+        clusterId: id,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/voc-clusters/:id/request-task',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = createTaskRequestFromVocClusterRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const hash = hashRequestBody({
+        ...rawBody,
+        clusterId: id,
+        route: 'voc_cluster.request_task',
+      });
+      const result = await taskRequestsService.createFromVocCluster({
         actor: actorFromSession({
           actor_id: sess.actor_id,
           workspace_id: sess.workspace_id,

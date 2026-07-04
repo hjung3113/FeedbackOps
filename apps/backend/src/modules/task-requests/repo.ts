@@ -50,7 +50,7 @@ export async function insertTaskRequest(
   tx: Tx,
   input: {
     workspaceId: string;
-    sourceType: 'finding';
+    sourceType: TaskRequestRow['source_type'];
     sourceId: string;
     primaryManagedSystemId: string;
     evidenceSummary: string;

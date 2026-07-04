@@ -35,6 +35,12 @@ Task Request or Task Primary Managed System, with Admin bypass. Slice 6 issue
 #135 keeps Task Detail reads and Finding Link Task on the same boundary:
 Admin or Developer with `finding.manage` on the relevant Primary Managed
 System; User is denied.
+Slice 6 issue #136 extends Task Request creation to VOC and VOC Cluster sources
+without adding a new capability. `POST /vocs/:id/request-task` mirrors
+`POST /vocs/:id/create-finding`: source VOC readability plus `finding.manage`
+on the source Primary Managed System, with Admin bypass. `POST
+/voc-clusters/:id/request-task` mirrors cluster create-finding authority:
+Admin or Developer with `finding.manage` on the cluster Primary Managed System.
 
 ## Permission Check Order
 
@@ -182,6 +188,8 @@ task_request_approved
 task_request_rejected
 task_request_needs_more_evidence
 task_request_self_approval_denied
+task_request_created_from_voc
+task_request_created_from_voc_cluster
 task_created_from_request
 task_linked_to_request
 ```

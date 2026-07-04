@@ -115,26 +115,27 @@ Convert to Task owns final execution fields:
 Task fields may be suggested from the Task Request or source object, but they
 are finalized during Convert to Task.
 
-### Slice 6 Tracer Contract: Finding To Task Request
+### Slice 6 Task Request Source Contracts
 
-`POST /findings/:id/request-task` creates a Task Request from an existing
-Finding. The request body is:
+`POST /findings/:id/request-task`, `POST /vocs/:id/request-task`, and
+`POST /voc-clusters/:id/request-task` create a Task Request from an existing
+source object. Each request body is:
 
 ```text
 evidence_summary required text
 requested_outcome required text
 ```
 
-The source object is the path Finding. The service copies the Finding's
-Primary Managed System, stores requester from the session Actor, and creates
-only `status='pending_review'`.
+The source object is the path object. The service copies that source's Primary
+Managed System, stores requester from the session Actor, and creates only
+`status='pending_review'`.
 
 The storage table is `task_request.task_requests`:
 
 ```text
 id uuid primary key
 workspace_id uuid
-source_type text -- finding now; voc and voc_cluster reserved for later source slices
+source_type text -- finding | voc | voc_cluster
 source_id uuid
 primary_managed_system_id uuid
 evidence_summary text
@@ -149,13 +150,24 @@ Side effects are atomic:
 
 ```text
 - insert task_request.task_requests
-- insert core.entity_links tuple (finding, task_request, requested_task)
-- audit task_request_created_from_finding
+- insert core.entity_links tuple:
+  - (finding, task_request, requested_task)
+  - (voc, task_request, requested_task)
+  - (voc_cluster, task_request, requested_task)
+- audit one source-specific event:
+  - task_request_created_from_finding
+  - task_request_created_from_voc
+  - task_request_created_from_voc_cluster
 ```
 
 Authorization reuses `finding.manage` for the Finding's Primary Managed
-System. VOC and VOC Cluster Task Request sources are deferred. Review decisions
-land in ADR-0026; conversion to Task and Link Existing Task land in ADR-0027.
+System. VOC request-task mirrors VOC create-finding authority: the actor must
+be able to read the source VOC and must have `finding.manage` on the VOC Primary
+Managed System, with Admin bypass. VOC Cluster request-task mirrors cluster
+create-finding authority: Admin or Developer with `finding.manage` on the
+cluster Primary Managed System. Review decisions land in ADR-0026; conversion
+to Task and Link Existing Task land in ADR-0027. ADR-0028 documents the
+VOC/cluster source extension.
 
 ### Slice 6 Conversion Contract: Task Request To Task
 

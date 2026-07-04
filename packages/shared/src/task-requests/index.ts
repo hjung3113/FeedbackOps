@@ -21,6 +21,12 @@ export const createTaskRequestFromFindingRequestSchema = z
 export type CreateTaskRequestFromFindingRequest = z.infer<
   typeof createTaskRequestFromFindingRequestSchema
 >;
+export const createTaskRequestRequestSchema = createTaskRequestFromFindingRequestSchema;
+export type CreateTaskRequestRequest = z.infer<typeof createTaskRequestRequestSchema>;
+export const createTaskRequestFromVocRequestSchema = createTaskRequestRequestSchema;
+export type CreateTaskRequestFromVocRequest = CreateTaskRequestRequest;
+export const createTaskRequestFromVocClusterRequestSchema = createTaskRequestRequestSchema;
+export type CreateTaskRequestFromVocClusterRequest = CreateTaskRequestRequest;
 
 export const listTaskRequestsQuerySchema = z
   .object({
@@ -70,7 +76,7 @@ export const taskRequestDtoSchema = z
     updated_at: z.string().datetime(),
     source: z
       .object({
-        type: z.literal('finding'),
+        type: taskRequestSourceTypeSchema,
         id: z.string().uuid(),
         relation_type: z.literal('requested_task'),
         link_id: z.string().uuid(),
