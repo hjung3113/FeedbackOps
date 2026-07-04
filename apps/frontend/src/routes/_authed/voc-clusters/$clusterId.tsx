@@ -3,8 +3,12 @@
 // (Add VOC, Remove VOC, Confirm cluster, Create Finding).
 // Admin/Developer CTAs are gated via role_level check (backend is authoritative).
 
-import * as React from 'react';
-import { useState } from 'react';
+import {
+  type CreateFindingRequest,
+  type FindingSeverity,
+  type VocClusterMemberDto,
+  createFindingRequestSchema,
+} from '@fops/shared';
 import {
   Button,
   Dialog,
@@ -25,25 +29,23 @@ import {
   Skeleton,
   Textarea,
 } from '@fops/ui';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
-import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  createFindingRequestSchema,
-  type CreateFindingRequest,
-  type FindingSeverity,
-  type VocClusterMemberDto,
-} from '@fops/shared';
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
+import { ChevronLeft, Plus, Trash2 } from 'lucide-react';
+import type * as React from 'react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 
-import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
+import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
 import { useAddClusterMember } from '@/features/voc-cluster/hooks/useAddClusterMember';
-import { useRemoveClusterMember } from '@/features/voc-cluster/hooks/useRemoveClusterMember';
 import { useConfirmCluster } from '@/features/voc-cluster/hooks/useConfirmCluster';
 import { useCreateFindingFromCluster } from '@/features/voc-cluster/hooks/useCreateFindingFromCluster';
+import { useRemoveClusterMember } from '@/features/voc-cluster/hooks/useRemoveClusterMember';
+import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useRequestTaskFromCluster';
+import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
+import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
-import { useIdempotencyKey, errorMapper, type ApiError } from '@/lib/api';
 
 export const Route = createFileRoute('/_authed/voc-clusters/$clusterId')({
   component: VocClusterDetailPage,
@@ -62,11 +64,7 @@ const SEVERITY_OPTIONS: { value: FindingSeverity; label: string }[] = [
 
 function StatusBadge({ status }: { status: string }): React.ReactElement {
   const label = status === 'confirmed' ? '확정' : '초안';
-  return (
-    <OutlineBadge data-testid="cluster-detail-status-badge">
-      {label}
-    </OutlineBadge>
-  );
+  return <OutlineBadge data-testid="cluster-detail-status-badge">{label}</OutlineBadge>;
 }
 
 // ── Section divider ───────────────────────────────────────────────────────────
@@ -107,19 +105,30 @@ function VocClusterDetailPage(): React.ReactElement {
 function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.ReactElement {
   const { data, isLoading, isError, error } = useVocClusterDetail(clusterId);
   const { data: me } = useMe();
-  const canMutate =
-    me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
+  const canMutate = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
 
   const [addVocOpen, setAddVocOpen] = useState(false);
   const [createFindingOpen, setCreateFindingOpen] = useState(false);
+  const [requestTaskOpen, setRequestTaskOpen] = useState(false);
+  const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
+    useIdempotencyKey();
 
   const confirmMutation = useConfirmCluster();
   const removeMemberMutation = useRemoveClusterMember();
+  const requestTaskMutation = useRequestTaskFromCluster({
+    clusterId,
+    idempotencyKey: requestTaskIdempotencyKey,
+    onError: (err: ApiError) => toast.error(errorMapper(err.envelope).message),
+  });
   const navigate = useNavigate();
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-4 p-6" aria-label="클러스터 상세 불러오는 중" data-testid="cluster-detail-skeleton">
+      <div
+        className="flex flex-col gap-4 p-6"
+        aria-label="클러스터 상세 불러오는 중"
+        data-testid="cluster-detail-skeleton"
+      >
         <Skeleton className="h-7 w-1/2" />
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-3/4" />
@@ -131,7 +140,10 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
   if (isError || !data) {
     const code = (error as { code?: string } | null)?.code;
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6 text-center" data-testid="cluster-detail-error">
+      <div
+        className="flex flex-col items-center justify-center py-16 px-6 text-center"
+        data-testid="cluster-detail-error"
+      >
         <p className="text-sm text-feedback-error">
           {code === 'not_found.record'
             ? '클러스터를 찾을 수 없습니다.'
@@ -168,6 +180,11 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
     );
   }
 
+  function closeRequestTaskModal(): void {
+    requestTaskMutation.reset();
+    setRequestTaskOpen(false);
+  }
+
   return (
     <div className="flex flex-col gap-0" data-testid="cluster-detail-panel">
       {/* Header */}
@@ -187,7 +204,10 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
         {data.summary !== null && (
           <div className="flex flex-col gap-1">
             <p className="text-xs font-medium text-text-muted uppercase tracking-wide">요약</p>
-            <p className="text-sm text-text-primary whitespace-pre-wrap" data-testid="cluster-detail-summary">
+            <p
+              className="text-sm text-text-primary whitespace-pre-wrap"
+              data-testid="cluster-detail-summary"
+            >
               {data.summary}
             </p>
           </div>
@@ -200,7 +220,10 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
           <p className="text-xs font-medium text-text-muted uppercase tracking-wide">
             Primary Managed System
           </p>
-          <span className="text-sm font-mono text-text-primary" data-testid="cluster-detail-managed-system">
+          <span
+            className="text-sm font-mono text-text-primary"
+            data-testid="cluster-detail-managed-system"
+          >
             {data.primary_managed_system_id}
           </span>
         </div>
@@ -284,6 +307,14 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
             >
               Finding 생성
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRequestTaskOpen(true)}
+              data-testid="cluster-request-task-button"
+            >
+              Task 요청
+            </Button>
           </>
         ) : (
           <span className="text-xs text-text-muted" data-testid="cluster-cta-hint">
@@ -294,11 +325,7 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
 
       {/* Add VOC modal */}
       {canMutate && (
-        <AddVocModal
-          open={addVocOpen}
-          clusterId={clusterId}
-          onClose={() => setAddVocOpen(false)}
-        />
+        <AddVocModal open={addVocOpen} clusterId={clusterId} onClose={() => setAddVocOpen(false)} />
       )}
 
       {/* Create Finding modal */}
@@ -307,6 +334,24 @@ function VocClusterDetailPanel({ clusterId }: { clusterId: string }): React.Reac
           open={createFindingOpen}
           clusterId={clusterId}
           onClose={() => setCreateFindingOpen(false)}
+        />
+      )}
+      {canMutate && (
+        <RequestTaskModal
+          open={requestTaskOpen}
+          evidenceSummaryDefault={data.summary ?? data.title}
+          isSubmitting={requestTaskMutation.isPending}
+          onClose={closeRequestTaskModal}
+          onSubmit={(values) => {
+            requestTaskMutation.mutate(values, {
+              onSuccess: () => {
+                markRequestTaskConsumed();
+                setRequestTaskOpen(false);
+                requestTaskMutation.reset();
+                toast.success('Task Request가 생성되었습니다.');
+              },
+            });
+          }}
         />
       )}
     </div>
@@ -583,12 +628,19 @@ function CreateFindingFromClusterModal({
                 form.setValue('severity', val as FindingSeverity, { shouldValidate: true })
               }
             >
-              <SelectTrigger id="cluster-finding-severity" data-testid="cluster-finding-severity-select">
+              <SelectTrigger
+                id="cluster-finding-severity"
+                data-testid="cluster-finding-severity-select"
+              >
                 <SelectValue placeholder="심각도 선택" />
               </SelectTrigger>
               <SelectContent>
                 {SEVERITY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} data-testid={`severity-option-${opt.value}`}>
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    data-testid={`severity-option-${opt.value}`}
+                  >
                     {opt.label}
                   </SelectItem>
                 ))}

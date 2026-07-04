@@ -74,6 +74,9 @@ export const AUDIT_EVENT_TYPES = [
   'finding_status_changed',
   // Slice 6 #132: Task Request tracer from Finding.
   'task_request_created_from_finding',
+  // Slice 6 #136: Task Request sources from VOC and VOC Cluster.
+  'task_request_created_from_voc',
+  'task_request_created_from_voc_cluster',
   // Slice 6 #133: Task Request review queue decisions.
   'task_request_approved',
   'task_request_rejected',
@@ -234,6 +237,20 @@ export const entityLinkCreatedDetailSchema = z.union([
   }),
   z.object({
     link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: taskRequestRefDetailSchema,
+    relation_type: z.literal('requested_task'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocClusterRefDetailSchema,
+    target: taskRequestRefDetailSchema,
+    relation_type: z.literal('requested_task'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
     source: taskRequestRefDetailSchema,
     target: taskRefDetailSchema,
     relation_type: z.literal('converted_to'),
@@ -355,6 +372,24 @@ export type TaskRequestCreatedFromFindingDetail = z.infer<
   typeof taskRequestCreatedFromFindingDetailSchema
 >;
 
+export const taskRequestCreatedFromVocDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  source_voc_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('voc'),
+});
+export type TaskRequestCreatedFromVocDetail = z.infer<typeof taskRequestCreatedFromVocDetailSchema>;
+
+export const taskRequestCreatedFromVocClusterDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  source_voc_cluster_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('voc_cluster'),
+});
+export type TaskRequestCreatedFromVocClusterDetail = z.infer<
+  typeof taskRequestCreatedFromVocClusterDetailSchema
+>;
+
 const taskRequestStatusDetailSchema = z.enum([
   'pending_review',
   'approved',
@@ -449,6 +484,9 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   finding_status_changed: findingStatusChangedDetailSchema,
   // Slice 6 #132.
   task_request_created_from_finding: taskRequestCreatedFromFindingDetailSchema,
+  // Slice 6 #136.
+  task_request_created_from_voc: taskRequestCreatedFromVocDetailSchema,
+  task_request_created_from_voc_cluster: taskRequestCreatedFromVocClusterDetailSchema,
   // Slice 6 #133.
   task_request_approved: taskRequestDecisionDetailSchema,
   task_request_rejected: taskRequestDecisionDetailSchema,

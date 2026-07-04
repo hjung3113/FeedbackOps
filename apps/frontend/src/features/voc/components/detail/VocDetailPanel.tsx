@@ -1,24 +1,34 @@
 // VocDetailPanel — orchestrator for the read-only VOC detail panel (Slice 3 #20 C8).
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
-import * as React from 'react';
-import { Button, Skeleton, PermissionBlockedPanel, DirtyConfirmation, DetailPanelSectionNav } from '@fops/ui';
-import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
-import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
+import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
+import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
+import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
+import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
+import {
+  Button,
+  DetailPanelSectionNav,
+  DirtyConfirmation,
+  PermissionBlockedPanel,
+  Skeleton,
+} from '@fops/ui';
+import * as React from 'react';
+import { toast } from 'sonner';
 
-import { DetailHeader } from './DetailHeader';
-import { IdentitySection, IdentityMetadataStrip } from './IdentitySection';
-import { TriageBlock } from './TriageBlock';
-import { DescriptionSection } from './DescriptionSection';
-import { LinkedExecutionSection } from './LinkedExecutionSection';
-import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
-import { ConversationTimeline } from './ConversationTimeline';
-import { ComposerSection } from './ComposerSection';
-import { NextActionFooter } from './NextActionFooter';
-import { DetailPanelNotFound } from './DetailPanelNotFound';
 import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
+import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
+import { ComposerSection } from './ComposerSection';
+import { ConversationTimeline } from './ConversationTimeline';
+import { DescriptionSection } from './DescriptionSection';
+import { DetailHeader } from './DetailHeader';
+import { DetailPanelNotFound } from './DetailPanelNotFound';
+import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
+import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
+import { LinkedExecutionSection } from './LinkedExecutionSection';
+import { NextActionFooter } from './NextActionFooter';
+import { TriageBlock } from './TriageBlock';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -108,8 +118,7 @@ export function VocDetailPanel({
 
   // 4. Full detail envelope
   const voc: VocDetailEnvelope = data;
-  const isReporterOnOwnVoc =
-    me?.actor.id === voc.reporter_id && voc.triage_state === 'untriaged';
+  const isReporterOnOwnVoc = me?.actor.id === voc.reporter_id && voc.triage_state === 'untriaged';
 
   return (
     <FullDetailView
@@ -160,12 +169,23 @@ function FullDetailView({
   const [composerDirty, setComposerDirty] = React.useState(false);
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
   const [createFindingOpen, setCreateFindingOpen] = React.useState(false);
+  const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
+  const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
+    useIdempotencyKey();
   // Scroll container ref for section nav anchor tracking
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // FE display hint only (ADR-0024 §C): gate button to Admin or Developer.
-  const canCreateFinding =
-    me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
+  const canCreateFinding = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
+  const canRequestTask = canCreateFinding;
+
+  const requestTaskMutation = useRequestTaskFromVoc({
+    vocId,
+    idempotencyKey: requestTaskIdempotencyKey,
+    onError: (err: ApiError) => {
+      toast.error(errorMapper(err.envelope).message);
+    },
+  });
 
   function handleClose() {
     if (composerDirty) {
@@ -185,6 +205,11 @@ function FullDetailView({
     setDirtyConfirmOpen(false);
   }
 
+  function closeRequestTaskModal(): void {
+    requestTaskMutation.reset();
+    setRequestTaskOpen(false);
+  }
+
   return (
     <>
       <div className="flex flex-col h-full" data-testid="voc-detail-panel">
@@ -198,27 +223,53 @@ function FullDetailView({
         {/* Section nav — sticky anchor tabs (prototype: screen-voc.jsx:191) */}
         <DetailPanelSectionNav sections={DETAIL_SECTIONS} scrollRef={scrollRef} />
 
-        <div ref={scrollRef} className="flex flex-col flex-1 min-h-0 overflow-y-auto pt-7 px-6 pb-16">
-          <div data-anchor="overview"><IdentitySection voc={voc} /></div>
-          <div data-anchor="triage"><TriageBlock voc={voc} /></div>
+        <div
+          ref={scrollRef}
+          className="flex flex-col flex-1 min-h-0 overflow-y-auto pt-7 px-6 pb-16"
+        >
+          <div data-anchor="overview">
+            <IdentitySection voc={voc} />
+          </div>
+          <div data-anchor="triage">
+            <TriageBlock voc={voc} />
+          </div>
           <div data-anchor="description">
             <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
             {/* Relocated metadata strip — severity/managed-system/AA/source-context
                 chips moved out of the title block per .review/title-reference.png */}
             <IdentityMetadataStrip voc={voc} />
           </div>
-          <div data-anchor="trail"><LinkedExecutionSection voc={voc} /><LinkedEntityTrailSection /></div>
-          <div data-anchor="conversation"><ConversationTimeline voc={voc} /></div>
+          <div data-anchor="trail">
+            <LinkedExecutionSection voc={voc} />
+            <LinkedEntityTrailSection />
+          </div>
+          <div data-anchor="conversation">
+            <ConversationTimeline voc={voc} />
+          </div>
           <div data-anchor="internal" />
-          <div data-anchor="compose"><ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} /></div>
+          <div data-anchor="compose">
+            <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
+          </div>
         </div>
 
         <NextActionFooter voc={voc} />
-        {canCreateFinding && (
-          <div className="px-4 pb-3 flex justify-end border-t border-border-subtle pt-2">
-            <Button variant="outline" size="sm" onClick={() => setCreateFindingOpen(true)}>
-              Finding 생성
-            </Button>
+        {(canCreateFinding || canRequestTask) && (
+          <div className="px-4 pb-3 flex justify-end gap-2 border-t border-border-subtle pt-2">
+            {canRequestTask && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRequestTaskOpen(true)}
+                data-testid="voc-request-task-button"
+              >
+                Task 요청
+              </Button>
+            )}
+            {canCreateFinding && (
+              <Button variant="outline" size="sm" onClick={() => setCreateFindingOpen(true)}>
+                Finding 생성
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -232,6 +283,22 @@ function FullDetailView({
         vocId={vocId}
         open={createFindingOpen}
         onClose={() => setCreateFindingOpen(false)}
+      />
+      <RequestTaskModal
+        open={requestTaskOpen}
+        evidenceSummaryDefault={`VOC ${voc.display_id}: ${voc.title}`}
+        isSubmitting={requestTaskMutation.isPending}
+        onClose={closeRequestTaskModal}
+        onSubmit={(values) => {
+          requestTaskMutation.mutate(values, {
+            onSuccess: () => {
+              markRequestTaskConsumed();
+              setRequestTaskOpen(false);
+              requestTaskMutation.reset();
+              toast.success('Task Request가 생성되었습니다.');
+            },
+          });
+        }}
       />
     </>
   );
@@ -268,8 +335,12 @@ function SummaryPermissionView({
             state={selfDecision.state}
             category="VOC 상세"
             {...(selfDecision.reason !== undefined ? { reason: selfDecision.reason } : {})}
-            {...(selfDecision.requiredScope !== undefined ? { requiredScope: selfDecision.requiredScope } : {})}
-            {...(selfDecision.decisionId !== undefined ? { decisionId: selfDecision.decisionId } : {})}
+            {...(selfDecision.requiredScope !== undefined
+              ? { requiredScope: selfDecision.requiredScope }
+              : {})}
+            {...(selfDecision.decisionId !== undefined
+              ? { decisionId: selfDecision.decisionId }
+              : {})}
           />
         ) : (
           <PermissionBlockedPanel state="denied" category="VOC 상세" />
@@ -278,4 +349,3 @@ function SummaryPermissionView({
     </div>
   );
 }
-

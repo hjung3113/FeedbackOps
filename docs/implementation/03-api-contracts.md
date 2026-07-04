@@ -224,8 +224,9 @@ idempotency behavior: Idempotency-Key required; hash includes body, Finding id,
   and route identity finding.request_task
 ```
 
-This endpoint does not approve, reject, convert to Task, link an existing Task,
-or create Task Requests from VOC / VOC Cluster sources.
+This endpoint does not approve, reject, convert to Task, or link an existing
+Task. VOC and VOC Cluster Task Request sources are implemented by
+`POST /vocs/:id/request-task` and `POST /voc-clusters/:id/request-task`.
 
 ## Task Request Review Contract
 
@@ -515,6 +516,7 @@ events, and dashboard repair signals.
 | `POST /voc-clusters/:id/create-finding` | FOP-FIND-001 | VOC Cluster | Finding | `created_finding` | finding_created_from_voc_cluster | resolves configured synthesis action for cluster | creating generated VOCs |
 | `POST /survey-responses/:id/create-finding` | FOP-SURVEY-005 | Survey Response | Finding | `generated_finding` | finding_created_from_survey_response | resolves configured synthesis action for survey response | `POST /survey-responses/:id/create-voc` |
 | `POST /vocs/:id/request-task` | FOP-TASK-001 | VOC | Task Request | `requested_task` | task_request_created_from_voc | moves VOC follow-up to pending execution review | creating Task directly from VOC follow-up |
+| `POST /voc-clusters/:id/request-task` | FOP-TASK-001 | VOC Cluster | Task Request | `requested_task` | task_request_created_from_voc_cluster | moves cluster follow-up to pending execution review | creating Task directly from VOC Cluster follow-up |
 | `POST /findings/:id/request-task` | FOP-TASK-001 | Finding | Task Request | `requested_task` | task_request_created_from_finding | moves Finding to pending execution review | creating Task without review when review is required |
 | `POST /survey-findings/:id/request-task` | FOP-SURVEY-005 | Finding | Task Request | `requested_task` | task_request_created_from_survey_finding | moves survey-derived Finding to pending execution review | Survey Response creates VOC |
 | `POST /task-requests/:id/convert` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_created_from_request | satisfies approved execution candidate | folding conversion into approval |
@@ -581,6 +583,7 @@ PATCH /voc-clusters/:id
 POST /voc-clusters/:id/vocs
 DELETE /voc-clusters/:id/vocs/:voc_id
 POST /voc-clusters/:id/create-finding
+POST /voc-clusters/:id/request-task
 ```
 
 Cluster membership changes are audited. MVP cluster APIs must not merge VOC
@@ -597,10 +600,46 @@ records. Cluster merge and split endpoints are out of scope for MVP.
 | Add member | `POST /voc-clusters/:id/vocs` `{ voc_id }` → `201` (inserted) / `200` (already a member). Member VOC must be in the cluster's managed system (else `422 validation.failed`); archived/unreadable VOC ⇒ `404`. |
 | Remove member | `DELETE /voc-clusters/:id/vocs/:voc_id` → `204`; missing membership ⇒ `404`. (No request body — clients must not send `Content-Type: application/json` with an empty body.) |
 | Create finding | `POST /voc-clusters/:id/create-finding` — body = `CreateFindingRequest` (same as `POST /vocs/:id/create-finding`); requires `Idempotency-Key` (UUIDv4). → `201` `FindingDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `source={ type:'voc_cluster', id, relation_type:'created_finding', link_id }`. Writes `finding_created_from_voc_cluster` + the `entity_link.created` audit in the finding txn. |
+| Request task | `POST /voc-clusters/:id/request-task` — body = `{ evidence_summary, requested_outcome }` (same as Finding request-task); requires `Idempotency-Key` (UUIDv4). → `201` `TaskRequestDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `status='pending_review'`, `source={ type:'voc_cluster', id, relation_type:'requested_task', link_id }`. Writes `task_request_created_from_voc_cluster` + the `entity_link.created` audit in the task-request txn. |
 | Authz | Read/list = Admin OR Developer with `finding.read` on the cluster MS. Create/edit/confirm/member-add/remove/create-finding = Admin OR Developer with `finding.manage` on the cluster MS. Reuses the Finding capabilities (no `voc_cluster.*` caps) — see ADR-0024 §H. |
 | Create-finding denial | Source-unreadable ⇒ `404 not_found.record` (hidden); readable-but-no-`finding.manage` ⇒ `403 permission.denied` (mirrors ADR-0024 §C). |
 | Idempotency | `Idempotency-Key`-scoped (same as `POST /vocs/:id/create-finding`): same key replays the same finding; distinct keys create distinct findings. |
-| Audit events | `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`. |
+| Audit events | `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`, `task_request_created_from_voc_cluster`. |
+
+### Task Request Create From VOC / VOC Cluster Contract
+
+`POST /vocs/:id/request-task`
+`POST /voc-clusters/:id/request-task`
+
+```text
+requirement_id: FOP-TASK-001
+request body:
+  evidence_summary string required
+  requested_outcome string required
+response body: TaskRequestDto
+auth and permission:
+  - VOC: authenticated Actor in workspace; source VOC readable under the same
+    rule used by `POST /vocs/:id/create-finding`, plus `finding.manage` on the
+    VOC Primary Managed System. Admin bypass follows the Finding actions
+    convention.
+  - VOC Cluster: Admin or Developer with `finding.manage` on the cluster Primary
+    Managed System, mirroring `POST /voc-clusters/:id/create-finding`.
+validation errors:
+  - invalid id path param
+  - invalid or unknown source object
+  - invalid request body
+  - missing or malformed Idempotency-Key
+side effects:
+  - create task_request.task_requests with status pending_review
+  - create active entity link (voc, task_request, requested_task) or
+    (voc_cluster, task_request, requested_task)
+audit events:
+  - task_request_created_from_voc or task_request_created_from_voc_cluster
+  - entity_link.created when the active link row is newly inserted
+managed_system scope: copied from the source VOC or VOC Cluster
+idempotency behavior: Idempotency-Key required; hash includes body, source id,
+  and route identity voc.request_task or voc_cluster.request_task
+```
 
 ### Finding
 

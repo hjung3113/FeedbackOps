@@ -13,6 +13,7 @@ import {
   FORBIDDEN_PATCH_FIELDS,
   FORBIDDEN_PATCH_FIELD_ERROR_CODES,
   createFindingRequestSchema,
+  createTaskRequestFromVocRequestSchema,
   createVocRequestSchema,
   editDescriptionRequestSchema,
   getConversationQuerySchema,
@@ -31,6 +32,7 @@ import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { FindingsService } from '../findings/index.js';
+import type { TaskRequestsService } from '../task-requests/index.js';
 import type { ConversationService } from './conversation-service.js';
 import type { ReadActorContext, VocReadService } from './read-service.js';
 import type { VocService } from './service.js';
@@ -46,6 +48,7 @@ export interface VocRoutesOptions {
   vocService: VocService;
   vocReadService: VocReadService;
   findingsService: FindingsService;
+  taskRequestsService: TaskRequestsService;
   idempotencyService: IdempotencyService;
   conversationService: ConversationService;
   workspaceId: string;
@@ -63,6 +66,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
     vocService,
     vocReadService,
     findingsService,
+    taskRequestsService,
     idempotencyService,
     conversationService,
     workspaceId,
@@ -185,6 +189,48 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
 
       const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.create_finding' });
       const result = await findingsService.createFindingFromVoc({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        vocId,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/vocs/:id/request-task',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const params = req.params as { id: string };
+      const vocId = params.id;
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = createTaskRequestFromVocRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+
+      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.request_task' });
+      const result = await taskRequestsService.createFromVoc({
         actor: {
           actor_id: sess.actor_id,
           workspace_id: sess.workspace_id,

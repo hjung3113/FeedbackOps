@@ -211,6 +211,12 @@ Rules:
 ```text
 - Approval, rejection, and conversion are audited.
 - Converted Task must preserve source context through entity_links.
+- Request creation from source objects preserves source context through
+  `(finding, task_request, requested_task)`, `(voc, task_request,
+  requested_task)`, or `(voc_cluster, task_request, requested_task)`.
+- Task Request creation audits the source-specific event:
+  `task_request_created_from_finding`, `task_request_created_from_voc`, or
+  `task_request_created_from_voc_cluster`.
 - Reviewer may be Admin or Developer within the same Managed System scope.
 - Self-approval by the same scoped Developer requires explicit `task_request.self_approve` capability.
 - Self-approval stores self_approved, reason, source_entity, and managed_system_id audit metadata.
@@ -331,6 +337,9 @@ Rules:
   - (task_request, task, converted_to)
   - (finding, task, requested_task)
   - (voc, task, evidence_of)
+- VOC/cluster Task Request source tuples added by ADR-0028:
+  - (voc, task_request, requested_task)
+  - (voc_cluster, task_request, requested_task)
 ```
 
 ## Reporter-Facing VOC Status

@@ -503,6 +503,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   await app.register(vocClustersRoutes, {
     sessionService,
     vocClustersService,
+    taskRequestsService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
@@ -532,6 +533,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     vocService,
     vocReadService,
     findingsService,
+    taskRequestsService,
     conversationService,
     idempotencyService,
     workspaceId,
