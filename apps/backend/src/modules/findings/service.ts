@@ -5,6 +5,7 @@ import {
   type FindingDto,
   type FindingStatus,
   type LinkEvidenceRequest,
+  type LinkTaskRequest,
   type ListEvidenceHighlightsResponse,
   type PatchFindingRequest,
   registeredEntityLinkPairSchema,
@@ -18,6 +19,7 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import { insertActiveEntityLink, resolveVocEndpoint } from '../entity-links/repo.js';
 import type { EntityLinksService } from '../entity-links/service.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { lockTaskById } from '../tasks/repo.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
 import {
   type FindingReadRow,
@@ -32,6 +34,7 @@ import {
   insertFinding,
   listEvidenceHighlightsByFinding,
   lockFindingById,
+  updateFindingLinkedTask,
   updateFindingStatus,
 } from './repo.js';
 
@@ -639,6 +642,122 @@ export function createFindingsService(deps: FindingsServiceDeps) {
     });
   }
 
+  async function linkTask(args: {
+    actor: FindingsActor;
+    findingId: string;
+    input: LinkTaskRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: FindingDto }> {
+    const { actor, findingId, input, idempotencyKey, requestHash } = args;
+
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        actor.actor_id,
+        idempotencyKey,
+        requestHash,
+        async () => {
+          const finding = await lockFindingById(tx, {
+            workspaceId: actor.workspace_id,
+            findingId,
+          });
+          if (!finding) throw new HttpError('not_found.record', 'finding not found');
+
+          const canManage = await canManageFinding(deps, actor, finding.primary_managed_system_id, {
+            tx,
+          });
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          const task = await lockTaskById(tx, {
+            workspaceId: actor.workspace_id,
+            taskId: input.task_id,
+          });
+          if (!task) throw new HttpError('not_found.record', 'task not found');
+          if (task.primary_managed_system_id !== finding.primary_managed_system_id) {
+            throw new HttpError('permission.denied', 'task is outside finding scope');
+          }
+
+          if (finding.linked_task_id !== null) {
+            if (finding.linked_task_id === task.id) {
+              const source = await findCreatedFindingSourceLink(tx, {
+                workspaceId: actor.workspace_id,
+                findingId: finding.id,
+              });
+              return { status: 200, body: toDto(finding, source) };
+            }
+            throw new HttpError('validation.failed', 'finding is already linked to a task', {
+              fields: [{ path: ['linked_task_id'], code: 'already_linked' }],
+            });
+          }
+
+          const updated = await updateFindingLinkedTask(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+            taskId: task.id,
+          });
+          const source = await findCreatedFindingSourceLink(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+          });
+
+          const tuple = registeredEntityLinkPairSchema.parse({
+            source_type: 'finding',
+            target_type: 'task',
+            relation_type: 'requested_task',
+          });
+          const link = await insertActiveEntityLink(tx, {
+            workspaceId: actor.workspace_id,
+            sourceType: tuple.source_type,
+            sourceId: finding.id,
+            targetType: tuple.target_type,
+            targetId: task.id,
+            relationType: tuple.relation_type,
+            managedSystemId: finding.primary_managed_system_id,
+            createdBy: actor.actor_id,
+            visibility: 'internal_only',
+          });
+
+          if (link.inserted) {
+            await deps.auditService.record(tx, {
+              workspace_id: actor.workspace_id,
+              actor_id: actor.actor_id,
+              event_type: 'entity_link.created',
+              subject_type: 'entity_link',
+              subject_id: link.row.id,
+              summary: 'Entity link created',
+              detail: {
+                link_id: link.row.id,
+                source: { type: 'finding', id: finding.id },
+                target: { type: 'task', id: task.id },
+                relation_type: 'requested_task',
+                visibility: 'internal_only',
+              },
+            });
+          }
+
+          await deps.auditService.record(tx, {
+            workspace_id: actor.workspace_id,
+            actor_id: actor.actor_id,
+            event_type: 'finding_task_linked',
+            subject_type: 'finding',
+            subject_id: finding.id,
+            summary: 'Finding linked to existing Task',
+            detail: {
+              finding_id: finding.id,
+              task_id: task.id,
+              primary_managed_system_id: finding.primary_managed_system_id,
+            },
+          });
+
+          return { status: 200, body: toDto(updated, source) };
+        },
+      );
+    });
+  }
+
   async function listFindings(args: {
     actor: FindingsActor;
     managedSystemId?: string;
@@ -668,6 +787,7 @@ export function createFindingsService(deps: FindingsServiceDeps) {
     listEvidenceHighlights,
     linkEvidence,
     patchFinding,
+    linkTask,
   };
 }
 

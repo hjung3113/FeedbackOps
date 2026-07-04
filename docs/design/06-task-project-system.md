@@ -192,6 +192,18 @@ converted_to)`, marks the request `converted`, and audits
 Standalone Tasks remain a valid data shape through nullable
 `source_task_request_id`. Standalone `POST /tasks` is deferred.
 
+`GET /tasks/:id` returns a compact Task Detail read model. In addition to the
+execution fields (`status`, `assignee_actor_id`, `priority`, `due_date`, Primary
+Managed System), it resolves why the work exists: the source Task Request via
+`source_task_request_id`, and the source Finding via the active
+`(finding, task_request, requested_task)` link when present. Standalone Tasks
+return `source = null`.
+
+Finding Detail may link an existing in-scope Task directly through
+`POST /findings/:id/link-task`. The command sets `finding.findings.linked_task_id`,
+preserves canonical history with the existing
+`(finding, task, requested_task)` tuple, and audits `finding_task_linked`.
+
 ## Key Workflows
 
 ### WF-TASK-001: VOC Follow-Up To Task Request
@@ -201,6 +213,15 @@ VOC follow-up
 → Task Request
 → approve / reject / needs more evidence / link existing Task
 → converted Task starts in Backlog
+```
+
+### WF-TASK-001A: Finding To Existing Task
+
+```text
+Finding
+→ Link Existing Task
+→ Task Detail shows source context when it came from a Task Request
+→ Finding Detail shows linked Task jump action
 ```
 
 ### WF-TASK-002: Finding To Milestone

@@ -170,6 +170,26 @@ export async function updateFindingStatus(
   return mapFindingRow(row);
 }
 
+export async function updateFindingLinkedTask(
+  tx: Tx,
+  input: { workspaceId: string; findingId: string; taskId: string },
+): Promise<FindingReadRow> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    UPDATE finding.findings
+    SET linked_task_id = ${input.taskId},
+        updated_at = now()
+    WHERE id = ${input.findingId}
+      AND workspace_id = ${input.workspaceId}
+    RETURNING
+      id, workspace_id, primary_managed_system_id, title, summary, source_type,
+      source_id, evidence_count, severity, confidence, status, analytics_area_id,
+      linked_task_id, linked_milestone_id, created_by, created_at, updated_at
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('updateFindingLinkedTask returned no row');
+  return mapFindingRow(row);
+}
+
 export async function listEvidenceHighlightsByFinding(
   db: Db | Tx,
   input: { workspaceId: string; findingId: string },

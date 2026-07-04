@@ -2,6 +2,7 @@ import {
   type ConvertTaskRequestRequest,
   type LinkExistingTaskRequest,
   type ListTasksQuery,
+  type TaskDetailDto,
   type TaskDto,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
@@ -19,10 +20,12 @@ import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
 import {
   type TaskRow,
+  findTaskById,
   insertTask,
   listTasksByWorkspace,
   lockTaskById,
   markTaskRequestConverted,
+  resolveTaskSource,
 } from './repo.js';
 
 export interface TasksActor {
@@ -170,6 +173,34 @@ async function preserveSourceLinks(args: {
 }
 
 export function createTasksService(deps: TasksServiceDeps) {
+  async function getTask(args: {
+    actor: TasksActor;
+    taskId: string;
+  }): Promise<TaskDetailDto> {
+    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+
+    const row = await findTaskById(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      taskId: args.taskId,
+    });
+    if (!row) throw new HttpError('not_found.record', 'task not found');
+
+    const canManage = await canManageFinding(deps, args.actor, row.primary_managed_system_id, {});
+    if (!canManage) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+
+    const source = row.source_task_request_id
+      ? await resolveTaskSource(deps.db, {
+          workspaceId: args.actor.workspace_id,
+          sourceTaskRequestId: row.source_task_request_id,
+        })
+      : null;
+    return { ...taskToDto(row), source };
+  }
+
   async function convertTaskRequest(args: {
     actor: TasksActor;
     taskRequestId: string;
@@ -352,6 +383,7 @@ export function createTasksService(deps: TasksServiceDeps) {
   }
 
   return {
+    getTask,
     convertTaskRequest,
     linkExistingTask,
     listTasks,

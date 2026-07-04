@@ -82,6 +82,8 @@ export const AUDIT_EVENT_TYPES = [
   // Slice 6 #134: Task conversion/link-existing decisions.
   'task_created_from_request',
   'task_linked_to_request',
+  // Slice 6 #135: Finding links an existing Task directly.
+  'finding_task_linked',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -397,6 +399,15 @@ export const taskLinkedToRequestDetailSchema = z.object({
 });
 export type TaskLinkedToRequestDetail = z.infer<typeof taskLinkedToRequestDetailSchema>;
 
+export const findingTaskLinkedDetailSchema = z
+  .object({
+    finding_id: z.string().uuid(),
+    task_id: z.string().uuid(),
+    primary_managed_system_id: z.string().uuid(),
+  })
+  .strict();
+export type FindingTaskLinkedDetail = z.infer<typeof findingTaskLinkedDetailSchema>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
@@ -446,4 +457,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   // Slice 6 #134.
   task_created_from_request: taskCreatedFromRequestDetailSchema,
   task_linked_to_request: taskLinkedToRequestDetailSchema,
+  // Slice 6 #135.
+  finding_task_linked: findingTaskLinkedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

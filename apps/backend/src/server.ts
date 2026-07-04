@@ -454,6 +454,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     findingsService,
     workspaceId,
     rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
     },
   });

@@ -344,6 +344,22 @@ auth and permission: Admin or Developer. Admin sees all workspace Tasks.
 sort: updated_at DESC
 ```
 
+`GET /tasks/:id`
+
+```text
+response body: TaskDetailDto
+auth and permission: Admin or Developer with finding.manage on the Task
+  primary_managed_system_id. Admin bypass follows GET /tasks.
+source resolution:
+  - source = null when source_task_request_id is null
+  - source.task_request = { id, status } when source_task_request_id resolves
+  - source.finding = { id, title, summary, evidence_count } via active
+    (finding, task_request, requested_task) when present
+errors:
+  - unknown id: 404 not_found.record
+  - User or Developer outside Managed System scope: 403 permission.denied
+```
+
 Standalone `POST /tasks` is deferred by issue #134 even though standalone Tasks
 are a valid nullable-source data shape.
 
@@ -609,6 +625,16 @@ updated `FindingDto`. Slice 6 supports only `draft -> active`,
 are rejected as user-directed targets here. Authz reuses `finding.manage`.
 Successful non-no-op transitions audit `finding_status_changed`; same-status
 requests are `200` no-ops returning the current Finding.
+
+`POST /findings/:id/link-task` accepts strict body `{ task_id: uuid }`, requires
+`Idempotency-Key`, and returns the updated `FindingDto`. Authz is Admin or
+Developer with `finding.manage` on the Finding Primary Managed System. The
+target Task must exist in the same workspace and Primary Managed System. The
+command rejects a different pre-existing `linked_task_id` with
+`422 validation.failed` field code `already_linked`; relinking to the same Task
+is a `200` no-op. Side effects are atomic: set `findings.linked_task_id`, create
+the existing `(finding, task, requested_task)` entity link, audit
+`entity_link.created` when inserted, and audit `finding_task_linked`.
 
 ### Task
 

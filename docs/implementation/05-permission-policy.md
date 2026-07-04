@@ -31,7 +31,10 @@ unreadable VOC). Slice 6 issue #133 adds `task_request.self_approve` for
 same-requester Task Request approval. It is Developer-requestable per Managed
 System and sensitive. Slice 6 issue #134 introduces Task conversion and
 Link Existing Task without a new capability; both reuse `finding.manage` on the
-Task Request or Task Primary Managed System, with Admin bypass.
+Task Request or Task Primary Managed System, with Admin bypass. Slice 6 issue
+#135 keeps Task Detail reads and Finding Link Task on the same boundary:
+Admin or Developer with `finding.manage` on the relevant Primary Managed
+System; User is denied.
 
 ## Permission Check Order
 
