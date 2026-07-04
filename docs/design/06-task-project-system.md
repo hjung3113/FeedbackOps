@@ -245,11 +245,11 @@ Acceptance Criteria:
 Views:
 
 ```text
-- Pending Review
+- Pending
+- Needs evidence
 - Approved
 - Rejected
-- Converted to Task
-- Needs More Evidence
+- All
 ```
 
 Actions:
@@ -258,8 +258,8 @@ Actions:
 - Approve
 - Reject
 - Request More Evidence
-- Convert to Task
-- Link Existing Task
+- Convert to Task (S6-4)
+- Link Existing Task (S6-4)
 ```
 
 ### Task Detail

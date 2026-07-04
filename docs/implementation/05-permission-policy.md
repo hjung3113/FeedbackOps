@@ -27,7 +27,9 @@ are NOT sensitive. Reading or creating a Finding is Admin (workspace) or
 Developer scoped to the Finding's `primary_managed_system_id`; User and Reporter
 never read Findings. Creating a Finding from a VOC additionally requires
 `voc.read` on the source VOC's Managed System (no forging a Finding from an
-unreadable VOC).
+unreadable VOC). Slice 6 issue #133 adds `task_request.self_approve` for
+same-requester Task Request approval. It is Developer-requestable per Managed
+System and sensitive.
 
 ## Permission Check Order
 
@@ -97,9 +99,9 @@ allows.
 
 Task Request self-approval is not included in the default Developer scoped
 review permission. A Developer may approve their own Task Request only when a
-grant includes task_request_self_approval for the same managed_system_id. The
-review request must include a reason and the audit event records self_approved,
-reason, source_entity, and managed_system_id.
+grant includes `task_request.self_approve` for the same managed_system_id. The
+review request must include a reason and the approval audit event records
+`self_approval: true`, `sensitive: true`, and the reason.
 
 ## Permission Request Lifecycle
 
@@ -171,6 +173,10 @@ permission_more_info_requested
 permission_more_info_submitted
 permission_revoked
 permission_expired
+task_request_approved
+task_request_rejected
+task_request_needs_more_evidence
+task_request_self_approval_denied
 ```
 
 ## Summary-Visible Contract

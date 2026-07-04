@@ -1,6 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 
-import { createTaskRequestFromFindingRequestSchema } from '@fops/shared';
+import {
+  approveTaskRequestRequestSchema,
+  createTaskRequestFromFindingRequestSchema,
+  listTaskRequestsQuerySchema,
+  rejectTaskRequestRequestSchema,
+  requestMoreEvidenceTaskRequestRequestSchema,
+} from '@fops/shared';
 
 import { fieldsFromZodIssues, HttpError, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
@@ -17,7 +23,7 @@ export interface TaskRequestsRoutesOptions {
   sessionService: SessionService;
   taskRequestsService: TaskRequestsService;
   workspaceId: string;
-  rateLimitConfig?: { mutation?: Record<string, unknown> };
+  rateLimitConfig?: { mutation?: Record<string, unknown>; read?: Record<string, unknown> };
 }
 
 function requireIdempotencyKey(headers: Record<string, unknown>): string {
@@ -42,6 +48,32 @@ export const taskRequestsRoutes: FastifyPluginAsync<TaskRequestsRoutesOptions> =
   opts,
 ) => {
   const { sessionService, taskRequestsService, workspaceId, rateLimitConfig } = opts;
+
+  app.route({
+    method: 'GET',
+    url: '/task-requests',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const parsed = listTaskRequestsQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const result = await taskRequestsService.listTaskRequests({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        ...(parsed.data.status !== undefined ? { status: parsed.data.status } : {}),
+      });
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
+    },
+  });
 
   app.route({
     method: 'POST',
@@ -80,6 +112,133 @@ export const taskRequestsRoutes: FastifyPluginAsync<TaskRequestsRoutesOptions> =
           role_level: sess.role_level,
         },
         findingId: id,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/task-requests/:id/approve',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = approveTaskRequestRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const hash = hashRequestBody({ ...rawBody, taskRequestId: id, route: 'task_request.approve' });
+      const result = await taskRequestsService.decideTaskRequest({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        taskRequestId: id,
+        action: 'approve',
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/task-requests/:id/reject',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = rejectTaskRequestRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const hash = hashRequestBody({ ...rawBody, taskRequestId: id, route: 'task_request.reject' });
+      const result = await taskRequestsService.decideTaskRequest({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        taskRequestId: id,
+        action: 'reject',
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/task-requests/:id/request-more-evidence',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = requestMoreEvidenceTaskRequestRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const hash = hashRequestBody({
+        ...rawBody,
+        taskRequestId: id,
+        route: 'task_request.request_more_evidence',
+      });
+      const result = await taskRequestsService.decideTaskRequest({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        taskRequestId: id,
+        action: 'request_more_evidence',
         input: parsed.data,
         idempotencyKey,
         requestHash: hash,

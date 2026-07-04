@@ -8,3 +8,4 @@ export * from './actors';
 export * from './managed-systems';
 export * from './analytics-areas';
 export * from './attachments';
+export * from './task-requests';

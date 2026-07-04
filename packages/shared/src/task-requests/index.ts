@@ -22,6 +22,36 @@ export type CreateTaskRequestFromFindingRequest = z.infer<
   typeof createTaskRequestFromFindingRequestSchema
 >;
 
+export const listTaskRequestsQuerySchema = z
+  .object({
+    status: taskRequestStatusSchema.optional(),
+  })
+  .strict();
+export type ListTaskRequestsQuery = z.infer<typeof listTaskRequestsQuerySchema>;
+
+export const approveTaskRequestRequestSchema = z
+  .object({
+    reason: z.string().trim().max(4000).optional(),
+  })
+  .strict();
+export type ApproveTaskRequestRequest = z.infer<typeof approveTaskRequestRequestSchema>;
+
+export const rejectTaskRequestRequestSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(4000),
+  })
+  .strict();
+export type RejectTaskRequestRequest = z.infer<typeof rejectTaskRequestRequestSchema>;
+
+export const requestMoreEvidenceTaskRequestRequestSchema = z
+  .object({
+    note: z.string().trim().min(1).max(4000),
+  })
+  .strict();
+export type RequestMoreEvidenceTaskRequestRequest = z.infer<
+  typeof requestMoreEvidenceTaskRequestRequestSchema
+>;
+
 export const taskRequestDtoSchema = z
   .object({
     id: z.string().uuid(),
@@ -33,6 +63,9 @@ export const taskRequestDtoSchema = z
     requested_outcome: z.string(),
     requester_actor_id: z.string().uuid(),
     status: taskRequestStatusSchema,
+    reviewer_actor_id: z.string().uuid().nullable(),
+    decision_reason: z.string().nullable(),
+    decided_at: z.string().datetime().nullable(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     source: z
