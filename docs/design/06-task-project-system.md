@@ -115,6 +115,48 @@ Convert to Task owns final execution fields:
 Task fields may be suggested from the Task Request or source object, but they
 are finalized during Convert to Task.
 
+### Slice 6 Tracer Contract: Finding To Task Request
+
+`POST /findings/:id/request-task` creates a Task Request from an existing
+Finding. The request body is:
+
+```text
+evidence_summary required text
+requested_outcome required text
+```
+
+The source object is the path Finding. The service copies the Finding's
+Primary Managed System, stores requester from the session Actor, and creates
+only `status='pending_review'`.
+
+The storage table is `task_request.task_requests`:
+
+```text
+id uuid primary key
+workspace_id uuid
+source_type text -- finding now; voc and voc_cluster reserved for later source slices
+source_id uuid
+primary_managed_system_id uuid
+evidence_summary text
+requested_outcome text
+requester_actor_id uuid
+status text default pending_review
+created_at timestamptz
+updated_at timestamptz
+```
+
+Side effects are atomic:
+
+```text
+- insert task_request.task_requests
+- insert core.entity_links tuple (finding, task_request, requested_task)
+- audit task_request_created_from_finding
+```
+
+Authorization reuses `finding.manage` for the Finding's Primary Managed
+System. VOC and VOC Cluster Task Request sources, review decisions, conversion
+to Task, and Link Existing Task are deferred.
+
 ## Key Workflows
 
 ### WF-TASK-001: VOC Follow-Up To Task Request
