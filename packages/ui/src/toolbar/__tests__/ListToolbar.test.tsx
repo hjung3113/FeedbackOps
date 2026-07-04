@@ -72,6 +72,19 @@ describe('ListToolbar — tabs mode', () => {
     );
     expect(screen.getByText('+ New VOC')).toBeInTheDocument();
   });
+
+  it('keeps the tab strip scrollable when actions occupy toolbar width', () => {
+    const { container } = render(
+      <ListToolbar
+        tabs={tabs}
+        activeTab="untriaged"
+        action={<button type="button">Action</button>}
+      />,
+    );
+    const tabViewport = container.querySelector('[data-list-toolbar-tabs]');
+    expect(tabViewport?.className).toContain('overflow-x-auto');
+    expect(tabViewport?.className).toContain('whitespace-nowrap');
+  });
 });
 
 describe('ListToolbar — title-only mode', () => {

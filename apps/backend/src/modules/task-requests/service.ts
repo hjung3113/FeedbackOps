@@ -1,6 +1,10 @@
 import {
+  type ApproveTaskRequestRequest,
   type CreateTaskRequestFromFindingRequest,
+  type RejectTaskRequestRequest,
+  type RequestMoreEvidenceTaskRequestRequest,
   type TaskRequestDto,
+  type TaskRequestStatus,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
 
@@ -12,7 +16,14 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import { insertActiveEntityLink } from '../entity-links/repo.js';
 import { lockFindingById } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { findTaskRequestById, insertTaskRequest, type TaskRequestRow } from './repo.js';
+import {
+  findTaskRequestById,
+  insertTaskRequest,
+  listTaskRequestsByWorkspace,
+  lockTaskRequestById,
+  updateTaskRequestDecision,
+  type TaskRequestRow,
+} from './repo.js';
 
 export interface TaskRequestsActor {
   actor_id: string;
@@ -26,6 +37,32 @@ export interface TaskRequestsServiceDeps {
   checkService: CheckService;
   idempotencyService: IdempotencyService;
 }
+
+type TaskRequestDecisionAction = 'approve' | 'reject' | 'request_more_evidence';
+
+const ALLOWED_TASK_REQUEST_TRANSITIONS: Record<
+  TaskRequestDecisionAction,
+  ReadonlyArray<TaskRequestStatus>
+> = {
+  approve: ['pending_review', 'needs_more_evidence'],
+  reject: ['pending_review', 'needs_more_evidence'],
+  request_more_evidence: ['pending_review'],
+};
+
+const TARGET_STATUS_BY_ACTION: Record<TaskRequestDecisionAction, TaskRequestStatus> = {
+  approve: 'approved',
+  reject: 'rejected',
+  request_more_evidence: 'needs_more_evidence',
+};
+
+const EVENT_TYPE_BY_ACTION: Record<
+  TaskRequestDecisionAction,
+  'task_request_approved' | 'task_request_rejected' | 'task_request_needs_more_evidence'
+> = {
+  approve: 'task_request_approved',
+  reject: 'task_request_rejected',
+  request_more_evidence: 'task_request_needs_more_evidence',
+};
 
 function taskRequestToDto(
   row: TaskRequestRow,
@@ -41,6 +78,9 @@ function taskRequestToDto(
     requested_outcome: row.requested_outcome,
     requester_actor_id: row.requester_actor_id,
     status: row.status,
+    reviewer_actor_id: row.reviewer_actor_id,
+    decision_reason: row.decision_reason,
+    decided_at: row.decided_at?.toISOString() ?? null,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
     ...(source
@@ -70,6 +110,37 @@ async function canManageFinding(
     options,
   );
   return decision.allow;
+}
+
+async function hasSelfApprovalCapability(
+  deps: Pick<TaskRequestsServiceDeps, 'checkService'>,
+  actor: TaskRequestsActor,
+  managedSystemId: string,
+  options: Parameters<TaskRequestsServiceDeps['checkService']['checkCapability']>[3],
+): Promise<boolean> {
+  if (actor.role_level === 'admin') return true;
+  const decision = await deps.checkService.checkCapability(
+    actor,
+    'task_request.self_approve',
+    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
+    options,
+  );
+  return decision.allow;
+}
+
+function decisionReasonForAction(
+  action: TaskRequestDecisionAction,
+  input:
+    | ApproveTaskRequestRequest
+    | RejectTaskRequestRequest
+    | RequestMoreEvidenceTaskRequestRequest,
+): string | undefined {
+  if (action === 'request_more_evidence') {
+    return (input as RequestMoreEvidenceTaskRequestRequest).note;
+  }
+  const reason = (input as ApproveTaskRequestRequest | RejectTaskRequestRequest).reason;
+  if (action === 'approve' && reason?.length === 0) return undefined;
+  return reason;
 }
 
 export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
@@ -187,8 +258,173 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     });
   }
 
+  async function listTaskRequests(args: {
+    actor: TaskRequestsActor;
+    status?: TaskRequestStatus;
+  }): Promise<{ items: TaskRequestDto[] }> {
+    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+
+    const rows = await listTaskRequestsByWorkspace(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      ...(args.status !== undefined ? { status: args.status } : {}),
+    });
+    const items: TaskRequestDto[] = [];
+    for (const row of rows) {
+      const canManage = await canManageFinding(
+        deps,
+        args.actor,
+        row.primary_managed_system_id,
+        {},
+      );
+      if (!canManage) continue;
+      items.push(taskRequestToDto(row));
+    }
+    return { items };
+  }
+
+  async function recordSelfApprovalDenied(args: {
+    actor: TaskRequestsActor;
+    taskRequest: TaskRequestRow;
+    reasonPresent: boolean;
+    capabilityPresent: boolean;
+  }): Promise<void> {
+    await deps.db.transaction(async (tx) => {
+      await deps.auditService.record(tx, {
+        workspace_id: args.actor.workspace_id,
+        actor_id: args.actor.actor_id,
+        event_type: 'task_request_self_approval_denied',
+        subject_type: 'task_request',
+        subject_id: args.taskRequest.id,
+        summary: 'Task Request self-approval denied',
+        detail: {
+          task_request_id: args.taskRequest.id,
+          requester_actor_id: args.taskRequest.requester_actor_id,
+          reason_present: args.reasonPresent,
+          capability_present: args.capabilityPresent,
+        },
+      });
+    });
+  }
+
+  async function decideTaskRequest(args: {
+    actor: TaskRequestsActor;
+    taskRequestId: string;
+    action: TaskRequestDecisionAction;
+    input:
+      | ApproveTaskRequestRequest
+      | RejectTaskRequestRequest
+      | RequestMoreEvidenceTaskRequestRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: TaskRequestDto }> {
+    const targetStatus = TARGET_STATUS_BY_ACTION[args.action];
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          const taskRequest = await lockTaskRequestById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskRequestId: args.taskRequestId,
+          });
+          if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
+
+          const canManage = await canManageFinding(
+            deps,
+            args.actor,
+            taskRequest.primary_managed_system_id,
+            { tx },
+          );
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          const reasonOrNote = decisionReasonForAction(args.action, args.input);
+          const reasonPresent = (reasonOrNote?.trim().length ?? 0) > 0;
+
+          if (args.action === 'approve' && taskRequest.requester_actor_id === args.actor.actor_id) {
+            const capabilityPresent = await hasSelfApprovalCapability(
+              deps,
+              args.actor,
+              taskRequest.primary_managed_system_id,
+              { tx },
+            );
+            if (!reasonPresent || !capabilityPresent) {
+              await recordSelfApprovalDenied({
+                actor: args.actor,
+                taskRequest,
+                reasonPresent,
+                capabilityPresent,
+              });
+              throw new HttpError(
+                'permission.denied',
+                'self-approval requires a reason and task_request.self_approve capability',
+              );
+            }
+          }
+
+          if (taskRequest.status === targetStatus) {
+            return { status: 200, body: taskRequestToDto(taskRequest) };
+          }
+
+          if (!ALLOWED_TASK_REQUEST_TRANSITIONS[args.action].includes(taskRequest.status)) {
+            throw new HttpError('validation.failed', 'invalid task request status transition', {
+              fields: [{ path: ['status'], code: 'invalid_transition' }],
+            });
+          }
+
+          const updated = await updateTaskRequestDecision(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskRequestId: taskRequest.id,
+            status: targetStatus,
+            reviewerActorId: args.actor.actor_id,
+            decisionReason: reasonOrNote ?? null,
+          });
+
+          const detail: Record<string, unknown> = {
+            task_request_id: taskRequest.id,
+            from_status: taskRequest.status,
+            to_status: updated.status,
+            reviewer_actor_id: args.actor.actor_id,
+          };
+          if (args.action === 'request_more_evidence') {
+            detail.note = reasonOrNote;
+          } else if (reasonOrNote !== undefined) {
+            detail.reason = reasonOrNote;
+          }
+          if (args.action === 'approve' && taskRequest.requester_actor_id === args.actor.actor_id) {
+            detail.self_approval = true;
+            detail.sensitive = true;
+          }
+
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: EVENT_TYPE_BY_ACTION[args.action],
+            subject_type: 'task_request',
+            subject_id: taskRequest.id,
+            summary: 'Task Request review decision recorded',
+            detail,
+          });
+
+          return { status: 200, body: taskRequestToDto(updated) };
+        },
+      );
+    });
+  }
+
   return {
     createFromFinding,
+    listTaskRequests,
+    decideTaskRequest,
     resolveEndpoint,
   };
 }

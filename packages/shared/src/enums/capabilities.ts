@@ -17,6 +17,7 @@ export const CAPABILITIES = [
   'voc.read',
   'finding.read',
   'finding.manage',
+  'task_request.self_approve',
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -41,6 +42,8 @@ export const CAPABILITY_META: Readonly<Record<Capability, CapabilityMeta>> = {
   'voc.read': { sensitive: false },
   'finding.read': { sensitive: false },
   'finding.manage': { sensitive: false },
+  // Self-approval is sensitive because it bypasses normal reviewer separation.
+  'task_request.self_approve': { sensitive: true },
 };
 
 export function isCapability(value: string): value is Capability {

@@ -212,7 +212,7 @@ Rules:
 - Approval, rejection, and conversion are audited.
 - Converted Task must preserve source context through entity_links.
 - Reviewer may be Admin or Developer within the same Managed System scope.
-- Self-approval by the same scoped Developer requires explicit task_request_self_approval capability.
+- Self-approval by the same scoped Developer requires explicit `task_request.self_approve` capability.
 - Self-approval stores self_approved, reason, source_entity, and managed_system_id audit metadata.
 - reviewer_id may be resolved from Managed System defaults.
 ```

@@ -74,6 +74,11 @@ export const AUDIT_EVENT_TYPES = [
   'finding_status_changed',
   // Slice 6 #132: Task Request tracer from Finding.
   'task_request_created_from_finding',
+  // Slice 6 #133: Task Request review queue decisions.
+  'task_request_approved',
+  'task_request_rejected',
+  'task_request_needs_more_evidence',
+  'task_request_self_approval_denied',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -319,6 +324,36 @@ export type TaskRequestCreatedFromFindingDetail = z.infer<
   typeof taskRequestCreatedFromFindingDetailSchema
 >;
 
+const taskRequestStatusDetailSchema = z.enum([
+  'pending_review',
+  'approved',
+  'rejected',
+  'needs_more_evidence',
+  'converted',
+]);
+
+export const taskRequestDecisionDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  from_status: taskRequestStatusDetailSchema,
+  to_status: taskRequestStatusDetailSchema,
+  reviewer_actor_id: z.string().uuid(),
+  reason: z.string().min(1).max(4000).optional(),
+  note: z.string().min(1).max(4000).optional(),
+  self_approval: z.boolean().optional(),
+  sensitive: z.boolean().optional(),
+});
+export type TaskRequestDecisionDetail = z.infer<typeof taskRequestDecisionDetailSchema>;
+
+export const taskRequestSelfApprovalDeniedDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  requester_actor_id: z.string().uuid(),
+  reason_present: z.boolean(),
+  capability_present: z.boolean(),
+});
+export type TaskRequestSelfApprovalDeniedDetail = z.infer<
+  typeof taskRequestSelfApprovalDeniedDetailSchema
+>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
@@ -360,4 +395,9 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   finding_status_changed: findingStatusChangedDetailSchema,
   // Slice 6 #132.
   task_request_created_from_finding: taskRequestCreatedFromFindingDetailSchema,
+  // Slice 6 #133.
+  task_request_approved: taskRequestDecisionDetailSchema,
+  task_request_rejected: taskRequestDecisionDetailSchema,
+  task_request_needs_more_evidence: taskRequestDecisionDetailSchema,
+  task_request_self_approval_denied: taskRequestSelfApprovalDeniedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

@@ -227,6 +227,60 @@ idempotency behavior: Idempotency-Key required; hash includes body, Finding id,
 This endpoint does not approve, reject, convert to Task, link an existing Task,
 or create Task Requests from VOC / VOC Cluster sources.
 
+## Task Request Review Contract
+
+`GET /task-requests`
+
+```text
+requirement_id: FOP-TASK-002
+query:
+  status optional pending_review|approved|rejected|needs_more_evidence|converted
+response body: { items: TaskRequestDto[] }
+auth and permission: Admin or Developer. Admin sees all Task Requests in the
+  workspace. Developer rows are filtered per Task Request by `finding.manage`
+  on `primary_managed_system_id`.
+sort: created_at DESC
+```
+
+Decision endpoints:
+
+```text
+POST /task-requests/:id/approve
+POST /task-requests/:id/reject
+POST /task-requests/:id/request-more-evidence
+```
+
+```text
+request bodies:
+  approve: { reason?: string max 4000 }
+  reject: { reason string required max 4000 }
+  request-more-evidence: { note string required max 4000 }
+response body: TaskRequestDto
+auth and permission: Admin or Developer with `finding.manage` on the Task
+  Request primary_managed_system_id. Admin bypass follows the same convention
+  used by Finding actions.
+idempotency behavior: Idempotency-Key required; hash includes body, Task
+  Request id, and route identity.
+status machine:
+  approve: pending_review|needs_more_evidence -> approved
+  reject: pending_review|needs_more_evidence -> rejected
+  request-more-evidence: pending_review -> needs_more_evidence
+invalid transition: 422 validation.failed with `invalid_transition` on
+  `status`
+no-op: already in target status returns 200 with current DTO and no new audit
+  event
+self-approval: if reviewer is requester, approve requires non-empty reason and
+  `task_request.self_approve` on the same Managed System unless reviewer is
+  Admin. Denied attempts record `task_request_self_approval_denied`.
+audit events:
+  approve: task_request_approved
+  reject: task_request_rejected
+  request-more-evidence: task_request_needs_more_evidence
+```
+
+These endpoints do not create Task rows, convert to Task, or link existing
+Tasks. Conversion and link-existing-Task remain issue #134.
+
 ## Next Action Contract
 
 Backend responses for work-object detail and queue rows must provide
@@ -386,9 +440,9 @@ events, and dashboard repair signals.
 
 Task Request review may be performed by a workspace Admin or by a Developer in
 the same Managed System Permission Scope. MVP allows a Developer to approve
-their own Task Request only when they have explicit task_request_self_approval
+their own Task Request only when they have explicit `task_request.self_approve`
 capability within that scope. Self-approval requires a reason and must audit
-self_approved, reason, source_entity, and managed_system_id metadata.
+`self_approval: true`, `sensitive: true`, and the reason.
 Approval and conversion are separate domain events. The API may expose an
 approve-and-convert convenience flow, but it must record both
 `task_request_approved` and `task_created_from_request` or
