@@ -8,7 +8,7 @@ import {
   type FindingSeverity,
   type VocClusterMemberDto,
   createFindingRequestSchema,
-} from '@fops/shared';
+} from "@fops/shared";
 import {
   Button,
   DetailPanelHeader,
@@ -22,6 +22,7 @@ import {
   Input,
   Label,
   ListShell,
+  ObjectRow,
   ManagedSystemPill,
   OutlineBadge,
   PanelSectionTitle,
@@ -32,45 +33,49 @@ import {
   SelectValue,
   Skeleton,
   Textarea,
-} from '@fops/ui';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react';
-import type * as React from 'react';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { toast } from 'sonner';
+} from "@fops/ui";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { Plus, Trash2 } from "lucide-react";
+import * as React from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
-import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
-import { useAddClusterMember } from '@/features/voc-cluster/hooks/useAddClusterMember';
-import { useConfirmCluster } from '@/features/voc-cluster/hooks/useConfirmCluster';
-import { useCreateFindingFromCluster } from '@/features/voc-cluster/hooks/useCreateFindingFromCluster';
-import { useRemoveClusterMember } from '@/features/voc-cluster/hooks/useRemoveClusterMember';
-import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useRequestTaskFromCluster';
-import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
-import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
-import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
-import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
-import { useMe } from '@/lib/auth/useMe';
+import { RequestTaskModal } from "@/features/tasks/components/RequestTaskModal";
+import { useAddClusterMember } from "@/features/voc-cluster/hooks/useAddClusterMember";
+import { useConfirmCluster } from "@/features/voc-cluster/hooks/useConfirmCluster";
+import { useCreateFindingFromCluster } from "@/features/voc-cluster/hooks/useCreateFindingFromCluster";
+import { useRemoveClusterMember } from "@/features/voc-cluster/hooks/useRemoveClusterMember";
+import { useRequestTaskFromCluster } from "@/features/voc-cluster/hooks/useRequestTaskFromCluster";
+import { useVocClusterDetail } from "@/features/voc-cluster/hooks/useVocClusterDetail";
+import { useVocClusterList } from "@/features/voc-cluster/hooks/useVocClusterList";
+import { useManagedSystem } from "@/features/voc/hooks/useManagedSystem";
+import { type ApiError, errorMapper, useIdempotencyKey } from "@/lib/api";
+import { useMe } from "@/lib/auth/useMe";
 
-export const Route = createFileRoute('/_authed/voc-clusters/$clusterId')({
+export const Route = createFileRoute("/_authed/voc-clusters/$clusterId")({
   component: VocClusterDetailPage,
 });
 
 // ── Severity options (mirrors CreateFindingModal) ─────────────────────────────
 
 const SEVERITY_OPTIONS: { value: FindingSeverity; label: string }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'critical', label: 'Critical' },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "critical", label: "Critical" },
 ];
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: string }): React.ReactElement {
-  const label = status === 'confirmed' ? '확정' : '초안';
-  return <OutlineBadge data-testid="cluster-detail-status-badge">{label}</OutlineBadge>;
+function DetailStatusBadge({ status }: { status: string }): React.ReactElement {
+  const label = status === "confirmed" ? "확정" : "초안";
+  return (
+    <OutlineBadge data-testid="cluster-detail-status-badge">
+      {label}
+    </OutlineBadge>
+  );
 }
 
 // ── Section divider ───────────────────────────────────────────────────────────
@@ -93,7 +98,35 @@ function shortId(id: string): string {
   return `${id.slice(0, 8)}...`;
 }
 
-function clusterDisplayId(data: { id: string; display_id?: string | null }): string {
+function dot() {
+  return (
+    <span
+      className="h-1 w-1 rounded-full bg-text-muted/60"
+      aria-hidden="true"
+    />
+  );
+}
+
+function formatDate(raw: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "2-digit",
+  }).format(new Date(raw));
+}
+
+function ListStatusBadge({ status }: { status: string }): React.ReactElement {
+  const label = status === "confirmed" ? "확정" : "초안";
+  return (
+    <OutlineBadge data-testid={`cluster-status-badge-${status}`}>
+      {label}
+    </OutlineBadge>
+  );
+}
+
+function clusterDisplayId(data: {
+  id: string;
+  display_id?: string | null;
+}): string {
   return data.display_id?.trim() ? data.display_id : shortId(data.id);
 }
 
@@ -104,13 +137,15 @@ function memberDisplay(member: VocClusterMemberPresentation): {
   if (member.title?.trim()) {
     return {
       primary: member.title,
-      secondary: member.display_id?.trim() ? member.display_id : shortId(member.voc_id),
+      secondary: member.display_id?.trim()
+        ? member.display_id
+        : shortId(member.voc_id),
     };
   }
   if (member.display_id?.trim()) {
     return { primary: member.display_id, secondary: shortId(member.voc_id) };
   }
-  return { primary: 'VOC', secondary: shortId(member.voc_id) };
+  return { primary: "VOC", secondary: shortId(member.voc_id) };
 }
 
 // ── ListShell route hosts ────────────────────────────────────────────────────
@@ -118,53 +153,167 @@ function memberDisplay(member: VocClusterMemberPresentation): {
 export function VocClusterDetailPage(): React.ReactElement {
   const { clusterId } = Route.useParams();
   const navigate = useNavigate();
+
+  return (
+    <VocClusterListShell
+      selectedId={clusterId}
+      onSelect={(id) =>
+        void navigate({
+          to: "/voc-clusters/$clusterId",
+          params: { clusterId: id },
+        })
+      }
+      onCloseDetail={() => void navigate({ to: "/voc-clusters" })}
+    />
+  );
+}
+
+export function VocClusterListShell({
+  selectedId,
+  onSelect,
+  toolbarActions,
+  onCloseDetail,
+  defaultToFirst = false,
+}: {
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  toolbarActions?: React.ReactNode;
+  onCloseDetail: () => void;
+  defaultToFirst?: boolean;
+}): React.ReactElement {
   const listQuery = useVocClusterList();
   const clusters = listQuery.data?.items ?? [];
 
+  React.useEffect(() => {
+    if (defaultToFirst && selectedId === null && clusters[0])
+      onSelect(clusters[0].id);
+  }, [clusters, defaultToFirst, onSelect, selectedId]);
+
   return (
     <ListShell
+      toolbar={{
+        title: "VOC 클러스터",
+        subtitle: "VOC를 유사 주제로 묶어 Finding으로 승격합니다.",
+        actions: toolbarActions,
+      }}
       list={
-        <div className="flex h-full min-h-0 flex-col">
-          <div className="border-b border-border-subtle px-4 py-3">
-            <Link
-              to="/voc-clusters"
-              className="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-1 text-sm text-text-muted hover:bg-surface-card hover:text-text-primary"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-              <span>클러스터 목록</span>
-            </Link>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {clusters.map((cluster) => (
-              <button
-                key={cluster.id}
-                type="button"
-                className={`w-full border-b border-border-subtle px-5 py-3 text-left hover:bg-surface-row-hover ${
-                  cluster.id === clusterId ? 'bg-surface-row-selected' : ''
-                }`}
-                onClick={() =>
-                  void navigate({
-                    to: '/voc-clusters/$clusterId',
-                    params: { clusterId: cluster.id },
-                  })
-                }
-              >
-                <span className="block truncate text-sm font-medium text-text-primary">
-                  {cluster.title}
-                </span>
-                <span className="mt-1 block text-xs text-text-muted">
-                  VOC {cluster.members?.length ?? 0}개
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <ClusterListBody
+          clusters={clusters}
+          isPending={listQuery.isPending}
+          isError={listQuery.isError}
+          selectedId={selectedId}
+          onSelect={onSelect}
+        />
       }
       detailPanel={
-        <VocClusterDetailPanel
-          clusterId={clusterId}
-          onClose={() => void navigate({ to: '/voc-clusters' })}
-        />
+        selectedId ? (
+          <VocClusterDetailPanel
+            clusterId={selectedId}
+            onClose={onCloseDetail}
+          />
+        ) : undefined
+      }
+    />
+  );
+}
+
+function ClusterListBody({
+  clusters,
+  isPending,
+  isError,
+  selectedId,
+  onSelect,
+}: {
+  clusters: Array<{
+    id: string;
+    title: string;
+    status: string;
+    created_at: string;
+    members?: { voc_id: string }[] | undefined;
+  }>;
+  isPending: boolean;
+  isError: boolean;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}): React.ReactElement {
+  return (
+    <section className="flex min-h-full flex-col">
+      <div className="border-b border-border-subtle px-5 py-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            클러스터 목록
+          </h3>
+          <span className="text-xs text-text-muted">{clusters.length}개</span>
+        </div>
+      </div>
+
+      {isPending ? (
+        <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      ) : isError ? (
+        <p
+          className="p-4 text-sm text-accent-danger"
+          data-testid="cluster-list-error"
+        >
+          데이터를 불러오지 못했습니다.
+        </p>
+      ) : clusters.length === 0 ? (
+        <div
+          className="p-8 text-center text-sm text-text-muted"
+          data-testid="cluster-empty-state"
+        >
+          생성된 클러스터가 없습니다.
+        </div>
+      ) : (
+        <div data-testid="cluster-list">
+          {clusters.map((cluster) => (
+            <ClusterRow
+              key={cluster.id}
+              cluster={cluster}
+              selected={selectedId === cluster.id}
+              onClick={() => onSelect(cluster.id)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ClusterRow({
+  cluster,
+  selected,
+  onClick,
+}: {
+  cluster: {
+    id: string;
+    title: string;
+    status: string;
+    created_at: string;
+    members?: { voc_id: string }[] | undefined;
+  };
+  selected: boolean;
+  onClick: () => void;
+}): React.ReactElement {
+  const memberCount = cluster.members?.length ?? 0;
+
+  return (
+    <ObjectRow
+      id={shortId(cluster.id)}
+      title={cluster.title}
+      selected={selected}
+      density="default"
+      onClick={onClick}
+      badges={<ListStatusBadge status={cluster.status} />}
+      meta={
+        <>
+          <span>VOC {memberCount}개</span>
+          {dot()}
+          <span>{formatDate(cluster.created_at)}</span>
+        </>
       }
     />
   );
@@ -180,16 +329,21 @@ export function VocClusterDetailPanel({
   onClose?: () => void;
 }): React.ReactElement {
   const { data, isLoading, isError, error } = useVocClusterDetail(clusterId);
-  const presentation = data as (typeof data & VocClusterDetailPresentation) | undefined;
+  const presentation = data as
+    | (typeof data & VocClusterDetailPresentation)
+    | undefined;
   const managedSystem = useManagedSystem(data?.primary_managed_system_id);
   const { data: me } = useMe();
-  const canMutate = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
+  const canMutate =
+    me?.actor.role_level === "admin" || me?.actor.role_level === "developer";
 
   const [addVocOpen, setAddVocOpen] = useState(false);
   const [createFindingOpen, setCreateFindingOpen] = useState(false);
   const [requestTaskOpen, setRequestTaskOpen] = useState(false);
-  const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
-    useIdempotencyKey();
+  const {
+    key: requestTaskIdempotencyKey,
+    markConsumed: markRequestTaskConsumed,
+  } = useIdempotencyKey();
 
   const confirmMutation = useConfirmCluster();
   const removeMemberMutation = useRemoveClusterMember();
@@ -223,15 +377,15 @@ export function VocClusterDetailPanel({
         data-testid="cluster-detail-error"
       >
         <p className="text-sm text-feedback-error">
-          {code === 'not_found.record'
-            ? '클러스터를 찾을 수 없습니다.'
-            : '데이터를 불러오지 못했습니다.'}
+          {code === "not_found.record"
+            ? "클러스터를 찾을 수 없습니다."
+            : "데이터를 불러오지 못했습니다."}
         </p>
         <Button
           variant="outline"
           size="sm"
           className="mt-3"
-          onClick={() => void navigate({ to: '/voc-clusters' })}
+          onClick={() => void navigate({ to: "/voc-clusters" })}
         >
           목록으로
         </Button>
@@ -243,8 +397,9 @@ export function VocClusterDetailPanel({
 
   function handleConfirm() {
     confirmMutation.mutate(clusterId, {
-      onSuccess: () => toast.success('클러스터가 확정되었습니다.'),
-      onError: (err: ApiError) => toast.error(errorMapper(err.envelope).message),
+      onSuccess: () => toast.success("클러스터가 확정되었습니다."),
+      onError: (err: ApiError) =>
+        toast.error(errorMapper(err.envelope).message),
     });
   }
 
@@ -252,8 +407,9 @@ export function VocClusterDetailPanel({
     removeMemberMutation.mutate(
       { clusterId, vocId },
       {
-        onSuccess: () => toast.success('VOC가 클러스터에서 제거되었습니다.'),
-        onError: (err: ApiError) => toast.error(errorMapper(err.envelope).message),
+        onSuccess: () => toast.success("VOC가 클러스터에서 제거되었습니다."),
+        onError: (err: ApiError) =>
+          toast.error(errorMapper(err.envelope).message),
       },
     );
   }
@@ -271,15 +427,18 @@ export function VocClusterDetailPanel({
       <DetailPanelHeader
         kind="cluster"
         id={clusterDisplayId(data)}
-        onClose={onClose ?? (() => void navigate({ to: '/voc-clusters' }))}
+        onClose={onClose ?? (() => void navigate({ to: "/voc-clusters" }))}
       />
       {/* Header */}
       <div className="shrink-0 px-6 pt-6 pb-4 border-b border-border-subtle">
         <div className="flex items-center gap-2 mb-1">
           <OutlineBadge>VOC Cluster</OutlineBadge>
-          <StatusBadge status={data.status} />
+          <DetailStatusBadge status={data.status} />
         </div>
-        <h1 className="text-xl font-semibold text-text-primary" data-testid="cluster-detail-title">
+        <h1
+          className="text-xl font-semibold text-text-primary"
+          data-testid="cluster-detail-title"
+        >
           {data.title}
         </h1>
       </div>
@@ -307,9 +466,11 @@ export function VocClusterDetailPanel({
             <FieldRow label="Managed System" className="px-0">
               <span data-testid="cluster-detail-managed-system">
                 <ManagedSystemPill
-                  name={managedSystem?.name ?? 'Managed System'}
+                  name={managedSystem?.name ?? "Managed System"}
                   {...(managedSystem?.mark ? { mark: managedSystem.mark } : {})}
-                  {...(managedSystem ? { archived: managedSystem.archived } : {})}
+                  {...(managedSystem
+                    ? { archived: managedSystem.archived }
+                    : {})}
                 />
               </span>
             </FieldRow>
@@ -321,7 +482,7 @@ export function VocClusterDetailPanel({
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <PanelSectionTitle>멤버 VOC ({members.length})</PanelSectionTitle>
-              {canMutate && data.status === 'draft' && (
+              {canMutate && data.status === "draft" && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -351,7 +512,7 @@ export function VocClusterDetailPanel({
                     key={member.voc_id}
                     member={member}
                     last={i === members.length - 1}
-                    canRemove={canMutate && data.status === 'draft'}
+                    canRemove={canMutate && data.status === "draft"}
                     onRemove={() => handleRemoveMember(member.voc_id)}
                     isRemoving={
                       removeMemberMutation.isPending &&
@@ -373,7 +534,7 @@ export function VocClusterDetailPanel({
         {canMutate ? (
           <>
             {/* Confirm button — only shown when draft */}
-            {data.status === 'draft' && (
+            {data.status === "draft" && (
               <Button
                 variant="default"
                 size="sm"
@@ -403,7 +564,10 @@ export function VocClusterDetailPanel({
             </Button>
           </>
         ) : (
-          <span className="text-xs text-text-muted" data-testid="cluster-cta-hint">
+          <span
+            className="text-xs text-text-muted"
+            data-testid="cluster-cta-hint"
+          >
             Admin 또는 Developer 권한이 있어야 클러스터를 관리할 수 있습니다.
           </span>
         )}
@@ -411,7 +575,11 @@ export function VocClusterDetailPanel({
 
       {/* Add VOC modal */}
       {canMutate && (
-        <AddVocModal open={addVocOpen} clusterId={clusterId} onClose={() => setAddVocOpen(false)} />
+        <AddVocModal
+          open={addVocOpen}
+          clusterId={clusterId}
+          onClose={() => setAddVocOpen(false)}
+        />
       )}
 
       {/* Create Finding modal */}
@@ -434,7 +602,7 @@ export function VocClusterDetailPanel({
                 markRequestTaskConsumed();
                 setRequestTaskOpen(false);
                 requestTaskMutation.reset();
-                toast.success('Task Request가 생성되었습니다.');
+                toast.success("Task Request가 생성되었습니다.");
               },
             });
           }}
@@ -459,25 +627,25 @@ function MemberRow({
   onRemove: () => void;
   isRemoving: boolean;
 }): React.ReactElement {
-  const addedDate = new Date(member.added_at).toLocaleDateString('ko-KR');
+  const addedDate = new Date(member.added_at).toLocaleDateString("ko-KR");
   const display = memberDisplay(member);
 
   return (
     <div
       data-testid={`cluster-member-row-${member.voc_id}`}
-      className={`flex items-center justify-between gap-3 px-4 py-2.5${last ? '' : ' border-b border-border-subtle'}`}
+      className={`flex items-center justify-between gap-3 px-4 py-2.5${last ? "" : " border-b border-border-subtle"}`}
     >
       <div className="flex flex-col gap-0.5 min-w-0">
         <Link
           to="/vocs"
-          search={{ view: 'inbox', selected: member.voc_id }}
+          search={{ view: "inbox", selected: member.voc_id }}
           className="truncate text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
           data-testid={`cluster-member-link-${member.voc_id}`}
         >
           {display.primary}
         </Link>
         <span className="text-xs text-text-muted">
-          {display.secondary ? `${display.secondary} · ` : ''}추가됨 {addedDate}
+          {display.secondary ? `${display.secondary} · ` : ""}추가됨 {addedDate}
         </span>
       </div>
       {canRemove && (
@@ -507,12 +675,12 @@ function AddVocModal({
   clusterId: string;
   onClose: () => void;
 }): React.ReactElement {
-  const [vocId, setVocId] = useState('');
+  const [vocId, setVocId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mutation = useAddClusterMember();
 
   function closeAndReset() {
-    setVocId('');
+    setVocId("");
     setError(null);
     mutation.reset();
     onClose();
@@ -525,7 +693,7 @@ function AddVocModal({
       { clusterId, vocId },
       {
         onSuccess: () => {
-          toast.success('VOC가 클러스터에 추가되었습니다.');
+          toast.success("VOC가 클러스터에 추가되었습니다.");
           closeAndReset();
         },
         onError: (err: ApiError) => {
@@ -568,7 +736,10 @@ function AddVocModal({
             />
           </div>
           {error && (
-            <p data-testid="add-voc-error" className="text-sm text-accent-danger">
+            <p
+              data-testid="add-voc-error"
+              className="text-sm text-accent-danger"
+            >
               {error}
             </p>
           )}
@@ -615,11 +786,11 @@ function CreateFindingFromClusterModal({
   const form = useForm<CreateFindingRequest>({
     resolver: zodResolver(createFindingRequestSchema),
     defaultValues: {
-      title: '',
-      summary: '',
-      severity: 'medium',
+      title: "",
+      summary: "",
+      severity: "medium",
     },
-    mode: 'onBlur',
+    mode: "onBlur",
   });
 
   function closeAndReset() {
@@ -637,7 +808,10 @@ function CreateFindingFromClusterModal({
           form.reset();
           mutation.reset();
           onClose();
-          void navigate({ to: '/findings/$findingId', params: { findingId: finding.id } });
+          void navigate({
+            to: "/findings/$findingId",
+            params: { findingId: finding.id },
+          });
         },
         onError: (err: ApiError) => {
           toast.error(errorMapper(err.envelope).message);
@@ -655,7 +829,10 @@ function CreateFindingFromClusterModal({
         if (!isOpen) closeAndReset();
       }}
     >
-      <DialogContent className="max-w-lg" data-testid="create-finding-from-cluster-modal">
+      <DialogContent
+        className="max-w-lg"
+        data-testid="create-finding-from-cluster-modal"
+      >
         <DialogHeader>
           <DialogTitle>Finding 생성</DialogTitle>
         </DialogHeader>
@@ -675,7 +852,7 @@ function CreateFindingFromClusterModal({
             <Input
               id="cluster-finding-title"
               placeholder="Finding을 한 줄로 요약하세요."
-              {...form.register('title')}
+              {...form.register("title")}
               aria-invalid={Boolean(form.formState.errors.title)}
               data-testid="cluster-finding-title-input"
             />
@@ -695,7 +872,7 @@ function CreateFindingFromClusterModal({
               id="cluster-finding-summary"
               placeholder="어떤 문제가 있고 왜 실행해야 하는지 설명하세요."
               rows={4}
-              {...form.register('summary')}
+              {...form.register("summary")}
               aria-invalid={Boolean(form.formState.errors.summary)}
               data-testid="cluster-finding-summary-input"
             />
@@ -714,7 +891,9 @@ function CreateFindingFromClusterModal({
             <Select
               defaultValue="medium"
               onValueChange={(val) =>
-                form.setValue('severity', val as FindingSeverity, { shouldValidate: true })
+                form.setValue("severity", val as FindingSeverity, {
+                  shouldValidate: true,
+                })
               }
             >
               <SelectTrigger

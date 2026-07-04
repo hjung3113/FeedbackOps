@@ -1,7 +1,7 @@
 // /voc-clusters — ADR-0020 ListShell cluster list + right detail panel.
 // CreateClusterModal opens on "클러스터 생성" and navigates to detail on create.
 
-import * as React from 'react';
+import * as React from "react";
 import {
   Button,
   Dialog,
@@ -11,49 +11,22 @@ import {
   DialogTitle,
   Input,
   Label,
-  ListShell,
-  ObjectRow,
-  OutlineBadge,
-  Skeleton,
   Textarea,
-} from '@fops/ui';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
-import { useState } from 'react';
-import { toast } from 'sonner';
-import type { CreateVocClusterRequest } from '@fops/shared';
-import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
-import { useCreateVocCluster } from '@/features/voc-cluster/hooks/useCreateVocCluster';
-import { useMe } from '@/lib/auth/useMe';
-import { fetchManagedSystems, errorMapper, type ApiError } from '@/lib/api';
-import { useQuery } from '@tanstack/react-query';
-import { VocClusterDetailPanel } from './$clusterId';
+} from "@fops/ui";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import type { CreateVocClusterRequest } from "@fops/shared";
+import { useCreateVocCluster } from "@/features/voc-cluster/hooks/useCreateVocCluster";
+import { useMe } from "@/lib/auth/useMe";
+import { fetchManagedSystems, errorMapper, type ApiError } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { VocClusterListShell } from "./$clusterId";
 
-export const Route = createFileRoute('/_authed/voc-clusters/')({
+export const Route = createFileRoute("/_authed/voc-clusters/")({
   component: VocClusterListPage,
 });
-
-// ── Status badge ──────────────────────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: string }): React.ReactElement {
-  const label = status === 'confirmed' ? '확정' : '초안';
-  return <OutlineBadge data-testid={`cluster-status-badge-${status}`}>{label}</OutlineBadge>;
-}
-
-function dot() {
-  return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
-}
-
-function shortId(id: string): string {
-  return `${id.slice(0, 8)}...`;
-}
-
-function formatDate(raw: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-  }).format(new Date(raw));
-}
 
 // ── ListShell page ────────────────────────────────────────────────────────────
 
@@ -62,31 +35,22 @@ export function VocClusterListPage(): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { data: me } = useMe();
-  const listQuery = useVocClusterList();
-  const clusters = listQuery.data?.items ?? [];
-  const canCreate = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
+  const canCreate =
+    me?.actor.role_level === "admin" || me?.actor.role_level === "developer";
 
-  React.useEffect(() => {
-    if (selectedId === null && clusters[0]) setSelectedId(clusters[0].id);
-  }, [clusters, selectedId]);
-
-  const selected = selectedId ? (clusters.find((item) => item.id === selectedId) ?? null) : null;
-
-  function selectCluster(id: string): void {
+  const selectCluster = React.useCallback((id: string): void => {
     setSelectedId(id);
-    void navigate({
-      to: '/voc-clusters/$clusterId',
-      params: { clusterId: id },
-    });
-  }
+  }, []);
 
   return (
     <>
-      <ListShell
-        toolbar={{
-          title: 'VOC 클러스터',
-          subtitle: 'VOC를 유사 주제로 묶어 Finding으로 승격합니다.',
-          actions: canCreate ? (
+      <VocClusterListShell
+        selectedId={selectedId}
+        onSelect={selectCluster}
+        onCloseDetail={() => setSelectedId(null)}
+        defaultToFirst
+        toolbarActions={
+          canCreate ? (
             <Button
               variant="primary"
               size="sm"
@@ -97,24 +61,13 @@ export function VocClusterListPage(): React.ReactElement {
               클러스터 생성
             </Button>
           ) : (
-            <span className="text-xs text-text-muted" data-testid="cluster-create-hint">
+            <span
+              className="text-xs text-text-muted"
+              data-testid="cluster-create-hint"
+            >
               Admin 또는 Developer 권한이 필요합니다.
             </span>
-          ),
-        }}
-        list={
-          <ClusterListBody
-            clusters={clusters}
-            isPending={listQuery.isPending}
-            isError={listQuery.isError}
-            selectedId={selected?.id ?? null}
-            onSelect={selectCluster}
-          />
-        }
-        detailPanel={
-          selected ? (
-            <VocClusterDetailPanel clusterId={selected.id} onClose={() => setSelectedId(null)} />
-          ) : undefined
+          )
         }
       />
 
@@ -125,111 +78,14 @@ export function VocClusterListPage(): React.ReactElement {
           onCreated={(id) => {
             setCreateOpen(false);
             setSelectedId(id);
-            void navigate({ to: '/voc-clusters/$clusterId', params: { clusterId: id } });
+            void navigate({
+              to: "/voc-clusters/$clusterId",
+              params: { clusterId: id },
+            });
           }}
         />
       )}
     </>
-  );
-}
-
-// ── Body ──────────────────────────────────────────────────────────────────────
-
-function ClusterListBody({
-  clusters,
-  isPending,
-  isError,
-  selectedId,
-  onSelect,
-}: {
-  clusters: Array<{
-    id: string;
-    title: string;
-    status: string;
-    created_at: string;
-    members?: { voc_id: string }[] | undefined;
-  }>;
-  isPending: boolean;
-  isError: boolean;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}): React.ReactElement {
-  return (
-    <section className="flex min-h-full flex-col">
-      <div className="border-b border-border-subtle px-5 py-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            클러스터 목록
-          </h3>
-          <span className="text-xs text-text-muted">{clusters.length}개</span>
-        </div>
-      </div>
-
-      {isPending ? (
-        <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </div>
-      ) : isError ? (
-        <p className="p-4 text-sm text-accent-danger" data-testid="cluster-list-error">
-          데이터를 불러오지 못했습니다.
-        </p>
-      ) : clusters.length === 0 ? (
-        <div className="p-8 text-center text-sm text-text-muted" data-testid="cluster-empty-state">
-          생성된 클러스터가 없습니다.
-        </div>
-      ) : (
-        <div data-testid="cluster-list">
-          {clusters.map((cluster) => (
-            <ClusterRow
-              key={cluster.id}
-              cluster={cluster}
-              selected={selectedId === cluster.id}
-              onClick={() => onSelect(cluster.id)}
-            />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ── Row ───────────────────────────────────────────────────────────────────────
-
-function ClusterRow({
-  cluster,
-  selected,
-  onClick,
-}: {
-  cluster: {
-    id: string;
-    title: string;
-    status: string;
-    created_at: string;
-    members?: { voc_id: string }[] | undefined;
-  };
-  selected: boolean;
-  onClick: () => void;
-}): React.ReactElement {
-  const memberCount = cluster.members?.length ?? 0;
-
-  return (
-    <ObjectRow
-      id={shortId(cluster.id)}
-      title={cluster.title}
-      selected={selected}
-      density="default"
-      onClick={onClick}
-      badges={<StatusBadge status={cluster.status} />}
-      meta={
-        <>
-          <span>VOC {memberCount}개</span>
-          {dot()}
-          <span>{formatDate(cluster.created_at)}</span>
-        </>
-      }
-    />
   );
 }
 
@@ -244,23 +100,24 @@ function CreateClusterModal({
   onClose: () => void;
   onCreated: (id: string) => void;
 }): React.ReactElement {
-  const [title, setTitle] = useState('');
-  const [summary, setSummary] = useState('');
-  const [managedSystemId, setManagedSystemId] = useState('');
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [managedSystemId, setManagedSystemId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const systemsQuery = useQuery({
-    queryKey: ['managed-systems', { includeArchived: false }] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: false, signal }),
+    queryKey: ["managed-systems", { includeArchived: false }] as const,
+    queryFn: ({ signal }) =>
+      fetchManagedSystems({ includeArchived: false, signal }),
     retry: false,
   });
 
   const mutation = useCreateVocCluster();
 
   function closeAndReset() {
-    setTitle('');
-    setSummary('');
-    setManagedSystemId('');
+    setTitle("");
+    setSummary("");
+    setManagedSystemId("");
     setError(null);
     mutation.reset();
     onClose();
@@ -335,7 +192,10 @@ function CreateClusterModal({
 
           {/* Managed System */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cluster-managed-system" className="text-text-secondary">
+            <Label
+              htmlFor="cluster-managed-system"
+              className="text-text-secondary"
+            >
               Managed System <span aria-hidden>*</span>
             </Label>
             <select
@@ -356,7 +216,10 @@ function CreateClusterModal({
           </div>
 
           {error && (
-            <p data-testid="create-cluster-error" className="text-sm text-accent-danger">
+            <p
+              data-testid="create-cluster-error"
+              className="text-sm text-accent-danger"
+            >
               {error}
             </p>
           )}
