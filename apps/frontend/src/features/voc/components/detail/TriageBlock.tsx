@@ -11,9 +11,15 @@ import {
 
 export interface TriageBlockProps {
   voc: VocDetailEnvelope;
+  ownerDisplayName?: string | null | undefined;
+  analyticsAreaName?: string | null | undefined;
 }
 
-export function TriageBlock({ voc }: TriageBlockProps): React.ReactElement {
+export function TriageBlock({
+  voc,
+  ownerDisplayName,
+  analyticsAreaName,
+}: TriageBlockProps): React.ReactElement {
   return (
     <div>
       <PanelSectionTitle>트리아지 (Read only)</PanelSectionTitle>
@@ -30,7 +36,7 @@ export function TriageBlock({ voc }: TriageBlockProps): React.ReactElement {
       {/* 담당자 */}
       <FieldRow label="담당자">
         {voc.owner_user_id !== null ? (
-          <UserChip user={{ display_name: `Actor ${voc.owner_user_id.slice(0, 8)}` }} size="sm" />
+          <UserChip user={{ display_name: ownerDisplayName ?? 'Owner' }} size="sm" />
         ) : (
           <span className="text-sm text-feedback-error">Owner 없음</span>
         )}
@@ -39,7 +45,7 @@ export function TriageBlock({ voc }: TriageBlockProps): React.ReactElement {
       {/* 분석 영역 */}
       <FieldRow label="분석 영역">
         {voc.analytics_area_id !== null ? (
-          <span className="text-sm text-text-primary">{voc.analytics_area_id.slice(0, 8)}</span>
+          <span className="text-sm text-text-primary">{analyticsAreaName ?? 'Analytics area'}</span>
         ) : (
           <span className="text-sm text-feedback-warning">미지정</span>
         )}

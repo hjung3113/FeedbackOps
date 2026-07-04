@@ -15,7 +15,7 @@ This ADR locks the taxonomy and the rhythm so the production React + TanStack Ro
 Every production route MUST classify as one of:
 
 - `PageShell` — page-body routes whose content is not a list or work surface. Examples: Home / Action Dashboard, Integration Action Dashboard, Coverage, Survey list (cards), Admin managed systems, Admin analytics areas, Admin settings, Roadmap, New VOC. `PageShell` exposes `title`, `subtitle`, `eyebrow`, `actions`, `back`, and `fluid` slots.
-- `ListShell` — filter / list / detail routes. Owns the toolbar slot, an optional `beforeList` extension row, the scroll body, and an optional right detail panel. Examples: VOC inbox + detail, Tasks requests / backlog / my / inbox, Evidence highlights, Entity Links, Findings.
+- `ListShell` — filter / list / detail routes. Owns the toolbar slot, an optional `beforeList` extension row, the scroll body, and an optional right detail panel. Examples: VOC inbox + detail, VOC clusters list + detail, Tasks requests / backlog / my / inbox, Evidence highlights, Entity Links, Findings.
 - `WorkbenchShell` — work surfaces whose body is not a simple object list. Owns the toolbar slot, an optional below-toolbar content row, the body, and an optional detail panel. Examples: Tasks board, VOC Triage console, Survey builder, Survey result.
 
 Backlog, Survey builder/result, and Roadmap are explicit **extensions** of those three, not new shell families. When a screen feels like it needs a new shell, the answer is to pick the closest existing shell and add an extension row, not to invent.

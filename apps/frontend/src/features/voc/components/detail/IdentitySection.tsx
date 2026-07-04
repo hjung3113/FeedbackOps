@@ -29,20 +29,19 @@ const SOURCE_CONTEXT_LABELS: Record<string, string> = {
 
 export interface IdentitySectionProps {
   voc: VocDetailEnvelope;
+  reporterDisplayName?: string | undefined;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function IdentitySection({ voc }: IdentitySectionProps): React.ReactElement {
+export function IdentitySection({
+  voc,
+  reporterDisplayName,
+}: IdentitySectionProps): React.ReactElement {
   const { data: me } = useMe();
-
-  // Reporter resolution: if the current actor IS the reporter, use real name;
-  // otherwise fall back to a truncated-ID stub (no actor-lookup API in Slice 3).
-  const reporterDisplayName: string =
-    me?.actor.id === voc.reporter_id
-      ? me.actor.display_name
-      : `Actor ${voc.reporter_id.slice(0, 8)}`;
-
+  const resolvedReporterDisplayName =
+    reporterDisplayName ??
+    (me?.actor.id === voc.reporter_id ? me.actor.display_name : 'Reporter');
   const relativeTime = formatVocCreatedAt(voc.created_at);
 
   // Title block: prototype .panel-title typography via PanelTitleBlock.
@@ -59,7 +58,7 @@ export function IdentitySection({ voc }: IdentitySectionProps): React.ReactEleme
       <div className="flex items-center gap-2 text-xs text-text-muted">
         <ReporterStatusBadge status={voc.reporter_facing_status} />
         <span aria-hidden="true">·</span>
-        <span>{reporterDisplayName}</span>
+        <span>{resolvedReporterDisplayName}</span>
         <span aria-hidden="true">·</span>
         <span>{relativeTime}</span>
       </div>
@@ -73,10 +72,12 @@ export function IdentitySection({ voc }: IdentitySectionProps): React.ReactEleme
 // information stays visible but no longer competes with the title.
 export interface IdentityMetadataStripProps {
   voc: VocDetailEnvelope;
+  analyticsAreaName?: string | null | undefined;
 }
 
 export function IdentityMetadataStrip({
   voc,
+  analyticsAreaName,
 }: IdentityMetadataStripProps): React.ReactElement | null {
   const managedSystem = useManagedSystem(voc.primary_managed_system_id);
 
@@ -99,7 +100,7 @@ export function IdentityMetadataStrip({
         <ManagedSystemPill name={managedSystem.name} mark={managedSystem.mark} />
       )}
       {hasAnalyticsArea && analyticsAreaId !== null && (
-        <OutlineBadge>{analyticsAreaId.slice(0, 8)}</OutlineBadge>
+        <OutlineBadge>{analyticsAreaName ?? 'Analytics area'}</OutlineBadge>
       )}
       <OutlineBadge>{sourceContextLabel}</OutlineBadge>
     </div>

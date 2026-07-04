@@ -2,14 +2,18 @@
 
 import * as React from 'react';
 import type { VocDetailEnvelope } from '@fops/shared';
-import { PanelSectionTitle, EmptyState, PermissionBlockedPanel } from '@fops/ui';
+import { PanelSectionTitle, EmptyState, PermissionBlockedPanel, OutlineBadge } from '@fops/ui';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 
 export interface LinkedExecutionSectionProps {
   voc: VocDetailEnvelope;
+  linkedTask?: { title: string; status: string } | null;
 }
 
-export function LinkedExecutionSection({ voc }: LinkedExecutionSectionProps): React.ReactElement {
+export function LinkedExecutionSection({
+  voc,
+  linkedTask = null,
+}: LinkedExecutionSectionProps): React.ReactElement {
   const linkedFindingDecision = usePermissionDecision(voc, 'linkedFinding');
 
   if (linkedFindingDecision !== null) {
@@ -30,11 +34,14 @@ export function LinkedExecutionSection({ voc }: LinkedExecutionSectionProps): Re
   return (
     <div>
       <PanelSectionTitle>연결된 실행</PanelSectionTitle>
-      <EmptyState
-        size="sm"
-        title="아직 연결된 Finding/Task가 없습니다."
-        body="(Slice 4/5에서 활성화)"
-      />
+      {linkedTask !== null ? (
+        <div className="flex items-center justify-between gap-3 rounded-sm border border-border-subtle bg-surface-card px-3 py-2">
+          <span className="text-sm font-medium text-text-primary">{linkedTask.title}</span>
+          <OutlineBadge>{linkedTask.status}</OutlineBadge>
+        </div>
+      ) : (
+        <EmptyState size="sm" title="연결된 실행 없음" />
+      )}
     </div>
   );
 }

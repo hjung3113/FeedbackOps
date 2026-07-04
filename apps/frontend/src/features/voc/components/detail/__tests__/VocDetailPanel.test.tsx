@@ -1,10 +1,18 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type * as React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
+vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({ useWorkspaceActors: vi.fn() }));
 vi.mock('@/features/voc/hooks/usePermissionDecision', () => ({ usePermissionDecision: vi.fn() }));
 vi.mock('@/features/voc/hooks/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
 vi.mock('@/features/voc/hooks/useVocConversation', () => ({ useVocConversation: vi.fn() }));
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return { ...actual, getTask: vi.fn() };
+});
+vi.mock('@/lib/api/analytics-areas', () => ({ fetchAnalyticsAreas: vi.fn() }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 vi.mock('@fops/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@fops/ui')>();
@@ -49,9 +57,11 @@ vi.mock('@/features/voc/components/detail/ComposerSection', () => ({
 }));
 
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
+import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
 import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
 import { VocDetailPanel } from '../VocDetailPanel';
 import {
@@ -62,17 +72,31 @@ import {
   makeConversationQuery,
 } from './_fixtures';
 
+function renderWithClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
 beforeEach(() => {
   vi.mocked(useManagedSystem).mockReturnValue(null);
   vi.mocked(usePermissionDecision).mockReturnValue(null);
   vi.mocked(useVocConversation).mockReturnValue(makeConversationQuery());
+  vi.mocked(useWorkspaceActors).mockReturnValue({
+    actors: [
+      { id: DETAIL_ENVELOPE.reporter_id, display_name: ME_RESPONSE.actor.display_name, kind: 'user' },
+      { id: '00000000-0000-0000-0000-000000000002', display_name: '박운영', kind: 'user' },
+    ],
+  } as ReturnType<typeof useWorkspaceActors>);
+  vi.mocked(fetchAnalyticsAreas).mockResolvedValue({ items: [], total: 0 });
   vi.mocked(useMe).mockReturnValue(makeMeQuery());
 });
 
 describe('<VocDetailPanel>', () => {
   it('happy path: renders the detail panel with title', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
-    render(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
+    renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getByText('테스트 VOC 제목')).toBeInTheDocument();
   });
 
@@ -80,7 +104,7 @@ describe('<VocDetailPanel>', () => {
     vi.mocked(useVocDetail).mockReturnValue(
       makeDetailQuery({ isLoading: true, isPending: true, isSuccess: false, status: 'pending', data: undefined }),
     );
-    const { container } = render(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
+    const { container } = renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(container.querySelector('.animate-pulse')).not.toBeNull();
     expect(screen.queryByText('테스트 VOC 제목')).not.toBeInTheDocument();
   });
@@ -97,7 +121,7 @@ describe('<VocDetailPanel>', () => {
         data: undefined,
       }),
     );
-    render(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
+    renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getByText('VOC를 찾을 수 없습니다.')).toBeInTheDocument();
   });
 
@@ -116,7 +140,7 @@ describe('<VocDetailPanel>', () => {
     vi.mocked(usePermissionDecision).mockReturnValue({ state: 'denied' });
     vi.mocked(useMe).mockReturnValue(makeMeQuery());
 
-    render(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
+    renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     // PermissionBlockedPanel renders; title should NOT be present
     expect(screen.queryByText('테스트 VOC 제목')).not.toBeInTheDocument();
   });
@@ -134,14 +158,14 @@ describe('<VocDetailPanel>', () => {
         data: undefined,
       }),
     );
-    render(<VocDetailPanel vocId="voc-uuid-1111" onClose={onClose} />);
+    renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={onClose} />);
     screen.getByRole('button', { name: '선택 해제' }).click();
     expect(onClose).toHaveBeenCalledOnce();
   });
 
   it('renders all 7 section titles in happy path', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
-    render(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
+    renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
     // Description section now uses an English 'BODY' label per the
     // reference image (see .review/title-reference.png + relaxed copy rule).
@@ -155,7 +179,7 @@ describe('<VocDetailPanel>', () => {
     vi.mocked(useVocDetail).mockReturnValue(
       makeDetailQuery({ data: { ...DETAIL_ENVELOPE, reporter_id: ME_RESPONSE.actor.id } }),
     );
-    render(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
+    renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getAllByText('김개발').length).toBeGreaterThan(0);
   });
 
@@ -163,7 +187,7 @@ describe('<VocDetailPanel>', () => {
   it('#6 dirty composer close: shows DirtyConfirmation before closing panel', async () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     const onClose = vi.fn();
-    render(<VocDetailPanel vocId="voc-uuid-1111" onClose={onClose} />);
+    renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={onClose} />);
 
     // Mark composer dirty via stub trigger
     fireEvent.click(screen.getByTestId('composer-dirty-trigger'));

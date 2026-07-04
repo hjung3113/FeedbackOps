@@ -4,9 +4,11 @@
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
-import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
+import { getTask, type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
-import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
+import type { EntityLinkDto, VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import {
   Button,
   DetailPanelSectionNav,
@@ -15,6 +17,7 @@ import {
   Skeleton,
 } from '@fops/ui';
 import * as React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
@@ -47,6 +50,21 @@ function isSummaryEnvelope(
   data: VocDetailEnvelope | VocSummaryEnvelope,
 ): data is VocSummaryEnvelope {
   return !('title' in data);
+}
+
+type AllowedEntityLink = Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
+type SummaryVisibleEntityLink = Extract<EntityLinkDto, { visibility_state: 'summary_visible' }>;
+
+function isAllowedTaskLinkForVoc(link: EntityLinkDto, vocId: string): link is AllowedEntityLink {
+  if (link.visibility_state !== 'allowed') return false;
+  return (
+    (link.source_type === 'voc' && link.source_id === vocId && link.target_type === 'task') ||
+    (link.target_type === 'voc' && link.target_id === vocId && link.source_type === 'task')
+  );
+}
+
+function isSummaryVisibleTaskLink(link: EntityLinkDto): link is SummaryVisibleEntityLink {
+  return link.visibility_state === 'summary_visible' && link.target_type === 'task';
 }
 
 // ── Loading skeleton ─────────────────────────────────────────────────────────
@@ -174,6 +192,48 @@ function FullDetailView({
     useIdempotencyKey();
   // Scroll container ref for section nav anchor tracking
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const { actors } = useWorkspaceActors();
+  const actorNamesById = React.useMemo(
+    () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
+    [actors],
+  );
+  const analyticsAreasQuery = useQuery({
+    queryKey: ['analytics-areas', voc.primary_managed_system_id] as const,
+    queryFn: ({ signal }) =>
+      fetchAnalyticsAreas({
+        managedSystemId: voc.primary_managed_system_id,
+        includeArchived: true,
+        signal,
+      }),
+    staleTime: 10 * 60 * 1000,
+  });
+  const analyticsAreasById = React.useMemo(
+    () => new Map((analyticsAreasQuery.data?.items ?? []).map((area) => [area.id, area.name])),
+    [analyticsAreasQuery.data?.items],
+  );
+  const allowedTaskLink = voc.links?.find((link) => isAllowedTaskLinkForVoc(link, voc.id));
+  const summaryTaskLink = voc.links?.find(isSummaryVisibleTaskLink);
+  const linkedTaskId =
+    allowedTaskLink?.source_type === 'task'
+      ? allowedTaskLink.source_id
+      : allowedTaskLink?.target_type === 'task'
+        ? allowedTaskLink.target_id
+        : null;
+  const linkedTaskQuery = useQuery({
+    queryKey: ['task', linkedTaskId] as const,
+    queryFn: ({ signal }) => getTask(linkedTaskId as string, signal),
+    enabled: linkedTaskId !== null,
+    staleTime: 30 * 1000,
+  });
+  const linkedTask =
+    linkedTaskQuery.data !== undefined
+      ? { title: linkedTaskQuery.data.title, status: linkedTaskQuery.data.status }
+      : summaryTaskLink?.summary.target_type === 'task'
+        ? {
+            title: summaryTaskLink.summary.public_title,
+            status: summaryTaskLink.summary.reporter_facing_status,
+          }
+        : null;
 
   // FE display hint only (ADR-0024 §C): gate button to Admin or Developer.
   const canCreateFinding = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
@@ -228,23 +288,43 @@ function FullDetailView({
           className="flex flex-col flex-1 min-h-0 overflow-y-auto pt-7 px-6 pb-16"
         >
           <div data-anchor="overview">
-            <IdentitySection voc={voc} />
+            <IdentitySection
+              voc={voc}
+              reporterDisplayName={actorNamesById.get(voc.reporter_id) ?? me?.actor.display_name}
+            />
           </div>
           <div data-anchor="triage">
-            <TriageBlock voc={voc} />
+            <TriageBlock
+              voc={voc}
+              ownerDisplayName={
+                voc.owner_user_id !== null ? (actorNamesById.get(voc.owner_user_id) ?? null) : null
+              }
+              analyticsAreaName={
+                voc.analytics_area_id !== null
+                  ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
+                  : null
+              }
+            />
           </div>
           <div data-anchor="description">
             <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
             {/* Relocated metadata strip — severity/managed-system/AA/source-context
                 chips moved out of the title block per .review/title-reference.png */}
-            <IdentityMetadataStrip voc={voc} />
+            <IdentityMetadataStrip
+              voc={voc}
+              analyticsAreaName={
+                voc.analytics_area_id !== null
+                  ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
+                  : null
+              }
+            />
           </div>
           <div data-anchor="trail">
-            <LinkedExecutionSection voc={voc} />
+            <LinkedExecutionSection voc={voc} linkedTask={linkedTask} />
             <LinkedEntityTrailSection />
           </div>
           <div data-anchor="conversation">
-            <ConversationTimeline voc={voc} />
+            <ConversationTimeline voc={voc} actorNamesById={actorNamesById} />
           </div>
           <div data-anchor="internal" />
           <div data-anchor="compose">
