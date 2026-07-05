@@ -29,3 +29,6 @@ minio_data/
 docs/.llmwiki/
 .claude/worktrees/
 smoke-*.png
+# Workflow toolkit lives in a separate repo (see project-workflow-extraction);
+# never commit a symlink into it — product repo stays product-only.
+scripts/codex-safe.sh
