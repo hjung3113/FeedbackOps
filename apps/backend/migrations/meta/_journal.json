@@ -127,6 +127,69 @@
       "when": 1780540000000,
       "tag": "0017_voc_per_workspace_display_counter",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1781533641945,
+      "tag": "0018_entity_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1781534641945,
+      "tag": "0019_entity_link_detach",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1781535641945,
+      "tag": "0020_finding_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1781536641945,
+      "tag": "0021_evidence_highlights",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1781537641945,
+      "tag": "0022_voc_clusters",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1781538641945,
+      "tag": "0023_task_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1781539641945,
+      "tag": "0024_task_request_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1781540641945,
+      "tag": "0025_task_domain",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1781541641945,
+      "tag": "0026_voc_task_request_links",
+      "breakpoints": true
     }
   ]
 }

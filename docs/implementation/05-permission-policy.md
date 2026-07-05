@@ -19,6 +19,29 @@ Permission Scope. User is the lowest role level and may submit VOC and access
 their own allowed work. Reporter is the Actor who submitted a specific VOC, not
 a separate role level.
 
+Capability vocabulary is module-prefixed (`{module}.{action}`,
+`packages/shared/src/enums/capabilities.ts`). Slice 5 (ADR-0024) adds
+`finding.read` (read a Finding / its entity links) and `finding.manage`
+(create/update a Finding). Both are Developer-requestable per Managed System and
+are NOT sensitive. Reading or creating a Finding is Admin (workspace) or
+Developer scoped to the Finding's `primary_managed_system_id`; User and Reporter
+never read Findings. Creating a Finding from a VOC additionally requires
+`voc.read` on the source VOC's Managed System (no forging a Finding from an
+unreadable VOC). Slice 6 issue #133 adds `task_request.self_approve` for
+same-requester Task Request approval. It is Developer-requestable per Managed
+System and sensitive. Slice 6 issue #134 introduces Task conversion and
+Link Existing Task without a new capability; both reuse `finding.manage` on the
+Task Request or Task Primary Managed System, with Admin bypass. Slice 6 issue
+#135 keeps Task Detail reads and Finding Link Task on the same boundary:
+Admin or Developer with `finding.manage` on the relevant Primary Managed
+System; User is denied.
+Slice 6 issue #136 extends Task Request creation to VOC and VOC Cluster sources
+without adding a new capability. `POST /vocs/:id/request-task` mirrors
+`POST /vocs/:id/create-finding`: source VOC readability plus `finding.manage`
+on the source Primary Managed System, with Admin bypass. `POST
+/voc-clusters/:id/request-task` mirrors cluster create-finding authority:
+Admin or Developer with `finding.manage` on the cluster Primary Managed System.
+
 ## Permission Check Order
 
 ```text
@@ -87,9 +110,9 @@ allows.
 
 Task Request self-approval is not included in the default Developer scoped
 review permission. A Developer may approve their own Task Request only when a
-grant includes task_request_self_approval for the same managed_system_id. The
-review request must include a reason and the audit event records self_approved,
-reason, source_entity, and managed_system_id.
+grant includes `task_request.self_approve` for the same managed_system_id. The
+review request must include a reason and the approval audit event records
+`self_approval: true`, `sensitive: true`, and the reason.
 
 ## Permission Request Lifecycle
 
@@ -161,11 +184,25 @@ permission_more_info_requested
 permission_more_info_submitted
 permission_revoked
 permission_expired
+task_request_approved
+task_request_rejected
+task_request_needs_more_evidence
+task_request_self_approval_denied
+task_request_created_from_voc
+task_request_created_from_voc_cluster
+task_created_from_request
+task_linked_to_request
 ```
 
 ## Summary-Visible Contract
 
 When entity link visibility is `summary_visible`, the target module returns a safe summary.
+
+ADR-0023 is the authoritative summary contract (Slice 4.4 #115): canonical Task
+field list, forbidden-field list, and the decision table. The fields below are
+the canonical list ADR-0023 reconciles to. No `voc` summary exists; `summary_visible`
+is not emitted for a `voc` target, and the runtime `getReporterSummary` resolver
+lands with the first non-VOC link target, not in #115.
 
 Dashboard recovery visibility may be summary-safe even when the underlying
 source object is not fully visible. Gap visibility, source-object visibility,

@@ -15,9 +15,15 @@ export interface TimelineProps {
   vocId: string;
   inline: ConversationEntry[];
   hasMore: boolean;
+  actorNamesById?: ReadonlyMap<string, string> | undefined;
 }
 
-export function InternalTimeline({ vocId, inline, hasMore }: TimelineProps): React.ReactElement {
+export function InternalTimeline({
+  vocId,
+  inline,
+  hasMore,
+  actorNamesById,
+}: TimelineProps): React.ReactElement {
   const query = useVocConversation({ vocId, kind: 'internal_comment' });
   const paginatedEntries: ConversationEntry[] =
     query.data?.pages.flatMap((p) => p.items) ?? [];
@@ -41,13 +47,23 @@ export function InternalTimeline({ vocId, inline, hasMore }: TimelineProps): Rea
       )}
 
       {paginatedEntries.map((entry) => (
-        <TimelineEntry key={entry.id} entry={entry} />
+        <TimelineEntry
+          key={entry.id}
+          entry={entry}
+          actorDisplayName={actorNamesById?.get(entry.actor_id)}
+        />
       ))}
 
       {inline.length === 0 && paginatedEntries.length === 0 ? (
         <EmptyState size="sm" title="아직 대화가 없습니다." />
       ) : (
-        inline.map((entry) => <TimelineEntry key={entry.id} entry={entry} />)
+        inline.map((entry) => (
+          <TimelineEntry
+            key={entry.id}
+            entry={entry}
+            actorDisplayName={actorNamesById?.get(entry.actor_id)}
+          />
+        ))
       )}
     </div>
   );

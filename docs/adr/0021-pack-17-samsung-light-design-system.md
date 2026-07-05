@@ -46,6 +46,13 @@ ADR-0016 locked "dark-only in MVP" with the explicit reopen clause: "Introducing
 
 Full mapping lives in `packages/ui/src/styles/__tests__/token-fidelity.fixture.ts` (created in #18 C1a).
 
+Issue #55 round 2 adds semantic Managed System identity tokens for prototype
+scope marks (`--managed-system-tableau`, `--managed-system-power-bi`,
+`--managed-system-looker`, `--managed-system-metabase`,
+`--managed-system-default`) plus `--text-system-mark` for the compact glyph
+label. Runtime components must consume these variables rather than embedding
+the prototype `data.js` color values inline.
+
 ## Reopen triggers
 
 Adding dark theme back, raising accessibility target to AAA, switching token format away from R G B triple, or exposing raw color tokens to components each warrant a new ADR.

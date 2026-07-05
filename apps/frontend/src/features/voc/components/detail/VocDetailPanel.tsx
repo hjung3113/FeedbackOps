@@ -1,23 +1,37 @@
 // VocDetailPanel — orchestrator for the read-only VOC detail panel (Slice 3 #20 C8).
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
-import * as React from 'react';
-import { Skeleton, PermissionBlockedPanel, DirtyConfirmation, DetailPanelSectionNav } from '@fops/ui';
-import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
-import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
+import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
+import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
+import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
+import { getTask, type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
+import type { EntityLinkDto, VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
+import {
+  Button,
+  DetailPanelSectionNav,
+  DirtyConfirmation,
+  PermissionBlockedPanel,
+  Skeleton,
+} from '@fops/ui';
+import * as React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
-import { DetailHeader } from './DetailHeader';
-import { IdentitySection, IdentityMetadataStrip } from './IdentitySection';
-import { TriageBlock } from './TriageBlock';
-import { DescriptionSection } from './DescriptionSection';
-import { LinkedExecutionSection } from './LinkedExecutionSection';
-import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
-import { ConversationTimeline } from './ConversationTimeline';
+import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
+import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
 import { ComposerSection } from './ComposerSection';
-import { NextActionFooter } from './NextActionFooter';
+import { ConversationTimeline } from './ConversationTimeline';
+import { DescriptionSection } from './DescriptionSection';
+import { DetailHeader } from './DetailHeader';
 import { DetailPanelNotFound } from './DetailPanelNotFound';
+import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
+import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
+import { LinkedExecutionSection } from './LinkedExecutionSection';
+import { NextActionFooter } from './NextActionFooter';
+import { TriageBlock } from './TriageBlock';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +50,21 @@ function isSummaryEnvelope(
   data: VocDetailEnvelope | VocSummaryEnvelope,
 ): data is VocSummaryEnvelope {
   return !('title' in data);
+}
+
+type AllowedEntityLink = Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
+type SummaryVisibleEntityLink = Extract<EntityLinkDto, { visibility_state: 'summary_visible' }>;
+
+function isAllowedTaskLinkForVoc(link: EntityLinkDto, vocId: string): link is AllowedEntityLink {
+  if (link.visibility_state !== 'allowed') return false;
+  return (
+    (link.source_type === 'voc' && link.source_id === vocId && link.target_type === 'task') ||
+    (link.target_type === 'voc' && link.target_id === vocId && link.source_type === 'task')
+  );
+}
+
+function isSummaryVisibleTaskLink(link: EntityLinkDto): link is SummaryVisibleEntityLink {
+  return link.visibility_state === 'summary_visible' && link.target_type === 'task';
 }
 
 // ── Loading skeleton ─────────────────────────────────────────────────────────
@@ -107,8 +136,7 @@ export function VocDetailPanel({
 
   // 4. Full detail envelope
   const voc: VocDetailEnvelope = data;
-  const isReporterOnOwnVoc =
-    me?.actor.id === voc.reporter_id && voc.triage_state === 'untriaged';
+  const isReporterOnOwnVoc = me?.actor.id === voc.reporter_id && voc.triage_state === 'untriaged';
 
   return (
     <FullDetailView
@@ -158,8 +186,66 @@ function FullDetailView({
   // REV-1 #6: track composer dirty state; intercept panel close to show DirtyConfirmation.
   const [composerDirty, setComposerDirty] = React.useState(false);
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
+  const [createFindingOpen, setCreateFindingOpen] = React.useState(false);
+  const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
+  const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
+    useIdempotencyKey();
   // Scroll container ref for section nav anchor tracking
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const { actors } = useWorkspaceActors();
+  const actorNamesById = React.useMemo(
+    () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
+    [actors],
+  );
+  const analyticsAreasQuery = useQuery({
+    queryKey: ['analytics-areas', voc.primary_managed_system_id] as const,
+    queryFn: ({ signal }) =>
+      fetchAnalyticsAreas({
+        managedSystemId: voc.primary_managed_system_id,
+        includeArchived: true,
+        signal,
+      }),
+    staleTime: 10 * 60 * 1000,
+  });
+  const analyticsAreasById = React.useMemo(
+    () => new Map((analyticsAreasQuery.data?.items ?? []).map((area) => [area.id, area.name])),
+    [analyticsAreasQuery.data?.items],
+  );
+  const allowedTaskLink = voc.links?.find((link) => isAllowedTaskLinkForVoc(link, voc.id));
+  const summaryTaskLink = voc.links?.find(isSummaryVisibleTaskLink);
+  const linkedTaskId =
+    allowedTaskLink?.source_type === 'task'
+      ? allowedTaskLink.source_id
+      : allowedTaskLink?.target_type === 'task'
+        ? allowedTaskLink.target_id
+        : null;
+  const linkedTaskQuery = useQuery({
+    queryKey: ['task', linkedTaskId] as const,
+    queryFn: ({ signal }) => getTask(linkedTaskId as string, signal),
+    enabled: linkedTaskId !== null,
+    staleTime: 30 * 1000,
+  });
+  const linkedTask =
+    linkedTaskQuery.data !== undefined
+      ? { title: linkedTaskQuery.data.title, status: linkedTaskQuery.data.status }
+      : summaryTaskLink?.summary.target_type === 'task'
+        ? {
+            title: summaryTaskLink.summary.public_title,
+            status: summaryTaskLink.summary.reporter_facing_status,
+          }
+        : null;
+
+  // FE display hint only (ADR-0024 §C): gate button to Admin or Developer.
+  const canCreateFinding = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
+  const canRequestTask = canCreateFinding;
+
+  const requestTaskMutation = useRequestTaskFromVoc({
+    vocId,
+    idempotencyKey: requestTaskIdempotencyKey,
+    onError: (err: ApiError) => {
+      toast.error(errorMapper(err.envelope).message);
+    },
+  });
 
   function handleClose() {
     if (composerDirty) {
@@ -179,6 +265,11 @@ function FullDetailView({
     setDirtyConfirmOpen(false);
   }
 
+  function closeRequestTaskModal(): void {
+    requestTaskMutation.reset();
+    setRequestTaskOpen(false);
+  }
+
   return (
     <>
       <div className="flex flex-col h-full" data-testid="voc-detail-panel">
@@ -192,28 +283,102 @@ function FullDetailView({
         {/* Section nav — sticky anchor tabs (prototype: screen-voc.jsx:191) */}
         <DetailPanelSectionNav sections={DETAIL_SECTIONS} scrollRef={scrollRef} />
 
-        <div ref={scrollRef} className="flex flex-col flex-1 min-h-0 overflow-y-auto pt-7 px-6 pb-16">
-          <div data-anchor="overview"><IdentitySection voc={voc} /></div>
-          <div data-anchor="triage"><TriageBlock voc={voc} /></div>
+        <div
+          ref={scrollRef}
+          className="flex flex-col flex-1 min-h-0 overflow-y-auto pt-7 px-6 pb-16"
+        >
+          <div data-anchor="overview">
+            <IdentitySection
+              voc={voc}
+              reporterDisplayName={actorNamesById.get(voc.reporter_id) ?? me?.actor.display_name}
+            />
+          </div>
+          <div data-anchor="triage">
+            <TriageBlock
+              voc={voc}
+              ownerDisplayName={
+                voc.owner_user_id !== null ? (actorNamesById.get(voc.owner_user_id) ?? null) : null
+              }
+              analyticsAreaName={
+                voc.analytics_area_id !== null
+                  ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
+                  : null
+              }
+            />
+          </div>
           <div data-anchor="description">
             <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
             {/* Relocated metadata strip — severity/managed-system/AA/source-context
                 chips moved out of the title block per .review/title-reference.png */}
-            <IdentityMetadataStrip voc={voc} />
+            <IdentityMetadataStrip
+              voc={voc}
+              analyticsAreaName={
+                voc.analytics_area_id !== null
+                  ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
+                  : null
+              }
+            />
           </div>
-          <div data-anchor="trail"><LinkedExecutionSection voc={voc} /><LinkedEntityTrailSection /></div>
-          <div data-anchor="conversation"><ConversationTimeline voc={voc} /></div>
+          <div data-anchor="trail">
+            <LinkedExecutionSection voc={voc} linkedTask={linkedTask} />
+            <LinkedEntityTrailSection />
+          </div>
+          <div data-anchor="conversation">
+            <ConversationTimeline voc={voc} actorNamesById={actorNamesById} />
+          </div>
           <div data-anchor="internal" />
-          <div data-anchor="compose"><ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} /></div>
+          <div data-anchor="compose">
+            <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
+          </div>
         </div>
 
         <NextActionFooter voc={voc} />
+        {(canCreateFinding || canRequestTask) && (
+          <div className="px-4 pb-3 flex justify-end gap-2 border-t border-border-subtle pt-2">
+            {canRequestTask && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRequestTaskOpen(true)}
+                data-testid="voc-request-task-button"
+              >
+                Task 요청
+              </Button>
+            )}
+            {canCreateFinding && (
+              <Button variant="outline" size="sm" onClick={() => setCreateFindingOpen(true)}>
+                Finding 생성
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       <DirtyConfirmation
         open={dirtyConfirmOpen}
         onConfirm={handleDirtyConfirm}
         onCancel={handleDirtyCancel}
+      />
+      <CreateFindingModal
+        vocId={vocId}
+        open={createFindingOpen}
+        onClose={() => setCreateFindingOpen(false)}
+      />
+      <RequestTaskModal
+        open={requestTaskOpen}
+        evidenceSummaryDefault={`VOC ${voc.display_id}: ${voc.title}`}
+        isSubmitting={requestTaskMutation.isPending}
+        onClose={closeRequestTaskModal}
+        onSubmit={(values) => {
+          requestTaskMutation.mutate(values, {
+            onSuccess: () => {
+              markRequestTaskConsumed();
+              setRequestTaskOpen(false);
+              requestTaskMutation.reset();
+              toast.success('Task Request가 생성되었습니다.');
+            },
+          });
+        }}
       />
     </>
   );
@@ -250,8 +415,12 @@ function SummaryPermissionView({
             state={selfDecision.state}
             category="VOC 상세"
             {...(selfDecision.reason !== undefined ? { reason: selfDecision.reason } : {})}
-            {...(selfDecision.requiredScope !== undefined ? { requiredScope: selfDecision.requiredScope } : {})}
-            {...(selfDecision.decisionId !== undefined ? { decisionId: selfDecision.decisionId } : {})}
+            {...(selfDecision.requiredScope !== undefined
+              ? { requiredScope: selfDecision.requiredScope }
+              : {})}
+            {...(selfDecision.decisionId !== undefined
+              ? { decisionId: selfDecision.decisionId }
+              : {})}
           />
         ) : (
           <PermissionBlockedPanel state="denied" category="VOC 상세" />
@@ -260,4 +429,3 @@ function SummaryPermissionView({
     </div>
   );
 }
-

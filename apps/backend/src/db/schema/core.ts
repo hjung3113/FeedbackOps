@@ -280,6 +280,74 @@ export const analyticsAreas = coreSchema.table(
   }),
 );
 
+// ─────────────────────────────────────────────────────────────────────────
+// core.entity_links — Slice 4.1 tracer. Canonical polymorphic relationship
+// table; this slice permits only active VOC↔VOC related_to links.
+// ─────────────────────────────────────────────────────────────────────────
+export const entityLinks = coreSchema.table(
+  'entity_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    sourceType: text('source_type').notNull(),
+    sourceId: uuid('source_id').notNull(),
+    targetType: text('target_type').notNull(),
+    targetId: uuid('target_id').notNull(),
+    relationType: text('relation_type').notNull(),
+    visibility: text('visibility').notNull().default('internal_only'),
+    status: text('status').notNull().default('active'),
+    managedSystemId: uuid('managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => actors.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }),
+    detachedBy: uuid('detached_by').references(() => actors.id),
+    detachReason: text('detach_reason'),
+    detachedAt: timestamp('detached_at', { withTimezone: true }),
+  },
+  (t) => ({
+    tupleCheck: check(
+      'entity_links_tuple_check',
+      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'), ('voc','finding','evidence_of'))`,
+    ),
+    visibilityCheck: check(
+      'entity_links_visibility_check',
+      sql`${t.visibility} in ('internal_only','summary_visible','visible_to_reporter','admin_only')`,
+    ),
+    statusCheck: check(
+      'entity_links_status_check',
+      sql`${t.status} in ('active','stale','detached','revoked')`,
+    ),
+    notSelfCheck: check(
+      'entity_links_not_self_check',
+      sql`not (${t.sourceType} = ${t.targetType} and ${t.sourceId} = ${t.targetId})`,
+    ),
+    activeUniqueIdx: uniqueIndex('entity_links_active_unique_idx')
+      .on(t.workspaceId, t.sourceType, t.sourceId, t.targetType, t.targetId, t.relationType)
+      .where(sql`${t.status} = 'active'`),
+    activeSourceIdx: index('entity_links_active_source_idx')
+      .on(t.workspaceId, t.sourceType, t.sourceId)
+      .where(sql`${t.status} = 'active'`),
+    activeTargetIdx: index('entity_links_active_target_idx')
+      .on(t.workspaceId, t.targetType, t.targetId)
+      .where(sql`${t.status} = 'active'`),
+    workspaceMsStatusIdx: index('entity_links_workspace_ms_status_idx').on(
+      t.workspaceId,
+      t.managedSystemId,
+      t.status,
+    ),
+    workspaceRelationIdx: index('entity_links_workspace_relation_idx').on(
+      t.workspaceId,
+      t.relationType,
+    ),
+  }),
+);
+
 export const idempotencyKeys = coreSchema.table(
   'idempotency_keys',
   {

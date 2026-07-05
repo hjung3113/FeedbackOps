@@ -88,6 +88,13 @@
   --confidence-medium: var(--color-cyan-spark);
   --confidence-high: var(--color-emerald);
 
+  /* --- Managed System identity tokens (prototype data.js scope marks) --- */
+  --managed-system-tableau: 94 106 210;  /* #5e6ad2 */
+  --managed-system-power-bi: 242 196 109; /* #f2c46d */
+  --managed-system-looker: 2 184 204;    /* #02b8cc */
+  --managed-system-metabase: 39 166 68;  /* #27a644 */
+  --managed-system-default: var(--color-aether-blue);
+
   /* --- Layout tokens --- */
   --sidebar-width: 240px;
   --sidebar-width-collapsed: 56px;
@@ -95,6 +102,11 @@
   --detail-panel-width: 440px;
   --toolbar-height: 50px;
   --topbar-height: 50px;
+  --entity-link-inventory-min-width: 1040px;
+  --entity-link-inventory-narrow-col-width: 104px;
+  --entity-link-inventory-row-height: 52px;
+  --entity-link-object-row-grid: 24px auto 1fr auto;
+  --entity-link-object-id-min-width: 64px;
   --row-height-compact: 44px;
   --row-height-default: 60px;
   --row-height-expanded: 96px;
@@ -148,6 +160,7 @@
   --text-heading: 24px;
   --text-heading-lg: 32px;
   --text-display: 48px;
+  --text-system-mark: 8px;
 
   /* --- Typography: leading --- */
   --leading-tight: 1.2;

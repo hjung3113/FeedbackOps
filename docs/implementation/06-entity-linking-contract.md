@@ -57,7 +57,107 @@ getInternalSummary(id)
 listExpectedLinks(id)
 ```
 
+Slice 4.1 tracer registry (#112):
+
+```text
+voc -> voc
+- relation_type: related_to
+- resolver: voc.vocs(id, workspace_id, primary_managed_system_id)
+- create authz: actor must have voc.read on both source and target Managed Systems
+- read authz: focused endpoint must be readable; the opposite endpoint is emitted
+  as visibility_state=allowed when readable and visibility_state=hidden when not
+```
+
+Slice 4.3 workspace inventory (#114):
+
+```text
+GET /entity-links?scope=workspace
+- default inventory mode is also used when no source or target endpoint is
+  supplied.
+- endpoint mode and workspace inventory mode are mutually exclusive.
+- optional filters: status=active|stale|detached|revoked, relation_type=related_to,
+  managed_system_id=<uuid>
+- order: created_at DESC, id DESC
+- response: { items: EntityLinkDto[] }
+- authz: every row checks voc.read on both endpoints' Managed Systems.
+  Rows are visibility_state=allowed only when both endpoints are readable;
+  otherwise they are visibility_state=hidden.
+- hidden inventory rows expose audit metadata but never source_id, target_id, or
+  synthesized endpoint summaries.
+```
+
+Slice 5 provider registry (Finding From VOC, ADR-0024):
+
+```text
+finding -> registered as a link TARGET type
+- relation_type: created_finding   (voc -> finding), created by POST /vocs/:id/create-finding
+- resolver: finding.findings(id, workspace_id, primary_managed_system_id)
+- create authz: actor needs voc.read on the source VOC's MS AND finding.manage
+  on the target Finding's MS; both checked in one transaction before insert
+- read authz: finding endpoint readable by Admin, or Developer with finding.read
+  on the finding's primary_managed_system_id; User/Reporter never
+- getReporterSummary(finding): returns UNAVAILABLE (Finding has no reporter
+  summary — ADR-0024 §E); summary_visible therefore unreachable for a finding target
+- getInternalSummary(finding): Finding internal read model
+- the #112 hard-coded VOC resolution is refactored into this registry; VOC↔VOC
+  related_to behavior (#112-#115) is preserved unchanged
+```
+
+The composite tuple allowlist after Slice 5 is exactly `(voc,voc,related_to)`,
+`(voc,finding,created_finding)`, `(voc,finding,evidence_of)`, and
+`(voc_cluster,finding,created_finding)`; independent value CHECKs are forbidden
+because they would admit invalid tuples. Creatable visibility stays
+`internal_only`.
+
+Slice 6 tracer (#132):
+
+```text
+task_request -> registered as a link TARGET type
+- relation_type: requested_task (finding -> task_request), created by
+  POST /findings/:id/request-task
+- resolver: task_request.task_requests(id, workspace_id, primary_managed_system_id)
+- create authz: source Finding must exist/read through the Finding lock path,
+  and actor needs finding.manage on the Finding's primary_managed_system_id
+- read authz: Task Request endpoint uses the same Admin or same-scope Developer
+  finding.read convention until the full Task backstage capability lands
+- getReporterSummary(task_request): returns UNAVAILABLE
+- getInternalSummary(task_request): Task Request internal read model
+```
+
+The composite tuple allowlist after Slice 6 adds exactly:
+
+```text
+(finding, task_request, requested_task)
+```
+
+## Link Detach Validation
+
+Slice 4.2 detach lifecycle (#113):
+
+```text
+PATCH /entity-links/:id
+- request body: { reason: string } where reason is required, trimmed, and non-empty
+- supported transition: active -> detached only
+- authz: actor must have the same voc.read capability used by link creation on
+  both source and target VOC Managed Systems
+- not found / cross-workspace / missing scope on either endpoint: 404
+- already detached, revoked, stale, or lost update race: 409
+- side effects in one transaction: update status/detach metadata and append
+  audit_log event_type entity_link.detached
+- hard delete is forbidden; fops_app has UPDATE but not DELETE on core.entity_links
+```
+
+Because the active uniqueness constraint is partial (`WHERE status='active'`),
+detaching a link intentionally frees the same VOC pair to be linked again later.
+
 ## Visibility Enforcement
+
+ADR-0023 (Slice 4.4 #115) locks the per-(stored visibility × actor) decision
+table, the `hidden`/`denied` boundary, both-side enforcement, the `request_access`
+deferral for VOC↔VOC, and the canonical summary/forbidden-field lists. The
+`evaluateLinkVisibility` pure function in the backend entity-links module is the
+single decision point; the read DTO gains `summary_visible` and `denied` variants
+(not `request_access`).
 
 ```text
 internal_only

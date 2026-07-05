@@ -2,7 +2,8 @@
 // by ops staff, not by the reporter.
 
 import * as React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, cn } from '@fops/ui';
+import { Card, CardContent, cn } from '@fops/ui';
+import { Shield } from 'lucide-react';
 
 export interface SeverityDisclaimerCardProps {
   className?: string;
@@ -10,12 +11,11 @@ export interface SeverityDisclaimerCardProps {
 
 export function SeverityDisclaimerCard({ className }: SeverityDisclaimerCardProps): React.ReactElement {
   return (
-    <Card className={cn(className)}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">심각도 안내</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-text-muted">
+    <Card className={cn('bg-accent-primary/5 p-3.5', className)}>
+      <CardContent className="p-0">
+        <span className="sr-only">심각도 안내</span>
+        <p className="text-xs leading-relaxed text-text-secondary">
+          <Shield className="mr-1 inline h-3 w-3 align-text-bottom text-accent-primary" aria-hidden />
           심각도는 검토 후 운영팀이 결정합니다. 직접 설정할 수 없습니다.
         </p>
       </CardContent>

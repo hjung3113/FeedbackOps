@@ -24,7 +24,9 @@ export interface TriageSummaryCardProps {
    */
   actorMap?: Map<string, AvatarUser>;
   /** Optional analytics area name for display. */
-  analyticsAreaName?: string | null;
+  analyticsAreaName?: string | null | undefined;
+  /** Optional owner team display name once team actors exist. */
+  ownerTeamName?: string | null | undefined;
   /**
    * Current reporter-facing status of the VOC. When provided, the card renders
    * the "Reporter status 변경" transition row (current → assigned/reviewing).
@@ -38,6 +40,7 @@ export function TriageSummaryCard({
   panelState,
   actorMap,
   analyticsAreaName,
+  ownerTeamName,
   currentReporterStatus,
   className,
 }: TriageSummaryCardProps): React.ReactElement {
@@ -48,7 +51,7 @@ export function TriageSummaryCard({
   const ownerMissing = ownerUserId === null && ownerTeamId === null;
 
   const areaLabel =
-    analyticsAreaId !== null ? (analyticsAreaName ?? analyticsAreaId.slice(0, 8)) : null;
+    analyticsAreaId !== null ? (analyticsAreaName ?? 'Analytics area') : null;
 
   return (
     <div className={cn('bg-surface-canvas rounded-md p-3 flex flex-col gap-2.5', className)}>
@@ -68,9 +71,14 @@ export function TriageSummaryCard({
         ) : ownerUser !== null ? (
           <UserChip user={ownerUser} size="sm" />
         ) : ownerUserId !== null ? (
-          <span className="text-sm text-text-primary">{ownerUserId.slice(0, 8)}…</span>
+          <span className="text-sm text-text-primary">Owner</span>
         ) : (
-          <span className="text-sm text-text-primary">Team {ownerTeamId?.slice(0, 8)}…</span>
+          <span className="flex flex-col items-end gap-0.5 text-sm text-text-primary">
+            <span>{ownerTeamName ?? 'Owner team'}</span>
+            {ownerTeamName === undefined || ownerTeamName === null ? (
+              <span className="font-mono text-xs text-text-muted">{ownerTeamId?.slice(0, 8)}</span>
+            ) : null}
+          </span>
         )}
       </FieldRow>
 

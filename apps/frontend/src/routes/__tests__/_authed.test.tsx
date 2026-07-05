@@ -12,6 +12,7 @@
 import { redirect } from '@tanstack/react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthenticatedError, fetchMe } from '../../lib/api';
+import { SIDEBAR_ENTRIES } from '../_authed';
 
 // Re-implement beforeLoad logic verbatim from _authed.tsx so we can
 // exercise it in isolation without the TanStack file-route type brands.
@@ -85,5 +86,31 @@ describe('_authed beforeLoad', () => {
     ) as typeof globalThis.fetch;
 
     await expect(beforeLoad({ location: { href: '/vocs?view=inbox' } })).resolves.toBeUndefined();
+  });
+});
+
+describe('_authed sidebar entries', () => {
+  it('exposes shipped VOC cluster and Tasks routes without linking missing finding list routes', () => {
+    const entries = SIDEBAR_ENTRIES.map(({ id, label, href, section }) => ({
+      id,
+      label,
+      href,
+      section,
+    }));
+
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { id: 'voc-clusters', label: 'Clusters', href: '/voc-clusters', section: 'VOC' },
+        {
+          id: 'task-requests',
+          label: 'Task Requests',
+          href: '/tasks?view=requests',
+          section: 'TASKS',
+        },
+        { id: 'tasks-board', label: 'Tasks', href: '/tasks?view=board', section: 'TASKS' },
+        { id: 'my-tasks', label: 'My Tasks', href: '/tasks?view=my', section: 'TASKS' },
+      ]),
+    );
+    expect(entries.some((entry) => entry.href === '/findings')).toBe(false);
   });
 });

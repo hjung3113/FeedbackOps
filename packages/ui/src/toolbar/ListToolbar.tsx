@@ -41,7 +41,10 @@ export function ListToolbar({
       )}
       data-toolbar-height="50"
     >
-      <div className="flex items-center min-w-0">
+      <div
+        className="flex min-w-0 flex-1 items-center overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-list-toolbar-tabs
+      >
         {tabs !== undefined ? (
           <Tabs
             {...(activeTab !== undefined ? { value: activeTab } : {})}

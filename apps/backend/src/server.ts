@@ -17,17 +17,23 @@ import type { DbHandle } from './db/client.js';
 import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
+import { getStorage } from './lib/storage/factory.js';
+import type { StorageBackend } from './lib/storage/index.js';
 import { SESSION_COOKIE_NAME } from './middleware/require-session.js';
 import {
   analyticsAreasRoutes,
   createAnalyticsAreaService,
 } from './modules/analytics-areas/index.js';
-import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
+import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
+import { createAttachmentsService } from './modules/attachments/service.js';
 import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
+import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
+import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
+import { createFindingsService, findingsRoutes } from './modules/findings/index.js';
 import {
   createManagedSystemService,
   managedSystemsRoutes,
@@ -37,16 +43,15 @@ import {
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
+import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-requests/index.js';
+import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
+import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
 import {
   createConversationService,
   createVocReadService,
   createVocService,
   vocRoutes,
 } from './modules/voc/index.js';
-import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
-import { createAttachmentsService } from './modules/attachments/service.js';
-import { getStorage } from './lib/storage/factory.js';
-import type { StorageBackend } from './lib/storage/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -113,8 +118,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     // be bounded to the operator-configured hop count. Default 0 outside
     // prod (identical to `trustProxy: false`); prod operators set
     // `TRUSTED_PROXY_HOPS=1` when a single ingress terminates TLS.
-    trustProxy:
-      config.NODE_ENV === 'production' ? Math.max(config.TRUSTED_PROXY_HOPS, 0) : false,
+    trustProxy: config.NODE_ENV === 'production' ? Math.max(config.TRUSTED_PROXY_HOPS, 0) : false,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
@@ -421,6 +425,92 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
+  // ── Entity Links module — Slice 4.1 issue #112 ────────────────────────────
+  const entityLinksService = createEntityLinksService({
+    db: dbHandle.db,
+    checkService,
+    auditService,
+  });
+  await app.register(entityLinksRoutes, {
+    sessionService,
+    entityLinksService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+    },
+  });
+
+  // ── Findings module — Slice 5 issue #122 ─────────────────────────────────
+  const findingsService = createFindingsService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+    entityLinksService,
+  });
+  await app.register(findingsRoutes, {
+    sessionService,
+    findingsService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+    },
+  });
+
+  // ── Task Requests module — Slice 6 issue #132 ─────────────────────────────
+  const taskRequestsService = createTaskRequestsService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(taskRequestsRoutes, {
+    sessionService,
+    taskRequestsService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+    },
+  });
+
+  // ── Tasks module — Slice 6 issue #134 ────────────────────────────────────
+  const tasksService = createTasksService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(tasksRoutes, {
+    sessionService,
+    tasksService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+    },
+  });
+
+  // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
+  const vocClustersService = createVocClustersService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(vocClustersRoutes, {
+    sessionService,
+    vocClustersService,
+    taskRequestsService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+    },
+  });
+
   // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
   const vocService = createVocService({
     db: dbHandle.db,
@@ -430,6 +520,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   const vocReadService = createVocReadService({
     db: dbHandle.db,
     checkService,
+    entityLinksService,
   });
   const conversationService = createConversationService({
     auditService,
@@ -441,6 +532,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     sessionService,
     vocService,
     vocReadService,
+    findingsService,
+    taskRequestsService,
     conversationService,
     idempotencyService,
     workspaceId,

@@ -14,9 +14,13 @@ import { InternalTimeline } from './InternalTimeline';
 
 export interface ConversationTimelineProps {
   voc: VocDetailEnvelope;
+  actorNamesById?: ReadonlyMap<string, string> | undefined;
 }
 
-export function ConversationTimeline({ voc }: ConversationTimelineProps): React.ReactElement {
+export function ConversationTimeline({
+  voc,
+  actorNamesById,
+}: ConversationTimelineProps): React.ReactElement {
   const publicEntries = voc.conversation_timeline.filter(
     (e) => e.kind === 'public_update' || e.kind === 'reporter_reply',
   );
@@ -43,6 +47,7 @@ export function ConversationTimeline({ voc }: ConversationTimelineProps): React.
             vocId={voc.id}
             inline={publicEntries}
             hasMore={voc.conversation_page.has_more}
+            actorNamesById={actorNamesById}
           />
         </TabsContent>
         <TabsContent value="internal">
@@ -50,6 +55,7 @@ export function ConversationTimeline({ voc }: ConversationTimelineProps): React.
             vocId={voc.id}
             inline={internalEntries}
             hasMore={voc.conversation_page.has_more}
+            actorNamesById={actorNamesById}
           />
         </TabsContent>
       </Tabs>

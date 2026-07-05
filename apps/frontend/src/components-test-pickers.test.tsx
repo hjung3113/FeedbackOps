@@ -50,4 +50,20 @@ describe('<ManagedSystemPicker>', () => {
     );
     expect(screen.getByText('Alpha (archived)')).toBeInTheDocument();
   });
+
+  test('renders managed system glyph marks for system chips', () => {
+    render(
+      <ManagedSystemPicker
+        options={[
+          { id: 'tableau', label: 'Tableau' },
+          { id: 'power-bi', label: 'Power BI' },
+        ]}
+        value="tableau"
+        onChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('TB')).toBeInTheDocument();
+    expect(screen.getByText('PB')).toBeInTheDocument();
+  });
 });

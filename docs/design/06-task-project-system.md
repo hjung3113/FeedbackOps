@@ -115,6 +115,107 @@ Convert to Task owns final execution fields:
 Task fields may be suggested from the Task Request or source object, but they
 are finalized during Convert to Task.
 
+### Slice 6 Task Request Source Contracts
+
+`POST /findings/:id/request-task`, `POST /vocs/:id/request-task`, and
+`POST /voc-clusters/:id/request-task` create a Task Request from an existing
+source object. Each request body is:
+
+```text
+evidence_summary required text
+requested_outcome required text
+```
+
+The source object is the path object. The service copies that source's Primary
+Managed System, stores requester from the session Actor, and creates only
+`status='pending_review'`.
+
+The storage table is `task_request.task_requests`:
+
+```text
+id uuid primary key
+workspace_id uuid
+source_type text -- finding | voc | voc_cluster
+source_id uuid
+primary_managed_system_id uuid
+evidence_summary text
+requested_outcome text
+requester_actor_id uuid
+status text default pending_review
+created_at timestamptz
+updated_at timestamptz
+```
+
+Side effects are atomic:
+
+```text
+- insert task_request.task_requests
+- insert core.entity_links tuple:
+  - (finding, task_request, requested_task)
+  - (voc, task_request, requested_task)
+  - (voc_cluster, task_request, requested_task)
+- audit one source-specific event:
+  - task_request_created_from_finding
+  - task_request_created_from_voc
+  - task_request_created_from_voc_cluster
+```
+
+Authorization reuses `finding.manage` for the Finding's Primary Managed
+System. VOC request-task mirrors VOC create-finding authority: the actor must
+be able to read the source VOC and must have `finding.manage` on the VOC Primary
+Managed System, with Admin bypass. VOC Cluster request-task mirrors cluster
+create-finding authority: Admin or Developer with `finding.manage` on the
+cluster Primary Managed System. Review decisions land in ADR-0026; conversion
+to Task and Link Existing Task land in ADR-0027. ADR-0028 documents the
+VOC/cluster source extension.
+
+### Slice 6 Conversion Contract: Task Request To Task
+
+`POST /task-requests/:id/convert` converts only an approved Task Request into a
+Backlog Task. The request body finalizes execution fields:
+
+```text
+title required
+priority optional default medium
+assignee_actor_id optional nullable
+due_date optional nullable ISO date
+milestone_id optional nullable UUID placeholder
+analytics_area_id optional nullable
+```
+
+Side effects are atomic:
+
+```text
+- insert task.tasks with status backlog
+- preserve entity_links:
+  - (task_request, task, converted_to)
+  - (finding, task, requested_task)
+  - (voc, task, evidence_of) when existing Finding evidence links make this cheap
+- update task_request.task_requests.status to converted
+- audit task_created_from_request
+```
+
+`POST /task-requests/:id/link-task` is the alternative path when suitable work
+already exists. It requires an approved request and an existing Task in the same
+workspace and Primary Managed System. It creates `(task_request, task,
+converted_to)`, marks the request `converted`, and audits
+`task_linked_to_request`.
+
+Standalone Tasks remain a valid data shape through nullable
+`source_task_request_id`. Standalone `POST /tasks` is deferred.
+
+`GET /tasks/:id` returns a compact Task Detail read model. In addition to the
+execution fields (`status`, `assignee_actor_id`, `priority`, `due_date`, Primary
+Managed System), it resolves why the work exists: the source Task Request via
+`source_task_request_id`, and the source Finding via the active
+`(finding, task_request, requested_task)` link when present. Standalone Tasks
+return `source = null`.
+
+Finding Detail may link an existing in-scope Task directly through
+`POST /findings/:id/link-task`. The command sets `finding.findings.linked_task_id`,
+preserves canonical history with the existing
+`(finding, task, requested_task)` tuple, and audits `finding_task_linked`.
+
 ## Key Workflows
 
 ### WF-TASK-001: VOC Follow-Up To Task Request
@@ -124,6 +225,15 @@ VOC follow-up
 → Task Request
 → approve / reject / needs more evidence / link existing Task
 → converted Task starts in Backlog
+```
+
+### WF-TASK-001A: Finding To Existing Task
+
+```text
+Finding
+→ Link Existing Task
+→ Task Detail shows source context when it came from a Task Request
+→ Finding Detail shows linked Task jump action
 ```
 
 ### WF-TASK-002: Finding To Milestone
@@ -203,11 +313,11 @@ Acceptance Criteria:
 Views:
 
 ```text
-- Pending Review
+- Pending
+- Needs evidence
 - Approved
 - Rejected
-- Converted to Task
-- Needs More Evidence
+- All
 ```
 
 Actions:
@@ -216,8 +326,8 @@ Actions:
 - Approve
 - Reject
 - Request More Evidence
-- Convert to Task
-- Link Existing Task
+- Convert to Task (S6-4)
+- Link Existing Task (S6-4)
 ```
 
 ### Task Detail
@@ -291,6 +401,7 @@ Developer discussion from the Gantt.
 - Admin can manage Task Requests and Tasks.
 - Developer can manage Task Requests and Tasks within their Managed System scope.
 - Access to one Managed System does not grant access to sibling Managed Systems unless permission scope explicitly includes them.
+- Conversion and Link Existing Task reuse `finding.manage` on the Primary Managed System until a later Task-specific capability is approved.
 ```
 
 ## Cross-System Dependencies

@@ -195,6 +195,175 @@ Reporter Summary must not expose raw task status, backlog priority, internal
 comments, individual Developer names, internal due dates, root-cause detail,
 severity, confidence, or private notes.
 
+## Task Request Create From Finding Contract
+
+`POST /findings/:id/request-task`
+
+```text
+requirement_id: FOP-TASK-001
+request body:
+  evidence_summary string required
+  requested_outcome string required
+response body: TaskRequestDto
+auth and permission: authenticated Actor in workspace; finding.manage on the
+  source Finding's primary_managed_system_id. Admin bypass follows the same
+  finding.manage convention used by Finding actions.
+validation errors:
+  - invalid id path param
+  - invalid or unknown Finding
+  - invalid request body
+  - missing or malformed Idempotency-Key
+side effects:
+  - create task_request.task_requests with status pending_review
+  - create active entity link (finding, task_request, requested_task)
+audit events:
+  - task_request_created_from_finding
+  - entity_link.created when the active link row is newly inserted
+managed_system scope: copied from the source Finding
+idempotency behavior: Idempotency-Key required; hash includes body, Finding id,
+  and route identity finding.request_task
+```
+
+This endpoint does not approve, reject, convert to Task, or link an existing
+Task. VOC and VOC Cluster Task Request sources are implemented by
+`POST /vocs/:id/request-task` and `POST /voc-clusters/:id/request-task`.
+
+## Task Request Review Contract
+
+`GET /task-requests`
+
+```text
+requirement_id: FOP-TASK-002
+query:
+  status optional pending_review|approved|rejected|needs_more_evidence|converted
+response body: { items: TaskRequestDto[] }
+auth and permission: Admin or Developer. Admin sees all Task Requests in the
+  workspace. Developer rows are filtered per Task Request by `finding.manage`
+  on `primary_managed_system_id`.
+sort: created_at DESC
+```
+
+Decision endpoints:
+
+```text
+POST /task-requests/:id/approve
+POST /task-requests/:id/reject
+POST /task-requests/:id/request-more-evidence
+```
+
+```text
+request bodies:
+  approve: { reason?: string max 4000 }
+  reject: { reason string required max 4000 }
+  request-more-evidence: { note string required max 4000 }
+response body: TaskRequestDto
+auth and permission: Admin or Developer with `finding.manage` on the Task
+  Request primary_managed_system_id. Admin bypass follows the same convention
+  used by Finding actions.
+idempotency behavior: Idempotency-Key required; hash includes body, Task
+  Request id, and route identity.
+status machine:
+  approve: pending_review|needs_more_evidence -> approved
+  reject: pending_review|needs_more_evidence -> rejected
+  request-more-evidence: pending_review -> needs_more_evidence
+invalid transition: 422 validation.failed with `invalid_transition` on
+  `status`
+no-op: already in target status returns 200 with current DTO and no new audit
+  event
+self-approval: if reviewer is requester, approve requires non-empty reason and
+  `task_request.self_approve` on the same Managed System unless reviewer is
+  Admin. Denied attempts record `task_request_self_approval_denied`.
+audit events:
+  approve: task_request_approved
+  reject: task_request_rejected
+  request-more-evidence: task_request_needs_more_evidence
+```
+
+These endpoints do not create Task rows, convert to Task, or link existing
+Tasks. Conversion and link-existing-Task remain issue #134.
+
+## Task Conversion Contract
+
+`POST /task-requests/:id/convert`
+
+```text
+requirement_id: FOP-TASK-002 / FOP-TASK-003
+request body:
+  title string required min 1 max 200
+  priority optional low|medium|high|urgent default medium
+  assignee_actor_id optional nullable uuid
+  due_date optional nullable ISO date
+  milestone_id optional nullable uuid
+  analytics_area_id optional nullable uuid
+response body: TaskDto
+auth and permission: Admin or Developer with finding.manage on the Task
+  Request primary_managed_system_id. Admin bypass follows the Finding actions
+  convention.
+validation errors:
+  - non-approved Task Request: 422 validation.failed with not_approved on status
+side effects:
+  - create task.tasks with status backlog and source_task_request_id
+  - create active entity link (task_request, task, converted_to)
+  - preserve (finding, task, requested_task)
+  - preserve (voc, task, evidence_of) when derived from existing Finding evidence
+  - update Task Request status to converted
+audit events:
+  - task_created_from_request
+idempotency behavior: Idempotency-Key required; hash includes body, Task
+  Request id, and route identity task_request.convert
+```
+
+`POST /task-requests/:id/link-task`
+
+```text
+request body:
+  task_id uuid required
+response body: TaskDto
+auth and permission: same as conversion
+validation:
+  - Task Request must be approved
+  - target Task must exist in the same workspace and Primary Managed System
+side effects:
+  - create active entity link (task_request, task, converted_to)
+  - update Task Request status to converted
+audit events:
+  - task_linked_to_request
+idempotency behavior: Idempotency-Key required; hash includes body, Task
+  Request id, and route identity task_request.link_task
+```
+
+`GET /tasks`
+
+```text
+query:
+  status optional backlog|todo|doing|review|done|released|reopened
+  assignee optional uuid or me
+response body: { items: TaskDto[] }
+auth and permission: Admin or Developer. Admin sees all workspace Tasks.
+  Developer rows are filtered by finding.manage on primary_managed_system_id.
+  User is denied.
+sort: updated_at DESC
+```
+
+`GET /tasks/:id`
+
+```text
+response body: TaskDetailDto
+auth and permission: Admin or Developer with finding.manage on the Task
+  primary_managed_system_id. Admin bypass follows GET /tasks.
+source resolution:
+  - source = null when source_task_request_id is null
+  - source.task_request = { id, status } when source_task_request_id resolves
+  - source.finding = { id, title, summary, evidence_count } via active
+    (finding, task_request, requested_task) when present
+errors:
+  - unknown id: 404 not_found.record
+  - User or Developer outside Managed System scope: 403 permission.denied
+```
+
+Standalone `POST /tasks` is deferred by issue #134 even though standalone Tasks
+are a valid nullable-source data shape.
+
 ## Next Action Contract
 
 Backend responses for work-object detail and queue rows must provide
@@ -347,20 +516,23 @@ events, and dashboard repair signals.
 | `POST /voc-clusters/:id/create-finding` | FOP-FIND-001 | VOC Cluster | Finding | `created_finding` | finding_created_from_voc_cluster | resolves configured synthesis action for cluster | creating generated VOCs |
 | `POST /survey-responses/:id/create-finding` | FOP-SURVEY-005 | Survey Response | Finding | `generated_finding` | finding_created_from_survey_response | resolves configured synthesis action for survey response | `POST /survey-responses/:id/create-voc` |
 | `POST /vocs/:id/request-task` | FOP-TASK-001 | VOC | Task Request | `requested_task` | task_request_created_from_voc | moves VOC follow-up to pending execution review | creating Task directly from VOC follow-up |
+| `POST /voc-clusters/:id/request-task` | FOP-TASK-001 | VOC Cluster | Task Request | `requested_task` | task_request_created_from_voc_cluster | moves cluster follow-up to pending execution review | creating Task directly from VOC Cluster follow-up |
 | `POST /findings/:id/request-task` | FOP-TASK-001 | Finding | Task Request | `requested_task` | task_request_created_from_finding | moves Finding to pending execution review | creating Task without review when review is required |
 | `POST /survey-findings/:id/request-task` | FOP-SURVEY-005 | Finding | Task Request | `requested_task` | task_request_created_from_survey_finding | moves survey-derived Finding to pending execution review | Survey Response creates VOC |
+| `POST /task-requests/:id/convert` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_created_from_request | satisfies approved execution candidate | folding conversion into approval |
+| `POST /task-requests/:id/link-task` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_linked_to_request | satisfies approved execution candidate with existing work | creating duplicate Task when suitable Task exists |
 | `POST /permission-requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_request_approved | may restore blocked object visibility | bypassing explicit deny checks |
 | `POST /permission-requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Deny | none | permission_request_rejected | keeps or creates permission-blocked state | exposing full restricted object |
 
 Task Request review may be performed by a workspace Admin or by a Developer in
 the same Managed System Permission Scope. MVP allows a Developer to approve
-their own Task Request only when they have explicit task_request_self_approval
+their own Task Request only when they have explicit `task_request.self_approve`
 capability within that scope. Self-approval requires a reason and must audit
-self_approved, reason, source_entity, and managed_system_id metadata.
+`self_approval: true`, `sensitive: true`, and the reason.
 Approval and conversion are separate domain events. The API may expose an
 approve-and-convert convenience flow, but it must record both
 `task_request_approved` and `task_created_from_request` or
-`task_request_linked_existing_task` as separate audit/side-effect events.
+`task_linked_to_request` as separate audit/side-effect events.
 Approved Task Requests may remain in `approved` state until converted or linked
 to an existing Task.
 Converted Tasks start in Backlog by default. Backlog Tasks may have assignees,
@@ -411,10 +583,63 @@ PATCH /voc-clusters/:id
 POST /voc-clusters/:id/vocs
 DELETE /voc-clusters/:id/vocs/:voc_id
 POST /voc-clusters/:id/create-finding
+POST /voc-clusters/:id/request-task
 ```
 
 Cluster membership changes are audited. MVP cluster APIs must not merge VOC
 records. Cluster merge and split endpoints are out of scope for MVP.
+
+**Field & behavior contract (#126):**
+
+| Aspect | Contract |
+|---|---|
+| Create body | `POST /voc-clusters` `{ title: string(1..200), summary?: string\|null, primary_managed_system_id: uuid }` → `201` `VocClusterDto` (`status='draft'`). |
+| List | `GET /voc-clusters` optional `?managed_system_id=<uuid>` → `{ items: VocClusterDto[] }`, workspace-scoped + MS-scope filtered. |
+| Detail | `GET /voc-clusters/:id` → `VocClusterDto` with `members: [{ voc_id, added_by, added_at }]`. |
+| Edit / confirm | `PATCH /voc-clusters/:id` `{ title?, summary?, status?: 'confirmed' }` → `200`. `status` only supports confirming (`draft`→`confirmed`). |
+| Add member | `POST /voc-clusters/:id/vocs` `{ voc_id }` → `201` (inserted) / `200` (already a member). Member VOC must be in the cluster's managed system (else `422 validation.failed`); archived/unreadable VOC ⇒ `404`. |
+| Remove member | `DELETE /voc-clusters/:id/vocs/:voc_id` → `204`; missing membership ⇒ `404`. (No request body — clients must not send `Content-Type: application/json` with an empty body.) |
+| Create finding | `POST /voc-clusters/:id/create-finding` — body = `CreateFindingRequest` (same as `POST /vocs/:id/create-finding`); requires `Idempotency-Key` (UUIDv4). → `201` `FindingDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `source={ type:'voc_cluster', id, relation_type:'created_finding', link_id }`. Writes `finding_created_from_voc_cluster` + the `entity_link.created` audit in the finding txn. |
+| Request task | `POST /voc-clusters/:id/request-task` — body = `{ evidence_summary, requested_outcome }` (same as Finding request-task); requires `Idempotency-Key` (UUIDv4). → `201` `TaskRequestDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `status='pending_review'`, `source={ type:'voc_cluster', id, relation_type:'requested_task', link_id }`. Writes `task_request_created_from_voc_cluster` + the `entity_link.created` audit in the task-request txn. |
+| Authz | Read/list = Admin OR Developer with `finding.read` on the cluster MS. Create/edit/confirm/member-add/remove/create-finding = Admin OR Developer with `finding.manage` on the cluster MS. Reuses the Finding capabilities (no `voc_cluster.*` caps) — see ADR-0024 §H. |
+| Create-finding denial | Source-unreadable ⇒ `404 not_found.record` (hidden); readable-but-no-`finding.manage` ⇒ `403 permission.denied` (mirrors ADR-0024 §C). |
+| Idempotency | `Idempotency-Key`-scoped (same as `POST /vocs/:id/create-finding`): same key replays the same finding; distinct keys create distinct findings. |
+| Audit events | `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`, `task_request_created_from_voc_cluster`. |
+
+### Task Request Create From VOC / VOC Cluster Contract
+
+`POST /vocs/:id/request-task`
+`POST /voc-clusters/:id/request-task`
+
+```text
+requirement_id: FOP-TASK-001
+request body:
+  evidence_summary string required
+  requested_outcome string required
+response body: TaskRequestDto
+auth and permission:
+  - VOC: authenticated Actor in workspace; source VOC readable under the same
+    rule used by `POST /vocs/:id/create-finding`, plus `finding.manage` on the
+    VOC Primary Managed System. Admin bypass follows the Finding actions
+    convention.
+  - VOC Cluster: Admin or Developer with `finding.manage` on the cluster Primary
+    Managed System, mirroring `POST /voc-clusters/:id/create-finding`.
+validation errors:
+  - invalid id path param
+  - invalid or unknown source object
+  - invalid request body
+  - missing or malformed Idempotency-Key
+side effects:
+  - create task_request.task_requests with status pending_review
+  - create active entity link (voc, task_request, requested_task) or
+    (voc_cluster, task_request, requested_task)
+audit events:
+  - task_request_created_from_voc or task_request_created_from_voc_cluster
+  - entity_link.created when the active link row is newly inserted
+managed_system scope: copied from the source VOC or VOC Cluster
+idempotency behavior: Idempotency-Key required; hash includes body, source id,
+  and route identity voc.request_task or voc_cluster.request_task
+```
 
 ### Finding
 
@@ -432,6 +657,24 @@ POST /findings/:id/link-task
 Finding-to-Milestone linking is future cross-system behavior and is not an MVP
 Finding endpoint.
 
+`PATCH /findings/:id` accepts strict body `{ status, reason? }` and returns the
+updated `FindingDto`. Slice 6 supports only `draft -> active`,
+`draft -> not_actionable`, `active -> not_actionable`, and
+`not_actionable -> active`; `converted` and `archived` remain stored statuses but
+are rejected as user-directed targets here. Authz reuses `finding.manage`.
+Successful non-no-op transitions audit `finding_status_changed`; same-status
+requests are `200` no-ops returning the current Finding.
+
+`POST /findings/:id/link-task` accepts strict body `{ task_id: uuid }`, requires
+`Idempotency-Key`, and returns the updated `FindingDto`. Authz is Admin or
+Developer with `finding.manage` on the Finding Primary Managed System. The
+target Task must exist in the same workspace and Primary Managed System. The
+command rejects a different pre-existing `linked_task_id` with
+`422 validation.failed` field code `already_linked`; relinking to the same Task
+is a `200` no-op. Side effects are atomic: set `findings.linked_task_id`, create
+the existing `(finding, task, requested_task)` entity link, audit
+`entity_link.created` when inserted, and audit `finding_task_linked`.
+
 ### Task
 
 ```text
@@ -441,12 +684,12 @@ GET /task-requests/:id
 POST /task-requests/:id/approve
 POST /task-requests/:id/reject
 POST /task-requests/:id/request-more-evidence
-POST /task-requests/:id/convert-to-task
-POST /task-requests/:id/link-existing-task
+POST /task-requests/:id/convert
+POST /task-requests/:id/link-task
 
 GET /tasks
 GET /tasks/:id
-POST /tasks
+POST /tasks    # deferred in issue #134
 PATCH /tasks/:id
 ```
 

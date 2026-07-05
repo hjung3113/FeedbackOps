@@ -17,18 +17,18 @@ import { z } from 'zod';
 
 import { attachmentUploadedDetailSchema } from '../audit/attachments.js';
 import {
-  vocCreatedDetailSchema,
-  vocTriageCommittedDetailSchema,
-  vocSeveritySetDetailSchema,
-  vocOwnerAssignedDetailSchema,
-  vocAnalyticsAreaLinkedDetailSchema,
-  vocClusterDecisionRecordedDetailSchema,
+  internalCommentCreatedDetailSchema,
   publicUpdateCreatedDetailSchema,
   reporterFacingStatusChangedDetailSchema,
   reporterReplyCreatedDetailSchema,
-  internalCommentCreatedDetailSchema,
-  vocTriagePostponedDetailSchema,
+  vocAnalyticsAreaLinkedDetailSchema,
+  vocClusterDecisionRecordedDetailSchema,
+  vocCreatedDetailSchema,
   vocDescriptionEditedDetailSchema,
+  vocOwnerAssignedDetailSchema,
+  vocSeveritySetDetailSchema,
+  vocTriageCommittedDetailSchema,
+  vocTriagePostponedDetailSchema,
 } from '../audit/voc.js';
 
 export const AUDIT_EVENT_TYPES = [
@@ -58,6 +58,35 @@ export const AUDIT_EVENT_TYPES = [
   'voc_description_edited',
   // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
   'attachment_uploaded',
+  // Slice 4.1 #112: canonical entity link creation tracer.
+  'entity_link.created',
+  // Slice 4.2 #113: audited soft detach lifecycle.
+  'entity_link.detached',
+  // Slice 5 #121: Finding created from a source VOC.
+  'finding_created_from_voc',
+  // Slice 5 #126: VOC Cluster membership and cluster-created Finding.
+  'voc_cluster_member_added',
+  'voc_cluster_member_removed',
+  'finding_created_from_voc_cluster',
+  // Slice 5 #124: Evidence preserved on a Finding.
+  'evidence_highlight_added',
+  // Slice 6 #131: Finding status machine.
+  'finding_status_changed',
+  // Slice 6 #132: Task Request tracer from Finding.
+  'task_request_created_from_finding',
+  // Slice 6 #136: Task Request sources from VOC and VOC Cluster.
+  'task_request_created_from_voc',
+  'task_request_created_from_voc_cluster',
+  // Slice 6 #133: Task Request review queue decisions.
+  'task_request_approved',
+  'task_request_rejected',
+  'task_request_needs_more_evidence',
+  'task_request_self_approval_denied',
+  // Slice 6 #134: Task conversion/link-existing decisions.
+  'task_created_from_request',
+  'task_linked_to_request',
+  // Slice 6 #135: Finding links an existing Task directly.
+  'finding_task_linked',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -145,6 +174,275 @@ export const analyticsAreaArchivedDetailSchema = z.object({
 });
 export type AnalyticsAreaArchivedDetail = z.infer<typeof analyticsAreaArchivedDetailSchema>;
 
+const vocRefDetailSchema = z.object({
+  type: z.literal('voc'),
+  id: z.string().uuid(),
+});
+
+const vocClusterRefDetailSchema = z.object({
+  type: z.literal('voc_cluster'),
+  id: z.string().uuid(),
+});
+
+const findingRefDetailSchema = z.object({
+  type: z.literal('finding'),
+  id: z.string().uuid(),
+});
+
+const taskRequestRefDetailSchema = z.object({
+  type: z.literal('task_request'),
+  id: z.string().uuid(),
+});
+
+const taskRefDetailSchema = z.object({
+  type: z.literal('task'),
+  id: z.string().uuid(),
+});
+
+export const entityLinkCreatedDetailSchema = z.union([
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: vocRefDetailSchema,
+    relation_type: z.literal('related_to'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('created_finding'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('evidence_of'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocClusterRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('created_finding'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: findingRefDetailSchema,
+    target: taskRequestRefDetailSchema,
+    relation_type: z.literal('requested_task'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: taskRequestRefDetailSchema,
+    relation_type: z.literal('requested_task'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocClusterRefDetailSchema,
+    target: taskRequestRefDetailSchema,
+    relation_type: z.literal('requested_task'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: taskRequestRefDetailSchema,
+    target: taskRefDetailSchema,
+    relation_type: z.literal('converted_to'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: findingRefDetailSchema,
+    target: taskRefDetailSchema,
+    relation_type: z.literal('requested_task'),
+    visibility: z.literal('internal_only'),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: taskRefDetailSchema,
+    relation_type: z.literal('evidence_of'),
+    visibility: z.literal('internal_only'),
+  }),
+]);
+export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
+
+export const entityLinkDetachedDetailSchema = z.union([
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: vocRefDetailSchema,
+    relation_type: z.literal('related_to'),
+    reason: z.string().min(1),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('created_finding'),
+    reason: z.string().min(1),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('evidence_of'),
+    reason: z.string().min(1),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: vocClusterRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('created_finding'),
+    reason: z.string().min(1),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
+    source: findingRefDetailSchema,
+    target: taskRequestRefDetailSchema,
+    relation_type: z.literal('requested_task'),
+    reason: z.string().min(1),
+  }),
+]);
+export type EntityLinkDetachedDetail = z.infer<typeof entityLinkDetachedDetailSchema>;
+
+export const findingCreatedFromVocDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  source_voc_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('voc'),
+});
+export type FindingCreatedFromVocDetail = z.infer<typeof findingCreatedFromVocDetailSchema>;
+
+export const findingCreatedFromVocClusterDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  source_voc_cluster_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('voc_cluster'),
+});
+export type FindingCreatedFromVocClusterDetail = z.infer<
+  typeof findingCreatedFromVocClusterDetailSchema
+>;
+
+export const vocClusterMemberAddedDetailSchema = z.object({
+  voc_cluster_id: z.string().uuid(),
+  voc_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+});
+export type VocClusterMemberAddedDetail = z.infer<typeof vocClusterMemberAddedDetailSchema>;
+
+export const vocClusterMemberRemovedDetailSchema = z.object({
+  voc_cluster_id: z.string().uuid(),
+  voc_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+});
+export type VocClusterMemberRemovedDetail = z.infer<typeof vocClusterMemberRemovedDetailSchema>;
+
+export const evidenceHighlightAddedDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  evidence_highlight_id: z.string().uuid(),
+  source_type: z.enum(['voc', 'survey_response', 'note']),
+  source_id: z.string().uuid().nullable(),
+  primary_managed_system_id: z.string().uuid(),
+});
+export type EvidenceHighlightAddedDetail = z.infer<typeof evidenceHighlightAddedDetailSchema>;
+
+export const findingStatusChangedDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  from_status: z.enum(['draft', 'active', 'not_actionable', 'converted', 'archived']),
+  to_status: z.enum(['draft', 'active', 'not_actionable', 'converted', 'archived']),
+  primary_managed_system_id: z.string().uuid(),
+  reason: z.string().min(1).max(1000).optional(),
+});
+export type FindingStatusChangedDetail = z.infer<typeof findingStatusChangedDetailSchema>;
+
+export const taskRequestCreatedFromFindingDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  source_finding_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('finding'),
+});
+export type TaskRequestCreatedFromFindingDetail = z.infer<
+  typeof taskRequestCreatedFromFindingDetailSchema
+>;
+
+export const taskRequestCreatedFromVocDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  source_voc_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('voc'),
+});
+export type TaskRequestCreatedFromVocDetail = z.infer<typeof taskRequestCreatedFromVocDetailSchema>;
+
+export const taskRequestCreatedFromVocClusterDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  source_voc_cluster_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  source_type: z.literal('voc_cluster'),
+});
+export type TaskRequestCreatedFromVocClusterDetail = z.infer<
+  typeof taskRequestCreatedFromVocClusterDetailSchema
+>;
+
+const taskRequestStatusDetailSchema = z.enum([
+  'pending_review',
+  'approved',
+  'rejected',
+  'needs_more_evidence',
+  'converted',
+]);
+
+export const taskRequestDecisionDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  from_status: taskRequestStatusDetailSchema,
+  to_status: taskRequestStatusDetailSchema,
+  reviewer_actor_id: z.string().uuid(),
+  reason: z.string().min(1).max(4000).optional(),
+  note: z.string().min(1).max(4000).optional(),
+  self_approval: z.boolean().optional(),
+  sensitive: z.boolean().optional(),
+});
+export type TaskRequestDecisionDetail = z.infer<typeof taskRequestDecisionDetailSchema>;
+
+export const taskRequestSelfApprovalDeniedDetailSchema = z.object({
+  task_request_id: z.string().uuid(),
+  requester_actor_id: z.string().uuid(),
+  reason_present: z.boolean(),
+  capability_present: z.boolean(),
+});
+export type TaskRequestSelfApprovalDeniedDetail = z.infer<
+  typeof taskRequestSelfApprovalDeniedDetailSchema
+>;
+
+export const taskCreatedFromRequestDetailSchema = z.object({
+  task_id: z.string().uuid(),
+  source_task_request_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  preserved_links: z.array(z.string().uuid()),
+});
+export type TaskCreatedFromRequestDetail = z.infer<typeof taskCreatedFromRequestDetailSchema>;
+
+export const taskLinkedToRequestDetailSchema = z.object({
+  task_id: z.string().uuid(),
+  task_request_id: z.string().uuid(),
+});
+export type TaskLinkedToRequestDetail = z.infer<typeof taskLinkedToRequestDetailSchema>;
+
+export const findingTaskLinkedDetailSchema = z
+  .object({
+    finding_id: z.string().uuid(),
+    task_id: z.string().uuid(),
+    primary_managed_system_id: z.string().uuid(),
+  })
+  .strict();
+export type FindingTaskLinkedDetail = z.infer<typeof findingTaskLinkedDetailSchema>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
@@ -170,4 +468,33 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   voc_description_edited: vocDescriptionEditedDetailSchema,
   // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
   attachment_uploaded: attachmentUploadedDetailSchema,
+  // Slice 4.1 #112.
+  'entity_link.created': entityLinkCreatedDetailSchema,
+  // Slice 4.2 #113.
+  'entity_link.detached': entityLinkDetachedDetailSchema,
+  // Slice 5 #121.
+  finding_created_from_voc: findingCreatedFromVocDetailSchema,
+  // Slice 5 #126.
+  voc_cluster_member_added: vocClusterMemberAddedDetailSchema,
+  voc_cluster_member_removed: vocClusterMemberRemovedDetailSchema,
+  finding_created_from_voc_cluster: findingCreatedFromVocClusterDetailSchema,
+  // Slice 5 #124.
+  evidence_highlight_added: evidenceHighlightAddedDetailSchema,
+  // Slice 6 #131.
+  finding_status_changed: findingStatusChangedDetailSchema,
+  // Slice 6 #132.
+  task_request_created_from_finding: taskRequestCreatedFromFindingDetailSchema,
+  // Slice 6 #136.
+  task_request_created_from_voc: taskRequestCreatedFromVocDetailSchema,
+  task_request_created_from_voc_cluster: taskRequestCreatedFromVocClusterDetailSchema,
+  // Slice 6 #133.
+  task_request_approved: taskRequestDecisionDetailSchema,
+  task_request_rejected: taskRequestDecisionDetailSchema,
+  task_request_needs_more_evidence: taskRequestDecisionDetailSchema,
+  task_request_self_approval_denied: taskRequestSelfApprovalDeniedDetailSchema,
+  // Slice 6 #134.
+  task_created_from_request: taskCreatedFromRequestDetailSchema,
+  task_linked_to_request: taskLinkedToRequestDetailSchema,
+  // Slice 6 #135.
+  finding_task_linked: findingTaskLinkedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

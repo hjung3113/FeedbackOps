@@ -12,8 +12,8 @@
 // AttachmentRow (icon mapping, oversize / pending / uploaded state, remove
 // button, formatFileSize) mirrors screen-voc-create.jsx:285-340.
 
-import { Card, cn } from '@fops/ui';
-import { Check, Paperclip, X } from 'lucide-react';
+import { cn } from '@fops/ui';
+import { Check, FileText, Paperclip, X } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -240,14 +240,19 @@ export function AttachmentDropzone({
   }
 
   return (
-    <Card
+    <section
       data-testid={testId}
-      className="flex flex-col gap-2 p-4"
+      className="flex flex-col gap-2"
     >
       {/* Label */}
       <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
-        <Paperclip className="h-4 w-4 shrink-0" aria-hidden />
         <span>{COPY.fieldLabel}</span>
+        <span
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-surface-row-selected text-xs text-text-muted"
+          aria-hidden
+        >
+          ?
+        </span>
       </div>
 
       {/* Dropzone */}
@@ -255,7 +260,8 @@ export function AttachmentDropzone({
       <label
         htmlFor="attachment-dropzone-input"
         className={cn(
-          'flex cursor-pointer items-center gap-2.5 rounded-md border border-dashed border-border-subtle px-3.5 py-2.5 transition-colors',
+          'flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-border-subtle px-3.5 py-3 transition-colors',
+          'hover:border-border-selected hover:bg-accent-primary/5',
           dragOver && 'border-accent-primary bg-accent-primary/5',
         )}
         onDragOver={handleDragOver}
@@ -263,10 +269,15 @@ export function AttachmentDropzone({
         onDrop={handleDrop}
         data-testid={testId ? `${testId}-drop` : undefined}
       >
-        <Paperclip className="h-3.5 w-3.5 shrink-0 text-text-muted" aria-hidden />
-        <span className="text-sm text-text-primary">{COPY.dropHint}</span>
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-row-selected text-accent-primary"
+          aria-hidden
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+        </span>
+        <span className="min-w-0 text-sm text-text-primary">{COPY.dropHint}</span>
         <span className="flex-1" />
-        <span className="text-xs text-text-muted">{COPY.footer}</span>
+        <span className="hidden text-xs text-text-muted sm:inline">{COPY.footer}</span>
         <input
           ref={inputRef}
           id="attachment-dropzone-input"
@@ -286,7 +297,7 @@ export function AttachmentDropzone({
           ))}
         </ul>
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -315,11 +326,17 @@ function AttachmentRow({ row, onRemove }: AttachmentRowProps): React.ReactElemen
 
   return (
     <li
-      className="flex items-center gap-2.5 rounded-md bg-surface-card px-2.5 py-2"
+      className="flex items-center gap-2.5 rounded-md bg-surface-card-elevated px-2.5 py-2 shadow-sm"
       data-testid="attachment-row"
       data-state={row.state.kind}
       data-error-code={row.state.kind === 'error' ? row.state.code : undefined}
     >
+      <span
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-popover text-text-muted"
+        aria-hidden
+      >
+        <FileText className="h-3.5 w-3.5" />
+      </span>
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-medium">{row.file.name}</span>
         <span className="text-xs">

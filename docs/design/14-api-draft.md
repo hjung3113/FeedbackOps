@@ -45,6 +45,8 @@ POST /voc-clusters/:id/create-finding
 ## Finding APIs
 
 ```text
+GET   /findings/:id
+PATCH /findings/:id
 POST /findings/:id/request-task
 POST /findings/:id/link-task
 # future: POST /findings/:id/create-milestone
@@ -57,6 +59,13 @@ POST /findings/:id/evidence-highlights
 POST /findings/:id/link-evidence
 # future: POST /findings/:id/link-milestone
 ```
+
+`PATCH /findings/:id` accepts strict body `{ status, reason? }` and returns the
+updated Finding DTO. Slice 6 allows only `draft -> active`,
+`draft -> not_actionable`, `active -> not_actionable`, and
+`not_actionable -> active`; `converted` and `archived` are rejected as
+user-directed targets in this endpoint. Authz reuses `finding.manage`; successful
+non-no-op transitions audit `finding_status_changed`.
 
 ## Analytics Area APIs
 
