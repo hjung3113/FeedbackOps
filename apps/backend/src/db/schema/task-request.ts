@@ -12,7 +12,7 @@ export const taskRequests = taskRequestSchema.table(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id),
-    displayId: text('display_id'),
+    displayId: text('display_id').notNull(),
     sourceType: text('source_type').notNull(),
     sourceId: uuid('source_id').notNull(),
     primaryManagedSystemId: uuid('primary_managed_system_id')

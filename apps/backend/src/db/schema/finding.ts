@@ -12,7 +12,7 @@ export const findings = findingSchema.table(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id),
-    displayId: text('display_id'),
+    displayId: text('display_id').notNull(),
     primaryManagedSystemId: uuid('primary_managed_system_id')
       .notNull()
       .references(() => managedSystems.id),

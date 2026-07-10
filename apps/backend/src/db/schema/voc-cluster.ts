@@ -22,7 +22,7 @@ export const vocClusters = vocClusterSchema.table(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id),
-    displayId: text('display_id'),
+    displayId: text('display_id').notNull(),
     title: text('title').notNull(),
     summary: text('summary'),
     status: text('status').notNull().default('draft'),
