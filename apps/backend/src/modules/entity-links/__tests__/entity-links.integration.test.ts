@@ -179,7 +179,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     managedSystemId: string;
     sourceVocId: string;
     title?: string;
-  }): Promise<{ id: string }> {
+  }): Promise<{ id: string; display_id: string }> {
     return insertFindingRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: input.managedSystemId,
@@ -821,8 +821,14 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       source_id: sourceVoc.id,
       target_id: readableFinding.id,
       target_type: 'finding',
+      target_summary: {
+        type: 'finding',
+        id: readableFinding.id,
+        display_id: readableFinding.display_id,
+      },
       relation_type: 'created_finding',
     });
+    expect(readableFinding.display_id).toMatch(/^FIN-\d+$/);
     const mixedRow = developerRows.find((item) => item.id === mixedId);
     expect(mixedRow).toMatchObject({
       visibility_state: 'hidden',

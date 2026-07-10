@@ -45,6 +45,62 @@ export const entityLinkRefSchema = z.object({
 });
 export type EntityLinkRef = z.infer<typeof entityLinkRefSchema>;
 
+export const entityLinkTargetSummarySchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('finding'),
+      id: z.string().uuid(),
+      display_id: z.string(),
+      title: z.string(),
+      summary: z.string(),
+      severity: z.string(),
+      confidence: z.string().nullable(),
+      status: z.string(),
+      primary_managed_system_id: z.string().uuid(),
+      evidence_count: z.number(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('task'),
+      id: z.string().uuid(),
+      display_id: z.string(),
+      title: z.string(),
+      status: z.string(),
+      priority: z.string(),
+      primary_managed_system_id: z.string().uuid(),
+      assignee_actor_id: z.string().uuid().nullable(),
+      due_date: z.string().nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('task_request'),
+      id: z.string().uuid(),
+      display_id: z.string(),
+      source_type: z.string(),
+      source_id: z.string().uuid(),
+      evidence_summary: z.string(),
+      requested_outcome: z.string(),
+      status: z.string(),
+      primary_managed_system_id: z.string().uuid(),
+      requester_actor_id: z.string().uuid(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('voc_cluster'),
+      id: z.string().uuid(),
+      display_id: z.string(),
+      title: z.string(),
+      summary: z.string().nullable(),
+      status: z.string(),
+      primary_managed_system_id: z.string().uuid(),
+    })
+    .strict(),
+]);
+export type EntityLinkTargetSummary = z.infer<typeof entityLinkTargetSummarySchema>;
+
 export const registeredEntityLinkPairSchema = z.union([
   z.object({
     source_type: z.literal('voc'),
@@ -189,6 +245,7 @@ export const allowedEntityLinkSchema = z.object({
   source_id: z.string().uuid(),
   target_type: entityLinkEntityTypeSchema,
   target_id: z.string().uuid(),
+  target_summary: entityLinkTargetSummarySchema.optional(),
   relation_type: entityLinkRelationTypeSchema,
   visibility: entityLinkVisibilitySchema,
   status: entityLinkStatusSchema,
