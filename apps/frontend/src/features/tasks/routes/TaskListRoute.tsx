@@ -45,6 +45,10 @@ function shortId(id: string): string {
   return `${id.slice(0, 8)}...`;
 }
 
+function optionalDisplayId(value: { id: string; display_id?: string | null }): string {
+  return value.display_id?.trim() ? value.display_id : shortId(value.id);
+}
+
 function formatDate(raw: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -81,11 +85,14 @@ function TaskDetailPanel({
 
   const task: TaskDetailDto = taskQuery.data;
   const source = task.source;
+  const sourceFinding = source?.finding as
+    | (NonNullable<TaskDetailDto['source']>['finding'] & { display_id?: string | null })
+    | undefined;
   return (
     <aside className="flex h-full flex-col bg-surface-detail">
       <DetailPanelHeader
         kind="task"
-        id={shortId(task.id)}
+        id={task.display_id}
         onClose={onClose}
         extras={
           <DetailPanelHeaderActions
@@ -136,19 +143,19 @@ function TaskDetailPanel({
 
         <div data-anchor="source" className="border-t border-border-subtle px-4 py-4">
           <PanelSectionTitle>Source evidence</PanelSectionTitle>
-          {source?.finding ? (
+          {sourceFinding ? (
             <div className="mt-2 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3">
               <span className="text-xs text-text-muted">From finding</span>
               <div className="text-sm font-medium text-text-primary">
-                {source.finding.title}
+                {sourceFinding.title}
                 <span className="ml-2 font-mono text-xs text-text-muted">
-                  {shortId(source.finding.id)}
+                  {optionalDisplayId(sourceFinding)}
                 </span>
               </div>
-              <p className="text-sm text-text-muted">{source.finding.summary}</p>
+              <p className="text-sm text-text-muted">{sourceFinding.summary}</p>
               <div className="flex flex-wrap gap-2">
-                <OutlineBadge>Evidence · {source.finding.evidence_count}</OutlineBadge>
-                {source.task_request && (
+                <OutlineBadge>Evidence · {sourceFinding.evidence_count}</OutlineBadge>
+                {source?.task_request && (
                   <OutlineBadge>Task Request · {source.task_request.status}</OutlineBadge>
                 )}
               </div>
@@ -163,17 +170,17 @@ function TaskDetailPanel({
           <div className="mt-2">
             <LinkedEntityTrail
               nodes={[
-                ...(source?.finding
+                ...(sourceFinding
                   ? [
                       {
                         type: 'finding' as const,
-                        id: source.finding.id,
-                        display_id: shortId(source.finding.id),
-                        title: source.finding.title,
+                        id: sourceFinding.id,
+                        display_id: optionalDisplayId(sourceFinding),
+                        title: sourceFinding.title,
                       },
                     ]
                   : []),
-                { type: 'task' as const, id: task.id, display_id: shortId(task.id), title: task.title },
+                { type: 'task' as const, id: task.id, display_id: task.display_id, title: task.title },
               ]}
             />
           </div>
@@ -236,7 +243,7 @@ export function TaskListRoute({ selectedParam }: { selectedParam?: string | unde
           {items.map((task) => (
             <ObjectRow
               key={task.id}
-              id={shortId(task.id)}
+              id={task.display_id}
               title={task.title}
               selected={selected?.id === task.id}
               density="default"
