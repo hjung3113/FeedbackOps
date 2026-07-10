@@ -1,12 +1,16 @@
 {
-  "task": "T2",
+  "task": "T3",
   "files_modified": [
-    "apps/backend/drizzle.config.ts",
-    "apps/backend/src/db/schema/core.ts",
-    "apps/backend/src/db/schema/task.ts",
-    "apps/backend/src/db/schema/finding.ts",
-    "apps/backend/src/db/schema/voc-cluster.ts",
-    "apps/backend/src/db/schema/task-request.ts"
+    "apps/backend/src/modules/tasks/repo.ts",
+    "apps/backend/src/modules/tasks/service.ts",
+    "apps/backend/src/modules/tasks/__tests__/task-conversion.integration.test.ts",
+    "apps/backend/src/modules/tasks/__tests__/task-detail-and-finding-link.integration.test.ts",
+    "packages/shared/src/tasks/index.ts",
+    "packages/shared/src/tasks/__tests__/tasks.test.ts"
   ],
-  "notes": "Implemented Task 2 schema/config sync: added task/task_request to drizzle config, added core.displayCounters, and added nullable displayId plus migration-matching unique indexes on task/finding/voc_cluster/task_request schemas. Verification: `cd apps/backend && pnpm exec drizzle-kit check` exited 1 before schema validation with existing migration metadata collision: `[migrations/meta/0003_snapshot.json, migrations/meta/0004_snapshot.json] are pointing to a parent snapshot: migrations/meta/0003_snapshot.json/snapshot.json which is a collision.` `git diff --check -- apps/backend/drizzle.config.ts apps/backend/src/db/schema/core.ts apps/backend/src/db/schema/task.ts apps/backend/src/db/schema/finding.ts apps/backend/src/db/schema/voc-cluster.ts apps/backend/src/db/schema/task-request.ts` passed."
+  "files_created": [
+    "apps/backend/src/modules/tasks/__tests__/_seed-helpers.ts",
+    "apps/backend/src/modules/tasks/__tests__/create-task-display-id.integration.test.ts"
+  ],
+  "notes": "New test command: `DATABASE_URL=... DATABASE_URL_MIGRATE=... pnpm --filter backend exec vitest run src/modules/tasks/__tests__/create-task-display-id.integration.test.ts`. Task-creation entry point used: `createTasksService(...).convertTaskRequest`, the module's real service path that creates task rows via `insertTask`. Added task test seed helper `insertTaskRow`, which calls `core.next_display_id($1::uuid, 'task')`; existing task integration finding/task_request seeds now populate display_id with `core.next_display_id(..., 'finding'/'task_request')`. Verification run: `pnpm --filter shared build` passed; `pnpm --filter shared exec vitest run src/tasks/__tests__/tasks.test.ts` passed; `git diff --check` passed; `pnpm --filter backend exec tsc --noEmit` is blocked by existing unrelated `src/cli/storage-bootstrap.ts(54,31): Type 'ProcessEnv' has no properties in common with type 'StorageEnv'.`"
 }

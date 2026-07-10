@@ -20,6 +20,7 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -149,10 +150,13 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   async function seedFinding(msId: string): Promise<string> {
     const res = await migrateHandle.pool.query<{ id: string }>(
       `insert into finding.findings (
-          workspace_id, title, summary, primary_managed_system_id,
+          workspace_id, display_id, title, summary, primary_managed_system_id,
           source_type, source_id, evidence_count, severity, confidence, status, created_by
         )
-       values ($1, $2, $3, $4, 'voc', gen_random_uuid(), 0, 'medium', 'medium', 'active', $5)
+       values (
+          $1, core.next_display_id($1::uuid, 'finding'), $2, $3, $4,
+          'voc', gen_random_uuid(), 0, 'medium', 'medium', 'active', $5
+        )
        returning id`,
       [WORKSPACE_ID, 'Seed finding', 'Finding source summary', msId, adminActorId],
     );
@@ -174,12 +178,15 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     const findingId = await seedFinding(msId);
     const request = await migrateHandle.pool.query<{ id: string }>(
       `insert into task_request.task_requests (
-          workspace_id, source_type, source_id, primary_managed_system_id,
+          workspace_id, display_id, source_type, source_id, primary_managed_system_id,
           evidence_summary, requested_outcome, requester_actor_id, status,
           reviewer_actor_id, decision_reason, decided_at
         )
-       values ($1, 'finding', $2, $3, 'Evidence summary', 'Stabilize export pipeline', $4, $5,
-               $6, 'Approved in seed', now())
+       values (
+          $1, core.next_display_id($1::uuid, 'task_request'), 'finding', $2, $3,
+          'Evidence summary', 'Stabilize export pipeline', $4, $5,
+          $6, 'Approved in seed', now()
+        )
        returning id`,
       [
         WORKSPACE_ID,
@@ -208,17 +215,13 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   }
 
   async function seedTask(msId: string, title = 'Existing scoped task'): Promise<string> {
-    const res = await migrateHandle.pool.query<{ id: string }>(
-      `insert into task.tasks (
-          workspace_id, primary_managed_system_id, title, status, priority, created_by
-        )
-       values ($1, $2, $3, 'backlog', 'medium', $4)
-       returning id`,
-      [WORKSPACE_ID, msId, title, adminActorId],
-    );
-    const id = res.rows[0]?.id;
-    if (!id) throw new Error('seedTask failed');
-    return id;
+    const row = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      title,
+      createdBy: adminActorId,
+    });
+    return row.id;
   }
 
   function convert(

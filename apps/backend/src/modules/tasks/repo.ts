@@ -8,6 +8,7 @@ import type { Tx } from '../../db/tx.js';
 export interface TaskRow {
   id: string;
   workspace_id: string;
+  display_id: string;
   primary_managed_system_id: string;
   title: string;
   status: TaskStatus;
@@ -30,6 +31,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
   return {
     id: row.id as string,
     workspace_id: row.workspace_id as string,
+    display_id: row.display_id as string,
     primary_managed_system_id: row.primary_managed_system_id as string,
     title: row.title as string,
     status: row.status as TaskStatus,
@@ -46,7 +48,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
 }
 
 const TASK_SELECT = sql`
-  id, workspace_id, primary_managed_system_id, title, status, priority,
+  id, workspace_id, display_id, primary_managed_system_id, title, status, priority,
   assignee_actor_id, due_date::text AS due_date, milestone_id, analytics_area_id,
   source_task_request_id, created_by, created_at, updated_at
 `;
@@ -66,15 +68,23 @@ export async function insertTask(
     createdBy: string;
   },
 ): Promise<TaskRow> {
+  const displayRows = await tx.execute<{ v: string }>(sql`
+    select core.next_display_id(${input.workspaceId}, 'task') as v
+  `);
+  const displayId = displayRows.rows[0]?.v;
+  if (!displayId) {
+    throw new Error('next_display_id returned empty');
+  }
+
   const result = await tx.execute<Record<string, unknown>>(sql`
     INSERT INTO task.tasks (
-      workspace_id, primary_managed_system_id, title, status, priority,
+      workspace_id, display_id, primary_managed_system_id, title, status, priority,
       assignee_actor_id, due_date, milestone_id, analytics_area_id,
       source_task_request_id, created_by
     )
     VALUES (
-      ${input.workspaceId}, ${input.primaryManagedSystemId}, ${input.title}, 'backlog',
-      ${input.priority}, ${input.assigneeActorId}, ${input.dueDate},
+      ${input.workspaceId}, ${displayId}, ${input.primaryManagedSystemId}, ${input.title},
+      'backlog', ${input.priority}, ${input.assigneeActorId}, ${input.dueDate},
       ${input.milestoneId}, ${input.analyticsAreaId}, ${input.sourceTaskRequestId},
       ${input.createdBy}
     )
