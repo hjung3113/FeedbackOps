@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "artifact_type": "verify_result",
+  "producer_role": "VERIFIER",
+  "issue": 142,
+  "branch": "feature/slice7-display-id-impl",
+  "head_sha": "d8f06fc50b320b93bc740d2587b5194e6eb341f8",
+  "cwd": "/Users/hyojung/Desktop/2026/wt-142",
+  "verify_cmd": "verify.sh display-id-migration",
+  "env_profile": "scrubbed",
+  "db_target": {
+    "host": "localhost",
+    "database": "feedbackops_142",
+    "role": "fops_app"
+  },
+  "verdict": {
+    "passed": 3,
+    "failed": 0,
+    "pending": 0,
+    "exit_code": 0
+  },
+  "classifier": "PASS",
+  "created_at": "2026-07-10T15:31:50Z"
+}

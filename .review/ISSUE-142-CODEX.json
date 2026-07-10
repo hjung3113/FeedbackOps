@@ -1,0 +1,1 @@
+{"task":"T1b","files_created":["apps/backend/migrations/0027_display_id_scheme.sql","docs/adr/0029-human-display-id-scheme.md","apps/backend/src/db/__tests__/display-id-migration.integration.test.ts"],"files_modified":["apps/backend/migrations/meta/_journal.json"],"notes":"0027 registered in journal idx 27"}
