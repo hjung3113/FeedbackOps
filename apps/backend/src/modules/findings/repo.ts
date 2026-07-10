@@ -19,19 +19,27 @@ export interface InsertFindingInput {
 }
 
 export async function insertFinding(tx: Tx, input: InsertFindingInput): Promise<FindingReadRow> {
+  const displayRows = await tx.execute<{ v: string }>(sql`
+    select core.next_display_id(${input.workspaceId}, 'finding') as v
+  `);
+  const displayId = displayRows.rows[0]?.v;
+  if (!displayId) {
+    throw new Error('next_display_id returned empty');
+  }
+
   const result = await tx.execute<Record<string, unknown>>(sql`
     INSERT INTO finding.findings (
-      workspace_id, primary_managed_system_id, title, summary, source_type,
+      workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status,
       analytics_area_id, created_by
     )
     VALUES (
-      ${input.workspaceId}, ${input.primaryManagedSystemId}, ${input.title}, ${input.summary},
-      ${input.sourceType}, ${input.sourceId}, 0, ${input.severity}, ${input.confidence},
-      'draft', ${input.analyticsAreaId}, ${input.createdBy}
+      ${input.workspaceId}, ${displayId}, ${input.primaryManagedSystemId}, ${input.title},
+      ${input.summary}, ${input.sourceType}, ${input.sourceId}, 0, ${input.severity},
+      ${input.confidence}, 'draft', ${input.analyticsAreaId}, ${input.createdBy}
     )
     RETURNING
-      id, workspace_id, primary_managed_system_id, title, summary, source_type,
+      id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
       linked_task_id, linked_milestone_id, created_by, created_at, updated_at
   `);
@@ -82,7 +90,7 @@ export async function lockFindingById(
 ): Promise<FindingReadRow | null> {
   const result = await tx.execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, primary_managed_system_id, title, summary, source_type,
+      id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
       linked_task_id, linked_milestone_id, created_by, created_at, updated_at
     FROM finding.findings
@@ -161,7 +169,7 @@ export async function updateFindingStatus(
     WHERE id = ${input.findingId}
       AND workspace_id = ${input.workspaceId}
     RETURNING
-      id, workspace_id, primary_managed_system_id, title, summary, source_type,
+      id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
       linked_task_id, linked_milestone_id, created_by, created_at, updated_at
   `);
@@ -181,7 +189,7 @@ export async function updateFindingLinkedTask(
     WHERE id = ${input.findingId}
       AND workspace_id = ${input.workspaceId}
     RETURNING
-      id, workspace_id, primary_managed_system_id, title, summary, source_type,
+      id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
       linked_task_id, linked_milestone_id, created_by, created_at, updated_at
   `);

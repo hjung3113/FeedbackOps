@@ -4,9 +4,9 @@
   "producer_role": "VERIFIER",
   "issue": 142,
   "branch": "feature/slice7-display-id-impl",
-  "head_sha": "c81085e566d43dc034904f9f851b84fde1e69399",
+  "head_sha": "fc91b96337d32cb361964252f54fc18780947d63",
   "cwd": "/Users/hyojung/Desktop/2026/wt-142",
-  "verify_cmd": "verify.sh src/modules/tasks/__tests__",
+  "verify_cmd": "verify.sh src/modules/findings/__tests__",
   "env_profile": "scrubbed",
   "db_target": {
     "host": "localhost",
@@ -14,11 +14,11 @@
     "role": "fops_app"
   },
   "verdict": {
-    "passed": 15,
+    "passed": 13,
     "failed": 0,
     "pending": 0,
     "exit_code": 0
   },
   "classifier": "PASS",
-  "created_at": "2026-07-10T16:08:45Z"
+  "created_at": "2026-07-10T23:22:57Z"
 }

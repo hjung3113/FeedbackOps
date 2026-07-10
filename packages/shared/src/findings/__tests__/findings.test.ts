@@ -44,6 +44,7 @@ describe('findingDtoSchema', () => {
       findingDtoSchema.parse({
         id: U1,
         workspace_id: U2,
+        display_id: 'FIN-1000',
         primary_managed_system_id: U3,
         title: 'Export failures',
         summary: 'VOC evidence needs synthesis.',

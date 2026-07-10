@@ -6,6 +6,7 @@ import type { Tx } from '../../db/tx.js';
 export interface VocClusterRow {
   id: string;
   workspace_id: string;
+  display_id: string;
   title: string;
   summary: string | null;
   status: 'draft' | 'confirmed';
@@ -30,6 +31,7 @@ function mapClusterRow(row: Record<string, unknown>): VocClusterRow {
   return {
     id: row.id as string,
     workspace_id: row.workspace_id as string,
+    display_id: row.display_id as string,
     title: row.title as string,
     summary: (row.summary as string | null) ?? null,
     status: row.status as VocClusterRow['status'],
@@ -59,16 +61,24 @@ export async function insertVocCluster(
     createdBy: string;
   },
 ): Promise<VocClusterRow> {
+  const displayRows = await tx.execute<{ v: string }>(sql`
+    select core.next_display_id(${input.workspaceId}, 'cluster') as v
+  `);
+  const displayId = displayRows.rows[0]?.v;
+  if (!displayId) {
+    throw new Error('next_display_id returned empty');
+  }
+
   const result = await tx.execute<Record<string, unknown>>(sql`
     INSERT INTO voc_cluster.voc_clusters (
-      workspace_id, title, summary, status, primary_managed_system_id, created_by
+      workspace_id, display_id, title, summary, status, primary_managed_system_id, created_by
     )
     VALUES (
-      ${input.workspaceId}, ${input.title}, ${input.summary}, 'draft',
+      ${input.workspaceId}, ${displayId}, ${input.title}, ${input.summary}, 'draft',
       ${input.primaryManagedSystemId}, ${input.createdBy}
     )
     RETURNING
-      id, workspace_id, title, summary, status, primary_managed_system_id,
+      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
       created_by, created_at, updated_at
   `);
   const row = result.rows[0];
@@ -82,7 +92,7 @@ export async function lockVocClusterById(
 ): Promise<VocClusterRow | null> {
   const result = await tx.execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, title, summary, status, primary_managed_system_id,
+      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
       created_by, created_at, updated_at
     FROM voc_cluster.voc_clusters
     WHERE id = ${input.clusterId}
@@ -99,7 +109,7 @@ export async function findVocClusterById(
 ): Promise<VocClusterRow | null> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, title, summary, status, primary_managed_system_id,
+      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
       created_by, created_at, updated_at
     FROM voc_cluster.voc_clusters
     WHERE id = ${input.clusterId}
@@ -120,7 +130,7 @@ export async function listVocClustersByWorkspace(
       : sql`primary_managed_system_id = ${input.managedSystemId}`;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, title, summary, status, primary_managed_system_id,
+      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
       created_by, created_at, updated_at
     FROM voc_cluster.voc_clusters
     WHERE workspace_id = ${input.workspaceId}
@@ -151,7 +161,7 @@ export async function updateVocCluster(
     WHERE id = ${input.clusterId}
       AND workspace_id = ${input.workspaceId}
     RETURNING
-      id, workspace_id, title, summary, status, primary_managed_system_id,
+      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
       created_by, created_at, updated_at
   `);
   const row = result.rows[0];

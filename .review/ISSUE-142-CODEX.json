@@ -1,16 +1,1 @@
-{
-  "task": "T3",
-  "files_modified": [
-    "apps/backend/src/modules/tasks/repo.ts",
-    "apps/backend/src/modules/tasks/service.ts",
-    "apps/backend/src/modules/tasks/__tests__/task-conversion.integration.test.ts",
-    "apps/backend/src/modules/tasks/__tests__/task-detail-and-finding-link.integration.test.ts",
-    "packages/shared/src/tasks/index.ts",
-    "packages/shared/src/tasks/__tests__/tasks.test.ts"
-  ],
-  "files_created": [
-    "apps/backend/src/modules/tasks/__tests__/_seed-helpers.ts",
-    "apps/backend/src/modules/tasks/__tests__/create-task-display-id.integration.test.ts"
-  ],
-  "notes": "New test command: `DATABASE_URL=... DATABASE_URL_MIGRATE=... pnpm --filter backend exec vitest run src/modules/tasks/__tests__/create-task-display-id.integration.test.ts`. Task-creation entry point used: `createTasksService(...).convertTaskRequest`, the module's real service path that creates task rows via `insertTask`. Added task test seed helper `insertTaskRow`, which calls `core.next_display_id($1::uuid, 'task')`; existing task integration finding/task_request seeds now populate display_id with `core.next_display_id(..., 'finding'/'task_request')`. Verification run: `pnpm --filter shared build` passed; `pnpm --filter shared exec vitest run src/tasks/__tests__/tasks.test.ts` passed; `git diff --check` passed; `pnpm --filter backend exec tsc --noEmit` is blocked by existing unrelated `src/cli/storage-bootstrap.ts(54,31): Type 'ProcessEnv' has no properties in common with type 'StorageEnv'.`"
-}
+{"task":"T456c","files_modified":["apps/backend/src/modules/findings/__tests__/create-finding-display-id.integration.test.ts",".review/ISSUE-142-CODEX.json"],"notes":"The invalid voc.display_counters reference was in the findings display-id integration test teardown; it now cleans the shared core.display_counters table once. Grep found no voc.display_counters reference in the other new display-id tests. Findings production insert path uses core.next_display_id(workspace_id,'finding') in apps/backend/src/modules/findings/repo.ts."}

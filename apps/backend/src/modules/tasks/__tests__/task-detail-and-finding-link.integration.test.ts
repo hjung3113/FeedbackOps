@@ -20,6 +20,8 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
+import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -138,21 +140,18 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
   }
 
   async function seedFinding(msId: string, title = 'Source finding'): Promise<string> {
-    const res = await migrateHandle.pool.query<{ id: string }>(
-      `insert into finding.findings (
-          workspace_id, display_id, title, summary, primary_managed_system_id,
-          source_type, source_id, evidence_count, severity, confidence, status, created_by
-        )
-       values (
-          $1, core.next_display_id($1::uuid, 'finding'), $2, 'Finding source summary', $3,
-          'voc', gen_random_uuid(), 2, 'medium', 'medium', 'active', $4
-        )
-       returning id`,
-      [WORKSPACE_ID, title, msId, adminActorId],
-    );
-    const id = res.rows[0]?.id;
-    if (!id) throw new Error('seedFinding failed');
-    return id;
+    const row = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      title,
+      summary: 'Finding source summary',
+      sourceId: randomUUID(),
+      evidenceCount: 2,
+      confidence: 'medium',
+      status: 'active',
+      createdBy: adminActorId,
+    });
+    return row.id;
   }
 
   async function seedTask(msId: string, input: { sourceTaskRequestId?: string | null } = {}) {
@@ -173,21 +172,19 @@ describe.skipIf(!runIntegration)('task-detail and finding link-task (#135)', () 
       'Task Detail MS',
     );
     const findingId = await seedFinding(msId, 'Export failure finding');
-    const request = await migrateHandle.pool.query<{ id: string }>(
-      `insert into task_request.task_requests (
-          workspace_id, display_id, source_type, source_id, primary_managed_system_id,
-          evidence_summary, requested_outcome, requester_actor_id, status,
-          reviewer_actor_id, decision_reason, decided_at
-        )
-       values (
-          $1, core.next_display_id($1::uuid, 'task_request'), 'finding', $2, $3,
-          'Evidence summary', 'Stabilize export', $4, 'converted', $4, 'Seed conversion', now()
-        )
-       returning id`,
-      [WORKSPACE_ID, findingId, msId, adminActorId],
-    );
-    const requestId = request.rows[0]?.id;
-    if (!requestId) throw new Error('seed request failed');
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceId: findingId,
+      primaryManagedSystemId: msId,
+      evidenceSummary: 'Evidence summary',
+      requestedOutcome: 'Stabilize export',
+      requesterActorId: adminActorId,
+      status: 'converted',
+      reviewerActorId: adminActorId,
+      decisionReason: 'Seed conversion',
+      decided: true,
+    });
+    const requestId = request.id;
     await migrateHandle.pool.query(
       `insert into core.entity_links (
           workspace_id, source_type, source_id, target_type, target_id,

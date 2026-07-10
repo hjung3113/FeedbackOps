@@ -6,6 +6,7 @@ import type { Tx } from '../../db/tx.js';
 export interface TaskRequestRow {
   id: string;
   workspace_id: string;
+  display_id: string;
   source_type: 'finding' | 'voc' | 'voc_cluster';
   source_id: string;
   primary_managed_system_id: string;
@@ -28,6 +29,7 @@ function mapTaskRequestRow(row: Record<string, unknown>): TaskRequestRow {
   return {
     id: row.id as string,
     workspace_id: row.workspace_id as string,
+    display_id: row.display_id as string,
     source_type: row.source_type as TaskRequestRow['source_type'],
     source_id: row.source_id as string,
     primary_managed_system_id: row.primary_managed_system_id as string,
@@ -58,18 +60,26 @@ export async function insertTaskRequest(
     requesterActorId: string;
   },
 ): Promise<TaskRequestRow> {
+  const displayRows = await tx.execute<{ v: string }>(sql`
+    select core.next_display_id(${input.workspaceId}, 'task_request') as v
+  `);
+  const displayId = displayRows.rows[0]?.v;
+  if (!displayId) {
+    throw new Error('next_display_id returned empty');
+  }
+
   const result = await tx.execute<Record<string, unknown>>(sql`
     INSERT INTO task_request.task_requests (
-      workspace_id, source_type, source_id, primary_managed_system_id,
+      workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status
     )
     VALUES (
-      ${input.workspaceId}, ${input.sourceType}, ${input.sourceId},
+      ${input.workspaceId}, ${displayId}, ${input.sourceType}, ${input.sourceId},
       ${input.primaryManagedSystemId}, ${input.evidenceSummary},
       ${input.requestedOutcome}, ${input.requesterActorId}, 'pending_review'
     )
     RETURNING
-      id, workspace_id, source_type, source_id, primary_managed_system_id,
+      id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status,
       reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
@@ -85,7 +95,7 @@ export async function findTaskRequestById(
 ): Promise<TaskRequestRow | null> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, source_type, source_id, primary_managed_system_id,
+      id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status,
       reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
@@ -104,7 +114,7 @@ export async function lockTaskRequestById(
 ): Promise<TaskRequestRow | null> {
   const result = await tx.execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, source_type, source_id, primary_managed_system_id,
+      id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status,
       reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
@@ -128,7 +138,7 @@ export async function listTaskRequestsByWorkspace(
   const statusPredicate = input.status === undefined ? sql`TRUE` : sql`status = ${input.status}`;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, source_type, source_id, primary_managed_system_id,
+      id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status,
       reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
@@ -160,7 +170,7 @@ export async function updateTaskRequestDecision(
      WHERE id = ${input.taskRequestId}
        AND workspace_id = ${input.workspaceId}
     RETURNING
-      id, workspace_id, source_type, source_id, primary_managed_system_id,
+      id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
       evidence_summary, requested_outcome, requester_actor_id, status,
       reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
