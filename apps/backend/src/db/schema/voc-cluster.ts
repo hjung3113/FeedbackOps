@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { check, index, pgSchema, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  pgSchema,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { actors, managedSystems, workspaces } from './core.js';
 import { vocs } from './voc.js';
@@ -13,6 +22,7 @@ export const vocClusters = vocClusterSchema.table(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id),
+    displayId: text('display_id'),
     title: text('title').notNull(),
     summary: text('summary'),
     status: text('status').notNull().default('draft'),
@@ -26,6 +36,10 @@ export const vocClusters = vocClusterSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    workspaceDisplayUq: uniqueIndex('voc_clusters_workspace_display_id_uq').on(
+      t.workspaceId,
+      t.displayId,
+    ),
     workspaceManagedSystemIdx: index('voc_clusters_workspace_managed_system_idx').on(
       t.workspaceId,
       t.primaryManagedSystemId,

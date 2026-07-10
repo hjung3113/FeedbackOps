@@ -13,6 +13,7 @@
 
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   check,
   index,
   integer,
@@ -26,6 +27,18 @@ import {
 } from 'drizzle-orm/pg-core';
 
 export const coreSchema = pgSchema('core');
+
+export const displayCounters = coreSchema.table(
+  'display_counters',
+  {
+    workspaceId: uuid('workspace_id').notNull(),
+    entityType: text('entity_type').notNull(),
+    nextValue: bigint('next_value', { mode: 'number' }).notNull().default(1000),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.workspaceId, t.entityType] }),
+  }),
+);
 
 // ─────────────────────────────────────────────────────────────────────────
 // core.workspaces — outermost tenant boundary per CONTEXT.md.

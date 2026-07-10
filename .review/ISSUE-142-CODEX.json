@@ -1,1 +1,12 @@
-{"task":"T1b","files_created":["apps/backend/migrations/0027_display_id_scheme.sql","docs/adr/0029-human-display-id-scheme.md","apps/backend/src/db/__tests__/display-id-migration.integration.test.ts"],"files_modified":["apps/backend/migrations/meta/_journal.json"],"notes":"0027 registered in journal idx 27"}
+{
+  "task": "T2",
+  "files_modified": [
+    "apps/backend/drizzle.config.ts",
+    "apps/backend/src/db/schema/core.ts",
+    "apps/backend/src/db/schema/task.ts",
+    "apps/backend/src/db/schema/finding.ts",
+    "apps/backend/src/db/schema/voc-cluster.ts",
+    "apps/backend/src/db/schema/task-request.ts"
+  ],
+  "notes": "Implemented Task 2 schema/config sync: added task/task_request to drizzle config, added core.displayCounters, and added nullable displayId plus migration-matching unique indexes on task/finding/voc_cluster/task_request schemas. Verification: `cd apps/backend && pnpm exec drizzle-kit check` exited 1 before schema validation with existing migration metadata collision: `[migrations/meta/0003_snapshot.json, migrations/meta/0004_snapshot.json] are pointing to a parent snapshot: migrations/meta/0003_snapshot.json/snapshot.json which is a collision.` `git diff --check -- apps/backend/drizzle.config.ts apps/backend/src/db/schema/core.ts apps/backend/src/db/schema/task.ts apps/backend/src/db/schema/finding.ts apps/backend/src/db/schema/voc-cluster.ts apps/backend/src/db/schema/task-request.ts` passed."
+}

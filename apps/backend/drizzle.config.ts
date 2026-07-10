@@ -17,10 +17,12 @@ export default defineConfig({
     './src/db/schema/voc.ts',
     './src/db/schema/voc-cluster.ts',
     './src/db/schema/finding.ts',
+    './src/db/schema/task.ts',
+    './src/db/schema/task-request.ts',
   ],
   out: './migrations',
   dialect: 'postgresql',
-  schemaFilter: ['core', 'permission', 'voc', 'voc_cluster', 'finding'],
+  schemaFilter: ['core', 'permission', 'voc', 'voc_cluster', 'finding', 'task', 'task_request'],
   dbCredentials: {
     url: migrateUrl,
   },
