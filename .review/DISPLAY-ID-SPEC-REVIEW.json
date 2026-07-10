@@ -1,0 +1,72 @@
+{
+  "reviewer": "codex",
+  "spec": "docs/superpowers/specs/2026-07-10-display-id-scheme-design.md",
+  "verdict": "NEEDS_REVISION",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocker",
+      "checklist": 6,
+      "claim": "Drizzle is not configured to load two of the four target schemas, so task/task_request display_id schema drift can be missed or generated incorrectly.",
+      "evidence": "docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:87 requires displayId changes in task/finding/voc-cluster/task-request schema files, but apps/backend/drizzle.config.ts:14-23 loads only core, permission, voc, voc-cluster, finding and filters only core/permission/voc/voc_cluster/finding; task.ts and task-request.ts are absent.",
+      "fix": "Amend the spec to update apps/backend/drizzle.config.ts schema and schemaFilter to include task and task_request before relying on db:generate/db:check, and require the migration meta snapshot/journal to cover those schemas."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "checklist": 9,
+      "claim": "The spec names DTO fields as camelCase displayId, which diverges from the existing public API contract and VOC precedent that use snake_case display_id.",
+      "evidence": "docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:82 and :89 say DTO/API gets displayId, while VOC read schemas expose display_id at packages/shared/src/vocs/list-item.ts:38-40 and packages/shared/src/vocs/detail.ts:57-60; current target DTOs are also snake_case strict zod objects, e.g. packages/shared/src/tasks/index.ts:19-36 and packages/shared/src/findings/index.ts:64-85.",
+      "fix": "Specify API/shared DTO field name as display_id, reserving displayId only for internal TypeScript/Drizzle property names if desired; update all strict zod DTOs, service mappers, and frontend consumers consistently."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "checklist": 4,
+      "claim": "The shared function accepts unchecked entity_type and prefix parameters, so a caller typo can create a separate counter stream or semantically wrong IDs.",
+      "evidence": "The proposed table only comments allowed entity_type values without a CHECK at docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:30-35, and the function accepts p_entity_type plus p_prefix then returns p_prefix || seq at :37-54. VOC's precedent hardcodes the prefix inside the function at apps/backend/migrations/0017_voc_per_workspace_display_counter.sql:41-50.",
+      "fix": "Add a CHECK constraint for entity_type and remove p_prefix from the public function, or validate the entity_type-to-prefix mapping inside core.next_display_id and raise on unknown or mismatched input."
+    },
+    {
+      "id": "F4",
+      "severity": "major",
+      "checklist": 8,
+      "claim": "The spec only calls out module repo INSERT paths, but existing integration tests seed all four target entity tables through raw SQL that will violate a new NOT NULL display_id.",
+      "evidence": "Spec scope says repo INSERT paths change at docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:78-89. Direct inserts exist for finding/task/task_request in apps/backend/src/modules/tasks/__tests__/task-detail-and-finding-link.integration.test.ts:139-187 and for voc_cluster in apps/backend/src/modules/task-requests/__tests__/voc-request-task.integration.test.ts:156-162; additional direct insert sites are listed by rg at apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts:183, apps/backend/src/modules/findings/__tests__/evidence-highlights.integration.test.ts:150, and apps/backend/src/modules/tasks/__tests__/task-conversion.integration.test.ts:151,176,212.",
+      "fix": "Add test/fixture seed paths to the impact list and require either updating every direct SQL seed to call core.next_display_id or introducing shared seed helpers that do so; include these files in verification."
+    },
+    {
+      "id": "F5",
+      "severity": "major",
+      "checklist": 9,
+      "claim": "Entity-link summaries will still expose raw UUIDs after the proposed DTO change, so the FE link-rendering goal is incomplete.",
+      "evidence": "The spec says link references should display display-id at docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:81-82, but entity-link internal summaries currently return only id/title/status fields without display ids for findings, task requests, or tasks at apps/backend/src/modules/entity-links/service.ts:67-102, and entity-link refs are currently just type plus uuid id at packages/shared/src/entity-links.ts:42-45.",
+      "fix": "Extend the spec to update entity-link summary provider rows and shared summary/ref DTOs with display_id for supported target types, or explicitly scope link rendering out of this migration."
+    },
+    {
+      "id": "F6",
+      "severity": "minor",
+      "checklist": 3,
+      "claim": "The spec says the created_at/id backfill is the same as VOC 0017, but VOC 0017 did not assign sequence numbers by created_at.",
+      "evidence": "docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:75-76 says the backfill follows VOC 0017 exactly. The VOC migration instead seeds next_value from max existing numeric VOC display_id grouped by workspace at apps/backend/migrations/0017_voc_per_workspace_display_counter.sql:12-29, because VOC already had display_id values.",
+      "fix": "Reword the spec: the counter seeding pattern follows VOC 0017, but the four new-column backfills need their own deterministic row_number() over (partition by workspace_id order by created_at asc, id asc) algorithm and tests."
+    },
+    {
+      "id": "F7",
+      "severity": "minor",
+      "checklist": 4,
+      "claim": "The SECURITY DEFINER owner is implicit; prior migrations document that SECDEF ownership should be pinned for least-privilege reviewability.",
+      "evidence": "The proposed function is SECURITY DEFINER at docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:37-41 but the spec only mentions GRANTs at :86. Migration 0008 explicitly pins SECURITY DEFINER ownership to fops_migrate at apps/backend/migrations/0008_slice2_review_followups.sql:74-81 after documenting that the definer must be a DDL-capable role at :75-79.",
+      "fix": "Require ALTER FUNCTION core.next_display_id(uuid,text,text) OWNER TO fops_migrate, or document why creation by fops_migrate is sufficient and add an ownership assertion to the migration review checklist."
+    }
+  ],
+  "confirmed_sound": [
+    "Checklist 1: The proposed upsert-then-UPDATE RETURNING pattern matches VOC's proven per-workspace counter function; compare docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:44-53 with apps/backend/migrations/0017_voc_per_workspace_display_counter.sql:41-50. PostgreSQL row locks on the updated primary-key row serialize concurrent inserts for the same key.",
+    "Checklist 2: The spec explicitly says backfill happens before SET NOT NULL at docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:75-76, which is the right order for existing rows; it still needs lock/downtime guidance for large tables.",
+    "Checklist 3: All four target tables have non-null created_at columns in both migrations and Drizzle schemas: finding at apps/backend/migrations/0020_finding_foundation.sql:29 and apps/backend/src/db/schema/finding.ts:32; cluster at apps/backend/migrations/0022_voc_clusters.sql:21 and apps/backend/src/db/schema/voc-cluster.ts:25; task_request at apps/backend/migrations/0023_task_requests.sql:23 and apps/backend/src/db/schema/task-request.ts:29; task at apps/backend/migrations/0025_task_domain.sql:26 and apps/backend/src/db/schema/task.ts:32.",
+    "Checklist 4: The proposed function pins search_path to pg_catalog, core at docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:40-41, matching the safe search_path style in VOC 0017 at apps/backend/migrations/0017_voc_per_workspace_display_counter.sql:32-37.",
+    "Checklist 5: Cross-schema execution is viable if owned by fops_migrate/creator because existing core schema grants USAGE to fops_app and fops_migrate at apps/backend/migrations/0000_familiar_centennial.sql:196, while the spec grants fops_app EXECUTE/SELECT at docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:86.",
+    "Checklist 7: A non-partial unique index on (workspace_id, display_id) is appropriate for active and historical rows because display_id is NOT NULL and no archive/reissue behavior is specified; VOC uses the same shape at apps/backend/migrations/0010_slice3_voc_foundation.sql:115-116.",
+    "Checklist 10: VOC coexistence is explicitly accepted at docs/superpowers/specs/2026-07-10-display-id-scheme-design.md:59, and VOC's current schema/function remain isolated in voc.* at apps/backend/migrations/0017_voc_per_workspace_display_counter.sql:6-59."
+  ]
+}
