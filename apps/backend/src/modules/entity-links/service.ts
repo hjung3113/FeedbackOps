@@ -4,6 +4,7 @@ import type {
   EntityLinkEntityType,
   EntityLinkRef,
   EntityLinkRelationType,
+  EntityLinkTargetSummary,
   EntityLinkVisibilityState,
   TaskReporterSummary,
 } from '@fops/shared';
@@ -16,7 +17,7 @@ import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, findTaskRequestById } from '../task-requests/repo.js';
 import { type TaskRow, findTaskById } from '../tasks/index.js';
-import { findVocClusterById } from '../voc-clusters/repo.js';
+import { type VocClusterRow, findVocClusterById } from '../voc-clusters/repo.js';
 import { type LinkVisibilityDecision, evaluateLinkVisibility } from './evaluate-visibility.js';
 import {
   type EntityLinkRow,
@@ -60,13 +61,19 @@ interface EntityLinkProvider {
     subject: LinkEndpointRow,
   ): Promise<boolean>;
   getReporterSummary(id: string): Promise<ReporterSummaryResult>;
-  getInternalSummary(db: Db, workspaceId: string, id: string): Promise<unknown | null>;
+  getInternalSummary(
+    db: Db,
+    workspaceId: string,
+    id: string,
+  ): Promise<EntityLinkTargetSummary | null>;
   listExpectedLinks(id: string): Promise<EntityLinkRef[]>;
 }
 
-function findingToInternalSummary(row: FindingReadRow): Record<string, unknown> {
+function findingToInternalSummary(row: FindingReadRow): EntityLinkTargetSummary {
   return {
+    type: 'finding',
     id: row.id,
+    display_id: row.display_id,
     title: row.title,
     summary: row.summary,
     severity: row.severity,
@@ -77,9 +84,11 @@ function findingToInternalSummary(row: FindingReadRow): Record<string, unknown> 
   };
 }
 
-function taskRequestToInternalSummary(row: TaskRequestRow): Record<string, unknown> {
+function taskRequestToInternalSummary(row: TaskRequestRow): EntityLinkTargetSummary {
   return {
+    type: 'task_request',
     id: row.id,
+    display_id: row.display_id,
     source_type: row.source_type,
     source_id: row.source_id,
     evidence_summary: row.evidence_summary,
@@ -90,9 +99,11 @@ function taskRequestToInternalSummary(row: TaskRequestRow): Record<string, unkno
   };
 }
 
-function taskToInternalSummary(row: TaskRow): Record<string, unknown> {
+function taskToInternalSummary(row: TaskRow): EntityLinkTargetSummary {
   return {
+    type: 'task',
     id: row.id,
+    display_id: row.display_id,
     title: row.title,
     status: row.status,
     priority: row.priority,
@@ -102,13 +113,26 @@ function taskToInternalSummary(row: TaskRow): Record<string, unknown> {
   };
 }
 
-function toAllowedDto(row: EntityLinkRow): EntityLinkDto {
+function clusterToInternalSummary(row: VocClusterRow): EntityLinkTargetSummary {
+  return {
+    type: 'voc_cluster',
+    id: row.id,
+    display_id: row.display_id,
+    title: row.title,
+    summary: row.summary,
+    status: row.status,
+    primary_managed_system_id: row.primary_managed_system_id,
+  };
+}
+
+function toAllowedDto(row: EntityLinkRow, targetSummary?: EntityLinkTargetSummary): EntityLinkDto {
   return {
     id: row.id,
     source_type: row.source_type,
     source_id: row.source_id,
     target_type: row.target_type,
     target_id: row.target_id,
+    ...(targetSummary !== undefined ? { target_summary: targetSummary } : {}),
     relation_type: row.relation_type,
     visibility: row.visibility,
     status: row.status,
@@ -158,8 +182,9 @@ function toDtoForDecision(
   row: EntityLinkRow,
   decision: LinkVisibilityDecision,
   summary?: TaskReporterSummary,
+  targetSummary?: EntityLinkTargetSummary,
 ): EntityLinkDto {
-  if (decision === 'allowed') return toAllowedDto(row);
+  if (decision === 'allowed') return toAllowedDto(row, targetSummary);
   if (decision === 'hidden' || decision === 'denied') return toAuditMetadataDto(row, decision);
   if (summary !== undefined) return toSummaryVisibleDto(row, summary);
   throw new HttpError(
@@ -288,7 +313,10 @@ const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
     canCreateTarget: (deps, actor, subject) =>
       assertFindingManageScope(deps, actor, subject.managed_system_id),
     getReporterSummary: unavailableReporterSummary,
-    getInternalSummary: async () => null,
+    getInternalSummary: async (db, workspaceId, id) => {
+      const cluster = await findVocClusterById(db, { workspaceId, clusterId: id });
+      return cluster ? clusterToInternalSummary(cluster) : null;
+    },
     listExpectedLinks: async () => [],
   },
   task_request: {
@@ -450,6 +478,19 @@ async function evaluateRowVisibility(
   });
 }
 
+async function getTargetInternalSummary(
+  db: Db | Tx,
+  actor: EntityLinksActor,
+  row: Pick<EntityLinkRow, 'target_type' | 'target_id'>,
+): Promise<EntityLinkTargetSummary | undefined> {
+  const summary = await providerFor(row.target_type).getInternalSummary(
+    db,
+    actor.workspace_id,
+    row.target_id,
+  );
+  return summary ?? undefined;
+}
+
 export function createEntityLinksService(deps: EntityLinksServiceDeps) {
   async function createLink(args: {
     actor: EntityLinksActor;
@@ -544,7 +585,12 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
 
     const result = args.tx ? await persist(args.tx) : await deps.db.transaction(persist);
 
-    return { link: toAllowedDto(result.row), status: result.inserted ? 201 : 200 };
+    const targetSummary = await getTargetInternalSummary(db, actor, result.row);
+
+    return {
+      link: toAllowedDto(result.row, targetSummary),
+      status: result.inserted ? 201 : 200,
+    };
   }
 
   async function listLinks(args: {
@@ -579,7 +625,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
-      items.push(toDtoForDecision(row, decision));
+      const targetSummary =
+        decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
+      items.push(toDtoForDecision(row, decision, undefined, targetSummary));
     }
     return items;
   }
@@ -602,7 +650,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
-      items.push(toDtoForDecision(row, decision));
+      const targetSummary =
+        decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
+      items.push(toDtoForDecision(row, decision, undefined, targetSummary));
     }
     return items;
   }

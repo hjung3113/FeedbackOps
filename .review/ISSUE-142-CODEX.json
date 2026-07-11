@@ -1,0 +1,18 @@
+{
+  "task": "T9",
+  "files_modified": [
+    "apps/frontend/src/features/integration/components/EntityRelationRow.tsx",
+    "apps/frontend/src/features/integration/components/FindingDetail/FindingDetailPanel.tsx",
+    "apps/frontend/src/features/tasks/routes/TaskListRoute.tsx",
+    "apps/frontend/src/features/tasks/routes/TaskRequestsRoute.tsx",
+    "apps/frontend/src/routes/_authed/voc-clusters/$clusterId.tsx",
+    "apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx"
+  ],
+  "files_created": [
+    "apps/frontend/src/features/integration/components/EntityRelationRow.test.tsx",
+    "apps/frontend/src/features/integration/components/FindingDetail/FindingDetailPanel.test.tsx",
+    "apps/frontend/src/features/tasks/routes/TaskListRoute.test.tsx",
+    "apps/frontend/src/features/tasks/routes/TaskRequestsRoute.render.test.tsx"
+  ],
+  "notes": "Task rows/detail headers/trail now render task.display_id; Task Request rows/detail headers/source cards/toasts/task picker rows now render display_id and optional source.display_id; Finding detail header/task picker/linked task chip now render display_id; Cluster list rows and detail coverage render CLU display_id; entity-link target chips render target_summary.display_id. Focused frontend vitest command: pnpm --filter frontend exec vitest run src/features/tasks/routes/TaskListRoute.test.tsx src/features/tasks/routes/TaskRequestsRoute.render.test.tsx src/features/integration/components/FindingDetail/FindingDetailPanel.test.tsx src/features/integration/components/EntityRelationRow.test.tsx src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx"
+}

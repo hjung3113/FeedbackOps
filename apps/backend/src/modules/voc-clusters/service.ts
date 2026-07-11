@@ -56,6 +56,7 @@ function clusterToDto(row: VocClusterRow, members?: VocClusterMemberRow[]): VocC
   return {
     id: row.id,
     workspace_id: row.workspace_id,
+    display_id: row.display_id,
     title: row.title,
     summary: row.summary,
     status: row.status,

@@ -77,6 +77,7 @@ function taskRequestToDto(
   return {
     id: row.id,
     workspace_id: row.workspace_id,
+    display_id: row.display_id,
     source_type: row.source_type,
     source_id: row.source_id,
     primary_managed_system_id: row.primary_managed_system_id,

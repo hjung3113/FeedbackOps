@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, index, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, index, integer, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { actors, analyticsAreas, managedSystems, workspaces } from './core.js';
 
@@ -12,6 +12,7 @@ export const findings = findingSchema.table(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id),
+    displayId: text('display_id').notNull(),
     primaryManagedSystemId: uuid('primary_managed_system_id')
       .notNull()
       .references(() => managedSystems.id),
@@ -33,6 +34,10 @@ export const findings = findingSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    workspaceDisplayUq: uniqueIndex('findings_workspace_display_id_uq').on(
+      t.workspaceId,
+      t.displayId,
+    ),
     workspaceManagedSystemIdx: index('findings_workspace_managed_system_idx').on(
       t.workspaceId,
       t.primaryManagedSystemId,

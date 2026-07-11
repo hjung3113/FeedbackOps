@@ -226,6 +226,7 @@ function ClusterListBody({
 }: {
   clusters: Array<{
     id: string;
+    display_id: string;
     title: string;
     status: string;
     created_at: string;
@@ -290,6 +291,7 @@ function ClusterRow({
 }: {
   cluster: {
     id: string;
+    display_id: string;
     title: string;
     status: string;
     created_at: string;
@@ -302,7 +304,7 @@ function ClusterRow({
 
   return (
     <ObjectRow
-      id={shortId(cluster.id)}
+      id={cluster.display_id}
       title={cluster.title}
       selected={selected}
       density="default"

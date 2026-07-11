@@ -21,6 +21,7 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { insertVocClusterRow } from '../../voc-clusters/__tests__/_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -128,6 +129,13 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
            or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
+    await migrateHandle.pool.query(
+      `delete from voc_cluster.voc_cluster_members
+        where cluster_id in (
+          select id from voc_cluster.voc_clusters where workspace_id = $1
+        )`,
+      [WORKSPACE_ID],
+    );
     await migrateHandle.pool.query('delete from voc_cluster.voc_clusters where workspace_id = $1', [
       WORKSPACE_ID,
     ]);
@@ -153,17 +161,15 @@ describe.skipIf(!runIntegration)('voc request-task source creation (#136)', () =
       uid(SLUG_PREFIX),
       'Cluster Request MS',
     );
-    const cluster = await migrateHandle.pool.query<{ id: string }>(
-      `insert into voc_cluster.voc_clusters (
-          workspace_id, title, summary, status, primary_managed_system_id, created_by
-        )
-       values ($1, 'Cluster source for task request', 'Repeated timeout complaints', 'confirmed', $2, $3)
-       returning id`,
-      [WORKSPACE_ID, msId, adminActorId],
-    );
-    const id = cluster.rows[0]?.id;
-    if (!id) throw new Error('seedClusterSource failed');
-    return { id, msId };
+    const cluster = await insertVocClusterRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      title: 'Cluster source for task request',
+      summary: 'Repeated timeout complaints',
+      status: 'confirmed',
+      primaryManagedSystemId: msId,
+      createdBy: adminActorId,
+    });
+    return { id: cluster.id, msId };
   }
 
   function requestTask(

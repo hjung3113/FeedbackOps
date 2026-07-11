@@ -65,6 +65,7 @@ export const findingDtoSchema = z
   .object({
     id: z.string().uuid(),
     workspace_id: z.string().uuid(),
+    display_id: z.string(),
     primary_managed_system_id: z.string().uuid(),
     title: z.string(),
     summary: z.string(),

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, index, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, index, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { actors, managedSystems, workspaces } from './core.js';
 
@@ -12,6 +12,7 @@ export const taskRequests = taskRequestSchema.table(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id),
+    displayId: text('display_id').notNull(),
     sourceType: text('source_type').notNull(),
     sourceId: uuid('source_id').notNull(),
     primaryManagedSystemId: uuid('primary_managed_system_id')
@@ -30,6 +31,10 @@ export const taskRequests = taskRequestSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    workspaceDisplayUq: uniqueIndex('task_requests_workspace_display_id_uq').on(
+      t.workspaceId,
+      t.displayId,
+    ),
     workspaceStatusIdx: index('task_requests_workspace_status_idx').on(t.workspaceId, t.status),
     workspaceSourceIdx: index('task_requests_workspace_source_idx').on(
       t.workspaceId,

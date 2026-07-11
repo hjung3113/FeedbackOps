@@ -20,6 +20,7 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { insertTaskRequestRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -134,25 +135,16 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     const msId =
       input.msId ??
       (await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Task Request MS'));
-    const res = await migrateHandle.pool.query<{ id: string }>(
-      `insert into task_request.task_requests (
-          workspace_id, source_type, source_id, primary_managed_system_id,
-          evidence_summary, requested_outcome, requester_actor_id, status
-        )
-       values ($1, 'finding', gen_random_uuid(), $2, $3, $4, $5, $6)
-       returning id`,
-      [
-        WORKSPACE_ID,
-        msId,
-        `${input.title ?? 'Seeded'} evidence summary`,
-        `${input.title ?? 'Seeded'} requested outcome`,
-        input.requesterActorId ?? userActorId,
-        input.status ?? 'pending_review',
-      ],
-    );
-    const id = res.rows[0]?.id;
-    if (!id) throw new Error('seedTaskRequest failed');
-    return { id, msId };
+    const row = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceId: randomUUID(),
+      primaryManagedSystemId: msId,
+      evidenceSummary: `${input.title ?? 'Seeded'} evidence summary`,
+      requestedOutcome: `${input.title ?? 'Seeded'} requested outcome`,
+      requesterActorId: input.requesterActorId ?? userActorId,
+      status: input.status ?? 'pending_review',
+    });
+    return { id: row.id, msId };
   }
 
   function listTaskRequests(cookie: string, status?: string) {

@@ -116,16 +116,28 @@ function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
 }
 
+function shortId(id: string): string {
+  return id.slice(0, 8);
+}
+
 interface NameMaps {
   actorsById: Record<string, { id: string; display_name: string; email?: string }>;
   managedSystemsById: Record<string, { name: string }>;
 }
 
+type TaskRequestListItem = TaskRequestDto & {
+  source?: TaskRequestDto['source'] & { display_id?: string | null };
+};
+
 interface TaskRequestRowProps {
-  item: TaskRequestDto;
+  item: TaskRequestListItem;
   selected: boolean;
   names: NameMaps;
   onSelect: (id: string) => void;
+}
+
+function sourceDisplayId(item: TaskRequestListItem): string {
+  return item.source?.display_id?.trim() ? item.source.display_id : shortId(item.source_id);
 }
 
 function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestRowProps) {
@@ -135,7 +147,7 @@ function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestRowProps
 
   return (
     <ObjectRow
-      id={item.id.slice(0, 8)}
+      id={item.display_id}
       title={item.requested_outcome}
       severity={STATUS_SEVERITY[item.status]}
       selected={selected}
@@ -145,12 +157,12 @@ function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestRowProps
       meta={
         <>
           {item.source_type === 'finding' && (
-            <span className="font-mono text-accent-info">↔ {item.source_id.slice(0, 8)}</span>
+            <span className="font-mono text-accent-info">↔ {sourceDisplayId(item)}</span>
           )}
           {dot()}
           <span>Evidence 1</span>
           {dot()}
-          <span>{ms?.name ?? item.primary_managed_system_id.slice(0, 8)}</span>
+          <span>{ms?.name ?? shortId(item.primary_managed_system_id)}</span>
           {dot()}
           <span>{formatDate(item.created_at)}</span>
         </>
@@ -307,7 +319,7 @@ function TaskRequestPanel({
     onSuccess: (task) => {
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast(`Converted to Task ${task.id.slice(0, 8)}.`);
+      toast(`Converted to Task ${task.display_id}.`);
       setConvertOpen(false);
     },
     onError: (err) => {
@@ -322,7 +334,7 @@ function TaskRequestPanel({
     onSuccess: (task) => {
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast(`Linked Task ${task.id.slice(0, 8)}.`);
+      toast(`Linked Task ${task.display_id}.`);
       setLinkOpen(false);
     },
     onError: (err) => {
@@ -379,7 +391,7 @@ function TaskRequestPanel({
     <aside className="flex h-full flex-col bg-surface-detail">
       <DetailPanelHeader
         kind="task"
-        id={item.id.slice(0, 8)}
+        id={item.display_id}
         onClose={onClose}
         extras={
           <DetailPanelHeaderActions
@@ -461,7 +473,7 @@ function TaskRequestPanel({
                   .map((task) => (
                     <ObjectRow
                       key={task.id}
-                      id={task.id.slice(0, 8)}
+                      id={task.display_id}
                       title={task.title}
                       density="compact"
                       severity="low"
@@ -623,7 +635,7 @@ function TaskRequestPanel({
                 <div className="flex items-center gap-2">
                   <OutlineBadge>{sourceFindingQuery.data?.status ?? 'finding'}</OutlineBadge>
                   <span className="font-mono text-xs text-text-muted">
-                    {item.source_id.slice(0, 8)}
+                    {sourceFindingQuery.data?.display_id ?? shortId(item.source_id)}
                   </span>
                 </div>
               </div>
@@ -638,7 +650,7 @@ function TaskRequestPanel({
             <ManagedSystemPill
               name={
                 names.managedSystemsById[item.primary_managed_system_id]?.name ??
-                item.primary_managed_system_id.slice(0, 8)
+                shortId(item.primary_managed_system_id)
               }
             />
           </FieldRow>

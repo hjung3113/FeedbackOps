@@ -45,6 +45,7 @@ function taskToDto(row: TaskRow): TaskDto {
   return {
     id: row.id,
     workspace_id: row.workspace_id,
+    display_id: row.display_id,
     primary_managed_system_id: row.primary_managed_system_id,
     title: row.title,
     status: row.status,

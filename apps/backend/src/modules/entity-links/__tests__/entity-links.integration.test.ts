@@ -19,6 +19,7 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -178,25 +179,14 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     managedSystemId: string;
     sourceVocId: string;
     title?: string;
-  }): Promise<{ id: string }> {
-    const res = await migrateHandle.pool.query<{ id: string }>(
-      `insert into finding.findings (
-          workspace_id, primary_managed_system_id, title, summary, source_type,
-          source_id, evidence_count, severity, confidence, status, created_by
-        )
-       values ($1, $2, $3, 'Finding summary', 'voc', $4, 0, 'medium', 'high', 'draft', $5)
-       returning id`,
-      [
-        WORKSPACE_ID,
-        input.managedSystemId,
-        input.title ?? 'Seeded Finding',
-        input.sourceVocId,
-        adminActorId,
-      ],
-    );
-    const id = res.rows[0]?.id;
-    if (!id) throw new Error('seedFindingDirectly failed');
-    return { id };
+  }): Promise<{ id: string; display_id: string }> {
+    return insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: input.managedSystemId,
+      title: input.title ?? 'Seeded Finding',
+      sourceId: input.sourceVocId,
+      createdBy: adminActorId,
+    });
   }
 
   async function postEntityLink(cookie: string, sourceId: string, targetId: string, extra = {}) {
@@ -831,8 +821,14 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       source_id: sourceVoc.id,
       target_id: readableFinding.id,
       target_type: 'finding',
+      target_summary: {
+        type: 'finding',
+        id: readableFinding.id,
+        display_id: readableFinding.display_id,
+      },
       relation_type: 'created_finding',
     });
+    expect(readableFinding.display_id).toMatch(/^FIN-\d+$/);
     const mixedRow = developerRows.find((item) => item.id === mixedId);
     expect(mixedRow).toMatchObject({
       visibility_state: 'hidden',

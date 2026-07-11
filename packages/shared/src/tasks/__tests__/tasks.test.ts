@@ -10,6 +10,7 @@ const U4 = '01919b8c-0000-7000-8000-000000000004';
 const baseTask = {
   id: U1,
   workspace_id: U2,
+  display_id: 'TASK-1000',
   primary_managed_system_id: U3,
   title: 'Stabilize export pipeline',
   status: 'backlog',

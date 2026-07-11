@@ -184,6 +184,7 @@ const clusters = [
   {
     id: "11111111-1111-1111-1111-111111111111",
     workspace_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    display_id: "CLU-31",
     title: "반복 결제 문의",
     summary: "결제 관련 VOC가 반복됩니다.",
     status: "draft" as const,
@@ -324,10 +325,10 @@ describe("VOC cluster route shells", () => {
 
     render(<VocClusterListPage />);
 
-    fireEvent.click(screen.getByTestId("cluster-row-11111111..."));
+    fireEvent.click(screen.getByTestId("cluster-row-CLU-31"));
 
     expect(navigateMock).not.toHaveBeenCalled();
-    expect(screen.getByTestId("cluster-row-11111111...")).toHaveAttribute(
+    expect(screen.getByTestId("cluster-row-CLU-31")).toHaveAttribute(
       "data-selected",
       "true",
     );
@@ -373,5 +374,6 @@ describe("VOC cluster route shells", () => {
     expect(screen.getByText(/VOC-333/)).toBeInTheDocument();
     expect(screen.getByText("결제 실패 문의")).toBeInTheDocument();
     expect(screen.queryByText(/VOC 33333333/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("CLU-31").length).toBeGreaterThan(0);
   });
 });

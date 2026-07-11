@@ -2,8 +2,21 @@ import type { EntityLinkDto } from '@fops/shared';
 import { EntityIconBadge, cn, type EntityIconType } from '@fops/ui';
 import { ArrowRight, Lock } from 'lucide-react';
 
+type AllowedEntityLinkDto = Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
+
 function shortId(id: string): string {
   return id.slice(0, 8);
+}
+
+function targetDisplayId(link: AllowedEntityLinkDto): string {
+  if (
+    link.visibility_state === 'allowed' &&
+    link.target_summary?.id === link.target_id &&
+    link.target_summary.type === link.target_type
+  ) {
+    return link.target_summary.display_id;
+  }
+  return shortId(link.target_id);
 }
 
 function iconTypeFor(type: EntityLinkDto['source_type']): EntityIconType {
@@ -49,7 +62,7 @@ export function EntityRelationRow({
       </span>
       <span className="inline-flex min-w-0 items-center gap-1.5">
         <EntityIconBadge type={iconTypeFor(link.target_type)} size={18} />
-        <span className="font-mono text-xs text-text-primary">{shortId(link.target_id)}</span>
+        <span className="font-mono text-xs text-text-primary">{targetDisplayId(link)}</span>
       </span>
     </div>
   );

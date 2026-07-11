@@ -20,6 +20,9 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
+import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
+import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -147,18 +150,17 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   }
 
   async function seedFinding(msId: string): Promise<string> {
-    const res = await migrateHandle.pool.query<{ id: string }>(
-      `insert into finding.findings (
-          workspace_id, title, summary, primary_managed_system_id,
-          source_type, source_id, evidence_count, severity, confidence, status, created_by
-        )
-       values ($1, $2, $3, $4, 'voc', gen_random_uuid(), 0, 'medium', 'medium', 'active', $5)
-       returning id`,
-      [WORKSPACE_ID, 'Seed finding', 'Finding source summary', msId, adminActorId],
-    );
-    const id = res.rows[0]?.id;
-    if (!id) throw new Error('seedFinding failed');
-    return id;
+    const row = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      title: 'Seed finding',
+      summary: 'Finding source summary',
+      sourceId: randomUUID(),
+      confidence: 'medium',
+      status: 'active',
+      createdBy: adminActorId,
+    });
+    return row.id;
   }
 
   async function seedApprovedTaskRequest(
@@ -172,26 +174,19 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       input.msId ??
       (await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Task Convert MS'));
     const findingId = await seedFinding(msId);
-    const request = await migrateHandle.pool.query<{ id: string }>(
-      `insert into task_request.task_requests (
-          workspace_id, source_type, source_id, primary_managed_system_id,
-          evidence_summary, requested_outcome, requester_actor_id, status,
-          reviewer_actor_id, decision_reason, decided_at
-        )
-       values ($1, 'finding', $2, $3, 'Evidence summary', 'Stabilize export pipeline', $4, $5,
-               $6, 'Approved in seed', now())
-       returning id`,
-      [
-        WORKSPACE_ID,
-        findingId,
-        msId,
-        input.requesterActorId ?? userActorId,
-        input.status ?? 'approved',
-        adminActorId,
-      ],
-    );
-    const id = request.rows[0]?.id;
-    if (!id) throw new Error('seedApprovedTaskRequest failed');
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceId: findingId,
+      primaryManagedSystemId: msId,
+      evidenceSummary: 'Evidence summary',
+      requestedOutcome: 'Stabilize export pipeline',
+      requesterActorId: input.requesterActorId ?? userActorId,
+      status: input.status ?? 'approved',
+      reviewerActorId: adminActorId,
+      decisionReason: 'Approved in seed',
+      decided: true,
+    });
+    const id = request.id;
     const link = await migrateHandle.pool.query<{ id: string }>(
       `insert into core.entity_links (
           workspace_id, source_type, source_id, target_type, target_id,
@@ -208,17 +203,13 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   }
 
   async function seedTask(msId: string, title = 'Existing scoped task'): Promise<string> {
-    const res = await migrateHandle.pool.query<{ id: string }>(
-      `insert into task.tasks (
-          workspace_id, primary_managed_system_id, title, status, priority, created_by
-        )
-       values ($1, $2, $3, 'backlog', 'medium', $4)
-       returning id`,
-      [WORKSPACE_ID, msId, title, adminActorId],
-    );
-    const id = res.rows[0]?.id;
-    if (!id) throw new Error('seedTask failed');
-    return id;
+    const row = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      title,
+      createdBy: adminActorId,
+    });
+    return row.id;
   }
 
   function convert(

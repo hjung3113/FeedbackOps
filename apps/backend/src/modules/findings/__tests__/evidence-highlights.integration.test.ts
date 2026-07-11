@@ -19,6 +19,7 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { insertFindingRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -146,24 +147,13 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
     sourceVocId: string;
     title?: string;
   }): Promise<{ id: string }> {
-    const res = await migrateHandle.pool.query<{ id: string }>(
-      `insert into finding.findings (
-          workspace_id, primary_managed_system_id, title, summary, source_type,
-          source_id, evidence_count, severity, confidence, status, created_by
-        )
-       values ($1, $2, $3, 'Finding summary', 'voc', $4, 0, 'medium', 'high', 'draft', $5)
-       returning id`,
-      [
-        WORKSPACE_ID,
-        input.managedSystemId,
-        input.title ?? 'Seeded Evidence Finding',
-        input.sourceVocId,
-        adminActorId,
-      ],
-    );
-    const id = res.rows[0]?.id;
-    if (!id) throw new Error('seedFinding failed');
-    return { id };
+    return insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: input.managedSystemId,
+      title: input.title ?? 'Seeded Evidence Finding',
+      sourceId: input.sourceVocId,
+      createdBy: adminActorId,
+    });
   }
 
   function postHighlight(cookie: string, findingId: string, payload: Record<string, unknown>) {
