@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { createFindingRequestSchema } from '../findings/index.js';
+import { createFindingRequestSchema, findingStatusSchema } from '../findings/index.js';
 
 export const vocClusterStatusSchema = z.enum(['draft', 'confirmed']);
 export type VocClusterStatus = z.infer<typeof vocClusterStatusSchema>;
@@ -55,6 +55,17 @@ export const vocClusterDtoSchema = z
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     members: z.array(vocClusterMemberDtoSchema).optional(),
+    linked_findings: z
+      .array(
+        z
+          .object({
+            id: z.string().uuid(),
+            display_id: z.string(),
+            status: findingStatusSchema,
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .strict();
 export type VocClusterDto = z.infer<typeof vocClusterDtoSchema>;

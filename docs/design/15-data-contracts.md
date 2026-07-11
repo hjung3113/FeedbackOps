@@ -167,6 +167,8 @@ evidence_highlights
 - primary_managed_system_id: uuid, required
 - source_type: enum(voc, survey_response, note), required
 - source_id: uuid, nullable when source_type=note
+- source_title: text, nullable
+- source_meta: text, nullable
 - quote_or_summary: text, required
 - analytics_area_id: uuid, nullable
 - sentiment: enum(negative, neutral, positive), nullable
@@ -180,6 +182,46 @@ Rules:
 ```text
 - Evidence Highlight must preserve source reference when source_type is voc or survey_response.
 - Evidence visibility cannot exceed source visibility.
+- source_title and source_meta are read-time DTO derivations for source_type=voc only.
+  source_title is the source VOC title; source_meta is the source VOC display_id.
+  Both are always present on the DTO and become null when the source is withheld,
+  unreadable, unresolved, or not a VOC.
+```
+
+## VOC Cluster
+
+Owner: Finding / Insight
+
+```text
+voc_clusters
+- id: uuid, required
+- workspace_id: uuid, required
+- display_id: text, required
+- title: text, required
+- summary: text, nullable
+- status: enum(draft, confirmed), required
+- primary_managed_system_id: uuid, required
+- created_by: uuid, required
+- created_at: timestamp, required
+- updated_at: timestamp, required
+```
+
+Read DTO extensions:
+
+```text
+- members: optional array of { voc_id, added_by, added_at }
+- linked_findings: optional array of { id, display_id, status }
+```
+
+Rules:
+
+```text
+- linked_findings lists Findings created from the cluster where
+  finding.source_type='voc_cluster' and finding.source_id=cluster.id.
+- linked_findings is derived at read time. It exposes only id, display_id, and
+  status; title and summary are intentionally omitted to avoid content leakage.
+- Cluster detail and list reads include linked_findings as an array. Create and
+  update responses may omit it.
 ```
 
 ## Task Request
