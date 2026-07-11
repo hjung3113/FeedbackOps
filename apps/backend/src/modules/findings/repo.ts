@@ -67,6 +67,12 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
+function sqlUuidArray(ids: string[]): ReturnType<typeof sql> {
+  if (ids.length === 0) return sql`ARRAY[]::uuid[]`;
+  const items = ids.map((id) => sql`${id}::uuid`);
+  return sql`ARRAY[${sql.join(items, sql`, `)}]::uuid[]`;
+}
+
 export function mapEvidenceHighlightRow(row: Record<string, unknown>): EvidenceHighlightRow {
   return {
     id: row.id as string,
@@ -213,6 +219,49 @@ export async function listEvidenceHighlightsByFinding(
     ORDER BY created_at DESC, id DESC
   `);
   return result.rows.map(mapEvidenceHighlightRow);
+}
+
+export interface VocSourceMetaRow {
+  id: string;
+  title: string;
+  display_id: string;
+}
+
+function mapVocSourceMetaRow(row: Record<string, unknown>): VocSourceMetaRow {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    display_id: row.display_id as string,
+  };
+}
+
+export async function findVocSourceMeta(
+  db: Db | Tx,
+  input: { workspaceId: string; vocId: string },
+): Promise<VocSourceMetaRow | null> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT id, title, display_id
+    FROM voc.vocs
+    WHERE workspace_id = ${input.workspaceId}
+      AND id = ${input.vocId}
+    LIMIT 1
+  `);
+  const row = result.rows[0];
+  return row ? mapVocSourceMetaRow(row) : null;
+}
+
+export async function listVocSourceMeta(
+  db: Db | Tx,
+  input: { workspaceId: string; vocIds: string[] },
+): Promise<VocSourceMetaRow[]> {
+  if (input.vocIds.length === 0) return [];
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT id, title, display_id
+    FROM voc.vocs
+    WHERE workspace_id = ${input.workspaceId}
+      AND id = ANY(${sqlUuidArray(input.vocIds)})
+  `);
+  return result.rows.map(mapVocSourceMetaRow);
 }
 
 export { findFindingById } from './repo-read.js';

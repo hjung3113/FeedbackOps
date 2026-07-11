@@ -19,12 +19,14 @@ import { insertFinding } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
 import {
+  type CreatedFindingForClusterRow,
   type VocClusterMemberRow,
   type VocClusterRow,
   deleteVocClusterMember,
   findVocClusterById,
   insertVocCluster,
   insertVocClusterMember,
+  listCreatedFindingsForClusters,
   listVocClusterMembers,
   listVocClustersByWorkspace,
   lockVocClusterById,
@@ -52,7 +54,21 @@ function memberToDto(row: VocClusterMemberRow): VocClusterMemberDto {
   };
 }
 
-function clusterToDto(row: VocClusterRow, members?: VocClusterMemberRow[]): VocClusterDto {
+function linkedFindingToDto(
+  row: CreatedFindingForClusterRow,
+): NonNullable<VocClusterDto['linked_findings']>[number] {
+  return {
+    id: row.id,
+    display_id: row.display_id,
+    status: row.status,
+  };
+}
+
+function clusterToDto(
+  row: VocClusterRow,
+  members?: VocClusterMemberRow[],
+  linkedFindings?: CreatedFindingForClusterRow[],
+): VocClusterDto {
   return {
     id: row.id,
     workspace_id: row.workspace_id,
@@ -65,6 +81,9 @@ function clusterToDto(row: VocClusterRow, members?: VocClusterMemberRow[]): VocC
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
     ...(members !== undefined ? { members: members.map(memberToDto) } : {}),
+    ...(linkedFindings !== undefined
+      ? { linked_findings: linkedFindings.map(linkedFindingToDto) }
+      : {}),
   };
 }
 
@@ -127,11 +146,9 @@ async function assertTargetAnalyticsArea(args: {
   const aa = await lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
   if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
   if (aa.managed_system_id !== args.managedSystemId) {
-    throw new HttpError(
-      'validation.failed',
-      'analytics_area does not belong to managed_system',
-      { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
-    );
+    throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
+      fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
+    });
   }
   if (aa.archived_at !== null) {
     throw new HttpError('conflict.parent_archived', 'analytics area archived', {
@@ -185,13 +202,27 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       workspaceId: args.actor.workspace_id,
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
     });
-    const items: VocClusterDto[] = [];
+    const readableRows: VocClusterRow[] = [];
     for (const row of rows) {
       const readable = await canReadCluster(deps, args.actor, row.primary_managed_system_id);
       if (!readable) continue;
-      items.push(clusterToDto(row));
+      readableRows.push(row);
     }
-    return { items };
+    const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      clusterIds: readableRows.map((row) => row.id),
+    });
+    const linkedFindingsByClusterId = new Map<string, CreatedFindingForClusterRow[]>();
+    for (const finding of linkedFindings) {
+      const existing = linkedFindingsByClusterId.get(finding.cluster_id) ?? [];
+      existing.push(finding);
+      linkedFindingsByClusterId.set(finding.cluster_id, existing);
+    }
+    return {
+      items: readableRows.map((row) =>
+        clusterToDto(row, undefined, linkedFindingsByClusterId.get(row.id) ?? []),
+      ),
+    };
   }
 
   async function getCluster(args: {
@@ -206,7 +237,11 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     const readable = await canReadCluster(deps, args.actor, row.primary_managed_system_id);
     if (!readable) throw new HttpError('not_found.record', 'voc cluster not found');
     const members = await listVocClusterMembers(deps.db, { clusterId: row.id });
-    return clusterToDto(row, members);
+    const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      clusterIds: [row.id],
+    });
+    return clusterToDto(row, members, linkedFindings);
   }
 
   async function updateCluster(args: {

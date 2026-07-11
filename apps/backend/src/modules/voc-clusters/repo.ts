@@ -27,6 +27,12 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
+function sqlUuidArray(ids: string[]): ReturnType<typeof sql> {
+  if (ids.length === 0) return sql`ARRAY[]::uuid[]`;
+  const items = ids.map((id) => sql`${id}::uuid`);
+  return sql`ARRAY[${sql.join(items, sql`, `)}]::uuid[]`;
+}
+
 function mapClusterRow(row: Record<string, unknown>): VocClusterRow {
   return {
     id: row.id as string,
@@ -48,6 +54,22 @@ function mapMemberRow(row: Record<string, unknown>): VocClusterMemberRow {
     voc_id: row.voc_id as string,
     added_by: row.added_by as string,
     added_at: toDate(row.added_at as Date | string),
+  };
+}
+
+export interface CreatedFindingForClusterRow {
+  cluster_id: string;
+  id: string;
+  display_id: string;
+  status: 'draft' | 'active' | 'not_actionable' | 'converted' | 'archived';
+}
+
+function mapCreatedFindingForClusterRow(row: Record<string, unknown>): CreatedFindingForClusterRow {
+  return {
+    cluster_id: row.cluster_id as string,
+    id: row.id as string,
+    display_id: row.display_id as string,
+    status: row.status as CreatedFindingForClusterRow['status'],
   };
 }
 
@@ -138,6 +160,22 @@ export async function listVocClustersByWorkspace(
     ORDER BY created_at DESC, id DESC
   `);
   return result.rows.map(mapClusterRow);
+}
+
+export async function listCreatedFindingsForClusters(
+  db: Db | Tx,
+  input: { workspaceId: string; clusterIds: string[] },
+): Promise<CreatedFindingForClusterRow[]> {
+  if (input.clusterIds.length === 0) return [];
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT source_id AS cluster_id, id, display_id, status
+    FROM finding.findings
+    WHERE workspace_id = ${input.workspaceId}
+      AND source_type = 'voc_cluster'
+      AND source_id = ANY(${sqlUuidArray(input.clusterIds)})
+    ORDER BY created_at DESC, id DESC
+  `);
+  return result.rows.map(mapCreatedFindingForClusterRow);
 }
 
 export async function updateVocCluster(
