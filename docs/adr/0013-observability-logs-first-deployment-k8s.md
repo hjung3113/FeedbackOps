@@ -64,6 +64,15 @@ GET /health/ready     → 200 if Postgres connects, pg-boss connects, and Attach
 
 Neither endpoint requires authentication; both refuse to disclose internal version or stack details in their response body.
 
+## Amended 2026-07-13
+
+The `/health/live` and `/health/ready` split above is the deployment
+target-state, not the current MVP implementation. The current backend exposes
+unauthenticated `GET /health` as a simple process-health endpoint; k8s
+deployment work must implement the target-state split before using these probes
+for production readiness. `/health/ready` remains the chosen readiness name, and
+the legacy `/healthz` wording in ADR-0011 is not the canonical endpoint name.
+
 ## What this ADR locks
 
 - Single deployment target: Docker on the company's internal k8s.

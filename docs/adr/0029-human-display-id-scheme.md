@@ -50,9 +50,9 @@ the first row assigned suffix `1000`. Counters are seeded to
 `1000 + count(existing rows)` per workspace and entity type. Each table gets a
 workspace-local unique index on `(workspace_id, display_id)`.
 
-`display_id` stays nullable in migration 0027. Later implementation tasks will
-route all insert paths through `core.next_display_id`; only after that is true
-will a separate migration promote the four columns to `NOT NULL`.
+`display_id` stays nullable in migration 0027. Later implementation tasks route
+all insert paths through `core.next_display_id`; migration 0028 then promotes
+the four columns to `NOT NULL`.
 
 ## Alternatives Rejected
 
@@ -88,5 +88,11 @@ Finding, VOC Cluster, and Task Request.
 - API DTOs should expose the field as snake_case `display_id`, matching VOC.
 - Backfill order is deterministic but not semantically meaningful beyond
   preserving a stable created-time order.
-- The system temporarily allows `NULL` display IDs until the later insert-path
-  tasks are complete and migration 0028 can set `NOT NULL`.
+- The system allowed `NULL` display IDs until the insert-path tasks were
+  complete; migration 0028 now sets the four columns to `NOT NULL`.
+
+## Amended 2026-07-13
+
+Migration `0028_display_id_not_null.sql` has landed and sets the Task, Finding,
+VOC Cluster, and Task Request `display_id` columns to `NOT NULL`. The nullable
+phase described for migration 0027 is complete.

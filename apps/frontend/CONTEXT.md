@@ -11,6 +11,7 @@ Top-level route ownership lives under `apps/frontend/src/features/*`:
 - `home`
 - `my-work`
 - `voc`
+- `voc-cluster`
 - `surveys`
 - `tasks`
 - `integration` — includes Findings, Evidence, Coverage, Links

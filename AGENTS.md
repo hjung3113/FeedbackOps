@@ -10,7 +10,7 @@
 - For multi-step work, define success criteria and verify them before claiming completion.
 - If domain rules conflict with generic framework habits, follow the domain rules.
 - Finish one issue fully (tests + typecheck + boundaries + commit + PR + merge + close) before starting the next.
-- Stop on locked-decision ambiguity. Collision with an ADR (`docs/adr/0001-0021-*.md`), `CONTEXT.md`, `AGENTS.md`, or a grill-locked Q → stop and report which doc needs to reopen. Never resolve unilaterally.
+- Stop on locked-decision ambiguity. Collision with an ADR (`docs/adr/0001-0029-*.md`), `CONTEXT.md`, `AGENTS.md`, or a grill-locked Q → stop and report which doc needs to reopen. Never resolve unilaterally.
 
 ## Prototype Is The Spec
 
@@ -23,7 +23,7 @@
 - **Prototype contradicts spec text:** prototype wins for copy/layout; spec wins for behavior/AC. Document the path taken in a one-line code comment.
 - **Do NOT port from prototype:** hash routing, `window` globals, `document.execCommand`, synthetic local data, draft-only API intent panels. Production routing is TanStack Router; rich text is TipTap (ADR-0002 / ADR-0011) — not the prototype's `RichEditor`.
 
-For pixel-diff enforcement on page-level FE issues, see `apps/frontend/AGENTS.md` → Page-Level Pixel-Diff. For the full operating playbook, see `docs/agents/workflow.md`.
+For pixel-diff enforcement on page-level FE issues, see `apps/frontend/AGENTS.md` → Page-Level Pixel-Diff. Repo-local agent docs cover issue tracker, triage labels, and domain routing under `docs/agents/`; no repo-local workflow playbook is currently committed.
 
 ## Git Workflow
 
@@ -62,7 +62,7 @@ Resolve conflicts in this order. Lower tiers never override higher tiers within 
 
 1. `AGENTS.md` (root + per-directory)
 2. `CONTEXT.md` (domain vocabulary)
-3. `docs/adr/0001-0021-*.md` (architectural decisions)
+3. `docs/adr/0001-0029-*.md` (architectural decisions)
 4. `docs/implementation/00-08-*.md` (implementation contracts)
 
 **USER-FACING COPY (labels, headers, buttons, microcopy):**
@@ -91,8 +91,8 @@ Resolve conflicts in this order. Lower tiers never override higher tiers within 
 - Repositories write only tables owned by their module.
 - Source-shaped routes do not grant write ownership to the source module.
 - Frontend screens compose typed API hooks and shared components; they do not enforce backend permissions as truth.
-- Frontend feature folders follow top-level route ownership: `home`, `my-work`, `voc`, `surveys`, `tasks`, `integration`, `admin`.
-- Findings, Evidence, Coverage, and Links live under Integration routes.
+- Frontend feature folders follow top-level route ownership: `home`, `my-work`, `voc`, `voc-cluster`, `surveys`, `tasks`, `integration`, `admin`.
+- Integration owns Findings, Evidence, Coverage, and Links feature code. Per the 2026-07-13 URL decision, Findings routes at top-level `/findings`; Evidence, Coverage, and Links stay under `/integration/*`.
 - Managed System Registry, Analytics Areas, Permission Requests, and workspace settings live under Admin routes.
 - `packages/shared` must not import either app. `packages/ui` must not call APIs or own domain mutations.
 
@@ -116,7 +116,7 @@ Test code is a liability. Fewer, sharper tests beat more tests.
 
 ## Workflow Operations
 
-Execution playbook (model tiers, task sizing, REV cycles, user confirms, HTML artifacts, plan/REV doc layout, prototype copy authority): see `docs/agents/workflow.md`.
+Execution playbooks live outside this repo until a repo-local doc is added. Do not cite missing repo-local workflow docs.
 
 ## PR Review Priorities
 
@@ -127,4 +127,4 @@ When reviewing a PR, prioritize product invariant violations, ownership boundary
 - **Issue tracker.** GitHub issues on `hjung3113/FeedbackOps` via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 - **Triage labels.** Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 - **Domain docs.** Multi-context. Start at `CONTEXT-MAP.md`, then read the relevant per-context `CONTEXT.md`. See `docs/agents/domain.md`.
-- **Workflow.** Model tiers, REV cycles, dispatch patterns: `docs/agents/workflow.md`.
+- **Workflow.** No repo-local workflow playbook is committed; use the current user-approved plan/REV artifacts plus the issue tracker, triage, and domain docs above.

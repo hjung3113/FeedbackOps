@@ -26,7 +26,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /tasks?view=board&managedSystem=:managedSystemId|all&selected=:taskId
 /tasks?view=milestones&managedSystem=:managedSystemId|all&selected=:milestoneId
 /integration
-/integration/findings?managedSystem=:managedSystemId|all&selected=:findingId
+/findings?managedSystem=:managedSystemId|all&selected=:findingId
 /integration/evidence?managedSystem=:managedSystemId|all
 /integration/coverage?managedSystem=:managedSystemId|all
 /integration/links?managedSystem=:managedSystemId|all
@@ -40,7 +40,8 @@ Route naming rules:
 
 ```text
 - Home is the user-facing navigation label for `/`.
-- Findings, Evidence, Coverage, and Links are Integration routes.
+- Findings routes at top-level `/findings`, while Integration retains feature ownership.
+- Evidence, Coverage, and Links stay under `/integration/*`.
 - Task Requests are Tasks intake routes, not top-level routes.
 - Analytics Areas and Permission Requests are Admin routes, not top-level work routes.
 - Managed Systems are MVP scope, filters, defaults, and dashboard grouping; they do not create per-Managed-System route trees.
@@ -210,7 +211,7 @@ Example:
 
 ```text
 /vocs?view=triage&triage=high_severity&selected=:vocId&action=create_finding
-/integration/findings?selected=:findingId&action=request_task
+/findings?selected=:findingId&action=request_task
 /tasks?view=board&selected=:taskId&action=review_reporter_status
 /tasks?view=milestones&selected=:milestoneId&action=review_timeline
 ```
