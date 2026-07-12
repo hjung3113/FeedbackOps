@@ -54,6 +54,7 @@ export const vocClusterDtoSchema = z
     created_by: z.string().uuid(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
+    member_count: z.number().int().nonnegative(),
     members: z.array(vocClusterMemberDtoSchema).optional(),
     linked_findings: z
       .array(

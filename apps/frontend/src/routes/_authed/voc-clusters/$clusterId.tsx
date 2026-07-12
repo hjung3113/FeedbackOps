@@ -230,6 +230,7 @@ function ClusterListBody({
     title: string;
     status: string;
     created_at: string;
+    member_count: number;
     members?: { voc_id: string }[] | undefined;
   }>;
   isPending: boolean;
@@ -295,12 +296,13 @@ function ClusterRow({
     title: string;
     status: string;
     created_at: string;
+    member_count: number;
     members?: { voc_id: string }[] | undefined;
   };
   selected: boolean;
   onClick: () => void;
 }): React.ReactElement {
-  const memberCount = cluster.members?.length ?? 0;
+  const memberCount = cluster.member_count;
 
   return (
     <ObjectRow

@@ -14,6 +14,7 @@ export interface VocClusterRow {
   created_by: string;
   created_at: Date;
   updated_at: Date;
+  member_count: number;
 }
 
 export interface VocClusterMemberRow {
@@ -45,6 +46,7 @@ function mapClusterRow(row: Record<string, unknown>): VocClusterRow {
     created_by: row.created_by as string,
     created_at: toDate(row.created_at as Date | string),
     updated_at: toDate(row.updated_at as Date | string),
+    member_count: Number(row.member_count),
   };
 }
 
@@ -101,7 +103,12 @@ export async function insertVocCluster(
     )
     RETURNING
       id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
-      created_by, created_at, updated_at
+      created_by, created_at, updated_at,
+      (
+        SELECT count(*)::int
+        FROM voc_cluster.voc_cluster_members m
+        WHERE m.cluster_id = id
+      ) AS member_count
   `);
   const row = result.rows[0];
   if (!row) throw new Error('insertVocCluster returned no row');
@@ -114,11 +121,16 @@ export async function lockVocClusterById(
 ): Promise<VocClusterRow | null> {
   const result = await tx.execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
-      created_by, created_at, updated_at
-    FROM voc_cluster.voc_clusters
-    WHERE id = ${input.clusterId}
-      AND workspace_id = ${input.workspaceId}
+      c.id, c.workspace_id, c.display_id, c.title, c.summary, c.status,
+      c.primary_managed_system_id, c.created_by, c.created_at, c.updated_at,
+      (
+        SELECT count(*)::int
+        FROM voc_cluster.voc_cluster_members m
+        WHERE m.cluster_id = c.id
+      ) AS member_count
+    FROM voc_cluster.voc_clusters c
+    WHERE c.id = ${input.clusterId}
+      AND c.workspace_id = ${input.workspaceId}
     FOR UPDATE
   `);
   const row = result.rows[0];
@@ -131,11 +143,16 @@ export async function findVocClusterById(
 ): Promise<VocClusterRow | null> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
-      created_by, created_at, updated_at
-    FROM voc_cluster.voc_clusters
-    WHERE id = ${input.clusterId}
-      AND workspace_id = ${input.workspaceId}
+      c.id, c.workspace_id, c.display_id, c.title, c.summary, c.status,
+      c.primary_managed_system_id, c.created_by, c.created_at, c.updated_at,
+      (
+        SELECT count(*)::int
+        FROM voc_cluster.voc_cluster_members m
+        WHERE m.cluster_id = c.id
+      ) AS member_count
+    FROM voc_cluster.voc_clusters c
+    WHERE c.id = ${input.clusterId}
+      AND c.workspace_id = ${input.workspaceId}
     LIMIT 1
   `);
   const row = result.rows[0];
@@ -149,15 +166,20 @@ export async function listVocClustersByWorkspace(
   const managedSystemPredicate =
     input.managedSystemId === undefined
       ? sql`TRUE`
-      : sql`primary_managed_system_id = ${input.managedSystemId}`;
+      : sql`c.primary_managed_system_id = ${input.managedSystemId}`;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
-      created_by, created_at, updated_at
-    FROM voc_cluster.voc_clusters
-    WHERE workspace_id = ${input.workspaceId}
+      c.id, c.workspace_id, c.display_id, c.title, c.summary, c.status,
+      c.primary_managed_system_id, c.created_by, c.created_at, c.updated_at,
+      (
+        SELECT count(*)::int
+        FROM voc_cluster.voc_cluster_members m
+        WHERE m.cluster_id = c.id
+      ) AS member_count
+    FROM voc_cluster.voc_clusters c
+    WHERE c.workspace_id = ${input.workspaceId}
       AND ${managedSystemPredicate}
-    ORDER BY created_at DESC, id DESC
+    ORDER BY c.created_at DESC, c.id DESC
   `);
   return result.rows.map(mapClusterRow);
 }
@@ -200,7 +222,12 @@ export async function updateVocCluster(
       AND workspace_id = ${input.workspaceId}
     RETURNING
       id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
-      created_by, created_at, updated_at
+      created_by, created_at, updated_at,
+      (
+        SELECT count(*)::int
+        FROM voc_cluster.voc_cluster_members m
+        WHERE m.cluster_id = id
+      ) AS member_count
   `);
   const row = result.rows[0];
   if (!row) throw new Error('updateVocCluster returned no row');
