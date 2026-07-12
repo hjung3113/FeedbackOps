@@ -204,6 +204,7 @@ voc_clusters
 - created_by: uuid, required
 - created_at: timestamp, required
 - updated_at: timestamp, required
+- member_count: integer, non-negative, required
 ```
 
 Read DTO extensions:
@@ -222,6 +223,9 @@ Rules:
   status; title and summary are intentionally omitted to avoid content leakage.
 - Cluster detail and list reads include linked_findings as an array. Create and
   update responses may omit it.
+- member_count is derived at read time with `COUNT(*)` over
+  `voc_cluster_members` for the cluster. It is always present and does not
+  require a stored column.
 ```
 
 ## Task Request

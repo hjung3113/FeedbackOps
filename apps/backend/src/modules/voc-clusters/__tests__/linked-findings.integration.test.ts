@@ -75,9 +75,17 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
         workspaceId,
       ]);
       await migrateHandle.pool.query(
+        `delete from voc_cluster.voc_cluster_members
+          where cluster_id in (
+            select id from voc_cluster.voc_clusters where workspace_id = $1
+          )`,
+        [workspaceId],
+      );
+      await migrateHandle.pool.query(
         'delete from voc_cluster.voc_clusters where workspace_id = $1',
         [workspaceId],
       );
+      await migrateHandle.pool.query('delete from voc.vocs where workspace_id = $1', [workspaceId]);
       await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
         workspaceId,
       ]);
@@ -110,6 +118,33 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
     });
   }
 
+  async function seedVoc(title: string): Promise<{ id: string }> {
+    const res = await migrateHandle.pool.query<{ id: string }>(
+      `insert into voc.vocs (
+          workspace_id, primary_managed_system_id, reporter_id, display_id, title,
+          description_rich_content, source_context, reporter_facing_status, triage_state
+        )
+       values (
+          $1, $2, $3, voc.next_voc_display_id($1::uuid), $4,
+          '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"body"}]}]}'::jsonb,
+          'direct_use', 'received', 'untriaged'
+        )
+       returning id`,
+      [workspaceId, managedSystemId, adminActorId, title],
+    );
+    const id = res.rows[0]?.id;
+    if (!id) throw new Error(`seed voc failed for title=${title}`);
+    return { id };
+  }
+
+  async function seedClusterMember(clusterId: string, vocId: string): Promise<void> {
+    await migrateHandle.pool.query(
+      `insert into voc_cluster.voc_cluster_members (cluster_id, voc_id, added_by)
+       values ($1, $2, $3)`,
+      [clusterId, vocId, adminActorId],
+    );
+  }
+
   it('getCluster includes id, display_id, and status for findings created from the cluster', async () => {
     const cluster = await seedCluster('Linked detail cluster');
     const finding = await insertFindingRow(migrateHandle, {
@@ -127,6 +162,40 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
     expect(detail.linked_findings).toEqual([
       { id: finding.id, display_id: finding.display_id, status: 'active' },
     ]);
+  });
+
+  it('listClusters returns member_count for populated and empty clusters in the same response', async () => {
+    const withMembers = await seedCluster('Member count list cluster');
+    const empty = await seedCluster('Empty member count list cluster');
+    const vocs = await Promise.all([
+      seedVoc('Member count VOC 1'),
+      seedVoc('Member count VOC 2'),
+      seedVoc('Member count VOC 3'),
+    ]);
+    for (const voc of vocs) {
+      await seedClusterMember(withMembers.id, voc.id);
+    }
+
+    const list = await vocClustersService.listClusters({ actor: actor(), managedSystemId });
+
+    expect(list.items.find((item) => item.id === withMembers.id)?.member_count).toBe(3);
+    expect(list.items.find((item) => item.id === empty.id)?.member_count).toBe(0);
+  });
+
+  it('getCluster returns member_count matching the members array length', async () => {
+    const cluster = await seedCluster('Member count detail cluster');
+    const vocs = await Promise.all([
+      seedVoc('Member count detail VOC 1'),
+      seedVoc('Member count detail VOC 2'),
+    ]);
+    for (const voc of vocs) {
+      await seedClusterMember(cluster.id, voc.id);
+    }
+
+    const detail = await vocClustersService.getCluster({ actor: actor(), clusterId: cluster.id });
+
+    expect(detail.member_count).toBe(2);
+    expect(detail.member_count).toBe(detail.members?.length);
   });
 
   it('listClusters batches linked finding lookup and returns arrays for clusters with and without findings', async () => {
