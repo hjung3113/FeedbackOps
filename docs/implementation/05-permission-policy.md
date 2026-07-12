@@ -178,12 +178,6 @@ Audit events:
 
 ```text
 permission_requested
-permission_approved
-permission_rejected
-permission_more_info_requested
-permission_more_info_submitted
-permission_revoked
-permission_expired
 task_request_approved
 task_request_rejected
 task_request_needs_more_evidence
@@ -192,6 +186,19 @@ task_request_created_from_voc
 task_request_created_from_voc_cluster
 task_created_from_request
 task_linked_to_request
+```
+
+Permission lifecycle events beyond `permission_requested` are not emitted as of
+Slice 6 because approval, rejection, more-info, revoke, and expiry endpoints are
+not implemented yet. Planned event names remain:
+
+```text
+permission_approved
+permission_rejected
+permission_more_info_requested
+permission_more_info_submitted
+permission_revoked
+permission_expired
 ```
 
 ## Summary-Visible Contract

@@ -15,7 +15,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /vocs?view=triage&triage=unassigned&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=inbox&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=my&selected=:vocId
-/vocs/clusters?selected=:clusterId
+/voc-clusters?selected=:clusterId
 /surveys
 /surveys/:surveyId
 /surveys/:surveyId/results
@@ -57,7 +57,7 @@ VOC route views:
 - `/vocs?view=triage` is the structured decision workspace for ownership, severity, Analytics Area, similar VOC, follow-up, and no-follow-up decisions.
 - Inbox and Triage share the `/vocs` route family and list/detail mechanics, but Triage must not be implemented as only an Inbox filter.
 - `/vocs?view=list` or saved list views may support broader browsing after the Inbox and Triage workspaces are defined.
-- `/vocs/clusters` owns cluster-specific list/detail behavior.
+- `/voc-clusters` owns cluster-specific list/detail behavior.
 ```
 
 ## Role Level Navigation Contract

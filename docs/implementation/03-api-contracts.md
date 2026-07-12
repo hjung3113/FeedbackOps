@@ -521,8 +521,8 @@ events, and dashboard repair signals.
 | `POST /survey-findings/:id/request-task` | FOP-SURVEY-005 | Finding | Task Request | `requested_task` | task_request_created_from_survey_finding | moves survey-derived Finding to pending execution review | Survey Response creates VOC |
 | `POST /task-requests/:id/convert` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_created_from_request | satisfies approved execution candidate | folding conversion into approval |
 | `POST /task-requests/:id/link-task` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_linked_to_request | satisfies approved execution candidate with existing work | creating duplicate Task when suitable Task exists |
-| `POST /permission-requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_request_approved | may restore blocked object visibility | bypassing explicit deny checks |
-| `POST /permission-requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Deny | none | permission_request_rejected | keeps or creates permission-blocked state | exposing full restricted object |
+| `POST /permission-requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_request_approved (미구현 as of Slice 6) | may restore blocked object visibility | bypassing explicit deny checks |
+| `POST /permission-requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Deny | none | permission_request_rejected (미구현 as of Slice 6) | keeps or creates permission-blocked state | exposing full restricted object |
 
 Task Request review may be performed by a workspace Admin or by a Developer in
 the same Managed System Permission Scope. MVP allows a Developer to approve
@@ -546,6 +546,7 @@ but execution has not started until the Task moves to Todo or Doing.
 POST /vocs
 GET /vocs
 GET /vocs/:id
+GET /vocs/:id/conversation
 PATCH /vocs/:id
 PATCH /vocs/:id/description
 POST /vocs/:id/create-finding
@@ -644,7 +645,6 @@ idempotency behavior: Idempotency-Key required; hash includes body, source id,
 ### Finding
 
 ```text
-POST /findings
 GET /findings
 GET /findings/:id
 PATCH /findings/:id
@@ -653,6 +653,12 @@ POST /findings/:id/link-evidence
 POST /findings/:id/request-task
 POST /findings/:id/link-task
 ```
+
+Finding is not independently created through `POST /findings` as of Slice 6.
+Creation happens only through source conversion routes:
+`POST /vocs/:id/create-finding` and `POST /voc-clusters/:id/create-finding`.
+`POST /survey-responses/:id/create-finding` is a planned Slice 8 route (미구현 —
+the `surveys` backend module has no implementation as of this writing).
 
 Finding-to-Milestone linking is future cross-system behavior and is not an MVP
 Finding endpoint.
@@ -678,7 +684,6 @@ the existing `(finding, task, requested_task)` entity link, audit
 ### Task
 
 ```text
-POST /task-requests
 GET /task-requests
 GET /task-requests/:id
 POST /task-requests/:id/approve
@@ -690,8 +695,13 @@ POST /task-requests/:id/link-task
 GET /tasks
 GET /tasks/:id
 POST /tasks    # deferred in issue #134
-PATCH /tasks/:id
+PATCH /tasks/:id   # 미구현 as of Slice 6 — Slice 7 Task status transition (#138) 예정
 ```
+
+Task Request is not independently created through `POST /task-requests` as of
+Slice 6. It is created only through source transition routes:
+`POST /findings/:id/request-task`, `POST /vocs/:id/request-task`, and
+`POST /voc-clusters/:id/request-task`.
 
 ### Survey
 
@@ -741,9 +751,9 @@ lists yield empty arrays. Response:
 POST /permission-requests
 GET /permission-requests          # admin-only workspace list (#87)
 GET /permission-requests/mine     # caller's open requests
-POST /permission-requests/:id/approve
-POST /permission-requests/:id/reject
-POST /permission-requests/:id/revoke
+POST /permission-requests/:id/approve   # 미구현 as of Slice 6 — permission request approval workflow not started
+POST /permission-requests/:id/reject    # 미구현 as of Slice 6 — permission request rejection workflow not started
+POST /permission-requests/:id/revoke    # 미구현 as of Slice 6 — permission grant/request revoke workflow not started
 ```
 
 `GET /permission-requests` (Slice 3 #87) — admin-only workspace-wide list of
@@ -774,8 +784,10 @@ non-admin caller receives `permission.denied` → `403`. Response:
 POST /entity-links
 GET /entity-links
 PATCH /entity-links/:id
-DELETE /entity-links/:id
 ```
+
+Link detach/revoke is represented by `PATCH /entity-links/:id` status
+transition. There is no hard-delete endpoint for entity links as of Slice 6.
 
 ## Forbidden Endpoint
 
