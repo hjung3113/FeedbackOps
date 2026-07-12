@@ -113,9 +113,11 @@ Survey `generated_finding` relation are unchanged by this slice.
 Slice 6 (#132): introduces Task Request as a production link target for the
 first Task Request tracer. `POST /findings/:id/request-task` creates
 `(finding -> task_request, requested_task)` with `visibility='internal_only'`.
-The endpoint creates only a `pending_review` Task Request; approval,
-conversion to Task, Link Existing Task, and VOC/VOC Cluster request sources are
-deferred to later slices.
+The endpoint creates a `pending_review` Task Request. VOC/VOC Cluster request
+sources and convert-to-task/link-existing-task paths are implemented in Slice 6
+(#134/#136) through `POST /vocs/:id/request-task`,
+`POST /voc-clusters/:id/request-task`, `POST /task-requests/:id/convert`, and
+`POST /task-requests/:id/link-task`.
 
 ## Visibility
 

@@ -49,11 +49,11 @@ Testing must protect the product invariants that are hardest to repair later.
 - cross-system creation pending/error tests
 - PublicUpdateComposer separation tests
 - ReporterReplyComposer and InternalCommentComposer visibility tests
-- CommandMenu action parity tests
+- CommandMenu action parity tests when CommandMenu is introduced
 - status badge family separation tests
 - Navigation renders from backend permission contract
 - ManagedSystemScopeSwitcher filters lists and preserves URL state
-- CommandMenu excludes or disables actions according to backend permission state
+- CommandMenu excludes or disables actions according to backend permission state when CommandMenu is introduced
 ```
 
 ## Integration Slices
@@ -102,7 +102,7 @@ Frontend implementation should verify:
 - desktop, tablet, and mobile layouts
 - selected row and detail panel visibility
 - focus-visible states
-- dark mode contrast
+- light theme contrast
 - permission blocked states
 - loading and error states
 ```

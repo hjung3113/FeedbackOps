@@ -185,7 +185,7 @@ A typed loose-coupling relation between two domain records (source and target) w
 _Avoid_: Foreign key, parent-child relation, hard reference, related record
 
 **Relation Type**:
-The named kind of an **Entity Link**, drawn from a controlled vocabulary (e.g. `related_to`, `evidence_of`, `follow_up_for`, `clustered_into`).
+The named kind of an **Entity Link**, drawn from a controlled vocabulary (e.g. `related_to`, `created_finding`, `evidence_of`, `requested_task`, `converted_to`).
 _Avoid_: Tag, category, free-form label
 
 **Visibility**:
