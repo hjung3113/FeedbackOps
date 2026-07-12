@@ -2,8 +2,16 @@
 
 import { FindingDetailPanel } from '@/features/integration/components/FindingDetail';
 import { useFindingsList } from '@/features/integration/hooks/useFindingsList';
+import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import type { FindingDto } from '@fops/shared';
-import { ListShell, ObjectRow, OutlineBadge, Skeleton } from '@fops/ui';
+import {
+  type AvatarUser,
+  ListShell,
+  ObjectRow,
+  OutlineBadge,
+  Skeleton,
+  UserAvatar,
+} from '@fops/ui';
 import { createFileRoute } from '@tanstack/react-router';
 import * as React from 'react';
 
@@ -29,7 +37,15 @@ function FindingsListShell({
   onSelect: (id: string) => void;
 }): React.ReactElement {
   const listQuery = useFindingsList();
+  const { actors } = useWorkspaceActors();
   const findings = listQuery.data?.items ?? [];
+  const actorsById = React.useMemo(() => {
+    const map = new Map<string, AvatarUser>();
+    for (const actor of actors ?? []) {
+      map.set(actor.id, { display_name: actor.display_name });
+    }
+    return map;
+  }, [actors]);
 
   return (
     <ListShell
@@ -43,6 +59,7 @@ function FindingsListShell({
           isPending={listQuery.isPending}
           isError={listQuery.isError}
           selectedId={selectedId}
+          actorsById={actorsById}
           onSelect={onSelect}
         />
       }
@@ -58,12 +75,14 @@ function FindingsListBody({
   isPending,
   isError,
   selectedId,
+  actorsById,
   onSelect,
 }: {
   findings: FindingDto[];
   isPending: boolean;
   isError: boolean;
   selectedId: string | null;
+  actorsById: Map<string, AvatarUser>;
   onSelect: (id: string) => void;
 }): React.ReactElement {
   return (
@@ -98,6 +117,7 @@ function FindingsListBody({
               key={finding.id}
               finding={finding}
               selected={selectedId === finding.id}
+              owner={actorsById.get(finding.created_by) ?? null}
               onClick={() => onSelect(finding.id)}
             />
           ))}
@@ -110,10 +130,12 @@ function FindingsListBody({
 function FindingRow({
   finding,
   selected,
+  owner,
   onClick,
 }: {
   finding: FindingDto;
   selected: boolean;
+  owner: AvatarUser | null;
   onClick: () => void;
 }): React.ReactElement {
   return (
@@ -122,17 +144,25 @@ function FindingRow({
       title={finding.title}
       selected={selected}
       density="default"
+      severity={finding.severity}
       onClick={onClick}
       badges={<FindingStatusBadge status={finding.status} />}
       meta={
         <>
           <span>{severityLabel(finding.severity)}</span>
+          {finding.confidence !== null ? (
+            <>
+              {dot()}
+              <ConfidenceBadge displayId={finding.display_id} confidence={finding.confidence} />
+            </>
+          ) : null}
           {dot()}
           <span>Evidence {finding.evidence_count}개</span>
           {dot()}
           <span>{formatDate(finding.created_at)}</span>
         </>
       }
+      trailing={owner !== null ? <UserAvatar user={owner} size="sm" /> : null}
     />
   );
 }
@@ -145,6 +175,20 @@ function FindingStatusBadge({
   return (
     <OutlineBadge data-testid={`finding-status-badge-${status}`}>
       {statusLabel(status)}
+    </OutlineBadge>
+  );
+}
+
+function ConfidenceBadge({
+  displayId,
+  confidence,
+}: {
+  displayId: string;
+  confidence: NonNullable<FindingDto['confidence']>;
+}): React.ReactElement {
+  return (
+    <OutlineBadge data-testid={`finding-confidence-badge-${displayId}`}>
+      Confidence · {confidenceLabel(confidence)}
     </OutlineBadge>
   );
 }
@@ -179,6 +223,15 @@ function severityLabel(severity: FindingDto['severity']): string {
     critical: 'Critical',
   };
   return labels[severity];
+}
+
+function confidenceLabel(confidence: NonNullable<FindingDto['confidence']>): string {
+  const labels: Record<NonNullable<FindingDto['confidence']>, string> = {
+    low: '낮음',
+    medium: '중간',
+    high: '높음',
+  };
+  return labels[confidence];
 }
 
 function statusLabel(status: FindingDto['status']): string {
