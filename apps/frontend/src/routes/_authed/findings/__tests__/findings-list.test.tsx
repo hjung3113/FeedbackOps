@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -33,6 +33,8 @@ vi.mock('@fops/ui', () => ({
     title,
     badges,
     meta,
+    trailing,
+    severity,
     selected,
     onClick,
   }: {
@@ -40,6 +42,8 @@ vi.mock('@fops/ui', () => ({
     title: React.ReactNode;
     badges?: React.ReactNode;
     meta?: React.ReactNode;
+    trailing?: React.ReactNode;
+    severity?: string;
     selected?: boolean;
     onClick?: React.MouseEventHandler<HTMLButtonElement>;
   }) => (
@@ -49,16 +53,29 @@ vi.mock('@fops/ui', () => ({
       data-selected={selected ? 'true' : 'false'}
       onClick={onClick}
     >
+      {severity ? <span data-token={`--severity-${severity}`} /> : null}
       <span>{id}</span>
       <span>{title}</span>
       <span>{badges}</span>
       <span>{meta}</span>
+      <span>{trailing}</span>
     </button>
   ),
   OutlineBadge: ({ children, ...props }: { children: React.ReactNode }) => (
     <span {...props}>{children}</span>
   ),
   Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
+  UserAvatar: ({
+    user,
+    size,
+  }: {
+    user: { display_name: string };
+    size?: 'sm' | 'md' | 'lg';
+  }) => (
+    <span data-size={size} data-testid={`owner-avatar-${user.display_name}`}>
+      {user.display_name}
+    </span>
+  ),
 }));
 
 const findings = [
@@ -120,6 +137,18 @@ vi.mock('@/features/integration/components/FindingDetail', () => ({
   ),
 }));
 
+vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
+  useWorkspaceActors: () => ({
+    actors: [
+      {
+        id: '33333333-3333-3333-3333-333333333333',
+        display_name: '박서연',
+        kind: 'user',
+      },
+    ],
+  }),
+}));
+
 describe('FindingsListPage', () => {
   it('renders finding rows from the list hook', async () => {
     const { FindingsListPage } = await import('../index');
@@ -127,12 +156,8 @@ describe('FindingsListPage', () => {
     render(<FindingsListPage />);
 
     expect(screen.getByText('Findings')).toBeInTheDocument();
-    expect(screen.getByTestId('finding-row-FND-101')).toHaveTextContent(
-      '결제 실패 반복',
-    );
-    expect(screen.getByTestId('finding-row-FND-102')).toHaveTextContent(
-      '배송 지연 문의 증가',
-    );
+    expect(screen.getByTestId('finding-row-FND-101')).toHaveTextContent('결제 실패 반복');
+    expect(screen.getByTestId('finding-row-FND-102')).toHaveTextContent('배송 지연 문의 증가');
   });
 
   it('renders the selected finding in the detail panel', async () => {
@@ -144,9 +169,23 @@ describe('FindingsListPage', () => {
     expect(screen.getByTestId('finding-detail-panel')).toHaveTextContent(
       'finding:11111111-1111-1111-1111-111111111111',
     );
-    expect(screen.getByTestId('finding-row-FND-101')).toHaveAttribute(
-      'data-selected',
-      'true',
+    expect(screen.getByTestId('finding-row-FND-101')).toHaveAttribute('data-selected', 'true');
+  });
+
+  it('renders severity, confidence, and owner enrichment in finding rows', async () => {
+    const { FindingsListPage } = await import('../index');
+
+    render(<FindingsListPage />);
+
+    const richRow = screen.getByTestId('finding-row-FND-101');
+    expect(richRow.querySelector('[data-token="--severity-high"]')).toBeInTheDocument();
+    expect(screen.getByTestId('finding-confidence-badge-FND-101')).toHaveTextContent(
+      'Confidence · 중간',
     );
+    expect(within(richRow).getByTestId('owner-avatar-박서연')).toHaveAttribute('data-size', 'sm');
+
+    const nullConfidenceRow = screen.getByTestId('finding-row-FND-102');
+    expect(nullConfidenceRow.querySelector('[data-token="--severity-medium"]')).toBeInTheDocument();
+    expect(screen.queryByTestId('finding-confidence-badge-FND-102')).not.toBeInTheDocument();
   });
 });
