@@ -390,6 +390,8 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       const source = endpoints[tuple.source_type];
       const target = tuple.target_type === 'voc' ? vocTarget : endpoints[tuple.target_type];
 
+      // Rate-limit tiers currently share one global counter (#153); this test asserts tuple registration/visibility, not rate limits.
+      await migrateHandle.pool.query('delete from core.rate_limits');
       const created = await postEntityLink(adminCookie, source.id, target.id, {
         source: { type: tuple.source_type, id: source.id },
         target: { type: tuple.target_type, id: target.id },
