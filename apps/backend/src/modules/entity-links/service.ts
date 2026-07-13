@@ -2,12 +2,14 @@ import type {
   DetachedEntityLinkResponse,
   EntityLinkDto,
   EntityLinkEntityType,
+  EntityLinkPair,
   EntityLinkRef,
   EntityLinkRelationType,
   EntityLinkTargetSummary,
   EntityLinkVisibilityState,
   TaskReporterSummary,
 } from '@fops/shared';
+import { isRegisteredEntityLinkPair, registeredEntityLinkPairs } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -387,36 +389,50 @@ function providerFor(type: EntityLinkEntityType): EntityLinkProvider {
   return entityLinkProviders[type];
 }
 
+const creatableEntityLinkPairs = registeredEntityLinkPairs;
+const listVisibleEntityLinkPairs = registeredEntityLinkPairs;
+
+function tupleListIncludes(
+  pairs: readonly EntityLinkPair[],
+  input: {
+    sourceType: EntityLinkEntityType;
+    targetType: EntityLinkEntityType;
+    relationType: EntityLinkRelationType;
+  },
+): boolean {
+  return pairs.some(
+    (pair) =>
+      pair.source_type === input.sourceType &&
+      pair.target_type === input.targetType &&
+      pair.relation_type === input.relationType,
+  );
+}
+
 function isCreatableTuple(input: {
   sourceType: EntityLinkEntityType;
   targetType: EntityLinkEntityType;
   relationType: EntityLinkRelationType;
 }): boolean {
   return (
-    (input.sourceType === 'voc' &&
-      input.targetType === 'voc' &&
-      input.relationType === 'related_to') ||
-    (input.sourceType === 'voc' &&
-      input.targetType === 'finding' &&
-      input.relationType === 'created_finding') ||
-    (input.sourceType === 'voc' &&
-      input.targetType === 'finding' &&
-      input.relationType === 'evidence_of') ||
-    (input.sourceType === 'voc_cluster' &&
-      input.targetType === 'finding' &&
-      input.relationType === 'created_finding') ||
-    (input.sourceType === 'finding' &&
-      input.targetType === 'task_request' &&
-      input.relationType === 'requested_task') ||
-    (input.sourceType === 'task_request' &&
-      input.targetType === 'task' &&
-      input.relationType === 'converted_to') ||
-    (input.sourceType === 'finding' &&
-      input.targetType === 'task' &&
-      input.relationType === 'requested_task') ||
-    (input.sourceType === 'voc' &&
-      input.targetType === 'task' &&
-      input.relationType === 'evidence_of')
+    isRegisteredEntityLinkPair({
+      source_type: input.sourceType,
+      target_type: input.targetType,
+      relation_type: input.relationType,
+    }) && tupleListIncludes(creatableEntityLinkPairs, input)
+  );
+}
+
+function isListVisibleTuple(input: {
+  sourceType: EntityLinkEntityType;
+  targetType: EntityLinkEntityType;
+  relationType: EntityLinkRelationType;
+}): boolean {
+  return (
+    isRegisteredEntityLinkPair({
+      source_type: input.sourceType,
+      target_type: input.targetType,
+      relation_type: input.relationType,
+    }) && tupleListIncludes(listVisibleEntityLinkPairs, input)
   );
 }
 
@@ -441,7 +457,7 @@ async function evaluateRowVisibility(
   resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
 ): Promise<LinkVisibilityDecision> {
   if (
-    !isCreatableTuple({
+    !isListVisibleTuple({
       sourceType: row.source_type,
       targetType: row.target_type,
       relationType: row.relation_type,
