@@ -6,9 +6,15 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { type EntityLinkEntityType, registeredEntityLinkPairs } from '@fops/shared';
+
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
+import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
+import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
+import { insertVocClusterRow } from '../../voc-clusters/__tests__/_seed-helpers.js';
 import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
@@ -19,7 +25,6 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
-import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -89,7 +94,31 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       [WORKSPACE_ID],
     );
     await migrateHandle.pool.query(
+      `delete from task.tasks
+        where workspace_id = $1
+          and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from task_request.task_requests
+        where workspace_id = $1
+          and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
       `delete from finding.findings
+        where workspace_id = $1
+          and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from voc_cluster.voc_clusters
         where workspace_id = $1
           and primary_managed_system_id in (
             select id from core.managed_systems where workspace_id = $1 and slug like $2
@@ -143,11 +172,11 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
   }
 
   async function seedEntityLinkDirectly(input: {
-    sourceType?: 'voc';
+    sourceType?: EntityLinkEntityType;
     sourceId: string;
-    targetType?: 'voc' | 'finding';
+    targetType?: EntityLinkEntityType;
     targetId: string;
-    relationType?: 'related_to' | 'created_finding';
+    relationType?: string;
     managedSystemId: string;
     visibility: 'internal_only' | 'summary_visible' | 'visible_to_reporter' | 'admin_only';
   }): Promise<string> {
@@ -189,7 +218,57 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     });
   }
 
-  async function postEntityLink(cookie: string, sourceId: string, targetId: string, extra = {}) {
+  async function seedRegisteredTupleEndpoints(): Promise<{
+    msA: string;
+    endpoints: Record<EntityLinkEntityType, { id: string }>;
+    vocTarget: { id: string };
+  }> {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const cluster = await insertVocClusterRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: 'Tuple Cluster',
+      status: 'confirmed',
+      createdBy: adminActorId,
+    });
+    const finding = await seedFindingDirectly({
+      managedSystemId: msA,
+      sourceVocId: sourceVoc.id,
+      title: 'Tuple Finding',
+    });
+    const taskRequest = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'finding',
+      sourceId: finding.id,
+      primaryManagedSystemId: msA,
+      requesterActorId: adminActorId,
+    });
+    const task = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: 'Tuple Task',
+      createdBy: adminActorId,
+    });
+
+    return {
+      msA,
+      endpoints: {
+        voc: sourceVoc,
+        finding,
+        voc_cluster: cluster,
+        task_request: taskRequest,
+        task,
+      },
+      vocTarget: targetVoc,
+    };
+  }
+
+  async function postEntityLink(
+    cookie: string,
+    sourceId: string,
+    targetId: string,
+    extra: Record<string, unknown> = {},
+  ) {
     return app.inject({
       method: 'POST',
       url: '/entity-links',
@@ -301,6 +380,57 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       const res = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id, extra);
       expect(res.statusCode).toBe(422);
       expect(res.json<{ code: string }>().code).toBe('validation.failed');
+    }
+  });
+
+  it('POST and GET honor every shared registered entity-link tuple', async () => {
+    const { endpoints, vocTarget } = await seedRegisteredTupleEndpoints();
+
+    for (const tuple of registeredEntityLinkPairs) {
+      const source = endpoints[tuple.source_type];
+      const target = tuple.target_type === 'voc' ? vocTarget : endpoints[tuple.target_type];
+
+      const created = await postEntityLink(adminCookie, source.id, target.id, {
+        source: { type: tuple.source_type, id: source.id },
+        target: { type: tuple.target_type, id: target.id },
+        relation_type: tuple.relation_type,
+      });
+      expect(created.statusCode, JSON.stringify(tuple)).toBeGreaterThanOrEqual(200);
+      expect(created.statusCode, JSON.stringify(tuple)).toBeLessThanOrEqual(201);
+      const createdBody = created.json<{
+        id: string;
+        visibility_state: string;
+        source_type: string;
+        target_type: string;
+        relation_type: string;
+      }>();
+      expect(createdBody, JSON.stringify(tuple)).toMatchObject({
+        visibility_state: 'allowed',
+        source_type: tuple.source_type,
+        target_type: tuple.target_type,
+        relation_type: tuple.relation_type,
+      });
+
+      const list = await getEntityLinks(
+        adminCookie,
+        `?source_type=${tuple.source_type}&source_id=${source.id}`,
+      );
+      expect(list.statusCode, JSON.stringify(tuple)).toBe(200);
+      const listed = list
+        .json<{
+          items: Array<{
+            id: string;
+            visibility_state: string;
+            target_type: string;
+            relation_type: string;
+          }>;
+        }>()
+        .items.find((item) => item.id === createdBody.id);
+      expect(listed, JSON.stringify(tuple)).toMatchObject({
+        visibility_state: 'allowed',
+        target_type: tuple.target_type,
+        relation_type: tuple.relation_type,
+      });
     }
   });
 
@@ -858,19 +988,24 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
   });
 
   it('DB tuple check allows only registered entity-link tuples', async () => {
-    const { msA, sourceVoc, targetVoc } = await seedVocPair();
-    const finding = await seedFindingDirectly({ managedSystemId: msA, sourceVocId: sourceVoc.id });
+    const { msA, endpoints, vocTarget } = await seedRegisteredTupleEndpoints();
 
-    await expect(
-      seedEntityLinkDirectly({
-        sourceId: sourceVoc.id,
-        targetType: 'finding',
-        targetId: finding.id,
-        relationType: 'created_finding',
-        managedSystemId: msA,
-        visibility: 'internal_only',
-      }),
-    ).resolves.toEqual(expect.any(String));
+    for (const tuple of registeredEntityLinkPairs) {
+      const source = endpoints[tuple.source_type];
+      const target = tuple.target_type === 'voc' ? vocTarget : endpoints[tuple.target_type];
+
+      await expect(
+        seedEntityLinkDirectly({
+          sourceType: tuple.source_type,
+          sourceId: source.id,
+          targetType: tuple.target_type,
+          targetId: target.id,
+          relationType: tuple.relation_type,
+          managedSystemId: msA,
+          visibility: 'internal_only',
+        }),
+      ).resolves.toEqual(expect.any(String));
+    }
 
     await expect(
       migrateHandle.pool.query(
@@ -879,7 +1014,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
             relation_type, visibility, status, managed_system_id, created_by
           )
          values ($1, 'voc', $2, 'finding', $3, 'related_to', 'internal_only', 'active', $4, $5)`,
-        [WORKSPACE_ID, sourceVoc.id, finding.id, msA, adminActorId],
+        [WORKSPACE_ID, endpoints.voc.id, endpoints.finding.id, msA, adminActorId],
       ),
     ).rejects.toThrow();
 
@@ -890,7 +1025,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
             relation_type, visibility, status, managed_system_id, created_by
           )
          values ($1, 'finding', $2, 'voc', $3, 'created_finding', 'internal_only', 'active', $4, $5)`,
-        [WORKSPACE_ID, finding.id, targetVoc.id, msA, adminActorId],
+        [WORKSPACE_ID, endpoints.finding.id, vocTarget.id, msA, adminActorId],
       ),
     ).rejects.toThrow();
   });

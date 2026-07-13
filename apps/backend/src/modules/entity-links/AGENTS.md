@@ -11,7 +11,7 @@ Entity Links owns link behavior even when link tables live in the `core` databas
 - `summary_visible` exposes only the approved summary contract.
 - `internal_only` links are hidden from Reporter.
 - Cross-workspace links are rejected.
-- The `entity_links_tuple_check` CHECK constraint (`apps/backend/src/db/schema/core.ts`, `entityLinks` table) allows exactly these `(source_type, target_type, relation_type)` tuples: `('voc','voc','related_to')`, `('voc','finding','created_finding')`, `('voc','finding','evidence_of')`. Adding a new relation type requires a migration that extends this CHECK constraint — do not attempt to add a relation type in application code alone.
+- `registeredEntityLinkPairs` in `packages/shared/src/entity-links.ts` is the canonical tuple registry (currently 10 tuples). The DB `entity_links_tuple_check` CHECK constraint must be kept in sync via migration; adding a relation type requires both a shared-list entry and a migration extending the CHECK.
 
 ## Provider Contract
 
