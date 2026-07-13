@@ -1,5 +1,7 @@
 # Dashboard Module Agent Guide
 
+Status: not yet implemented — this document is the target contract for this module.
+
 ## Ownership
 
 Dashboard owns Home/Integration action queues, coverage projections, missing-link projections, and dashboard read models.

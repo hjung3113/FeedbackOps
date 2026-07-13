@@ -1,5 +1,7 @@
 # Surveys Module Agent Guide
 
+Status: not yet implemented — this document is the target contract for this module.
+
 ## Ownership
 
 Survey owns Survey, Survey Response, Survey Result, survey-specific summaries, and survey evidence read models.

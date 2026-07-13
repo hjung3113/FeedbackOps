@@ -8,9 +8,12 @@ It is the UI home for FeedbackOps linking behavior, but it does not own source o
 
 ## Route Boundary
 
-- Owns `/integration`, `/integration/findings`, `/integration/evidence`, `/integration/coverage`, and `/integration/links`.
-- Findings, Evidence, Coverage, and Links are Integration routes, not top-level navigation.
-- Home may link into Integration with selected object and action intent.
+Code ownership and URL mount are not the same thing here:
+
+- Owns component/hook implementation for Findings, but Findings is mounted at the **top-level** `/findings` and `/findings/$findingId` routes (route files live in `apps/frontend/src/routes/_authed/findings/`), not under `/integration`.
+- Owns both code and URL for Links, at `/integration/links`.
+- `/integration/evidence` and `/integration/coverage` are planned, not yet built.
+- Home may link into Integration-owned surfaces with selected object and action intent.
 
 ## Invariants
 

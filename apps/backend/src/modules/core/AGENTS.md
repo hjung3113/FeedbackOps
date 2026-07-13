@@ -4,6 +4,8 @@
 
 Core owns workspace and actor context, teams, Managed System Registry, Product Areas, Role Level vocabulary, shared identifiers, shared attachment governance, and audit log append APIs.
 
+Product Areas are implemented as a separate top-level module directory (`../analytics-areas/`) but logically owned by Core for boundary/permission purposes.
+
 ## Boundaries
 
 - Core must not import VOC, Finding, Task, Survey, Dashboard, Permission, or frontend modules.

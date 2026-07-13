@@ -4,6 +4,8 @@
 
 VOC owns VOC records, VOC clusters, reporter-facing VOC status, public updates, and VOC-specific read models.
 
+VOC Clusters are implemented as a separate top-level module directory (`../voc-clusters/`) but logically owned by VOC for boundary/permission purposes.
+
 ## Invariants
 
 - VOC means customer or user-submitted voice.
