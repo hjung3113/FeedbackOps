@@ -20,9 +20,8 @@
 - Keep row click, inline controls, keyboard focus, hover, selected, active, disabled, loading, error, and permission-limited states distinct.
 - Right detail panels preserve list context on desktop; they become drill-in panels on mobile.
 - Permission-limited content must show an approved summary or a request path, not a blank failure.
-- Top-level feature folders are `home`, `my-work`, `voc`, `voc-cluster`, `surveys`, `tasks`, `integration`, and `admin`.
-- Integration retains feature ownership for Findings, Evidence, Coverage, and Links. Per the 2026-07-13 URL decision, Findings routes at top-level `/findings`; Evidence, Coverage, and Links stay under `/integration/*`.
-- Task Requests live under Tasks. Product Areas, Permission Requests, Managed System Registry, and workspace settings live under Admin.
+- Top-level feature folders and route ownership follow root `AGENTS.md` → Implementation Boundaries (canonical list, includes `voc-cluster`).
+- Integration owns component/hook code for Findings (mounted at top-level `/findings`, `/findings/$findingId` per the 2026-07-13 URL decision); it owns both code and URL for Links (`/integration/links`). Evidence and Coverage routes are planned, not yet built. See `apps/frontend/src/features/integration/AGENTS.md`.
 - Managed System scope is a filter/defaulting context, not duplicated navigation.
 - Use Role Level labels: Admin, Developer, and User. Backend capability checks remain authoritative.
 - Keep Public Update, Reporter Reply, and Internal Comment as separate communication surfaces.
@@ -32,7 +31,7 @@
 
 - Do not build repeated UI patterns directly inside screens. Create or reuse a feature-local component first, then compose it in the screen.
 - Before creating a new component, check `packages/ui`, the feature's existing components, and `docs/frontend/component-inventory.md`.
-- Use existing wrappers under `packages/ui/src/ui` before importing shadcn/Radix primitives directly.
+- Use existing wrappers under `packages/ui/src/components` (Radix wrappers live in `components/shadcn`) before importing shadcn/Radix primitives directly.
 - Do not import raw Radix primitives in feature screens when a wrapper exists.
 - Use installed libraries, shadcn/Radix wrappers, and `lucide-react` before hand-rolling interaction behavior, accessibility primitives, icons, popovers, menus, tabs, dialogs, or form controls.
 - Add new tokens or variants to docs before using them broadly.
@@ -82,8 +81,6 @@ Every page-level FE issue (route mount, full screen) runs a structured Playwrigh
 
 ## Prototype Copy Authority
 
-See root `AGENTS.md` → Prototype Is The Spec for full rules. Frontend reminders:
+See root `AGENTS.md` → Prototype Is The Spec for full rules.
 
-- Quote labels from `screen-*.jsx` and `data.js` exactly. Korean and English may mix freely per surface; copy the reference verbatim regardless of language.
-- Section headers like `Triage (Read only)` stay as-is.
-- Do not blanket-translate either direction — but per-surface variance (e.g. `BODY` label in detail panel coexisting with `설명` in create form) is allowed when the reference design/screenshot shows it that way.
+- Frontend-unique addition: per-surface variance (e.g. `BODY` label in detail panel coexisting with `설명` in create form) is allowed when the reference design/screenshot shows it that way.

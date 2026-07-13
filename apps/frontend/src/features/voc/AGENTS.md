@@ -2,15 +2,15 @@
 
 ## Ownership
 
-VOC owns frontend route composition for VOC submission, inbox, triage, clusters, reporter-facing status, public updates, and VOC detail panels.
+VOC owns frontend route composition for VOC submission, inbox, triage, reporter-facing status, public updates, and VOC detail panels.
 
 It does not own Task status, Survey Response conversion, Finding persistence, or Entity Link visibility rules.
 
 ## Route Boundary
 
-- Owns `/vocs` and `/vocs/clusters`.
-- Keeps VOC Clusters under VOC.
+- Owns `/vocs` (single view-switching route covering inbox, triage, and create — see `apps/frontend/src/routes/_authed/vocs.tsx`).
 - May start Create Finding or Request Task flows without losing VOC list/detail context.
+- VOC Clusters are a separate feature (`features/voc-cluster/`, mounted at `/voc-clusters`) — see its AGENTS.md.
 
 ## Invariants
 
