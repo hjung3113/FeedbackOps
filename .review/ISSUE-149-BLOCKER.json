@@ -1,0 +1,36 @@
+{
+  "schema_version": "1",
+  "artifact_type": "issue_blocker",
+  "issue": 149,
+  "status": "blocked",
+  "reason_code": "product_audit_behavior_missing_for_required_tests",
+  "blocking_fact": "The requested test-only deliverable requires audit-row assertions for createCluster and updateCluster, but apps/backend/src/modules/voc-clusters/service.ts currently has no deps.auditService.record call in either mutation. createCluster inserts the cluster at lines 184-190 and returns at line 191 without writing core.audit_log. updateCluster updates the cluster and returns without writing core.audit_log. Because product source changes are forbidden, adding genuine passing audit regression tests for every mutation is impossible.",
+  "evidence": [
+    {
+      "file": "apps/backend/src/modules/voc-clusters/service.ts",
+      "lines": "184-191",
+      "fact": "createCluster persists voc_cluster.voc_clusters and returns the DTO without any auditService.record call."
+    },
+    {
+      "file": "apps/backend/src/modules/voc-clusters/service.ts",
+      "lines": "246-274",
+      "fact": "updateCluster locks and updates the cluster, then returns the DTO without any auditService.record call."
+    },
+    {
+      "file": "apps/backend/src/modules/voc-clusters/service.ts",
+      "lines": "326-338",
+      "fact": "addMember does record voc_cluster_member_added, showing the audit seam exists for other mutations."
+    },
+    {
+      "file": "apps/backend/src/modules/voc-clusters/service.ts",
+      "lines": "373-385",
+      "fact": "removeMember records voc_cluster_member_removed."
+    },
+    {
+      "file": "apps/backend/src/modules/voc-clusters/service.ts",
+      "lines": "483-513",
+      "fact": "createFindingFromCluster records finding_created_from_voc_cluster and entity_link.created."
+    }
+  ],
+  "required_unblock": "Add product behavior for createCluster and updateCluster audit rows, or narrow Issue #149 so tests only assert audits for mutations that currently write audit rows."
+}
