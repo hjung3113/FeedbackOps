@@ -15,6 +15,7 @@ import { buildServer } from '../../../server.js';
 import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
+  denyCapability,
   grantCapability,
   insertDevActor,
   insertInternalComment,
@@ -573,5 +574,26 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(body.conversation_timeline).toBeUndefined();
     expect(body.next_reporter_states).toBeUndefined();
     expect(body.title).toBeUndefined();
+  });
+
+  it('AC17: SUMMARY explicit_deny returns blocked_not_requestable permission_decisions._self', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sum-deny`, 'Sum Deny MS');
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac17'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
+    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const voc = await insertVoc(msId, 'Summary Deny VOC');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${devCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ permission_decisions: Record<string, unknown> }>();
+    const selfDecision = body.permission_decisions._self as Record<string, unknown>;
+    expect(selfDecision.state).toBe('blocked_not_requestable');
+    expect(selfDecision.reason).toBe('explicit_deny');
   });
 });
