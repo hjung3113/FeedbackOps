@@ -526,6 +526,47 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(hidden?.source_id).toBeUndefined();
   });
 
+  it('GET by VOC source accepts managed-system scoped voc.triage without voc.read', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-triage`,
+      'Links Triage MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'GET Triage Source VOC',
+    );
+    const targetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'GET Triage Target VOC',
+    );
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('triage'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const res = await getEntityLinks(devCookie, `?source_type=voc&source_id=${sourceVoc.id}`);
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: Array<Record<string, unknown>> }>();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      id: linkId,
+      visibility_state: 'allowed',
+      source_id: sourceVoc.id,
+      target_id: targetVoc.id,
+    });
+  });
+
   it('VOC detail returns active outbound related_to links on the Links tab payload', async () => {
     const { sourceVoc, targetVoc } = await seedVocPair();
     const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);

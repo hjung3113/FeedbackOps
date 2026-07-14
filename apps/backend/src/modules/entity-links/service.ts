@@ -212,11 +212,17 @@ async function assertVocReadScope(
   subject: LinkEndpointRow,
 ): Promise<boolean> {
   if (subject.reporter_id && actor.actor_id === subject.reporter_id) return true;
-  const decision = await deps.checkService.checkCapability(actor, 'voc.read', {
+  const readDecision = await deps.checkService.checkCapability(actor, 'voc.read', {
     workspace_id: actor.workspace_id,
     managed_system_id: subject.managed_system_id,
   });
-  return decision.allow;
+  if (readDecision.allow) return true;
+
+  const triageDecision = await deps.checkService.checkCapability(actor, 'voc.triage', {
+    workspace_id: actor.workspace_id,
+    managed_system_id: subject.managed_system_id,
+  });
+  return triageDecision.allow;
 }
 
 async function assertFindingReadScope(
