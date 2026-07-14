@@ -13,6 +13,20 @@ type FakeSession = {
   workspace_id: string;
 };
 
+type RateLimitRow = {
+  key: string;
+  routeGroup: string;
+  counter: number;
+};
+
+const RATE_LIMIT_TIER_PROBES = [
+  ['mutation', '/issue-153-mutation-probe'],
+  ['sensitive', '/issue-153-sensitive-probe'],
+  ['read', '/issue-153-read-probe'],
+  ['reporterEdit', '/issue-153-reporter-edit-probe'],
+  ['attachmentMutation', '/issue-153-attachment-mutation-probe'],
+] as const;
+
 function config(): AppConfig {
   return {
     NODE_ENV: 'test',
@@ -42,9 +56,13 @@ function extractSqlParams(query: unknown): unknown[] {
 function createDbHandle(opts: {
   sessions?: Record<string, FakeSession>;
   failSessionLookup?: boolean;
-}): DbHandle & { sessionLookupCount: () => number } {
+}): DbHandle & {
+  sessionLookupCount: () => number;
+  rateLimitRows: () => RateLimitRow[];
+} {
   const sessions = opts.sessions ?? {};
   const counters = new Map<string, number>();
+  const rateLimitRows = new Map<string, RateLimitRow>();
   let sessionLookupCount = 0;
 
   const db = {
@@ -66,6 +84,7 @@ function createDbHandle(opts: {
       const counterKey = `${routeGroup}:${key}`;
       const counter = (counters.get(counterKey) ?? 0) + 1;
       counters.set(counterKey, counter);
+      rateLimitRows.set(counterKey, { key, routeGroup, counter });
       return { rows: [{ counter, ttl_ms: '60000' } as T] };
     },
   };
@@ -75,12 +94,23 @@ function createDbHandle(opts: {
     pool: pool as unknown as DbHandle['pool'],
     close: async () => undefined,
     sessionLookupCount: () => sessionLookupCount,
+    rateLimitRows: () =>
+      Array.from(rateLimitRows.values()).sort((a, b) =>
+        `${a.routeGroup}:${a.key}`.localeCompare(`${b.routeGroup}:${b.key}`),
+      ),
   };
 }
 
 async function buildFakeServer(dbHandle: DbHandle): Promise<FastifyInstance> {
   const app = await buildServer({ config: config(), dbHandle });
   app.get('/issue-25-global-probe', async () => ({ ok: true }));
+  for (const [tier, url] of RATE_LIMIT_TIER_PROBES) {
+    app.get(
+      url,
+      { config: { rateLimit: app.rateLimitConfig[tier] as never } },
+      async () => ({ ok: true, tier }),
+    );
+  }
   await app.ready();
   return app;
 }
@@ -89,12 +119,13 @@ async function statusesFor(
   app: FastifyInstance,
   count: number,
   headers?: Record<string, string>,
+  url = '/issue-25-global-probe',
 ): Promise<number[]> {
   const statuses: number[] = [];
   for (let i = 0; i < count; i += 1) {
     const res = await app.inject({
       method: 'GET',
-      url: '/issue-25-global-probe',
+      url,
       ...(headers ? { headers } : {}),
     });
     statuses.push(res.statusCode);
@@ -137,6 +168,42 @@ describe('global rate limit actor resolution', () => {
     const actorBOverLimit = await statusesFor(app, 1, { cookie: sessionCookie('session-b') });
     expect(actorAOverLimit).toEqual([429]);
     expect(actorBOverLimit).toEqual([429]);
+  });
+
+  it('keeps route-level tiers in distinct Postgres route_group buckets', async () => {
+    const dbHandle = createDbHandle({
+      sessions: {
+        'session-a': {
+          workspace_id: WORKSPACE_ID,
+          actor_id: '10000000-0000-4000-8000-000000000001',
+        },
+      },
+    });
+    app = await buildFakeServer(dbHandle);
+    const headers = { cookie: sessionCookie('session-a') };
+
+    expect(await statusesFor(app, 10, headers, '/issue-153-mutation-probe')).toEqual(
+      Array(10).fill(200),
+    );
+    expect(await statusesFor(app, 1, headers, '/issue-153-mutation-probe')).toEqual([429]);
+    expect(await statusesFor(app, 1, headers, '/issue-153-read-probe')).toEqual([200]);
+    expect(await statusesFor(app, 1, headers, '/issue-153-sensitive-probe')).toEqual([200]);
+    expect(await statusesFor(app, 1, headers, '/issue-153-reporter-edit-probe')).toEqual([200]);
+    expect(await statusesFor(app, 1, headers, '/issue-153-attachment-mutation-probe')).toEqual([
+      200,
+    ]);
+
+    const rows = dbHandle.rateLimitRows();
+    expect(rows.map((row) => row.routeGroup).sort()).toEqual([
+      'attachment_mutation',
+      'mutation',
+      'read',
+      'reporter_edit',
+      'sensitive',
+    ]);
+    expect(rows.find((row) => row.routeGroup === 'mutation')?.counter).toBe(11);
+    expect(rows.find((row) => row.routeGroup === 'read')?.counter).toBe(1);
+    expect(rows.some((row) => row.routeGroup === 'global')).toBe(false);
   });
 
   it('caches actor session resolution for repeated requests with the same cookie', async () => {
