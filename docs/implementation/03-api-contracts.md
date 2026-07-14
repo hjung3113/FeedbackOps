@@ -695,6 +695,7 @@ POST /task-requests/:id/link-task
 GET /tasks
 GET /tasks/:id
 POST /tasks    # deferred in issue #134
+```
 
 ### PATCH /tasks/:id — Task status transition (Slice 7 #138)
 
@@ -712,8 +713,6 @@ POST /tasks    # deferred in issue #134
 | Idempotency hash | Includes `taskId`, `ifMatch`, route, and request body. A retry after refetching a stale Task has a distinct hash; clients must mint a fresh `Idempotency-Key` for each distinct `If-Match` value. |
 | Released side effect | ADR-0005/0009's Public-Update review-candidate background job remains deferred. Moving a Task to `released` in this endpoint does not yet enqueue or emit that candidate. |
 | Error codes | `validation.failed` · `validation.malformed_idempotency_key` · `permission.denied` · `not_found.record` · `conflict.stale_write` · `conflict.idempotency_key_reuse` · `rate_limited.actor` |
-
-```
 
 Task Request is not independently created through `POST /task-requests` as of
 Slice 6. It is created only through source transition routes:

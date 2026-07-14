@@ -63,8 +63,19 @@ describe.skipIf(!runIntegration)(
     async function cleanupFixtures(): Promise<void> {
       if (!migrateHandle) return;
       await migrateHandle.pool.query(
-        `delete from core.audit_log where workspace_id = $1 and event_type = 'task_status_changed'`,
-        [WORKSPACE_ID],
+        `delete from core.audit_log
+          where workspace_id = $1
+            and event_type = 'task_status_changed'
+            and subject_id in (
+              select task.id
+              from task.tasks task
+              join core.managed_systems managed_system
+                on managed_system.id = task.primary_managed_system_id
+              where task.workspace_id = $1
+                and managed_system.workspace_id = $1
+                and managed_system.slug like $2
+            )`,
+        [WORKSPACE_ID, `${SLUG_PREFIX}%`],
       );
       await migrateHandle.pool.query(
         `delete from core.idempotency_keys
@@ -187,6 +198,25 @@ describe.skipIf(!runIntegration)(
         expect(res.statusCode).toBe(422);
         expect(res.json<{ code: string }>().code).toBe("validation.failed");
       }
+    });
+
+    it("rejects a malformed If-Match header with the required-header validation shape", async () => {
+      const task = await seedTask();
+      const res = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "doing" },
+        {
+          idempotencyKey: randomUUID(),
+          ifMatch: "not-an-iso-timestamp",
+        },
+      );
+
+      expect(res.statusCode).toBe(422);
+      expect(res.json()).toMatchObject({
+        code: "validation.failed",
+        detail: { fields: [{ path: ["headers", "if-match"], code: "required" }] },
+      });
     });
 
     it("denies a Developer without finding.manage on the task Managed System", async () => {

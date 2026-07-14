@@ -17,6 +17,7 @@ import type { TasksService } from './service.js';
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const IDEMPOTENCY_KEY_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ISO_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 export interface TasksRoutesOptions {
   sessionService: SessionService;
@@ -42,7 +43,7 @@ function requireIdempotencyKey(headers: Record<string, unknown>): string {
 function requireIfMatch(headers: Record<string, unknown>): string {
   const raw = headers['if-match'];
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== 'string' || !ISO_TIMESTAMP_REGEX.test(value)) {
     throw new HttpError('validation.failed', 'If-Match header required', {
       fields: [{ path: ['headers', 'if-match'], code: 'required' }],
     });
