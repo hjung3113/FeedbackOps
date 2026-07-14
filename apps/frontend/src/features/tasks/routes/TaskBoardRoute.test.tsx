@@ -15,6 +15,7 @@ const task = {
 };
 
 const api = vi.hoisted(() => ({ listTasks: vi.fn(), updateTaskStatus: vi.fn() }));
+const draggableOptions = vi.hoisted(() => [] as Array<{ id?: string; disabled?: boolean }>);
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
@@ -24,7 +25,10 @@ vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children, onDragEnd }: { children: React.ReactNode; onDragEnd: (event: unknown) => void }) => <><button type="button" onClick={() => onDragEnd({ active: { data: { current: { task } } }, over: { id: 'doing' } })}>simulate drag to doing</button>{children}</>,
   KeyboardSensor: class {},
   PointerSensor: class {},
-  useDraggable: () => ({ setNodeRef: vi.fn(), listeners: {}, attributes: {}, isDragging: false }),
+  useDraggable: (options: { id?: string; disabled?: boolean }) => {
+    draggableOptions.push(options);
+    return { setNodeRef: vi.fn(), listeners: {}, attributes: {}, isDragging: false };
+  },
   useDroppable: () => ({ setNodeRef: vi.fn(), isOver: false }),
   useSensor: () => ({}),
   useSensors: () => [],
@@ -64,6 +68,7 @@ describe('TaskBoardRoute', () => {
   beforeEach(() => {
     api.listTasks.mockReset();
     api.updateTaskStatus.mockReset();
+    draggableOptions.length = 0;
     vi.mocked(toast.error).mockReset();
     vi.mocked(toast.warning).mockReset();
   });
@@ -116,11 +121,14 @@ describe('TaskBoardRoute', () => {
   });
 
   it('rolls back and refetches after a stale-write conflict', async () => {
+    const update = deferred<never>();
     api.listTasks.mockResolvedValue({ items: [task] });
-    api.updateTaskStatus.mockRejectedValue(new ApiError(409, { code: 'conflict.stale_write', message: 'stale' }));
+    api.updateTaskStatus.mockReturnValue(update.promise);
     renderBoard();
     await screen.findByText('TASK-1000');
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
+    await waitFor(() => expect(screen.getByLabelText('Doing column')).toHaveTextContent('TASK-1000'));
+    update.reject(new ApiError(409, { code: 'conflict.stale_write', message: 'stale' }));
     await waitFor(() => expect(screen.getByLabelText('Backlog column')).toHaveTextContent('TASK-1000'));
     await waitFor(() => expect(api.listTasks.mock.calls.length).toBeGreaterThan(1));
     expect(toast.error).toHaveBeenCalledWith('Task changed elsewhere. Board refreshed.');
@@ -130,8 +138,11 @@ describe('TaskBoardRoute', () => {
     api.listTasks.mockResolvedValue({ items: [task] });
     renderBoard();
     await screen.findByText('TASK-1000');
+    expect(draggableOptions).toContainEqual(expect.objectContaining({ id: task.id, disabled: false }));
+    draggableOptions.length = 0;
     fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'priority' } });
     await waitFor(() => expect(screen.getByLabelText('high column')).toBeInTheDocument());
+    await waitFor(() => expect(draggableOptions).toContainEqual(expect.objectContaining({ id: task.id, disabled: true })));
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
     expect(api.updateTaskStatus).not.toHaveBeenCalled();
     expect(toast.warning).toHaveBeenCalledWith('Group by Status 일 때만 드래그로 상태를 변경할 수 있습니다.');
