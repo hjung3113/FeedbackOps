@@ -16,9 +16,11 @@ const task = {
 
 const api = vi.hoisted(() => ({ listTasks: vi.fn(), updateTaskStatus: vi.fn() }));
 const draggableOptions = vi.hoisted(() => [] as Array<{ id?: string; disabled?: boolean }>);
+const sensorOptions = vi.hoisted(() => [] as Array<{ Sensor: unknown; options?: unknown }>);
+const navigate = vi.hoisted(() => vi.fn());
 
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
   createFileRoute: () => () => ({ useSearch: () => ({}) }),
 }));
 vi.mock('@dnd-kit/core', () => ({
@@ -30,7 +32,10 @@ vi.mock('@dnd-kit/core', () => ({
     return { setNodeRef: vi.fn(), listeners: {}, attributes: {}, isDragging: false };
   },
   useDroppable: () => ({ setNodeRef: vi.fn(), isOver: false }),
-  useSensor: () => ({}),
+  useSensor: (Sensor: unknown, options?: unknown) => {
+    sensorOptions.push({ Sensor, options });
+    return {};
+  },
   useSensors: () => [],
 }));
 vi.mock('@fops/ui', async () => {
@@ -38,7 +43,6 @@ vi.mock('@fops/ui', async () => {
   return {
     ...actual,
     WorkbenchShell: ({ toolbar, children, detailPanel }: { toolbar: { title: React.ReactNode; actions: React.ReactNode }; children: React.ReactNode; detailPanel?: React.ReactNode }) => <div><header>{toolbar.title}{toolbar.actions}</header>{children}<aside>{detailPanel}</aside></div>,
-    ListSortButton: ({ value, onChange }: { value: string; onChange: (next: string) => void }) => <select aria-label="Group by" value={value} onChange={(event) => onChange(event.target.value)}><option value="status">Status</option><option value="priority">Priority</option><option value="managedSystem">Managed System</option><option value="assignee">Assignee</option></select>,
   };
 });
 vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({ useWorkspaceActors: () => ({ actors: [] }) }));
@@ -69,6 +73,8 @@ describe('TaskBoardRoute', () => {
     api.listTasks.mockReset();
     api.updateTaskStatus.mockReset();
     draggableOptions.length = 0;
+    sensorOptions.length = 0;
+    navigate.mockReset();
     vi.mocked(toast.error).mockReset();
     vi.mocked(toast.warning).mockReset();
   });
@@ -81,6 +87,23 @@ describe('TaskBoardRoute', () => {
       expect(screen.getByLabelText(`${status[0]!.toUpperCase()}${status.slice(1)} column`)).toBeInTheDocument();
     }
     expect(screen.getAllByText('비어있음').length).toBe(6);
+  });
+
+  it('keeps a pointer click on a status-board card available for selection', async () => {
+    api.listTasks.mockResolvedValue({ items: [task] });
+    renderBoard();
+    const card = await screen.findByRole('button', { name: `${task.display_id}: ${task.title}` });
+
+    fireEvent.pointerDown(card, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(card, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.click(card);
+
+    expect(sensorOptions).toContainEqual({
+      Sensor: expect.anything(),
+      options: { activationConstraint: { distance: 5 } },
+    });
+    expect(screen.getByText(`detail ${task.id}`)).toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith({ to: '/tasks', search: { view: 'board', param: task.id } });
   });
 
   it('moves a card optimistically and sends concurrency and idempotency arguments', async () => {
@@ -140,8 +163,9 @@ describe('TaskBoardRoute', () => {
     await screen.findByText('TASK-1000');
     expect(draggableOptions).toContainEqual(expect.objectContaining({ id: task.id, disabled: false }));
     draggableOptions.length = 0;
-    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'priority' } });
-    await waitFor(() => expect(screen.getByLabelText('high column')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Group by' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Priority' }));
+    await waitFor(() => expect(screen.getByLabelText('High column')).toBeInTheDocument());
     await waitFor(() => expect(draggableOptions).toContainEqual(expect.objectContaining({ id: task.id, disabled: true })));
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
     expect(api.updateTaskStatus).not.toHaveBeenCalled();

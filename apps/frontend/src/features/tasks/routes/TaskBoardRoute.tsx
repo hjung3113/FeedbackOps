@@ -8,7 +8,6 @@ import {
   Button,
   InternalTaskBadge,
   ListFilterButton,
-  ListSortButton,
   OutlineBadge,
   SeverityBadge,
   UserAvatar,
@@ -17,7 +16,7 @@ import {
 import { DndContext, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Layers, Plus } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -76,12 +75,22 @@ function BoardColumn({ id, label, tasks, groupBy, selectedId, selectTask, names,
 }) {
   const droppable = useDroppable({ id, disabled: groupBy !== 'status' });
   return <section ref={droppable.setNodeRef} className={`flex min-h-0 w-72 shrink-0 flex-col rounded-sm border border-border-subtle bg-surface-raised ${droppable.isOver ? 'ring-1 ring-accent-primary' : ''}`} aria-label={`${label} column`}>
-    <header className="flex items-center gap-2 border-b border-border-subtle px-3 py-2"><>{groupBy === 'status' ? <InternalTaskBadge status={id as TaskStatus} /> : <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">{label}</span>}</><span className="text-xs tabular-nums text-text-muted">{tasks.length}</span></header>
+    <header className="flex items-center gap-2 border-b border-border-subtle px-3 py-2"><>{groupBy === 'status' ? <InternalTaskBadge status={id as TaskStatus} /> : <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">{label}</span>}</><span className="text-xs tabular-nums text-text-muted">{tasks.length}</span><span className="flex-1" /><Button type="button" variant="ghost" size="sm" className="h-[22px] w-[22px] p-0" disabled title="Task creation API is not available yet" aria-label={`Add task to ${label}`}><Plus className="h-3 w-3" /></Button></header>
     <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
       {tasks.map((task) => <DraggableTaskCard key={task.id} task={task} selected={task.id === selectedId} onSelect={() => selectTask(task.id)} enabled={enabled} managedSystemName={names.systems.get(task.primary_managed_system_id) ?? 'Managed System'} assigneeName={task.assignee_actor_id ? names.actors.get(task.assignee_actor_id) : undefined} />)}
       {tasks.length === 0 && <div className="p-3 text-center text-xs text-text-muted">비어있음</div>}
     </div>
   </section>;
+}
+
+function GroupByButton({ value, onChange }: { value: GroupBy; onChange: (value: GroupBy) => void }) {
+  const [open, setOpen] = React.useState(false);
+  return <div className="relative">
+    <Button type="button" variant="outline" size="sm" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="dialog"><Layers className="h-4 w-4" />Group by</Button>
+    {open && <div role="dialog" aria-label="Group by options" className="absolute right-0 z-10 mt-1 w-52 rounded-md border border-border-subtle bg-surface-raised p-1 shadow-md">
+      <div role="radiogroup" aria-label="Group by">{GROUP_OPTIONS.map((option) => <button key={option.value} type="button" role="radio" aria-checked={option.value === value} className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm text-text-primary hover:bg-surface-card" onClick={() => { onChange(option.value); setOpen(false); }}>{option.label}</button>)}</div>
+    </div>}
+  </div>;
 }
 
 export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
@@ -94,7 +103,7 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
   const tasksQuery = useQuery({ queryKey: ['tasks'] as const, queryFn: ({ signal }) => listTasks({ signal }), staleTime: 30_000 });
   const { actors } = useWorkspaceActors();
   const systemsQuery = useQuery({ queryKey: ['managed-systems', 'all'] as const, queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }), staleTime: 600_000 });
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor));
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
   const actorNames = React.useMemo(() => new Map((actors ?? []).map((a) => [a.id, a.display_name])), [actors]);
   const systemNames = React.useMemo(() => new Map((systemsQuery.data?.items ?? []).map((s) => [s.id, s.name])), [systemsQuery.data?.items]);
   const items = tasksQuery.data?.items ?? [];
@@ -105,7 +114,7 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
   }), [items, filters]);
   const columns = React.useMemo(() => {
     if (groupBy === 'status') return STATUS_COLUMNS;
-    if (groupBy === 'priority') return ['urgent', 'high', 'medium', 'low'].map((key) => ({ key, label: key }));
+    if (groupBy === 'priority') return ['urgent', 'high', 'medium', 'low'].map((key) => ({ key, label: key[0]!.toUpperCase() + key.slice(1) }));
     if (groupBy === 'managedSystem') return [...systemNames].map(([key, label]) => ({ key, label }));
     return [...new Set(filtered.map((t) => t.assignee_actor_id).filter((id): id is string => id !== null))].map((key) => ({ key, label: actorNames.get(key) ?? key })).concat({ key: '__unassigned', label: '미배정' });
   }, [actorNames, filtered, groupBy, systemNames]);
@@ -137,10 +146,16 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
   });
   function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: { view: 'board', param: id } }); }
   function onDragEnd(event: DragEndEvent) { const task = event.active.data.current?.task as TaskDto | undefined; const target = event.over?.id; if (groupBy !== 'status') { toast.warning('Group by Status 일 때만 드래그로 상태를 변경할 수 있습니다.'); return; } if (!task || typeof target !== 'string') return; if (task.status !== target) mutation.mutate({ task, status: target as TaskStatus }); }
+  function moveToNextStatus(taskId: string) {
+    const task = items.find((item) => item.id === taskId);
+    const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = { todo: 'doing', doing: 'review', review: 'done', done: 'released', reopened: 'todo' };
+    const next = task && nextStatus[task.status];
+    if (task && next) mutation.mutate({ task, status: next });
+  }
   if (tasksQuery.isLoading) return <div className="p-4 text-sm text-text-muted">Loading Tasks...</div>;
   if (tasksQuery.error) return <div className="p-4 text-sm text-accent-danger">Task board unavailable.</div>;
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
-  return <WorkbenchShell toolbar={{ title: <span className="flex items-center gap-2">Board <OutlineBadge>{filtered.length} tasks</OutlineBadge></span>, actions: <><ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} /><span className="text-xs text-text-muted">Group by</span><ListSortButton options={GROUP_OPTIONS} value={groupBy} defaultValue="status" onChange={(value) => setGroupBy(value as GroupBy)} /><Button variant="primary" size="sm" disabled title="Task creation API is not available yet"><Plus className="h-4 w-4" />New task</Button></> }} detailPanel={selected ? <TaskDetailPanel taskId={selected.id} actorNamesById={actorNames} managedSystemNamesById={systemNames} view="board" onClose={() => { setSelectedId(null); void navigate({ to: '/tasks', search: { view: 'board' } }); }} /> : null}>
+  return <WorkbenchShell toolbar={{ title: <span className="flex items-center gap-2">Board <OutlineBadge>{filtered.length} tasks</OutlineBadge></span>, actions: <><ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} /><GroupByButton value={groupBy} onChange={setGroupBy} /><Button variant="primary" size="sm" disabled title="Task creation API is not available yet"><Plus className="h-4 w-4" />New task</Button></> }} detailPanel={selected ? <TaskDetailPanel taskId={selected.id} actorNamesById={actorNames} managedSystemNamesById={systemNames} view="board" onMoveToNextStatus={moveToNextStatus} onClose={() => { setSelectedId(null); void navigate({ to: '/tasks', search: { view: 'board' } }); }} /> : null}>
     <div className="flex items-stretch gap-4 border-b border-border-subtle bg-surface-canvas px-5 py-2.5">
       <StatBlock label="Total tasks" value={items.length} />
       <StatDivider />
