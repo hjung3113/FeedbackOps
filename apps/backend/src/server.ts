@@ -237,13 +237,13 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       max: 10,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'mutation') as never,
+      routeGroup: 'mutation',
     },
     sensitive: {
       max: 5,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'sensitive') as never,
+      routeGroup: 'sensitive',
     },
     // TODO(F18 follow-up): add admin bypass for the read tier once the
     // admin-role detection helper lands (see plan §C3 follow-up F18).
@@ -251,7 +251,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       max: 300,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'read') as never,
+      routeGroup: 'read',
     },
     // Slice 3 #17 — Reporter pre-triage edit (PATCH /vocs/:id/description).
     // 30/min per actor (more permissive than generic `mutation: 10/min` because
@@ -261,7 +261,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       max: 30,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'reporter_edit') as never,
+      routeGroup: 'reporter_edit',
     },
     // PLAN-22 C3a — POST /attachments. 20/min per actor. Admin bypass is a
     // documented follow-up: it depends on the same admin-role helper called
@@ -270,7 +270,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       max: 20,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'attachment_mutation') as never,
+      routeGroup: 'attachment_mutation',
     },
   });
 
