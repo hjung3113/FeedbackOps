@@ -81,6 +81,9 @@ describe.skipIf(!runIntegration)('cluster display_id assignment (#142)', () => {
         `delete from core.managed_systems where workspace_id = $1`,
         [workspaceId],
       );
+      await migrateHandle.pool.query(`delete from core.audit_log where workspace_id = $1`, [
+        workspaceId,
+      ]);
       await migrateHandle.pool.query(`delete from core.actors where workspace_id = $1`, [
         workspaceId,
       ]);
