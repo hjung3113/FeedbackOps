@@ -141,7 +141,10 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
       toast.error('Task status could not be updated.');
     },
     onSettled: (_data, _error, _variables, context) => {
-      if (!context || mutationTokens.current.get(context.taskId) === context.token) void client.invalidateQueries({ queryKey: ['tasks'] });
+      if (!context || mutationTokens.current.get(context.taskId) === context.token) {
+        void client.invalidateQueries({ queryKey: ['tasks'] });
+        if (context) void client.invalidateQueries({ queryKey: ['task', context.taskId] });
+      }
     },
   });
   function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: { view: 'board', param: id } }); }

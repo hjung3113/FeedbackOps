@@ -14,7 +14,7 @@ const task = {
   created_by: '20000000-0000-0000-0000-000000000002', created_at: '2026-07-10T00:00:00.000Z', updated_at: '2026-07-10T00:00:00.000Z',
 };
 
-const api = vi.hoisted(() => ({ listTasks: vi.fn(), updateTaskStatus: vi.fn() }));
+const api = vi.hoisted(() => ({ getTask: vi.fn(), listTasks: vi.fn(), updateTaskStatus: vi.fn() }));
 const draggableOptions = vi.hoisted(() => [] as Array<{ id?: string; disabled?: boolean }>);
 const sensorOptions = vi.hoisted(() => [] as Array<{ Sensor: unknown; options?: unknown }>);
 const navigate = vi.hoisted(() => vi.fn());
@@ -48,10 +48,10 @@ vi.mock('@fops/ui', async () => {
 vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({ useWorkspaceActors: () => ({ actors: [] }) }));
 vi.mock('@/lib/api/managed-systems', () => ({ fetchManagedSystems: vi.fn(async () => ({ items: [{ id: task.primary_managed_system_id, name: 'Billing Ops', archived_at: null }] })) }));
 vi.mock('@/lib/api/tasks', () => api);
-vi.mock('./TaskListRoute', () => ({
-  TaskDetailPanel: ({ taskId }: { taskId: string }) => <div>detail {taskId}</div>,
-  TaskListRoute: () => <div>task list unchanged</div>,
-}));
+vi.mock('./TaskListRoute', async () => {
+  const actual = await vi.importActual<typeof import('./TaskListRoute')>('./TaskListRoute');
+  return { ...actual, TaskListRoute: () => <div>task list unchanged</div> };
+});
 vi.mock('./TaskRequestsRoute', () => ({ TaskRequestsRoute: () => <div>task requests unchanged</div> }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }));
 
@@ -70,6 +70,7 @@ function deferred<T>() {
 
 describe('TaskBoardRoute', () => {
   beforeEach(() => {
+    api.getTask.mockReset();
     api.listTasks.mockReset();
     api.updateTaskStatus.mockReset();
     draggableOptions.length = 0;
@@ -91,6 +92,7 @@ describe('TaskBoardRoute', () => {
 
   it('keeps a pointer click on a status-board card available for selection', async () => {
     api.listTasks.mockResolvedValue({ items: [task] });
+    api.getTask.mockResolvedValue({ ...task, source: null });
     renderBoard();
     const card = await screen.findByRole('button', { name: `${task.display_id}: ${task.title}` });
 
@@ -102,7 +104,7 @@ describe('TaskBoardRoute', () => {
       Sensor: expect.anything(),
       options: { activationConstraint: { distance: 5 } },
     });
-    expect(screen.getByText(`detail ${task.id}`)).toBeInTheDocument();
+    await screen.findByText('Standalone task');
     expect(navigate).toHaveBeenCalledWith({ to: '/tasks', search: { view: 'board', param: task.id } });
   });
 
@@ -174,8 +176,27 @@ describe('TaskBoardRoute', () => {
 
   it('restores the board selected detail from the URL parameter', async () => {
     api.listTasks.mockResolvedValue({ items: [task] });
+    api.getTask.mockResolvedValue({ ...task, source: null });
     renderBoard(task.id);
-    await waitFor(() => expect(screen.getByText(`detail ${task.id}`)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(task.title)).toBeInTheDocument());
+  });
+
+  it('refreshes the selected detail after moving a task from done to released', async () => {
+    const doneTask = { ...task, status: 'done' as const };
+    const releasedTask = { ...doneTask, status: 'released' as const };
+    api.listTasks.mockResolvedValue({ items: [doneTask] });
+    api.getTask.mockResolvedValueOnce({ ...doneTask, source: null }).mockResolvedValueOnce({ ...releasedTask, source: null });
+    api.updateTaskStatus.mockResolvedValue(releasedTask);
+
+    renderBoard(doneTask.id);
+    const footerAction = await screen.findByRole('button', { name: 'Move to next status' });
+    expect(screen.getAllByText('Done').length).toBeGreaterThan(0);
+
+    fireEvent.click(footerAction);
+
+    await waitFor(() => expect(api.getTask).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Move to next status' })).not.toBeInTheDocument());
+    expect(screen.getAllByText('Released').length).toBeGreaterThan(0);
   });
 
   it.each(['backlog', 'my', 'inbox'] as const)('keeps the %s view on TaskListRoute', (view) => {
