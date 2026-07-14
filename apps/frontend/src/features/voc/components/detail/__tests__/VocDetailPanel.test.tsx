@@ -8,6 +8,11 @@ vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({ useWorkspaceActors: 
 vi.mock('@/features/voc/hooks/usePermissionDecision', () => ({ usePermissionDecision: vi.fn() }));
 vi.mock('@/features/voc/hooks/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
 vi.mock('@/features/voc/hooks/useVocConversation', () => ({ useVocConversation: vi.fn() }));
+const navigate = vi.fn();
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>();
+  return { ...actual, useNavigate: () => navigate };
+});
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
   return { ...actual, getTask: vi.fn() };
@@ -80,6 +85,7 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 beforeEach(() => {
+  navigate.mockReset();
   vi.mocked(useManagedSystem).mockReturnValue(null);
   vi.mocked(usePermissionDecision).mockReturnValue(null);
   vi.mocked(useVocConversation).mockReturnValue(makeConversationQuery());
@@ -181,6 +187,44 @@ describe('<VocDetailPanel>', () => {
     );
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getAllByText('김개발').length).toBeGreaterThan(0);
+  });
+
+  it('navigates to a selected similar VOC while preserving list search state', () => {
+    const peerId = '00000000-0000-0000-0000-000000000002';
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({
+        data: {
+          ...DETAIL_ENVELOPE,
+          similar_count: 1,
+          similar: {
+            items: [
+              {
+                id: peerId,
+                display_id: 'VOC-0002',
+                title: '유사 VOC 제목',
+                reporter_facing_status: 'reviewing',
+                severity: 'medium',
+              },
+            ],
+          },
+        },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /VOC-0002 유사 VOC 제목/i }));
+
+    expect(navigate).toHaveBeenCalledOnce();
+    const navigation = navigate.mock.calls[0]?.[0] as {
+      to: string;
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navigation.to).toBe('/vocs');
+    expect(navigation.search({ view: 'inbox', tab: 'similar' })).toEqual({
+      view: 'inbox',
+      tab: 'similar',
+      selected: peerId,
+    });
   });
 
   // REV-1 #6: dirty composer close must show DirtyConfirmation, not call onClose immediately.

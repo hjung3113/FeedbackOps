@@ -18,6 +18,7 @@ import {
 } from '@fops/ui';
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 
 import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
@@ -31,6 +32,7 @@ import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
 import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { NextActionFooter } from './NextActionFooter';
+import { SimilarVocSection } from './SimilarVocSection';
 import { TriageBlock } from './TriageBlock';
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -170,6 +172,7 @@ const DETAIL_SECTIONS = [
   { id: 'triage', label: 'Triage' },
   { id: 'description', label: 'Description' },
   { id: 'trail', label: 'Trail' },
+  { id: 'similar', label: 'Similar' },
   { id: 'conversation', label: 'Public' },
   { id: 'internal', label: 'Internal' },
   { id: 'compose', label: 'Compose' },
@@ -188,6 +191,7 @@ function FullDetailView({
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
   const [createFindingOpen, setCreateFindingOpen] = React.useState(false);
   const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
+  const navigate = useNavigate();
   const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
     useIdempotencyKey();
   // Scroll container ref for section nav anchor tracking
@@ -270,6 +274,12 @@ function FullDetailView({
     setRequestTaskOpen(false);
   }
 
+  function handleSimilarVocSelect(id: string): void {
+    // Match VOC list-row selection: retain the current view and filters.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void navigate({ to: '/vocs', search: (prev: any) => ({ ...prev, selected: id }) as any });
+  }
+
   return (
     <>
       <div className="flex flex-col h-full" data-testid="voc-detail-panel">
@@ -322,6 +332,13 @@ function FullDetailView({
           <div data-anchor="trail">
             <LinkedExecutionSection voc={voc} linkedTask={linkedTask} />
             <LinkedEntityTrailSection />
+          </div>
+          <div data-anchor="similar">
+            <SimilarVocSection
+              similar={voc.similar}
+              similarCount={voc.similar_count}
+              onSelect={handleSimilarVocSelect}
+            />
           </div>
           <div data-anchor="conversation">
             <ConversationTimeline voc={voc} actorNamesById={actorNamesById} />
