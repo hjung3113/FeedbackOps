@@ -50,7 +50,7 @@ export const vocListItemSchema = z.object({
   source_context: sourceContextEnumSchema,
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
-  // Slice 3: always 0 — real aggregate deferred until Cluster table ships (F20).
+  // Authorized, active same-Managed-System peers; see ADR-0031.
   similar_count: z.number().int().min(0),
   // PLAN-22 §Bug-1 (2026-05-22): count of active (non-archived) attachments
   // linked to this VOC. Computed via subquery in listVocs to keep the row

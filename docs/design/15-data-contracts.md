@@ -450,3 +450,14 @@ Rules:
 - Rich Table support is spike-gated in MVP; when enabled, tables are stored as rich content nodes.
 - Large spreadsheet-like data should be attachments.
 ```
+
+## VOC Similarity Projection
+
+`similar_count` on every VOC list/detail item is the authorized total of active
+same-workspace, same-primary-Managed-System peers, excluding the source VOC.
+Detail additionally includes `similar.items`, capped at three and ordered by
+`created_at DESC, id DESC`, with `id`, `display_id`, `title`,
+`reporter_facing_status`, and nullable `severity`. It is not a second count.
+
+Peer visibility is `voc.read` scope or reporter ownership of that peer. A
+triage-only summary envelope includes neither field. See ADR-0031.

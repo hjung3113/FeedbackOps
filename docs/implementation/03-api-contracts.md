@@ -805,6 +805,20 @@ PATCH /entity-links/:id
 Link detach/revoke is represented by `PATCH /entity-links/:id` status
 transition. There is no hard-delete endpoint for entity links as of Slice 6.
 
+### VOC Similarity Projection
+
+`GET /vocs` returns a real `similar_count` for each list item. `GET /vocs/:id`
+returns that same sole total plus `similar: { items }`; items are capped at
+three, ordered `created_at DESC, id DESC`, and contain only `id`, `display_id`,
+`title`, `reporter_facing_status`, and `severity`.
+
+The peer predicate requires the same workspace and primary Managed System,
+active (non-archived) status, non-self identity, and peer visibility through
+the actor's `voc.read` scope or peer reporter ownership. Reporter ownership of
+the source does not broaden peer visibility. Summary/triage-only envelopes omit
+similarity entirely. Detail ignores `If-None-Match` and returns 200 while this
+peer-derived projection has no projection-aware validator. See ADR-0031.
+
 ## Forbidden Endpoint
 
 ```text
