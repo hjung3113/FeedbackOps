@@ -63,11 +63,13 @@ export function TaskDetailPanel({
   onClose,
   actorNamesById,
   managedSystemNamesById,
+  view = 'backlog',
 }: {
   taskId: string;
   onClose: () => void;
   actorNamesById: ReadonlyMap<string, string>;
   managedSystemNamesById: ReadonlyMap<string, string>;
+  view?: 'backlog' | 'board';
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const taskQuery = useQuery({
@@ -98,7 +100,7 @@ export function TaskDetailPanel({
           <DetailPanelHeaderActions
             entityKind="task"
             entityId={task.id}
-            copyUrl={`/tasks?view=backlog&param=${task.id}`}
+            copyUrl={`/tasks?view=${view}&param=${task.id}`}
           />
         }
       />
@@ -279,6 +281,7 @@ export function TaskListRoute({ selectedParam }: { selectedParam?: string | unde
             taskId={selected.id}
             actorNamesById={actorNamesById}
             managedSystemNamesById={managedSystemNamesById}
+            view="backlog"
             onClose={() => {
               setSelectedId(null);
               void navigate({ to: '/tasks', search: { view: 'backlog' } });

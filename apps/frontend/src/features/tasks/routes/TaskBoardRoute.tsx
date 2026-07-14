@@ -50,7 +50,7 @@ function uuid(): string {
 function DraggableTaskCard({ task, selected, onSelect, managedSystemName, assigneeName, enabled }: {
   task: TaskDto; selected: boolean; onSelect: () => void; managedSystemName: string; assigneeName?: string | undefined; enabled: boolean;
 }) {
-  const draggable = useDraggable({ id: task.id, data: { task }, disabled: false });
+  const draggable = useDraggable({ id: task.id, data: { task }, disabled: !enabled });
   return (
     <button
       ref={draggable.setNodeRef}
@@ -62,7 +62,7 @@ function DraggableTaskCard({ task, selected, onSelect, managedSystemName, assign
       className={`w-full cursor-grab rounded-sm border border-border-subtle bg-surface-card p-3 text-left shadow-sm transition ${selected ? 'ring-1 ring-border-selected' : ''} ${draggable.isDragging ? 'opacity-35' : ''}`}
     >
       <div className="flex items-center gap-1.5"><span className="font-mono text-xs text-text-muted">{task.display_id}</span><SeverityBadge severity={severity(task.priority)} /></div>
-      {task.source_task_request_id && <span className="mt-2 inline-flex rounded border border-accent-info/30 px-1.5 py-0.5 text-xs text-accent-info">Linked finding</span>}
+      {/* TaskDto does not project finding linkage or linked VOC counts; only TaskDetailDto.source does. */}
       <div className="mt-2 text-sm font-medium text-text-primary">{task.title}</div>
       <div className="mt-3 flex items-center justify-between gap-2 text-xs text-text-muted"><span className="flex min-w-0 items-center gap-1.5 truncate"><span className="h-1.5 w-1.5 rounded-full bg-accent-info" />{managedSystemName}</span>{assigneeName ? <UserAvatar user={{ display_name: assigneeName }} size="sm" /> : <span className="rounded border border-border-subtle px-1.5 py-0.5">Unassigned</span>}</div>
       {!enabled && <span className="sr-only">Drag changes status only when grouped by status.</span>}
@@ -90,6 +90,7 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
   const [groupBy, setGroupBy] = React.useState<GroupBy>('status');
   const [filters, setFilters] = React.useState<Filters>({});
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
+  const mutationTokens = React.useRef(new Map<string, number>());
   const tasksQuery = useQuery({ queryKey: ['tasks'] as const, queryFn: ({ signal }) => listTasks({ signal }), staleTime: 30_000 });
   const { actors } = useWorkspaceActors();
   const systemsQuery = useQuery({ queryKey: ['managed-systems', 'all'] as const, queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }), staleTime: 600_000 });
@@ -108,21 +109,53 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
     if (groupBy === 'managedSystem') return [...systemNames].map(([key, label]) => ({ key, label }));
     return [...new Set(filtered.map((t) => t.assignee_actor_id).filter((id): id is string => id !== null))].map((key) => ({ key, label: actorNames.get(key) ?? key })).concat({ key: '__unassigned', label: '미배정' });
   }, [actorNames, filtered, groupBy, systemNames]);
-  const filterCategories = React.useMemo(() => [{ key: 'priority', label: 'Priority', options: ['urgent', 'high', 'medium', 'low'].map((value) => ({ value, label: value[0]!.toUpperCase() + value.slice(1) })) }, { key: 'milestone', label: 'Milestone', options: [{ value: '__any', label: 'Milestone 있음' }, { value: '__none', label: 'Milestone 없음' }] }, { key: 'assignee', label: 'Assignee', options: [{ value: '__unassigned', label: '미배정' }, ...[...actorNames].map(([value, label]) => ({ value, label }))] }], [actorNames]);
+  const filterCategories = React.useMemo(() => {
+    const assigneeIds = [...new Set(items.map((task) => task.assignee_actor_id).filter((id): id is string => id !== null))];
+    return [{ key: 'priority', label: 'Priority', options: ['urgent', 'high', 'medium', 'low'].map((value) => ({ value, label: value[0]!.toUpperCase() + value.slice(1) })) }, { key: 'milestone', label: 'Milestone', options: [{ value: '__any', label: 'Milestone 있음' }, { value: '__none', label: 'Milestone 없음' }] }, { key: 'assignee', label: 'Assignee', options: [{ value: '__unassigned', label: '미배정' }, ...assigneeIds.map((value) => ({ value, label: actorNames.get(value) ?? value }))] }];
+  }, [actorNames, items]);
   const mutation = useMutation({
     mutationKey: ['task-status-transition'],
     mutationFn: ({ task, status }: { task: TaskDto; status: TaskStatus }) => updateTaskStatus(task.id, status, { ifMatch: task.updated_at, idempotencyKey: uuid() }),
-    onMutate: async ({ task, status }) => { const previousStatus = task.status; client.setQueryData<{ items: TaskDto[] }>(['tasks'], (old) => old ? { ...old, items: old.items.map((item) => item.id === task.id ? { ...item, status } : item) } : old); return { taskId: task.id, previousStatus }; },
-    onError: (error, _variables, context) => { if (context) client.setQueryData<{ items: TaskDto[] }>(['tasks'], (old) => old ? { ...old, items: old.items.map((item) => item.id === context.taskId ? { ...item, status: context.previousStatus } : item) } : old); if (error instanceof ApiError && error.code === 'conflict.stale_write') { void client.invalidateQueries({ queryKey: ['tasks'] }); toast.error('Task changed elsewhere. Board refreshed.'); return; } toast.error('Task status could not be updated.'); },
-    onSettled: () => void client.invalidateQueries({ queryKey: ['tasks'] }),
+    onMutate: async ({ task, status }) => {
+      const token = (mutationTokens.current.get(task.id) ?? 0) + 1;
+      mutationTokens.current.set(task.id, token);
+      await client.cancelQueries({ queryKey: ['tasks'] });
+      const previousStatus = client.getQueryData<{ items: TaskDto[] }>(['tasks'])?.items.find((item) => item.id === task.id)?.status ?? task.status;
+      client.setQueryData<{ items: TaskDto[] }>(['tasks'], (old) => old ? { ...old, items: old.items.map((item) => item.id === task.id ? { ...item, status } : item) } : old);
+      return { taskId: task.id, previousStatus, token };
+    },
+    onError: (error, _variables, context) => {
+      if (context && mutationTokens.current.get(context.taskId) === context.token) {
+        client.setQueryData<{ items: TaskDto[] }>(['tasks'], (old) => old ? { ...old, items: old.items.map((item) => item.id === context.taskId ? { ...item, status: context.previousStatus } : item) } : old);
+      }
+      if (error instanceof ApiError && error.code === 'conflict.stale_write' && context && mutationTokens.current.get(context.taskId) === context.token) { void client.invalidateQueries({ queryKey: ['tasks'] }); toast.error('Task changed elsewhere. Board refreshed.'); return; }
+      toast.error('Task status could not be updated.');
+    },
+    onSettled: (_data, _error, _variables, context) => {
+      if (!context || mutationTokens.current.get(context.taskId) === context.token) void client.invalidateQueries({ queryKey: ['tasks'] });
+    },
   });
   function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: { view: 'board', param: id } }); }
   function onDragEnd(event: DragEndEvent) { const task = event.active.data.current?.task as TaskDto | undefined; const target = event.over?.id; if (groupBy !== 'status') { toast.warning('Group by Status 일 때만 드래그로 상태를 변경할 수 있습니다.'); return; } if (!task || typeof target !== 'string') return; if (task.status !== target) mutation.mutate({ task, status: target as TaskStatus }); }
   if (tasksQuery.isLoading) return <div className="p-4 text-sm text-text-muted">Loading Tasks...</div>;
   if (tasksQuery.error) return <div className="p-4 text-sm text-accent-danger">Task board unavailable.</div>;
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
-  return <WorkbenchShell toolbar={{ title: <span className="flex items-center gap-2">Board <OutlineBadge>{filtered.length} tasks</OutlineBadge></span>, actions: <><ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} /><ListSortButton options={GROUP_OPTIONS} value={groupBy} defaultValue="status" onChange={(value) => setGroupBy(value as GroupBy)} /><Button variant="primary" size="sm" disabled title="Task creation API is not available yet"><Plus className="h-4 w-4" />New task</Button></> }} detailPanel={selected ? <TaskDetailPanel taskId={selected.id} actorNamesById={actorNames} managedSystemNamesById={systemNames} onClose={() => { setSelectedId(null); void navigate({ to: '/tasks', search: { view: 'board' } }); }} /> : null}>
-    <div className="border-b border-border-subtle bg-surface-canvas px-4 py-2"><div className="flex items-center gap-5 text-xs"><span><strong>{items.length}</strong> Total tasks</span><span><strong>{items.filter((t) => t.assignee_actor_id === null).length}</strong> Unassigned</span><span><strong>{items.filter((t) => t.status === 'doing').length}</strong> In progress</span></div></div>
+  return <WorkbenchShell toolbar={{ title: <span className="flex items-center gap-2">Board <OutlineBadge>{filtered.length} tasks</OutlineBadge></span>, actions: <><ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} /><span className="text-xs text-text-muted">Group by</span><ListSortButton options={GROUP_OPTIONS} value={groupBy} defaultValue="status" onChange={(value) => setGroupBy(value as GroupBy)} /><Button variant="primary" size="sm" disabled title="Task creation API is not available yet"><Plus className="h-4 w-4" />New task</Button></> }} detailPanel={selected ? <TaskDetailPanel taskId={selected.id} actorNamesById={actorNames} managedSystemNamesById={systemNames} view="board" onClose={() => { setSelectedId(null); void navigate({ to: '/tasks', search: { view: 'board' } }); }} /> : null}>
+    <div className="flex items-stretch gap-4 border-b border-border-subtle bg-surface-canvas px-5 py-2.5">
+      <StatBlock label="Total tasks" value={items.length} />
+      <StatDivider />
+      <StatBlock label="Unassigned" value={items.filter((task) => task.assignee_actor_id === null).length} valueClassName="text-accent-warning" />
+      <StatDivider />
+      <StatBlock label="In progress" value={items.filter((task) => task.status === 'doing').length} valueClassName="text-accent-success" />
+    </div>
     <DndContext sensors={sensors} onDragEnd={onDragEnd}><div className="flex h-full gap-3 overflow-x-auto p-4">{columns.map((column) => <BoardColumn key={column.key} id={column.key} label={column.label} tasks={filtered.filter((task) => groupValue(task, groupBy) === column.key)} groupBy={groupBy} selectedId={selectedId} selectTask={selectTask} names={{ systems: systemNames, actors: actorNames }} enabled={groupBy === 'status'} />)}</div></DndContext>
   </WorkbenchShell>;
+}
+
+function StatBlock({ label, value, valueClassName = '' }: { label: string; value: number; valueClassName?: string }) {
+  return <div className="flex flex-col gap-0.5"><span className="text-xs uppercase tracking-wide text-text-muted">{label}</span><span className={`text-base font-semibold tabular-nums ${valueClassName}`}>{value}</span></div>;
+}
+
+function StatDivider() {
+  return <div className="w-px self-stretch bg-border-subtle" aria-hidden="true" />;
 }
