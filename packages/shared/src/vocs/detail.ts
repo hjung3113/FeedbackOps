@@ -6,6 +6,17 @@ import { conversationEntrySchema } from './conversation.js';
 import { reporterFacingStatusEnumSchema, vocListItemSchema } from './list-item.js';
 
 export const vocDetailEnvelopeSchema = vocListItemSchema.extend({
+  // The capped peer preview uses the same authorized peer set as similar_count.
+  // similar_count remains the sole total; this array is intentionally not paginated.
+  similar: z.object({
+    items: z.array(z.object({
+      id: z.string().uuid(),
+      display_id: z.string(),
+      title: z.string(),
+      reporter_facing_status: reporterFacingStatusEnumSchema,
+      severity: z.enum(['low', 'medium', 'high', 'critical']).nullable(),
+    })),
+  }),
   // TipTap doc — opaque jsonb; backend validates structure.
   description_rich_content: z.unknown(),
   // No action items in Slice 3; kept as opaque array for future shape.

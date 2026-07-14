@@ -10,8 +10,8 @@
 //   !msInReadScope && !isReporter && msInEffectiveScope → SUMMARY envelope
 //   !msInReadScope && !isReporter && !msInEffectiveScope → 404 not_found.record
 //
-// ETag (Slice 3): weak W/"<voc.updated_at-ISO>". Conversation tables immutable
-// until #16 lands. TODO(#16): compose with max(conv.created_at) once #16 ships.
+// ETag header: weak W/"<voc.updated_at-ISO>". ADR-0031 disables conditional
+// detail 304 responses because similarity is peer-derived.
 
 import { z } from 'zod';
 
@@ -97,7 +97,7 @@ function decodeConversationCursor(raw: string): ConversationCursor {
 
 // ── Row mappers ──────────────────────────────────────────────────────────────
 
-function mapRowToListItem(row: VocReadRow, attachmentCount = 0): VocListItem {
+function mapRowToListItem(row: VocReadRow, attachmentCount = 0, similarCount = 0): VocListItem {
   return {
     id: row.id,
     display_id: row.displayId,
@@ -113,9 +113,21 @@ function mapRowToListItem(row: VocReadRow, attachmentCount = 0): VocListItem {
     source_context: row.sourceContext as VocListItem['source_context'],
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
-    similar_count: 0,
+    similar_count: similarCount,
     // PLAN-22 §Bug-1: populated by listVocs via bulk subquery.
     attachment_count: attachmentCount,
+  };
+}
+
+function mapSimilarItems(items: repoRead.SimilarVocReadItem[]): VocDetailEnvelope['similar'] {
+  return {
+    items: items.map((item) => ({
+      id: item.id,
+      display_id: item.displayId,
+      title: item.title,
+      reporter_facing_status: item.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
+      severity: item.severity,
+    })),
   };
 }
 
@@ -382,13 +394,23 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     const { rows, hasMore, nextCursor: repoCursor } = await repoRead.listVocsForRead(deps.db, repoArgs);
 
     // ── 9. Bulk attachment count per row (PLAN-22 §Bug-1) ────────────────────
-    const attachmentCounts = await repoRead.selectVocAttachmentCounts(
-      deps.db,
-      rows.map((r) => r.id),
-    );
+    const sourceVocIds = rows.map((r) => r.id);
+    const [attachmentCounts, similarCounts] = await Promise.all([
+      repoRead.selectVocAttachmentCounts(deps.db, sourceVocIds),
+      repoRead.selectSimilarVocCounts(deps.db, {
+        workspaceId: actor.workspace_id,
+        sourceVocIds,
+        actorId: actor.actor_id,
+        readScope,
+      }),
+    ]);
 
     // ── 9b. Map rows → VocListItem with attachment_count ─────────────────────
-    const items = rows.map((r) => mapRowToListItem(r, attachmentCounts.get(r.id) ?? 0));
+    const items = rows.map((r) => mapRowToListItem(
+      r,
+      attachmentCounts.get(r.id) ?? 0,
+      similarCounts.get(r.id) ?? 0,
+    ));
 
     // ── 10. Encode nextCursor ──────────────────────────────────────────────────
     let nextCursorStr: string | undefined;
@@ -513,9 +535,23 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     // Fetched in parallel — one query for VOC-body attachments, one bulk
     // query for ALL inline comment-attached rows (no N+1).
     const commentIds = convResult.entries.map((e) => e.id);
-    const [vocAttRows, commentAttachmentsMap] = await Promise.all([
+    const [vocAttRows, commentAttachmentsMap, similarCount, similarItems] = await Promise.all([
       repoRead.selectVocAttachments(deps.db, actor.workspace_id, vocId),
       repoRead.selectAttachmentsForComments(deps.db, actor.workspace_id, commentIds),
+      repoRead.selectSimilarVocCount(deps.db, {
+        workspaceId: actor.workspace_id,
+        sourceVocId: vocId,
+        primaryManagedSystemId: primaryMs,
+        actorId: actor.actor_id,
+        readScope,
+      }),
+      repoRead.selectSimilarVocItems(deps.db, {
+        workspaceId: actor.workspace_id,
+        sourceVocId: vocId,
+        primaryManagedSystemId: primaryMs,
+        actorId: actor.actor_id,
+        readScope,
+      }),
     ]);
     const links = await deps.entityLinksService.listLinks({
       actor,
@@ -561,7 +597,8 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       source_context: row.sourceContext as VocDetailEnvelope['source_context'],
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
-      similar_count: 0,
+      similar_count: similarCount,
+      similar: mapSimilarItems(similarItems),
       // PLAN-22 §Bug-1: detail row also carries attachment_count (matches the
       // shared schema which extends vocListItemSchema).
       attachment_count: vocAttRows.length,
@@ -694,7 +731,10 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
     // Resolve triage scope inside the tx (permissions may have changed if this
     // is ever used post-grant; belt-and-suspenders).
-    const triageScope = await repoRead.actorTriageScope(tx, actor);
+    const [triageScope, readScope] = await Promise.all([
+      repoRead.actorTriageScope(tx, actor),
+      repoRead.actorReadScope(tx, actor),
+    ]);
     const canTriage = msInScope(triageScope, primaryMs);
 
     // Inline conversation (first 50 entries).
@@ -711,9 +751,23 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     // so the post-write envelope reflects link rows written in the same tx
     // (e.g. a public_update that just attached files).
     const commentIds = convResult.entries.map((e) => e.id);
-    const [vocAttRows, commentAttachmentsMap] = await Promise.all([
+    const [vocAttRows, commentAttachmentsMap, similarCount, similarItems] = await Promise.all([
       repoRead.selectVocAttachments(tx, actor.workspace_id, vocId),
       repoRead.selectAttachmentsForComments(tx, actor.workspace_id, commentIds),
+      repoRead.selectSimilarVocCount(tx, {
+        workspaceId: actor.workspace_id,
+        sourceVocId: vocId,
+        primaryManagedSystemId: primaryMs,
+        actorId: actor.actor_id,
+        readScope,
+      }),
+      repoRead.selectSimilarVocItems(tx, {
+        workspaceId: actor.workspace_id,
+        sourceVocId: vocId,
+        primaryManagedSystemId: primaryMs,
+        actorId: actor.actor_id,
+        readScope,
+      }),
     ]);
     const links = await deps.entityLinksService.listLinks({
       actor,
@@ -757,7 +811,8 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       source_context: row.sourceContext as VocDetailEnvelope['source_context'],
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
-      similar_count: 0,
+      similar_count: similarCount,
+      similar: mapSimilarItems(similarItems),
       attachment_count: vocAttRows.length,
       description_rich_content: row.descriptionRichContent,
       next_actions: [],
