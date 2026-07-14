@@ -2,6 +2,7 @@ import {
   type ConvertTaskRequestRequest,
   type LinkExistingTaskRequest,
   type ListTasksQuery,
+  type PatchTaskStatusRequest,
   type TaskDetailDto,
   type TaskDto,
   registeredEntityLinkPairSchema,
@@ -26,6 +27,7 @@ import {
   lockTaskById,
   markTaskRequestConverted,
   resolveTaskSource,
+  updateTaskStatus,
 } from './repo.js';
 
 export interface TasksActor {
@@ -360,6 +362,79 @@ export function createTasksService(deps: TasksServiceDeps) {
     });
   }
 
+  async function patchTaskStatus(args: {
+    actor: TasksActor;
+    taskId: string;
+    ifMatch: string;
+    input: PatchTaskStatusRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: TaskDetailDto }> {
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const task = await lockTaskById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: args.taskId,
+          });
+          if (!task) throw new HttpError('not_found.record', 'task not found');
+
+          const canManage = await canManageFinding(
+            deps,
+            args.actor,
+            task.primary_managed_system_id,
+            { tx },
+          );
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          if (task.updated_at.toISOString() !== args.ifMatch) {
+            throw new HttpError('conflict.stale_write', 'task updated_at does not match If-Match', {
+              current_updated_at: task.updated_at.toISOString(),
+            });
+          }
+
+          if (task.status === args.input.status) {
+            const source = task.source_task_request_id
+              ? await resolveTaskSource(tx, {
+                  workspaceId: args.actor.workspace_id,
+                  sourceTaskRequestId: task.source_task_request_id,
+                })
+              : null;
+            return { status: 200, body: { ...taskToDto(task), source } };
+          }
+
+          const updatedTask = await updateTaskStatus(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: task.id,
+            status: args.input.status,
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_status_changed',
+            subject_type: 'task',
+            subject_id: task.id,
+            summary: 'Task status changed',
+            detail: { from: task.status, to: updatedTask.status },
+          });
+          const source = updatedTask.source_task_request_id
+            ? await resolveTaskSource(tx, {
+                workspaceId: args.actor.workspace_id,
+                sourceTaskRequestId: updatedTask.source_task_request_id,
+              })
+            : null;
+          return { status: 200, body: { ...taskToDto(updatedTask), source } };
+        },
+      );
+    });
+  }
+
   async function listTasks(args: {
     actor: TasksActor;
     query: ListTasksQuery;
@@ -387,6 +462,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     getTask,
     convertTaskRequest,
     linkExistingTask,
+    patchTaskStatus,
     listTasks,
   };
 }

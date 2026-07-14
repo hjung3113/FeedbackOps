@@ -72,6 +72,13 @@ export const taskDetailDtoSchema = taskDtoSchema
   .strict();
 export type TaskDetailDto = z.infer<typeof taskDetailDtoSchema>;
 
+export const patchTaskStatusRequestSchema = z
+  .object({
+    status: taskStatusSchema,
+  })
+  .strict();
+export type PatchTaskStatusRequest = z.infer<typeof patchTaskStatusRequestSchema>;
+
 export const convertTaskRequestRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(200),

@@ -695,7 +695,24 @@ POST /task-requests/:id/link-task
 GET /tasks
 GET /tasks/:id
 POST /tasks    # deferred in issue #134
-PATCH /tasks/:id   # 미구현 as of Slice 6 — Slice 7 Task status transition (#138) 예정
+
+### PATCH /tasks/:id — Task status transition (Slice 7 #138)
+
+| Aspect | Contract |
+|---|---|
+| Purpose | Mutate the internal Task status for the Task board. Transitions are free: any of `backlog`, `todo`, `doing`, `review`, `done`, `released`, or `reopened` may move to any other status. ADR-0027 defined the status vocabulary but no transition edges; the audit trail provides the required traceability. |
+| Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · `Authorization: Bearer <session>` |
+| Body | `{ status: TaskStatus }` only; `.strict()` (zod) rejects unknown fields. |
+| Permission | Admin or Developer with `finding.manage` on the Task `primary_managed_system_id`, matching `GET /tasks/:id`, convert, and link-existing authority. |
+| Optimistic concurrency | `If-Match` compared against `task.updated_at`; mismatch → 409 `conflict.stale_write` with `detail.current_updated_at`. |
+| Service ordering | `SELECT FOR UPDATE task → permission check → If-Match compare → same-status no-op check → UPDATE status + updated_at → audit emit → refresh Task Detail DTO`. |
+| Empty-diff semantics | A request whose `status` already equals the stored status returns 200 with the current Task Detail DTO. It performs no UPDATE and emits no audit row; the idempotency cache still records the 200 response. |
+| Response | 200 `TaskDetailDto`, with the same `source` projection as `GET /tasks/:id`. Missing task → 404 `not_found.record`. |
+| Audit event | `task_status_changed` with strict detail `{ from: TaskStatus, to: TaskStatus }`, written in the same transaction as the UPDATE. |
+| Idempotency hash | Includes `taskId`, `ifMatch`, route, and request body. A retry after refetching a stale Task has a distinct hash; clients must mint a fresh `Idempotency-Key` for each distinct `If-Match` value. |
+| Released side effect | ADR-0005/0009's Public-Update review-candidate background job remains deferred. Moving a Task to `released` in this endpoint does not yet enqueue or emit that candidate. |
+| Error codes | `validation.failed` · `validation.malformed_idempotency_key` · `permission.denied` · `not_found.record` · `conflict.stale_write` · `conflict.idempotency_key_reuse` · `rate_limited.actor` |
+
 ```
 
 Task Request is not independently created through `POST /task-requests` as of
