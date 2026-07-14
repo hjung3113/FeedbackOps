@@ -15,7 +15,12 @@ import {
   vocTriagePostponedDetailSchema,
   vocDescriptionEditedDetailSchema,
 } from '../voc.js';
-import { AUDIT_EVENT_TYPES, AUDIT_EVENT_DETAIL_SCHEMAS } from '../../enums/audit-events.js';
+import {
+  AUDIT_EVENT_TYPES,
+  AUDIT_EVENT_DETAIL_SCHEMAS,
+  vocClusterCreatedDetailSchema,
+  vocClusterUpdatedDetailSchema,
+} from '../../enums/audit-events.js';
 
 const U = '01919b8c-0000-7000-8000-000000000001';
 
@@ -481,5 +486,57 @@ describe('AUDIT_EVENT_TYPES registry', () => {
   it.each(VOC_EVENTS)('%s is in AUDIT_EVENT_TYPES and has a detail schema', (event) => {
     expect(AUDIT_EVENT_TYPES).toContain(event);
     expect(AUDIT_EVENT_DETAIL_SCHEMAS).toHaveProperty(event);
+  });
+});
+
+describe('VOC cluster audit event registry', () => {
+  const VOC_CLUSTER_EVENTS = ['voc_cluster_created', 'voc_cluster_updated'] as const;
+
+  it.each(VOC_CLUSTER_EVENTS)('%s is in AUDIT_EVENT_TYPES and has a detail schema', (event) => {
+    expect(AUDIT_EVENT_TYPES).toContain(event);
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS).toHaveProperty(event);
+  });
+});
+
+describe('vocClusterCreatedDetailSchema', () => {
+  it('accepts required shape', () => {
+    expect(
+      vocClusterCreatedDetailSchema.parse({
+        voc_cluster_id: U,
+        primary_managed_system_id: U,
+        title: 'Cluster title',
+        summary_present: true,
+        status: 'draft',
+      }),
+    ).toMatchObject({ voc_cluster_id: U, status: 'draft' });
+  });
+});
+
+describe('vocClusterUpdatedDetailSchema', () => {
+  it('accepts changed title, summary, and status', () => {
+    expect(
+      vocClusterUpdatedDetailSchema.parse({
+        voc_cluster_id: U,
+        primary_managed_system_id: U,
+        changes: {
+          title: { from: 'Old title', to: 'New title' },
+          summary: { from: null, to: 'New summary' },
+          status: { from: 'draft', to: 'confirmed' },
+        },
+      }),
+    ).toMatchObject({
+      voc_cluster_id: U,
+      changes: { status: { from: 'draft', to: 'confirmed' } },
+    });
+  });
+
+  it('rejects an empty changes object', () => {
+    expect(() =>
+      vocClusterUpdatedDetailSchema.parse({
+        voc_cluster_id: U,
+        primary_managed_system_id: U,
+        changes: {},
+      }),
+    ).toThrow();
   });
 });
