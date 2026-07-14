@@ -111,6 +111,23 @@ export async function lockTaskById(
   return row ? mapTaskRow(row) : null;
 }
 
+export async function updateTaskStatus(
+  tx: Tx,
+  input: { workspaceId: string; taskId: string; status: TaskStatus },
+): Promise<TaskRow> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    UPDATE task.tasks
+       SET status = ${input.status},
+           updated_at = now()
+     WHERE id = ${input.taskId}
+       AND workspace_id = ${input.workspaceId}
+     RETURNING ${TASK_SELECT}
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('updateTaskStatus returned no row');
+  return mapTaskRow(row);
+}
+
 export async function findTaskById(
   db: Db | Tx,
   input: { workspaceId: string; taskId: string },

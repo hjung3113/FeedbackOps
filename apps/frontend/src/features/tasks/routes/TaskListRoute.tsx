@@ -3,6 +3,7 @@ import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import type { TaskDetailDto, TaskDto } from '@fops/shared';
 import {
+  Button,
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
@@ -21,6 +22,7 @@ import {
 } from '@fops/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
 
 const PRIORITY_SEVERITY: Record<TaskDto['priority'], ObjectRowSeverity> = {
@@ -58,16 +60,20 @@ function formatDate(raw: string): string {
   }).format(new Date(raw));
 }
 
-function TaskDetailPanel({
+export function TaskDetailPanel({
   taskId,
   onClose,
   actorNamesById,
   managedSystemNamesById,
+  view = 'backlog',
+  onMoveToNextStatus,
 }: {
   taskId: string;
   onClose: () => void;
   actorNamesById: ReadonlyMap<string, string>;
   managedSystemNamesById: ReadonlyMap<string, string>;
+  view?: 'backlog' | 'board';
+  onMoveToNextStatus?: (taskId: string) => void;
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const taskQuery = useQuery({
@@ -98,7 +104,7 @@ function TaskDetailPanel({
           <DetailPanelHeaderActions
             entityKind="task"
             entityId={task.id}
-            copyUrl={`/tasks?view=backlog&param=${task.id}`}
+            copyUrl={`/tasks?view=${view}&param=${task.id}`}
           />
         }
       />
@@ -186,6 +192,13 @@ function TaskDetailPanel({
           </div>
         </div>
       </div>
+      {view === 'board' && task.status !== 'backlog' && task.status !== 'released' && onMoveToNextStatus && (
+        <div className="border-t border-border-subtle p-3">
+          <Button type="button" variant="primary" className="w-full" onClick={() => onMoveToNextStatus(task.id)}>
+            <ArrowRight className="h-4 w-4" />Move to next status
+          </Button>
+        </div>
+      )}
     </aside>
   );
 }
@@ -279,6 +292,7 @@ export function TaskListRoute({ selectedParam }: { selectedParam?: string | unde
             taskId={selected.id}
             actorNamesById={actorNamesById}
             managedSystemNamesById={managedSystemNamesById}
+            view="backlog"
             onClose={() => {
               setSelectedId(null);
               void navigate({ to: '/tasks', search: { view: 'backlog' } });

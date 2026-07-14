@@ -89,6 +89,8 @@ export const AUDIT_EVENT_TYPES = [
   'task_linked_to_request',
   // Slice 6 #135: Finding links an existing Task directly.
   'finding_task_linked',
+  // Slice 7 #138: Task board status transition.
+  'task_status_changed',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -481,6 +483,14 @@ export const findingTaskLinkedDetailSchema = z
   .strict();
 export type FindingTaskLinkedDetail = z.infer<typeof findingTaskLinkedDetailSchema>;
 
+export const taskStatusChangedDetailSchema = z
+  .object({
+    from: z.enum(['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']),
+    to: z.enum(['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']),
+  })
+  .strict();
+export type TaskStatusChangedDetail = z.infer<typeof taskStatusChangedDetailSchema>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
@@ -537,4 +547,6 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_linked_to_request: taskLinkedToRequestDetailSchema,
   // Slice 6 #135.
   finding_task_linked: findingTaskLinkedDetailSchema,
+  // Slice 7 #138.
+  task_status_changed: taskStatusChangedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;
