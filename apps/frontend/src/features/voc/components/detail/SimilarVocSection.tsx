@@ -9,6 +9,14 @@ export interface SimilarVocSectionProps {
   onSelect: (vocId: string) => void;
 }
 
+/** Keep the section, its anchor, and its navigation entry in lockstep. */
+export function hasSimilarVocSection(
+  similar: VocDetailEnvelope['similar'] | undefined,
+  similarCount: number,
+): similar is VocDetailEnvelope['similar'] {
+  return similar !== undefined && similarCount > 0 && similar.items.length > 0;
+}
+
 /**
  * Authorized same-Managed-System peer preview. This is deliberately read-only:
  * cluster confirmation and dismissal remain owned by the cluster workflow.
@@ -18,16 +26,14 @@ export function SimilarVocSection({
   similarCount,
   onSelect,
 }: SimilarVocSectionProps): React.ReactElement | null {
-  if (similar === undefined || similarCount === 0 || similar.items.length === 0) {
+  if (!hasSimilarVocSection(similar, similarCount)) {
     return null;
   }
 
   return (
     <section className="mb-8" aria-label="유사 VOC">
       <div className="flex items-start justify-between gap-3">
-        <PanelSectionTitle className="mb-3.5">
-          유사 VOC
-        </PanelSectionTitle>
+        <PanelSectionTitle className="mb-3.5">유사 VOC</PanelSectionTitle>
         <span className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-2 py-0.5 text-xs font-medium text-accent-primary">
           <Sparkles className="h-3 w-3" aria-hidden="true" />
           Similarity {similarCount}
