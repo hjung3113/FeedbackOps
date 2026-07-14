@@ -1,14 +1,12 @@
 // Permission routes. Thin controllers per AGENTS.md:65-66 — every DB read of
-// permission_* tables happens inside `check-service.ts`. The route's only
+// permission_* tables happens inside permission services. The route's only
 // jobs are: parse + validate query params, look up the actor's role_level,
 // call the service, and shape the response envelope.
 
-import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { type Capability, isCapability } from '@fops/shared';
-import { permissionRequests } from '../../db/schema/permission.js';
 import { HttpError, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
@@ -97,29 +95,10 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       // `permission_requests_active_uq` (workspace, requester, capability,
       // COALESCE(managed_system_id, sentinel)). A null query MS hits null
       // rows; a concrete MS UUID hits exactly its own rows.
-      const msFilter =
-        q.managed_system_id !== undefined
-          ? eq(permissionRequests.requestedManagedSystemId, q.managed_system_id)
-          : isNull(permissionRequests.requestedManagedSystemId);
-      const openReqRows = await app.db
-        .select({ status: permissionRequests.status })
-        .from(permissionRequests)
-        .where(
-          and(
-            eq(permissionRequests.workspaceId, sess.workspace_id),
-            eq(permissionRequests.requesterActorId, sess.actor_id),
-            eq(permissionRequests.requestedCapability, capability),
-            msFilter,
-            sql`${permissionRequests.status} in ('pending','needs_more_info')`,
-          ),
-        )
-        .limit(1);
-      const openReq = openReqRows[0] ?? null;
-      // We only feed pending/needs_more_info/rejected to the mapper; any
-      // other status (approved/expired/revoked) is irrelevant for the
-      // request flow.
-      const openRequestSummary =
-        openReq && isMapperStatus(openReq.status) ? { status: openReq.status } : null;
+      const openRequestSummary = await requestService.findOpenRequestSummary(actor, capability, {
+        workspace_id: sess.workspace_id,
+        ...(q.managed_system_id !== undefined ? { managed_system_id: q.managed_system_id } : {}),
+      });
 
       const state: FrontendState = toFrontendState(decision, openRequestSummary);
       return { state, decision };
@@ -225,7 +204,3 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     },
   });
 };
-
-function isMapperStatus(value: string): value is 'pending' | 'needs_more_info' | 'rejected' {
-  return value === 'pending' || value === 'needs_more_info' || value === 'rejected';
-}
