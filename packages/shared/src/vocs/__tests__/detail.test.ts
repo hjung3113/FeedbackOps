@@ -62,6 +62,28 @@ describe('vocDetailEnvelopeSchema', () => {
     expect(result.similar.items[0]?.display_id).toBe('VOC-002');
   });
 
+  it('rejects a similar peer preview with more than three items', () => {
+    const peer = {
+      id: U2,
+      display_id: 'VOC-002',
+      title: 'Peer VOC',
+      reporter_facing_status: 'received' as const,
+      severity: 'high' as const,
+    };
+
+    expect(() => vocDetailEnvelopeSchema.parse({
+      ...validDetail,
+      similar: {
+        items: [
+          peer,
+          { ...peer, id: '01919b8c-0000-7000-8000-000000000003' },
+          { ...peer, id: '01919b8c-0000-7000-8000-000000000004' },
+          { ...peer, id: '01919b8c-0000-7000-8000-000000000005' },
+        ],
+      },
+    })).toThrow();
+  });
+
   it('accepts description_rich_content as any shape (opaque)', () => {
     const result = vocDetailEnvelopeSchema.parse({
       ...validDetail,

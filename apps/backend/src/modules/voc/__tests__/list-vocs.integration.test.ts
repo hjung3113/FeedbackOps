@@ -427,6 +427,23 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(body.items.find((item) => item.id === source.id)?.similar_count).toBe(2);
   });
 
+  it('AC17: reporter view=my excludes same-MS peers outside the reporter\'s read scope', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sim-my-scope`, 'Sim My Scope MS');
+    const source = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Reporter-owned source');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Reporter-owned peer');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, adminActorId, 'Unauthorized peer');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=my&managed_system_id=${msId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${reporterCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json<{ items: { id: string; similar_count: number }[] }>();
+    expect(body.items.find((item) => item.id === source.id)?.similar_count).toBe(1);
+  });
+
   // ── AC18: Cursor pagination 75 VOCs ──────────────────────────────────────
 
   it('AC18: 75 VOCs, limit=50 → first page 50+has_more+cursor; second page 25+has_more=false', async () => {

@@ -223,6 +223,40 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     expect(types).not.toContain('reporter_facing_status_changed');
   });
 
+  it('returns the same hydrated similarity projection as GET detail', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-similar`, 'Similarity MS');
+    const voc = await insertVoc(msId, 'Similarity source');
+    const peerOne = await insertVoc(msId, 'Similarity peer one');
+    const peerTwo = await insertVoc(msId, 'Similarity peer two');
+
+    const mutation = await postPublicUpdate(adminCookie, voc.id, {
+      skip_public_update: false,
+      body_rich_content: paragraphDoc('refresh similarity projection'),
+      next_reporter_facing_status: 'received',
+    });
+    expect(mutation.statusCode).toBe(201);
+
+    const mutationBody = mutation.json<{
+      voc: { similar_count: number; similar: { items: Array<{ id: string }> } };
+    }>();
+    expect(mutationBody.voc.similar_count).toBe(2);
+    expect(mutationBody.voc.similar.items).toHaveLength(2);
+    expect(mutationBody.voc.similar.items.map((item) => item.id)).toEqual(expect.arrayContaining([peerOne.id, peerTwo.id]));
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(detail.statusCode).toBe(200);
+
+    const detailBody = detail.json<{
+      similar_count: number; similar: { items: Array<{ id: string }> };
+    }>();
+    expect(mutationBody.voc.similar_count).toBe(detailBody.similar_count);
+    expect(mutationBody.voc.similar.items).toEqual(detailBody.similar.items);
+  });
+
   // ── AC (c): skip + status change → 201; row body=null skip=true; paired_with='skip' ──
 
   it('(c) skip + status change → 201; row body=null skip=true; audit paired_with=skip', async () => {

@@ -15,7 +15,7 @@ export const vocDetailEnvelopeSchema = vocListItemSchema.extend({
       title: z.string(),
       reporter_facing_status: reporterFacingStatusEnumSchema,
       severity: z.enum(['low', 'medium', 'high', 'critical']).nullable(),
-    })),
+    })).max(3),
   }),
   // TipTap doc — opaque jsonb; backend validates structure.
   description_rich_content: z.unknown(),
