@@ -415,6 +415,69 @@ describe.skipIf(!runIntegration)('VOC cluster mutation authorization and audit r
     expect(await auditCount()).toBe(0);
   });
 
+  it('records voc_cluster_created audit row for an authorized createCluster', async () => {
+    const result = await vocClustersService.createCluster({
+      actor: manager(),
+      input: {
+        title: 'Audited created cluster',
+        summary: 'Created cluster summary',
+        primary_managed_system_id: managedSystemId,
+      },
+    });
+
+    expect(result.status).toBe(201);
+    const rows = await auditRows(['voc_cluster_created']);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      workspace_id: workspaceId,
+      actor_id: managerActorId,
+      event_type: 'voc_cluster_created',
+      subject_type: 'voc_cluster',
+      subject_id: result.body.id,
+    });
+    expect(rows[0]?.detail).toMatchObject({
+      voc_cluster_id: result.body.id,
+      primary_managed_system_id: managedSystemId,
+      title: 'Audited created cluster',
+      summary_present: true,
+      status: 'draft',
+    });
+  });
+
+  it('records voc_cluster_updated audit row for an authorized updateCluster', async () => {
+    const cluster = await seedCluster('Audited update cluster');
+
+    const result = await vocClustersService.updateCluster({
+      actor: manager(),
+      clusterId: cluster.id,
+      input: {
+        title: 'Audited updated cluster',
+        summary: 'Updated cluster summary',
+        status: 'confirmed',
+      },
+    });
+
+    expect(result.status).toBe(200);
+    const rows = await auditRows(['voc_cluster_updated']);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      workspace_id: workspaceId,
+      actor_id: managerActorId,
+      event_type: 'voc_cluster_updated',
+      subject_type: 'voc_cluster',
+      subject_id: cluster.id,
+    });
+    expect(rows[0]?.detail).toMatchObject({
+      voc_cluster_id: cluster.id,
+      primary_managed_system_id: managedSystemId,
+      changes: {
+        title: { from: 'Audited update cluster', to: 'Audited updated cluster' },
+        summary: { from: null, to: 'Updated cluster summary' },
+        status: { from: 'draft', to: 'confirmed' },
+      },
+    });
+  });
+
   it('records voc_cluster_member_added audit row for an authorized addMember', async () => {
     const cluster = await seedCluster('Audited add member cluster');
     const voc = await seedVoc('Audited add member VOC');

@@ -188,6 +188,21 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         primaryManagedSystemId: ms.id,
         createdBy: args.actor.actor_id,
       });
+      await deps.auditService.record(tx, {
+        workspace_id: args.actor.workspace_id,
+        actor_id: args.actor.actor_id,
+        event_type: 'voc_cluster_created',
+        subject_type: 'voc_cluster',
+        subject_id: row.id,
+        summary: 'VOC cluster created',
+        detail: {
+          voc_cluster_id: row.id,
+          primary_managed_system_id: row.primary_managed_system_id,
+          title: row.title,
+          summary_present: row.summary !== null,
+          status: row.status,
+        },
+      });
       return { status: 201, body: clusterToDto(row) };
     });
   }
@@ -274,6 +289,35 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         ...(args.input.summary !== undefined ? { summary: args.input.summary } : {}),
         ...(args.input.status !== undefined ? { status: args.input.status } : {}),
       });
+      const changes: Partial<{
+        title: { from: string; to: string };
+        summary: { from: string | null; to: string | null };
+        status: { from: VocClusterRow['status']; to: VocClusterRow['status'] };
+      }> = {};
+      if (cluster.title !== updated.title) {
+        changes.title = { from: cluster.title, to: updated.title };
+      }
+      if (cluster.summary !== updated.summary) {
+        changes.summary = { from: cluster.summary, to: updated.summary };
+      }
+      if (cluster.status !== updated.status) {
+        changes.status = { from: cluster.status, to: updated.status };
+      }
+      if (Object.keys(changes).length > 0) {
+        await deps.auditService.record(tx, {
+          workspace_id: args.actor.workspace_id,
+          actor_id: args.actor.actor_id,
+          event_type: 'voc_cluster_updated',
+          subject_type: 'voc_cluster',
+          subject_id: cluster.id,
+          summary: 'VOC cluster updated',
+          detail: {
+            voc_cluster_id: cluster.id,
+            primary_managed_system_id: updated.primary_managed_system_id,
+            changes,
+          },
+        });
+      }
       return { status: 200, body: clusterToDto(updated) };
     });
   }

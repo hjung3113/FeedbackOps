@@ -65,6 +65,8 @@ export const AUDIT_EVENT_TYPES = [
   // Slice 5 #121: Finding created from a source VOC.
   'finding_created_from_voc',
   // Slice 5 #126: VOC Cluster membership and cluster-created Finding.
+  'voc_cluster_created',
+  'voc_cluster_updated',
   'voc_cluster_member_added',
   'voc_cluster_member_removed',
   'finding_created_from_voc_cluster',
@@ -330,6 +332,42 @@ export type FindingCreatedFromVocClusterDetail = z.infer<
   typeof findingCreatedFromVocClusterDetailSchema
 >;
 
+const vocClusterStatusDetailSchema = z.enum(['draft', 'confirmed']);
+
+export const vocClusterCreatedDetailSchema = z.object({
+  voc_cluster_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  title: z.string().min(1),
+  summary_present: z.boolean(),
+  status: vocClusterStatusDetailSchema,
+});
+export type VocClusterCreatedDetail = z.infer<typeof vocClusterCreatedDetailSchema>;
+
+export const vocClusterUpdatedDetailSchema = z.object({
+  voc_cluster_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  changes: z
+    .object({
+      title: z.object({ from: z.string().min(1), to: z.string().min(1) }).optional(),
+      summary: z
+        .object({
+          from: z.string().nullable(),
+          to: z.string().nullable(),
+        })
+        .optional(),
+      status: z
+        .object({
+          from: vocClusterStatusDetailSchema,
+          to: vocClusterStatusDetailSchema,
+        })
+        .optional(),
+    })
+    .refine((changes) => Object.keys(changes).length > 0, {
+      message: 'at least one cluster field change is required',
+    }),
+});
+export type VocClusterUpdatedDetail = z.infer<typeof vocClusterUpdatedDetailSchema>;
+
 export const vocClusterMemberAddedDetailSchema = z.object({
   voc_cluster_id: z.string().uuid(),
   voc_id: z.string().uuid(),
@@ -475,6 +513,8 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   // Slice 5 #121.
   finding_created_from_voc: findingCreatedFromVocDetailSchema,
   // Slice 5 #126.
+  voc_cluster_created: vocClusterCreatedDetailSchema,
+  voc_cluster_updated: vocClusterUpdatedDetailSchema,
   voc_cluster_member_added: vocClusterMemberAddedDetailSchema,
   voc_cluster_member_removed: vocClusterMemberRemovedDetailSchema,
   finding_created_from_voc_cluster: findingCreatedFromVocClusterDetailSchema,
