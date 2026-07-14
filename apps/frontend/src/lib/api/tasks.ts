@@ -34,6 +34,19 @@ export async function getTask(id: string, signal?: AbortSignal): Promise<TaskDet
   return res.data;
 }
 
+export async function updateTaskStatus(
+  id: string,
+  status: TaskStatus,
+  options: { ifMatch: string; idempotencyKey: string },
+): Promise<TaskDetailDto> {
+  const res = await apiClient<TaskDetailDto>('PATCH', `/tasks/${id}`, {
+    body: { status },
+    ifMatch: options.ifMatch,
+    idempotencyKey: options.idempotencyKey,
+  });
+  return res.data;
+}
+
 export async function convertTaskRequest(
   id: string,
   body: ConvertTaskRequestRequest,

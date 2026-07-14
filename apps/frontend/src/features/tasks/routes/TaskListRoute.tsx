@@ -58,7 +58,7 @@ function formatDate(raw: string): string {
   }).format(new Date(raw));
 }
 
-function TaskDetailPanel({
+export function TaskDetailPanel({
   taskId,
   onClose,
   actorNamesById,
