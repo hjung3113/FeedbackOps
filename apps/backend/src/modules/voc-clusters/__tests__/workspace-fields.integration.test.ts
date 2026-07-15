@@ -265,6 +265,20 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
     expect(firstBody.confirmed_by).toBe(adminId);
     expect(firstBody.confirmed_at).toEqual(expect.any(String));
 
+    const audit = await migrateDb.pool.query<{ detail: Record<string, unknown> }>(
+      `select detail from core.audit_log
+       where subject_id = $1 and event_type = 'voc_cluster_updated'`,
+      [clusterId],
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0]?.detail).toMatchObject({
+      changes: {
+        status: { from: 'draft', to: 'confirmed' },
+        confirmed_by: { from: null, to: adminId },
+        confirmed_at: { from: null, to: firstBody.confirmed_at },
+      },
+    });
+
     const second = await updateCluster(clusterId, { status: 'confirmed' });
     expect(second.statusCode).toBe(200);
     expect(second.json()).toMatchObject({
