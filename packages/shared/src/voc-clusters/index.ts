@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { createFindingRequestSchema, findingStatusSchema } from '../findings/index.js';
+import {
+  createFindingRequestSchema,
+  findingConfidenceSchema,
+  findingSeveritySchema,
+  findingStatusSchema,
+} from '../findings/index.js';
 
 export const vocClusterStatusSchema = z.enum(['draft', 'confirmed']);
 export type VocClusterStatus = z.infer<typeof vocClusterStatusSchema>;
@@ -9,6 +14,10 @@ export const createVocClusterRequestSchema = z
   .object({
     title: z.string().min(1).max(200),
     summary: z.string().min(1).nullable().optional(),
+    severity: findingSeveritySchema.nullable().optional(),
+    confidence: findingConfidenceSchema.nullable().optional(),
+    rationale: z.string().nullable().optional(),
+    owner_user_id: z.string().uuid().nullable().optional(),
     primary_managed_system_id: z.string().uuid(),
   })
   .strict();
@@ -18,6 +27,10 @@ export const updateVocClusterRequestSchema = z
   .object({
     title: z.string().min(1).max(200).optional(),
     summary: z.string().min(1).nullable().optional(),
+    severity: findingSeveritySchema.nullable().optional(),
+    confidence: findingConfidenceSchema.nullable().optional(),
+    rationale: z.string().nullable().optional(),
+    owner_user_id: z.string().uuid().nullable().optional(),
     status: z.literal('confirmed').optional(),
   })
   .strict()
@@ -49,9 +62,15 @@ export const vocClusterDtoSchema = z
     display_id: z.string(),
     title: z.string(),
     summary: z.string().nullable(),
+    severity: findingSeveritySchema.nullable(),
+    confidence: findingConfidenceSchema.nullable(),
+    rationale: z.string().nullable(),
+    owner_user_id: z.string().uuid().nullable(),
     status: vocClusterStatusSchema,
     primary_managed_system_id: z.string().uuid(),
     created_by: z.string().uuid(),
+    confirmed_by: z.string().uuid().nullable(),
+    confirmed_at: z.string().datetime().nullable(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     member_count: z.number().int().nonnegative(),

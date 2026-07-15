@@ -199,9 +199,15 @@ voc_clusters
 - display_id: text, required
 - title: text, required
 - summary: text, nullable
+- severity: enum(low, medium, high, critical), nullable
+- confidence: enum(low, medium, high), nullable
+- rationale: text, nullable
+- owner_user_id: uuid, nullable
 - status: enum(draft, confirmed), required
 - primary_managed_system_id: uuid, required
 - created_by: uuid, required
+- confirmed_by: uuid, nullable
+- confirmed_at: timestamp, nullable
 - created_at: timestamp, required
 - updated_at: timestamp, required
 - member_count: integer, non-negative, required
@@ -217,6 +223,10 @@ Read DTO extensions:
 Rules:
 
 ```text
+- Workspace fields are nullable and existing clusters receive no fabricated backfill.
+- owner_user_id references an assignable internal user in the cluster workspace.
+- confirmed_by and confirmed_at are server-owned. A draft-to-confirmed transition
+  writes both atomically; later confirmation requests preserve the original provenance.
 - linked_findings lists Findings created from the cluster where
   finding.source_type='voc_cluster' and finding.source_id=cluster.id.
 - linked_findings is derived at read time. It exposes only id, display_id, and

@@ -9,9 +9,15 @@ export interface VocClusterRow {
   display_id: string;
   title: string;
   summary: string | null;
+  severity: 'low' | 'medium' | 'high' | 'critical' | null;
+  confidence: 'low' | 'medium' | 'high' | null;
+  rationale: string | null;
+  owner_user_id: string | null;
   status: 'draft' | 'confirmed';
   primary_managed_system_id: string;
   created_by: string;
+  confirmed_by: string | null;
+  confirmed_at: Date | null;
   created_at: Date;
   updated_at: Date;
   member_count: number;
@@ -41,9 +47,18 @@ function mapClusterRow(row: Record<string, unknown>): VocClusterRow {
     display_id: row.display_id as string,
     title: row.title as string,
     summary: (row.summary as string | null) ?? null,
+    severity: (row.severity as VocClusterRow['severity']) ?? null,
+    confidence: (row.confidence as VocClusterRow['confidence']) ?? null,
+    rationale: (row.rationale as string | null) ?? null,
+    owner_user_id: (row.owner_user_id as string | null) ?? null,
     status: row.status as VocClusterRow['status'],
     primary_managed_system_id: row.primary_managed_system_id as string,
     created_by: row.created_by as string,
+    confirmed_by: (row.confirmed_by as string | null) ?? null,
+    confirmed_at:
+      row.confirmed_at === null || row.confirmed_at === undefined
+        ? null
+        : toDate(row.confirmed_at as Date | string),
     created_at: toDate(row.created_at as Date | string),
     updated_at: toDate(row.updated_at as Date | string),
     member_count: Number(row.member_count),
@@ -81,6 +96,10 @@ export async function insertVocCluster(
     workspaceId: string;
     title: string;
     summary: string | null;
+    severity: VocClusterRow['severity'];
+    confidence: VocClusterRow['confidence'];
+    rationale: string | null;
+    ownerUserId: string | null;
     primaryManagedSystemId: string;
     createdBy: string;
   },
@@ -95,15 +114,17 @@ export async function insertVocCluster(
 
   const result = await tx.execute<Record<string, unknown>>(sql`
     INSERT INTO voc_cluster.voc_clusters (
-      workspace_id, display_id, title, summary, status, primary_managed_system_id, created_by
+      workspace_id, display_id, title, summary, severity, confidence, rationale, owner_user_id,
+      status, primary_managed_system_id, created_by
     )
     VALUES (
-      ${input.workspaceId}, ${displayId}, ${input.title}, ${input.summary}, 'draft',
+      ${input.workspaceId}, ${displayId}, ${input.title}, ${input.summary}, ${input.severity},
+      ${input.confidence}, ${input.rationale}, ${input.ownerUserId}, 'draft',
       ${input.primaryManagedSystemId}, ${input.createdBy}
     )
     RETURNING
-      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
-      created_by, created_at, updated_at,
+      id, workspace_id, display_id, title, summary, severity, confidence, rationale, owner_user_id,
+      status, primary_managed_system_id, created_by, confirmed_by, confirmed_at, created_at, updated_at,
       (
         SELECT count(*)::int
         FROM voc_cluster.voc_cluster_members m
@@ -121,8 +142,9 @@ export async function lockVocClusterById(
 ): Promise<VocClusterRow | null> {
   const result = await tx.execute<Record<string, unknown>>(sql`
     SELECT
-      c.id, c.workspace_id, c.display_id, c.title, c.summary, c.status,
-      c.primary_managed_system_id, c.created_by, c.created_at, c.updated_at,
+      c.id, c.workspace_id, c.display_id, c.title, c.summary, c.severity, c.confidence,
+      c.rationale, c.owner_user_id, c.status, c.primary_managed_system_id, c.created_by,
+      c.confirmed_by, c.confirmed_at, c.created_at, c.updated_at,
       (
         SELECT count(*)::int
         FROM voc_cluster.voc_cluster_members m
@@ -143,8 +165,9 @@ export async function findVocClusterById(
 ): Promise<VocClusterRow | null> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      c.id, c.workspace_id, c.display_id, c.title, c.summary, c.status,
-      c.primary_managed_system_id, c.created_by, c.created_at, c.updated_at,
+      c.id, c.workspace_id, c.display_id, c.title, c.summary, c.severity, c.confidence,
+      c.rationale, c.owner_user_id, c.status, c.primary_managed_system_id, c.created_by,
+      c.confirmed_by, c.confirmed_at, c.created_at, c.updated_at,
       (
         SELECT count(*)::int
         FROM voc_cluster.voc_cluster_members m
@@ -169,8 +192,9 @@ export async function listVocClustersByWorkspace(
       : sql`c.primary_managed_system_id = ${input.managedSystemId}`;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      c.id, c.workspace_id, c.display_id, c.title, c.summary, c.status,
-      c.primary_managed_system_id, c.created_by, c.created_at, c.updated_at,
+      c.id, c.workspace_id, c.display_id, c.title, c.summary, c.severity, c.confidence,
+      c.rationale, c.owner_user_id, c.status, c.primary_managed_system_id, c.created_by,
+      c.confirmed_by, c.confirmed_at, c.created_at, c.updated_at,
       (
         SELECT count(*)::int
         FROM voc_cluster.voc_cluster_members m
@@ -207,13 +231,26 @@ export async function updateVocCluster(
     clusterId: string;
     title?: string;
     summary?: string | null;
+    severity?: VocClusterRow['severity'];
+    confidence?: VocClusterRow['confidence'];
+    rationale?: string | null;
+    ownerUserId?: string | null;
     status?: 'confirmed';
+    confirmedBy?: string;
   },
 ): Promise<VocClusterRow> {
   const setClauses: ReturnType<typeof sql>[] = [sql`updated_at = now()`];
   if (input.title !== undefined) setClauses.push(sql`title = ${input.title}`);
   if (input.summary !== undefined) setClauses.push(sql`summary = ${input.summary}`);
+  if (input.severity !== undefined) setClauses.push(sql`severity = ${input.severity}`);
+  if (input.confidence !== undefined) setClauses.push(sql`confidence = ${input.confidence}`);
+  if (input.rationale !== undefined) setClauses.push(sql`rationale = ${input.rationale}`);
+  if (input.ownerUserId !== undefined) setClauses.push(sql`owner_user_id = ${input.ownerUserId}`);
   if (input.status !== undefined) setClauses.push(sql`status = ${input.status}`);
+  if (input.confirmedBy !== undefined) {
+    setClauses.push(sql`confirmed_by = ${input.confirmedBy}`);
+    setClauses.push(sql`confirmed_at = now()`);
+  }
 
   const result = await tx.execute<Record<string, unknown>>(sql`
     UPDATE voc_cluster.voc_clusters
@@ -221,8 +258,8 @@ export async function updateVocCluster(
     WHERE id = ${input.clusterId}
       AND workspace_id = ${input.workspaceId}
     RETURNING
-      id, workspace_id, display_id, title, summary, status, primary_managed_system_id,
-      created_by, created_at, updated_at,
+      id, workspace_id, display_id, title, summary, severity, confidence, rationale, owner_user_id,
+      status, primary_managed_system_id, created_by, confirmed_by, confirmed_at, created_at, updated_at,
       (
         SELECT count(*)::int
         FROM voc_cluster.voc_cluster_members m
@@ -232,6 +269,22 @@ export async function updateVocCluster(
   const row = result.rows[0];
   if (!row) throw new Error('updateVocCluster returned no row');
   return mapClusterRow(row);
+}
+
+export async function isAssignableClusterOwner(
+  tx: Tx,
+  input: { workspaceId: string; actorId: string },
+): Promise<boolean> {
+  const result = await tx.execute<{ exists: boolean }>(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM core.actors
+      WHERE id = ${input.actorId}
+        AND workspace_id = ${input.workspaceId}
+        AND actor_type = 'internal_member'
+    ) AS exists
+  `);
+  return result.rows[0]?.exists === true;
 }
 
 export async function listVocClusterMembers(

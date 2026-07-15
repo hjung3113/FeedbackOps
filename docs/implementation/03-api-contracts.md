@@ -594,10 +594,10 @@ records. Cluster merge and split endpoints are out of scope for MVP.
 
 | Aspect | Contract |
 |---|---|
-| Create body | `POST /voc-clusters` `{ title: string(1..200), summary?: string\|null, primary_managed_system_id: uuid }` → `201` `VocClusterDto` (`status='draft'`). |
-| List | `GET /voc-clusters` optional `?managed_system_id=<uuid>` → `{ items: VocClusterDto[] }`, workspace-scoped + MS-scope filtered. |
-| Detail | `GET /voc-clusters/:id` → `VocClusterDto` with `members: [{ voc_id, added_by, added_at }]`. |
-| Edit / confirm | `PATCH /voc-clusters/:id` `{ title?, summary?, status?: 'confirmed' }` → `200`. `status` only supports confirming (`draft`→`confirmed`). |
+| Create body | `POST /voc-clusters` `{ title: string(1..200), summary?: string\|null, primary_managed_system_id: uuid, severity?: 'low'\|'medium'\|'high'\|'critical'\|null, confidence?: 'low'\|'medium'\|'high'\|null, rationale?: string\|null, owner_user_id?: uuid\|null }` → `201` `VocClusterDto` (`status='draft'`). |
+| List | `GET /voc-clusters` optional `?managed_system_id=<uuid>` → `{ items: VocClusterDto[] }`, workspace-scoped + MS-scope filtered. DTOs include nullable `severity`, `confidence`, `rationale`, `owner_user_id`, `confirmed_by`, and `confirmed_at`. |
+| Detail | `GET /voc-clusters/:id` → `VocClusterDto` with the nullable workspace/provenance fields and `members: [{ voc_id, added_by, added_at }]`. |
+| Edit / confirm | `PATCH /voc-clusters/:id` `{ title?, summary?, severity?, confidence?, rationale?, owner_user_id?, status?: 'confirmed' }` → `200`. `confirmed_by` and `confirmed_at` are rejected as unexpected client fields. A `draft`→`confirmed` transition atomically sets them to the actor and current time; subsequent confirmation requests preserve the original values. |
 | Add member | `POST /voc-clusters/:id/vocs` `{ voc_id }` → `201` (inserted) / `200` (already a member). Member VOC must be in the cluster's managed system (else `422 validation.failed`); archived/unreadable VOC ⇒ `404`. |
 | Remove member | `DELETE /voc-clusters/:id/vocs/:voc_id` → `204`; missing membership ⇒ `404`. (No request body — clients must not send `Content-Type: application/json` with an empty body.) |
 | Create finding | `POST /voc-clusters/:id/create-finding` — body = `CreateFindingRequest` (same as `POST /vocs/:id/create-finding`); requires `Idempotency-Key` (UUIDv4). → `201` `FindingDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `source={ type:'voc_cluster', id, relation_type:'created_finding', link_id }`. Writes `finding_created_from_voc_cluster` + the `entity_link.created` audit in the finding txn. |

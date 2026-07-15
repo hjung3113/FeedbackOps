@@ -335,6 +335,8 @@ export type FindingCreatedFromVocClusterDetail = z.infer<
 >;
 
 const vocClusterStatusDetailSchema = z.enum(['draft', 'confirmed']);
+const vocClusterSeverityDetailSchema = z.enum(['low', 'medium', 'high', 'critical']);
+const vocClusterConfidenceDetailSchema = z.enum(['low', 'medium', 'high']);
 
 export const vocClusterCreatedDetailSchema = z.object({
   voc_cluster_id: z.string().uuid(),
@@ -357,11 +359,33 @@ export const vocClusterUpdatedDetailSchema = z.object({
           to: z.string().nullable(),
         })
         .optional(),
+      severity: z
+        .object({
+          from: vocClusterSeverityDetailSchema.nullable(),
+          to: vocClusterSeverityDetailSchema.nullable(),
+        })
+        .optional(),
+      confidence: z
+        .object({
+          from: vocClusterConfidenceDetailSchema.nullable(),
+          to: vocClusterConfidenceDetailSchema.nullable(),
+        })
+        .optional(),
+      rationale: z.object({ from: z.string().nullable(), to: z.string().nullable() }).optional(),
+      owner_user_id: z
+        .object({ from: z.string().uuid().nullable(), to: z.string().uuid().nullable() })
+        .optional(),
       status: z
         .object({
           from: vocClusterStatusDetailSchema,
           to: vocClusterStatusDetailSchema,
         })
+        .optional(),
+      confirmed_by: z
+        .object({ from: z.string().uuid().nullable(), to: z.string().uuid().nullable() })
+        .optional(),
+      confirmed_at: z
+        .object({ from: z.string().datetime().nullable(), to: z.string().datetime().nullable() })
         .optional(),
     })
     .refine((changes) => Object.keys(changes).length > 0, {
