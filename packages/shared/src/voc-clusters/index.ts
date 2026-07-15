@@ -6,6 +6,7 @@ import {
   findingSeveritySchema,
   findingStatusSchema,
 } from '../findings/index.js';
+import { publicUpdateRequestSchema } from '../vocs/public-update-request.js';
 
 export const vocClusterStatusSchema = z.enum(['draft', 'confirmed']);
 export type VocClusterStatus = z.infer<typeof vocClusterStatusSchema>;
@@ -51,9 +52,37 @@ export const vocClusterMemberDtoSchema = z
     voc_id: z.string().uuid(),
     added_by: z.string().uuid(),
     added_at: z.string().datetime(),
+    display_id: z.string().optional(),
+    title: z.string().optional(),
+    severity: findingSeveritySchema.nullable().optional(),
+    reporter_facing_status: z.string().optional(),
   })
   .strict();
 export type VocClusterMemberDto = z.infer<typeof vocClusterMemberDtoSchema>;
+
+export const vocClusterPublicUpdateCandidateRequestSchema = publicUpdateRequestSchema;
+export type VocClusterPublicUpdateCandidateRequest = z.infer<
+  typeof vocClusterPublicUpdateCandidateRequestSchema
+>;
+
+export const applyVocClusterPublicUpdateRequestSchema = z
+  .object({
+    voc_ids: z.array(z.string().uuid()).min(1),
+    public_update: publicUpdateRequestSchema,
+  })
+  .strict();
+export type ApplyVocClusterPublicUpdateRequest = z.infer<
+  typeof applyVocClusterPublicUpdateRequestSchema
+>;
+
+export const vocClusterPublicUpdateOutcomeSchema = z
+  .object({
+    voc_id: z.string().uuid(),
+    status: z.enum(['applied', 'skipped']),
+    reason: z.string().optional(),
+  })
+  .strict();
+export type VocClusterPublicUpdateOutcome = z.infer<typeof vocClusterPublicUpdateOutcomeSchema>;
 
 export const vocClusterDtoSchema = z
   .object({

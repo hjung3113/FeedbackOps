@@ -173,6 +173,27 @@ cluster endpoints may return status update candidates and shared draft content,
 but apply requests must resolve into separate per-VOC status decisions, Public
 Update records or skip reasons, and audit events.
 
+VOC Cluster member detail projects `voc_id`, `added_by`, `added_at`, and the
+optional enrichment fields `display_id`, `title`, `severity`, and
+`reporter_facing_status`. Both rows and `member_count` use the same predicate:
+Admin, `voc.read` on the member Managed System, or reporter ownership.
+Triage-only effective scope is not member-read authority.
+
+`DELETE /voc-clusters/:id/vocs/:voc_id` returns the identical
+`not_found.record` 404 envelope when the VOC is unreadable, missing, or exists
+but is not a member. A successful authorized removal returns 204 and records
+the normal membership-removal audit event.
+
+`POST /voc-clusters/:id/public-update-candidate` validates and returns shared
+draft content after `finding.manage`; it writes no VOC. `POST
+/voc-clusters/:id/apply-public-update-candidate` accepts selected `voc_ids` and
+the Public Update request. Each readable selected member is delegated to the
+existing per-VOC Public Update command in its own transaction, which rechecks
+`voc.triage`, archive state, transition validity, sanitization, and audit.
+Outcomes are `applied` or `skipped` with a reason. Hidden membership and absent
+membership both produce the same `not_found` skipped outcome; no unselected or
+hidden row is identified.
+
 Status-change requests that omit Public Update creation must include
 `skip_public_update: true` and a non-empty `skip_reason`. The audit event must
 record `public_update_created` or `skipped_with_reason`, the previous and next

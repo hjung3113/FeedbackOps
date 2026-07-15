@@ -28,6 +28,13 @@ export interface VocClusterMemberRow {
   voc_id: string;
   added_by: string;
   added_at: Date;
+  display_id?: string;
+  title?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical' | null;
+  reporter_facing_status?: string;
+  primary_managed_system_id?: string;
+  reporter_id?: string;
+  archived_at?: Date | null;
 }
 
 function toDate(value: Date | string): Date {
@@ -71,6 +78,21 @@ function mapMemberRow(row: Record<string, unknown>): VocClusterMemberRow {
     voc_id: row.voc_id as string,
     added_by: row.added_by as string,
     added_at: toDate(row.added_at as Date | string),
+    ...(row.display_id !== undefined ? { display_id: row.display_id as string } : {}),
+    ...(row.title !== undefined ? { title: row.title as string } : {}),
+    ...(row.severity !== undefined
+      ? { severity: (row.severity as VocClusterMemberRow['severity']) ?? null }
+      : {}),
+    ...(row.reporter_facing_status !== undefined
+      ? { reporter_facing_status: row.reporter_facing_status as string }
+      : {}),
+    ...(row.primary_managed_system_id !== undefined
+      ? { primary_managed_system_id: row.primary_managed_system_id as string }
+      : {}),
+    ...(row.reporter_id !== undefined ? { reporter_id: row.reporter_id as string } : {}),
+    ...(row.archived_at !== undefined
+      ? { archived_at: row.archived_at === null ? null : toDate(row.archived_at as Date | string) }
+      : {}),
   };
 }
 
@@ -292,10 +314,13 @@ export async function listVocClusterMembers(
   input: { clusterId: string },
 ): Promise<VocClusterMemberRow[]> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
-    SELECT cluster_id, voc_id, added_by, added_at
-    FROM voc_cluster.voc_cluster_members
-    WHERE cluster_id = ${input.clusterId}
-    ORDER BY added_at DESC, voc_id DESC
+    SELECT m.cluster_id, m.voc_id, m.added_by, m.added_at,
+           v.display_id, v.title, v.severity, v.reporter_facing_status,
+           v.primary_managed_system_id, v.reporter_id, v.archived_at
+    FROM voc_cluster.voc_cluster_members m
+    JOIN voc.vocs v ON v.id = m.voc_id
+    WHERE m.cluster_id = ${input.clusterId}
+    ORDER BY m.added_at DESC, m.voc_id DESC
   `);
   return result.rows.map(mapMemberRow);
 }

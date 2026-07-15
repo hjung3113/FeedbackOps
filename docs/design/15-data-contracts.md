@@ -216,7 +216,7 @@ voc_clusters
 Read DTO extensions:
 
 ```text
-- members: optional array of { voc_id, added_by, added_at }
+- members: optional array of { voc_id, added_by, added_at, display_id?, title?, severity?, reporter_facing_status? }
 - linked_findings: optional array of { id, display_id, status }
 ```
 
@@ -233,9 +233,14 @@ Rules:
   status; title and summary are intentionally omitted to avoid content leakage.
 - Cluster detail and list reads include linked_findings as an array. Create and
   update responses may omit it.
-- member_count is derived at read time with `COUNT(*)` over
-  `voc_cluster_members` for the cluster. It is always present and does not
-  require a stored column.
+- `member_count` is the authorized membership total, not total membership. It
+  uses the same per-member predicate as `members`: Admin, `voc.read` on the
+  member Managed System, or reporter ownership. This contract change prevents
+  the count from disclosing hidden VOC existence. It is always present and
+  does not require a stored column.
+- Member enrichment fields are additive and optional. They are returned only
+  for authorized members; unreadable and corrupt cross-System memberships are
+  absent rather than masked or represented by placeholders.
 ```
 
 ## Task Request

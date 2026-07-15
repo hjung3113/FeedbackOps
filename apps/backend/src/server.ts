@@ -493,25 +493,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
-  const vocClustersService = createVocClustersService({
-    db: dbHandle.db,
-    auditService,
-    checkService,
-    idempotencyService,
-  });
-  await app.register(vocClustersRoutes, {
-    sessionService,
-    vocClustersService,
-    taskRequestsService,
-    workspaceId,
-    rateLimitConfig: {
-      mutation: app.rateLimitConfig.mutation,
-      read: app.rateLimitConfig.read,
-    },
-  });
-
-  // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
+  // VOC conversation command is constructed here so cluster candidate apply can
+  // delegate each selected VOC to the canonical per-VOC command.
   const vocService = createVocService({
     db: dbHandle.db,
     auditService,
@@ -527,6 +510,27 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     checkService,
     vocReadService,
   });
+
+  // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
+  const vocClustersService = createVocClustersService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+    postPublicUpdate: conversationService.postPublicUpdate,
+  });
+  await app.register(vocClustersRoutes, {
+    sessionService,
+    vocClustersService,
+    taskRequestsService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+    },
+  });
+
+  // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
   await app.register(vocRoutes, {
     db: dbHandle.db,
     sessionService,
