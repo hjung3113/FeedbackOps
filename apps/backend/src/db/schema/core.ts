@@ -326,7 +326,7 @@ export const entityLinks = coreSchema.table(
   (t) => ({
     tupleCheck: check(
       'entity_links_tuple_check',
-      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'), ('voc','finding','evidence_of'), ('voc_cluster','finding','created_finding'), ('finding','task_request','requested_task'), ('task_request','task','converted_to'), ('finding','task','requested_task'), ('voc','task','evidence_of'), ('voc','task_request','requested_task'), ('voc_cluster','task_request','requested_task'))`,
+      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'), ('voc','finding','evidence_of'), ('voc_cluster','finding','created_finding'), ('voc_cluster','finding','evidence_of'), ('finding','task_request','requested_task'), ('task_request','task','converted_to'), ('finding','task','requested_task'), ('voc','task','evidence_of'), ('voc','task_request','requested_task'), ('voc_cluster','task_request','requested_task'))`,
     ),
     visibilityCheck: check(
       'entity_links_visibility_check',

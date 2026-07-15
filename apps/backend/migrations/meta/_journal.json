@@ -218,6 +218,13 @@
       "when": 1781900000000,
       "tag": "0030_voc_cluster_workspace_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1782000000000,
+      "tag": "0031_voc_cluster_finding_evidence_link",
+      "breakpoints": true
     }
   ]
 }

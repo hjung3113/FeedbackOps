@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+import type { Scope } from '../permissions/scope-service.js';
 
 export interface VocClusterRow {
   id: string;
@@ -259,16 +260,27 @@ export async function listVocClustersByWorkspace(
 
 export async function listCreatedFindingsForClusters(
   db: Db | Tx,
-  input: { workspaceId: string; clusterIds: string[] },
+  input: { workspaceId: string; clusterIds: string[]; findingReadScope: Scope },
 ): Promise<CreatedFindingForClusterRow[]> {
   if (input.clusterIds.length === 0) return [];
+  const findingScopePredicate =
+    input.findingReadScope.kind === 'all'
+      ? sql`TRUE`
+      : sql`f.primary_managed_system_id = ANY(${sqlUuidArray(input.findingReadScope.managedSystemIds)})`;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
-    SELECT source_id AS cluster_id, id, display_id, status
-    FROM finding.findings
-    WHERE workspace_id = ${input.workspaceId}
-      AND source_type = 'voc_cluster'
-      AND source_id = ANY(${sqlUuidArray(input.clusterIds)})
-    ORDER BY created_at DESC, id DESC
+    SELECT l.source_id AS cluster_id, f.id, f.display_id, f.status
+    FROM core.entity_links l
+    JOIN finding.findings f
+      ON f.id = l.target_id
+      AND f.workspace_id = l.workspace_id
+    WHERE l.workspace_id = ${input.workspaceId}
+      AND l.source_type = 'voc_cluster'
+      AND l.source_id = ANY(${sqlUuidArray(input.clusterIds)})
+      AND l.target_type = 'finding'
+      AND l.relation_type IN ('created_finding', 'evidence_of')
+      AND l.status = 'active'
+      AND ${findingScopePredicate}
+    ORDER BY l.created_at DESC, l.id DESC
   `);
   return result.rows.map(mapCreatedFindingForClusterRow);
 }

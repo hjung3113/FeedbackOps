@@ -110,6 +110,7 @@ Link creation endpoints map to registered pairs as of Slice 6:
 ```text
 POST /vocs/:id/create-finding          -> (voc, finding, created_finding)            [#122]
 POST /voc-clusters/:id/create-finding  -> (voc_cluster, finding, created_finding)    [#126]
+POST /voc-clusters/:id/link-finding    -> (voc_cluster, finding, evidence_of)        [#127]
 POST /findings/:id/request-task        -> (finding, task_request, requested_task)    [#132]
 POST /vocs/:id/request-task            -> (voc, task_request, requested_task)        [#136]
 POST /voc-clusters/:id/request-task    -> (voc_cluster, task_request, requested_task) [#136]
@@ -123,6 +124,7 @@ set. As of #134, direct creation is allowed for these tuples:
 (voc, finding, created_finding)
 (voc, finding, evidence_of)
 (voc_cluster, finding, created_finding)
+(voc_cluster, finding, evidence_of)
 (finding, task_request, requested_task)
 (task_request, task, converted_to)
 (finding, task, requested_task)

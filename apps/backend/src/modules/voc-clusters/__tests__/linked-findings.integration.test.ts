@@ -145,6 +145,16 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
     );
   }
 
+  async function seedFindingLink(clusterId: string, findingId: string): Promise<void> {
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        ) values ($1, 'voc_cluster', $2, 'finding', $3, 'created_finding', 'internal_only', 'active', $4, $5)`,
+      [workspaceId, clusterId, findingId, managedSystemId, adminActorId],
+    );
+  }
+
   it('getCluster includes id, display_id, and status for findings created from the cluster', async () => {
     const cluster = await seedCluster('Linked detail cluster');
     const finding = await insertFindingRow(migrateHandle, {
@@ -156,6 +166,7 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
       status: 'active',
       createdBy: adminActorId,
     });
+    await seedFindingLink(cluster.id, finding.id);
 
     const detail = await vocClustersService.getCluster({ actor: actor(), clusterId: cluster.id });
 
@@ -210,6 +221,7 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
       status: 'not_actionable',
       createdBy: adminActorId,
     });
+    await seedFindingLink(withFinding.id, finding.id);
 
     let executeCount = 0;
     const countingDb = new Proxy(dbHandle.db, {
