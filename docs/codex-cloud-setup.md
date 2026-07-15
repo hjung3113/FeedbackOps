@@ -24,7 +24,7 @@ Create an environment for:
 bash scripts/codex-cloud-setup.sh
 ```
 
-FeedbackOps currently contains product, frontend, implementation, reporting, and agent-boundary documentation. It has app and package directories, but no package manager lockfile or runnable application project yet. Keep setup lightweight until application code is added.
+FeedbackOps is a pnpm + Turborepo monorepo: `apps/backend` (Fastify + drizzle), `apps/frontend` (React + TanStack Router), and shared packages under `packages/` (`@fops/shared`, `@fops/ui`). `pnpm-lock.yaml` is committed, so the setup command installs from the lockfile. Backend integration tests need a Postgres instance and will not run in a bare cloud environment — prefer typecheck and unit tests there.
 
 ## Suggested task prompt from mobile
 
