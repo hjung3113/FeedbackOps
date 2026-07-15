@@ -60,6 +60,29 @@ export const vocClusterMemberDtoSchema = z
   .strict();
 export type VocClusterMemberDto = z.infer<typeof vocClusterMemberDtoSchema>;
 
+export const sameManagedSystemCandidatePeerDtoSchema = z
+  .object({
+    voc_id: z.string().uuid(),
+    display_id: z.string(),
+    title: z.string(),
+    severity: findingSeveritySchema.nullable(),
+    reporter_facing_status: z.string(),
+  })
+  .strict();
+export type SameManagedSystemCandidatePeerDto = z.infer<
+  typeof sameManagedSystemCandidatePeerDtoSchema
+>;
+
+export const listSameManagedSystemCandidatePeersResponseSchema = z
+  .object({
+    candidate_basis: z.literal('same_managed_system_active_voc'),
+    candidates: z.array(sameManagedSystemCandidatePeerDtoSchema),
+  })
+  .strict();
+export type ListSameManagedSystemCandidatePeersResponse = z.infer<
+  typeof listSameManagedSystemCandidatePeersResponseSchema
+>;
+
 export const vocClusterPublicUpdateCandidateRequestSchema = publicUpdateRequestSchema;
 export type VocClusterPublicUpdateCandidateRequest = z.infer<
   typeof vocClusterPublicUpdateCandidateRequestSchema

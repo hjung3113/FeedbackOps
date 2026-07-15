@@ -3,6 +3,7 @@ import {
   type ApplyVocClusterPublicUpdateRequest,
   type CreateFindingFromVocClusterRequest,
   type CreateVocClusterRequest,
+  type ListSameManagedSystemCandidatePeersResponse,
   type ListVocClustersResponse,
   type UpdateVocClusterRequest,
   type VocClusterDto,
@@ -25,6 +26,7 @@ import { type Scope, actorReadScope } from '../voc/repo-read.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
 import {
   type CreatedFindingForClusterRow,
+  type SameManagedSystemCandidatePeerRow,
   type VocClusterMemberRow,
   type VocClusterRow,
   deleteVocClusterMember,
@@ -33,6 +35,7 @@ import {
   insertVocClusterMember,
   isAssignableClusterOwner,
   listCreatedFindingsForClusters,
+  listSameManagedSystemCandidatePeers,
   listVocClusterMembers,
   listVocClusterMembersForClusters,
   listVocClustersByWorkspace,
@@ -142,7 +145,7 @@ async function canManageCluster(
 function isAuthorizedMember(
   readScope: Scope,
   actorId: string,
-  member: VocClusterMemberRow,
+  member: Pick<VocClusterMemberRow, 'archived_at' | 'primary_managed_system_id' | 'reporter_id'>,
   clusterManagedSystemId: string,
 ): boolean {
   return (
@@ -153,6 +156,15 @@ function isAuthorizedMember(
       readScope.managedSystemIds.includes(member.primary_managed_system_id) ||
       member.reporter_id === actorId)
   );
+}
+
+function isAuthorizedCandidatePeer(
+  readScope: Scope,
+  actorId: string,
+  candidate: SameManagedSystemCandidatePeerRow,
+  clusterManagedSystemId: string,
+): boolean {
+  return isAuthorizedMember(readScope, actorId, candidate, clusterManagedSystemId);
 }
 
 function authorizedMembers(
@@ -356,6 +368,47 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     return clusterToDto({ ...row, member_count: members.length }, members, linkedFindings);
   }
 
+  async function listCandidatePeers(args: {
+    actor: VocClustersActor;
+    clusterId: string;
+  }): Promise<ListSameManagedSystemCandidatePeersResponse> {
+    const cluster = await findVocClusterById(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      clusterId: args.clusterId,
+    });
+    if (!cluster) throw new HttpError('not_found.record', 'voc cluster not found');
+    if (!(await canReadCluster(deps, args.actor, cluster.primary_managed_system_id))) {
+      throw new HttpError('not_found.record', 'voc cluster not found');
+    }
+
+    const readScope = await actorReadScope(deps.db, args.actor);
+    const candidates = (
+      await listSameManagedSystemCandidatePeers(deps.db, {
+        workspaceId: args.actor.workspace_id,
+        clusterId: cluster.id,
+        primaryManagedSystemId: cluster.primary_managed_system_id,
+      })
+    ).filter((candidate) =>
+      isAuthorizedCandidatePeer(
+        readScope,
+        args.actor.actor_id,
+        candidate,
+        cluster.primary_managed_system_id,
+      ),
+    );
+
+    return {
+      candidate_basis: 'same_managed_system_active_voc',
+      candidates: candidates.map((candidate) => ({
+        voc_id: candidate.voc_id,
+        display_id: candidate.display_id,
+        title: candidate.title,
+        severity: candidate.severity,
+        reporter_facing_status: candidate.reporter_facing_status,
+      })),
+    };
+  }
+
   async function updateCluster(args: {
     actor: VocClustersActor;
     clusterId: string;
@@ -506,10 +559,6 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         readScope,
         args.actor.actor_id,
         {
-          cluster_id: cluster.id,
-          voc_id: voc.id,
-          added_by: args.actor.actor_id,
-          added_at: new Date(),
           primary_managed_system_id: voc.primaryManagedSystemId,
           reporter_id: voc.reporterId,
           archived_at: voc.archivedAt,
@@ -839,6 +888,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     createCluster,
     listClusters,
     getCluster,
+    listCandidatePeers,
     updateCluster,
     addMember,
     removeMember,
