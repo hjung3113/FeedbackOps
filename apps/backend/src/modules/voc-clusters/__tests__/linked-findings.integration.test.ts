@@ -71,7 +71,37 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
 
   afterAll(async () => {
     if (migrateHandle) {
+      // Reverse every FK edge owned by this suite's isolated workspace before
+      // removing its managed system, actors, and workspace.
+      await migrateHandle.pool.query('delete from finding.evidence_highlights where workspace_id = $1', [
+        workspaceId,
+      ]);
       await migrateHandle.pool.query('delete from core.entity_links where workspace_id = $1', [
+        workspaceId,
+      ]);
+      await migrateHandle.pool.query('delete from core.audit_log where workspace_id = $1', [workspaceId]);
+      await migrateHandle.pool.query('delete from permission.permission_requests where workspace_id = $1', [
+        workspaceId,
+      ]);
+      await migrateHandle.pool.query('delete from permission.permission_denies where workspace_id = $1', [
+        workspaceId,
+      ]);
+      await migrateHandle.pool.query('delete from permission.permission_grants where workspace_id = $1', [
+        workspaceId,
+      ]);
+      await migrateHandle.pool.query(
+        `delete from core.idempotency_keys
+         where actor_id in (select id from core.actors where workspace_id = $1)`,
+        [workspaceId],
+      );
+      await migrateHandle.pool.query('delete from core.sessions where workspace_id = $1', [workspaceId]);
+      await migrateHandle.pool.query(
+        `delete from voc.voc_attachments
+         where uploaded_by_actor_id in (select id from core.actors where workspace_id = $1)`,
+        [workspaceId],
+      );
+      await migrateHandle.pool.query('delete from task.tasks where workspace_id = $1', [workspaceId]);
+      await migrateHandle.pool.query('delete from task_request.task_requests where workspace_id = $1', [
         workspaceId,
       ]);
       await migrateHandle.pool.query('delete from finding.findings where workspace_id = $1', [
@@ -89,9 +119,13 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
         [workspaceId],
       );
       await migrateHandle.pool.query('delete from voc.vocs where workspace_id = $1', [workspaceId]);
+      await migrateHandle.pool.query('delete from core.analytics_areas where workspace_id = $1', [
+        workspaceId,
+      ]);
       await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
         workspaceId,
       ]);
+      await migrateHandle.pool.query('delete from core.teams where workspace_id = $1', [workspaceId]);
       await migrateHandle.pool.query('delete from core.actors where workspace_id = $1', [
         workspaceId,
       ]);

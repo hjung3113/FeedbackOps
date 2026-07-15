@@ -162,21 +162,75 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
 
   afterAll(async () => {
     if (ops) {
+      // Delete every row that can reference this suite's actors, managed systems,
+      // cluster, or findings before deleting those parent fixtures.
+      await ops.pool.query(
+        `delete from finding.evidence_highlights
+         where finding_id=any($1::uuid[])`,
+        [[targetFindingId, deniedFindingId]],
+      );
       await ops.pool.query(
         `delete from core.audit_log
          where workspace_id=$1
-           and (subject_id=any($2::uuid[]) or detail->>'voc_cluster_id'=$3 or detail->'source'->>'id'=$3)`,
+           and (
+             actor_id in (
+               select id from core.actors where workspace_id=$1 and external_id like 'link-%'
+             )
+             or subject_id=any($2::uuid[])
+             or detail->>'voc_cluster_id'=$3
+             or detail->'source'->>'id'=$3
+           )`,
         [WORKSPACE_ID, [clusterId, targetFindingId, deniedFindingId], clusterId],
       );
       await ops.pool.query(
         'delete from core.entity_links where workspace_id=$1 and (source_id=$2 or target_id=any($3::uuid[]))',
         [WORKSPACE_ID, clusterId, [targetFindingId, deniedFindingId]],
       );
+      await ops.pool.query(
+        `delete from permission.permission_requests
+         where workspace_id=$1
+           and requester_actor_id in (
+             select id from core.actors where workspace_id=$1 and external_id like 'link-%'
+           )`,
+        [WORKSPACE_ID],
+      );
+      await ops.pool.query(
+        `delete from permission.permission_denies
+         where workspace_id=$1
+           and actor_id in (
+             select id from core.actors where workspace_id=$1 and external_id like 'link-%'
+           )`,
+        [WORKSPACE_ID],
+      );
+      await ops.pool.query(
+        `delete from permission.permission_grants
+         where workspace_id=$1
+           and (
+             managed_system_id=any($2::uuid[])
+             or actor_id in (
+               select id from core.actors where workspace_id=$1 and external_id like 'link-%'
+             )
+           )`,
+        [WORKSPACE_ID, [clusterMsId, targetMsId]],
+      );
       await ops.pool.query('delete from finding.findings where id=any($1::uuid[])', [[targetFindingId, deniedFindingId]]);
       await ops.pool.query('delete from voc_cluster.voc_clusters where id=$1', [clusterId]);
-      await ops.pool.query('delete from permission.permission_grants where managed_system_id=any($1::uuid[])', [[clusterMsId, targetMsId]]);
+      await ops.pool.query(
+        `delete from core.idempotency_keys
+         where actor_id in (
+           select id from core.actors where workspace_id=$1 and external_id like 'link-%'
+         )`,
+        [WORKSPACE_ID],
+      );
       await ops.pool.query('delete from core.managed_systems where id=any($1::uuid[])', [[clusterMsId, targetMsId]]);
       await ops.pool.query(`delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'link-%')`, [WORKSPACE_ID]);
+      await ops.pool.query(
+        `delete from voc.voc_attachments
+         where uploaded_by_actor_id in (
+           select id from core.actors where workspace_id=$1 and external_id like 'link-%'
+         )`,
+        [WORKSPACE_ID],
+      );
       await ops.pool.query(`delete from core.actors where workspace_id=$1 and external_id like 'link-%'`, [WORKSPACE_ID]);
     }
     await app?.close();
