@@ -2,25 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import {
-  vocCreatedDetailSchema,
-  vocTriageCommittedDetailSchema,
-  vocSeveritySetDetailSchema,
-  vocOwnerAssignedDetailSchema,
-  vocAnalyticsAreaLinkedDetailSchema,
-  vocClusterDecisionRecordedDetailSchema,
-  publicUpdateCreatedDetailSchema,
-  reporterFacingStatusChangedDetailSchema,
-  reporterReplyCreatedDetailSchema,
-  internalCommentCreatedDetailSchema,
-  vocTriagePostponedDetailSchema,
-  vocDescriptionEditedDetailSchema,
-} from '../voc.js';
-import {
-  AUDIT_EVENT_TYPES,
   AUDIT_EVENT_DETAIL_SCHEMAS,
+  AUDIT_EVENT_TYPES,
   vocClusterCreatedDetailSchema,
   vocClusterUpdatedDetailSchema,
 } from '../../enums/audit-events.js';
+import {
+  internalCommentCreatedDetailSchema,
+  publicUpdateCreatedDetailSchema,
+  reporterFacingStatusChangedDetailSchema,
+  reporterReplyCreatedDetailSchema,
+  vocAnalyticsAreaLinkedDetailSchema,
+  vocClusterDecisionRecordedDetailSchema,
+  vocCreatedDetailSchema,
+  vocDescriptionEditedDetailSchema,
+  vocOwnerAssignedDetailSchema,
+  vocSeveritySetDetailSchema,
+  vocTriageCommittedDetailSchema,
+  vocTriagePostponedDetailSchema,
+} from '../voc.js';
 
 const U = '01919b8c-0000-7000-8000-000000000001';
 
@@ -46,6 +46,36 @@ describe('vocCreatedDetailSchema', () => {
         analytics_area_id: null,
         reporter_id: U,
         source_context: 'phone_call',
+      }),
+    ).toThrow(z.ZodError);
+  });
+});
+
+describe('vocClusterUpdatedDetailSchema workspace fields', () => {
+  it('accepts workspace field and confirmation provenance changes', () => {
+    const confirmedAt = '2026-07-15T01:02:03.000Z';
+    const parsed = vocClusterUpdatedDetailSchema.parse({
+      voc_cluster_id: U,
+      primary_managed_system_id: U,
+      changes: {
+        severity: { from: null, to: 'critical' },
+        confidence: { from: null, to: 'high' },
+        rationale: { from: null, to: 'Repeated customer impact' },
+        owner_user_id: { from: null, to: U },
+        confirmed_by: { from: null, to: U },
+        confirmed_at: { from: null, to: confirmedAt },
+      },
+    });
+
+    expect(parsed.changes.confirmed_at?.to).toBe(confirmedAt);
+  });
+
+  it('rejects workspace field values outside the contract', () => {
+    expect(() =>
+      vocClusterUpdatedDetailSchema.parse({
+        voc_cluster_id: U,
+        primary_managed_system_id: U,
+        changes: { severity: { from: null, to: 'urgent' } },
       }),
     ).toThrow(z.ZodError);
   });
@@ -366,15 +396,11 @@ describe('vocTriagePostponedDetailSchema', () => {
   });
 
   it('rejects missing actor_id', () => {
-    expect(() =>
-      vocTriagePostponedDetailSchema.parse({ voc_id: U }),
-    ).toThrow(z.ZodError);
+    expect(() => vocTriagePostponedDetailSchema.parse({ voc_id: U })).toThrow(z.ZodError);
   });
 
   it('rejects missing voc_id', () => {
-    expect(() =>
-      vocTriagePostponedDetailSchema.parse({ actor_id: U }),
-    ).toThrow(z.ZodError);
+    expect(() => vocTriagePostponedDetailSchema.parse({ actor_id: U })).toThrow(z.ZodError);
   });
 
   it('rejects non-uuid voc_id', () => {

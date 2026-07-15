@@ -26,6 +26,7 @@ import {
   findVocClusterById,
   insertVocCluster,
   insertVocClusterMember,
+  isAssignableClusterOwner,
   listCreatedFindingsForClusters,
   listVocClusterMembers,
   listVocClustersByWorkspace,
@@ -75,9 +76,15 @@ function clusterToDto(
     display_id: row.display_id,
     title: row.title,
     summary: row.summary,
+    severity: row.severity,
+    confidence: row.confidence,
+    rationale: row.rationale,
+    owner_user_id: row.owner_user_id,
     status: row.status,
     primary_managed_system_id: row.primary_managed_system_id,
     created_by: row.created_by,
+    confirmed_by: row.confirmed_by,
+    confirmed_at: row.confirmed_at?.toISOString() ?? null,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
     member_count: row.member_count,
@@ -181,10 +188,27 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         throw new HttpError('permission.denied', 'finding.manage capability required');
       }
 
+      if (
+        args.input.owner_user_id !== undefined &&
+        args.input.owner_user_id !== null &&
+        !(await isAssignableClusterOwner(tx, {
+          workspaceId: args.actor.workspace_id,
+          actorId: args.input.owner_user_id,
+        }))
+      ) {
+        throw new HttpError('validation.failed', 'owner_user_id is not an assignable user', {
+          fields: [{ path: ['owner_user_id'], code: 'invalid' }],
+        });
+      }
+
       const row = await insertVocCluster(tx, {
         workspaceId: args.actor.workspace_id,
         title: args.input.title,
         summary: args.input.summary ?? null,
+        severity: args.input.severity ?? null,
+        confidence: args.input.confidence ?? null,
+        rationale: args.input.rationale ?? null,
+        ownerUserId: args.input.owner_user_id ?? null,
         primaryManagedSystemId: ms.id,
         createdBy: args.actor.actor_id,
       });
@@ -282,17 +306,45 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         throw new HttpError('permission.denied', 'finding.manage capability required');
       }
 
+      if (
+        args.input.owner_user_id !== undefined &&
+        args.input.owner_user_id !== null &&
+        !(await isAssignableClusterOwner(tx, {
+          workspaceId: args.actor.workspace_id,
+          actorId: args.input.owner_user_id,
+        }))
+      ) {
+        throw new HttpError('validation.failed', 'owner_user_id is not an assignable user', {
+          fields: [{ path: ['owner_user_id'], code: 'invalid' }],
+        });
+      }
+
+      const confirmsNow = cluster.status === 'draft' && args.input.status === 'confirmed';
+
       const updated = await updateVocCluster(tx, {
         workspaceId: args.actor.workspace_id,
         clusterId: cluster.id,
         ...(args.input.title !== undefined ? { title: args.input.title } : {}),
         ...(args.input.summary !== undefined ? { summary: args.input.summary } : {}),
+        ...(args.input.severity !== undefined ? { severity: args.input.severity } : {}),
+        ...(args.input.confidence !== undefined ? { confidence: args.input.confidence } : {}),
+        ...(args.input.rationale !== undefined ? { rationale: args.input.rationale } : {}),
+        ...(args.input.owner_user_id !== undefined
+          ? { ownerUserId: args.input.owner_user_id }
+          : {}),
         ...(args.input.status !== undefined ? { status: args.input.status } : {}),
+        ...(confirmsNow ? { confirmedBy: args.actor.actor_id } : {}),
       });
       const changes: Partial<{
         title: { from: string; to: string };
         summary: { from: string | null; to: string | null };
+        severity: { from: VocClusterRow['severity']; to: VocClusterRow['severity'] };
+        confidence: { from: VocClusterRow['confidence']; to: VocClusterRow['confidence'] };
+        rationale: { from: string | null; to: string | null };
+        owner_user_id: { from: string | null; to: string | null };
         status: { from: VocClusterRow['status']; to: VocClusterRow['status'] };
+        confirmed_by: { from: string | null; to: string | null };
+        confirmed_at: { from: string | null; to: string | null };
       }> = {};
       if (cluster.title !== updated.title) {
         changes.title = { from: cluster.title, to: updated.title };
@@ -300,8 +352,29 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       if (cluster.summary !== updated.summary) {
         changes.summary = { from: cluster.summary, to: updated.summary };
       }
+      if (cluster.severity !== updated.severity) {
+        changes.severity = { from: cluster.severity, to: updated.severity };
+      }
+      if (cluster.confidence !== updated.confidence) {
+        changes.confidence = { from: cluster.confidence, to: updated.confidence };
+      }
+      if (cluster.rationale !== updated.rationale) {
+        changes.rationale = { from: cluster.rationale, to: updated.rationale };
+      }
+      if (cluster.owner_user_id !== updated.owner_user_id) {
+        changes.owner_user_id = { from: cluster.owner_user_id, to: updated.owner_user_id };
+      }
       if (cluster.status !== updated.status) {
         changes.status = { from: cluster.status, to: updated.status };
+      }
+      if (cluster.confirmed_by !== updated.confirmed_by) {
+        changes.confirmed_by = { from: cluster.confirmed_by, to: updated.confirmed_by };
+      }
+      if (cluster.confirmed_at?.getTime() !== updated.confirmed_at?.getTime()) {
+        changes.confirmed_at = {
+          from: cluster.confirmed_at?.toISOString() ?? null,
+          to: updated.confirmed_at?.toISOString() ?? null,
+        };
       }
       if (Object.keys(changes).length > 0) {
         await deps.auditService.record(tx, {
