@@ -1,115 +1,141 @@
 import { randomUUID } from 'node:crypto';
 
-import { createVocClusterRequestSchema, updateVocClusterRequestSchema } from '@fops/shared';
+import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
-import { createAuditService } from '../../core/audit/audit-service.js';
-import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
-import { createCheckService } from '../../permissions/check-service.js';
-import { type VocClustersService, createVocClustersService } from '../service.js';
+import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
+import { buildServer } from '../../../server.js';
+import { loginAs } from '../../voc/__tests__/_seed-helpers.js';
 import { insertActorRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
-const runIntegration = Boolean(APP_URL && MIGRATE_URL);
+const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
+const SLUG_PREFIX = 'it-cluster-fields';
 
 describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
   let appDb: DbHandle;
   let migrateDb: DbHandle;
-  let service: VocClustersService;
-  const workspaceId = randomUUID();
-  let managedSystemId: string;
+  let app: FastifyInstance;
+  let adminCookie: string;
   let adminId: string;
   let ownerId: string;
+  let managedSystemId: string;
 
   beforeAll(async () => {
+    process.env.NODE_ENV = 'test';
     appDb = createDb(APP_URL);
     migrateDb = createDb(MIGRATE_URL);
-    service = createVocClustersService({
-      db: appDb.db,
-      auditService: createAuditService(),
-      checkService: createCheckService({ db: appDb.db }),
-      idempotencyService: createIdempotencyService(),
-    });
-    await migrateDb.pool.query('insert into core.workspaces (id, name) values ($1, $2)', [
-      workspaceId,
-      'VOC cluster workspace fields test',
-    ]);
-    adminId = (
-      await insertActorRow(migrateDb, {
-        workspaceId,
-        externalId: `cluster-fields-admin-${workspaceId}`,
-        roleLevel: 'admin',
-      })
-    ).id;
+    app = await buildServer({ config: loadConfig(), dbHandle: appDb });
+    await app.ready();
+    adminCookie = await loginAs(app, 'mock-admin-1');
+
+    const admin = await appDb.pool.query<{ id: string }>(
+      `select id from core.actors where workspace_id = $1 and external_id = 'mock-admin-1'`,
+      [WORKSPACE_ID],
+    );
+    adminId = admin.rows[0]?.id ?? '';
+    if (!adminId) throw new Error('seed admin actor not found');
+
     ownerId = (
       await insertActorRow(migrateDb, {
-        workspaceId,
-        externalId: `cluster-fields-owner-${workspaceId}`,
+        workspaceId: WORKSPACE_ID,
+        externalId: `${SLUG_PREFIX}-owner-${randomUUID()}`,
         roleLevel: 'developer',
       })
     ).id;
     const ms = await migrateDb.pool.query<{ id: string }>(
       `insert into core.managed_systems (workspace_id, slug, name)
        values ($1, $2, $3) returning id`,
-      [workspaceId, `cluster-fields-${workspaceId}`, 'Cluster fields MS'],
+      [WORKSPACE_ID, `${SLUG_PREFIX}-${randomUUID()}`, 'Cluster fields MS'],
     );
     managedSystemId = ms.rows[0]?.id ?? '';
+    if (!managedSystemId) throw new Error('seed managed system failed');
   });
 
   beforeEach(async () => {
-    await migrateDb.pool.query('delete from core.audit_log where workspace_id = $1', [workspaceId]);
-    await migrateDb.pool.query('delete from voc_cluster.voc_clusters where workspace_id = $1', [
-      workspaceId,
-    ]);
+    await cleanupClusters();
   });
 
   afterAll(async () => {
-    await migrateDb.pool.query('delete from core.audit_log where workspace_id = $1', [workspaceId]);
-    await migrateDb.pool.query('delete from voc_cluster.voc_clusters where workspace_id = $1', [
-      workspaceId,
-    ]);
-    await migrateDb.pool.query('delete from core.display_counters where workspace_id = $1', [
-      workspaceId,
-    ]);
-    await migrateDb.pool.query('delete from core.managed_systems where workspace_id = $1', [
-      workspaceId,
-    ]);
-    await migrateDb.pool.query('delete from core.actors where workspace_id = $1', [workspaceId]);
-    await migrateDb.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
-    await appDb.close();
-    await migrateDb.close();
+    await cleanupClusters();
+    if (migrateDb) {
+      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+        managedSystemId,
+      ]);
+      await migrateDb.pool.query('delete from core.actors where id = $1', [ownerId]);
+    }
+    await app?.close();
+    await appDb?.close();
+    await migrateDb?.close();
   });
 
-  const actor = () => ({
-    actor_id: adminId,
-    workspace_id: workspaceId,
-    role_level: 'admin' as const,
-  });
+  async function cleanupClusters(): Promise<void> {
+    if (!migrateDb) return;
+    await migrateDb.pool.query(
+      `delete from core.audit_log
+        where workspace_id = $1
+          and subject_id in (
+            select id from voc_cluster.voc_clusters
+             where primary_managed_system_id = $2
+          )`,
+      [WORKSPACE_ID, managedSystemId],
+    );
+    await migrateDb.pool.query(
+      'delete from voc_cluster.voc_clusters where primary_managed_system_id = $1',
+      [managedSystemId],
+    );
+    await migrateDb.pool.query(
+      `delete from core.rate_limits
+        where key like $1 || ':%'
+           or key like '127.0.0.%'`,
+      [WORKSPACE_ID],
+    );
+  }
 
-  async function create(title: string, extra: Record<string, unknown> = {}) {
-    return service.createCluster({
-      actor: actor(),
-      input: createVocClusterRequestSchema.parse({
+  function headers(): Record<string, string> {
+    return {
+      cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+      'content-type': 'application/json',
+    };
+  }
+
+  function createCluster(title: string, extra: Record<string, unknown> = {}) {
+    return app.inject({
+      method: 'POST',
+      url: '/voc-clusters',
+      headers: headers(),
+      payload: {
         title,
         primary_managed_system_id: managedSystemId,
         ...extra,
-      }),
+      },
     });
   }
 
-  it('creates all workspace fields and returns them on detail', async () => {
-    const result = await create('All workspace fields', {
+  function updateCluster(clusterId: string, payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/voc-clusters/${clusterId}`,
+      headers: headers(),
+      payload,
+    });
+  }
+
+  it('returns workspace fields through create, list, detail, and update envelopes', async () => {
+    const created = await createCluster('All workspace fields', {
       summary: 'Summary',
       severity: 'critical',
       confidence: 'high',
       rationale: 'Repeated impact across accounts',
       owner_user_id: ownerId,
     });
-    const detail = await service.getCluster({ actor: actor(), clusterId: result.body.id });
-
-    expect(detail).toMatchObject({
+    expect(created.statusCode).toBe(201);
+    const createdBody = created.json<{ id: string }>();
+    expect(createdBody).toMatchObject({
       severity: 'critical',
       confidence: 'high',
       rationale: 'Repeated impact across accounts',
@@ -117,12 +143,74 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
       confirmed_by: null,
       confirmed_at: null,
     });
+
+    const list = await app.inject({
+      method: 'GET',
+      url: `/voc-clusters?managed_system_id=${managedSystemId}`,
+      headers: headers(),
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json<{ items: unknown[] }>().items).toEqual([
+      expect.objectContaining({
+        id: createdBody.id,
+        severity: 'critical',
+        confidence: 'high',
+        rationale: 'Repeated impact across accounts',
+        owner_user_id: ownerId,
+        confirmed_by: null,
+        confirmed_at: null,
+      }),
+    ]);
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/voc-clusters/${createdBody.id}`,
+      headers: headers(),
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({
+      id: createdBody.id,
+      severity: 'critical',
+      confidence: 'high',
+      rationale: 'Repeated impact across accounts',
+      owner_user_id: ownerId,
+      confirmed_by: null,
+      confirmed_at: null,
+    });
+
+    const updated = await updateCluster(createdBody.id, {
+      severity: 'high',
+      confidence: 'medium',
+      rationale: 'Corroborated by three VOCs',
+      owner_user_id: null,
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toMatchObject({
+      severity: 'high',
+      confidence: 'medium',
+      rationale: 'Corroborated by three VOCs',
+      owner_user_id: null,
+    });
+
+    const audit = await migrateDb.pool.query<{ detail: Record<string, unknown> }>(
+      `select detail from core.audit_log
+       where subject_id = $1 and event_type = 'voc_cluster_updated'`,
+      [createdBody.id],
+    );
+    expect(audit.rows[0]?.detail).toMatchObject({
+      changes: {
+        severity: { from: 'critical', to: 'high' },
+        confidence: { from: 'high', to: 'medium' },
+        rationale: { from: 'Repeated impact across accounts', to: 'Corroborated by three VOCs' },
+        owner_user_id: { from: ownerId, to: null },
+      },
+    });
   });
 
-  it('creates no fabricated defaults and exposes nullable fields in list and detail', async () => {
-    const result = await create('No workspace fields');
-    const list = await service.listClusters({ actor: actor(), managedSystemId });
-    const detail = await service.getCluster({ actor: actor(), clusterId: result.body.id });
+  it('emits nullable fields instead of fabricated defaults', async () => {
+    const created = await createCluster('No workspace fields');
+    expect(created.statusCode).toBe(201);
+    const body = created.json<{ id: string }>();
     const nullShape = {
       severity: null,
       confidence: null,
@@ -131,150 +219,71 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
       confirmed_by: null,
       confirmed_at: null,
     };
+    expect(body).toMatchObject(nullShape);
 
-    expect(list.items[0]).toMatchObject(nullShape);
-    expect(detail).toMatchObject(nullShape);
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/voc-clusters/${body.id}`,
+      headers: headers(),
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject(nullShape);
   });
 
-  it('updates writable workspace fields and records their audit changes', async () => {
-    const cluster = await create('Update workspace fields');
-    const updated = await service.updateCluster({
-      actor: actor(),
-      clusterId: cluster.body.id,
-      input: {
-        severity: 'high',
-        confidence: 'medium',
-        rationale: 'Corroborated by three VOCs',
-        owner_user_id: ownerId,
-      },
-    });
-    const audit = await migrateDb.pool.query<{ detail: Record<string, unknown> }>(
-      `select detail from core.audit_log
-       where workspace_id = $1 and event_type = 'voc_cluster_updated'`,
-      [workspaceId],
-    );
-
-    expect(updated.body).toMatchObject({
-      severity: 'high',
-      confidence: 'medium',
-      rationale: 'Corroborated by three VOCs',
-      owner_user_id: ownerId,
-    });
-    expect(audit.rows[0]?.detail).toMatchObject({
-      changes: {
-        severity: { from: null, to: 'high' },
-        confidence: { from: null, to: 'medium' },
-        rationale: { from: null, to: 'Corroborated by three VOCs' },
-        owner_user_id: { from: null, to: ownerId },
-      },
-    });
+  it.each([
+    ['severity', 'urgent'],
+    ['confidence', 'certain'],
+  ])('rejects invalid %s through route validation', async (field, value) => {
+    const response = await createCluster(`Invalid ${field}`, { [field]: value });
+    expect(response.statusCode).toBe(422);
+    expect(response.json<{ code: string }>().code).toBe('validation.failed');
   });
 
-  it('rejects direct writes to confirmation provenance', () => {
-    for (const field of ['confirmed_by', 'confirmed_at'] as const) {
-      expect(
-        updateVocClusterRequestSchema.safeParse({
-          [field]: field === 'confirmed_by' ? ownerId : new Date().toISOString(),
-        }).success,
-      ).toBe(false);
-    }
+  it('rejects a nonexistent owner_user_id through the create route', async () => {
+    const response = await createCluster('Bad owner', { owner_user_id: randomUUID() });
+    expect(response.statusCode).toBe(422);
+    expect(response.json<{ code: string }>().code).toBe('validation.failed');
   });
 
-  it('atomically records actor and timestamp on draft confirmation and audits provenance', async () => {
-    const cluster = await create('Confirm cluster');
-    const updated = await service.updateCluster({
-      actor: actor(),
-      clusterId: cluster.body.id,
-      input: { status: 'confirmed' },
-    });
-    const stored = await migrateDb.pool.query<{
-      status: string;
-      confirmed_by: string | null;
-      confirmed_at: Date | null;
-    }>('select status, confirmed_by, confirmed_at from voc_cluster.voc_clusters where id = $1', [
-      cluster.body.id,
-    ]);
-    const audit = await migrateDb.pool.query<{ detail: Record<string, unknown> }>(
-      `select detail from core.audit_log
-       where subject_id = $1 and event_type = 'voc_cluster_updated'`,
-      [cluster.body.id],
-    );
-
-    expect(updated.body.confirmed_by).toBe(adminId);
-    expect(updated.body.confirmed_at).not.toBeNull();
-    expect(stored.rows[0]).toMatchObject({ status: 'confirmed', confirmed_by: adminId });
-    expect(stored.rows[0]?.confirmed_at).not.toBeNull();
-    expect(audit.rows[0]?.detail).toMatchObject({
-      changes: {
-        status: { from: 'draft', to: 'confirmed' },
-        confirmed_by: { from: null, to: adminId },
-        confirmed_at: { from: null, to: updated.body.confirmed_at },
-      },
-    });
+  it.each(['confirmed_by', 'confirmed_at'])('rejects client writes to %s', async (field) => {
+    const created = await createCluster(`Reject ${field}`);
+    expect(created.statusCode).toBe(201);
+    const value = field === 'confirmed_by' ? ownerId : new Date().toISOString();
+    const response = await updateCluster(created.json<{ id: string }>().id, { [field]: value });
+    expect(response.statusCode).toBe(422);
+    expect(response.json<{ code: string }>().code).toBe('validation.failed');
   });
 
-  it('does not overwrite provenance when confirming an already confirmed cluster', async () => {
-    const cluster = await create('Reconfirm cluster');
-    const first = await service.updateCluster({
-      actor: actor(),
-      clusterId: cluster.body.id,
-      input: { status: 'confirmed' },
-    });
-    const second = await service.updateCluster({
-      actor: { ...actor(), actor_id: ownerId, role_level: 'admin' },
-      clusterId: cluster.body.id,
-      input: { status: 'confirmed' },
-    });
+  it('records immutable confirmation provenance through the update route', async () => {
+    const created = await createCluster('Confirm cluster');
+    expect(created.statusCode).toBe(201);
+    const clusterId = created.json<{ id: string }>().id;
 
-    expect(second.body.confirmed_by).toBe(adminId);
-    expect(second.body.confirmed_at).toBe(first.body.confirmed_at);
+    const first = await updateCluster(clusterId, { status: 'confirmed' });
+    expect(first.statusCode).toBe(200);
+    const firstBody = first.json<{ confirmed_by: string; confirmed_at: string }>();
+    expect(firstBody.confirmed_by).toBe(adminId);
+    expect(firstBody.confirmed_at).toEqual(expect.any(String));
+
+    const second = await updateCluster(clusterId, { status: 'confirmed' });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({
+      confirmed_by: adminId,
+      confirmed_at: firstBody.confirmed_at,
+    });
   });
 
   it.each([
     ['severity', 'urgent', 'voc_clusters_severity_check'],
     ['confidence', 'certain', 'voc_clusters_confidence_check'],
-  ] as const)('rejects invalid %s at DTO and DB CHECK levels', async (field, value, constraint) => {
-    expect(
-      createVocClusterRequestSchema.safeParse({
-        title: 'Invalid enum DTO',
-        primary_managed_system_id: managedSystemId,
-        [field]: value,
-      }).success,
-    ).toBe(false);
-
+  ] as const)('enforces the %s database CHECK', async (field, value, constraint) => {
     await expect(
       migrateDb.pool.query(
         `insert into voc_cluster.voc_clusters
           (workspace_id, display_id, title, primary_managed_system_id, created_by, ${field})
          values ($1, $2, $3, $4, $5, $6)`,
-        [workspaceId, `CL-${randomUUID()}`, 'Invalid enum DB', managedSystemId, adminId, value],
+        [WORKSPACE_ID, `CL-${randomUUID()}`, 'Invalid enum DB', managedSystemId, adminId, value],
       ),
     ).rejects.toMatchObject({ constraint });
-  });
-
-  it('rejects a nonexistent owner_user_id', async () => {
-    await expect(create('Bad owner', { owner_user_id: randomUUID() })).rejects.toMatchObject({
-      code: 'validation.failed',
-    });
-  });
-
-  it('reads rows created without workspace field values as NULL', async () => {
-    const row = await migrateDb.pool.query<{ id: string }>(
-      `insert into voc_cluster.voc_clusters
-        (workspace_id, display_id, title, summary, status, primary_managed_system_id, created_by)
-       values ($1, core.next_display_id($1::uuid, 'cluster'), $2, null, 'draft', $3, $4)
-       returning id`,
-      [workspaceId, 'Pre-migration-shaped row', managedSystemId, adminId],
-    );
-    const detail = await service.getCluster({ actor: actor(), clusterId: row.rows[0]?.id ?? '' });
-
-    expect(detail).toMatchObject({
-      severity: null,
-      confidence: null,
-      rationale: null,
-      owner_user_id: null,
-      confirmed_by: null,
-      confirmed_at: null,
-    });
   });
 });

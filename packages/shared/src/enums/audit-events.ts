@@ -30,6 +30,7 @@ import {
   vocTriageCommittedDetailSchema,
   vocTriagePostponedDetailSchema,
 } from '../audit/voc.js';
+import { findingConfidenceSchema, findingSeveritySchema } from '../findings/index.js';
 
 export const AUDIT_EVENT_TYPES = [
   'permission_requested',
@@ -335,8 +336,6 @@ export type FindingCreatedFromVocClusterDetail = z.infer<
 >;
 
 const vocClusterStatusDetailSchema = z.enum(['draft', 'confirmed']);
-const vocClusterSeverityDetailSchema = z.enum(['low', 'medium', 'high', 'critical']);
-const vocClusterConfidenceDetailSchema = z.enum(['low', 'medium', 'high']);
 
 export const vocClusterCreatedDetailSchema = z.object({
   voc_cluster_id: z.string().uuid(),
@@ -361,14 +360,14 @@ export const vocClusterUpdatedDetailSchema = z.object({
         .optional(),
       severity: z
         .object({
-          from: vocClusterSeverityDetailSchema.nullable(),
-          to: vocClusterSeverityDetailSchema.nullable(),
+          from: findingSeveritySchema.nullable(),
+          to: findingSeveritySchema.nullable(),
         })
         .optional(),
       confidence: z
         .object({
-          from: vocClusterConfidenceDetailSchema.nullable(),
-          to: vocClusterConfidenceDetailSchema.nullable(),
+          from: findingConfidenceSchema.nullable(),
+          to: findingConfidenceSchema.nullable(),
         })
         .optional(),
       rationale: z.object({ from: z.string().nullable(), to: z.string().nullable() }).optional(),
