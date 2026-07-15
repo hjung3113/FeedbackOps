@@ -21,6 +21,7 @@ import { insertActiveEntityLink } from '../entity-links/repo.js';
 import { insertFinding } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { ConversationService } from '../voc/conversation-service.js';
+import { type Scope, actorReadScope } from '../voc/repo-read.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
 import {
   type CreatedFindingForClusterRow,
@@ -138,48 +139,37 @@ async function canManageCluster(
   return decision.allow;
 }
 
-async function canReadSourceVoc(
-  deps: Pick<VocClustersServiceDeps, 'checkService'>,
-  actor: VocClustersActor,
-  managedSystemId: string,
-  reporterId: string,
-  options?: Parameters<VocClustersServiceDeps['checkService']['checkCapability']>[3],
-): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.actor_id === reporterId) return true;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'voc.read',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
+function isAuthorizedMember(
+  readScope: Scope,
+  actorId: string,
+  member: VocClusterMemberRow,
+  clusterManagedSystemId: string,
+): boolean {
+  return (
+    member.archived_at === null &&
+    member.primary_managed_system_id === clusterManagedSystemId &&
+    member.reporter_id !== undefined &&
+    (readScope.kind === 'all' ||
+      readScope.managedSystemIds.includes(member.primary_managed_system_id) ||
+      member.reporter_id === actorId)
   );
-  return decision.allow;
 }
 
-async function authorizedMembers(
-  deps: Pick<VocClustersServiceDeps, 'checkService'>,
-  actor: VocClustersActor,
+function authorizedMembers(
+  readScope: Scope,
+  actorId: string,
   members: VocClusterMemberRow[],
   clusterManagedSystemId: string,
-): Promise<VocClusterMemberRow[]> {
-  const visible: VocClusterMemberRow[] = [];
-  for (const member of members) {
-    if (
-      member.archived_at === null &&
-      member.primary_managed_system_id !== undefined &&
-      member.primary_managed_system_id === clusterManagedSystemId &&
-      member.reporter_id !== undefined &&
-      (await canReadSourceVoc(deps, actor, member.primary_managed_system_id, member.reporter_id))
-    ) {
-      visible.push(member);
-    }
-  }
-  return visible;
+): VocClusterMemberRow[] {
+  return members.filter((member) =>
+    isAuthorizedMember(readScope, actorId, member, clusterManagedSystemId),
+  );
 }
 
 async function authorizedMembersByCluster(
-  deps: Pick<VocClustersServiceDeps, 'checkService' | 'db'>,
+  deps: Pick<VocClustersServiceDeps, 'db'>,
   actor: VocClustersActor,
+  readScope: Scope,
   clusters: VocClusterRow[],
 ): Promise<Map<string, VocClusterMemberRow[]>> {
   const visibleByCluster = new Map<string, VocClusterMemberRow[]>();
@@ -192,29 +182,13 @@ async function authorizedMembersByCluster(
   const clusterManagedSystemById = new Map(
     clusters.map((cluster) => [cluster.id, cluster.primary_managed_system_id]),
   );
-  const readDecisionByManagedSystem = new Map<string, boolean>();
-
   for (const member of members) {
     const clusterManagedSystemId = clusterManagedSystemById.get(member.cluster_id);
     if (
-      clusterManagedSystemId === undefined ||
-      member.archived_at !== null ||
-      member.primary_managed_system_id !== clusterManagedSystemId ||
-      member.reporter_id === undefined
-    ) {
-      continue;
-    }
-    let readable = member.reporter_id === actor.actor_id;
-    if (!readable) {
-      if (!readDecisionByManagedSystem.has(clusterManagedSystemId)) {
-        readDecisionByManagedSystem.set(
-          clusterManagedSystemId,
-          await canReadSourceVoc(deps, actor, clusterManagedSystemId, member.reporter_id),
-        );
-      }
-      readable = readDecisionByManagedSystem.get(clusterManagedSystemId) === true;
-    }
-    if (readable) visibleByCluster.get(member.cluster_id)?.push(member);
+      clusterManagedSystemId !== undefined &&
+      isAuthorizedMember(readScope, actor.actor_id, member, clusterManagedSystemId)
+    )
+      visibleByCluster.get(member.cluster_id)?.push(member);
   }
   return visibleByCluster;
 }
@@ -323,7 +297,13 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       if (!readable) continue;
       readableRows.push(row);
     }
-    const membersByCluster = await authorizedMembersByCluster(deps, args.actor, readableRows);
+    const readScope = await actorReadScope(deps.db, args.actor);
+    const membersByCluster = await authorizedMembersByCluster(
+      deps,
+      args.actor,
+      readScope,
+      readableRows,
+    );
     const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
       workspaceId: args.actor.workspace_id,
       clusterIds: readableRows.map((row) => row.id),
@@ -362,9 +342,10 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     if (!row) throw new HttpError('not_found.record', 'voc cluster not found');
     const readable = await canReadCluster(deps, args.actor, row.primary_managed_system_id);
     if (!readable) throw new HttpError('not_found.record', 'voc cluster not found');
-    const members = await authorizedMembers(
-      deps,
-      args.actor,
+    const readScope = await actorReadScope(deps.db, args.actor);
+    const members = authorizedMembers(
+      readScope,
+      args.actor.actor_id,
       await listVocClusterMembers(deps.db, { clusterId: row.id }),
       row.primary_managed_system_id,
     );
@@ -482,9 +463,10 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
           },
         });
       }
-      const visibleMembers = await authorizedMembers(
-        deps,
-        args.actor,
+      const readScope = await actorReadScope(tx, args.actor);
+      const visibleMembers = authorizedMembers(
+        readScope,
+        args.actor.actor_id,
         await listVocClusterMembers(tx, { clusterId: cluster.id }),
         cluster.primary_managed_system_id,
       );
@@ -519,12 +501,20 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
 
       const voc = await selectVocForUpdate(tx, args.actor.workspace_id, args.input.voc_id);
       if (!voc || voc.archivedAt !== null) throw new HttpError('not_found.record', 'voc not found');
-      const sourceReadable = await canReadSourceVoc(
-        deps,
-        args.actor,
+      const readScope = await actorReadScope(tx, args.actor);
+      const sourceReadable = isAuthorizedMember(
+        readScope,
+        args.actor.actor_id,
+        {
+          cluster_id: cluster.id,
+          voc_id: voc.id,
+          added_by: args.actor.actor_id,
+          added_at: new Date(),
+          primary_managed_system_id: voc.primaryManagedSystemId,
+          reporter_id: voc.reporterId,
+          archived_at: voc.archivedAt,
+        },
         voc.primaryManagedSystemId,
-        voc.reporterId,
-        { tx },
       );
       if (!sourceReadable) throw new HttpError('not_found.record', 'voc not found');
       if (voc.primaryManagedSystemId !== cluster.primary_managed_system_id) {
@@ -584,18 +574,15 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       const membershipAndVoc = (await listVocClusterMembers(tx, { clusterId: cluster.id })).find(
         (member) => member.voc_id === args.vocId,
       );
-      const sourceReadable = await canReadSourceVoc(
-        deps,
-        args.actor,
-        membershipAndVoc?.primary_managed_system_id ?? cluster.primary_managed_system_id,
-        membershipAndVoc?.reporter_id ?? '',
-        { tx },
-      );
+      const readScope = await actorReadScope(tx, args.actor);
       if (
         !membershipAndVoc ||
-        membershipAndVoc.archived_at !== null ||
-        membershipAndVoc.primary_managed_system_id !== cluster.primary_managed_system_id ||
-        !sourceReadable
+        !isAuthorizedMember(
+          readScope,
+          args.actor.actor_id,
+          membershipAndVoc,
+          cluster.primary_managed_system_id,
+        )
       ) {
         throw new HttpError('not_found.record', 'voc cluster member not found');
       }
@@ -655,9 +642,10 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     if (!(await canManageCluster(deps, args.actor, cluster.primary_managed_system_id))) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
-    const members = await authorizedMembers(
-      deps,
-      args.actor,
+    const readScope = await actorReadScope(deps.db, args.actor);
+    const members = authorizedMembers(
+      readScope,
+      args.actor.actor_id,
       await listVocClusterMembers(deps.db, { clusterId: cluster.id }),
       cluster.primary_managed_system_id,
     );

@@ -33,6 +33,7 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
   let clusterId: string;
   let memberVocId: string;
   let secondMemberVocId: string;
+  let archivedMemberVocId: string;
 
   const headers = (cookie: string) => ({
     cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
@@ -74,7 +75,7 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
           [WORKSPACE_ID, `cluster-bulk-${randomUUID()}`, 'Cluster bulk update'],
         )
       ).rows[0]?.id ?? '';
-    for (const capability of ['finding.read', 'finding.manage']) {
+    for (const capability of ['voc.read', 'finding.read', 'finding.manage']) {
       await grantCapability(ops, {
         workspaceId: WORKSPACE_ID,
         actorId: managerId,
@@ -106,12 +107,28 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
         title: 'Second bulk member',
       })
     ).id;
+    archivedMemberVocId = (
+      await insertVocRow(ops, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msId,
+        reporterId: adminId,
+        title: 'Archived hidden member',
+      })
+    ).id;
     await insertVocClusterMemberRow(ops, { clusterId, vocId: memberVocId, addedBy: adminId });
     await insertVocClusterMemberRow(ops, {
       clusterId,
       vocId: secondMemberVocId,
       addedBy: adminId,
     });
+    await insertVocClusterMemberRow(ops, {
+      clusterId,
+      vocId: archivedMemberVocId,
+      addedBy: adminId,
+    });
+    await ops.pool.query('update voc.vocs set archived_at=now() where id=$1', [
+      archivedMemberVocId,
+    ]);
     managerCookie = await loginAs(app, externalId);
   });
 
@@ -130,7 +147,7 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
       ]);
       await ops.pool.query('delete from voc_cluster.voc_clusters where id=$1', [clusterId]);
       await ops.pool.query('delete from voc.vocs where id=any($1::uuid[])', [
-        [memberVocId, secondMemberVocId],
+        [memberVocId, secondMemberVocId, archivedMemberVocId],
       ]);
       await ops.pool.query('delete from permission.permission_grants where actor_id=$1', [
         managerId,
@@ -174,10 +191,22 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       outcomes: [
-        { voc_id: memberVocId, status: 'skipped', reason: 'not_found' },
-        { voc_id: secondMemberVocId, status: 'skipped', reason: 'not_found' },
+        { voc_id: memberVocId, status: 'skipped', reason: 'permission.denied' },
+        { voc_id: secondMemberVocId, status: 'skipped', reason: 'permission.denied' },
       ],
     });
+    const writes = await ops.pool.query<{ n: number }>(
+      'select count(*)::int n from voc.voc_public_updates where voc_id=any($1::uuid[])',
+      [[memberVocId, secondMemberVocId]],
+    );
+    expect(writes.rows[0]?.n).toBe(0);
+    const audits = await ops.pool.query<{ n: number }>(
+      `select count(*)::int n from core.audit_log
+       where subject_id=any($1::uuid[])
+         and event_type in ('public_update_created','reporter_facing_status_changed')`,
+      [[memberVocId, secondMemberVocId]],
+    );
+    expect(audits.rows[0]?.n).toBe(0);
   });
 
   it('makes a hidden member indistinguishable from an absent VOC in the response', async () => {
@@ -186,30 +215,15 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
       method: 'POST',
       url: `/voc-clusters/${clusterId}/apply-public-update-candidate`,
       headers: headers(managerCookie),
-      payload: { voc_ids: [memberVocId, absentId], public_update: publicUpdate },
+      payload: { voc_ids: [archivedMemberVocId, absentId], public_update: publicUpdate },
     });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       outcomes: [
-        { voc_id: memberVocId, status: 'skipped', reason: 'not_found' },
+        { voc_id: archivedMemberVocId, status: 'skipped', reason: 'not_found' },
         { voc_id: absentId, status: 'skipped', reason: 'not_found' },
       ],
     });
-  });
-
-  it('does not write any public update for finding.manage without voc.triage', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: `/voc-clusters/${clusterId}/apply-public-update-candidate`,
-      headers: headers(managerCookie),
-      payload: { voc_ids: [memberVocId, secondMemberVocId], public_update: publicUpdate },
-    });
-    expect(response.statusCode).toBe(200);
-    const writes = await ops.pool.query<{ n: number }>(
-      'select count(*)::int n from voc.voc_public_updates where voc_id=any($1::uuid[])',
-      [[memberVocId, secondMemberVocId]],
-    );
-    expect(writes.rows[0]?.n).toBe(0);
   });
 
   it('applies through the per-VOC command and emits its normal audit', async () => {

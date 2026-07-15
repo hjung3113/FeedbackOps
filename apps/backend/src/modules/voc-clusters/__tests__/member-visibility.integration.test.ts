@@ -26,11 +26,14 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
   let appDb: DbHandle;
   let ops: DbHandle;
   let msId: string;
+  let scopedMsId: string;
   let clusterId: string;
+  let scopedClusterId: string;
   let ownerVocId: string;
   let hiddenVocId: string;
   let triageOwnedVocId: string;
   let nonMemberVocId: string;
+  let scopedVocIds: string[];
   let developerCookie: string;
   let triageOnlyCookie: string;
   let adminId: string;
@@ -70,6 +73,13 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
       [WORKSPACE_ID, `cluster-member-${randomUUID()}`, 'Cluster member visibility'],
     );
     msId = ms.rows[0]?.id ?? '';
+    scopedMsId =
+      (
+        await ops.pool.query<{ id: string }>(
+          'insert into core.managed_systems(workspace_id,slug,name) values($1,$2,$3) returning id',
+          [WORKSPACE_ID, `cluster-member-scoped-${randomUUID()}`, 'Scoped member visibility'],
+        )
+      ).rows[0]?.id ?? '';
     for (const actorId of [developer.id, triageOnly.id]) {
       await grantCapability(ops, {
         workspaceId: WORKSPACE_ID,
@@ -86,6 +96,15 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
       managedSystemId: msId,
       grantedByActorId: adminId,
     });
+    for (const capability of ['finding.read', 'voc.read']) {
+      await grantCapability(ops, {
+        workspaceId: WORKSPACE_ID,
+        actorId: developer.id,
+        capability,
+        managedSystemId: scopedMsId,
+        grantedByActorId: adminId,
+      });
+    }
     await grantCapability(ops, {
       workspaceId: WORKSPACE_ID,
       actorId: triageOnly.id,
@@ -98,6 +117,14 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
         workspaceId: WORKSPACE_ID,
         primaryManagedSystemId: msId,
         createdBy: adminId,
+      })
+    ).id;
+    scopedClusterId = (
+      await insertVocClusterRow(ops, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: scopedMsId,
+        createdBy: adminId,
+        title: 'VOC-read scoped cluster',
       })
     ).id;
     ownerVocId = (
@@ -132,6 +159,19 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
         title: 'Existing non-member',
       })
     ).id;
+    scopedVocIds = await Promise.all(
+      ['Scoped member one', 'Scoped member two'].map(
+        async (title) =>
+          (
+            await insertVocRow(ops, {
+              workspaceId: WORKSPACE_ID,
+              primaryManagedSystemId: scopedMsId,
+              reporterId: adminId,
+              title,
+            })
+          ).id,
+      ),
+    );
     await insertVocClusterMemberRow(ops, { clusterId, vocId: ownerVocId, addedBy: adminId });
     await insertVocClusterMemberRow(ops, { clusterId, vocId: hiddenVocId, addedBy: adminId });
     await insertVocClusterMemberRow(ops, {
@@ -139,6 +179,13 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
       vocId: triageOwnedVocId,
       addedBy: adminId,
     });
+    for (const vocId of scopedVocIds) {
+      await insertVocClusterMemberRow(ops, {
+        clusterId: scopedClusterId,
+        vocId,
+        addedBy: adminId,
+      });
+    }
     developerCookie = await loginAs(
       app,
       (
@@ -161,18 +208,26 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
 
   afterAll(async () => {
     if (ops) {
-      await ops.pool.query('delete from core.audit_log where subject_id=$1', [clusterId]);
-      await ops.pool.query('delete from voc_cluster.voc_cluster_members where cluster_id=$1', [
-        clusterId,
+      await ops.pool.query('delete from core.audit_log where subject_id=any($1::uuid[])', [
+        [clusterId, scopedClusterId],
       ]);
-      await ops.pool.query('delete from voc_cluster.voc_clusters where id=$1', [clusterId]);
+      await ops.pool.query(
+        'delete from voc_cluster.voc_cluster_members where cluster_id=any($1::uuid[])',
+        [[clusterId, scopedClusterId]],
+      );
+      await ops.pool.query('delete from voc_cluster.voc_clusters where id=any($1::uuid[])', [
+        [clusterId, scopedClusterId],
+      ]);
       await ops.pool.query('delete from voc.vocs where id=any($1::uuid[])', [
-        [ownerVocId, hiddenVocId, triageOwnedVocId, nonMemberVocId],
+        [ownerVocId, hiddenVocId, triageOwnedVocId, nonMemberVocId, ...scopedVocIds],
       ]);
-      await ops.pool.query('delete from permission.permission_grants where managed_system_id=$1', [
-        msId,
+      await ops.pool.query(
+        'delete from permission.permission_grants where managed_system_id=any($1::uuid[])',
+        [[msId, scopedMsId]],
+      );
+      await ops.pool.query('delete from core.managed_systems where id=any($1::uuid[])', [
+        [msId, scopedMsId],
       ]);
-      await ops.pool.query('delete from core.managed_systems where id=$1', [msId]);
       await ops.pool.query(
         'delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
         [WORKSPACE_ID, 'cluster-member-%'],
@@ -223,6 +278,43 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
     expect(detail.statusCode).toBe(200);
     expect(detail.json()).toMatchObject({ member_count: 1 });
     expect(detail.json().members).toHaveLength(1);
+  });
+
+  it('reports an authorized-only member_count from the list projection', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/voc-clusters',
+      headers: headers(developerCookie),
+    });
+    expect(response.statusCode).toBe(200);
+    const cluster = response.json().items.find((item: { id: string }) => item.id === clusterId);
+    expect(cluster).toMatchObject({ id: clusterId, member_count: 1 });
+  });
+
+  it('applies voc.read scope to included and excluded Managed Systems', async () => {
+    const [inScope, outOfScope] = await Promise.all([
+      app.inject({
+        method: 'GET',
+        url: `/voc-clusters/${scopedClusterId}`,
+        headers: headers(developerCookie),
+      }),
+      app.inject({
+        method: 'GET',
+        url: `/voc-clusters/${clusterId}`,
+        headers: headers(developerCookie),
+      }),
+    ]);
+    expect(inScope.statusCode).toBe(200);
+    expect(inScope.json().members.map((member: { voc_id: string }) => member.voc_id)).toEqual(
+      expect.arrayContaining(scopedVocIds),
+    );
+    expect(inScope.json().members).toHaveLength(2);
+    expect(inScope.json().member_count).toBe(2);
+    expect(outOfScope.statusCode).toBe(200);
+    expect(outOfScope.json().members.map((member: { voc_id: string }) => member.voc_id)).toEqual([
+      ownerVocId,
+    ]);
+    expect(outOfScope.json().member_count).toBe(1);
   });
 
   it('does not let a triage-only effective scope reveal peer member rows', async () => {
