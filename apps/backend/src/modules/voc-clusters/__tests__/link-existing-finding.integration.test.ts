@@ -27,6 +27,7 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
   let clusterId: string;
   let targetFindingId: string;
   let targetDisplayId: string;
+  let deniedFindingId: string;
   let authorizedCookie: string;
   let blindCookie: string;
   let noManageCookie: string;
@@ -78,6 +79,15 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
     });
     targetFindingId = finding.id;
     targetDisplayId = finding.display_id;
+    deniedFindingId = (
+      await insertFindingRow(ops, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: targetMsId,
+        sourceId: clusterId,
+        createdBy: adminId,
+        status: 'active',
+      })
+    ).id;
     const authorized = await insertActorRow(ops, {
       workspaceId: WORKSPACE_ID,
       externalId: `link-authorized-${randomUUID()}`,
@@ -156,10 +166,13 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
         `delete from core.audit_log
          where workspace_id=$1
            and (subject_id=any($2::uuid[]) or detail->>'voc_cluster_id'=$3 or detail->'source'->>'id'=$3)`,
-        [WORKSPACE_ID, [clusterId, targetFindingId], clusterId],
+        [WORKSPACE_ID, [clusterId, targetFindingId, deniedFindingId], clusterId],
       );
-      await ops.pool.query('delete from core.entity_links where workspace_id=$1 and source_id=$2', [WORKSPACE_ID, clusterId]);
-      await ops.pool.query('delete from finding.findings where id=$1', [targetFindingId]);
+      await ops.pool.query(
+        'delete from core.entity_links where workspace_id=$1 and (source_id=$2 or target_id=any($3::uuid[]))',
+        [WORKSPACE_ID, clusterId, [targetFindingId, deniedFindingId]],
+      );
+      await ops.pool.query('delete from finding.findings where id=any($1::uuid[])', [[targetFindingId, deniedFindingId]]);
       await ops.pool.query('delete from voc_cluster.voc_clusters where id=$1', [clusterId]);
       await ops.pool.query('delete from permission.permission_grants where managed_system_id=any($1::uuid[])', [[clusterMsId, targetMsId]]);
       await ops.pool.query('delete from core.managed_systems where id=any($1::uuid[])', [[clusterMsId, targetMsId]]);
@@ -171,9 +184,10 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
     await ops?.close();
   });
 
-  const link = (cookie: string) => app.inject({
-    method: 'POST', url: `/voc-clusters/${clusterId}/link-finding`,
-    headers: { ...headers(cookie), 'idempotency-key': randomUUID() }, body: { finding_id: targetFindingId },
+  const link = (cookie: string, options: { clusterId?: string; findingId?: string } = {}) => app.inject({
+    method: 'POST', url: `/voc-clusters/${options.clusterId ?? clusterId}/link-finding`,
+    headers: { ...headers(cookie), 'idempotency-key': randomUUID() },
+    body: { finding_id: options.findingId ?? targetFindingId },
   });
 
   it('links as evidence, audits it, and hides the cross-MS target from a cluster reader without target scope', async () => {
@@ -201,12 +215,38 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
     expect(JSON.stringify(list.json())).not.toContain(targetFindingId);
   });
 
-  it('denies a readable target when the actor lacks finding.manage and hides an unreadable cluster', async () => {
-    const denied = await link(noManageCookie);
+  it('returns one byte-equivalent 404 envelope for missing or unreadable cluster and target', async () => {
+    const responses = await Promise.all([
+      link(authorizedCookie, { clusterId: randomUUID() }),
+      link(unscopedCookie),
+      link(authorizedCookie, { findingId: randomUUID() }),
+      link(blindCookie),
+    ]);
+    for (const response of responses) expect(response.statusCode).toBe(404);
+    expect(new Set(responses.map((response) => response.body))).toEqual(
+      new Set(['{"code":"not_found.record","message":"record not found"}']),
+    );
+  });
+
+  it('denies a readable target without manage scope and writes neither link nor audit row', async () => {
+    const before = await ops.pool.query<{ links: string; audits: string }>(
+      `select
+        (select count(*)::text from core.entity_links where source_id=$1 and target_id=$2) as links,
+        (select count(*)::text from core.audit_log where subject_id=$2 and event_type='finding_linked_to_voc_cluster') as audits`,
+      [clusterId, deniedFindingId],
+    );
+    const denied = await link(noManageCookie, { findingId: deniedFindingId });
     expect(denied.statusCode).toBe(403);
-    expect(denied.json<{ code: string }>().code).toBe('permission.denied');
-    const hidden = await link(unscopedCookie);
-    expect(hidden.statusCode).toBe(404);
+    expect(denied.json<{ code: string }>().code).toBe('permission.scope_required');
+    const blindDenied = await link(blindCookie, { findingId: deniedFindingId });
+    expect(blindDenied.statusCode).toBe(404);
+    const after = await ops.pool.query<{ links: string; audits: string }>(
+      `select
+        (select count(*)::text from core.entity_links where source_id=$1 and target_id=$2) as links,
+        (select count(*)::text from core.audit_log where subject_id=$2 and event_type='finding_linked_to_voc_cluster') as audits`,
+      [clusterId, deniedFindingId],
+    );
+    expect(after.rows).toEqual(before.rows);
   });
 
   it('returns the existing link on a duplicate without creating a second audit row', async () => {

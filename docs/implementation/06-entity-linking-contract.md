@@ -124,7 +124,6 @@ set. As of #134, direct creation is allowed for these tuples:
 (voc, finding, created_finding)
 (voc, finding, evidence_of)
 (voc_cluster, finding, created_finding)
-(voc_cluster, finding, evidence_of)
 (finding, task_request, requested_task)
 (task_request, task, converted_to)
 (finding, task, requested_task)
@@ -138,6 +137,10 @@ created by routes, not by direct `POST /entity-links`:
 (voc, task_request, requested_task)
 (voc_cluster, task_request, requested_task)
 ```
+
+`(voc_cluster, finding, evidence_of)` is registered for DB validation and is
+created only by `POST /voc-clusters/:id/link-finding`; it is intentionally not
+available through generic `POST /entity-links` or generic link listings.
 
 Independent value CHECKs are forbidden because they would admit invalid tuples.
 Creatable visibility stays `internal_only`.

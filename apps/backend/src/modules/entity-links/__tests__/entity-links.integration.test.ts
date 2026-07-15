@@ -383,7 +383,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     }
   });
 
-  it('POST and GET honor every shared registered entity-link tuple', async () => {
+  it('POST honors generic tuples while leaving command-only tuples to their domain route', async () => {
     const { endpoints, vocTarget } = await seedRegisteredTupleEndpoints();
 
     for (const tuple of registeredEntityLinkPairs) {
@@ -397,7 +397,16 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         target: { type: tuple.target_type, id: target.id },
         relation_type: tuple.relation_type,
       });
-      expect(created.statusCode, JSON.stringify(tuple)).toBeGreaterThanOrEqual(200);
+      if (
+        tuple.source_type === 'voc_cluster' &&
+        tuple.target_type === 'finding' &&
+        tuple.relation_type === 'evidence_of'
+      ) {
+        expect(created.statusCode, JSON.stringify(tuple)).toBe(422);
+        continue;
+      } else {
+        expect(created.statusCode, JSON.stringify(tuple)).toBeGreaterThanOrEqual(200);
+      }
       expect(created.statusCode, JSON.stringify(tuple)).toBeLessThanOrEqual(201);
       const createdBody = created.json<{
         id: string;
@@ -514,16 +523,48 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ items: Array<Record<string, unknown>> }>();
-    expect(body.items).toHaveLength(2);
+    expect(body.items).toHaveLength(1);
     expect(
       body.items.some(
         (item) => item.visibility_state === 'allowed' && item.target_id === allowedTarget.id,
       ),
     ).toBe(true);
-    const hidden = body.items.find((item) => item.visibility_state === 'hidden');
-    expect(hidden).toBeDefined();
-    expect(hidden?.target_id).toBeUndefined();
-    expect(hidden?.source_id).toBeUndefined();
+    expect(body.items.some((item) => item.target_id === hiddenTarget.id)).toBe(false);
+  });
+
+  it('generic endpoints neither create nor disclose command-only cluster Finding evidence links', async () => {
+    const msA = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-cmd-a`, 'Command source MS');
+    const msB = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-cmd-b`, 'Command target MS');
+    const sourceVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msA, reporterId, 'Command source VOC');
+    const cluster = await insertVocClusterRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: 'Command-only cluster',
+      createdBy: adminActorId,
+    });
+    const finding = await seedFindingDirectly({ managedSystemId: msB, sourceVocId: sourceVoc.id });
+    const linkId = await seedEntityLinkDirectly({
+      sourceType: 'voc_cluster',
+      sourceId: cluster.id,
+      targetType: 'finding',
+      targetId: finding.id,
+      relationType: 'evidence_of',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('cmd-only'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'finding.read', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const create = await postEntityLink(devCookie, cluster.id, finding.id, {
+      source: { type: 'voc_cluster', id: cluster.id },
+      target: { type: 'finding', id: finding.id },
+      relation_type: 'evidence_of',
+    });
+    expect(create.statusCode).toBe(422);
+    const listed = await getEntityLinks(devCookie, `?source_type=voc_cluster&source_id=${cluster.id}`);
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId)).toBe(false);
   });
 
   it('GET by VOC source accepts managed-system scoped voc.triage without voc.read', async () => {

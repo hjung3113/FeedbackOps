@@ -395,8 +395,19 @@ function providerFor(type: EntityLinkEntityType): EntityLinkProvider {
   return entityLinkProviders[type];
 }
 
-const creatableEntityLinkPairs = registeredEntityLinkPairs;
-const listVisibleEntityLinkPairs = registeredEntityLinkPairs;
+// The registry is the DB/audit allowlist. Some registered tuples are written only by
+// domain commands, whose compound authorization and audit obligations cannot be
+// represented by the generic endpoints.
+const genericEntityLinkPairs = registeredEntityLinkPairs.filter(
+  (pair) =>
+    !(
+      pair.source_type === 'voc_cluster' &&
+      pair.target_type === 'finding' &&
+      pair.relation_type === 'evidence_of'
+    ),
+);
+const creatableEntityLinkPairs = genericEntityLinkPairs;
+const listVisibleEntityLinkPairs = genericEntityLinkPairs;
 
 function tupleListIncludes(
   pairs: readonly EntityLinkPair[],
@@ -647,6 +658,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
+      if (decision === 'hidden') continue;
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
       items.push(toDtoForDecision(row, decision, undefined, targetSummary));
@@ -672,6 +684,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
+      if (decision === 'hidden') continue;
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
       items.push(toDtoForDecision(row, decision, undefined, targetSummary));

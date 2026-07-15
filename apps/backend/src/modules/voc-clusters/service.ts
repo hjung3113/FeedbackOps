@@ -317,12 +317,10 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       workspaceId: args.actor.workspace_id,
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
     });
-    const readableRows: VocClusterRow[] = [];
-    for (const row of rows) {
-      const readable = await canReadCluster(deps, args.actor, row.primary_managed_system_id);
-      if (!readable) continue;
-      readableRows.push(row);
-    }
+    const findingReadScope = await actorFindingReadScope(deps.db, args.actor);
+    const readableRows = rows.filter((row) =>
+      isInScope(findingReadScope, row.primary_managed_system_id),
+    );
     const readScope = await actorReadScope(deps.db, args.actor);
     const membersByCluster = await authorizedMembersByCluster(
       deps,
@@ -330,7 +328,6 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       readScope,
       readableRows,
     );
-    const findingReadScope = await actorFindingReadScope(deps.db, args.actor);
     const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
       workspaceId: args.actor.workspace_id,
       clusterIds: readableRows.map((row) => row.id),
@@ -762,7 +759,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             workspaceId: args.actor.workspace_id,
             clusterId: args.clusterId,
           });
-          if (!cluster) throw new HttpError('not_found.record', 'voc cluster not found');
+          if (!cluster) throw new HttpError('not_found.record', 'record not found');
 
           const canManageClusterScope = await canManageCluster(
             deps,
@@ -923,11 +920,11 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             workspaceId: args.actor.workspace_id,
             clusterId: args.clusterId,
           });
-          if (!cluster) throw new HttpError('not_found.record', 'voc cluster not found');
+          if (!cluster) throw new HttpError('not_found.record', 'record not found');
 
           const findingReadScope = await actorFindingReadScope(tx, args.actor);
           if (!isInScope(findingReadScope, cluster.primary_managed_system_id)) {
-            throw new HttpError('not_found.record', 'voc cluster not found');
+            throw new HttpError('not_found.record', 'record not found');
           }
 
           const finding = await lockFindingById(tx, {
@@ -935,14 +932,54 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             findingId: args.input.finding_id,
           });
           if (!finding || !isInScope(findingReadScope, finding.primary_managed_system_id)) {
-            throw new HttpError('not_found.record', 'finding not found');
+            throw new HttpError('not_found.record', 'record not found');
           }
 
-          const [canManageClusterScope, canManageFindingScope] = await Promise.all([
-            canManageCluster(deps, args.actor, cluster.primary_managed_system_id, { tx }),
-            canManageCluster(deps, args.actor, finding.primary_managed_system_id, { tx }),
+          const [clusterManageDecision, findingManageDecision] = await Promise.all([
+            deps.checkService.checkCapability(
+              args.actor,
+              'finding.manage',
+              {
+                workspace_id: args.actor.workspace_id,
+                managed_system_id: cluster.primary_managed_system_id,
+              },
+              { tx },
+            ),
+            deps.checkService.checkCapability(
+              args.actor,
+              'finding.manage',
+              {
+                workspace_id: args.actor.workspace_id,
+                managed_system_id: finding.primary_managed_system_id,
+              },
+              { tx },
+            ),
           ]);
-          if (!canManageClusterScope || !canManageFindingScope) {
+          if (!clusterManageDecision.allow || !findingManageDecision.allow) {
+            const missingScope = [clusterManageDecision, findingManageDecision].some(
+              (decision) => !decision.allow && decision.reason === 'no_grant',
+            );
+            if (args.actor.role_level === 'developer' && missingScope) {
+              throw new HttpError(
+                'permission.scope_required',
+                'finding.manage capability required; developer needs MS-scoped grant',
+                {
+                  requiredScope: [
+                    ...new Set(
+                      [
+                        !clusterManageDecision.allow
+                          ? cluster.primary_managed_system_id
+                          : undefined,
+                        !findingManageDecision.allow
+                          ? finding.primary_managed_system_id
+                          : undefined,
+                      ].filter((id): id is string => id !== undefined),
+                    ),
+                  ],
+                  requestable_permission: { permission: 'finding.manage' },
+                },
+              );
+            }
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 

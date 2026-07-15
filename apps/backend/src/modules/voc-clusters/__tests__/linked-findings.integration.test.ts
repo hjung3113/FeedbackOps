@@ -9,7 +9,7 @@ import { createIdempotencyService } from '../../core/idempotency/idempotency-ser
 import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
 import { createCheckService } from '../../permissions/check-service.js';
 import { type VocClustersService, createVocClustersService } from '../service.js';
-import { insertVocClusterRow } from './_seed-helpers.js';
+import { grantCapability, insertActorRow, insertVocClusterRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -71,6 +71,9 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
 
   afterAll(async () => {
     if (migrateHandle) {
+      await migrateHandle.pool.query('delete from core.entity_links where workspace_id = $1', [
+        workspaceId,
+      ]);
       await migrateHandle.pool.query('delete from finding.findings where workspace_id = $1', [
         workspaceId,
       ]);
@@ -209,44 +212,68 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
     expect(detail.member_count).toBe(detail.members?.length);
   });
 
-  it('listClusters batches linked finding lookup and returns arrays for clusters with and without findings', async () => {
-    const withFinding = await seedCluster('Linked list cluster');
-    const withoutFinding = await seedCluster('Unlinked list cluster');
-    const finding = await insertFindingRow(migrateHandle, {
+  it('listClusters resolves scoped authorization in a row-count-invariant number of database operations', async () => {
+    const scopedDeveloper = await insertActorRow(migrateHandle, {
       workspaceId,
-      primaryManagedSystemId: managedSystemId,
-      title: 'Linked list finding',
-      sourceType: 'voc_cluster',
-      sourceId: withFinding.id,
-      status: 'not_actionable',
-      createdBy: adminActorId,
+      externalId: `cluster-linked-scoped-${workspaceId}`,
+      roleLevel: 'developer',
     });
-    await seedFindingLink(withFinding.id, finding.id);
-
-    let executeCount = 0;
-    const countingDb = new Proxy(dbHandle.db, {
-      get(target, prop, receiver) {
-        if (prop !== 'execute') return Reflect.get(target, prop, receiver);
-        return (...args: Parameters<Db['execute']>) => {
-          executeCount += 1;
-          return target.execute(...args);
-        };
-      },
-    }) as Db;
-    const countingService = createVocClustersService({
-      db: countingDb,
-      auditService: createAuditService(),
-      checkService: createCheckService({ db: countingDb }),
-      idempotencyService: createIdempotencyService(),
+    await grantCapability(migrateHandle, {
+      workspaceId,
+      actorId: scopedDeveloper.id,
+      capability: 'finding.read',
+      managedSystemId,
+      grantedByActorId: adminActorId,
     });
+    const scopedActor = {
+      actor_id: scopedDeveloper.id,
+      workspace_id: workspaceId,
+      role_level: 'developer' as const,
+    };
+    const countDatabaseOperations = async () => {
+      let count = 0;
+      const countingDb = new Proxy(dbHandle.db, {
+        get(target, prop, receiver) {
+          const value = Reflect.get(target, prop, receiver);
+          if (
+            typeof value !== 'function' ||
+            !['execute', 'select', 'insert', 'update', 'delete', 'transaction'].includes(String(prop))
+          ) {
+            return value;
+          }
+          return (...args: unknown[]) => {
+            count += 1;
+            return Reflect.apply(value, target, args);
+          };
+        },
+      }) as Db;
+      const countingService = createVocClustersService({
+        db: countingDb,
+        auditService: createAuditService(),
+        checkService: createCheckService({ db: countingDb }),
+        idempotencyService: createIdempotencyService(),
+      });
+      const list = await countingService.listClusters({ actor: scopedActor, managedSystemId });
+      return { count, list };
+    };
 
-    const list = await countingService.listClusters({ actor: actor(), managedSystemId });
-
-    expect(executeCount).toBe(2);
-    expect(list.items.find((item) => item.id === withFinding.id)?.linked_findings).toEqual([
-      { id: finding.id, display_id: finding.display_id, status: 'not_actionable' },
+    const baselineClusters = await Promise.all([
+      seedCluster('Scoped query baseline 1'),
+      seedCluster('Scoped query baseline 2'),
     ]);
-    expect(list.items.find((item) => item.id === withoutFinding.id)?.linked_findings).toEqual([]);
+    const baseline = await countDatabaseOperations();
+    await Promise.all([
+      seedCluster('Scoped query expanded 1'),
+      seedCluster('Scoped query expanded 2'),
+      seedCluster('Scoped query expanded 3'),
+    ]);
+    const expanded = await countDatabaseOperations();
+
+    expect(baseline.list.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining(baselineClusters.map((cluster) => cluster.id)),
+    );
+    expect(expanded.list.items.length).toBeGreaterThan(baseline.list.items.length);
+    expect(expanded.count).toBe(baseline.count);
   });
 
   it('getCluster and listClusters return an empty linked_findings array when no findings exist', async () => {

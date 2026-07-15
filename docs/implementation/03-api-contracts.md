@@ -636,7 +636,7 @@ records. Cluster merge and split endpoints are out of scope for MVP.
 | Create-finding denial | Source-unreadable ⇒ `404 not_found.record` (hidden); readable-but-no-`finding.manage` ⇒ `403 permission.denied` (mirrors ADR-0024 §C). |
 | Idempotency | `Idempotency-Key`-scoped (same as `POST /vocs/:id/create-finding`): same key replays the same finding; distinct keys create distinct findings. |
 | Linked Findings visibility | `linked_findings` on both list and detail contains every active `created_finding` or `evidence_of` Finding link that is readable under Admin or `finding.read` on that Finding's own Primary Managed System. Unreadable targets are omitted entirely, including from list projections. |
-| Audit events | `voc_cluster_created`, `voc_cluster_updated`, `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`, `task_request_created_from_voc_cluster`. |
+| Audit events | `voc_cluster_created`, `voc_cluster_updated`, `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`, `finding_linked_to_voc_cluster`, `entity_link.created`, `task_request_created_from_voc_cluster`. |
 
 ### Task Request Create From VOC / VOC Cluster Contract
 
