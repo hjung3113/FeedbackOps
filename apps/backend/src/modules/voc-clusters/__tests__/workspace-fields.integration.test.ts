@@ -88,6 +88,7 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
       await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
         managedSystemId,
       ]);
+      await migrateDb.pool.query('delete from core.sessions where actor_id = $1', [reConfirmerId]);
       await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [
         [ownerId, reConfirmerId],
       ]);
