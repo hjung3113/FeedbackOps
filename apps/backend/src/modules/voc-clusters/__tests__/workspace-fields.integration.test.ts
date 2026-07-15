@@ -8,7 +8,7 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { loginAs } from '../../voc/__tests__/_seed-helpers.js';
-import { insertActorRow } from './_seed-helpers.js';
+import { grantCapability, insertActorRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -22,6 +22,8 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
   let app: FastifyInstance;
   let adminCookie: string;
   let adminId: string;
+  let reConfirmerCookie: string;
+  let reConfirmerId: string;
   let ownerId: string;
   let managedSystemId: string;
 
@@ -54,6 +56,23 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
     );
     managedSystemId = ms.rows[0]?.id ?? '';
     if (!managedSystemId) throw new Error('seed managed system failed');
+
+    const reConfirmerExternalId = `${SLUG_PREFIX}-re-confirmer-${randomUUID()}`;
+    reConfirmerId = (
+      await insertActorRow(migrateDb, {
+        workspaceId: WORKSPACE_ID,
+        externalId: reConfirmerExternalId,
+        roleLevel: 'developer',
+      })
+    ).id;
+    await grantCapability(migrateDb, {
+      workspaceId: WORKSPACE_ID,
+      actorId: reConfirmerId,
+      capability: 'finding.manage',
+      managedSystemId,
+      grantedByActorId: adminId,
+    });
+    reConfirmerCookie = await loginAs(app, reConfirmerExternalId);
   });
 
   beforeEach(async () => {
@@ -63,10 +82,15 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
   afterAll(async () => {
     await cleanupClusters();
     if (migrateDb) {
+      await migrateDb.pool.query('delete from permission.permission_grants where actor_id = $1', [
+        reConfirmerId,
+      ]);
       await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
         managedSystemId,
       ]);
-      await migrateDb.pool.query('delete from core.actors where id = $1', [ownerId]);
+      await migrateDb.pool.query('delete from core.actors where id = any($1::uuid[])', [
+        [ownerId, reConfirmerId],
+      ]);
     }
     await app?.close();
     await appDb?.close();
@@ -116,11 +140,18 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
     });
   }
 
-  function updateCluster(clusterId: string, payload: Record<string, unknown>) {
+  function updateCluster(
+    clusterId: string,
+    payload: Record<string, unknown>,
+    cookie = adminCookie,
+  ) {
     return app.inject({
       method: 'PATCH',
       url: `/voc-clusters/${clusterId}`,
-      headers: headers(),
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'content-type': 'application/json',
+      },
       payload,
     });
   }
@@ -279,12 +310,13 @@ describe.skipIf(!runIntegration)('VOC cluster workspace fields', () => {
       },
     });
 
-    const second = await updateCluster(clusterId, { status: 'confirmed' });
+    const second = await updateCluster(clusterId, { status: 'confirmed' }, reConfirmerCookie);
     expect(second.statusCode).toBe(200);
     expect(second.json()).toMatchObject({
       confirmed_by: adminId,
       confirmed_at: firstBody.confirmed_at,
     });
+    expect(second.json()).not.toMatchObject({ confirmed_by: reConfirmerId });
   });
 
   it.each([
