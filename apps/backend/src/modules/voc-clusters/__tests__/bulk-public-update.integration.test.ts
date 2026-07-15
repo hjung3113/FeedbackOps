@@ -189,10 +189,11 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
       payload: { voc_ids: [memberVocId, secondMemberVocId], public_update: publicUpdate },
     });
     expect(response.statusCode).toBe(200);
+    // This canonical code proves the apply path delegated to the per-VOC command.
     expect(response.json()).toEqual({
       outcomes: [
-        { voc_id: memberVocId, status: 'skipped', reason: 'permission.denied' },
-        { voc_id: secondMemberVocId, status: 'skipped', reason: 'permission.denied' },
+        { voc_id: memberVocId, status: 'skipped', reason: 'permission.scope_required' },
+        { voc_id: secondMemberVocId, status: 'skipped', reason: 'permission.scope_required' },
       ],
     });
     const writes = await ops.pool.query<{ n: number }>(
