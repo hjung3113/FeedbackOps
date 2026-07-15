@@ -523,13 +523,16 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ items: Array<Record<string, unknown>> }>();
-    expect(body.items).toHaveLength(1);
+    expect(body.items).toHaveLength(2);
     expect(
       body.items.some(
         (item) => item.visibility_state === 'allowed' && item.target_id === allowedTarget.id,
       ),
     ).toBe(true);
-    expect(body.items.some((item) => item.target_id === hiddenTarget.id)).toBe(false);
+    const hidden = body.items.find((item) => item.visibility_state === 'hidden');
+    expect(hidden).toBeDefined();
+    expect(hidden?.target_id).toBeUndefined();
+    expect(hidden?.source_id).toBeUndefined();
   });
 
   it('generic endpoints neither create nor disclose command-only cluster Finding evidence links', async () => {
