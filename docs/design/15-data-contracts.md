@@ -220,6 +220,21 @@ Read DTO extensions:
 - linked_findings: optional array of { id, display_id, status }
 ```
 
+Candidate-peer picker DTO (separate read endpoint):
+
+```text
+ListSameManagedSystemCandidatePeersResponse
+- candidate_basis: literal(same_managed_system_active_voc), required
+- candidates: array of SameManagedSystemCandidatePeerDto, required
+
+SameManagedSystemCandidatePeerDto
+- voc_id: uuid, required
+- display_id: text, required
+- title: text, required
+- severity: enum(low, medium, high, critical), nullable, required
+- reporter_facing_status: text, required
+```
+
 Rules:
 
 ```text
@@ -241,6 +256,14 @@ Rules:
 - Member enrichment fields are additive and optional. They are returned only
   for authorized members; unreadable and corrupt cross-System memberships are
   absent rather than masked or represented by placeholders.
+- `candidate_basis` deliberately names the temporary same-Managed-System active-
+  VOC heuristic. Candidate peers are membership-picker options, not semantic
+  matches or cluster recommendations; real embedding similarity belongs to
+  epic #168. The DTO must not add a similarity score, confidence, or rationale.
+- Candidate peers exclude existing members/source VOCs, archived VOCs, and
+  cross-Managed-System VOCs. Candidate item visibility is Admin, `voc.read` on
+  the candidate Managed System, or reporter ownership. Triage-only/effective
+  summary scope grants no candidate visibility; unreadable candidates are absent.
 ```
 
 ## Task Request

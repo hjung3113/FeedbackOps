@@ -37,6 +37,17 @@ export interface VocClusterMemberRow {
   archived_at?: Date | null;
 }
 
+export interface SameManagedSystemCandidatePeerRow {
+  voc_id: string;
+  display_id: string;
+  title: string;
+  severity: 'low' | 'medium' | 'high' | 'critical' | null;
+  reporter_facing_status: string;
+  primary_managed_system_id: string;
+  reporter_id: string;
+  archived_at: Date | null;
+}
+
 function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
@@ -93,6 +104,19 @@ function mapMemberRow(row: Record<string, unknown>): VocClusterMemberRow {
     ...(row.archived_at !== undefined
       ? { archived_at: row.archived_at === null ? null : toDate(row.archived_at as Date | string) }
       : {}),
+  };
+}
+
+function mapCandidatePeerRow(row: Record<string, unknown>): SameManagedSystemCandidatePeerRow {
+  return {
+    voc_id: row.voc_id as string,
+    display_id: row.display_id as string,
+    title: row.title as string,
+    severity: (row.severity as SameManagedSystemCandidatePeerRow['severity']) ?? null,
+    reporter_facing_status: row.reporter_facing_status as string,
+    primary_managed_system_id: row.primary_managed_system_id as string,
+    reporter_id: row.reporter_id as string,
+    archived_at: row.archived_at === null ? null : toDate(row.archived_at as Date | string),
   };
 }
 
@@ -343,6 +367,28 @@ export async function listVocClusterMembersForClusters(
     ORDER BY m.cluster_id, m.added_at DESC, m.voc_id DESC
   `);
   return result.rows.map(mapMemberRow);
+}
+
+export async function listSameManagedSystemCandidatePeers(
+  db: Db | Tx,
+  input: { workspaceId: string; clusterId: string; primaryManagedSystemId: string },
+): Promise<SameManagedSystemCandidatePeerRow[]> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT v.id AS voc_id, v.display_id, v.title, v.severity, v.reporter_facing_status,
+           v.primary_managed_system_id, v.reporter_id, v.archived_at
+    FROM voc.vocs v
+    WHERE v.workspace_id = ${input.workspaceId}
+      AND v.primary_managed_system_id = ${input.primaryManagedSystemId}
+      AND v.archived_at IS NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM voc_cluster.voc_cluster_members m
+        WHERE m.cluster_id = ${input.clusterId}
+          AND m.voc_id = v.id
+      )
+    ORDER BY v.created_at DESC, v.id DESC
+  `);
+  return result.rows.map(mapCandidatePeerRow);
 }
 
 export async function insertVocClusterMember(

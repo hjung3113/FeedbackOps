@@ -140,6 +140,32 @@ export const vocClustersRoutes: FastifyPluginAsync<VocClustersRoutesOptions> = a
   });
 
   app.route({
+    method: 'GET',
+    url: '/voc-clusters/:id/candidate-peers',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const result = await vocClustersService.listCandidatePeers({
+        actor: actorFromSession({
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        }),
+        clusterId: id,
+      });
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
+    },
+  });
+
+  app.route({
     method: 'PATCH',
     url: '/voc-clusters/:id',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
