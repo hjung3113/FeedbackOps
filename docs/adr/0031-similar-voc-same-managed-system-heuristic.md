@@ -19,7 +19,19 @@ must preserve the VOC permission boundary.
 same primary Managed System, excluding the source VOC. All reporter-facing
 statuses and all ages are eligible. This is deliberately a weak heuristic, not
 #127 clustering, which remains manual/confirmed; real similarity is deferred to
-#127 / Phase-1.
+#168 / Phase-1.
+
+> **Amended 2026-07-15 (#127 ARCHITECT audit).** This decision originally
+> deferred real similarity to "#127 / Phase-1". That was wrong: #127 is a UI
+> workspace slice and carries no similarity infrastructure. An audit at develop
+> `68f121e` confirmed the repository has no pgvector, no pg_trgm, no embedding
+> store or worker, no similarity score, no threshold, no dismissal state, and no
+> recommendation table — the same-MS peer query described here is still the only
+> implemented "similarity". Real embedding similarity is therefore re-assigned to
+> epic **#168**. #127 ships this heuristic as explicitly labelled temporary
+> scaffolding and does NOT widen `voc_clusters.status` to `suggested`;
+> recommendations are modelled as a separate DTO/state machine whose
+> confirmation creates a `draft`/`confirmed` cluster (#127 decision D1).
 
 A peer is visible only when its Managed System is in the actor's `voc.read`
 scope or the actor reported that peer. A triage-only summary envelope exposes
