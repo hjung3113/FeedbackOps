@@ -1,11 +1,14 @@
 import {
   type AddVocClusterMemberRequest,
+  type ApplyVocClusterPublicUpdateRequest,
   type CreateFindingFromVocClusterRequest,
   type CreateVocClusterRequest,
   type ListVocClustersResponse,
   type UpdateVocClusterRequest,
   type VocClusterDto,
   type VocClusterMemberDto,
+  type VocClusterPublicUpdateCandidateRequest,
+  type VocClusterPublicUpdateOutcome,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
 
@@ -17,6 +20,8 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import { insertActiveEntityLink } from '../entity-links/repo.js';
 import { insertFinding } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
+import type { ConversationService } from '../voc/conversation-service.js';
+import { type Scope, actorReadScope } from '../voc/repo-read.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
 import {
   type CreatedFindingForClusterRow,
@@ -29,6 +34,7 @@ import {
   isAssignableClusterOwner,
   listCreatedFindingsForClusters,
   listVocClusterMembers,
+  listVocClusterMembersForClusters,
   listVocClustersByWorkspace,
   lockVocClusterById,
   updateVocCluster,
@@ -45,6 +51,7 @@ export interface VocClustersServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  postPublicUpdate?: ConversationService['postPublicUpdate'];
 }
 
 function memberToDto(row: VocClusterMemberRow): VocClusterMemberDto {
@@ -52,6 +59,12 @@ function memberToDto(row: VocClusterMemberRow): VocClusterMemberDto {
     voc_id: row.voc_id,
     added_by: row.added_by,
     added_at: row.added_at.toISOString(),
+    ...(row.display_id !== undefined ? { display_id: row.display_id } : {}),
+    ...(row.title !== undefined ? { title: row.title } : {}),
+    ...(row.severity !== undefined ? { severity: row.severity } : {}),
+    ...(row.reporter_facing_status !== undefined
+      ? { reporter_facing_status: row.reporter_facing_status }
+      : {}),
   };
 }
 
@@ -126,22 +139,58 @@ async function canManageCluster(
   return decision.allow;
 }
 
-async function canReadSourceVoc(
-  deps: Pick<VocClustersServiceDeps, 'checkService'>,
-  actor: VocClustersActor,
-  managedSystemId: string,
-  reporterId: string,
-  options?: Parameters<VocClustersServiceDeps['checkService']['checkCapability']>[3],
-): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.actor_id === reporterId) return true;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'voc.read',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
+function isAuthorizedMember(
+  readScope: Scope,
+  actorId: string,
+  member: VocClusterMemberRow,
+  clusterManagedSystemId: string,
+): boolean {
+  return (
+    member.archived_at === null &&
+    member.primary_managed_system_id === clusterManagedSystemId &&
+    member.reporter_id !== undefined &&
+    (readScope.kind === 'all' ||
+      readScope.managedSystemIds.includes(member.primary_managed_system_id) ||
+      member.reporter_id === actorId)
   );
-  return decision.allow;
+}
+
+function authorizedMembers(
+  readScope: Scope,
+  actorId: string,
+  members: VocClusterMemberRow[],
+  clusterManagedSystemId: string,
+): VocClusterMemberRow[] {
+  return members.filter((member) =>
+    isAuthorizedMember(readScope, actorId, member, clusterManagedSystemId),
+  );
+}
+
+async function authorizedMembersByCluster(
+  deps: Pick<VocClustersServiceDeps, 'db'>,
+  actor: VocClustersActor,
+  readScope: Scope,
+  clusters: VocClusterRow[],
+): Promise<Map<string, VocClusterMemberRow[]>> {
+  const visibleByCluster = new Map<string, VocClusterMemberRow[]>();
+  for (const cluster of clusters) visibleByCluster.set(cluster.id, []);
+  if (clusters.length === 0 || actor.role_level === 'admin') return visibleByCluster;
+
+  const members = await listVocClusterMembersForClusters(deps.db, {
+    clusterIds: clusters.map((cluster) => cluster.id),
+  });
+  const clusterManagedSystemById = new Map(
+    clusters.map((cluster) => [cluster.id, cluster.primary_managed_system_id]),
+  );
+  for (const member of members) {
+    const clusterManagedSystemId = clusterManagedSystemById.get(member.cluster_id);
+    if (
+      clusterManagedSystemId !== undefined &&
+      isAuthorizedMember(readScope, actor.actor_id, member, clusterManagedSystemId)
+    )
+      visibleByCluster.get(member.cluster_id)?.push(member);
+  }
+  return visibleByCluster;
 }
 
 async function assertTargetAnalyticsArea(args: {
@@ -248,6 +297,13 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       if (!readable) continue;
       readableRows.push(row);
     }
+    const readScope = await actorReadScope(deps.db, args.actor);
+    const membersByCluster = await authorizedMembersByCluster(
+      deps,
+      args.actor,
+      readScope,
+      readableRows,
+    );
     const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
       workspaceId: args.actor.workspace_id,
       clusterIds: readableRows.map((row) => row.id),
@@ -260,7 +316,17 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     }
     return {
       items: readableRows.map((row) =>
-        clusterToDto(row, undefined, linkedFindingsByClusterId.get(row.id) ?? []),
+        clusterToDto(
+          {
+            ...row,
+            member_count:
+              args.actor.role_level === 'admin'
+                ? row.member_count
+                : (membersByCluster.get(row.id)?.length ?? 0),
+          },
+          undefined,
+          linkedFindingsByClusterId.get(row.id) ?? [],
+        ),
       ),
     };
   }
@@ -276,12 +342,18 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     if (!row) throw new HttpError('not_found.record', 'voc cluster not found');
     const readable = await canReadCluster(deps, args.actor, row.primary_managed_system_id);
     if (!readable) throw new HttpError('not_found.record', 'voc cluster not found');
-    const members = await listVocClusterMembers(deps.db, { clusterId: row.id });
+    const readScope = await actorReadScope(deps.db, args.actor);
+    const members = authorizedMembers(
+      readScope,
+      args.actor.actor_id,
+      await listVocClusterMembers(deps.db, { clusterId: row.id }),
+      row.primary_managed_system_id,
+    );
     const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
       workspaceId: args.actor.workspace_id,
       clusterIds: [row.id],
     });
-    return clusterToDto(row, members, linkedFindings);
+    return clusterToDto({ ...row, member_count: members.length }, members, linkedFindings);
   }
 
   async function updateCluster(args: {
@@ -391,7 +463,17 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
           },
         });
       }
-      return { status: 200, body: clusterToDto(updated) };
+      const readScope = await actorReadScope(tx, args.actor);
+      const visibleMembers = authorizedMembers(
+        readScope,
+        args.actor.actor_id,
+        await listVocClusterMembers(tx, { clusterId: cluster.id }),
+        cluster.primary_managed_system_id,
+      );
+      return {
+        status: 200,
+        body: clusterToDto({ ...updated, member_count: visibleMembers.length }),
+      };
     });
   }
 
@@ -419,12 +501,20 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
 
       const voc = await selectVocForUpdate(tx, args.actor.workspace_id, args.input.voc_id);
       if (!voc || voc.archivedAt !== null) throw new HttpError('not_found.record', 'voc not found');
-      const sourceReadable = await canReadSourceVoc(
-        deps,
-        args.actor,
+      const readScope = await actorReadScope(tx, args.actor);
+      const sourceReadable = isAuthorizedMember(
+        readScope,
+        args.actor.actor_id,
+        {
+          cluster_id: cluster.id,
+          voc_id: voc.id,
+          added_by: args.actor.actor_id,
+          added_at: new Date(),
+          primary_managed_system_id: voc.primaryManagedSystemId,
+          reporter_id: voc.reporterId,
+          archived_at: voc.archivedAt,
+        },
         voc.primaryManagedSystemId,
-        voc.reporterId,
-        { tx },
       );
       if (!sourceReadable) throw new HttpError('not_found.record', 'voc not found');
       if (voc.primaryManagedSystemId !== cluster.primary_managed_system_id) {
@@ -481,6 +571,22 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
         throw new HttpError('permission.denied', 'finding.manage capability required');
       }
 
+      const membershipAndVoc = (await listVocClusterMembers(tx, { clusterId: cluster.id })).find(
+        (member) => member.voc_id === args.vocId,
+      );
+      const readScope = await actorReadScope(tx, args.actor);
+      if (
+        !membershipAndVoc ||
+        !isAuthorizedMember(
+          readScope,
+          args.actor.actor_id,
+          membershipAndVoc,
+          cluster.primary_managed_system_id,
+        )
+      ) {
+        throw new HttpError('not_found.record', 'voc cluster member not found');
+      }
+
       const deleted = await deleteVocClusterMember(tx, {
         clusterId: cluster.id,
         vocId: args.vocId,
@@ -503,6 +609,72 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
 
       return { status: 204, body: null };
     });
+  }
+
+  async function createPublicUpdateCandidate(args: {
+    actor: VocClustersActor;
+    clusterId: string;
+    input: VocClusterPublicUpdateCandidateRequest;
+  }) {
+    const cluster = await findVocClusterById(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      clusterId: args.clusterId,
+    });
+    if (!cluster) throw new HttpError('not_found.record', 'voc cluster not found');
+    if (!(await canManageCluster(deps, args.actor, cluster.primary_managed_system_id))) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+    return { candidate: args.input };
+  }
+
+  async function applyPublicUpdateCandidate(args: {
+    actor: VocClustersActor;
+    clusterId: string;
+    input: ApplyVocClusterPublicUpdateRequest;
+  }): Promise<{ outcomes: VocClusterPublicUpdateOutcome[] }> {
+    const postPublicUpdate = deps.postPublicUpdate;
+    if (!postPublicUpdate) throw new Error('postPublicUpdate dependency is not configured');
+    const cluster = await findVocClusterById(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      clusterId: args.clusterId,
+    });
+    if (!cluster) throw new HttpError('not_found.record', 'voc cluster not found');
+    if (!(await canManageCluster(deps, args.actor, cluster.primary_managed_system_id))) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+    const readScope = await actorReadScope(deps.db, args.actor);
+    const members = authorizedMembers(
+      readScope,
+      args.actor.actor_id,
+      await listVocClusterMembers(deps.db, { clusterId: cluster.id }),
+      cluster.primary_managed_system_id,
+    );
+    const visibleIds = new Set(members.map((member) => member.voc_id));
+    const outcomes: VocClusterPublicUpdateOutcome[] = [];
+    for (const vocId of [...new Set(args.input.voc_ids)]) {
+      if (!visibleIds.has(vocId)) {
+        outcomes.push({ voc_id: vocId, status: 'skipped', reason: 'not_found' });
+        continue;
+      }
+      try {
+        await deps.db.transaction((tx) =>
+          postPublicUpdate({
+            tx,
+            actor: args.actor,
+            vocId,
+            input: args.input.public_update,
+          }),
+        );
+        outcomes.push({ voc_id: vocId, status: 'applied' });
+      } catch (error) {
+        if (error instanceof HttpError) {
+          outcomes.push({ voc_id: vocId, status: 'skipped', reason: error.code });
+          continue;
+        }
+        throw error;
+      }
+    }
+    return { outcomes };
   }
 
   async function createFindingFromCluster(args: {
@@ -670,6 +842,8 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     updateCluster,
     addMember,
     removeMember,
+    createPublicUpdateCandidate,
+    applyPublicUpdateCandidate,
     createFindingFromCluster,
   };
 }

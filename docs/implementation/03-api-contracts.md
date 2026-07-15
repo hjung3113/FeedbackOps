@@ -173,6 +173,27 @@ cluster endpoints may return status update candidates and shared draft content,
 but apply requests must resolve into separate per-VOC status decisions, Public
 Update records or skip reasons, and audit events.
 
+VOC Cluster member detail projects `voc_id`, `added_by`, `added_at`, and the
+optional enrichment fields `display_id`, `title`, `severity`, and
+`reporter_facing_status`. Both rows and `member_count` use the same predicate:
+Admin, `voc.read` on the member Managed System, or reporter ownership.
+Triage-only effective scope is not member-read authority.
+
+`DELETE /voc-clusters/:id/vocs/:voc_id` returns the identical
+`not_found.record` 404 envelope when the VOC is unreadable, missing, or exists
+but is not a member. A successful authorized removal returns 204 and records
+the normal membership-removal audit event.
+
+`POST /voc-clusters/:id/public-update-candidate` validates and returns shared
+draft content after `finding.manage`; it writes no VOC. `POST
+/voc-clusters/:id/apply-public-update-candidate` accepts selected `voc_ids` and
+the Public Update request. Each readable selected member is delegated to the
+existing per-VOC Public Update command in its own transaction, which rechecks
+`voc.triage`, archive state, transition validity, sanitization, and audit.
+Outcomes are `applied` or `skipped` with a reason. Hidden membership and absent
+membership both produce the same `not_found` skipped outcome; no unselected or
+hidden row is identified.
+
 Status-change requests that omit Public Update creation must include
 `skip_public_update: true` and a non-empty `skip_reason`. The audit event must
 record `public_update_created` or `skipped_with_reason`, the previous and next
@@ -583,6 +604,8 @@ GET /voc-clusters/:id
 PATCH /voc-clusters/:id
 POST /voc-clusters/:id/vocs
 DELETE /voc-clusters/:id/vocs/:voc_id
+POST /voc-clusters/:id/public-update-candidate
+POST /voc-clusters/:id/apply-public-update-candidate
 POST /voc-clusters/:id/create-finding
 POST /voc-clusters/:id/request-task
 ```
@@ -595,11 +618,13 @@ records. Cluster merge and split endpoints are out of scope for MVP.
 | Aspect | Contract |
 |---|---|
 | Create body | `POST /voc-clusters` `{ title: string(1..200), summary?: string\|null, primary_managed_system_id: uuid, severity?: 'low'\|'medium'\|'high'\|'critical'\|null, confidence?: 'low'\|'medium'\|'high'\|null, rationale?: string\|null, owner_user_id?: uuid\|null }` → `201` `VocClusterDto` (`status='draft'`). |
-| List | `GET /voc-clusters` optional `?managed_system_id=<uuid>` → `{ items: VocClusterDto[] }`, workspace-scoped + MS-scope filtered. DTOs include nullable `severity`, `confidence`, `rationale`, `owner_user_id`, `confirmed_by`, and `confirmed_at`. |
-| Detail | `GET /voc-clusters/:id` → `VocClusterDto` with the nullable workspace/provenance fields and `members: [{ voc_id, added_by, added_at }]`. |
+| List | `GET /voc-clusters` optional `?managed_system_id=<uuid>` → `{ items: VocClusterDto[] }`, workspace-scoped + MS-scope filtered. DTOs include nullable `severity`, `confidence`, `rationale`, `owner_user_id`, `confirmed_by`, and `confirmed_at`. Each `member_count` is the authorized-member total, filtered by the same member predicate as detail. |
+| Detail | `GET /voc-clusters/:id` → `VocClusterDto` with the nullable workspace/provenance fields and authorized `members: [{ voc_id, added_by, added_at, display_id?, title?, severity?, reporter_facing_status? }]`; `member_count` equals the authorized `members` length. Member visibility is Admin, `voc.read` scope on that member's Managed System, or reporter ownership. |
 | Edit / confirm | `PATCH /voc-clusters/:id` `{ title?, summary?, severity?, confidence?, rationale?, owner_user_id?, status?: 'confirmed' }` → `200`. `confirmed_by` and `confirmed_at` are rejected as unexpected client fields. A `draft`→`confirmed` transition atomically sets them to the actor and current time; subsequent confirmation requests preserve the original values. |
 | Add member | `POST /voc-clusters/:id/vocs` `{ voc_id }` → `201` (inserted) / `200` (already a member). Member VOC must be in the cluster's managed system (else `422 validation.failed`); archived/unreadable VOC ⇒ `404`. |
-| Remove member | `DELETE /voc-clusters/:id/vocs/:voc_id` → `204`; missing membership ⇒ `404`. (No request body — clients must not send `Content-Type: application/json` with an empty body.) |
+| Remove member | `DELETE /voc-clusters/:id/vocs/:voc_id` → authorized removal `204`; unreadable VOC, missing VOC, and existing non-member all return the identical `404 not_found.record` envelope. (No request body — clients must not send `Content-Type: application/json` with an empty body.) |
+| Bulk Public Update candidate | `POST /voc-clusters/:id/public-update-candidate` validates and returns shared draft content after `finding.manage`; it writes no Public Update or audit row. |
+| Bulk Public Update apply | `POST /voc-clusters/:id/apply-public-update-candidate` accepts selected member `voc_ids` plus the candidate. Each readable selected member is delegated in its own transaction to the canonical per-VOC Public Update command, including its `voc.triage` recheck and normal audits; outcomes are `applied` or `skipped`. Hidden and absent membership both return the same `not_found` skip reason. |
 | Create finding | `POST /voc-clusters/:id/create-finding` — body = `CreateFindingRequest` (same as `POST /vocs/:id/create-finding`); requires `Idempotency-Key` (UUIDv4). → `201` `FindingDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `source={ type:'voc_cluster', id, relation_type:'created_finding', link_id }`. Writes `finding_created_from_voc_cluster` + the `entity_link.created` audit in the finding txn. |
 | Request task | `POST /voc-clusters/:id/request-task` — body = `{ evidence_summary, requested_outcome }` (same as Finding request-task); requires `Idempotency-Key` (UUIDv4). → `201` `TaskRequestDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `status='pending_review'`, `source={ type:'voc_cluster', id, relation_type:'requested_task', link_id }`. Writes `task_request_created_from_voc_cluster` + the `entity_link.created` audit in the task-request txn. |
 | Authz | Read/list = Admin OR Developer with `finding.read` on the cluster MS. Create/edit/confirm/member-add/remove/create-finding = Admin OR Developer with `finding.manage` on the cluster MS. Reuses the Finding capabilities (no `voc_cluster.*` caps) — see ADR-0024 §H. |
