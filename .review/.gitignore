@@ -1,2 +1,13 @@
-*.out
-*.raw.txt
+# .review/ is a mixed directory: a few committed assets, plus per-run agent
+# artifacts that are regenerated on every dispatch and must never be committed.
+# Allowlist, not blocklist — a new artifact kind should default to ignored.
+
+*
+
+# Committed assets — real repo state, not run output.
+!.gitignore
+!baselines/
+!baselines/**
+!schemas/
+!schemas/**
+!typecheck-baseline.txt
