@@ -658,7 +658,6 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
-      if (decision === 'hidden') continue;
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
       items.push(toDtoForDecision(row, decision, undefined, targetSummary));
@@ -684,7 +683,6 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
-      if (decision === 'hidden') continue;
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
       items.push(toDtoForDecision(row, decision, undefined, targetSummary));
