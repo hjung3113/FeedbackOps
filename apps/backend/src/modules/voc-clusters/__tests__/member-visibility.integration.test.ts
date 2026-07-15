@@ -29,6 +29,7 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
   let clusterId: string;
   let ownerVocId: string;
   let hiddenVocId: string;
+  let triageOwnedVocId: string;
   let nonMemberVocId: string;
   let developerCookie: string;
   let triageOnlyCookie: string;
@@ -115,6 +116,14 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
         title: 'Hidden member',
       })
     ).id;
+    triageOwnedVocId = (
+      await insertVocRow(ops, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msId,
+        reporterId: triageOnly.id,
+        title: 'Triage actor owned member',
+      })
+    ).id;
     nonMemberVocId = (
       await insertVocRow(ops, {
         workspaceId: WORKSPACE_ID,
@@ -125,6 +134,11 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
     ).id;
     await insertVocClusterMemberRow(ops, { clusterId, vocId: ownerVocId, addedBy: adminId });
     await insertVocClusterMemberRow(ops, { clusterId, vocId: hiddenVocId, addedBy: adminId });
+    await insertVocClusterMemberRow(ops, {
+      clusterId,
+      vocId: triageOwnedVocId,
+      addedBy: adminId,
+    });
     developerCookie = await loginAs(
       app,
       (
@@ -147,22 +161,22 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
 
   afterAll(async () => {
     if (ops) {
-      await ops.pool.query(
-        'delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
-        [WORKSPACE_ID, 'cluster-member-%'],
-      );
       await ops.pool.query('delete from core.audit_log where subject_id=$1', [clusterId]);
       await ops.pool.query('delete from voc_cluster.voc_cluster_members where cluster_id=$1', [
         clusterId,
       ]);
       await ops.pool.query('delete from voc_cluster.voc_clusters where id=$1', [clusterId]);
       await ops.pool.query('delete from voc.vocs where id=any($1::uuid[])', [
-        [ownerVocId, hiddenVocId, nonMemberVocId],
+        [ownerVocId, hiddenVocId, triageOwnedVocId, nonMemberVocId],
       ]);
       await ops.pool.query('delete from permission.permission_grants where managed_system_id=$1', [
         msId,
       ]);
       await ops.pool.query('delete from core.managed_systems where id=$1', [msId]);
+      await ops.pool.query(
+        'delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2)',
+        [WORKSPACE_ID, 'cluster-member-%'],
+      );
       await ops.pool.query(
         'delete from core.actors where workspace_id=$1 and external_id like $2',
         [WORKSPACE_ID, 'cluster-member-%'],
@@ -173,7 +187,7 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
     await ops?.close();
   });
 
-  it('projects only authorized members and counts the authorized total', async () => {
+  it('returns authorized members and omits unreadable members rather than masking them', async () => {
     const detail = await app.inject({
       method: 'GET',
       url: `/voc-clusters/${clusterId}`,
@@ -185,14 +199,45 @@ describe.skipIf(!runIntegration)('VOC cluster member visibility', () => {
       members: [expect.objectContaining({ voc_id: ownerVocId, title: 'Reporter-owned member' })],
     });
     expect(detail.body).not.toContain(hiddenVocId);
+    expect(detail.body).not.toContain(triageOwnedVocId);
+  });
 
+  it('lets a reporter see their own member row without voc.read scope', async () => {
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/voc-clusters/${clusterId}`,
+      headers: headers(developerCookie),
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().members).toEqual([
+      expect.objectContaining({ voc_id: ownerVocId, title: 'Reporter-owned member' }),
+    ]);
+  });
+
+  it('reports the authorized member count instead of the total membership count', async () => {
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/voc-clusters/${clusterId}`,
+      headers: headers(developerCookie),
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({ member_count: 1 });
+    expect(detail.json().members).toHaveLength(1);
+  });
+
+  it('does not let a triage-only effective scope reveal peer member rows', async () => {
     const triageOnly = await app.inject({
       method: 'GET',
       url: `/voc-clusters/${clusterId}`,
       headers: headers(triageOnlyCookie),
     });
     expect(triageOnly.statusCode).toBe(200);
-    expect(triageOnly.json()).toMatchObject({ member_count: 0, members: [] });
+    expect(triageOnly.json()).toMatchObject({
+      member_count: 1,
+      members: [expect.objectContaining({ voc_id: triageOwnedVocId })],
+    });
+    expect(triageOnly.body).not.toContain(ownerVocId);
+    expect(triageOnly.body).not.toContain(hiddenVocId);
   });
 
   it('collapses unreadable, missing, and non-member DELETE probes to the same 404', async () => {

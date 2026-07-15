@@ -220,7 +220,10 @@ export async function listVocClustersByWorkspace(
       (
         SELECT count(*)::int
         FROM voc_cluster.voc_cluster_members m
+        JOIN voc.vocs v ON v.id = m.voc_id
         WHERE m.cluster_id = c.id
+          AND v.archived_at IS NULL
+          AND v.primary_managed_system_id = c.primary_managed_system_id
       ) AS member_count
     FROM voc_cluster.voc_clusters c
     WHERE c.workspace_id = ${input.workspaceId}
@@ -321,6 +324,23 @@ export async function listVocClusterMembers(
     JOIN voc.vocs v ON v.id = m.voc_id
     WHERE m.cluster_id = ${input.clusterId}
     ORDER BY m.added_at DESC, m.voc_id DESC
+  `);
+  return result.rows.map(mapMemberRow);
+}
+
+export async function listVocClusterMembersForClusters(
+  db: Db | Tx,
+  input: { clusterIds: string[] },
+): Promise<VocClusterMemberRow[]> {
+  if (input.clusterIds.length === 0) return [];
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT m.cluster_id, m.voc_id, m.added_by, m.added_at,
+           v.display_id, v.title, v.severity, v.reporter_facing_status,
+           v.primary_managed_system_id, v.reporter_id, v.archived_at
+    FROM voc_cluster.voc_cluster_members m
+    JOIN voc.vocs v ON v.id = m.voc_id
+    WHERE m.cluster_id = ANY(${sqlUuidArray(input.clusterIds)})
+    ORDER BY m.cluster_id, m.added_at DESC, m.voc_id DESC
   `);
   return result.rows.map(mapMemberRow);
 }

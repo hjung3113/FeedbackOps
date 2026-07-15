@@ -32,6 +32,7 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
   let msId: string;
   let clusterId: string;
   let memberVocId: string;
+  let secondMemberVocId: string;
 
   const headers = (cookie: string) => ({
     cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
@@ -97,27 +98,45 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
         title: 'Bulk member',
       })
     ).id;
+    secondMemberVocId = (
+      await insertVocRow(ops, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msId,
+        reporterId: adminId,
+        title: 'Second bulk member',
+      })
+    ).id;
     await insertVocClusterMemberRow(ops, { clusterId, vocId: memberVocId, addedBy: adminId });
+    await insertVocClusterMemberRow(ops, {
+      clusterId,
+      vocId: secondMemberVocId,
+      addedBy: adminId,
+    });
     managerCookie = await loginAs(app, externalId);
   });
 
   afterAll(async () => {
     if (ops) {
-      await ops.pool.query('delete from core.sessions where actor_id=$1', [managerId]);
-      await ops.pool.query('delete from core.audit_log where subject_id in ($1,$2)', [
+      await ops.pool.query('delete from core.audit_log where subject_id in ($1,$2,$3)', [
         clusterId,
         memberVocId,
+        secondMemberVocId,
       ]);
-      await ops.pool.query('delete from voc.voc_public_updates where voc_id=$1', [memberVocId]);
+      await ops.pool.query('delete from voc.voc_public_updates where voc_id=any($1::uuid[])', [
+        [memberVocId, secondMemberVocId],
+      ]);
       await ops.pool.query('delete from voc_cluster.voc_cluster_members where cluster_id=$1', [
         clusterId,
       ]);
       await ops.pool.query('delete from voc_cluster.voc_clusters where id=$1', [clusterId]);
-      await ops.pool.query('delete from voc.vocs where id=$1', [memberVocId]);
+      await ops.pool.query('delete from voc.vocs where id=any($1::uuid[])', [
+        [memberVocId, secondMemberVocId],
+      ]);
       await ops.pool.query('delete from permission.permission_grants where actor_id=$1', [
         managerId,
       ]);
       await ops.pool.query('delete from core.managed_systems where id=$1', [msId]);
+      await ops.pool.query('delete from core.sessions where actor_id=$1', [managerId]);
       await ops.pool.query('delete from core.actors where id=$1', [managerId]);
     }
     await app?.close();
@@ -145,7 +164,23 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
     expect(after.rows[0]?.n).toBe(before.rows[0]?.n);
   });
 
-  it('rechecks voc.triage per VOC and makes hidden membership indistinguishable from absence', async () => {
+  it('rechecks voc.triage for each VOC and skips a member the actor cannot triage', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/voc-clusters/${clusterId}/apply-public-update-candidate`,
+      headers: headers(managerCookie),
+      payload: { voc_ids: [memberVocId, secondMemberVocId], public_update: publicUpdate },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      outcomes: [
+        { voc_id: memberVocId, status: 'skipped', reason: 'not_found' },
+        { voc_id: secondMemberVocId, status: 'skipped', reason: 'not_found' },
+      ],
+    });
+  });
+
+  it('makes a hidden member indistinguishable from an absent VOC in the response', async () => {
     const absentId = randomUUID();
     const response = await app.inject({
       method: 'POST',
@@ -160,9 +195,19 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
         { voc_id: absentId, status: 'skipped', reason: 'not_found' },
       ],
     });
+  });
+
+  it('does not write any public update for finding.manage without voc.triage', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/voc-clusters/${clusterId}/apply-public-update-candidate`,
+      headers: headers(managerCookie),
+      payload: { voc_ids: [memberVocId, secondMemberVocId], public_update: publicUpdate },
+    });
+    expect(response.statusCode).toBe(200);
     const writes = await ops.pool.query<{ n: number }>(
-      'select count(*)::int n from voc.voc_public_updates where voc_id=$1',
-      [memberVocId],
+      'select count(*)::int n from voc.voc_public_updates where voc_id=any($1::uuid[])',
+      [[memberVocId, secondMemberVocId]],
     );
     expect(writes.rows[0]?.n).toBe(0);
   });
@@ -172,17 +217,26 @@ describe.skipIf(!runIntegration)('VOC cluster bulk public update', () => {
       method: 'POST',
       url: `/voc-clusters/${clusterId}/apply-public-update-candidate`,
       headers: headers(adminCookie),
-      payload: { voc_ids: [memberVocId], public_update: publicUpdate },
+      payload: { voc_ids: [memberVocId, secondMemberVocId], public_update: publicUpdate },
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ outcomes: [{ voc_id: memberVocId, status: 'applied' }] });
-    const audit = await ops.pool.query<{ event_type: string }>(
-      `select event_type from core.audit_log where subject_id=$1 and event_type in ('public_update_created','reporter_facing_status_changed') order by event_type`,
-      [memberVocId],
+    expect(response.json()).toEqual({
+      outcomes: [
+        { voc_id: memberVocId, status: 'applied' },
+        { voc_id: secondMemberVocId, status: 'applied' },
+      ],
+    });
+    const audit = await ops.pool.query<{ subject_id: string; event_type: string }>(
+      `select subject_id, event_type from core.audit_log
+       where subject_id=any($1::uuid[])
+         and event_type in ('public_update_created','reporter_facing_status_changed')
+       order by subject_id, event_type`,
+      [[memberVocId, secondMemberVocId]],
     );
-    expect(audit.rows.map((row) => row.event_type).sort()).toEqual([
-      'public_update_created',
-      'reporter_facing_status_changed',
-    ]);
+    for (const vocId of [memberVocId, secondMemberVocId]) {
+      expect(
+        audit.rows.filter((row) => row.subject_id === vocId).map((row) => row.event_type),
+      ).toEqual(['public_update_created', 'reporter_facing_status_changed']);
+    }
   });
 });

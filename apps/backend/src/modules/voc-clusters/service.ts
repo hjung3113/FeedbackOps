@@ -33,6 +33,7 @@ import {
   isAssignableClusterOwner,
   listCreatedFindingsForClusters,
   listVocClusterMembers,
+  listVocClusterMembersForClusters,
   listVocClustersByWorkspace,
   lockVocClusterById,
   updateVocCluster,
@@ -176,6 +177,48 @@ async function authorizedMembers(
   return visible;
 }
 
+async function authorizedMembersByCluster(
+  deps: Pick<VocClustersServiceDeps, 'checkService' | 'db'>,
+  actor: VocClustersActor,
+  clusters: VocClusterRow[],
+): Promise<Map<string, VocClusterMemberRow[]>> {
+  const visibleByCluster = new Map<string, VocClusterMemberRow[]>();
+  for (const cluster of clusters) visibleByCluster.set(cluster.id, []);
+  if (clusters.length === 0 || actor.role_level === 'admin') return visibleByCluster;
+
+  const members = await listVocClusterMembersForClusters(deps.db, {
+    clusterIds: clusters.map((cluster) => cluster.id),
+  });
+  const clusterManagedSystemById = new Map(
+    clusters.map((cluster) => [cluster.id, cluster.primary_managed_system_id]),
+  );
+  const readDecisionByManagedSystem = new Map<string, boolean>();
+
+  for (const member of members) {
+    const clusterManagedSystemId = clusterManagedSystemById.get(member.cluster_id);
+    if (
+      clusterManagedSystemId === undefined ||
+      member.archived_at !== null ||
+      member.primary_managed_system_id !== clusterManagedSystemId ||
+      member.reporter_id === undefined
+    ) {
+      continue;
+    }
+    let readable = member.reporter_id === actor.actor_id;
+    if (!readable) {
+      if (!readDecisionByManagedSystem.has(clusterManagedSystemId)) {
+        readDecisionByManagedSystem.set(
+          clusterManagedSystemId,
+          await canReadSourceVoc(deps, actor, clusterManagedSystemId, member.reporter_id),
+        );
+      }
+      readable = readDecisionByManagedSystem.get(clusterManagedSystemId) === true;
+    }
+    if (readable) visibleByCluster.get(member.cluster_id)?.push(member);
+  }
+  return visibleByCluster;
+}
+
 async function assertTargetAnalyticsArea(args: {
   tx: Tx;
   workspaceId: string;
@@ -280,16 +323,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       if (!readable) continue;
       readableRows.push(row);
     }
-    const memberLists = await Promise.all(
-      readableRows.map(async (row) =>
-        authorizedMembers(
-          deps,
-          args.actor,
-          await listVocClusterMembers(deps.db, { clusterId: row.id }),
-          row.primary_managed_system_id,
-        ),
-      ),
-    );
+    const membersByCluster = await authorizedMembersByCluster(deps, args.actor, readableRows);
     const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
       workspaceId: args.actor.workspace_id,
       clusterIds: readableRows.map((row) => row.id),
@@ -301,9 +335,15 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       linkedFindingsByClusterId.set(finding.cluster_id, existing);
     }
     return {
-      items: readableRows.map((row, index) =>
+      items: readableRows.map((row) =>
         clusterToDto(
-          { ...row, member_count: memberLists[index]?.length ?? 0 },
+          {
+            ...row,
+            member_count:
+              args.actor.role_level === 'admin'
+                ? row.member_count
+                : (membersByCluster.get(row.id)?.length ?? 0),
+          },
           undefined,
           linkedFindingsByClusterId.get(row.id) ?? [],
         ),
