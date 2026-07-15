@@ -533,9 +533,25 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
   });
 
   it('generic endpoints neither create nor disclose command-only cluster Finding evidence links', async () => {
-    const msA = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-cmd-a`, 'Command source MS');
-    const msB = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-cmd-b`, 'Command target MS');
-    const sourceVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msA, reporterId, 'Command source VOC');
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cmd-a`,
+      'Command source MS',
+    );
+    const msB = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cmd-b`,
+      'Command target MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Command source VOC',
+    );
     const cluster = await insertVocClusterRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: msA,
@@ -562,9 +578,33 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       relation_type: 'evidence_of',
     });
     expect(create.statusCode).toBe(422);
-    const listed = await getEntityLinks(devCookie, `?source_type=voc_cluster&source_id=${cluster.id}`);
+
+    // Admin can read both endpoints, so this omission depends on the
+    // command-only tuple policy rather than endpoint authorization.
+    const adminListed = await getEntityLinks(
+      adminCookie,
+      `?source_type=voc_cluster&source_id=${cluster.id}`,
+    );
+    expect(adminListed.statusCode).toBe(200);
+    expect(
+      adminListed.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId),
+    ).toBe(false);
+    const adminInventory = await getEntityLinks(adminCookie, '?scope=workspace');
+    expect(adminInventory.statusCode).toBe(200);
+    expect(
+      adminInventory
+        .json<{ items: Array<{ id: string }> }>()
+        .items.some((item) => item.id === linkId),
+    ).toBe(false);
+
+    const listed = await getEntityLinks(
+      devCookie,
+      `?source_type=voc_cluster&source_id=${cluster.id}`,
+    );
     expect(listed.statusCode).toBe(200);
-    expect(listed.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId)).toBe(false);
+    expect(
+      listed.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId),
+    ).toBe(false);
   });
 
   it('GET by VOC source accepts managed-system scoped voc.triage without voc.read', async () => {

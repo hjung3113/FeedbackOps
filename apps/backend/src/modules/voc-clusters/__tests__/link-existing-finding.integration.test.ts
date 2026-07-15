@@ -9,7 +9,12 @@ import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { loginAs } from '../../voc/__tests__/_seed-helpers.js';
 import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
-import { grantCapability, insertActorRow, insertVocClusterRow } from './_seed-helpers.js';
+import {
+  cleanupVocClusterFixtures,
+  grantCapability,
+  insertActorRow,
+  insertVocClusterRow,
+} from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -32,6 +37,8 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
   let blindCookie: string;
   let noManageCookie: string;
   let unscopedCookie: string;
+  const fixtureActorIds: string[] = [];
+  const fixtureGrantIds: string[] = [];
 
   const headers = (cookie: string) => ({
     cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
@@ -94,59 +101,82 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
       roleLevel: 'developer',
     });
     authorizedActorId = authorized.id;
+    fixtureActorIds.push(authorized.id);
     const blind = await insertActorRow(ops, {
       workspaceId: WORKSPACE_ID,
       externalId: `link-blind-${randomUUID()}`,
       roleLevel: 'developer',
     });
+    fixtureActorIds.push(blind.id);
     const noManage = await insertActorRow(ops, {
       workspaceId: WORKSPACE_ID,
       externalId: `link-no-manage-${randomUUID()}`,
       roleLevel: 'developer',
     });
+    fixtureActorIds.push(noManage.id);
     const unscoped = await insertActorRow(ops, {
       workspaceId: WORKSPACE_ID,
       externalId: `link-unscoped-${randomUUID()}`,
       roleLevel: 'developer',
     });
+    fixtureActorIds.push(unscoped.id);
     for (const actorId of [authorized.id, noManage.id]) {
       for (const managedSystemId of [clusterMsId, targetMsId]) {
-        await grantCapability(ops, {
-          workspaceId: WORKSPACE_ID,
-          actorId,
-          capability: 'finding.read',
-          managedSystemId,
-          grantedByActorId: adminId,
-        });
+        fixtureGrantIds.push(
+          (
+            await grantCapability(ops, {
+              workspaceId: WORKSPACE_ID,
+              actorId,
+              capability: 'finding.read',
+              managedSystemId,
+              grantedByActorId: adminId,
+            })
+          ).id,
+        );
       }
     }
-    await grantCapability(ops, {
-      workspaceId: WORKSPACE_ID,
-      actorId: blind.id,
-      capability: 'finding.read',
-      managedSystemId: clusterMsId,
-      grantedByActorId: adminId,
-    });
+    fixtureGrantIds.push(
+      (
+        await grantCapability(ops, {
+          workspaceId: WORKSPACE_ID,
+          actorId: blind.id,
+          capability: 'finding.read',
+          managedSystemId: clusterMsId,
+          grantedByActorId: adminId,
+        })
+      ).id,
+    );
     for (const managedSystemId of [clusterMsId, targetMsId]) {
-      await grantCapability(ops, {
-        workspaceId: WORKSPACE_ID,
-        actorId: authorized.id,
-        capability: 'finding.manage',
-        managedSystemId,
-        grantedByActorId: adminId,
-      });
+      fixtureGrantIds.push(
+        (
+          await grantCapability(ops, {
+            workspaceId: WORKSPACE_ID,
+            actorId: authorized.id,
+            capability: 'finding.manage',
+            managedSystemId,
+            grantedByActorId: adminId,
+          })
+        ).id,
+      );
     }
-    await grantCapability(ops, {
-      workspaceId: WORKSPACE_ID,
-      actorId: noManage.id,
-      capability: 'finding.manage',
-      managedSystemId: clusterMsId,
-      grantedByActorId: adminId,
-    });
+    fixtureGrantIds.push(
+      (
+        await grantCapability(ops, {
+          workspaceId: WORKSPACE_ID,
+          actorId: noManage.id,
+          capability: 'finding.manage',
+          managedSystemId: clusterMsId,
+          grantedByActorId: adminId,
+        })
+      ).id,
+    );
     // loginAs requires the exact external id; retrieve it rather than deriving fixture identifiers.
     const actorCookies = await Promise.all(
       [authorized.id, blind.id, noManage.id, unscoped.id].map(async (id) => {
-        const row = await ops.pool.query<{ external_id: string }>('select external_id from core.actors where id=$1', [id]);
+        const row = await ops.pool.query<{ external_id: string }>(
+          'select external_id from core.actors where id=$1',
+          [id],
+        );
         return loginAs(app, row.rows[0]?.external_id ?? '');
       }),
     );
@@ -162,92 +192,36 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
 
   afterAll(async () => {
     if (ops) {
-      // Delete every row that can reference this suite's actors, managed systems,
-      // cluster, or findings before deleting those parent fixtures.
-      await ops.pool.query(
-        `delete from finding.evidence_highlights
-         where finding_id=any($1::uuid[])`,
-        [[targetFindingId, deniedFindingId]],
-      );
-      await ops.pool.query(
-        `delete from core.audit_log
-         where workspace_id=$1
-           and (
-             actor_id in (
-               select id from core.actors where workspace_id=$1 and external_id like 'link-%'
-             )
-             or subject_id=any($2::uuid[])
-             or detail->>'voc_cluster_id'=$3
-             or detail->'source'->>'id'=$3
-           )`,
-        [WORKSPACE_ID, [clusterId, targetFindingId, deniedFindingId], clusterId],
-      );
-      await ops.pool.query(
-        'delete from core.entity_links where workspace_id=$1 and (source_id=$2 or target_id=any($3::uuid[]))',
-        [WORKSPACE_ID, clusterId, [targetFindingId, deniedFindingId]],
-      );
-      await ops.pool.query(
-        `delete from permission.permission_requests
-         where workspace_id=$1
-           and requester_actor_id in (
-             select id from core.actors where workspace_id=$1 and external_id like 'link-%'
-           )`,
-        [WORKSPACE_ID],
-      );
-      await ops.pool.query(
-        `delete from permission.permission_denies
-         where workspace_id=$1
-           and actor_id in (
-             select id from core.actors where workspace_id=$1 and external_id like 'link-%'
-           )`,
-        [WORKSPACE_ID],
-      );
-      await ops.pool.query(
-        `delete from permission.permission_grants
-         where workspace_id=$1
-           and (
-             managed_system_id=any($2::uuid[])
-             or actor_id in (
-               select id from core.actors where workspace_id=$1 and external_id like 'link-%'
-             )
-           )`,
-        [WORKSPACE_ID, [clusterMsId, targetMsId]],
-      );
-      await ops.pool.query('delete from finding.findings where id=any($1::uuid[])', [[targetFindingId, deniedFindingId]]);
-      await ops.pool.query('delete from voc_cluster.voc_clusters where id=$1', [clusterId]);
-      await ops.pool.query(
-        `delete from core.idempotency_keys
-         where actor_id in (
-           select id from core.actors where workspace_id=$1 and external_id like 'link-%'
-         )`,
-        [WORKSPACE_ID],
-      );
-      await ops.pool.query('delete from core.managed_systems where id=any($1::uuid[])', [[clusterMsId, targetMsId]]);
-      await ops.pool.query(`delete from core.sessions where actor_id in (select id from core.actors where workspace_id=$1 and external_id like 'link-%')`, [WORKSPACE_ID]);
-      await ops.pool.query(
-        `delete from voc.voc_attachments
-         where uploaded_by_actor_id in (
-           select id from core.actors where workspace_id=$1 and external_id like 'link-%'
-         )`,
-        [WORKSPACE_ID],
-      );
-      await ops.pool.query(`delete from core.actors where workspace_id=$1 and external_id like 'link-%'`, [WORKSPACE_ID]);
+      await cleanupVocClusterFixtures(ops, {
+        workspaceId: WORKSPACE_ID,
+        actorIds: fixtureActorIds,
+        managedSystemIds: [clusterMsId, targetMsId],
+        clusterIds: [clusterId],
+        findingIds: [targetFindingId, deniedFindingId],
+        permissionGrantIds: fixtureGrantIds,
+      });
     }
     await app?.close();
     await appDb?.close();
     await ops?.close();
   });
 
-  const link = (cookie: string, options: { clusterId?: string; findingId?: string } = {}) => app.inject({
-    method: 'POST', url: `/voc-clusters/${options.clusterId ?? clusterId}/link-finding`,
-    headers: { ...headers(cookie), 'idempotency-key': randomUUID() },
-    body: { finding_id: options.findingId ?? targetFindingId },
-  });
+  const link = (cookie: string, options: { clusterId?: string; findingId?: string } = {}) =>
+    app.inject({
+      method: 'POST',
+      url: `/voc-clusters/${options.clusterId ?? clusterId}/link-finding`,
+      headers: { ...headers(cookie), 'idempotency-key': randomUUID() },
+      body: { finding_id: options.findingId ?? targetFindingId },
+    });
 
   it('links as evidence, audits it, and hides the cross-MS target from a cluster reader without target scope', async () => {
     const linked = await link(authorizedCookie);
     expect(linked.statusCode).toBe(201);
-    expect(linked.json()).toEqual({ id: targetFindingId, display_id: targetDisplayId, status: 'active' });
+    expect(linked.json()).toEqual({
+      id: targetFindingId,
+      display_id: targetDisplayId,
+      status: 'active',
+    });
     const relation = await ops.pool.query<{ relation_type: string }>(
       'select relation_type from core.entity_links where source_id=$1 and target_id=$2 and status=$3',
       [clusterId, targetFindingId, 'active'],
@@ -259,12 +233,26 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
     );
     expect(audit.rows).toHaveLength(1);
     expect(audit.rows[0]?.actor_id).toBe(authorizedActorId);
-    const visible = await app.inject({ method: 'GET', url: `/voc-clusters/${clusterId}`, headers: headers(authorizedCookie) });
-    expect(visible.json().linked_findings).toEqual([{ id: targetFindingId, display_id: targetDisplayId, status: 'active' }]);
-    const hidden = await app.inject({ method: 'GET', url: `/voc-clusters/${clusterId}`, headers: headers(blindCookie) });
+    const visible = await app.inject({
+      method: 'GET',
+      url: `/voc-clusters/${clusterId}`,
+      headers: headers(authorizedCookie),
+    });
+    expect(visible.json().linked_findings).toEqual([
+      { id: targetFindingId, display_id: targetDisplayId, status: 'active' },
+    ]);
+    const hidden = await app.inject({
+      method: 'GET',
+      url: `/voc-clusters/${clusterId}`,
+      headers: headers(blindCookie),
+    });
     expect(hidden.statusCode).toBe(200);
     expect(hidden.json().linked_findings).toEqual([]);
-    const list = await app.inject({ method: 'GET', url: `/voc-clusters?managed_system_id=${clusterMsId}`, headers: headers(blindCookie) });
+    const list = await app.inject({
+      method: 'GET',
+      url: `/voc-clusters?managed_system_id=${clusterMsId}`,
+      headers: headers(blindCookie),
+    });
     expect(list.statusCode).toBe(200);
     expect(JSON.stringify(list.json())).not.toContain(targetFindingId);
   });
@@ -306,7 +294,10 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
   it('returns the existing link on a duplicate without creating a second audit row', async () => {
     const duplicate = await link(authorizedCookie);
     expect(duplicate.statusCode).toBe(200);
-    const audit = await ops.pool.query('select id from core.audit_log where subject_id=$1 and event_type=$2', [targetFindingId, 'finding_linked_to_voc_cluster']);
+    const audit = await ops.pool.query(
+      'select id from core.audit_log where subject_id=$1 and event_type=$2',
+      [targetFindingId, 'finding_linked_to_voc_cluster'],
+    );
     expect(audit.rows).toHaveLength(1);
   });
 });
