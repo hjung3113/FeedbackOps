@@ -473,16 +473,6 @@ async function evaluateRowVisibility(
   row: EntityLinkRow,
   resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
 ): Promise<LinkVisibilityDecision> {
-  if (
-    !isListVisibleTuple({
-      sourceType: row.source_type,
-      targetType: row.target_type,
-      relationType: row.relation_type,
-    })
-  ) {
-    return 'hidden';
-  }
-
   const sourceRef = { type: row.source_type, id: row.source_id };
   const targetRef = { type: row.target_type, id: row.target_id };
   const [source, target] = await Promise.all([
@@ -657,6 +647,15 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     ]);
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
+      if (
+        !isListVisibleTuple({
+          sourceType: row.source_type,
+          targetType: row.target_type,
+          relationType: row.relation_type,
+        })
+      ) {
+        continue;
+      }
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
@@ -682,6 +681,15 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const resolvedByEndpoint = new Map<string, LinkEndpointRow | null>();
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
+      if (
+        !isListVisibleTuple({
+          sourceType: row.source_type,
+          targetType: row.target_type,
+          relationType: row.relation_type,
+        })
+      ) {
+        continue;
+      }
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
