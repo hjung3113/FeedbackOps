@@ -3,6 +3,7 @@ import type * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigateMock = vi.fn();
+const addClusterMemberMutate = vi.hoisted(() => vi.fn());
 let routeParams: Record<string, string> = {
   clusterId: "11111111-1111-1111-1111-111111111111",
 };
@@ -16,12 +17,24 @@ vi.mock("@tanstack/react-router", () => ({
     children,
     to,
     className,
+    params,
   }: {
     children: React.ReactNode;
     to: string;
     className?: string;
+    params?: Record<string, string>;
   }) => (
-    <a href={to} className={className}>
+    <a
+      href={
+        params
+          ? Object.entries(params).reduce(
+              (path, [key, value]) => path.replace(`$${key}`, value),
+              to,
+            )
+          : to
+      }
+      className={className}
+    >
       {children}
     </a>
   ),
@@ -180,14 +193,40 @@ vi.mock("@fops/ui", () => ({
   ),
 }));
 
-const clusters = [
+type ClusterFixture = {
+  id: string;
+  workspace_id: string;
+  display_id: string;
+  title: string;
+  summary: string;
+  status: string;
+  primary_managed_system_id: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  members: Array<{
+    voc_id: string;
+    display_id: string;
+    title: string;
+    added_by: string;
+    added_at: string;
+  }>;
+  linked_findings: Array<{
+    id: string;
+    display_id: string;
+    status: string;
+    title?: string;
+  }>;
+};
+
+const clusters: ClusterFixture[] = [
   {
     id: "11111111-1111-1111-1111-111111111111",
     workspace_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     display_id: "CLU-31",
     title: "반복 결제 문의",
     summary: "결제 관련 VOC가 반복됩니다.",
-    status: "draft" as const,
+    status: "draft" as string,
     primary_managed_system_id: "99999999-9999-9999-9999-999999999999",
     created_by: "22222222-2222-2222-2222-222222222222",
     created_at: "2026-01-01T00:00:00.000Z",
@@ -201,6 +240,11 @@ const clusters = [
         added_at: "2026-01-03T00:00:00.000Z",
       },
     ],
+    linked_findings: [] as Array<{
+      id: string;
+      display_id: string;
+      status: string;
+    }>,
   },
 ];
 
@@ -231,9 +275,28 @@ vi.mock("@/features/voc-cluster/hooks/useCreateVocCluster", () => ({
 
 vi.mock("@/features/voc-cluster/hooks/useAddClusterMember", () => ({
   useAddClusterMember: () => ({
-    mutate: vi.fn(),
+    mutate: addClusterMemberMutate,
     reset: vi.fn(),
     isPending: false,
+  }),
+}));
+
+vi.mock("@/features/voc-cluster/hooks/useCandidatePeers", () => ({
+  useCandidatePeers: () => ({
+    data: {
+      candidate_basis: "same_managed_system_active_voc",
+      candidates: [
+        {
+          voc_id: "44444444-4444-4444-4444-444444444444",
+          display_id: "VOC-444",
+          title: "결제 재시도 안내 요청",
+          severity: "high",
+          reporter_facing_status: "received",
+        },
+      ],
+    },
+    isLoading: false,
+    isError: false,
   }),
 }));
 
@@ -296,7 +359,11 @@ vi.mock("@hookform/resolvers/zod", () => ({ zodResolver: vi.fn() }));
 describe("VOC cluster route shells", () => {
   beforeEach(() => {
     navigateMock.mockClear();
+    addClusterMemberMutate.mockClear();
     routeParams = { clusterId: "11111111-1111-1111-1111-111111111111" };
+    clusters.splice(1);
+    clusters[0]!.status = "draft";
+    clusters[0]!.linked_findings = [];
   });
 
   it("renders the cluster index as a ListShell with the selected cluster detail panel", async () => {
@@ -375,5 +442,177 @@ describe("VOC cluster route shells", () => {
     expect(screen.getByText("결제 실패 문의")).toBeInTheDocument();
     expect(screen.queryByText(/VOC 33333333/)).not.toBeInTheDocument();
     expect(screen.getAllByText("CLU-31").length).toBeGreaterThan(0);
+  });
+
+  it("filters list rows by All, Confirmed, and No finding without a backend filter", async () => {
+    const baseCluster = clusters[0]!;
+    clusters.push(
+      {
+        ...baseCluster,
+        id: "55555555-5555-5555-5555-555555555555",
+        display_id: "CLU-32",
+        title: "확정된 연결 없음",
+        status: "confirmed",
+        linked_findings: [],
+      },
+      {
+        ...baseCluster,
+        id: "66666666-6666-6666-6666-666666666666",
+        display_id: "CLU-33",
+        title: "연결된 Finding 있음",
+        status: "draft",
+        linked_findings: [
+          {
+            id: "77777777-7777-7777-7777-777777777777",
+            display_id: "FIN-777",
+            status: "active",
+          },
+        ],
+      },
+    );
+    const { VocClusterListShell } = await import("../$clusterId");
+
+    render(
+      <VocClusterListShell
+        selectedId={null}
+        onSelect={vi.fn()}
+        onCloseDetail={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("반복 결제 문의")).toBeInTheDocument();
+    expect(screen.getByText("확정된 연결 없음")).toBeInTheDocument();
+    expect(screen.getByText("연결된 Finding 있음")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("cluster-tab-confirmed"));
+    expect(screen.getByText("확정된 연결 없음")).toBeInTheDocument();
+    expect(screen.queryByText("반복 결제 문의")).not.toBeInTheDocument();
+    expect(screen.queryByText("연결된 Finding 있음")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("cluster-tab-no-finding"));
+    expect(screen.getByText("반복 결제 문의")).toBeInTheDocument();
+    expect(screen.getByText("확정된 연결 없음")).toBeInTheDocument();
+    expect(screen.queryByText("연결된 Finding 있음")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("cluster-tab-all"));
+    expect(screen.getByText("반복 결제 문의")).toBeInTheDocument();
+    expect(screen.getByText("확정된 연결 없음")).toBeInTheDocument();
+    expect(screen.getByText("연결된 Finding 있음")).toBeInTheDocument();
+  });
+
+  it("clears an inline detail selection when its tab excludes the selected cluster without navigation", async () => {
+    const baseCluster = clusters[0]!;
+    clusters.push({
+      ...baseCluster,
+      id: "55555555-5555-5555-5555-555555555555",
+      display_id: "CLU-32",
+      title: "확정된 연결 없음",
+      status: "confirmed",
+    });
+    const onSelect = vi.fn();
+    const onCloseDetail = vi.fn();
+    const { VocClusterListShell } = await import("../$clusterId");
+
+    render(
+      <VocClusterListShell
+        selectedId={baseCluster.id}
+        onSelect={onSelect}
+        onCloseDetail={onCloseDetail}
+      />,
+    );
+
+    expect(screen.getByTestId("cluster-detail-panel")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("cluster-tab-confirmed"));
+
+    expect(screen.queryByTestId("cluster-detail-panel")).not.toBeInTheDocument();
+    expect(onCloseDetail).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("renders every linked Finding in Execution and exposes its finding route", async () => {
+    clusters[0]!.linked_findings = [
+      {
+        id: "77777777-7777-7777-7777-777777777777",
+        display_id: "FIN-777",
+        status: "active",
+        title: "결제 오류 개선",
+      },
+      {
+        id: "88888888-8888-8888-8888-888888888888",
+        display_id: "FIN-888",
+        status: "validated",
+        title: "결제 안내 개선",
+      },
+    ];
+    const { VocClusterDetailPanel } = await import("../$clusterId");
+
+    render(
+      <VocClusterDetailPanel
+        clusterId="11111111-1111-1111-1111-111111111111"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("cluster-linked-findings-list")).toBeInTheDocument();
+    expect(screen.getByText("FIN-777")).toBeInTheDocument();
+    expect(screen.getByText("결제 오류 개선")).toBeInTheDocument();
+    expect(screen.getByText("active")).toBeInTheDocument();
+    expect(screen.getByText("FIN-888")).toBeInTheDocument();
+    expect(screen.getByText("validated")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Finding 열기" })[0]).toHaveAttribute(
+      "href",
+      "/findings/77777777-7777-7777-7777-777777777777",
+    );
+    expect(screen.queryByTestId("cluster-execution-empty")).not.toBeInTheDocument();
+  });
+
+  it("shows Execution create and link CTAs when no Finding is linked", async () => {
+    const { VocClusterDetailPanel } = await import("../$clusterId");
+
+    render(
+      <VocClusterDetailPanel
+        clusterId="11111111-1111-1111-1111-111111111111"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("cluster-execution-empty")).toBeInTheDocument();
+    expect(screen.getByTestId("cluster-execution-create-finding")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "기존 Finding 연결 (준비 중)" }),
+    ).toBeDisabled();
+    expect(screen.queryByTestId("cluster-linked-findings-list")).not.toBeInTheDocument();
+  });
+
+  it("picks a candidate peer and submits its VOC id instead of accepting a raw UUID", async () => {
+    const { VocClusterDetailPanel } = await import("../$clusterId");
+
+    render(
+      <VocClusterDetailPanel
+        clusterId="11111111-1111-1111-1111-111111111111"
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("cluster-add-voc-button"));
+    expect(screen.getByTestId("add-voc-candidate-picker")).toHaveTextContent(
+      "VOC-444 · 결제 재시도 안내 요청 · high · received",
+    );
+    expect(screen.queryByTestId("add-voc-id-input")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("add-voc-candidate-picker"), {
+      target: { value: "44444444-4444-4444-4444-444444444444" },
+    });
+    fireEvent.submit(screen.getByTestId("add-voc-form"));
+
+    expect(addClusterMemberMutate).toHaveBeenCalledWith(
+      {
+        clusterId: "11111111-1111-1111-1111-111111111111",
+        vocId: "44444444-4444-4444-4444-444444444444",
+      },
+      expect.any(Object),
+    );
   });
 });

@@ -6,6 +6,7 @@
 import {
   type CreateFindingRequest,
   type FindingSeverity,
+  type LinkedFindingDto,
   type VocClusterMemberDto,
   createFindingRequestSchema,
 } from "@fops/shared";
@@ -44,6 +45,7 @@ import { toast } from "sonner";
 
 import { RequestTaskModal } from "@/features/tasks/components/RequestTaskModal";
 import { useAddClusterMember } from "@/features/voc-cluster/hooks/useAddClusterMember";
+import { useCandidatePeers } from "@/features/voc-cluster/hooks/useCandidatePeers";
 import { useConfirmCluster } from "@/features/voc-cluster/hooks/useConfirmCluster";
 import { useCreateFindingFromCluster } from "@/features/voc-cluster/hooks/useCreateFindingFromCluster";
 import { useRemoveClusterMember } from "@/features/voc-cluster/hooks/useRemoveClusterMember";
@@ -92,6 +94,18 @@ type VocClusterMemberPresentation = VocClusterMemberDto & {
 type VocClusterDetailPresentation = {
   display_id?: string | null;
   members?: VocClusterMemberPresentation[];
+  linked_findings?: LinkedFindingDto[];
+};
+
+type VocClusterListPresentation = {
+  id: string;
+  display_id: string;
+  title: string;
+  status: string;
+  created_at: string;
+  member_count: number;
+  members?: { voc_id: string }[] | undefined;
+  linked_findings?: LinkedFindingDto[] | undefined;
 };
 
 function shortId(id: string): string {
@@ -183,11 +197,28 @@ export function VocClusterListShell({
 }): React.ReactElement {
   const listQuery = useVocClusterList();
   const clusters = listQuery.data?.items ?? [];
+  const [activeTab, setActiveTab] = useState<"all" | "confirmed" | "no-finding">(
+    "all",
+  );
+  const visibleClusters = clusters.filter((cluster) => {
+    if (activeTab === "confirmed") return cluster.status === "confirmed";
+    if (activeTab === "no-finding") return (cluster.linked_findings ?? []).length === 0;
+    return true;
+  });
 
   React.useEffect(() => {
-    if (defaultToFirst && selectedId === null && clusters[0])
-      onSelect(clusters[0].id);
-  }, [clusters, defaultToFirst, onSelect, selectedId]);
+    if (defaultToFirst && selectedId === null && visibleClusters[0])
+      onSelect(visibleClusters[0].id);
+  }, [defaultToFirst, onSelect, selectedId, visibleClusters]);
+
+  React.useEffect(() => {
+    if (
+      selectedId !== null &&
+      !visibleClusters.some((cluster) => cluster.id === selectedId)
+    ) {
+      onCloseDetail();
+    }
+  }, [onCloseDetail, selectedId, visibleClusters]);
 
   return (
     <ListShell
@@ -198,15 +229,19 @@ export function VocClusterListShell({
       }}
       list={
         <ClusterListBody
-          clusters={clusters}
+          clusters={visibleClusters}
+          allClusters={clusters}
           isPending={listQuery.isPending}
           isError={listQuery.isError}
           selectedId={selectedId}
           onSelect={onSelect}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
         />
       }
       detailPanel={
-        selectedId ? (
+        selectedId !== null &&
+        visibleClusters.some((cluster) => cluster.id === selectedId) ? (
           <VocClusterDetailPanel
             clusterId={selectedId}
             onClose={onCloseDetail}
@@ -219,68 +254,107 @@ export function VocClusterListShell({
 
 function ClusterListBody({
   clusters,
+  allClusters,
   isPending,
   isError,
   selectedId,
   onSelect,
+  activeTab,
+  onTabChange,
 }: {
-  clusters: Array<{
-    id: string;
-    display_id: string;
-    title: string;
-    status: string;
-    created_at: string;
-    member_count: number;
-    members?: { voc_id: string }[] | undefined;
-  }>;
+  clusters: VocClusterListPresentation[];
+  allClusters: VocClusterListPresentation[];
   isPending: boolean;
   isError: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  activeTab: "all" | "confirmed" | "no-finding";
+  onTabChange: (tab: "all" | "confirmed" | "no-finding") => void;
 }): React.ReactElement {
+  const tabs = [
+    { key: "all" as const, label: "전체", count: allClusters.length },
+    {
+      key: "confirmed" as const,
+      label: "확정",
+      count: allClusters.filter((cluster) => cluster.status === "confirmed").length,
+    },
+    {
+      key: "no-finding" as const,
+      label: "Finding 없음",
+      count: allClusters.filter((cluster) => (cluster.linked_findings ?? []).length === 0)
+        .length,
+    },
+  ];
+
   return (
     <section className="flex min-h-full flex-col">
-      <div className="border-b border-border-subtle px-5 py-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            클러스터 목록
-          </h3>
-          <span className="text-xs text-text-muted">{clusters.length}개</span>
-        </div>
-      </div>
-
-      {isPending ? (
-        <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </div>
-      ) : isError ? (
-        <p
-          className="p-4 text-sm text-accent-danger"
-          data-testid="cluster-list-error"
-        >
-          데이터를 불러오지 못했습니다.
-        </p>
-      ) : clusters.length === 0 ? (
+      <div
+        className="flex h-toolbar items-center justify-between gap-3 border-b border-border-subtle bg-surface-canvas px-4"
+        data-toolbar-height="50"
+      >
         <div
-          className="p-8 text-center text-sm text-text-muted"
-          data-testid="cluster-empty-state"
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap"
+          role="tablist"
+          aria-label="클러스터 필터"
         >
-          생성된 클러스터가 없습니다.
-        </div>
-      ) : (
-        <div data-testid="cluster-list">
-          {clusters.map((cluster) => (
-            <ClusterRow
-              key={cluster.id}
-              cluster={cluster}
-              selected={selectedId === cluster.id}
-              onClick={() => onSelect(cluster.id)}
-            />
+          {tabs.map((tab) => (
+            <Button
+              key={tab.key}
+              type="button"
+              variant={activeTab === tab.key ? "secondary" : "ghost"}
+              size="sm"
+              role="tab"
+              id={`cluster-tab-${tab.key}`}
+              aria-controls="cluster-list-panel"
+              aria-selected={activeTab === tab.key}
+              onClick={() => onTabChange(tab.key)}
+              data-testid={`cluster-tab-${tab.key}`}
+            >
+              {tab.label} {tab.count}
+            </Button>
           ))}
         </div>
-      )}
+        <span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>
+      </div>
+
+      <div
+        id="cluster-list-panel"
+        role="tabpanel"
+        aria-labelledby={`cluster-tab-${activeTab}`}
+      >
+        {isPending ? (
+          <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : isError ? (
+          <p
+            className="p-4 text-sm text-accent-danger"
+            data-testid="cluster-list-error"
+          >
+            데이터를 불러오지 못했습니다.
+          </p>
+        ) : clusters.length === 0 ? (
+          <div
+            className="p-8 text-center text-sm text-text-muted"
+            data-testid="cluster-empty-state"
+          >
+            생성된 클러스터가 없습니다.
+          </div>
+        ) : (
+          <div data-testid="cluster-list">
+            {clusters.map((cluster) => (
+              <ClusterRow
+                key={cluster.id}
+                cluster={cluster}
+                selected={selectedId === cluster.id}
+                onClick={() => onSelect(cluster.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -290,15 +364,7 @@ function ClusterRow({
   selected,
   onClick,
 }: {
-  cluster: {
-    id: string;
-    display_id: string;
-    title: string;
-    status: string;
-    created_at: string;
-    member_count: number;
-    members?: { voc_id: string }[] | undefined;
-  };
+  cluster: VocClusterListPresentation;
   selected: boolean;
   onClick: () => void;
 }): React.ReactElement {
@@ -398,6 +464,7 @@ export function VocClusterDetailPanel({
   }
 
   const members: VocClusterMemberPresentation[] = presentation?.members ?? [];
+  const linkedFindings = presentation?.linked_findings ?? [];
 
   function handleConfirm() {
     confirmMutation.mutate(clusterId, {
@@ -478,6 +545,63 @@ export function VocClusterDetailPanel({
                 />
               </span>
             </FieldRow>
+          </div>
+
+          <SectionDivider />
+
+          <div className="flex flex-col gap-3" data-anchor="execution">
+            <PanelSectionTitle>실행</PanelSectionTitle>
+            {linkedFindings.length > 0 ? (
+              <div
+                className="flex flex-col gap-2"
+                data-testid="cluster-linked-findings-list"
+              >
+                {linkedFindings.map((finding) => (
+                  <div
+                    key={finding.id}
+                    className="flex flex-col gap-2 rounded-md border border-border-subtle bg-surface-card p-4"
+                    data-testid={`cluster-linked-finding-${finding.id}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <OutlineBadge data-testid={`finding-status-badge-${finding.status}`}>
+                        {finding.status}
+                      </OutlineBadge>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs text-text-muted">
+                        {finding.display_id}
+                      </span>
+                      <p className="mt-1 text-sm font-medium text-text-primary">
+                        {(finding as LinkedFindingDto & { title?: string | null }).title ?? finding.display_id}
+                      </p>
+                    </div>
+                    <Link
+                      to="/findings/$findingId"
+                      params={{ findingId: finding.id }}
+                      className="text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
+                    >
+                      Finding 열기
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2" data-testid="cluster-execution-empty">
+                {canMutate && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setCreateFindingOpen(true)}
+                    data-testid="cluster-execution-create-finding"
+                  >
+                    Finding 생성
+                  </Button>
+                )}
+                <Button type="button" variant="outline" size="sm" disabled>
+                  기존 Finding 연결 (준비 중)
+                </Button>
+              </div>
+            )}
           </div>
 
           <SectionDivider />
@@ -682,6 +806,7 @@ function AddVocModal({
   const [vocId, setVocId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mutation = useAddClusterMember();
+  const candidatePeers = useCandidatePeers(clusterId);
 
   function closeAndReset() {
     setVocId("");
@@ -727,17 +852,32 @@ function AddVocModal({
           onSubmit={handleSubmit}
         >
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="add-voc-id" className="text-text-secondary">
-              VOC ID <span aria-hidden>*</span>
+            <Label htmlFor="add-voc-candidate" className="text-text-secondary">
+              추가할 VOC <span aria-hidden>*</span>
             </Label>
-            <Input
-              id="add-voc-id"
-              required
-              value={vocId}
-              placeholder="VOC UUID를 입력하세요."
-              onChange={(e) => setVocId(e.target.value)}
-              data-testid="add-voc-id-input"
-            />
+            {candidatePeers.isLoading ? (
+              <Skeleton className="h-9 w-full" data-testid="candidate-peers-loading" />
+            ) : candidatePeers.isError ? (
+              <p className="text-sm text-accent-danger" data-testid="candidate-peers-error">
+                추가 가능한 VOC를 불러오지 못했습니다.
+              </p>
+            ) : (
+              <select
+                id="add-voc-candidate"
+                required
+                value={vocId}
+                onChange={(e) => setVocId(e.target.value)}
+                data-testid="add-voc-candidate-picker"
+                className="h-9 w-full rounded-md border border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">추가할 VOC를 선택하세요.</option>
+                {(candidatePeers.data?.candidates ?? []).map((candidate) => (
+                  <option key={candidate.voc_id} value={candidate.voc_id}>
+                    {candidate.display_id} · {candidate.title} · {candidate.severity ?? "미지정"} · {candidate.reporter_facing_status}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           {error && (
             <p
@@ -761,7 +901,7 @@ function AddVocModal({
           <Button
             type="submit"
             form="add-voc-form"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || !vocId}
             data-testid="add-voc-submit"
           >
             추가
