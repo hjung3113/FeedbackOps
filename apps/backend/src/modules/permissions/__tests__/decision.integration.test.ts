@@ -60,6 +60,8 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   });
 
   beforeEach(async () => {
+    await db.pool.query('delete from core.idempotency_keys');
+    await db.pool.query('delete from core.rate_limits');
     const actor = await insertDevActor(db, WORKSPACE_ID, `perm-decision-${randomUUID()}`);
     requesterId = actor.id;
     requesterExternalId = actor.externalId;
