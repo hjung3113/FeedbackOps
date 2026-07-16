@@ -1,4 +1,6 @@
-import { z } from 'zod';
+import { z } from "zod";
+
+export * from "./decisions.js";
 
 // State vocabulary per docs/frontend/specs/voc.md §4.2 (PermissionDecisionState).
 // Envelope appears ONLY for blocked states — 'allow' has no envelope; an
@@ -9,12 +11,13 @@ import { z } from 'zod';
 //   blocked_not_requestable — structural restriction; actor must not learn
 //                            they could request access
 export const PERMISSION_DECISION_STATES = [
-  'request_access',
-  'summary_visible',
-  'denied',
-  'blocked_not_requestable',
+  "request_access",
+  "summary_visible",
+  "denied",
+  "blocked_not_requestable",
 ] as const;
-export type PermissionDecisionState = (typeof PERMISSION_DECISION_STATES)[number];
+export type PermissionDecisionState =
+  (typeof PERMISSION_DECISION_STATES)[number];
 
 // `summary` is a SafeSummary; the precise shape lives outside this module
 // (voc.md §4.2 references it but the type is owned by the permission policy
@@ -38,5 +41,8 @@ export type PermissionDecision = z.infer<typeof permissionDecisionSchema>;
 
 // Envelope: keys are decision purposes (linkedFinding, linkedTask, ...).
 // Values must match permissionDecisionSchema; unknown-shaped values are rejected.
-export const permissionDecisionsEnvelopeSchema = z.record(z.string(), permissionDecisionSchema);
+export const permissionDecisionsEnvelopeSchema = z.record(
+  z.string(),
+  permissionDecisionSchema,
+);
 export type PermissionDecisionsEnvelope = Record<string, PermissionDecision>;
