@@ -112,6 +112,7 @@ export const registeredEntityLinkPairs = [
   { source_type: 'voc', target_type: 'finding', relation_type: 'created_finding' },
   { source_type: 'voc', target_type: 'finding', relation_type: 'evidence_of' },
   { source_type: 'voc_cluster', target_type: 'finding', relation_type: 'created_finding' },
+  { source_type: 'voc_cluster', target_type: 'finding', relation_type: 'evidence_of' },
   { source_type: 'finding', target_type: 'task_request', relation_type: 'requested_task' },
   { source_type: 'task_request', target_type: 'task', relation_type: 'converted_to' },
   { source_type: 'finding', target_type: 'task', relation_type: 'requested_task' },

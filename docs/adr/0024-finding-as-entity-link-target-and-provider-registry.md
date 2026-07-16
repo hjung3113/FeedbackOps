@@ -137,6 +137,26 @@ Authz reuses `finding.manage` on the Finding's `primary_managed_system_id`; no n
 introduced. Successful non-no-op transitions write audit event `finding_status_changed` with
 `finding_id`, `from_status`, `to_status`, `primary_managed_system_id`, and optional `reason`.
 
+### Section J — Existing Finding links from a VOC Cluster (#127)
+
+`POST /voc-clusters/:id/link-finding` creates the additive tuple
+`(voc_cluster → finding, evidence_of)`. This is evidence association, not
+creation provenance: `created_finding` remains exclusive to the command that
+actually creates the Finding, because using it for a pre-existing Finding would
+make a false statement in both the entity-link and audit history.
+
+This command-only tuple is categorically excluded from every generic
+entity-link surface: POST, both GET/list modes, and PATCH/detach. Generic
+surfaces respond non-disclosively; PATCH/detach returns the same 404 envelope
+as an absent link rather than revealing the tuple through a distinct response.
+
+Cross-Managed-System targets remain valid. Every cluster list and detail
+projection instead applies the target Finding's own read scope (Admin or
+`finding.read` on its Primary Managed System) to every linked Finding. An
+unreadable target is omitted completely; no placeholder or count may reveal it.
+The link command hides an unreadable cluster or target as `404`, and requires
+`finding.manage` on both readable endpoint scopes.
+
 ## Consequences
 
 - The provider-registry refactor is the largest single piece of Slice 5 and a prerequisite for cluster (Slice 5 follow-on), Survey (Slice 8), and Task (Slice 6) link targets — all become additive provider registrations.

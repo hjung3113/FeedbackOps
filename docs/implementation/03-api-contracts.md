@@ -608,6 +608,7 @@ DELETE /voc-clusters/:id/vocs/:voc_id
 POST /voc-clusters/:id/public-update-candidate
 POST /voc-clusters/:id/apply-public-update-candidate
 POST /voc-clusters/:id/create-finding
+POST /voc-clusters/:id/link-finding
 POST /voc-clusters/:id/request-task
 ```
 
@@ -628,12 +629,14 @@ records. Cluster merge and split endpoints are out of scope for MVP.
 | Bulk Public Update candidate | `POST /voc-clusters/:id/public-update-candidate` validates and returns shared draft content after `finding.manage`; it writes no Public Update or audit row. |
 | Bulk Public Update apply | `POST /voc-clusters/:id/apply-public-update-candidate` accepts selected member `voc_ids` plus the candidate. Each readable selected member is delegated in its own transaction to the canonical per-VOC Public Update command, including its `voc.triage` recheck and normal audits; outcomes are `applied` or `skipped`. Hidden and absent membership both return the same `not_found` skip reason. |
 | Create finding | `POST /voc-clusters/:id/create-finding` — body = `CreateFindingRequest` (same as `POST /vocs/:id/create-finding`); requires `Idempotency-Key` (UUIDv4). → `201` `FindingDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `source={ type:'voc_cluster', id, relation_type:'created_finding', link_id }`. Writes `finding_created_from_voc_cluster` + the `entity_link.created` audit in the finding txn. |
+| Link existing Finding | `POST /voc-clusters/:id/link-finding` — body `{ finding_id: uuid }`; requires `Idempotency-Key` (UUIDv4). It creates `(voc_cluster, finding, evidence_of)` and returns `201 { id, display_id, status }`; a duplicate active link returns `200` with the same body and writes no second audit. The actor must be able to read and manage both the cluster MS and the target Finding's own MS; an unreadable cluster or target is `404`, while a readable target without `finding.manage` is `403`. Writes `finding_linked_to_voc_cluster` and `entity_link.created`. |
 | Request task | `POST /voc-clusters/:id/request-task` — body = `{ evidence_summary, requested_outcome }` (same as Finding request-task); requires `Idempotency-Key` (UUIDv4). → `201` `TaskRequestDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `status='pending_review'`, `source={ type:'voc_cluster', id, relation_type:'requested_task', link_id }`. Writes `task_request_created_from_voc_cluster` + the `entity_link.created` audit in the task-request txn. |
 | Authz | Read/list/candidate endpoint cluster gate = Admin OR Developer with `finding.read` on the cluster MS. Candidate item visibility additionally requires Admin, candidate-MS `voc.read`, or reporter ownership. Create/edit/confirm/member-add/remove/create-finding = Admin OR Developer with `finding.manage` on the cluster MS. Reuses the Finding capabilities (no `voc_cluster.*` caps) — see ADR-0024 §H. |
 | Candidate-peer errors | Invalid cluster UUID → `422 validation.failed`; missing or cluster-unreadable → `404 not_found.record`; missing session → `401 authentication.required`; workspace mismatch → `403 workspace.mismatch`. A readable cluster with zero candidate authority is not an error and returns `200` with `candidates: []`. |
 | Create-finding denial | Source-unreadable ⇒ `404 not_found.record` (hidden); readable-but-no-`finding.manage` ⇒ `403 permission.denied` (mirrors ADR-0024 §C). |
 | Idempotency | `Idempotency-Key`-scoped (same as `POST /vocs/:id/create-finding`): same key replays the same finding; distinct keys create distinct findings. |
-| Audit events | `voc_cluster_created`, `voc_cluster_updated`, `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`, `task_request_created_from_voc_cluster`. |
+| Linked Findings visibility | `linked_findings` on both list and detail contains every active `created_finding` or `evidence_of` Finding link that is readable under Admin or `finding.read` on that Finding's own Primary Managed System. Unreadable targets are omitted entirely, including from list projections. |
+| Audit events | `voc_cluster_created`, `voc_cluster_updated`, `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`, `finding_linked_to_voc_cluster`, `entity_link.created`, `task_request_created_from_voc_cluster`. |
 
 ### Task Request Create From VOC / VOC Cluster Contract
 
@@ -832,6 +835,11 @@ PATCH /entity-links/:id
 
 Link detach/revoke is represented by `PATCH /entity-links/:id` status
 transition. There is no hard-delete endpoint for entity links as of Slice 6.
+The command-only `(voc_cluster, finding, evidence_of)` tuple is unavailable on
+every generic entity-link surface: POST, both GET/list modes, and PATCH/detach.
+Generic PATCH treats that tuple exactly as an absent link, returning the same
+non-disclosing `404 not_found.record` envelope rather than a distinguishable
+`422` response.
 
 ### VOC Similarity Projection
 

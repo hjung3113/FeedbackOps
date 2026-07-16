@@ -107,6 +107,15 @@ export const vocClusterPublicUpdateOutcomeSchema = z
   .strict();
 export type VocClusterPublicUpdateOutcome = z.infer<typeof vocClusterPublicUpdateOutcomeSchema>;
 
+export const linkedFindingDtoSchema = z
+  .object({
+    id: z.string().uuid(),
+    display_id: z.string(),
+    status: findingStatusSchema,
+  })
+  .strict();
+export type LinkedFindingDto = z.infer<typeof linkedFindingDtoSchema>;
+
 export const vocClusterDtoSchema = z
   .object({
     id: z.string().uuid(),
@@ -127,17 +136,7 @@ export const vocClusterDtoSchema = z
     updated_at: z.string().datetime(),
     member_count: z.number().int().nonnegative(),
     members: z.array(vocClusterMemberDtoSchema).optional(),
-    linked_findings: z
-      .array(
-        z
-          .object({
-            id: z.string().uuid(),
-            display_id: z.string(),
-            status: findingStatusSchema,
-          })
-          .strict(),
-      )
-      .optional(),
+    linked_findings: z.array(linkedFindingDtoSchema).optional(),
   })
   .strict();
 export type VocClusterDto = z.infer<typeof vocClusterDtoSchema>;
@@ -152,4 +151,13 @@ export type ListVocClustersResponse = z.infer<typeof listVocClustersResponseSche
 export const createFindingFromVocClusterRequestSchema = createFindingRequestSchema;
 export type CreateFindingFromVocClusterRequest = z.infer<
   typeof createFindingFromVocClusterRequestSchema
+>;
+
+export const linkExistingFindingToVocClusterRequestSchema = z
+  .object({
+    finding_id: z.string().uuid(),
+  })
+  .strict();
+export type LinkExistingFindingToVocClusterRequest = z.infer<
+  typeof linkExistingFindingToVocClusterRequestSchema
 >;

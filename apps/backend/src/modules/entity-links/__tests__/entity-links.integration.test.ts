@@ -4,6 +4,7 @@
 // required because core.entity_links is append-only to fops_app.
 
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type EntityLinkEntityType, registeredEntityLinkPairs } from '@fops/shared';
@@ -383,7 +384,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     }
   });
 
-  it('POST and GET honor every shared registered entity-link tuple', async () => {
+  it('POST honors generic tuples while leaving command-only tuples to their domain route', async () => {
     const { endpoints, vocTarget } = await seedRegisteredTupleEndpoints();
 
     for (const tuple of registeredEntityLinkPairs) {
@@ -397,7 +398,16 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         target: { type: tuple.target_type, id: target.id },
         relation_type: tuple.relation_type,
       });
-      expect(created.statusCode, JSON.stringify(tuple)).toBeGreaterThanOrEqual(200);
+      if (
+        tuple.source_type === 'voc_cluster' &&
+        tuple.target_type === 'finding' &&
+        tuple.relation_type === 'evidence_of'
+      ) {
+        expect(created.statusCode, JSON.stringify(tuple)).toBe(422);
+        continue;
+      } else {
+        expect(created.statusCode, JSON.stringify(tuple)).toBeGreaterThanOrEqual(200);
+      }
       expect(created.statusCode, JSON.stringify(tuple)).toBeLessThanOrEqual(201);
       const createdBody = created.json<{
         id: string;
@@ -524,6 +534,138 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(hidden).toBeDefined();
     expect(hidden?.target_id).toBeUndefined();
     expect(hidden?.source_id).toBeUndefined();
+  });
+
+  it('generic endpoints neither create nor disclose command-only cluster Finding evidence links', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cmd-a`,
+      'Command source MS',
+    );
+    const msB = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cmd-b`,
+      'Command target MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Command source VOC',
+    );
+    const cluster = await insertVocClusterRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: 'Command-only cluster',
+      createdBy: adminActorId,
+    });
+    const finding = await seedFindingDirectly({ managedSystemId: msB, sourceVocId: sourceVoc.id });
+    const linkId = await seedEntityLinkDirectly({
+      sourceType: 'voc_cluster',
+      sourceId: cluster.id,
+      targetType: 'finding',
+      targetId: finding.id,
+      relationType: 'evidence_of',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('cmd-only'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'finding.read', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const create = await postEntityLink(devCookie, cluster.id, finding.id, {
+      source: { type: 'voc_cluster', id: cluster.id },
+      target: { type: 'finding', id: finding.id },
+      relation_type: 'evidence_of',
+    });
+    expect(create.statusCode).toBe(422);
+
+    // Admin can read both endpoints, so this omission depends on the
+    // command-only tuple policy rather than endpoint authorization.
+    const adminListed = await getEntityLinks(
+      adminCookie,
+      `?source_type=voc_cluster&source_id=${cluster.id}`,
+    );
+    expect(adminListed.statusCode).toBe(200);
+    expect(
+      adminListed.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId),
+    ).toBe(false);
+    const adminInventory = await getEntityLinks(adminCookie, '?scope=workspace');
+    expect(adminInventory.statusCode).toBe(200);
+    expect(
+      adminInventory
+        .json<{ items: Array<{ id: string }> }>()
+        .items.some((item) => item.id === linkId),
+    ).toBe(false);
+
+    const listed = await getEntityLinks(
+      devCookie,
+      `?source_type=voc_cluster&source_id=${cluster.id}`,
+    );
+    expect(listed.statusCode).toBe(200);
+    expect(
+      listed.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId),
+    ).toBe(false);
+  });
+
+  it('PATCH returns the absent-link 404 envelope for a command-only link before endpoint authorization', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cmd-patch-a`,
+      'Command PATCH source MS',
+    );
+    const msB = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cmd-patch-b`,
+      'Command PATCH target MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Command PATCH source VOC',
+    );
+    const cluster = await insertVocClusterRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: 'Command-only PATCH cluster',
+      createdBy: adminActorId,
+    });
+    const finding = await seedFindingDirectly({ managedSystemId: msB, sourceVocId: sourceVoc.id });
+    const linkId = await seedEntityLinkDirectly({
+      sourceType: 'voc_cluster',
+      sourceId: cluster.id,
+      targetType: 'finding',
+      targetId: finding.id,
+      relationType: 'evidence_of',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+    const { id: devId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('cmd-patch'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'finding.read', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const absent = await patchEntityLink(devCookie, randomUUID(), { reason: 'Probe absent link' });
+    const commandOnly = await patchEntityLink(devCookie, linkId, { reason: 'Probe command link' });
+    const privilegedCommandOnly = await patchEntityLink(adminCookie, linkId, {
+      reason: 'Probe command link as admin',
+    });
+
+    expect(absent.statusCode).toBe(404);
+    expect(commandOnly.statusCode).toBe(404);
+    expect(commandOnly.body).toBe(absent.body);
+    expect(privilegedCommandOnly.statusCode).toBe(404);
+    expect(privilegedCommandOnly.body).toBe(absent.body);
   });
 
   it('GET by VOC source accepts managed-system scoped voc.triage without voc.read', async () => {

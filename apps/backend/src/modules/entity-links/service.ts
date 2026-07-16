@@ -395,8 +395,19 @@ function providerFor(type: EntityLinkEntityType): EntityLinkProvider {
   return entityLinkProviders[type];
 }
 
-const creatableEntityLinkPairs = registeredEntityLinkPairs;
-const listVisibleEntityLinkPairs = registeredEntityLinkPairs;
+// The registry is the DB/audit allowlist. Some registered tuples are written only by
+// domain commands, whose compound authorization and audit obligations cannot be
+// represented by the generic endpoints.
+const genericEntityLinkPairs = registeredEntityLinkPairs.filter(
+  (pair) =>
+    !(
+      pair.source_type === 'voc_cluster' &&
+      pair.target_type === 'finding' &&
+      pair.relation_type === 'evidence_of'
+    ),
+);
+const creatableEntityLinkPairs = genericEntityLinkPairs;
+const listVisibleEntityLinkPairs = genericEntityLinkPairs;
 
 function tupleListIncludes(
   pairs: readonly EntityLinkPair[],
@@ -462,16 +473,6 @@ async function evaluateRowVisibility(
   row: EntityLinkRow,
   resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
 ): Promise<LinkVisibilityDecision> {
-  if (
-    !isListVisibleTuple({
-      sourceType: row.source_type,
-      targetType: row.target_type,
-      relationType: row.relation_type,
-    })
-  ) {
-    return 'hidden';
-  }
-
   const sourceRef = { type: row.source_type, id: row.source_id };
   const targetRef = { type: row.target_type, id: row.target_id };
   const [source, target] = await Promise.all([
@@ -646,6 +647,15 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     ]);
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
+      if (
+        !isListVisibleTuple({
+          sourceType: row.source_type,
+          targetType: row.target_type,
+          relationType: row.relation_type,
+        })
+      ) {
+        continue;
+      }
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
@@ -671,6 +681,15 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const resolvedByEndpoint = new Map<string, LinkEndpointRow | null>();
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
+      if (
+        !isListVisibleTuple({
+          sourceType: row.source_type,
+          targetType: row.target_type,
+          relationType: row.relation_type,
+        })
+      ) {
+        continue;
+      }
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
@@ -690,19 +709,15 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       workspaceId: actor.workspace_id,
       linkId,
     });
-    if (!link) {
-      throw new HttpError('not_found.record', 'entity link not found');
-    }
     if (
+      !link ||
       !isCreatableTuple({
         sourceType: link.source_type,
         targetType: link.target_type,
         relationType: link.relation_type,
       })
     ) {
-      throw new HttpError('validation.failed', 'unsupported entity link tuple', {
-        fields: [{ path: [], code: 'unsupported_tuple' }],
-      });
+      throw new HttpError('not_found.record', 'entity link not found');
     }
     const sourceProvider = providerFor(link.source_type);
     const targetProvider = providerFor(link.target_type);

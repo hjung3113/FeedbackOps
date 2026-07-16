@@ -2,6 +2,7 @@ import {
   type AddVocClusterMemberRequest,
   type ApplyVocClusterPublicUpdateRequest,
   type CreateFindingFromVocClusterRequest,
+  type LinkExistingFindingToVocClusterRequest,
   type CreateVocClusterRequest,
   type ListSameManagedSystemCandidatePeersResponse,
   type ListVocClustersResponse,
@@ -20,7 +21,9 @@ import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { insertActiveEntityLink } from '../entity-links/repo.js';
 import { insertFinding } from '../findings/repo.js';
+import { lockFindingById } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { actorScopeForCapability } from '../permissions/scope-service.js';
 import type { ConversationService } from '../voc/conversation-service.js';
 import { type Scope, actorReadScope } from '../voc/repo-read.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
@@ -178,6 +181,17 @@ function authorizedMembers(
   );
 }
 
+function isInScope(scope: Scope, managedSystemId: string): boolean {
+  return scope.kind === 'all' || scope.managedSystemIds.includes(managedSystemId);
+}
+
+async function actorFindingReadScope(
+  db: Db | Tx,
+  actor: VocClustersActor,
+): Promise<Scope> {
+  return actorScopeForCapability(db, actor, 'finding.read');
+}
+
 async function authorizedMembersByCluster(
   deps: Pick<VocClustersServiceDeps, 'db'>,
   actor: VocClustersActor,
@@ -303,12 +317,10 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       workspaceId: args.actor.workspace_id,
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
     });
-    const readableRows: VocClusterRow[] = [];
-    for (const row of rows) {
-      const readable = await canReadCluster(deps, args.actor, row.primary_managed_system_id);
-      if (!readable) continue;
-      readableRows.push(row);
-    }
+    const findingReadScope = await actorFindingReadScope(deps.db, args.actor);
+    const readableRows = rows.filter((row) =>
+      isInScope(findingReadScope, row.primary_managed_system_id),
+    );
     const readScope = await actorReadScope(deps.db, args.actor);
     const membersByCluster = await authorizedMembersByCluster(
       deps,
@@ -319,6 +331,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
       workspaceId: args.actor.workspace_id,
       clusterIds: readableRows.map((row) => row.id),
+      findingReadScope,
     });
     const linkedFindingsByClusterId = new Map<string, CreatedFindingForClusterRow[]>();
     for (const finding of linkedFindings) {
@@ -361,9 +374,11 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       await listVocClusterMembers(deps.db, { clusterId: row.id }),
       row.primary_managed_system_id,
     );
+    const findingReadScope = await actorFindingReadScope(deps.db, args.actor);
     const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
       workspaceId: args.actor.workspace_id,
       clusterIds: [row.id],
+      findingReadScope,
     });
     return clusterToDto({ ...row, member_count: members.length }, members, linkedFindings);
   }
@@ -744,7 +759,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             workspaceId: args.actor.workspace_id,
             clusterId: args.clusterId,
           });
-          if (!cluster) throw new HttpError('not_found.record', 'voc cluster not found');
+          if (!cluster) throw new HttpError('not_found.record', 'record not found');
 
           const canManageClusterScope = await canManageCluster(
             deps,
@@ -884,6 +899,148 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     });
   }
 
+  async function linkExistingFinding(args: {
+    actor: VocClustersActor;
+    clusterId: string;
+    input: LinkExistingFindingToVocClusterRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{
+    status: number;
+    body: NonNullable<VocClusterDto['linked_findings']>[number];
+  }> {
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const cluster = await lockVocClusterById(tx, {
+            workspaceId: args.actor.workspace_id,
+            clusterId: args.clusterId,
+          });
+          if (!cluster) throw new HttpError('not_found.record', 'record not found');
+
+          const findingReadScope = await actorFindingReadScope(tx, args.actor);
+          if (!isInScope(findingReadScope, cluster.primary_managed_system_id)) {
+            throw new HttpError('not_found.record', 'record not found');
+          }
+
+          const finding = await lockFindingById(tx, {
+            workspaceId: args.actor.workspace_id,
+            findingId: args.input.finding_id,
+          });
+          if (!finding || !isInScope(findingReadScope, finding.primary_managed_system_id)) {
+            throw new HttpError('not_found.record', 'record not found');
+          }
+
+          const [clusterManageDecision, findingManageDecision] = await Promise.all([
+            deps.checkService.checkCapability(
+              args.actor,
+              'finding.manage',
+              {
+                workspace_id: args.actor.workspace_id,
+                managed_system_id: cluster.primary_managed_system_id,
+              },
+              { tx },
+            ),
+            deps.checkService.checkCapability(
+              args.actor,
+              'finding.manage',
+              {
+                workspace_id: args.actor.workspace_id,
+                managed_system_id: finding.primary_managed_system_id,
+              },
+              { tx },
+            ),
+          ]);
+          if (!clusterManageDecision.allow || !findingManageDecision.allow) {
+            const missingScope = [clusterManageDecision, findingManageDecision].some(
+              (decision) => !decision.allow && decision.reason === 'no_grant',
+            );
+            if (args.actor.role_level === 'developer' && missingScope) {
+              throw new HttpError(
+                'permission.scope_required',
+                'finding.manage capability required; developer needs MS-scoped grant',
+                {
+                  requiredScope: [
+                    ...new Set(
+                      [
+                        !clusterManageDecision.allow
+                          ? cluster.primary_managed_system_id
+                          : undefined,
+                        !findingManageDecision.allow
+                          ? finding.primary_managed_system_id
+                          : undefined,
+                      ].filter((id): id is string => id !== undefined),
+                    ),
+                  ],
+                  requestable_permission: { permission: 'finding.manage' },
+                },
+              );
+            }
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          const evidenceTuple = registeredEntityLinkPairSchema.parse({
+            source_type: 'voc_cluster',
+            target_type: 'finding',
+            relation_type: 'evidence_of',
+          });
+          const link = await insertActiveEntityLink(tx, {
+            workspaceId: args.actor.workspace_id,
+            sourceType: evidenceTuple.source_type,
+            sourceId: cluster.id,
+            targetType: evidenceTuple.target_type,
+            targetId: finding.id,
+            relationType: evidenceTuple.relation_type,
+            managedSystemId: cluster.primary_managed_system_id,
+            createdBy: args.actor.actor_id,
+            visibility: 'internal_only',
+          });
+
+          if (link.inserted) {
+            await deps.auditService.record(tx, {
+              workspace_id: args.actor.workspace_id,
+              actor_id: args.actor.actor_id,
+              event_type: 'finding_linked_to_voc_cluster',
+              subject_type: 'finding',
+              subject_id: finding.id,
+              summary: 'Finding linked to VOC Cluster',
+              detail: {
+                finding_id: finding.id,
+                voc_cluster_id: cluster.id,
+                primary_managed_system_id: finding.primary_managed_system_id,
+                relation_type: 'evidence_of',
+              },
+            });
+            await deps.auditService.record(tx, {
+              workspace_id: args.actor.workspace_id,
+              actor_id: args.actor.actor_id,
+              event_type: 'entity_link.created',
+              subject_type: 'entity_link',
+              subject_id: link.row.id,
+              summary: 'Entity link created',
+              detail: {
+                link_id: link.row.id,
+                source: { type: 'voc_cluster', id: cluster.id },
+                target: { type: 'finding', id: finding.id },
+                relation_type: 'evidence_of',
+                visibility: 'internal_only',
+              },
+            });
+          }
+
+          return {
+            status: link.inserted ? 201 : 200,
+            body: { id: finding.id, display_id: finding.display_id, status: finding.status },
+          };
+        },
+      );
+    });
+  }
+
   return {
     createCluster,
     listClusters,
@@ -895,6 +1052,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     createPublicUpdateCandidate,
     applyPublicUpdateCandidate,
     createFindingFromCluster,
+    linkExistingFinding,
   };
 }
 
