@@ -657,10 +657,15 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
     const absent = await patchEntityLink(devCookie, randomUUID(), { reason: 'Probe absent link' });
     const commandOnly = await patchEntityLink(devCookie, linkId, { reason: 'Probe command link' });
+    const privilegedCommandOnly = await patchEntityLink(adminCookie, linkId, {
+      reason: 'Probe command link as admin',
+    });
 
     expect(absent.statusCode).toBe(404);
     expect(commandOnly.statusCode).toBe(404);
     expect(commandOnly.body).toBe(absent.body);
+    expect(privilegedCommandOnly.statusCode).toBe(404);
+    expect(privilegedCommandOnly.body).toBe(absent.body);
   });
 
   it('GET by VOC source accepts managed-system scoped voc.triage without voc.read', async () => {
