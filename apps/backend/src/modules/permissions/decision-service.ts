@@ -97,8 +97,14 @@ export function createDecisionService(deps: DecisionServiceDeps) {
         const capability: Capability = request.requestedCapability;
         const reason = body.reason?.trim();
         const note = body.note?.trim();
+        if (action === 'approve' && isSensitiveCapability(capability) && !reason) {
+          throw new HttpError(
+            'validation.sensitive_reason_required',
+            'a non-empty reason is required for sensitive capabilities',
+            { capability },
+          );
+        }
         if (
-          (action === 'approve' && isSensitiveCapability(capability) && !reason) ||
           ((action === 'reject' || action === 'deny') && !reason) ||
           (action === 'need_more_info' && !note)
         ) {
@@ -233,19 +239,19 @@ export function createDecisionService(deps: DecisionServiceDeps) {
     rejectRequest: (
       actor: ActorContext,
       requestId: string,
-      body: { reason: string },
+      body: { reason?: string },
       options?: DecisionOptions,
     ) => decide(actor, requestId, 'reject', body, options),
     needMoreInfoRequest: (
       actor: ActorContext,
       requestId: string,
-      body: { note: string },
+      body: { note?: string },
       options?: DecisionOptions,
     ) => decide(actor, requestId, 'need_more_info', body, options),
     denyRequest: (
       actor: ActorContext,
       requestId: string,
-      body: { reason: string },
+      body: { reason?: string },
       options?: DecisionOptions,
     ) => decide(actor, requestId, 'deny', body, options),
   };

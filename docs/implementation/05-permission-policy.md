@@ -199,7 +199,9 @@ POST /permissions/requests/:id/deny            { reason: string }
   deny takes precedence only for checks in that same Managed System.
 - Reject, deny, and need-more-info require a non-empty trimmed reason/note.
   Approve requires one only for `isSensitiveCapability`; it is optional for a
-  non-sensitive capability. Reviewers cannot alter requested scope or expiry.
+  non-sensitive capability. Missing decision reason/note is a `validation.*`
+  response (`422`), including `validation.sensitive_reason_required` for a
+  sensitive approval. Reviewers cannot alter requested scope or expiry.
 - Unknown request IDs are `not_found.record` (`404`); non-decidable requests
   are `conflict.stale_write` (`409`). Duplicate active grants/denies are
   `conflict.capability_already_granted` / `conflict.capability_already_denied`.

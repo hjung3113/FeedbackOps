@@ -336,12 +336,15 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     ['need-more-info', 'workspace.read', { note: '' }],
   ] as const)('requires a reason for %s', async (action, capability, payload) => {
     const response = await decide(await seedRequest({ capability }), action, payload);
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(422);
+    expect(response.json().code).toBe('validation.failed');
   });
 
   it('requires a reason for sensitive approval but not non-sensitive approval', async () => {
     const sensitive = await seedRequest({ capability: 'workspace.admin' });
-    expect((await decide(sensitive, 'approve', {})).statusCode).toBe(400);
+    const sensitiveResponse = await decide(sensitive, 'approve', {});
+    expect(sensitiveResponse.statusCode).toBe(422);
+    expect(sensitiveResponse.json().code).toBe('validation.sensitive_reason_required');
     const nonSensitive = await seedRequest({ capability: 'workspace.read' });
     expect((await decide(nonSensitive, 'approve', {})).statusCode).toBe(200);
   });

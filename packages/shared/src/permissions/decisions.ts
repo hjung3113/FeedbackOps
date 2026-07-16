@@ -1,13 +1,14 @@
 import { z } from 'zod';
 
 const optionalReasonSchema = z.object({ reason: z.string().max(2000).optional() }).strict();
-const requiredReasonSchema = z.object({ reason: z.string().min(1).max(2000) }).strict();
 
 export const approvePermissionRequestSchema = optionalReasonSchema;
-export const rejectPermissionRequestSchema = requiredReasonSchema;
-export const denyPermissionRequestSchema = requiredReasonSchema;
+// Decision reason requirements are domain validation, not transport validation:
+// the service trims and returns the ADR-0012 validation.* envelope (422).
+export const rejectPermissionRequestSchema = optionalReasonSchema;
+export const denyPermissionRequestSchema = optionalReasonSchema;
 export const needMoreInfoPermissionRequestSchema = z
-  .object({ note: z.string().min(1).max(2000) })
+  .object({ note: z.string().max(2000).optional() })
   .strict();
 
 export const permissionDecisionResultSchema = z

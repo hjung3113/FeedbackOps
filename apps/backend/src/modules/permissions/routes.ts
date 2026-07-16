@@ -285,7 +285,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       suffix: 'reject',
       schema: rejectPermissionRequestSchema,
       invoke: (actor, id, body, idempotencyKey) =>
-        decisionService.rejectRequest(actor, id, body as { reason: string }, {
+        decisionService.rejectRequest(actor, id, body as { reason?: string }, {
           idempotencyKey,
         }),
     },
@@ -293,7 +293,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       suffix: 'need-more-info',
       schema: needMoreInfoPermissionRequestSchema,
       invoke: (actor, id, body, idempotencyKey) =>
-        decisionService.needMoreInfoRequest(actor, id, body as { note: string }, {
+        decisionService.needMoreInfoRequest(actor, id, body as { note?: string }, {
           idempotencyKey,
         }),
     },
@@ -301,7 +301,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       suffix: 'deny',
       schema: denyPermissionRequestSchema,
       invoke: (actor, id, body, idempotencyKey) =>
-        decisionService.denyRequest(actor, id, body as { reason: string }, {
+        decisionService.denyRequest(actor, id, body as { reason?: string }, {
           idempotencyKey,
         }),
     },
