@@ -186,6 +186,20 @@ describe.skipIf(!runIntegration)('VOC cluster linked findings contract (#130)', 
     ]);
   });
 
+  it('deduplicates both active cluster-to-Finding relations in list and detail projections', async () => {
+    const cluster = await seedCluster('Deduplicated linked findings cluster');
+    const finding = await seedFinding('Deduplicated linked finding', managedSystemId, cluster.id);
+    await seedFindingLink(cluster.id, finding.id, 'created_finding');
+    await seedFindingLink(cluster.id, finding.id, 'evidence_of');
+
+    const expected = [{ id: finding.id, display_id: finding.display_id, status: 'active' }];
+    const detail = await vocClustersService.getCluster({ actor: actor(), clusterId: cluster.id });
+    const list = await vocClustersService.listClusters({ actor: actor(), managedSystemId });
+
+    expect(detail.linked_findings).toEqual(expected);
+    expect(list.items.find((item) => item.id === cluster.id)?.linked_findings).toEqual(expected);
+  });
+
   it('listClusters returns member_count for populated and empty clusters in the same response', async () => {
     const withMembers = await seedCluster('Member count list cluster');
     const empty = await seedCluster('Empty member count list cluster');

@@ -835,6 +835,11 @@ PATCH /entity-links/:id
 
 Link detach/revoke is represented by `PATCH /entity-links/:id` status
 transition. There is no hard-delete endpoint for entity links as of Slice 6.
+The command-only `(voc_cluster, finding, evidence_of)` tuple is unavailable on
+every generic entity-link surface: POST, both GET/list modes, and PATCH/detach.
+Generic PATCH treats that tuple exactly as an absent link, returning the same
+non-disclosing `404 not_found.record` envelope rather than a distinguishable
+`422` response.
 
 ### VOC Similarity Projection
 

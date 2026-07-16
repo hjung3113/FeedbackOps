@@ -4,6 +4,7 @@
 // required because core.entity_links is append-only to fops_app.
 
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type EntityLinkEntityType, registeredEntityLinkPairs } from '@fops/shared';
@@ -608,6 +609,58 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(
       listed.json<{ items: Array<{ id: string }> }>().items.some((item) => item.id === linkId),
     ).toBe(false);
+  });
+
+  it('PATCH returns the absent-link 404 envelope for a command-only link before endpoint authorization', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cmd-patch-a`,
+      'Command PATCH source MS',
+    );
+    const msB = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cmd-patch-b`,
+      'Command PATCH target MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Command PATCH source VOC',
+    );
+    const cluster = await insertVocClusterRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: 'Command-only PATCH cluster',
+      createdBy: adminActorId,
+    });
+    const finding = await seedFindingDirectly({ managedSystemId: msB, sourceVocId: sourceVoc.id });
+    const linkId = await seedEntityLinkDirectly({
+      sourceType: 'voc_cluster',
+      sourceId: cluster.id,
+      targetType: 'finding',
+      targetId: finding.id,
+      relationType: 'evidence_of',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+    const { id: devId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('cmd-patch'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'finding.read', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const absent = await patchEntityLink(devCookie, randomUUID(), { reason: 'Probe absent link' });
+    const commandOnly = await patchEntityLink(devCookie, linkId, { reason: 'Probe command link' });
+
+    expect(absent.statusCode).toBe(404);
+    expect(commandOnly.statusCode).toBe(404);
+    expect(commandOnly.body).toBe(absent.body);
   });
 
   it('GET by VOC source accepts managed-system scoped voc.triage without voc.read', async () => {

@@ -145,6 +145,11 @@ creation provenance: `created_finding` remains exclusive to the command that
 actually creates the Finding, because using it for a pre-existing Finding would
 make a false statement in both the entity-link and audit history.
 
+This command-only tuple is categorically excluded from every generic
+entity-link surface: POST, both GET/list modes, and PATCH/detach. Generic
+surfaces respond non-disclosively; PATCH/detach returns the same 404 envelope
+as an absent link rather than revealing the tuple through a distinct response.
+
 Cross-Managed-System targets remain valid. Every cluster list and detail
 projection instead applies the target Finding's own read scope (Admin or
 `finding.read` on its Primary Managed System) to every linked Finding. An

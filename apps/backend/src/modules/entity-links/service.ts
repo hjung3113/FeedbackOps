@@ -709,19 +709,15 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       workspaceId: actor.workspace_id,
       linkId,
     });
-    if (!link) {
-      throw new HttpError('not_found.record', 'entity link not found');
-    }
     if (
+      !link ||
       !isCreatableTuple({
         sourceType: link.source_type,
         targetType: link.target_type,
         relationType: link.relation_type,
       })
     ) {
-      throw new HttpError('validation.failed', 'unsupported entity link tuple', {
-        fields: [{ path: [], code: 'unsupported_tuple' }],
-      });
+      throw new HttpError('not_found.record', 'entity link not found');
     }
     const sourceProvider = providerFor(link.source_type);
     const targetProvider = providerFor(link.target_type);

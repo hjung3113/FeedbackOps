@@ -140,7 +140,10 @@ created by routes, not by direct `POST /entity-links`:
 
 `(voc_cluster, finding, evidence_of)` is registered for DB validation and is
 created only by `POST /voc-clusters/:id/link-finding`; it is intentionally not
-available through generic `POST /entity-links` or generic link listings.
+available through generic `POST /entity-links`, generic link listings, or
+generic `PATCH /entity-links/:id` detach. Every generic surface excludes the
+tuple categorically; PATCH/detach returns the same non-disclosing 404 envelope
+as an absent link.
 
 Independent value CHECKs are forbidden because they would admit invalid tuples.
 Creatable visibility stays `internal_only`.

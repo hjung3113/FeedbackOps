@@ -282,7 +282,13 @@ export async function listCreatedFindingsForClusters(
       AND ${findingScopePredicate}
     ORDER BY l.created_at DESC, l.id DESC
   `);
-  return result.rows.map(mapCreatedFindingForClusterRow);
+  const seen = new Set<string>();
+  return result.rows.map(mapCreatedFindingForClusterRow).filter((row) => {
+    const key = `${row.cluster_id}:${row.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export async function updateVocCluster(
