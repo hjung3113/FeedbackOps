@@ -10,23 +10,23 @@ export {
   type RequestableScope,
   type ActorContext,
   type CheckScope,
-} from "./check-service.js";
+} from './check-service.js';
 export {
   toFrontendState,
   type FrontendState,
   type OpenRequestSummary,
   type OpenRequestStatus,
-} from "./state-mapper.js";
-export { permissionsRoutes, type PermissionsRoutesOptions } from "./routes.js";
+} from './state-mapper.js';
+export { permissionsRoutes, type PermissionsRoutesOptions } from './routes.js';
 export {
   createRequestService,
   type RequestService,
   type CreatePermissionRequestBody,
   type CreatePermissionRequestResult,
-} from "./request-service.js";
+} from './request-service.js';
 export {
   createDecisionService,
   type DecisionService,
   type DecisionServiceDeps,
   type DecisionOptions,
-} from "./decision-service.js";
+} from './decision-service.js';

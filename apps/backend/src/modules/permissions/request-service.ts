@@ -22,28 +22,24 @@
 // values inside the index so duplicate inserts with all-NULL scope/source
 // still collide as expected.
 
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import type { DatabaseError } from "pg";
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import type { DatabaseError } from 'pg';
 
 import {
   type AuditEventType,
   type Capability,
   isCapability,
   isSensitiveCapability,
-} from "@fops/shared";
+} from '@fops/shared';
 
-import type { Db } from "../../db/client.js";
-import { permissionRequests } from "../../db/schema/permission.js";
-import { HttpError } from "../../lib/errors.js";
-import type { AuditService } from "../core/audit/audit-service.js";
-import { hashRequestBody } from "../core/idempotency/canonicalize.js";
-import type { IdempotencyService } from "../core/idempotency/idempotency-service.js";
-import type {
-  ActorContext,
-  CheckScope,
-  CheckService,
-} from "./check-service.js";
-import type { OpenRequestSummary } from "./state-mapper.js";
+import type { Db } from '../../db/client.js';
+import { permissionRequests } from '../../db/schema/permission.js';
+import { HttpError } from '../../lib/errors.js';
+import type { AuditService } from '../core/audit/audit-service.js';
+import { hashRequestBody } from '../core/idempotency/canonicalize.js';
+import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { ActorContext, CheckScope, CheckService } from './check-service.js';
+import type { OpenRequestSummary } from './state-mapper.js';
 
 export interface CreatePermissionRequestBody {
   requested_capability: string;
@@ -62,7 +58,7 @@ export interface CreatePermissionRequestResult {
   status: number;
   body: {
     id: string;
-    status: "pending";
+    status: 'pending';
     created_at: string;
   };
 }
@@ -81,18 +77,11 @@ export interface RequestServiceDeps {
 
 export type RequestService = ReturnType<typeof createRequestService>;
 
-const PERMISSION_REQUESTED: AuditEventType = "permission_requested";
+const PERMISSION_REQUESTED: AuditEventType = 'permission_requested';
 
-const ACTIVE_STATUSES = ["pending", "needs_more_info"] as const;
-const REVIEW_STATUSES = [
-  "pending",
-  "needs_more_info",
-  "approved",
-  "rejected",
-] as const;
-export type PermissionRequestReviewStatus =
-  | (typeof REVIEW_STATUSES)[number]
-  | "all";
+const ACTIVE_STATUSES = ['pending', 'needs_more_info'] as const;
+const REVIEW_STATUSES = ['pending', 'needs_more_info', 'approved', 'rejected'] as const;
+export type PermissionRequestReviewStatus = (typeof REVIEW_STATUSES)[number] | 'all';
 
 export function createRequestService(deps: RequestServiceDeps) {
   const { db, checkService, auditService, idempotencyService } = deps;
@@ -103,13 +92,9 @@ export function createRequestService(deps: RequestServiceDeps) {
     options: CreatePermissionRequestOptions = {},
   ): Promise<CreatePermissionRequestResult> {
     if (!isCapability(body.requested_capability)) {
-      throw new HttpError(
-        "validation.unknown_capability",
-        "unknown capability",
-        {
-          capability: body.requested_capability,
-        },
-      );
+      throw new HttpError('validation.unknown_capability', 'unknown capability', {
+        capability: body.requested_capability,
+      });
     }
     const capability: Capability = body.requested_capability;
     const sensitive = isSensitiveCapability(capability);
@@ -119,8 +104,8 @@ export function createRequestService(deps: RequestServiceDeps) {
     // ADR-0012 code that downstream UIs can surface specifically.
     if (sensitive && body.reason.trim().length === 0) {
       throw new HttpError(
-        "validation.sensitive_reason_required",
-        "a non-empty reason is required for sensitive capabilities",
+        'validation.sensitive_reason_required',
+        'a non-empty reason is required for sensitive capabilities',
         { capability },
       );
     }
@@ -142,16 +127,16 @@ export function createRequestService(deps: RequestServiceDeps) {
           options.idempotencyKey,
           requestHash,
         );
-        if (hit.kind === "match") {
+        if (hit.kind === 'match') {
           return {
             status: hit.status,
-            body: hit.body as CreatePermissionRequestResult["body"],
+            body: hit.body as CreatePermissionRequestResult['body'],
           };
         }
-        if (hit.kind === "mismatch") {
+        if (hit.kind === 'mismatch') {
           throw new HttpError(
-            "conflict.idempotency_key_reuse",
-            "Idempotency-Key reused with a different request body",
+            'conflict.idempotency_key_reuse',
+            'Idempotency-Key reused with a different request body',
           );
         }
       }
@@ -173,8 +158,8 @@ export function createRequestService(deps: RequestServiceDeps) {
       );
       if (decision.allow === true) {
         throw new HttpError(
-          "conflict.capability_already_granted",
-          "actor already holds the requested capability",
+          'conflict.capability_already_granted',
+          'actor already holds the requested capability',
         );
       }
 
@@ -199,7 +184,7 @@ export function createRequestService(deps: RequestServiceDeps) {
             sourceObjectId: body.source_object_id ?? null,
             sourceActionId: body.source_action_id ?? null,
             returnRouteIntent: body.return_route_intent ?? null,
-            status: "pending",
+            status: 'pending',
           })
           .returning({
             id: permissionRequests.id,
@@ -207,10 +192,7 @@ export function createRequestService(deps: RequestServiceDeps) {
           });
         const row = rows[0];
         if (!row) {
-          throw new HttpError(
-            "internal.unexpected",
-            "permission_request insert returned no row",
-          );
+          throw new HttpError('internal.unexpected', 'permission_request insert returned no row');
         }
         insertedId = row.id;
         insertedCreatedAt = row.createdAt;
@@ -219,10 +201,10 @@ export function createRequestService(deps: RequestServiceDeps) {
         // `permission_requests_active_uq` fires for an existing
         // pending|needs_more_info row with the same scope/source tuple.
         const pgErr = err as DatabaseError;
-        if (pgErr?.code === "23505") {
+        if (pgErr?.code === '23505') {
           throw new HttpError(
-            "conflict.permission_request_duplicate",
-            "an open permission request already exists for this capability and scope",
+            'conflict.permission_request_duplicate',
+            'an open permission request already exists for this capability and scope',
           );
         }
         throw err;
@@ -233,7 +215,7 @@ export function createRequestService(deps: RequestServiceDeps) {
         workspace_id: actor.workspace_id,
         actor_id: actor.actor_id,
         event_type: PERMISSION_REQUESTED,
-        subject_type: "permission_request",
+        subject_type: 'permission_request',
         subject_id: insertedId,
         summary: `Permission requested: ${capability}`,
         detail: {
@@ -249,7 +231,7 @@ export function createRequestService(deps: RequestServiceDeps) {
 
       const responseBody = {
         id: insertedId,
-        status: "pending" as const,
+        status: 'pending' as const,
         created_at: insertedCreatedAt.toISOString(),
       };
 
@@ -276,10 +258,7 @@ export function createRequestService(deps: RequestServiceDeps) {
   ): Promise<OpenRequestSummary | null> {
     const msFilter =
       scope.managed_system_id !== undefined
-        ? eq(
-            permissionRequests.requestedManagedSystemId,
-            scope.managed_system_id,
-          )
+        ? eq(permissionRequests.requestedManagedSystemId, scope.managed_system_id)
         : isNull(permissionRequests.requestedManagedSystemId);
 
     const rows = await db
@@ -298,7 +277,7 @@ export function createRequestService(deps: RequestServiceDeps) {
 
     const row = rows[0] ?? null;
     if (!row) return null;
-    if (row.status === "pending" || row.status === "needs_more_info") {
+    if (row.status === 'pending' || row.status === 'needs_more_info') {
       return { status: row.status };
     }
     return null;
@@ -308,27 +287,16 @@ export function createRequestService(deps: RequestServiceDeps) {
   // Guarded by workspace.admin (issue #87). Mirrors the managed-system admin
   // gate: throws permission.denied (mapped to 403) for non-admins. The count
   // equals the returned row length (no separate pagination cap today).
-  async function listAllActive(
-    actor: ActorContext,
-    status?: PermissionRequestReviewStatus,
-  ) {
-    const decision = await checkService.checkCapability(
-      actor,
-      "workspace.admin",
-      {
-        workspace_id: actor.workspace_id,
-      },
-    );
+  async function listAllActive(actor: ActorContext, status?: PermissionRequestReviewStatus) {
+    const decision = await checkService.checkCapability(actor, 'workspace.admin', {
+      workspace_id: actor.workspace_id,
+    });
     if (decision.allow !== true) {
-      throw new HttpError("permission.denied", "workspace.admin required");
+      throw new HttpError('permission.denied', 'workspace.admin required');
     }
 
     const selectedStatuses =
-      status === undefined
-        ? ACTIVE_STATUSES
-        : status === "all"
-          ? REVIEW_STATUSES
-          : [status];
+      status === undefined ? ACTIVE_STATUSES : status === 'all' ? REVIEW_STATUSES : [status];
     const rows = await db
       .select({
         id: permissionRequests.id,

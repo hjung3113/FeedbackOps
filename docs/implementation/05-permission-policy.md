@@ -194,8 +194,9 @@ POST /permissions/requests/:id/deny            { reason: string }
 - Reject sets the request to `rejected`; it does not mint a grant.
 - Need-more-info sets it to `needs_more_info`; the note is kept in audit detail.
 - Explicit deny copies the requested capability and Managed System scope into a
-  real `permission_denies` row and sets the request to `rejected`. Explicit deny
-  takes precedence over every grant in the capability check.
+  real `permission_denies` row and sets the request to `rejected`. A
+  workspace-wide deny takes precedence over every grant; a Managed-System-scoped
+  deny takes precedence only for checks in that same Managed System.
 - Reject, deny, and need-more-info require a non-empty trimmed reason/note.
   Approve requires one only for `isSensitiveCapability`; it is optional for a
   non-sensitive capability. Reviewers cannot alter requested scope or expiry.
