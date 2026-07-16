@@ -12,7 +12,7 @@
 ## Design Consistency Rules
 
 - Consume semantic tokens such as `--text-primary`, `--surface-detail`, and `--border-selected`; do not hard-code hex colors in screens.
-- Keep the visual model dark, compact, and list-first. Avoid decorative cards, broad gradients, oversized hero sections, and empty whitespace.
+- Keep the visual model light, compact, and list-first. Avoid decorative cards, broad gradients, oversized hero sections, and empty whitespace.
 - Use one primary action per toolbar or panel. Secondary actions belong in subtle buttons, menus, or contextual rows.
 - Reuse `ObjectList`, `DetailPanel`, `StatusBadge`, `SignalBadge`, `PermissionBlockedPanel`, `RichContentEditor`, and `LinkedEntityTrail` before making a screen-specific variant.
 - Keep components feature-local until a second real feature needs the same behavior; then promote stable reusable components to `packages/ui`.
@@ -21,7 +21,7 @@
 - Right detail panels preserve list context on desktop; they become drill-in panels on mobile.
 - Permission-limited content must show an approved summary or a request path, not a blank failure.
 - Top-level feature folders and route ownership follow root `AGENTS.md` → Implementation Boundaries (canonical list, includes `voc-cluster`).
-- Integration owns component/hook code for Findings (mounted at top-level `/findings`, `/findings/$findingId` per the 2026-07-13 URL decision); it owns both code and URL for Links (`/integration/links`). Evidence and Coverage routes are planned, not yet built. See `apps/frontend/src/features/integration/AGENTS.md`.
+- Integration owns component/hook code for Findings (mounted at top-level `/findings`, `/findings/$findingId`); it owns both code and URL for Links (`/integration/links`). Evidence and Coverage routes are planned, not yet built. See `apps/frontend/src/features/integration/AGENTS.md`.
 - Managed System scope is a filter/defaulting context, not duplicated navigation.
 - Use Role Level labels: Admin, Developer, and User. Backend capability checks remain authoritative.
 - Keep Public Update, Reporter Reply, and Internal Comment as separate communication surfaces.
