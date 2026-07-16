@@ -336,10 +336,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
         }),
       },
     },
-    handler: async () => ({
-      status: 'ok' as const,
-      ts: new Date().toISOString(),
-    }),
+    handler: async () => ({ status: 'ok' as const, ts: new Date().toISOString() }),
   });
 
   // ADR-0006:16 — the two providers are swapped by the AUTH_PROVIDER env

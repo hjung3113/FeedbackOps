@@ -395,7 +395,9 @@ export const findingLinkedToVocClusterDetailSchema = z.object({
   primary_managed_system_id: z.string().uuid(),
   relation_type: z.literal('evidence_of'),
 });
-export type FindingLinkedToVocClusterDetail = z.infer<typeof findingLinkedToVocClusterDetailSchema>;
+export type FindingLinkedToVocClusterDetail = z.infer<
+  typeof findingLinkedToVocClusterDetailSchema
+>;
 
 const vocClusterStatusDetailSchema = z.enum(['draft', 'confirmed']);
 
@@ -434,10 +436,7 @@ export const vocClusterUpdatedDetailSchema = z.object({
         .optional(),
       rationale: z.object({ from: z.string().nullable(), to: z.string().nullable() }).optional(),
       owner_user_id: z
-        .object({
-          from: z.string().uuid().nullable(),
-          to: z.string().uuid().nullable(),
-        })
+        .object({ from: z.string().uuid().nullable(), to: z.string().uuid().nullable() })
         .optional(),
       status: z
         .object({
@@ -446,16 +445,10 @@ export const vocClusterUpdatedDetailSchema = z.object({
         })
         .optional(),
       confirmed_by: z
-        .object({
-          from: z.string().uuid().nullable(),
-          to: z.string().uuid().nullable(),
-        })
+        .object({ from: z.string().uuid().nullable(), to: z.string().uuid().nullable() })
         .optional(),
       confirmed_at: z
-        .object({
-          from: z.string().datetime().nullable(),
-          to: z.string().datetime().nullable(),
-        })
+        .object({ from: z.string().datetime().nullable(), to: z.string().datetime().nullable() })
         .optional(),
     })
     .refine((changes) => Object.keys(changes).length > 0, {

@@ -186,10 +186,7 @@ export function createRequestService(deps: RequestServiceDeps) {
             returnRouteIntent: body.return_route_intent ?? null,
             status: 'pending',
           })
-          .returning({
-            id: permissionRequests.id,
-            createdAt: permissionRequests.createdAt,
-          });
+          .returning({ id: permissionRequests.id, createdAt: permissionRequests.createdAt });
         const row = rows[0];
         if (!row) {
           throw new HttpError('internal.unexpected', 'permission_request insert returned no row');
