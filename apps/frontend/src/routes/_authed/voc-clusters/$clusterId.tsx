@@ -207,9 +207,18 @@ export function VocClusterListShell({
   });
 
   React.useEffect(() => {
-    if (defaultToFirst && selectedId === null && clusters[0])
-      onSelect(clusters[0].id);
-  }, [clusters, defaultToFirst, onSelect, selectedId]);
+    if (defaultToFirst && selectedId === null && visibleClusters[0])
+      onSelect(visibleClusters[0].id);
+  }, [defaultToFirst, onSelect, selectedId, visibleClusters]);
+
+  React.useEffect(() => {
+    if (
+      selectedId !== null &&
+      !visibleClusters.some((cluster) => cluster.id === selectedId)
+    ) {
+      onCloseDetail();
+    }
+  }, [onCloseDetail, selectedId, visibleClusters]);
 
   return (
     <ListShell
@@ -231,7 +240,8 @@ export function VocClusterListShell({
         />
       }
       detailPanel={
-        selectedId ? (
+        selectedId !== null &&
+        visibleClusters.some((cluster) => cluster.id === selectedId) ? (
           <VocClusterDetailPanel
             clusterId={selectedId}
             onClose={onCloseDetail}
@@ -262,15 +272,15 @@ function ClusterListBody({
   onTabChange: (tab: "all" | "confirmed" | "no-finding") => void;
 }): React.ReactElement {
   const tabs = [
-    { key: "all" as const, label: "All", count: allClusters.length },
+    { key: "all" as const, label: "전체", count: allClusters.length },
     {
       key: "confirmed" as const,
-      label: "Confirmed",
+      label: "확정",
       count: allClusters.filter((cluster) => cluster.status === "confirmed").length,
     },
     {
       key: "no-finding" as const,
-      label: "No finding",
+      label: "Finding 없음",
       count: allClusters.filter((cluster) => (cluster.linked_findings ?? []).length === 0)
         .length,
     },
@@ -278,15 +288,12 @@ function ClusterListBody({
 
   return (
     <section className="flex min-h-full flex-col">
-      <div className="border-b border-border-subtle px-5 py-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            클러스터 목록
-          </h3>
-          <span className="text-xs text-text-muted">{clusters.length}개</span>
-        </div>
+      <div
+        className="flex h-toolbar items-center justify-between gap-3 border-b border-border-subtle bg-surface-canvas px-4"
+        data-toolbar-height="50"
+      >
         <div
-          className="mt-3 flex items-center gap-1"
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap"
           role="tablist"
           aria-label="클러스터 필터"
         >
@@ -297,6 +304,8 @@ function ClusterListBody({
               variant={activeTab === tab.key ? "secondary" : "ghost"}
               size="sm"
               role="tab"
+              id={`cluster-tab-${tab.key}`}
+              aria-controls="cluster-list-panel"
               aria-selected={activeTab === tab.key}
               onClick={() => onTabChange(tab.key)}
               data-testid={`cluster-tab-${tab.key}`}
@@ -305,40 +314,47 @@ function ClusterListBody({
             </Button>
           ))}
         </div>
+        <span className="shrink-0 text-xs text-text-muted">{clusters.length}개</span>
       </div>
 
-      {isPending ? (
-        <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </div>
-      ) : isError ? (
-        <p
-          className="p-4 text-sm text-accent-danger"
-          data-testid="cluster-list-error"
-        >
-          데이터를 불러오지 못했습니다.
-        </p>
-      ) : clusters.length === 0 ? (
-        <div
-          className="p-8 text-center text-sm text-text-muted"
-          data-testid="cluster-empty-state"
-        >
-          생성된 클러스터가 없습니다.
-        </div>
-      ) : (
-        <div data-testid="cluster-list">
-          {clusters.map((cluster) => (
-            <ClusterRow
-              key={cluster.id}
-              cluster={cluster}
-              selected={selectedId === cluster.id}
-              onClick={() => onSelect(cluster.id)}
-            />
-          ))}
-        </div>
-      )}
+      <div
+        id="cluster-list-panel"
+        role="tabpanel"
+        aria-labelledby={`cluster-tab-${activeTab}`}
+      >
+        {isPending ? (
+          <div className="space-y-2 p-4" data-testid="cluster-list-skeleton">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : isError ? (
+          <p
+            className="p-4 text-sm text-accent-danger"
+            data-testid="cluster-list-error"
+          >
+            데이터를 불러오지 못했습니다.
+          </p>
+        ) : clusters.length === 0 ? (
+          <div
+            className="p-8 text-center text-sm text-text-muted"
+            data-testid="cluster-empty-state"
+          >
+            생성된 클러스터가 없습니다.
+          </div>
+        ) : (
+          <div data-testid="cluster-list">
+            {clusters.map((cluster) => (
+              <ClusterRow
+                key={cluster.id}
+                cluster={cluster}
+                selected={selectedId === cluster.id}
+                onClick={() => onSelect(cluster.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -534,32 +550,37 @@ export function VocClusterDetailPanel({
           <SectionDivider />
 
           <div className="flex flex-col gap-3" data-anchor="execution">
-            <PanelSectionTitle>Execution</PanelSectionTitle>
+            <PanelSectionTitle>실행</PanelSectionTitle>
             {linkedFindings.length > 0 ? (
               <div
-                className="flex flex-col overflow-hidden rounded-md border border-border-subtle bg-surface-card"
+                className="flex flex-col gap-2"
                 data-testid="cluster-linked-findings-list"
               >
-                {linkedFindings.map((finding, index) => (
+                {linkedFindings.map((finding) => (
                   <div
                     key={finding.id}
-                    className={`flex items-center justify-between gap-3 px-4 py-3${index === linkedFindings.length - 1 ? "" : " border-b border-border-subtle"}`}
+                    className="flex flex-col gap-2 rounded-md border border-border-subtle bg-surface-card p-4"
                     data-testid={`cluster-linked-finding-${finding.id}`}
                   >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="text-sm font-medium text-text-primary">
-                        {finding.display_id}
-                      </span>
+                    <div className="flex items-center justify-between gap-2">
                       <OutlineBadge data-testid={`finding-status-badge-${finding.status}`}>
                         {finding.status}
                       </OutlineBadge>
                     </div>
+                    <div className="min-w-0">
+                      <span className="text-xs text-text-muted">
+                        {finding.display_id}
+                      </span>
+                      <p className="mt-1 text-sm font-medium text-text-primary">
+                        {(finding as LinkedFindingDto & { title?: string | null }).title ?? finding.display_id}
+                      </p>
+                    </div>
                     <Link
                       to="/findings/$findingId"
                       params={{ findingId: finding.id }}
-                      className="shrink-0 text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
+                      className="text-sm text-accent-primary underline underline-offset-2 hover:text-accent-primary/80"
                     >
-                      Open finding
+                      Finding 열기
                     </Link>
                   </div>
                 ))}
@@ -576,8 +597,8 @@ export function VocClusterDetailPanel({
                     Finding 생성
                   </Button>
                 )}
-                <Button type="button" variant="outline" size="sm">
-                  기존 Finding 연결
+                <Button type="button" variant="outline" size="sm" disabled>
+                  기존 Finding 연결 (준비 중)
                 </Button>
               </div>
             )}

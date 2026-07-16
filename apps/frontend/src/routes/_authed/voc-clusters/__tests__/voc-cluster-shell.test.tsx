@@ -211,7 +211,12 @@ type ClusterFixture = {
     added_by: string;
     added_at: string;
   }>;
-  linked_findings: Array<{ id: string; display_id: string; status: string }>;
+  linked_findings: Array<{
+    id: string;
+    display_id: string;
+    status: string;
+    title?: string;
+  }>;
 };
 
 const clusters: ClusterFixture[] = [
@@ -495,17 +500,50 @@ describe("VOC cluster route shells", () => {
     expect(screen.getByText("연결된 Finding 있음")).toBeInTheDocument();
   });
 
+  it("clears an inline detail selection when its tab excludes the selected cluster without navigation", async () => {
+    const baseCluster = clusters[0]!;
+    clusters.push({
+      ...baseCluster,
+      id: "55555555-5555-5555-5555-555555555555",
+      display_id: "CLU-32",
+      title: "확정된 연결 없음",
+      status: "confirmed",
+    });
+    const onSelect = vi.fn();
+    const onCloseDetail = vi.fn();
+    const { VocClusterListShell } = await import("../$clusterId");
+
+    render(
+      <VocClusterListShell
+        selectedId={baseCluster.id}
+        onSelect={onSelect}
+        onCloseDetail={onCloseDetail}
+      />,
+    );
+
+    expect(screen.getByTestId("cluster-detail-panel")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("cluster-tab-confirmed"));
+
+    expect(screen.queryByTestId("cluster-detail-panel")).not.toBeInTheDocument();
+    expect(onCloseDetail).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it("renders every linked Finding in Execution and exposes its finding route", async () => {
     clusters[0]!.linked_findings = [
       {
         id: "77777777-7777-7777-7777-777777777777",
         display_id: "FIN-777",
         status: "active",
+        title: "결제 오류 개선",
       },
       {
         id: "88888888-8888-8888-8888-888888888888",
         display_id: "FIN-888",
         status: "validated",
+        title: "결제 안내 개선",
       },
     ];
     const { VocClusterDetailPanel } = await import("../$clusterId");
@@ -519,10 +557,11 @@ describe("VOC cluster route shells", () => {
 
     expect(screen.getByTestId("cluster-linked-findings-list")).toBeInTheDocument();
     expect(screen.getByText("FIN-777")).toBeInTheDocument();
+    expect(screen.getByText("결제 오류 개선")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
     expect(screen.getByText("FIN-888")).toBeInTheDocument();
     expect(screen.getByText("validated")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Open finding" })[0]).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: "Finding 열기" })[0]).toHaveAttribute(
       "href",
       "/findings/77777777-7777-7777-7777-777777777777",
     );
@@ -541,7 +580,9 @@ describe("VOC cluster route shells", () => {
 
     expect(screen.getByTestId("cluster-execution-empty")).toBeInTheDocument();
     expect(screen.getByTestId("cluster-execution-create-finding")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "기존 Finding 연결" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "기존 Finding 연결 (준비 중)" }),
+    ).toBeDisabled();
     expect(screen.queryByTestId("cluster-linked-findings-list")).not.toBeInTheDocument();
   });
 
