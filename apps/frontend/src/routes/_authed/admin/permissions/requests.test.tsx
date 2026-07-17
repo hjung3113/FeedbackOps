@@ -17,7 +17,7 @@ import {
 import type React from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { errorMapper } from "@/lib/api";
+import { errorMapper, type AdminPermissionRequestRow } from "@/lib/api";
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
@@ -120,8 +120,10 @@ function installFetch(
   options: {
     decision?: { status: number; body: unknown };
     onList?: () => void;
+    requests?: readonly AdminPermissionRequestRow[];
   } = {},
 ) {
+  const requests = options.requests ?? REQUESTS;
   globalThis.fetch = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -132,11 +134,11 @@ function installFetch(
         (!init?.method || init.method === "GET")
       ) {
         options.onList?.();
-        return response({ requests: REQUESTS, count: REQUESTS.length });
+        return response({ requests, count: requests.length });
       }
       if (url.includes("/permissions/requests/") && init?.method === "POST") {
         return response(
-          options.decision?.body ?? { id: REQUESTS[0].id, status: "approved" },
+          options.decision?.body ?? { id: requests[0].id, status: "approved" },
           options.decision?.status ?? 200,
         );
       }
@@ -371,7 +373,7 @@ describe("/admin/permissions/requests", () => {
     });
     fireEvent.click(screen.getByTestId("permission-decision-submit"));
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("이미 처리된 요청입니다"),
+      expect(toast.error).toHaveBeenCalledWith("이미 처리된 요청입니다."),
     );
     await waitFor(() => expect(listCalls).toBeGreaterThanOrEqual(3));
   });
@@ -396,6 +398,74 @@ describe("/admin/permissions/requests", () => {
         ([, init]) => init?.method === "POST",
       ),
     ).toBe(false);
+  });
+
+  test("blocks an empty or whitespace-only need-more-info note", async () => {
+    installFetch();
+    renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-decision-section"),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "추가 정보 요청" }));
+    expect(screen.getByLabelText("사유 · 필수")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+    fireEvent.change(screen.getByLabelText(/사유/), {
+      target: { value: "   " },
+    });
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+
+    expect(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+        ([, init]) => init?.method === "POST",
+      ),
+    ).toBe(false);
+  });
+
+  test("blocks an empty approve reason for a sensitive capability", async () => {
+    installFetch({
+      requests: [
+        { ...REQUESTS[0], requested_capability: "workspace.admin" },
+      ],
+    });
+    renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-decision-section"),
+      ).toBeInTheDocument(),
+    );
+
+    expect(screen.getByLabelText("사유 · 필수")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+
+    expect(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+        ([, init]) => init?.method === "POST",
+      ),
+    ).toBe(false);
+  });
+
+  test("allows an empty approve reason for a non-sensitive capability", async () => {
+    installFetch();
+    renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-decision-section"),
+      ).toBeInTheDocument(),
+    );
+
+    expect(screen.getByLabelText("사유 · 선택")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+
+    await waitFor(() =>
+      expect(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+          ([, init]) => init?.method === "POST",
+        ),
+      ).toBe(true),
+    );
   });
 
   test("shows the errorMapper validation message for a sensitive decision", async () => {

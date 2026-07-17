@@ -8,6 +8,7 @@ import {
   PanelSectionTitle,
   Textarea,
 } from "@fops/ui";
+import { isCapability, isSensitiveCapability } from "@fops/shared";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
@@ -51,7 +52,7 @@ const ACTIONS: Array<{
   needsReason: boolean;
 }> = [
   { value: "approve", label: "승인", needsReason: false },
-  { value: "need-more-info", label: "추가 정보 요청", needsReason: false },
+  { value: "need-more-info", label: "추가 정보 요청", needsReason: true },
   { value: "reject", label: "거절", needsReason: true },
   { value: "deny", label: "명시적 거부", needsReason: true },
 ];
@@ -239,6 +240,11 @@ function PermissionRequestDetail({
   const mutation = useDecidePermissionRequest();
   const selectedAction =
     ACTIONS.find((candidate) => candidate.value === action) ?? ACTIONS[0]!;
+  const needsReason =
+    selectedAction.needsReason ||
+    (action === "approve" &&
+      isCapability(request.requested_capability) &&
+      isSensitiveCapability(request.requested_capability));
   const decidable =
     request.status === "pending" || request.status === "needs_more_info";
 
@@ -248,7 +254,7 @@ function PermissionRequestDetail({
   }, [request.id]);
 
   function submit() {
-    if (selectedAction.needsReason && !reason.trim()) return;
+    if (needsReason && !reason.trim()) return;
     mutation.mutate(
       { id: request.id, action, reason: reason.trim(), idempotencyKey },
       { onSuccess: () => markConsumed() },
@@ -324,7 +330,7 @@ function PermissionRequestDetail({
                 className="flex flex-col gap-2 text-sm text-text-secondary"
                 htmlFor="permission-decision-reason"
               >
-                사유{selectedAction.needsReason ? " · 필수" : " · 선택"}
+                사유{needsReason ? " · 필수" : " · 선택"}
                 <Textarea
                   id="permission-decision-reason"
                   value={reason}

@@ -48,7 +48,7 @@ export function useDecidePermissionRequest(): UseMutationResult<
     },
     onError: async (error: ApiError) => {
       if (error.code === "conflict.stale_write") {
-        toast.error("이미 처리된 요청입니다");
+        toast.error("이미 처리된 요청입니다.");
         await queryClient.invalidateQueries({
           queryKey: permissionRequestsReviewKey,
         });
