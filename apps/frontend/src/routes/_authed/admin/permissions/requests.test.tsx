@@ -219,6 +219,24 @@ describe("/admin/permissions/requests", () => {
     );
   });
 
+  test("selects the first visible request when a selected request drops out on tab change", async () => {
+    installFetch();
+    renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-request-detail-panel"),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /승인됨 \(1\)/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-request-detail-panel"),
+      ).toHaveTextContent("workspace.admin"),
+    );
+  });
+
   test.each([
     ["승인", "/approve", "승인 사유", { reason: "승인 사유" }],
     [
@@ -356,6 +374,28 @@ describe("/admin/permissions/requests", () => {
       expect(toast.error).toHaveBeenCalledWith("이미 처리된 요청입니다"),
     );
     await waitFor(() => expect(listCalls).toBeGreaterThanOrEqual(3));
+  });
+
+  test("blocks a whitespace-only deny reason", async () => {
+    installFetch();
+    renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-decision-section"),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "명시적 거부" }));
+    fireEvent.change(screen.getByLabelText(/사유/), {
+      target: { value: "   " },
+    });
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+
+    expect(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+        ([, init]) => init?.method === "POST",
+      ),
+    ).toBe(false);
   });
 
   test("shows the errorMapper validation message for a sensitive decision", async () => {

@@ -87,6 +87,16 @@ function PermissionRequestsConsole() {
     const tabChanged = previousActiveTab.current !== activeTab;
     previousActiveTab.current = activeTab;
 
+    if (tabChanged) {
+      const selectionIsVisible =
+        selectedId !== null &&
+        visibleRequests.some((request) => request.id === selectedId);
+      if (!selectionIsVisible) {
+        setSelectedId(visibleRequests[0]?.id ?? null);
+      }
+      return;
+    }
+
     if (
       selectedId !== null &&
       !visibleRequests.some((request) => request.id === selectedId)
@@ -99,10 +109,6 @@ function PermissionRequestsConsole() {
       hasAppliedInitialSelection.current = true;
       if (selectedId === null) setSelectedId(visibleRequests[0].id);
       return;
-    }
-
-    if (tabChanged && selectedId === null && visibleRequests[0]) {
-      setSelectedId(visibleRequests[0].id);
     }
   }, [activeTab, selectedId, visibleRequests]);
 
