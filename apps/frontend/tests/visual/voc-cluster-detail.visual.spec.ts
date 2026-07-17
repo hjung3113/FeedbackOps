@@ -1,6 +1,6 @@
 import { expect, test } from './support/visual-test';
 
-import { IDS, addCandidateRequest } from './fixtures/voc-clusters';
+import { IDS, addCandidateRequest, confirmedLinkedFinding } from './fixtures/voc-clusters';
 import { installMockApi } from './support/mock-api';
 import { expectVisual } from './support/screenshot';
 
@@ -12,7 +12,7 @@ test.describe('/voc-clusters/$clusterId visual harness', () => {
 
     const detail = page.getByTestId('cluster-detail-panel');
     await expect(page.locator('[data-shell="list"]')).toHaveCount(1);
-    await expect(detail.getByTestId('cluster-detail-title')).toHaveText('인증 오류 패턴');
+    await expect(detail.getByTestId('cluster-detail-title')).toHaveText(confirmedLinkedFinding.title);
     await expect(detail.getByTestId('cluster-members-list')).toBeVisible();
     // D10: title is intentionally absent from the schema-valid linked Finding fixture.
     await expect(detail.getByTestId(`cluster-linked-finding-${IDS.finding}`)).toContainText('FND-201');
