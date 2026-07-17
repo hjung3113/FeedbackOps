@@ -83,11 +83,7 @@ export async function installMockApi(
       return;
     }
 
-    if (
-      isRequest(route, 'GET', '/managed-systems', (query) =>
-        query.get('include_archived') === 'true',
-      )
-    ) {
+    if (isRequest(route, 'GET', '/managed-systems')) {
       await json(route, 200, managedSystems);
       return;
     }
