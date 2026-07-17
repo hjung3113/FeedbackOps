@@ -73,6 +73,8 @@ function PermissionRequestsConsole() {
   });
   const [activeTab, setActiveTab] = React.useState<ReviewTab>("pending");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const previousActiveTab = React.useRef<ReviewTab | null>(null);
+  const hasAppliedInitialSelection = React.useRef(false);
   const allRequests = query.data?.requests ?? [];
   const visibleRequests =
     activeTab === "all"
@@ -82,18 +84,27 @@ function PermissionRequestsConsole() {
     visibleRequests.find((request) => request.id === selectedId) ?? null;
 
   React.useEffect(() => {
-    if (selectedId === null && visibleRequests[0])
-      setSelectedId(visibleRequests[0].id);
-  }, [selectedId, visibleRequests]);
+    const tabChanged = previousActiveTab.current !== activeTab;
+    previousActiveTab.current = activeTab;
 
-  React.useEffect(() => {
     if (
       selectedId !== null &&
       !visibleRequests.some((request) => request.id === selectedId)
     ) {
       setSelectedId(null);
+      return;
     }
-  }, [selectedId, visibleRequests]);
+
+    if (!hasAppliedInitialSelection.current && visibleRequests[0]) {
+      hasAppliedInitialSelection.current = true;
+      if (selectedId === null) setSelectedId(visibleRequests[0].id);
+      return;
+    }
+
+    if (tabChanged && selectedId === null && visibleRequests[0]) {
+      setSelectedId(visibleRequests[0].id);
+    }
+  }, [activeTab, selectedId, visibleRequests]);
 
   return (
     <ListShell

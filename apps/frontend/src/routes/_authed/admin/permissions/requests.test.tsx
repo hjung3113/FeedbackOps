@@ -17,6 +17,8 @@ import {
 import type React from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { errorMapper } from "@/lib/api";
+
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
 vi.mock("@fops/ui", async (importOriginal) => {
@@ -193,14 +195,48 @@ describe("/admin/permissions/requests", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("keeps the detail panel closed until a row is selected or the tab changes", async () => {
+    installFetch();
+    renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-request-detail-panel"),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "패널 닫기" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId("permission-request-detail-panel"),
+      ).not.toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /추가 정보 필요 \(1\)/ }));
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-request-detail-panel"),
+      ).toBeInTheDocument(),
+    );
+  });
+
   test.each([
-    ["승인", "/approve", "", true],
-    ["추가 정보 요청", "/need-more-info", "", true],
-    ["거절", "/reject", "정책 사유", true],
-    ["명시적 거부", "/deny", "명시적 거부 사유", true],
+    ["승인", "/approve", "승인 사유", { reason: "승인 사유" }],
+    [
+      "추가 정보 요청",
+      "/need-more-info",
+      "추가 정보 사유",
+      { note: "추가 정보 사유" },
+    ],
+    ["거절", "/reject", "정책 사유", { reason: "정책 사유" }],
+    [
+      "명시적 거부",
+      "/deny",
+      "명시적 거부 사유",
+      { reason: "명시적 거부 사유" },
+    ],
   ])(
-    "posts %s to %s with an Idempotency-Key",
-    async (action, suffix, reason, shouldPost) => {
+    "posts %s to %s with its exact decision body and an Idempotency-Key",
+    async (action, suffix, reason, expectedBody) => {
       installFetch();
       renderRoute();
       await waitFor(() =>
@@ -218,17 +254,60 @@ describe("/admin/permissions/requests", () => {
         const posts = (
           globalThis.fetch as ReturnType<typeof vi.fn>
         ).mock.calls.filter(([, init]) => init?.method === "POST");
-        expect(posts.length > 0).toBe(shouldPost);
+        expect(posts).toHaveLength(1);
       });
-      const [url, init] = (
-        globalThis.fetch as ReturnType<typeof vi.fn>
-      ).mock.calls.find(([, candidate]) => candidate?.method === "POST")!;
+      const post = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        ([, candidate]) => candidate?.method === "POST",
+      );
+      if (!post) throw new Error("Expected a decision POST request");
+      const [url, init] = post;
       expect(url).toBe(`/permissions/requests/${REQUESTS[0].id}${suffix}`);
       expect(new Headers(init.headers).get("Idempotency-Key")).toMatch(
         /^[0-9a-f-]{36}$/i,
       );
+      expect(JSON.parse(init.body as string)).toEqual(expectedBody);
     },
   );
+
+  test("re-mints the Idempotency-Key after a successful decision", async () => {
+    installFetch();
+    renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-decision-section"),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+    await waitFor(() =>
+      expect(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+          ([, init]) => init?.method === "POST",
+        ),
+      ).toHaveLength(1),
+    );
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("권한 요청이 처리되었습니다."),
+    );
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+    await waitFor(() =>
+      expect(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+          ([, init]) => init?.method === "POST",
+        ),
+      ).toHaveLength(2),
+    );
+
+    const posts = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([, init]) => init?.method === "POST",
+    );
+    const [firstPost, secondPost] = posts;
+    if (!firstPost || !secondPost)
+      throw new Error("Expected two decision POST requests");
+    expect(new Headers(secondPost[1].headers).get("Idempotency-Key")).not.toBe(
+      new Headers(firstPost[1].headers).get("Idempotency-Key"),
+    );
+  });
 
   test("blocks an empty reject reason, allows empty approve, refetches after success and stale write", async () => {
     let listCalls = 0;
@@ -244,6 +323,15 @@ describe("/admin/permissions/requests", () => {
       ).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByRole("button", { name: "거절" }));
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+    expect(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+        ([, init]) => init?.method === "POST",
+      ),
+    ).toBe(false);
+    fireEvent.change(screen.getByLabelText(/사유/), {
+      target: { value: "   " },
+    });
     fireEvent.click(screen.getByTestId("permission-decision-submit"));
     expect(
       (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
@@ -268,5 +356,24 @@ describe("/admin/permissions/requests", () => {
       expect(toast.error).toHaveBeenCalledWith("이미 처리된 요청입니다"),
     );
     await waitFor(() => expect(listCalls).toBeGreaterThanOrEqual(3));
+  });
+
+  test("shows the errorMapper validation message for a sensitive decision", async () => {
+    const envelope = {
+      code: "validation.sensitive_reason_required",
+      message: "reason required",
+    } as const;
+    installFetch({ decision: { status: 422, body: envelope } });
+    renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-decision-section"),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(errorMapper(envelope).message),
+    );
   });
 });
