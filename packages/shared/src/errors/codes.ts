@@ -23,6 +23,7 @@ export const ERROR_CODES = [
   // conflict.* → 409
   'conflict.idempotency_key_reuse',
   'conflict.capability_already_granted',
+  'conflict.capability_already_denied',
   'conflict.permission_request_duplicate',
   // validation.* → 422 (continued)
   'validation.malformed_idempotency_key',

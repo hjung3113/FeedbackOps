@@ -80,6 +80,8 @@ export type RequestService = ReturnType<typeof createRequestService>;
 const PERMISSION_REQUESTED: AuditEventType = 'permission_requested';
 
 const ACTIVE_STATUSES = ['pending', 'needs_more_info'] as const;
+const REVIEW_STATUSES = ['pending', 'needs_more_info', 'approved', 'rejected'] as const;
+export type PermissionRequestReviewStatus = (typeof REVIEW_STATUSES)[number] | 'all';
 
 export function createRequestService(deps: RequestServiceDeps) {
   const { db, checkService, auditService, idempotencyService } = deps;
@@ -282,7 +284,7 @@ export function createRequestService(deps: RequestServiceDeps) {
   // Guarded by workspace.admin (issue #87). Mirrors the managed-system admin
   // gate: throws permission.denied (mapped to 403) for non-admins. The count
   // equals the returned row length (no separate pagination cap today).
-  async function listAllActive(actor: ActorContext) {
+  async function listAllActive(actor: ActorContext, status?: PermissionRequestReviewStatus) {
     const decision = await checkService.checkCapability(actor, 'workspace.admin', {
       workspace_id: actor.workspace_id,
     });
@@ -290,6 +292,8 @@ export function createRequestService(deps: RequestServiceDeps) {
       throw new HttpError('permission.denied', 'workspace.admin required');
     }
 
+    const selectedStatuses =
+      status === undefined ? ACTIVE_STATUSES : status === 'all' ? REVIEW_STATUSES : [status];
     const rows = await db
       .select({
         id: permissionRequests.id,
@@ -304,7 +308,7 @@ export function createRequestService(deps: RequestServiceDeps) {
       .where(
         and(
           eq(permissionRequests.workspaceId, actor.workspace_id),
-          inArray(permissionRequests.status, [...ACTIVE_STATUSES]),
+          inArray(permissionRequests.status, [...selectedStatuses]),
         ),
       )
       .orderBy(desc(permissionRequests.createdAt));
