@@ -24,3 +24,9 @@ export {
   type CreatePermissionRequestBody,
   type CreatePermissionRequestResult,
 } from './request-service.js';
+export {
+  createDecisionService,
+  type DecisionService,
+  type DecisionServiceDeps,
+  type DecisionOptions,
+} from './decision-service.js';

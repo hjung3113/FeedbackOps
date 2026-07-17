@@ -40,6 +40,7 @@ import {
 } from './modules/managed-systems/index.js';
 import {
   createCheckService,
+  createDecisionService,
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
@@ -383,10 +384,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     idempotencyService,
   });
+  const decisionService = createDecisionService({
+    db: dbHandle.db,
+    checkService,
+    auditService,
+    idempotencyService,
+  });
   await app.register(permissionsRoutes, {
     sessionService,
     checkService,
     requestService,
+    decisionService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,

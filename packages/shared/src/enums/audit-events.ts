@@ -34,6 +34,10 @@ import { findingConfidenceSchema, findingSeveritySchema } from '../findings/inde
 
 export const AUDIT_EVENT_TYPES = [
   'permission_requested',
+  'permission_approved',
+  'permission_rejected',
+  'permission_needs_more_info',
+  'permission_denied',
   // Slice 2 #10: Managed System Registry write path (ADR-0017 audit detail).
   'managed_system_registered',
   'managed_system_updated',
@@ -113,6 +117,48 @@ export const permissionRequestedDetailSchema = z.object({
   source_action_id: z.string().nullable(),
 });
 export type PermissionRequestedDetail = z.infer<typeof permissionRequestedDetailSchema>;
+
+export const permissionApprovedDetailSchema = z
+  .object({
+    capability: z.string().min(1),
+    managed_system_id: z.string().uuid().nullable(),
+    requester_actor_id: z.string().uuid(),
+    reason: z.string().min(1).nullable(),
+    grant_id: z.string().uuid(),
+  })
+  .strict();
+export type PermissionApprovedDetail = z.infer<typeof permissionApprovedDetailSchema>;
+
+export const permissionRejectedDetailSchema = z
+  .object({
+    capability: z.string().min(1),
+    managed_system_id: z.string().uuid().nullable(),
+    requester_actor_id: z.string().uuid(),
+    reason: z.string().min(1),
+  })
+  .strict();
+export type PermissionRejectedDetail = z.infer<typeof permissionRejectedDetailSchema>;
+
+export const permissionNeedsMoreInfoDetailSchema = z
+  .object({
+    capability: z.string().min(1),
+    managed_system_id: z.string().uuid().nullable(),
+    requester_actor_id: z.string().uuid(),
+    note: z.string().min(1),
+  })
+  .strict();
+export type PermissionNeedsMoreInfoDetail = z.infer<typeof permissionNeedsMoreInfoDetailSchema>;
+
+export const permissionDeniedDetailSchema = z
+  .object({
+    capability: z.string().min(1),
+    managed_system_id: z.string().uuid().nullable(),
+    requester_actor_id: z.string().uuid(),
+    reason: z.string().min(1),
+    deny_id: z.string().uuid(),
+  })
+  .strict();
+export type PermissionDeniedDetail = z.infer<typeof permissionDeniedDetailSchema>;
 
 // ──────────────────────────────────────────────────────────────────────
 // Managed System Registry audit events (ADR-0017 audit-detail section).
@@ -534,6 +580,10 @@ export type TaskStatusChangedDetail = z.infer<typeof taskStatusChangedDetailSche
 
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
+  permission_approved: permissionApprovedDetailSchema,
+  permission_rejected: permissionRejectedDetailSchema,
+  permission_needs_more_info: permissionNeedsMoreInfoDetailSchema,
+  permission_denied: permissionDeniedDetailSchema,
   managed_system_registered: managedSystemRegisteredDetailSchema,
   managed_system_updated: managedSystemUpdatedDetailSchema,
   managed_system_archived: managedSystemArchivedDetailSchema,
