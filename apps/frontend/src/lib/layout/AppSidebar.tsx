@@ -38,8 +38,8 @@ const DEFAULT_FOOTER_ITEMS: SidebarFooterItem[] = [
   },
   {
     id: 'workspace-settings',
-    label: 'Workspace settings',
-    href: '/admin/placeholder',
+    label: '권한 요청 검토',
+    href: '/admin/permissions/requests',
     icon: <Settings className="h-4 w-4" />,
   },
 ];
