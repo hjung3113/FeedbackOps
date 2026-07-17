@@ -25,7 +25,7 @@ export default defineConfig({
   webServer: {
     command:
       `pnpm --filter @fops/frontend build && ` +
-      `pnpm --filter @fops/frontend preview -- --host 127.0.0.1 --port ${port} --strictPort`,
+      `pnpm --filter @fops/frontend exec vite preview --host 127.0.0.1 --port ${port} --strictPort`,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 180_000,
