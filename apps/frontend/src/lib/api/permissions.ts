@@ -3,7 +3,10 @@
 // The frontend never enforces backend permissions as truth (AGENTS.md:69) —
 // these types only describe what the server returned so the UI can pick a state.
 
+import type { PermissionDecisionResult } from '@fops/shared';
+
 import { UnauthenticatedError } from './auth';
+import { apiClient } from './client';
 import { ApiError, type ApiErrorEnvelope } from './types';
 
 export type FrontendPermissionState =
@@ -116,23 +119,29 @@ export async function fetchPermissionRequestsMine(
   return (await res.json()) as { requests: MinePermissionRequestRow[] };
 }
 
-// Admin workspace-wide list (issue #87). 403 for non-admins → ApiError.
+// Admin workspace-wide list. 403 for non-admins → ApiError.
 export interface AdminPermissionRequestRow {
   id: string;
   requester_actor_id: string;
   requested_capability: string;
   requested_managed_system_id: string | null;
   reason: string;
-  status: 'pending' | 'needs_more_info';
+  status: 'pending' | 'needs_more_info' | 'approved' | 'rejected';
   created_at: string;
 }
 
+export type PermissionRequestReviewStatus = AdminPermissionRequestRow['status'] | 'all';
+
 export async function fetchPermissionRequestsAll(
-  signal?: AbortSignal,
+  options?: { status?: PermissionRequestReviewStatus; signal?: AbortSignal } | AbortSignal,
 ): Promise<{ requests: AdminPermissionRequestRow[]; count: number }> {
+  const normalized = options instanceof AbortSignal ? { signal: options } : options;
+  const params = new URLSearchParams();
+  if (normalized?.status) params.set('status', normalized.status);
   const init: RequestInit = { credentials: 'same-origin' };
-  if (signal) init.signal = signal;
-  const res = await fetch('/permission-requests', init);
+  if (normalized?.signal) init.signal = normalized.signal;
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  const res = await fetch(`/permissions/requests${suffix}`, init);
   if (res.status === 401) throw new UnauthenticatedError();
   if (!res.ok) {
     let envelope: ApiErrorEnvelope = { code: 'internal.unexpected', message: 'request failed' };
@@ -144,4 +153,21 @@ export async function fetchPermissionRequestsAll(
     throw new ApiError(res.status, envelope);
   }
   return (await res.json()) as { requests: AdminPermissionRequestRow[]; count: number };
+}
+
+export type PermissionRequestDecisionAction = 'approve' | 'reject' | 'need-more-info' | 'deny';
+
+export async function decidePermissionRequest(
+  id: string,
+  action: PermissionRequestDecisionAction,
+  reason: string,
+  idempotencyKey: string,
+): Promise<PermissionDecisionResult> {
+  const body = action === 'need-more-info' ? { note: reason || undefined } : { reason: reason || undefined };
+  const response = await apiClient<PermissionDecisionResult>(
+    'POST',
+    `/permissions/requests/${id}/${action}`,
+    { body, idempotencyKey },
+  );
+  return response.data;
 }
