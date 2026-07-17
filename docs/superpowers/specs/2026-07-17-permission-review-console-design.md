@@ -122,7 +122,7 @@ re-runs the previously blocked action, which now passes `check-service`.
 - Non-admin caller → `permission.denied` (403).
 - Already-decided request → `conflict.stale_write` (409); FE surfaces "이미 처리된 요청" and refetches.
 - Duplicate active grant/deny → `conflict.capability_already_granted` (409).
-- Missing reason where required → `validation.*` (400); FE blocks submit client-side too.
+- Missing reason where required → `validation.*` (422, ADR-0012 domain validation — matches create-request; NOT 400); FE blocks submit client-side too. Locked gating set: reject, explicit-deny, need-more-info, and sensitive-capability approve.
 - Unknown request id → `not_found.record` (404).
 
 ## Testing
