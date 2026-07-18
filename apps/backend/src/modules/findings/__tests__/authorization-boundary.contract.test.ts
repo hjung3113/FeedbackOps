@@ -42,13 +42,13 @@ function policyCheckService() {
 }
 
 describe('Finding authorization semantic contract (#169)', () => {
-  it('locks Admin-or-Developer point decisions across grant, cross-MS, archived-MS, and expiry cases', async () => {
+  it('locks point decisions across grants, cross-MS, archived-MS, and expiry cases', async () => {
     const checkService = policyCheckService();
     const matrix = [
       ['admin', targetMs, true],
       ['scopedDeveloper', targetMs, true],
       ['scopedDeveloper', crossMs, false],
-      // A grant alone must not turn a User into a Finding reader/manager.
+      // A grant alone must not turn a User into a Finding reader.
       ['userWithGrant', targetMs, false],
       // This is allowed by the permission double only on an archived target:
       // the point helper must delegate rather than enumerate active MS scope.
@@ -63,16 +63,19 @@ describe('Finding authorization semantic contract (#169)', () => {
         allow: expected,
       });
       await expect(checkFindingManage(checkService, actor, managedSystemId)).resolves.toMatchObject({
-        allow: expected,
+        // Finding manage preserves the established direct-grant behavior for
+        // the VOC -> Finding evidence_of command, even though point reads
+        // retain their Developer-or-Admin role gate.
+        allow: actorName === 'userWithGrant' ? true : expected,
       });
     }
 
-    // The User's fake grant is deliberately permissive, proving the canonical
-    // role gate—not CheckService's capability result—produces both denials.
+    // The User's fake grant is deliberately permissive: point reads keep the
+    // role gate, while manage delegates to Permission for the legacy command.
     const userCalls = vi
       .mocked(checkService.checkCapability)
       .mock.calls.filter(([actor]) => actor.actor_id === actors.userWithGrant!.actor_id);
-    expect(userCalls).toHaveLength(0);
+    expect(userCalls).toHaveLength(1);
   });
 
   it('keeps scope resolution as a list-only form and denies User before querying scope storage', async () => {

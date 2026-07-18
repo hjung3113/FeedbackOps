@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
@@ -26,6 +26,7 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
   let appDb: DbHandle;
   let ops: DbHandle;
   let adminId: string;
+  let seedAdminId: string;
   let adminCookie: string;
   let concurrentAdminCookie: string;
   let provenanceAdminCookie: string;
@@ -118,7 +119,7 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
     return result.rows[0]?.response_body;
   }
 
-  async function createIsolatedAdminCookie(label: string): Promise<string> {
+  async function createIsolatedAdmin(label: string): Promise<{ id: string; cookie: string }> {
     const externalId = `unlink-${label}-${randomUUID()}`;
     const actor = await insertActorRow(ops, {
       workspaceId: WORKSPACE_ID,
@@ -126,7 +127,11 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
       roleLevel: 'admin',
     });
     actorIds.push(actor.id);
-    return loginAs(app, externalId);
+    return { id: actor.id, cookie: await loginAs(app, externalId) };
+  }
+
+  async function createIsolatedAdminCookie(label: string): Promise<string> {
+    return (await createIsolatedAdmin(label)).cookie;
   }
 
   beforeAll(async () => {
@@ -140,7 +145,7 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
       [WORKSPACE_ID],
     );
     adminId = admin.rows[0]?.id ?? '';
-    adminCookie = await loginAs(app, admin.rows[0]?.external_id ?? '');
+    seedAdminId = adminId;
     concurrentAdminCookie = await createIsolatedAdminCookie('concurrent-admin');
     provenanceAdminCookie = await createIsolatedAdminCookie('provenance-admin');
     const managedSystems = await Promise.all(
@@ -311,8 +316,17 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
     foreignFindingId = foreignFinding.id;
   });
 
+  // Every test gets a fresh actor and session. The mutation tier is 10/min,
+  // while this module intentionally exercises multi-request validation and
+  // idempotency flows; sharing the seed admin made aggregate runs order-bound.
+  beforeEach(async () => {
+    const admin = await createIsolatedAdmin('test-admin');
+    adminId = admin.id;
+    adminCookie = admin.cookie;
+  });
+
   afterAll(async () => {
-    await ops.pool.query('delete from core.idempotency_keys where actor_id=$1', [adminId]);
+    await ops.pool.query('delete from core.idempotency_keys where actor_id=$1', [seedAdminId]);
     await cleanupVocClusterFixtures(ops, {
       workspaceId: WORKSPACE_ID,
       actorIds,

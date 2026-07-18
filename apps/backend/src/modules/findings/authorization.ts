@@ -67,7 +67,10 @@ export async function checkFindingManage(
   // Preserve the workspace-admin bypass before delegating scoped decisions to
   // Permission. This mirrors the Finding policy and avoids needless DB reads.
   if (actor.role_level === 'admin') return { allow: true, via: 'role' };
-  if (actor.role_level !== 'developer') return findingRoleDenied;
+  // Finding manage historically delegates non-admin decisions to Permission.
+  // In particular, an explicitly granted reporter must retain the authority
+  // used by the VOC -> Finding evidence_of command. Do not apply the
+  // Finding-read role gate to this distinct mutation predicate.
   return checkService.checkCapability(
     actor,
     'finding.manage',
