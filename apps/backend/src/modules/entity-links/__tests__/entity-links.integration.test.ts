@@ -1186,6 +1186,24 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       reporterId,
       'Task Reporter Summary Source VOC',
     );
+    const internalComment = 'distinctive task-summary internal comment';
+    await migrateHandle.pool.query(
+      `insert into voc.voc_internal_comments (voc_id, actor_id, body_rich_content)
+       values ($1, $2, $3::jsonb)`,
+      [
+        sourceVoc.id,
+        adminActorId,
+        JSON.stringify({
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: internalComment }],
+            },
+          ],
+        }),
+      ],
+    );
     const rootCauseDetail = 'root-cause detail';
     const privateNotes = 'private notes';
     const privateCustomerDetail = 'private customer detail';
@@ -1284,6 +1302,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       [taskLinks[0]?.task.id],
     );
     expect(persistedForbidden.rows[0]).toMatchObject({
+      status: taskLinks[0]?.status,
       priority: 'urgent',
       due_date: dueDate,
       assignee_actor_id: assigneeId,
@@ -1297,6 +1316,27 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       confidence: 'high',
       linked_task_id: taskLinks[0]?.task.id,
     });
+    const persistedTaskStatuses = await migrateHandle.pool.query<{
+      title: string;
+      status: string;
+    }>(`select title, status from task.tasks where id = any($1::uuid[]) order by title`, [
+      taskLinks.map((link) => link.task.id),
+    ]);
+    expect(persistedTaskStatuses.rows).toEqual(
+      taskLinks
+        .map((link) => ({ title: link.title, status: link.status }))
+        .sort((left, right) => left.title.localeCompare(right.title)),
+    );
+    const persistedInternalComment = await migrateHandle.pool.query<{
+      body_rich_content: unknown;
+    }>(
+      `select body_rich_content from voc.voc_internal_comments
+        where voc_id = $1 and actor_id = $2`,
+      [sourceVoc.id, adminActorId],
+    );
+    expect(JSON.stringify(persistedInternalComment.rows[0]?.body_rich_content)).toContain(
+      internalComment,
+    );
     expect(assigneeExternalId).toContain('task-summary-assignee');
 
     const { id: scopedDevId, externalId: scopedDevExternalId } = await insertDevActor(
@@ -1360,6 +1400,9 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       privateNotes,
       privateCustomerDetail,
       permissionDecisionInternals,
+      'critical',
+      'high',
+      internalComment,
     ]) {
       expect(reporterPayload).not.toContain(forbidden);
     }
@@ -1397,6 +1440,37 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       expect(item).not.toHaveProperty('source_id');
       expect(item).not.toHaveProperty('target_id');
     }
+
+    const invalidStoredStatus = 'invalid_task_status';
+    const invalidTask = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: ms,
+      title: 'Invalid Status Task',
+      status: 'backlog',
+      createdBy: adminActorId,
+    });
+    await migrateHandle.pool.query('update task.tasks set status = $1 where id = $2', [
+      invalidStoredStatus,
+      invalidTask.id,
+    ]);
+    const invalidLinkId = await seedEntityLinkDirectly({
+      sourceId: sourceVoc.id,
+      targetType: 'task',
+      targetId: invalidTask.id,
+      relationType: 'evidence_of',
+      managedSystemId: ms,
+      visibility: 'summary_visible',
+    });
+    const reporterWithInvalidStatus = await getEntityLinks(
+      await loginAs(app, 'mock-user-1'),
+      query,
+    );
+    expect(reporterWithInvalidStatus.statusCode).toBe(200);
+    const invalidStatusItem = reporterWithInvalidStatus
+      .json<{ items: Array<Record<string, unknown>> }>()
+      .items.find((item) => item.id === invalidLinkId);
+    expect(invalidStatusItem).toMatchObject({ visibility_state: 'hidden' });
+    expect(invalidStatusItem).not.toHaveProperty('summary');
   });
 
   it('DB tuple check allows only registered entity-link tuples', async () => {

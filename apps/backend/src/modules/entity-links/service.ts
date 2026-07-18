@@ -287,12 +287,13 @@ function projectTaskStatusForReporter(status: TaskStatus): string {
   }
 }
 
-function toTaskReporterSummary(task: { title: string; status: unknown }): TaskReporterSummary {
-  const status = taskStatusSchema.parse(task.status);
+function toTaskReporterSummary(task: { title: string; status: unknown }): TaskReporterSummary | undefined {
+  const parsedStatus = taskStatusSchema.safeParse(task.status);
+  if (!parsedStatus.success) return undefined;
   return taskReporterSummarySchema.parse({
     target_type: 'task',
     public_title: task.title,
-    reporter_facing_status: projectTaskStatusForReporter(status),
+    reporter_facing_status: projectTaskStatusForReporter(parsedStatus.data),
   });
 }
 
@@ -311,10 +312,8 @@ async function getTaskReporterSummary(
   const task = result.rows[0];
   if (!task) return { available: false };
 
-  return {
-    available: true,
-    summary: toTaskReporterSummary(task),
-  };
+  const summary = toTaskReporterSummary(task);
+  return summary ? { available: true, summary } : { available: false };
 }
 
 async function getTaskReporterSummaries(
@@ -334,10 +333,15 @@ async function getTaskReporterSummaries(
        )})
   `);
   return new Map(
-    result.rows.map((task) => [
-      task.id,
-      { available: true, summary: toTaskReporterSummary(task) } satisfies ReporterSummaryResult,
-    ]),
+    result.rows.map((task) => {
+      const summary = toTaskReporterSummary(task);
+      return [
+        task.id,
+        summary
+          ? ({ available: true, summary } satisfies ReporterSummaryResult)
+          : ({ available: false } satisfies ReporterSummaryResult),
+      ];
+    }),
   );
 }
 
@@ -560,6 +564,7 @@ async function evaluateRowVisibility(
   row: EntityLinkRow,
   resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
   reporterSummaries: ReadonlyMap<string, ReporterSummaryResult>,
+  sourceReadabilityByEndpoint: Map<string, boolean>,
 ): Promise<{ decision: LinkVisibilityDecision; summary?: TaskReporterSummary }> {
   const sourceRef = { type: row.source_type, id: row.source_id };
   const targetRef = { type: row.target_type, id: row.target_id };
@@ -571,10 +576,13 @@ async function evaluateRowVisibility(
   const targetSummary: ReporterSummaryResult = reporterSummaries.get(
     `${row.target_type}:${row.target_id}`,
   ) ?? { available: false };
+  const sourceKey = `${row.source_type}:${row.source_id}`;
+  const cachedSourceReadable = sourceReadabilityByEndpoint.get(sourceKey);
   const [sourceReadable, targetReadable] = await Promise.all([
-    source ? sourceProvider.canRead(deps, actor, source) : Promise.resolve(false),
-    target ? providerFor(row.target_type).canRead(deps, actor, target) : Promise.resolve(false),
+    cachedSourceReadable ?? (source ? sourceProvider.canRead(deps, actor, source) : false),
+    target ? providerFor(row.target_type).canRead(deps, actor, target) : false,
   ]);
+  sourceReadabilityByEndpoint.set(sourceKey, sourceReadable);
 
   const decision = evaluateLinkVisibility({
     visibility: row.visibility,
@@ -592,16 +600,50 @@ async function evaluateRowVisibility(
 }
 
 async function preloadReporterSummaries(
-  deps: Pick<EntityLinksServiceDeps, 'db'>,
+  deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
   actor: EntityLinksActor,
   rows: readonly EntityLinkRow[],
-): Promise<Map<string, ReporterSummaryResult>> {
-  if (actor.role_level !== 'user') return new Map();
+  resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
+): Promise<{
+  reporterSummaries: Map<string, ReporterSummaryResult>;
+  sourceReadabilityByEndpoint: Map<string, boolean>;
+}> {
+  const sourceReadabilityByEndpoint = new Map<string, boolean>();
+  if (actor.role_level !== 'user') {
+    return { reporterSummaries: new Map(), sourceReadabilityByEndpoint };
+  }
+
+  const summaryCandidateRows = rows.filter(
+    (row) =>
+      row.visibility === 'summary_visible' &&
+      row.target_type === 'task' &&
+      isListVisibleTuple({
+        sourceType: row.source_type,
+        targetType: row.target_type,
+        relationType: row.relation_type,
+      }),
+  );
+  const sourceRefs = new Map(
+    summaryCandidateRows.map((row) => [
+      `${row.source_type}:${row.source_id}`,
+      { type: row.source_type, id: row.source_id } satisfies EntityLinkRef,
+    ]),
+  );
+  const sourceReadability = await Promise.all(
+    [...sourceRefs].map(async ([key, sourceRef]) => {
+      const source = await resolveEndpointForRow(deps, actor, sourceRef, resolvedByEndpoint);
+      const readable = source
+        ? await providerFor(sourceRef.type).canRead(deps, actor, source)
+        : false;
+      return [key, readable] as const;
+    }),
+  );
+  for (const [key, readable] of sourceReadability) sourceReadabilityByEndpoint.set(key, readable);
 
   const taskIds = [
     ...new Set(
-      rows
-        .filter((row) => row.visibility === 'summary_visible' && row.target_type === 'task')
+      summaryCandidateRows
+        .filter((row) => sourceReadabilityByEndpoint.get(`${row.source_type}:${row.source_id}`))
         .map((row) => row.target_id),
     ),
   ];
@@ -610,12 +652,15 @@ async function preloadReporterSummaries(
     actor.workspace_id,
     taskIds,
   );
-  return new Map(
-    [...(summaries ?? new Map<string, ReporterSummaryResult>())].map(([id, summary]) => [
-      `task:${id}`,
-      summary,
-    ]),
-  );
+  return {
+    reporterSummaries: new Map(
+      [...(summaries ?? new Map<string, ReporterSummaryResult>())].map(([id, summary]) => [
+        `task:${id}`,
+        summary,
+      ]),
+    ),
+    sourceReadabilityByEndpoint,
+  };
 }
 
 async function getTargetInternalSummary(
@@ -762,7 +807,12 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const resolvedByEndpoint = new Map<string, LinkEndpointRow | null>([
       [`${endpoint.type}:${endpoint.id}`, focus],
     ]);
-    const reporterSummaries = await preloadReporterSummaries(deps, actor, rows);
+    const { reporterSummaries, sourceReadabilityByEndpoint } = await preloadReporterSummaries(
+      deps,
+      actor,
+      rows,
+      resolvedByEndpoint,
+    );
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       if (
@@ -780,6 +830,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         row,
         resolvedByEndpoint,
         reporterSummaries,
+        sourceReadabilityByEndpoint,
       );
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
@@ -803,7 +854,12 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     });
 
     const resolvedByEndpoint = new Map<string, LinkEndpointRow | null>();
-    const reporterSummaries = await preloadReporterSummaries(deps, actor, rows);
+    const { reporterSummaries, sourceReadabilityByEndpoint } = await preloadReporterSummaries(
+      deps,
+      actor,
+      rows,
+      resolvedByEndpoint,
+    );
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       if (
@@ -821,6 +877,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         row,
         resolvedByEndpoint,
         reporterSummaries,
+        sourceReadabilityByEndpoint,
       );
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;

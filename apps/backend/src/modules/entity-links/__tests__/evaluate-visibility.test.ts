@@ -160,6 +160,50 @@ describe('evaluateLinkVisibility', () => {
     ).toBe('summary_visible');
   });
 
+  it.each([
+    [
+      'User with unreadable source',
+      'summary_visible',
+      { role_level: 'user' as const, actor_id: userId },
+      false,
+    ],
+    ['Admin', 'summary_visible', { role_level: 'admin' as const, actor_id: adminId }, true],
+    [
+      'Developer',
+      'summary_visible',
+      { role_level: 'developer' as const, actor_id: developerId },
+      true,
+    ],
+    [
+      'User internal_only',
+      'internal_only',
+      { role_level: 'user' as const, actor_id: userId },
+      true,
+    ],
+    [
+      'User visible_to_reporter',
+      'visible_to_reporter',
+      { role_level: 'user' as const, actor_id: userId },
+      true,
+    ],
+    ['User admin_only', 'admin_only', { role_level: 'user' as const, actor_id: userId }, true],
+  ])(
+    'keeps the unchanged unreadable-target cell hidden for %s when a summary is available',
+    (_label, visibility, actorContext, sourceReadable) => {
+      expect(
+        evaluateLinkVisibility({
+          visibility: visibility as LinkVisibilityEvaluationInput['visibility'],
+          actorContext,
+          sourceReadable,
+          targetReadable: false,
+          targetSummaryAvailable: true,
+          sourceReporterId: reporterId,
+          targetReporterId: reporterId,
+        }),
+      ).toBe('hidden');
+    },
+  );
+
   it('hides visible_to_reporter when the actor is not the shared reporter', () => {
     expect(
       evaluateLinkVisibility({
