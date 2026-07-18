@@ -12,6 +12,7 @@ import type { Page, Route } from '@playwright/test';
 import {
   VOC_REVIEW_IDS,
   populatedReviewCandidates,
+  populatedReviewConversationPage,
   populatedReviewVoc,
 } from '../fixtures/voc-public-update-review';
 
@@ -114,6 +115,11 @@ export async function installMockApi(
 
     if (options.vocReview && isRequest(route, 'GET', `/vocs/${VOC_REVIEW_IDS.voc}`)) {
       await json(route, 200, populatedReviewVoc);
+      return;
+    }
+
+    if (options.vocReview && isRequest(route, 'GET', `/vocs/${VOC_REVIEW_IDS.voc}/conversation`)) {
+      await json(route, 200, populatedReviewConversationPage);
       return;
     }
 

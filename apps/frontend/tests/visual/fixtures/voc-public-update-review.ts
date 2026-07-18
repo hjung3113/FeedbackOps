@@ -1,9 +1,11 @@
 import {
   type ListPublicUpdateReviewCandidatesResponse,
   type VocDetailEnvelope,
+  conversationEntrySchema,
   listPublicUpdateReviewCandidatesResponseSchema,
   vocDetailEnvelopeSchema,
 } from '@fops/shared';
+import { z } from 'zod';
 
 export const VOC_REVIEW_IDS = {
   voc: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -53,3 +55,17 @@ export const populatedReviewCandidates: ListPublicUpdateReviewCandidatesResponse
       },
     ],
   });
+
+// Both public and internal timeline hooks fetch their initial page on panel load.
+// Keep this response schema-validated so the fail-closed visual mock cannot bless
+// an invalid conversation payload.
+const conversationPageSchema = z.object({
+  items: z.array(conversationEntrySchema),
+  next_cursor: z.string().optional(),
+  has_more: z.boolean(),
+});
+
+export const populatedReviewConversationPage = conversationPageSchema.parse({
+  items: [],
+  has_more: false,
+});
