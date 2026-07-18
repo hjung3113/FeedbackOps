@@ -43,7 +43,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await expect.poll(() => mock.postedRequests).toEqual([
       {
         pathname: `/permissions/requests/${PERMISSION_IDS.pendingRead}/approve`,
-        body: { reason: '' },
+        body: {},
         idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
       },
     ]);
