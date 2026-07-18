@@ -190,6 +190,7 @@ describe.skipIf(!runIntegration)(
         ["scopedDeveloper", "developer"],
         ["unscopedDeveloper", "developer"],
         ["userWithGrant", "user"],
+        ["reporterWithGrant", "user"],
         ["expiringDeveloper", "developer"],
       ] as const) {
         actorIds[name] = (
@@ -217,6 +218,7 @@ describe.skipIf(!runIntegration)(
         await grant(actorIds.userWithGrant!, "finding.read", managedSystemId);
         await grant(actorIds.userWithGrant!, "finding.manage", managedSystemId);
       }
+      await grant(actorIds.reporterWithGrant!, "finding.read", ids.activeMs);
       await grant(
         actorIds.expiringDeveloper!,
         "finding.read",
@@ -290,7 +292,7 @@ describe.skipIf(!runIntegration)(
           migrateHandle,
           workspaceId,
           ids.activeMs,
-          actorIds.userWithGrant!,
+          actorIds.reporterWithGrant!,
           "Finding authorization boundary evidence VOC",
         )
       ).id;
@@ -402,7 +404,7 @@ describe.skipIf(!runIntegration)(
           endpoint: { type: "voc", id: ids.activeVoc },
         });
 
-      await expect(listActiveVocLinks(actor("userWithGrant", "user"))).resolves.toEqual(
+      await expect(listActiveVocLinks(actor("reporterWithGrant", "user"))).resolves.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             source_id: ids.activeVoc,
@@ -527,8 +529,9 @@ describe.skipIf(!runIntegration)(
 
     it("locks the user-with-grant policy matrix for every Finding authorization consumer", async () => {
       const userWithGrant = actor("userWithGrant", "user");
+      const reporterWithGrant = actor("reporterWithGrant", "user");
       const matrix = [
-        ["entity-links", () => expect(entityLinksService.listLinks({ actor: userWithGrant, endpoint: { type: "voc", id: ids.activeVoc } })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ source_id: ids.activeVoc, target_id: ids.activeFinding, relation_type: "evidence_of", visibility_state: "allowed" })]))],
+        ["entity-links", () => expect(entityLinksService.listLinks({ actor: reporterWithGrant, endpoint: { type: "voc", id: ids.activeVoc } })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ source_id: ids.activeVoc, target_id: ids.activeFinding, relation_type: "evidence_of", visibility_state: "allowed" })]))],
         ["voc-clusters", () => expect(vocClustersService.getCluster({ actor: userWithGrant, clusterId: ids.activeCluster })).rejects.toMatchObject({ code: "not_found.record" } satisfies Partial<HttpError>)],
         ["tasks", () => expect(tasksService.getTask({ actor: userWithGrant, taskId: ids.activeTask })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
         ["task-requests", () => expect(taskRequestsService.listTaskRequests({ actor: userWithGrant })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
