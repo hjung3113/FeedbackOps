@@ -213,12 +213,13 @@ export function VocClusterListShell({
 
   React.useEffect(() => {
     if (
+      listQuery.isSuccess &&
       selectedId !== null &&
       !visibleClusters.some((cluster) => cluster.id === selectedId)
     ) {
       onCloseDetail();
     }
-  }, [onCloseDetail, selectedId, visibleClusters]);
+  }, [listQuery.isSuccess, onCloseDetail, selectedId, visibleClusters]);
 
   return (
     <ListShell

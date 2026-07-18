@@ -79,6 +79,12 @@ Every page-level FE issue (route mount, full screen) runs a structured Playwrigh
 
 **Scope:** only when a prototype baseline exists. If absent, state "no prototype baseline" in PR body, capture a fresh screenshot, and queue a prototype refresh follow-up issue — do not silently ship UI without a baseline.
 
+### Durable visual harnesses
+
+For a route with a committed Playwright visual harness (currently `/voc-clusters`), the durable `test:visual` regression run replaces the manual Playwright-MCP recapture step above. The one-time CP-pixel fidelity table against `docs/design-prototype/screenshots/final-baselines/<page>.png` still happens once when introducing the harness, and again for an intentional redesign.
+
+The authority prototype baseline is `final-baselines/`, never `pack20-current/`. Committed Playwright screenshot baselines change only in a commit that declares the intended visual change. Blanket `--update-snapshots` to silence red is forbidden. A baseline-change commit must state the intended change, attach or point to the Playwright diff, and have a changed-PNG count equal to the intended-screen count.
+
 ## Prototype Copy Authority
 
 See root `AGENTS.md` → Prototype Is The Spec for full rules.

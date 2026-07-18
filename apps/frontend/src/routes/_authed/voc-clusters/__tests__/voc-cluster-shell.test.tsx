@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigateMock = vi.fn();
 const addClusterMemberMutate = vi.hoisted(() => vi.fn());
+const listQueryState = vi.hoisted(() => ({
+  status: "success" as "pending" | "success",
+}));
 let routeParams: Record<string, string> = {
   clusterId: "11111111-1111-1111-1111-111111111111",
 };
@@ -250,9 +253,10 @@ const clusters: ClusterFixture[] = [
 
 vi.mock("@/features/voc-cluster/hooks/useVocClusterList", () => ({
   useVocClusterList: () => ({
-    data: { items: clusters },
-    isPending: false,
+    data: listQueryState.status === "success" ? { items: clusters } : undefined,
+    isPending: listQueryState.status === "pending",
     isError: false,
+    isSuccess: listQueryState.status === "success",
   }),
 }));
 
@@ -360,6 +364,7 @@ describe("VOC cluster route shells", () => {
   beforeEach(() => {
     navigateMock.mockClear();
     addClusterMemberMutate.mockClear();
+    listQueryState.status = "success";
     routeParams = { clusterId: "11111111-1111-1111-1111-111111111111" };
     clusters.splice(1);
     clusters[0]!.status = "draft";
@@ -529,6 +534,36 @@ describe("VOC cluster route shells", () => {
     expect(onCloseDetail).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps a deeplinked detail selection open while the list query is pending", async () => {
+    const selectedId = clusters[0]!.id;
+    const onCloseDetail = vi.fn();
+    const { VocClusterListShell } = await import("../$clusterId");
+    listQueryState.status = "pending";
+
+    const { rerender } = render(
+      <VocClusterListShell
+        selectedId={selectedId}
+        onSelect={vi.fn()}
+        onCloseDetail={onCloseDetail}
+      />,
+    );
+
+    expect(screen.queryByTestId("cluster-detail-panel")).not.toBeInTheDocument();
+    expect(onCloseDetail).not.toHaveBeenCalled();
+
+    listQueryState.status = "success";
+    rerender(
+      <VocClusterListShell
+        selectedId={selectedId}
+        onSelect={vi.fn()}
+        onCloseDetail={onCloseDetail}
+      />,
+    );
+
+    expect(screen.getByTestId("cluster-detail-panel")).toBeInTheDocument();
+    expect(onCloseDetail).not.toHaveBeenCalled();
   });
 
   it("renders every linked Finding in Execution and exposes its finding route", async () => {
