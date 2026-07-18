@@ -1052,7 +1052,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     input: UnlinkExistingFindingFromVocClusterRequest;
     idempotencyKey: string;
     requestHash: string;
-  }): Promise<{ status: number; body: null }> {
+  }): Promise<{ status: number; body: Record<string, never> }> {
     return deps.db.transaction(async (tx) => {
       return deps.idempotencyService.runIdempotent(
         tx,
@@ -1141,8 +1141,8 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             relationType: 'evidence_of',
           });
           // Idempotency records are JSONB NOT NULL. Keep the transport response
-          // empty (the route calls send() without a payload), while caching JSON null.
-          if (!activeLink) return { status: 204 as const, body: null };
+          // empty (the route calls send() without a payload), while caching an empty object.
+          if (!activeLink) return { status: 204 as const, body: {} };
 
           const detached = await detachEntityLink(tx, {
             workspaceId: args.actor.workspace_id,
@@ -1150,7 +1150,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             actorId: args.actor.actor_id,
             reason: args.input.reason,
           });
-          if (!detached) return { status: 204 as const, body: null };
+          if (!detached) return { status: 204 as const, body: {} };
 
           await deps.auditService.record(tx, {
             workspace_id: args.actor.workspace_id,
@@ -1183,7 +1183,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
               reason: args.input.reason,
             },
           });
-          return { status: 204 as const, body: null };
+          return { status: 204 as const, body: {} };
         },
       );
     });

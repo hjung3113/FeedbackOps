@@ -102,7 +102,7 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
     const result = await ops.pool.query<{ count: string }>(
       `select count(*)::text as count from core.audit_log
        where (subject_id=$1::uuid and event_type='entity_link.detached')
-          or (detail->>'link_id'=$1 and event_type='finding_unlinked_from_voc_cluster')`,
+          or (detail->>'link_id'=$1::text and event_type='finding_unlinked_from_voc_cluster')`,
       [linkId],
     );
     return Number(result.rows[0]?.count ?? 0);
@@ -379,7 +379,7 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
     });
   });
 
-  it('persists JSON null for a first-time 204 and replays a successful detach exactly once', async () => {
+  it('persists a cacheable JSON body for a first-time 204 and replays a successful detach exactly once', async () => {
     const linkId = await seedLink();
     const key = randomUUID();
     const first = await unlink(adminCookie, { key });
@@ -387,7 +387,7 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
     expect(first.statusCode).toBe(204);
     expect(replay.statusCode).toBe(204);
     expect(first.body).toBe(replay.body);
-    expect(await idempotencyBody(adminId, key)).toBeNull();
+    expect(await idempotencyBody(adminId, key)).toEqual({});
     expect(await auditCount(linkId)).toBe(2);
     const changedKey = await unlink(adminCookie, { key, reason: 'changed reason' });
     expect(changedKey.statusCode).toBe(409);
