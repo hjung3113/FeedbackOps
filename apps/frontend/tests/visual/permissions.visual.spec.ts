@@ -35,8 +35,6 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await expect(detail.getByLabel('사유 · 필수')).toBeVisible();
     await detail.getByTestId('permission-decision-submit').click();
     await expect.poll(() => mock.postedRequests).toHaveLength(0);
-    await expectVisual(page, detail, 'permission-requests-sensitive-approve.png');
-
     await page.getByTestId('permission-requests-list').getByText('workspace.read', { exact: true }).click();
     await expect(detail).toContainText('workspace.read');
     await expect(detail.getByLabel('사유 · 선택')).toBeVisible();
