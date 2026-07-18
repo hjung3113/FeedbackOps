@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ApiError } from "@/lib/api";
+
 const navigateMock = vi.fn();
 const addClusterMemberMutate = vi.hoisted(() => vi.fn());
 const linkFindingMutate = vi.hoisted(() => vi.fn());
@@ -62,6 +64,8 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("@fops/ui", () => ({
+  cn: (...classes: Array<string | false | null | undefined>) =>
+    classes.filter(Boolean).join(" "),
   Button: ({
     children,
     ...props
@@ -189,6 +193,7 @@ vi.mock("@fops/ui", () => ({
   ReporterStatusBadge: ({ status }: { status: string }) => (
     <span data-testid={`reporter-status-${status}`}>{status}</span>
   ),
+  SeverityBadge: ({ severity }: { severity: string }) => <span>{severity}</span>,
   PageShell: ({ children }: { children: React.ReactNode }) => (
     <div data-shell="page">{children}</div>
   ),
@@ -390,11 +395,14 @@ vi.mock("@/lib/auth/useMe", () => ({
   useMe: () => ({ data: { actor: { role_level: "admin" } } }),
 }));
 
-vi.mock("@/lib/api", () => ({
-  fetchManagedSystems: vi.fn(),
-  errorMapper: () => ({ message: "mapped error" }),
-  useIdempotencyKey: () => ({ key: "idem-key", markConsumed: vi.fn() }),
-}));
+vi.mock("@/lib/api", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
+  return {
+    ...actual,
+    fetchManagedSystems: vi.fn(),
+    useIdempotencyKey: () => ({ key: "idem-key", markConsumed: vi.fn() }),
+  };
+});
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -421,12 +429,12 @@ describe("VOC cluster route shells", () => {
     clusters[0]!.status = "draft";
     clusters[0]!.linked_findings = [];
     clusters[0]!.summary = "결제 관련 VOC가 반복됩니다.";
-    clusters[0]!.severity = undefined;
-    clusters[0]!.confidence = undefined;
-    clusters[0]!.rationale = undefined;
-    clusters[0]!.owner_user_id = undefined;
-    clusters[0]!.confirmed_by = undefined;
-    clusters[0]!.confirmed_at = undefined;
+    delete clusters[0]!.severity;
+    delete clusters[0]!.confidence;
+    delete clusters[0]!.rationale;
+    delete clusters[0]!.owner_user_id;
+    delete clusters[0]!.confirmed_by;
+    delete clusters[0]!.confirmed_at;
     clusters[0]!.members = [
       {
         voc_id: "33333333-3333-3333-3333-333333333333",
@@ -795,15 +803,21 @@ describe("VOC cluster route shells", () => {
     ).not.toBeInTheDocument();
   });
 
-  it.each(["permission.denied", "not_found.record"])(
-    "surfaces a mapped non-disclosing link error for %s",
-    async (code) => {
+  it.each([
+    [403, "permission.scope_required", "해당 Managed System에 대한 권한이 없습니다."],
+    [404, "not_found.record", "존재하지 않거나 접근할 수 없는 항목입니다."],
+  ] as const)(
+    "surfaces the $1 / $2 non-disclosing link error",
+    async (status, code, expectedMessage) => {
       const { VocClusterDetailPanel } = await import("../$clusterId");
+      const error = new ApiError(status, { code, message: "backend detail" });
+      expect(error.status).toBe(status);
+      expect(error.envelope.code).toBe(code);
       linkFindingMutate.mockImplementation(
         (
           _variables: unknown,
           callbacks: { onError: (error: unknown) => void },
-        ) => callbacks.onError({ envelope: { code } }),
+        ) => callbacks.onError(error),
       );
       render(
         <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
@@ -824,7 +838,7 @@ describe("VOC cluster route shells", () => {
       );
       expect(
         screen.getByTestId("link-existing-finding-error"),
-      ).toHaveTextContent("mapped error");
+      ).toHaveTextContent(expectedMessage);
     },
   );
 

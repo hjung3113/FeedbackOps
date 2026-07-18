@@ -28,7 +28,8 @@ import {
   ManagedSystemPill,
   OutlineBadge,
   PanelSectionTitle,
-  ReporterStatusBadge,
+  type ReporterStatusBadge,
+  SeverityBadge,
   Select,
   SelectContent,
   SelectItem,
@@ -533,6 +534,12 @@ export function VocClusterDetailPanel({
               <div className="flex items-center gap-2 mb-1">
                 <OutlineBadge>VOC Cluster</OutlineBadge>
                 <DetailStatusBadge status={data.status} />
+                {data.severity && <SeverityBadge severity={data.severity} />}
+                {data.confidence && (
+                  <OutlineBadge data-testid="cluster-detail-confidence-badge">
+                    Confidence · {data.confidence}
+                  </OutlineBadge>
+                )}
               </div>
               <h1
                 className="text-xl font-semibold text-text-primary"
@@ -862,16 +869,13 @@ function MemberRow({
   onRemove: () => void;
   isRemoving: boolean;
 }): React.ReactElement {
-  const addedDate = new Date(member.added_at).toLocaleDateString("ko-KR");
   const display = memberDisplay(member);
 
   return (
-    <div
-      data-testid={`cluster-member-row-${member.voc_id}`}
-      className={`flex items-center justify-between gap-3 px-4 py-2.5${last ? "" : " border-b border-border-subtle"}`}
-    >
-      <EntityRelationRow
-        member={{
+    <EntityRelationRow
+      testId={`cluster-member-row-${member.voc_id}`}
+      {...(last ? {} : { className: "border-b border-border-subtle" })}
+      member={{
           vocId: member.voc_id,
           displayId: display.secondary,
           title: (
@@ -901,9 +905,8 @@ function MemberRow({
               <Trash2 className="h-3.5 w-3.5 text-text-muted" />
             </Button>
           ) : null,
-        }}
-      />
-    </div>
+      }}
+    />
   );
 }
 

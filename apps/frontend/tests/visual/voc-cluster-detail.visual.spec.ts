@@ -22,6 +22,22 @@ test.describe("/voc-clusters/$clusterId visual harness", () => {
     await expect(detail.getByTestId("cluster-detail-title")).toHaveText(
       confirmedLinkedFinding.title,
     );
+    for (const anchor of [
+      "overview",
+      "why",
+      "execution",
+      "members",
+      "properties",
+    ]) {
+      await expect(detail.locator(`[data-anchor="${anchor}"]`)).toHaveCount(1);
+    }
+    await expect(detail.locator('[data-token="--severity-high"]')).toBeVisible();
+    await expect(detail.getByTestId("cluster-detail-confidence-badge")).toContainText(
+      "Confidence · high",
+    );
+    await expect(
+      detail.locator('[data-token="--status-reporter-reviewing"]'),
+    ).toBeVisible();
     await expect(detail.getByTestId("cluster-members-list")).toBeVisible();
     // D10: title is intentionally absent from the schema-valid linked Finding fixture.
     await expect(

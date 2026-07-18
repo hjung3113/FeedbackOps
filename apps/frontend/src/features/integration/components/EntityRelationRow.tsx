@@ -39,9 +39,13 @@ export function EntityRelationRow({
   link,
   compact = false,
   member,
+  className,
+  testId,
 }: {
   link?: EntityLinkDto;
   compact?: boolean;
+  className?: string;
+  testId?: string;
   member?: {
     vocId: string;
     displayId?: string | null;
@@ -53,7 +57,10 @@ export function EntityRelationRow({
 }) {
   if (member) {
     return (
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+      <div
+        className={cn("flex items-center justify-between gap-3 px-4 py-2.5", className)}
+        data-testid={testId}
+      >
         <div className="min-w-0">
           <div className="truncate text-sm text-text-primary">
             {member.title || member.displayId || "VOC"}
@@ -75,7 +82,10 @@ export function EntityRelationRow({
   if (!link) return null;
   if (link.visibility_state !== "allowed") {
     return (
-      <div className="inline-flex min-w-0 items-center gap-2 bg-transparent">
+      <div
+        className={cn("inline-flex min-w-0 items-center gap-2 bg-transparent", className)}
+        data-testid={testId}
+      >
         <span className="inline-flex items-center gap-1 rounded border border-border-subtle bg-surface-blocked px-2 py-0.5 text-xs font-medium text-text-muted">
           <Lock className="h-3 w-3" aria-hidden="true" />
           권한 제한
@@ -92,7 +102,9 @@ export function EntityRelationRow({
       className={cn(
         "inline-flex min-w-0 flex-wrap items-center gap-2 bg-transparent",
         compact && "gap-1.5",
+        className,
       )}
+      data-testid={testId}
     >
       <span className="inline-flex min-w-0 items-center gap-1.5">
         <EntityIconBadge type={iconTypeFor(link.source_type)} size={18} />

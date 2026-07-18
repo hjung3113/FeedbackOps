@@ -40,7 +40,7 @@ const member = {
   display_id: "VOC-101",
   title: "로그인 세션이 자주 만료됩니다",
   severity: "high",
-  reporter_facing_status: "검토 중",
+  reporter_facing_status: "reviewing",
 } as const;
 
 export const candidatePeer = {
@@ -48,7 +48,7 @@ export const candidatePeer = {
   display_id: "VOC-102",
   title: "인증 후 화면이 반복해서 새로고침됩니다",
   severity: "medium",
-  reporter_facing_status: "접수됨",
+  reporter_facing_status: "received",
 } as const;
 
 export const existingFinding: FindingDto = findingDtoSchema.parse({
@@ -131,7 +131,7 @@ export const confirmedNoFinding = cluster({
 
 export const populatedList: ListVocClustersResponse =
   listVocClustersResponseSchema.parse({
-    items: [draftNoFinding, confirmedLinkedFinding, confirmedNoFinding],
+    items: [confirmedNoFinding, confirmedLinkedFinding, draftNoFinding],
   });
 
 export const emptyList: ListVocClustersResponse =
