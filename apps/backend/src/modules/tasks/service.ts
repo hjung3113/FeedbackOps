@@ -444,15 +444,6 @@ export function createTasksService(deps: TasksServiceDeps) {
             taskId: task.id,
             status: args.input.status,
           });
-          await deps.auditService.record(tx, {
-            workspace_id: args.actor.workspace_id,
-            actor_id: args.actor.actor_id,
-            event_type: 'task_status_changed',
-            subject_type: 'task',
-            subject_id: task.id,
-            summary: 'Task status changed',
-            detail: { from: task.status, to: updatedTask.status },
-          });
           if (task.status !== 'released' && updatedTask.status === 'released') {
             if (!deps.boss) {
               throw new Error('pg-boss is required to publish released Task review candidates');
@@ -478,6 +469,15 @@ export function createTasksService(deps: TasksServiceDeps) {
               });
             }
           }
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_status_changed',
+            subject_type: 'task',
+            subject_id: task.id,
+            summary: 'Task status changed',
+            detail: { from: task.status, to: updatedTask.status },
+          });
           const source = updatedTask.source_task_request_id
             ? await resolveTaskSource(tx, {
                 workspaceId: args.actor.workspace_id,

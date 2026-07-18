@@ -13,6 +13,7 @@ import { loadConfig } from "../../../config.js";
 import { type DbHandle, createDb } from "../../../db/client.js";
 import { buildServer } from "../../../server.js";
 import { initBoss, shutdownBoss } from "../../../lib/jobs.js";
+import { createAuditService } from "../../core/audit/index.js";
 import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
@@ -23,12 +24,25 @@ import {
   insertVocDirectly,
 } from "../../voc/__tests__/_seed-helpers.js";
 import { insertTaskRow } from "./_seed-helpers.js";
+import {
+  releasedReviewCandidatesHandler,
+  type TaskReleasedReviewCandidatesPayload,
+} from "../jobs/released-review-candidates.js";
+import { createPublicUpdateReviewCandidatesService } from "../../voc/public-update-review-candidates/service.js";
 
 const APP_URL = process.env.DATABASE_URL ?? "";
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? "";
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? "";
 const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 const SLUG_PREFIX = "it-task-status";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function asReleasedReviewCandidatesPayload(
+  data: Record<string, unknown> | undefined,
+): TaskReleasedReviewCandidatesPayload {
+  if (!data) throw new Error("released review-candidate job payload missing");
+  return data as unknown as TaskReleasedReviewCandidatesPayload;
+}
 
 describe.skipIf(!runIntegration)(
   "PATCH /tasks/:id status transition (#138)",
@@ -238,7 +252,24 @@ describe.skipIf(!runIntegration)(
         triggered_by_actor_id: adminActorId,
         linked_vocs: [{ voc_id: voc.id, entity_link_id: link.rows[0]?.id }],
       });
-      expect(jobs.rows[0]?.data.release_event_id).toEqual(expect.any(String));
+      const releaseEventId = jobs.rows[0]?.data.release_event_id;
+      expect(releaseEventId).toEqual(expect.any(String));
+      expect(releaseEventId).toMatch(UUID_PATTERN);
+      const handler = releasedReviewCandidatesHandler({
+        publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
+          db: dbHandle.db,
+          auditService: createAuditService(),
+        }),
+      });
+      await handler([
+        { data: asReleasedReviewCandidatesPayload(jobs.rows[0]?.data) },
+      ]);
+      const candidates = await migrateHandle.pool.query<{ release_event_id: string }>(
+        `select release_event_id from voc.public_update_review_candidates
+          where source_task_id = $1 and voc_id = $2`,
+        [task.id, voc.id],
+      );
+      expect(candidates.rows).toEqual([{ release_event_id: releaseEventId }]);
     });
 
     it("publishes one two-VOC snapshot only for a real transition into released", async () => {
@@ -281,6 +312,30 @@ describe.skipIf(!runIntegration)(
           { voc_id: vocs[1]?.id, entity_link_id: links[1]?.rows[0]?.id },
         ],
       });
+      const firstReleaseEventId = jobRows.rows[0]?.data.release_event_id;
+      expect(firstReleaseEventId).toEqual(expect.any(String));
+      expect(firstReleaseEventId).toMatch(UUID_PATTERN);
+      const handler = releasedReviewCandidatesHandler({
+        publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
+          db: dbHandle.db,
+          auditService: createAuditService(),
+        }),
+      });
+      await handler([
+        { data: asReleasedReviewCandidatesPayload(jobRows.rows[0]?.data) },
+      ]);
+      const persistedCandidates = await migrateHandle.pool.query<{ voc_id: string; release_event_id: string }>(
+        `select voc_id, release_event_id
+           from voc.public_update_review_candidates
+          where source_task_id = $1
+          order by voc_id`,
+        [task.id],
+      );
+      expect(persistedCandidates.rows).toEqual(
+        vocs.map((voc) => voc.id)
+          .sort()
+          .map((vocId) => ({ voc_id: vocId, release_event_id: firstReleaseEventId })),
+      );
 
       const releaseBody = released.json<{ updated_at: string }>();
       const same = await patchTask(
@@ -297,6 +352,23 @@ describe.skipIf(!runIntegration)(
         { idempotencyKey: randomUUID(), ifMatch: releaseBody.updated_at },
       );
       expect(reopened.statusCode).toBe(200);
+      const secondRelease = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "released" },
+        { idempotencyKey: randomUUID(), ifMatch: reopened.json<{ updated_at: string }>().updated_at },
+      );
+      expect(secondRelease.statusCode).toBe(200);
+      const releaseEvents = await migrateHandle.pool.query<{ data: Record<string, unknown> }>(
+        `select data from pgboss.job_common
+          where name = 'tasks.create_public_update_review_candidates'
+          order by created_on`,
+      );
+      expect(releaseEvents.rowCount).toBe(2);
+      const secondReleaseEventId = releaseEvents.rows[1]?.data.release_event_id;
+      expect(secondReleaseEventId).toEqual(expect.any(String));
+      expect(secondReleaseEventId).toMatch(UUID_PATTERN);
+      expect(secondReleaseEventId).not.toBe(firstReleaseEventId);
       const replay = await patchTask(
         adminCookie,
         task.id,
@@ -307,7 +379,7 @@ describe.skipIf(!runIntegration)(
       const after = await migrateHandle.pool.query(
         `select 1 from pgboss.job_common where name = 'tasks.create_public_update_review_candidates'`,
       );
-      expect(after.rowCount).toBe(1);
+      expect(after.rowCount).toBe(2);
     });
 
     it("does not publish for stale, unauthorized, or failed release mutations", async () => {
@@ -402,15 +474,15 @@ describe.skipIf(!runIntegration)(
         [WORKSPACE_ID, voc.id, task.id, task.msId, adminActorId],
       );
       await migrateHandle.pool.query(`
-        create or replace function pgboss.fail_issue_165_enqueue()
+        create or replace function core.fail_issue_165_audit()
         returns trigger language plpgsql as $$
         begin
-          raise exception 'forced enqueue failure';
+          raise exception 'forced audit failure after enqueue';
         end;
         $$;
-        create trigger fail_issue_165_enqueue
-          before insert on pgboss.job_common
-          for each row execute function pgboss.fail_issue_165_enqueue();
+        create trigger fail_issue_165_audit
+          before insert on core.audit_log
+          for each row execute function core.fail_issue_165_audit();
       `);
       try {
         const res = await patchTask(
@@ -437,8 +509,8 @@ describe.skipIf(!runIntegration)(
         expect(audits.rowCount).toBe(0);
       } finally {
         await migrateHandle.pool.query(`
-          drop trigger if exists fail_issue_165_enqueue on pgboss.job_common;
-          drop function if exists pgboss.fail_issue_165_enqueue();
+          drop trigger if exists fail_issue_165_audit on core.audit_log;
+          drop function if exists core.fail_issue_165_audit();
         `);
       }
     });
