@@ -297,6 +297,7 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
   });
 
   afterAll(async () => {
+    await ops.pool.query('delete from core.idempotency_keys where actor_id=$1', [adminId]);
     await cleanupVocClusterFixtures(ops, {
       workspaceId: WORKSPACE_ID,
       actorIds,
@@ -388,9 +389,9 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
     expect(first.body).toBe(replay.body);
     expect(await idempotencyBody(adminId, key)).toBeNull();
     expect(await auditCount(linkId)).toBe(2);
-    expect(
-      (await unlink(adminCookie, { key, reason: 'changed reason' })).json<{ code: string }>().code,
-    ).toBe('conflict.idempotency_key_reuse');
+    const changedKey = await unlink(adminCookie, { key, reason: 'changed reason' });
+    expect(changedKey.statusCode).toBe(409);
+    expect(changedKey.json<{ code: string }>().code).toBe('conflict.idempotency_key_reuse');
   });
 
   it('allows a fully scoped Developer and makes never-linked and already-detached no-ops byte-equivalent', async () => {
@@ -408,6 +409,10 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
     ).id;
     findingIds.push(neverLinkedFinding);
     const neverLinked = await unlink(adminCookie, { findingId: neverLinkedFinding });
+    expect(alreadyDetached.statusCode).toBe(204);
+    expect(alreadyDetached.body).toBe('');
+    expect(neverLinked.statusCode).toBe(204);
+    expect(neverLinked.body).toBe('');
     expect(alreadyDetached.body).toBe(neverLinked.body);
     expect(await auditCount(linkId)).toBe(2);
   });
@@ -430,11 +435,11 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
   });
 
   it('requires finding.manage separately on the cluster and target managed systems', async () => {
+    const linkId = await seedLink();
     for (const [cookie, expectedScope] of [
       [clusterManageOnlyCookie, targetMsId],
       [targetManageOnlyCookie, clusterMsId],
     ] as const) {
-      const linkId = await seedLink();
       const denied = await unlink(cookie);
       expect(denied.statusCode).toBe(403);
       expect(denied.json<{ code: string; detail: { requiredScope: string[] } }>()).toMatchObject({
