@@ -17,6 +17,14 @@ import { z } from 'zod';
 
 import { attachmentUploadedDetailSchema } from '../audit/attachments.js';
 import {
+  surveyClosedDetailSchema,
+  surveyCreatedDetailSchema,
+  surveyOpenedDetailSchema,
+  surveyQuestionCreatedDetailSchema,
+  surveyQuestionDeletedDetailSchema,
+  surveyQuestionUpdatedDetailSchema,
+} from '../audit/survey.js';
+import {
   internalCommentCreatedDetailSchema,
   publicUpdateCreatedDetailSchema,
   reporterFacingStatusChangedDetailSchema,
@@ -100,6 +108,13 @@ export const AUDIT_EVENT_TYPES = [
   'task_status_changed',
   'public_update_review_candidate_created',
   'public_update_review_candidate_dismissed',
+  // Slice 8 #191: Survey lifecycle and question structure events.
+  'survey_created',
+  'survey_question_created',
+  'survey_question_updated',
+  'survey_question_deleted',
+  'survey_opened',
+  'survey_closed',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -684,4 +699,11 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_status_changed: taskStatusChangedDetailSchema,
   public_update_review_candidate_created: publicUpdateReviewCandidateCreatedDetailSchema,
   public_update_review_candidate_dismissed: publicUpdateReviewCandidateDismissedDetailSchema,
+  // Slice 8 #191: Survey lifecycle and question structure events.
+  survey_created: surveyCreatedDetailSchema,
+  survey_question_created: surveyQuestionCreatedDetailSchema,
+  survey_question_updated: surveyQuestionUpdatedDetailSchema,
+  survey_question_deleted: surveyQuestionDeletedDetailSchema,
+  survey_opened: surveyOpenedDetailSchema,
+  survey_closed: surveyClosedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;
