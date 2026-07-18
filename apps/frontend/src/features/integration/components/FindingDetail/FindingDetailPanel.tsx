@@ -243,7 +243,7 @@ function LinkTaskModal({ finding, open, onClose }: LinkTaskModalProps): React.Re
             <SelectContent>
               {candidates.map((task) => (
                 <SelectItem key={task.id} value={task.id}>
-                  {task.title} · {shortId(task.id)}
+                  {task.title} · {task.display_id}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1023,7 +1023,7 @@ function FullFindingDetail({
           <div className="flex items-center gap-2 mb-1">
             <FitBadge>Finding</FitBadge>
             <span className="text-xs text-text-muted">
-              {finding.id.slice(0, 8)}
+              {finding.display_id}
             </span>
           </div>
           <h1 className="text-xl font-semibold text-text-primary">
@@ -1148,7 +1148,7 @@ function FullFindingDetail({
                 >
                   <span>{linkedTaskQuery.data?.title ?? 'Linked task'}</span>
                   <span className="font-mono text-xs text-text-muted">
-                    {shortId(finding.linked_task_id)}
+                    {linkedTaskQuery.data?.display_id ?? shortId(finding.linked_task_id)}
                   </span>
                   <span className="text-xs text-text-muted">jump</span>
                 </Link>

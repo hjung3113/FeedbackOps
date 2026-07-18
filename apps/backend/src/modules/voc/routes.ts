@@ -505,23 +505,10 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       const result = await vocReadService.getVocDetail({ actor, vocId });
       const { envelope, etag } = result;
 
-      // WHY (M3): RFC 7232 allows multi-value If-None-Match headers
-      // (comma-separated ETags) and wildcard '*'. Exact string compare misses these.
-      const raw = req.headers['if-none-match'];
-      const headerVal = Array.isArray(raw) ? raw[0] : raw;
-      const matches = String(headerVal ?? '')
-        .split(',')
-        .map((v) => v.trim())
-        .some((v) => v === '*' || v === etag);
-      if (matches) {
-        // WHY (M4): 304 must include cache-control per RFC 7234 §4.3.4.
-        return reply
-          .code(304)
-          .header('etag', etag)
-          .header('cache-control', 'private, no-cache')
-          .send();
-      }
-
+      // ADR-0031: detail includes peer-derived similarity. A source-row ETag
+      // cannot safely validate peer creation, edit, or archival, so this route
+      // intentionally ignores If-None-Match until a projection-aware validator
+      // is introduced.
       return reply
         .header('etag', etag)
         .header('cache-control', 'private, no-cache')

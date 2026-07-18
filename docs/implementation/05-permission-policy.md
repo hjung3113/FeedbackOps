@@ -25,7 +25,10 @@ Capability vocabulary is module-prefixed (`{module}.{action}`,
 (create/update a Finding). Both are Developer-requestable per Managed System and
 are NOT sensitive. Reading or creating a Finding is Admin (workspace) or
 Developer scoped to the Finding's `primary_managed_system_id`; User and Reporter
-never read Findings. Creating a Finding from a VOC additionally requires
+never read Findings directly. The #112/#124 Entity Links Finding endpoint and
+command surfaces are the documented exception: a User/Reporter holding an
+explicit `finding.read` or `finding.manage` grant retains that point capability
+there, without an Admin-or-Developer role gate. Creating a Finding from a VOC additionally requires
 `voc.read` on the source VOC's Managed System (no forging a Finding from an
 unreadable VOC). Slice 6 issue #133 adds `task_request.self_approve` for
 same-requester Task Request approval. It is Developer-requestable per Managed
@@ -41,6 +44,15 @@ without adding a new capability. `POST /vocs/:id/request-task` mirrors
 on the source Primary Managed System, with Admin bypass. `POST
 /voc-clusters/:id/request-task` mirrors cluster create-finding authority:
 Admin or Developer with `finding.manage` on the cluster Primary Managed System.
+
+The Findings module owns the canonical implementation of these predicates:
+`checkFindingRead` resolves a point `finding.read` decision, preserving the
+Permission Check Service clock and archived Managed System behavior;
+`actorFindingReadScope` resolves `finding.read` list-filter scope; and
+`checkFindingManage` resolves point `finding.manage` decisions. Entity Links,
+VOC Clusters, Task Requests, and Tasks must consume the form matching their
+original call-site semantics; they must not reconstruct Finding scope or
+capability checks locally.
 
 ## Permission Check Order
 
@@ -151,13 +163,14 @@ requested capability, requested scope, safe source summary when available,
 reason, risk indicators, requested expiration, explicit deny state, and allowed
 decision actions.
 
-The admin review queue is read via `GET /permission-requests` (Slice 3 #87),
-which returns the workspace's open (`pending` | `needs_more_info`) requests and
-a `count`. The endpoint is gated by the `workspace.admin` capability — the same
-gate the managed-systems mutations use; a non-admin caller receives
-`permission.denied` (`403`). It introduces no new capability vocabulary. The
-caller-scoped variant `GET /permission-requests/mine` requires only a session
-(an Actor may always read their own open requests).
+The admin review queue is read via `GET /permissions/requests` (the legacy
+`GET /permission-requests` remains compatible), which returns the workspace's
+open (`pending` | `needs_more_info`) requests and a `count` by default. Admins
+may request `?status=pending|needs_more_info|approved|rejected|all` to review
+decided rows. The endpoint is gated by `workspace.admin`; a non-admin caller
+receives `permission.denied` (`403`). The caller-scoped variant
+`GET /permission-requests/mine` requires only a session (an Actor may always
+read their own open requests).
 
 Rejected Permission Requests must not be immediately resubmitted for the same
 source object, source action, and requested scope unless the rejection response
@@ -174,16 +187,46 @@ Permission approval and domain mutation are separate audited actions; after
 approval, the requester returns to the original object or action and explicitly
 runs it again.
 
+### Admin decision lifecycle
+
+Only a request in `pending` or `needs_more_info` is decidable. The four
+administrator endpoints all require `workspace.admin`, lock the request row,
+and write the request change plus its audit row in one transaction:
+
+```text
+POST /permissions/requests/:id/approve         { reason?: string }
+POST /permissions/requests/:id/reject          { reason: string }
+POST /permissions/requests/:id/need-more-info  { note: string }
+POST /permissions/requests/:id/deny            { reason: string }
+```
+
+- Approve copies the requested capability, Managed System scope, and expiration
+  verbatim into a real `permission_grants` row, then sets the request to
+  `approved`. It never auto-runs the blocked action.
+- Reject sets the request to `rejected`; it does not mint a grant.
+- Need-more-info sets it to `needs_more_info`; the note is kept in audit detail.
+- Explicit deny copies the requested capability and Managed System scope into a
+  real `permission_denies` row and sets the request to `rejected`. A
+  workspace-wide deny takes precedence over every grant; a Managed-System-scoped
+  deny takes precedence only for checks in that same Managed System.
+- Reject, deny, and need-more-info require a non-empty trimmed reason/note.
+  Approve requires one only for `isSensitiveCapability`; it is optional for a
+  non-sensitive capability. Missing decision reason/note is a `validation.*`
+  response (`422`), including `validation.sensitive_reason_required` for a
+  sensitive approval. Reviewers cannot alter requested scope or expiry.
+- Unknown request IDs are `not_found.record` (`404`); non-decidable requests
+  are `conflict.stale_write` (`409`). Duplicate active grants/denies are
+  `conflict.capability_already_granted` / `conflict.capability_already_denied`.
+  `Idempotency-Key` replays the stored decision response without a second write.
+
 Audit events:
 
 ```text
 permission_requested
 permission_approved
 permission_rejected
-permission_more_info_requested
-permission_more_info_submitted
-permission_revoked
-permission_expired
+permission_needs_more_info
+permission_denied
 task_request_approved
 task_request_rejected
 task_request_needs_more_evidence
@@ -192,6 +235,14 @@ task_request_created_from_voc
 task_request_created_from_voc_cluster
 task_created_from_request
 task_linked_to_request
+```
+
+Revoke and expiry endpoints are not implemented yet. Planned event names remain:
+
+```text
+permission_more_info_submitted
+permission_revoked
+permission_expired
 ```
 
 ## Summary-Visible Contract

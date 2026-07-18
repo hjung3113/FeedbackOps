@@ -123,7 +123,7 @@ Entity Linking uses providers to enforce:
 
 ```text
 - packages/ui implements reusable visual and interaction primitives.
-- apps/frontend/src/features/{home,my-work,voc,surveys,tasks,integration,admin} own route and screen composition.
+- apps/frontend/src/features/{home,my-work,voc,voc-cluster,surveys,tasks,integration,admin} own route and screen composition.
 - Findings, Evidence, Coverage, and Links are Integration feature surfaces.
 - Analytics Areas, Permission Requests, Managed System Registry, and settings are Admin feature surfaces.
 - Frontend features represent UI surfaces for product systems; they do not own domain rules or writes.
@@ -131,3 +131,7 @@ Entity Linking uses providers to enforce:
 - Frontend permission states are display hints only.
 - LinkedEntityTrail renders permission-limited nodes from backend-provided summaries.
 ```
+
+`voc-cluster` is a VOC-owned subdomain assembled as a sibling feature folder
+(currently hooks only, with routes under `src/routes/_authed/voc-clusters/`), not
+a new top-level product domain.

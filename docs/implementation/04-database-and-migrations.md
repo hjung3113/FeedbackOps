@@ -32,33 +32,39 @@ module.
 core
 - workspaces
 - actors
-- role_levels
+- sessions
 - teams
 - managed_systems
-- customers
-- contacts
 - analytics_areas
-- attachments
 - entity_links
-- audit_logs
+- audit_log
+- rate_limits
+- idempotency_keys
+- display_counters
 
 voc
 - vocs
+- voc_public_updates
+- voc_reporter_replies
+- voc_internal_comments
+- voc_attachments
+- reporter_facing_status_transitions
+
+voc_cluster
 - voc_clusters
-- public_updates
+- voc_cluster_members
 
 finding
 - findings
 - evidence_highlights
 
 task
-- task_requests
 - tasks
 - work_initiatives / projects when future execution grouping is introduced
 - milestones when future execution grouping is introduced
 
 task_request
-- task_requests (Slice 6 tracer namespace for the Task Request review buffer)
+- task_requests
 
 survey
 - surveys
@@ -70,6 +76,12 @@ permission
 - permission_grants
 - permission_denies
 ```
+
+`core.attachments` does not exist as a shared attachment table as of Slice 6;
+attachments are domain-scoped, such as `voc.voc_attachments`. `role_levels`,
+`customers`, and `contacts` are not present in the current schema. `task_request`
+is the Slice 6 review-buffer namespace, with no migration that folds it back
+into `task`.
 
 ## Enum Strategy
 
@@ -127,7 +139,7 @@ VOC status.
 
 ### Archive over delete on `voc.voc_attachments` (migration 0016)
 
-Migration `0016_grant_app_delete_voc_attachments.sql` grants `DELETE ON voc.voc_attachments TO fops_app`. The grant exists strictly to let the **hourly `core.attachments_purge` worker** reclaim unlinked attachment rows older than 24h (rows with `voc_id IS NULL AND comment_id IS NULL`). It is **not** a relaxation of the project-wide "archive over hard delete" rule:
+Migration `0016_voc_attachments_grants.sql` grants `DELETE ON voc.voc_attachments TO fops_app`. The grant exists strictly to let the **hourly `core.attachments_purge` worker** reclaim unlinked attachment rows older than 24h (rows with `voc_id IS NULL AND comment_id IS NULL`). It is **not** a relaxation of the project-wide "archive over hard delete" rule:
 
 - **User-initiated paths** (Triage Console "remove attachment", EditDescriptionModal, etc.) MUST go through the service-layer archive: set `archived_at = now()`, `archived_by_actor_id = caller`. They never issue a `DELETE`.
 - **The purge worker** is the only legitimate row-deleter, and only against truly orphaned uploads that were never linked to a parent VOC or comment.
@@ -150,15 +162,32 @@ The archive-over-delete invariant is enforced in `apps/backend/src/modules/attac
 ## Migration Naming
 
 ```text
-YYYYMMDDHHMM_descriptive_change.sql
+NNNN_slug.sql            # drizzle-kit 4-digit sequence + slug (generated or custom)
 ```
 
 Examples:
 
 ```text
-202605121200_create_core_analytics_areas.sql
-202605121230_create_core_entity_links.sql
+0022_voc_clusters.sql
+0025_task_domain.sql
+0027_display_id_scheme.sql
 ```
+
+`drizzle-kit generate` assigns the 4-digit sequence. Timestamp prefixes are not
+used in the current migrations directory.
+
+## Issue #165: released Task review candidates
+
+`voc.public_update_review_candidates` is a VOC-owned durable queue of human
+review obligations. Its permanent `(workspace_id, release_event_id, voc_id)`
+unique key makes pg-boss retries safe; its partial pending Task/VOC key prevents
+two unresolved obligations for the same Task/VOC. `fops_app` has SELECT and
+INSERT only. Migration `0032_task_released_review_candidates.sql` also
+pre-creates the Task release queue with ADR-0009 retry defaults. Its resolution
+CHECK validates pending/dismissed/actioned fields, and its terminal-immutability
+trigger rejects every rewrite of an actioned or dismissed candidate. A later
+Task release must create a new candidate row; it must never reopen or mutate a
+terminal decision.
 
 ## Seed Data
 

@@ -49,11 +49,13 @@ Every new entity link must validate:
 Each linkable module registers:
 
 ```text
-entity_type
-assertExists(id, workspace_id)
-getPermissionSubject(id)
+entityType
+assertExists(db, workspaceId, id)
+getPermissionSubject(db, workspaceId, id)
+canRead(deps, actor, subject)                 # read visibility gate (required)
+canCreateTarget?(deps, actor, subject)        # creatable target gate (optional)
 getReporterSummary(id)
-getInternalSummary(id)
+getInternalSummary(db, workspaceId, id)
 listExpectedLinks(id)
 ```
 
@@ -103,11 +105,49 @@ finding -> registered as a link TARGET type
   related_to behavior (#112-#115) is preserved unchanged
 ```
 
-The composite tuple allowlist after Slice 5 is exactly `(voc,voc,related_to)`,
-`(voc,finding,created_finding)`, `(voc,finding,evidence_of)`, and
-`(voc_cluster,finding,created_finding)`; independent value CHECKs are forbidden
-because they would admit invalid tuples. Creatable visibility stays
-`internal_only`.
+Link creation endpoints map to registered pairs as of Slice 6:
+
+```text
+POST /vocs/:id/create-finding          -> (voc, finding, created_finding)            [#122]
+POST /voc-clusters/:id/create-finding  -> (voc_cluster, finding, created_finding)    [#126]
+POST /voc-clusters/:id/link-finding    -> (voc_cluster, finding, evidence_of)        [#127]
+POST /findings/:id/request-task        -> (finding, task_request, requested_task)    [#132]
+POST /vocs/:id/request-task            -> (voc, task_request, requested_task)        [#136]
+POST /voc-clusters/:id/request-task    -> (voc_cluster, task_request, requested_task) [#136]
+```
+
+Direct `POST /entity-links` creation is narrower than the registered/DB tuple
+set. As of #134, direct creation is allowed for these tuples:
+
+```text
+(voc, voc, related_to)
+(voc, finding, created_finding)
+(voc, finding, evidence_of)
+(voc_cluster, finding, created_finding)
+(finding, task_request, requested_task)
+(task_request, task, converted_to)
+(finding, task, requested_task)
+(voc, task, evidence_of)
+```
+
+As of #136, the registered/DB allowlist also includes source-conversion tuples
+created by routes, not by direct `POST /entity-links`:
+
+```text
+(voc, task_request, requested_task)
+(voc_cluster, task_request, requested_task)
+```
+
+`(voc_cluster, finding, evidence_of)` is registered for DB validation and is
+created only by `POST /voc-clusters/:id/link-finding`. Generic
+`POST /entity-links`, generic link listings, and generic `PATCH /entity-links/:id`
+detach are prohibited categorically; PATCH/detach returns the same
+non-disclosing 404 envelope as an absent link. Domain unlink is permitted only
+through `POST /voc-clusters/:id/unlink-finding`, which soft-detaches the exact
+active tuple.
+
+Independent value CHECKs are forbidden because they would admit invalid tuples.
+Creatable visibility stays `internal_only`.
 
 Slice 6 tracer (#132):
 
@@ -124,7 +164,7 @@ task_request -> registered as a link TARGET type
 - getInternalSummary(task_request): Task Request internal read model
 ```
 
-The composite tuple allowlist after Slice 6 adds exactly:
+The Slice 6 #132 tracer baseline included:
 
 ```text
 (finding, task_request, requested_task)

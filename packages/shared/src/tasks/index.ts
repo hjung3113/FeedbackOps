@@ -20,6 +20,7 @@ export const taskDtoSchema = z
   .object({
     id: z.string().uuid(),
     workspace_id: z.string().uuid(),
+    display_id: z.string(),
     primary_managed_system_id: z.string().uuid(),
     title: z.string(),
     status: taskStatusSchema,
@@ -70,6 +71,13 @@ export const taskDetailDtoSchema = taskDtoSchema
   })
   .strict();
 export type TaskDetailDto = z.infer<typeof taskDetailDtoSchema>;
+
+export const patchTaskStatusRequestSchema = z
+  .object({
+    status: taskStatusSchema,
+  })
+  .strict();
+export type PatchTaskStatusRequest = z.infer<typeof patchTaskStatusRequestSchema>;
 
 export const convertTaskRequestRequestSchema = z
   .object({

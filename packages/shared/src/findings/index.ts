@@ -65,6 +65,7 @@ export const findingDtoSchema = z
   .object({
     id: z.string().uuid(),
     workspace_id: z.string().uuid(),
+    display_id: z.string(),
     primary_managed_system_id: z.string().uuid(),
     title: z.string(),
     summary: z.string(),
@@ -121,6 +122,8 @@ export const evidenceHighlightDtoSchema = z
     primary_managed_system_id: z.string().uuid(),
     source_type: evidenceHighlightSourceTypeSchema,
     source_id: z.string().uuid().nullable(),
+    source_title: z.string().nullable(),
+    source_meta: z.string().nullable(),
     quote_or_summary: z.string().optional(),
     analytics_area_id: z.string().uuid().nullable(),
     sentiment: evidenceHighlightSentimentSchema.nullable(),

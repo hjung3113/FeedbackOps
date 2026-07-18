@@ -2,21 +2,28 @@ import type {
   DetachedEntityLinkResponse,
   EntityLinkDto,
   EntityLinkEntityType,
+  EntityLinkPair,
   EntityLinkRef,
   EntityLinkRelationType,
+  EntityLinkTargetSummary,
   EntityLinkVisibilityState,
   TaskReporterSummary,
 } from '@fops/shared';
+import { isRegisteredEntityLinkPair, registeredEntityLinkPairs } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
+import {
+  checkFindingRead,
+  checkFindingManage,
+} from '../findings/authorization.js';
 import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, findTaskRequestById } from '../task-requests/repo.js';
 import { type TaskRow, findTaskById } from '../tasks/index.js';
-import { findVocClusterById } from '../voc-clusters/repo.js';
+import { type VocClusterRow, findVocClusterById } from '../voc-clusters/repo.js';
 import { type LinkVisibilityDecision, evaluateLinkVisibility } from './evaluate-visibility.js';
 import {
   type EntityLinkRow,
@@ -50,7 +57,7 @@ interface EntityLinkProvider {
   assertExists(db: Db, workspaceId: string, id: string): Promise<LinkEndpointRow | null>;
   getPermissionSubject(db: Db, workspaceId: string, id: string): Promise<LinkEndpointRow | null>;
   canRead(
-    deps: Pick<EntityLinksServiceDeps, 'checkService'>,
+    deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
     actor: EntityLinksActor,
     subject: LinkEndpointRow,
   ): Promise<boolean>;
@@ -60,13 +67,19 @@ interface EntityLinkProvider {
     subject: LinkEndpointRow,
   ): Promise<boolean>;
   getReporterSummary(id: string): Promise<ReporterSummaryResult>;
-  getInternalSummary(db: Db, workspaceId: string, id: string): Promise<unknown | null>;
+  getInternalSummary(
+    db: Db,
+    workspaceId: string,
+    id: string,
+  ): Promise<EntityLinkTargetSummary | null>;
   listExpectedLinks(id: string): Promise<EntityLinkRef[]>;
 }
 
-function findingToInternalSummary(row: FindingReadRow): Record<string, unknown> {
+function findingToInternalSummary(row: FindingReadRow): EntityLinkTargetSummary {
   return {
+    type: 'finding',
     id: row.id,
+    display_id: row.display_id,
     title: row.title,
     summary: row.summary,
     severity: row.severity,
@@ -77,9 +90,11 @@ function findingToInternalSummary(row: FindingReadRow): Record<string, unknown> 
   };
 }
 
-function taskRequestToInternalSummary(row: TaskRequestRow): Record<string, unknown> {
+function taskRequestToInternalSummary(row: TaskRequestRow): EntityLinkTargetSummary {
   return {
+    type: 'task_request',
     id: row.id,
+    display_id: row.display_id,
     source_type: row.source_type,
     source_id: row.source_id,
     evidence_summary: row.evidence_summary,
@@ -90,9 +105,11 @@ function taskRequestToInternalSummary(row: TaskRequestRow): Record<string, unkno
   };
 }
 
-function taskToInternalSummary(row: TaskRow): Record<string, unknown> {
+function taskToInternalSummary(row: TaskRow): EntityLinkTargetSummary {
   return {
+    type: 'task',
     id: row.id,
+    display_id: row.display_id,
     title: row.title,
     status: row.status,
     priority: row.priority,
@@ -102,13 +119,26 @@ function taskToInternalSummary(row: TaskRow): Record<string, unknown> {
   };
 }
 
-function toAllowedDto(row: EntityLinkRow): EntityLinkDto {
+function clusterToInternalSummary(row: VocClusterRow): EntityLinkTargetSummary {
+  return {
+    type: 'voc_cluster',
+    id: row.id,
+    display_id: row.display_id,
+    title: row.title,
+    summary: row.summary,
+    status: row.status,
+    primary_managed_system_id: row.primary_managed_system_id,
+  };
+}
+
+function toAllowedDto(row: EntityLinkRow, targetSummary?: EntityLinkTargetSummary): EntityLinkDto {
   return {
     id: row.id,
     source_type: row.source_type,
     source_id: row.source_id,
     target_type: row.target_type,
     target_id: row.target_id,
+    ...(targetSummary !== undefined ? { target_summary: targetSummary } : {}),
     relation_type: row.relation_type,
     visibility: row.visibility,
     status: row.status,
@@ -158,8 +188,9 @@ function toDtoForDecision(
   row: EntityLinkRow,
   decision: LinkVisibilityDecision,
   summary?: TaskReporterSummary,
+  targetSummary?: EntityLinkTargetSummary,
 ): EntityLinkDto {
-  if (decision === 'allowed') return toAllowedDto(row);
+  if (decision === 'allowed') return toAllowedDto(row, targetSummary);
   if (decision === 'hidden' || decision === 'denied') return toAuditMetadataDto(row, decision);
   if (summary !== undefined) return toSummaryVisibleDto(row, summary);
   throw new HttpError(
@@ -185,11 +216,17 @@ async function assertVocReadScope(
   subject: LinkEndpointRow,
 ): Promise<boolean> {
   if (subject.reporter_id && actor.actor_id === subject.reporter_id) return true;
-  const decision = await deps.checkService.checkCapability(actor, 'voc.read', {
+  const readDecision = await deps.checkService.checkCapability(actor, 'voc.read', {
     workspace_id: actor.workspace_id,
     managed_system_id: subject.managed_system_id,
   });
-  return decision.allow;
+  if (readDecision.allow) return true;
+
+  const triageDecision = await deps.checkService.checkCapability(actor, 'voc.triage', {
+    workspace_id: actor.workspace_id,
+    managed_system_id: subject.managed_system_id,
+  });
+  return triageDecision.allow;
 }
 
 async function assertFindingReadScope(
@@ -197,10 +234,8 @@ async function assertFindingReadScope(
   actor: EntityLinksActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  const decision = await deps.checkService.checkCapability(actor, 'finding.read', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: managedSystemId,
+  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId, {
+    requireElevatedRole: false,
   });
   return decision.allow;
 }
@@ -210,10 +245,8 @@ async function assertFindingManageScope(
   actor: EntityLinksActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  const decision = await deps.checkService.checkCapability(actor, 'finding.manage', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: managedSystemId,
+  const decision = await checkFindingManage(deps.checkService, actor, managedSystemId, {
+    requireElevatedRole: false,
   });
   return decision.allow;
 }
@@ -288,7 +321,10 @@ const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
     canCreateTarget: (deps, actor, subject) =>
       assertFindingManageScope(deps, actor, subject.managed_system_id),
     getReporterSummary: unavailableReporterSummary,
-    getInternalSummary: async () => null,
+    getInternalSummary: async (db, workspaceId, id) => {
+      const cluster = await findVocClusterById(db, { workspaceId, clusterId: id });
+      return cluster ? clusterToInternalSummary(cluster) : null;
+    },
     listExpectedLinks: async () => [],
   },
   task_request: {
@@ -359,36 +395,61 @@ function providerFor(type: EntityLinkEntityType): EntityLinkProvider {
   return entityLinkProviders[type];
 }
 
+// The registry is the DB/audit allowlist. Some registered tuples are written only by
+// domain commands, whose compound authorization and audit obligations cannot be
+// represented by the generic endpoints.
+const genericEntityLinkPairs = registeredEntityLinkPairs.filter(
+  (pair) =>
+    !(
+      pair.source_type === 'voc_cluster' &&
+      pair.target_type === 'finding' &&
+      pair.relation_type === 'evidence_of'
+    ),
+);
+const creatableEntityLinkPairs = genericEntityLinkPairs;
+const listVisibleEntityLinkPairs = genericEntityLinkPairs;
+
+function tupleListIncludes(
+  pairs: readonly EntityLinkPair[],
+  input: {
+    sourceType: EntityLinkEntityType;
+    targetType: EntityLinkEntityType;
+    relationType: EntityLinkRelationType;
+  },
+): boolean {
+  return pairs.some(
+    (pair) =>
+      pair.source_type === input.sourceType &&
+      pair.target_type === input.targetType &&
+      pair.relation_type === input.relationType,
+  );
+}
+
 function isCreatableTuple(input: {
   sourceType: EntityLinkEntityType;
   targetType: EntityLinkEntityType;
   relationType: EntityLinkRelationType;
 }): boolean {
   return (
-    (input.sourceType === 'voc' &&
-      input.targetType === 'voc' &&
-      input.relationType === 'related_to') ||
-    (input.sourceType === 'voc' &&
-      input.targetType === 'finding' &&
-      input.relationType === 'created_finding') ||
-    (input.sourceType === 'voc' &&
-      input.targetType === 'finding' &&
-      input.relationType === 'evidence_of') ||
-    (input.sourceType === 'voc_cluster' &&
-      input.targetType === 'finding' &&
-      input.relationType === 'created_finding') ||
-    (input.sourceType === 'finding' &&
-      input.targetType === 'task_request' &&
-      input.relationType === 'requested_task') ||
-    (input.sourceType === 'task_request' &&
-      input.targetType === 'task' &&
-      input.relationType === 'converted_to') ||
-    (input.sourceType === 'finding' &&
-      input.targetType === 'task' &&
-      input.relationType === 'requested_task') ||
-    (input.sourceType === 'voc' &&
-      input.targetType === 'task' &&
-      input.relationType === 'evidence_of')
+    isRegisteredEntityLinkPair({
+      source_type: input.sourceType,
+      target_type: input.targetType,
+      relation_type: input.relationType,
+    }) && tupleListIncludes(creatableEntityLinkPairs, input)
+  );
+}
+
+function isListVisibleTuple(input: {
+  sourceType: EntityLinkEntityType;
+  targetType: EntityLinkEntityType;
+  relationType: EntityLinkRelationType;
+}): boolean {
+  return (
+    isRegisteredEntityLinkPair({
+      source_type: input.sourceType,
+      target_type: input.targetType,
+      relation_type: input.relationType,
+    }) && tupleListIncludes(listVisibleEntityLinkPairs, input)
   );
 }
 
@@ -412,16 +473,6 @@ async function evaluateRowVisibility(
   row: EntityLinkRow,
   resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
 ): Promise<LinkVisibilityDecision> {
-  if (
-    !isCreatableTuple({
-      sourceType: row.source_type,
-      targetType: row.target_type,
-      relationType: row.relation_type,
-    })
-  ) {
-    return 'hidden';
-  }
-
   const sourceRef = { type: row.source_type, id: row.source_id };
   const targetRef = { type: row.target_type, id: row.target_id };
   const [source, target] = await Promise.all([
@@ -448,6 +499,19 @@ async function evaluateRowVisibility(
     sourceReporterId: source?.reporter_id ?? null,
     targetReporterId: target?.reporter_id ?? null,
   });
+}
+
+async function getTargetInternalSummary(
+  db: Db | Tx,
+  actor: EntityLinksActor,
+  row: Pick<EntityLinkRow, 'target_type' | 'target_id'>,
+): Promise<EntityLinkTargetSummary | undefined> {
+  const summary = await providerFor(row.target_type).getInternalSummary(
+    db,
+    actor.workspace_id,
+    row.target_id,
+  );
+  return summary ?? undefined;
 }
 
 export function createEntityLinksService(deps: EntityLinksServiceDeps) {
@@ -544,7 +608,12 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
 
     const result = args.tx ? await persist(args.tx) : await deps.db.transaction(persist);
 
-    return { link: toAllowedDto(result.row), status: result.inserted ? 201 : 200 };
+    const targetSummary = await getTargetInternalSummary(db, actor, result.row);
+
+    return {
+      link: toAllowedDto(result.row, targetSummary),
+      status: result.inserted ? 201 : 200,
+    };
   }
 
   async function listLinks(args: {
@@ -578,8 +647,19 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     ]);
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
+      if (
+        !isListVisibleTuple({
+          sourceType: row.source_type,
+          targetType: row.target_type,
+          relationType: row.relation_type,
+        })
+      ) {
+        continue;
+      }
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
-      items.push(toDtoForDecision(row, decision));
+      const targetSummary =
+        decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
+      items.push(toDtoForDecision(row, decision, undefined, targetSummary));
     }
     return items;
   }
@@ -601,8 +681,19 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const resolvedByEndpoint = new Map<string, LinkEndpointRow | null>();
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
+      if (
+        !isListVisibleTuple({
+          sourceType: row.source_type,
+          targetType: row.target_type,
+          relationType: row.relation_type,
+        })
+      ) {
+        continue;
+      }
       const decision = await evaluateRowVisibility(deps, actor, row, resolvedByEndpoint);
-      items.push(toDtoForDecision(row, decision));
+      const targetSummary =
+        decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
+      items.push(toDtoForDecision(row, decision, undefined, targetSummary));
     }
     return items;
   }
@@ -618,19 +709,15 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       workspaceId: actor.workspace_id,
       linkId,
     });
-    if (!link) {
-      throw new HttpError('not_found.record', 'entity link not found');
-    }
     if (
+      !link ||
       !isCreatableTuple({
         sourceType: link.source_type,
         targetType: link.target_type,
         relationType: link.relation_type,
       })
     ) {
-      throw new HttpError('validation.failed', 'unsupported entity link tuple', {
-        fields: [{ path: [], code: 'unsupported_tuple' }],
-      });
+      throw new HttpError('not_found.record', 'entity link not found');
     }
     const sourceProvider = providerFor(link.source_type);
     const targetProvider = providerFor(link.target_type);

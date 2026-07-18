@@ -15,7 +15,10 @@ import { loadConfig } from './config.js';
 import { createDb } from './db/client.js';
 import { initBoss, shutdownBoss } from './lib/jobs.js';
 import { getStorage } from './lib/storage/factory.js';
+import { createAuditService } from './modules/core/audit/index.js';
 import { registerCoreJobs } from './modules/core/jobs/index.js';
+import { registerTasksJobs } from './modules/tasks/index.js';
+import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
 import { buildServer } from './server.js';
 
 const config = loadConfig();
@@ -31,6 +34,13 @@ await registerCoreJobs(boss, {
   db: dbHandle.db,
   pool: dbHandle.pool,
   storage: getStorage(),
+});
+await registerTasksJobs(boss, {
+  db: dbHandle.db,
+  publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
+    db: dbHandle.db,
+    auditService: createAuditService(),
+  }),
 });
 
 const app = await buildServer({ config, dbHandle, boss });

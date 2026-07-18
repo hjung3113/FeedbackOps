@@ -1,26 +1,33 @@
 // Permission routes. Thin controllers per AGENTS.md:65-66 — every DB read of
-// permission_* tables happens inside `check-service.ts`. The route's only
+// permission_* tables happens inside permission services. The route's only
 // jobs are: parse + validate query params, look up the actor's role_level,
 // call the service, and shape the response envelope.
 
-import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
-import { type Capability, isCapability } from '@fops/shared';
-import { permissionRequests } from '../../db/schema/permission.js';
+import {
+  approvePermissionRequestSchema,
+  denyPermissionRequestSchema,
+  needMoreInfoPermissionRequestSchema,
+  rejectPermissionRequestSchema,
+  type Capability,
+  isCapability,
+} from '@fops/shared';
 import { HttpError, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import type { ActorContext, CheckService, Decision } from './check-service.js';
 import type { RequestService } from './request-service.js';
+import type { DecisionService } from './decision-service.js';
 import { type FrontendState, toFrontendState } from './state-mapper.js';
 
 export interface PermissionsRoutesOptions {
   sessionService: SessionService;
   checkService: CheckService;
   requestService: RequestService;
+  decisionService: DecisionService;
   workspaceId: string;
   rateLimitConfig?: {
     mutation: Record<string, unknown>;
@@ -49,7 +56,14 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
   app,
   opts,
 ) => {
-  const { sessionService, checkService, requestService, workspaceId, rateLimitConfig } = opts;
+  const {
+    sessionService,
+    checkService,
+    requestService,
+    decisionService,
+    workspaceId,
+    rateLimitConfig,
+  } = opts;
 
   // ── GET /me/permissions/check ───────────────────────────────────────────
   // Query: capability=<cap>&managed_system_id=<uuid?>
@@ -97,29 +111,10 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       // `permission_requests_active_uq` (workspace, requester, capability,
       // COALESCE(managed_system_id, sentinel)). A null query MS hits null
       // rows; a concrete MS UUID hits exactly its own rows.
-      const msFilter =
-        q.managed_system_id !== undefined
-          ? eq(permissionRequests.requestedManagedSystemId, q.managed_system_id)
-          : isNull(permissionRequests.requestedManagedSystemId);
-      const openReqRows = await app.db
-        .select({ status: permissionRequests.status })
-        .from(permissionRequests)
-        .where(
-          and(
-            eq(permissionRequests.workspaceId, sess.workspace_id),
-            eq(permissionRequests.requesterActorId, sess.actor_id),
-            eq(permissionRequests.requestedCapability, capability),
-            msFilter,
-            sql`${permissionRequests.status} in ('pending','needs_more_info')`,
-          ),
-        )
-        .limit(1);
-      const openReq = openReqRows[0] ?? null;
-      // We only feed pending/needs_more_info/rejected to the mapper; any
-      // other status (approved/expired/revoked) is irrelevant for the
-      // request flow.
-      const openRequestSummary =
-        openReq && isMapperStatus(openReq.status) ? { status: openReq.status } : null;
+      const openRequestSummary = await requestService.findOpenRequestSummary(actor, capability, {
+        workspace_id: sess.workspace_id,
+        ...(q.managed_system_id !== undefined ? { managed_system_id: q.managed_system_id } : {}),
+      });
 
       const state: FrontendState = toFrontendState(decision, openRequestSummary);
       return { state, decision };
@@ -188,7 +183,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     method: 'GET',
     url: '/permission-requests/mine',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    handler: async (req) => {
+    handler: async (req, reply) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
 
@@ -211,7 +206,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     method: 'GET',
     url: '/permission-requests',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    handler: async (req) => {
+    handler: async (req, reply) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
 
@@ -221,11 +216,135 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
         role_level: sess.role_level,
       };
 
-      return await requestService.listAllActive(actor);
+      const parsed = z
+        .object({
+          status: z.enum(['pending', 'needs_more_info', 'approved', 'rejected', 'all']).optional(),
+        })
+        .safeParse(req.query);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          code: 'validation.failed',
+          message: 'invalid query parameters',
+        });
+      }
+      return await requestService.listAllActive(actor, parsed.data.status);
     },
   });
-};
 
-function isMapperStatus(value: string): value is 'pending' | 'needs_more_info' | 'rejected' {
-  return value === 'pending' || value === 'needs_more_info' || value === 'rejected';
-}
+  // Canonical review-console route. Keep the older singular endpoint above
+  // for clients shipped before the console; both retain the same default
+  // open-request behavior when `status` is omitted.
+  app.route({
+    method: 'GET',
+    url: '/permissions/requests',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+      const parsed = z
+        .object({
+          status: z.enum(['pending', 'needs_more_info', 'approved', 'rejected', 'all']).optional(),
+        })
+        .safeParse(req.query);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          code: 'validation.failed',
+          message: 'invalid query parameters',
+        });
+      }
+      return await requestService.listAllActive(
+        {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        parsed.data.status,
+      );
+    },
+  });
+
+  const decisionRoutes: Array<{
+    suffix: string;
+    schema: z.ZodType;
+    invoke: (
+      actor: ActorContext,
+      id: string,
+      body: unknown,
+      idempotencyKey?: string,
+    ) => Promise<{ status: number; body: unknown }>;
+  }> = [
+    {
+      suffix: 'approve',
+      schema: approvePermissionRequestSchema,
+      invoke: (actor, id, body, idempotencyKey) =>
+        decisionService.approveRequest(actor, id, body as { reason?: string }, {
+          idempotencyKey,
+        }),
+    },
+    {
+      suffix: 'reject',
+      schema: rejectPermissionRequestSchema,
+      invoke: (actor, id, body, idempotencyKey) =>
+        decisionService.rejectRequest(actor, id, body as { reason?: string }, {
+          idempotencyKey,
+        }),
+    },
+    {
+      suffix: 'need-more-info',
+      schema: needMoreInfoPermissionRequestSchema,
+      invoke: (actor, id, body, idempotencyKey) =>
+        decisionService.needMoreInfoRequest(actor, id, body as { note?: string }, {
+          idempotencyKey,
+        }),
+    },
+    {
+      suffix: 'deny',
+      schema: denyPermissionRequestSchema,
+      invoke: (actor, id, body, idempotencyKey) =>
+        decisionService.denyRequest(actor, id, body as { reason?: string }, {
+          idempotencyKey,
+        }),
+    },
+  ];
+
+  for (const route of decisionRoutes) {
+    app.route({
+      method: 'POST',
+      url: `/permissions/requests/:id/${route.suffix}`,
+      preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+      ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+      handler: async (req, reply) => {
+        const sess = req.session;
+        if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+        const rawKey = req.headers['idempotency-key'];
+        const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+        if (
+          typeof idempotencyKey === 'string' &&
+          idempotencyKey.length > 0 &&
+          !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
+        ) {
+          return sendError(
+            reply,
+            'validation.malformed_idempotency_key',
+            'Idempotency-Key must be a UUIDv4',
+          );
+        }
+        const parsed = route.schema.safeParse(req.body ?? {});
+        if (!parsed.success) {
+          return reply.code(400).send({
+            code: 'validation.failed',
+            message: 'invalid request body',
+          });
+        }
+        const actor: ActorContext = {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        };
+        const { id } = req.params as { id: string };
+        const result = await route.invoke(actor, id, parsed.data, idempotencyKey || undefined);
+        return reply.code(result.status).send(result.body);
+      },
+    });
+  }
+};

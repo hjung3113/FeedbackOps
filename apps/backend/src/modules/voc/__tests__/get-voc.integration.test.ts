@@ -15,6 +15,7 @@ import { buildServer } from '../../../server.js';
 import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
+  denyCapability,
   grantCapability,
   insertDevActor,
   insertInternalComment,
@@ -109,6 +110,7 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(body.created_at).toBeDefined();
     expect(body.updated_at).toBeDefined();
     expect(body.similar_count).toBe(0);
+    expect(body.similar).toEqual({ items: [] });
     expect(body.description_rich_content).toBeDefined();
     expect(body.next_actions).toEqual([]);
     expect(body.next_reporter_states).toBeDefined();
@@ -116,6 +118,60 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(Array.isArray(body.conversation_timeline)).toBe(true);
     expect(body.conversation_page).toBeDefined();
     expect(body.permission_decisions).toBeDefined();
+  });
+
+  it('returns authorized same-MS peers only, capped and ordered in similar.items', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-similar`, 'Similar MS');
+    const otherMsId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-other`, 'Other MS');
+    const source = await insertVoc(msId, 'Similarity source');
+    const peer1 = await insertVoc(msId, 'Peer one');
+    const peer2 = await insertVoc(msId, 'Peer two');
+    const peer3 = await insertVoc(msId, 'Peer three');
+    const peer4 = await insertVoc(msId, 'Peer four');
+    await insertVoc(otherMsId, 'Other MS peer');
+    const archived = await insertVoc(msId, 'Archived peer');
+    await dbHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [archived.id]);
+    await dbHandle.pool.query(
+      `update voc.vocs set created_at = $2::timestamptz where id = $1`,
+      [peer1.id, '2026-01-01T00:00:01Z'],
+    );
+    await dbHandle.pool.query(
+      `update voc.vocs set created_at = $2::timestamptz where id = $1`,
+      [peer2.id, '2026-01-01T00:00:02Z'],
+    );
+    await dbHandle.pool.query(
+      `update voc.vocs set created_at = $2::timestamptz where id = $1`,
+      [peer3.id, '2026-01-01T00:00:03Z'],
+    );
+
+    const res = await app.inject({
+      method: 'GET', url: `/vocs/${source.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ similar_count: number; similar: { items: Array<{ id: string; title: string }> } }>();
+    expect(body.similar_count).toBe(4);
+    expect(body.similar.items).toHaveLength(3);
+    expect(body.similar.items.map((item) => item.id)).toEqual([peer4.id, peer3.id, peer2.id]);
+  });
+
+  it('does not leak unscoped peers from a reporter-owned source VOC', async () => {
+    const msAId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-scope-a`, 'Scope A');
+    const msBId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-scope-b`, 'Scope B');
+    const { id: actorId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('similar-scope'));
+    await grantCapability(dbHandle, WORKSPACE_ID, actorId, 'voc.read', msAId, adminActorId);
+    const cookie = await loginAs(app, externalId);
+    const source = await insertVocDirectly(dbHandle, WORKSPACE_ID, msBId, actorId, 'Owned source outside read scope');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msBId, reporterId, 'Hidden peer');
+
+    const res = await app.inject({
+      method: 'GET', url: `/vocs/${source.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ similar_count: number; similar: { items: unknown[] } }>();
+    expect(body.similar_count).toBe(0);
+    expect(body.similar.items).toEqual([]);
   });
 
   // ── AC2: next_reporter_states derived from transitions ───────────────────
@@ -421,9 +477,9 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(etag).toMatch(/^W\/"[\d\-T:.Z]+"$/);
   });
 
-  // ── AC13: If-None-Match round-trip → 304 ─────────────────────────────────
+  // ── AC13: similarity detail always bypasses conditional 304 ───────────────
 
-  it('AC13: If-None-Match: <etag> → 304 Not Modified', async () => {
+  it('AC13: If-None-Match: <etag> → 200 because similarity is peer-derived', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-304`, '304 MS');
     const voc = await insertVoc(msId, '304 VOC');
 
@@ -436,7 +492,7 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(res1.statusCode).toBe(200);
     const etag = res1.headers['etag'] as string;
 
-    // Second request with If-None-Match → 304
+    // The source ETag cannot account for peer changes.
     const res2 = await app.inject({
       method: 'GET',
       url: `/vocs/${voc.id}`,
@@ -445,7 +501,7 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
         'if-none-match': etag,
       },
     });
-    expect(res2.statusCode).toBe(304);
+    expect(res2.statusCode).toBe(200);
   });
 
   // ── AC14: Stale If-None-Match → 200 + new etag ───────────────────────────
@@ -494,9 +550,9 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(body.permission_decisions.linkedFinding).toEqual(seedEnvelope.linkedFinding);
   });
 
-  // ── AC13b: If-None-Match multi-value → 304 (M3 fix) ─────────────────────
+  // ── AC13b: multi-value If-None-Match is also ignored ─────────────────────
 
-  it('AC13b: multi-value If-None-Match header containing current etag → 304 + cache-control (M3, M4)', async () => {
+  it('AC13b: multi-value If-None-Match returns the current detail envelope', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-304-mv`, '304 MV MS');
     const voc = await insertVoc(msId, '304 MV VOC');
 
@@ -518,12 +574,12 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
         'if-none-match': `"stale-etag", ${etag}`,
       },
     });
-    expect(res2.statusCode).toBe(304);
+    expect(res2.statusCode).toBe(200);
     expect(res2.headers['cache-control']).toBe('private, no-cache');
     expect(res2.headers['etag']).toBe(etag);
   });
 
-  it('AC13c: wildcard If-None-Match (*) → 304 (M3 fix)', async () => {
+  it('AC13c: wildcard If-None-Match returns the current detail envelope', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-304-wc`, '304 WC MS');
     const voc = await insertVoc(msId, '304 WC VOC');
 
@@ -535,7 +591,7 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
         'if-none-match': '*',
       },
     });
-    expect(res.statusCode).toBe(304);
+    expect(res.statusCode).toBe(200);
     expect(res.headers['cache-control']).toBe('private, no-cache');
   });
 
@@ -573,5 +629,28 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(body.conversation_timeline).toBeUndefined();
     expect(body.next_reporter_states).toBeUndefined();
     expect(body.title).toBeUndefined();
+    expect(body.similar_count).toBeUndefined();
+    expect(body.similar).toBeUndefined();
+  });
+
+  it('AC17: SUMMARY explicit_deny returns blocked_not_requestable permission_decisions._self', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sum-deny`, 'Sum Deny MS');
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('ac17'));
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
+    await denyCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msId, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const voc = await insertVoc(msId, 'Summary Deny VOC');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${devCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ permission_decisions: Record<string, unknown> }>();
+    const selfDecision = body.permission_decisions._self as Record<string, unknown>;
+    expect(selfDecision.state).toBe('blocked_not_requestable');
+    expect(selfDecision.reason).toBe('explicit_deny');
   });
 });

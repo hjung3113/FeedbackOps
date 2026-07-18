@@ -19,6 +19,7 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { insertFindingRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -135,10 +136,16 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
 
   async function seedSource(
     title = 'Evidence Source VOC',
-  ): Promise<{ msId: string; vocId: string }> {
+  ): Promise<{ msId: string; vocId: string; vocDisplayId: string; title: string }> {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), `${title} MS`);
     const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterActorId, title);
-    return { msId, vocId: voc.id };
+    const display = await dbHandle.pool.query<{ display_id: string }>(
+      'select display_id from voc.vocs where id = $1',
+      [voc.id],
+    );
+    const vocDisplayId = display.rows[0]?.display_id;
+    if (!vocDisplayId) throw new Error(`seedSource failed to read display_id for ${title}`);
+    return { msId, vocId: voc.id, vocDisplayId, title };
   }
 
   async function seedFinding(input: {
@@ -146,24 +153,13 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
     sourceVocId: string;
     title?: string;
   }): Promise<{ id: string }> {
-    const res = await migrateHandle.pool.query<{ id: string }>(
-      `insert into finding.findings (
-          workspace_id, primary_managed_system_id, title, summary, source_type,
-          source_id, evidence_count, severity, confidence, status, created_by
-        )
-       values ($1, $2, $3, 'Finding summary', 'voc', $4, 0, 'medium', 'high', 'draft', $5)
-       returning id`,
-      [
-        WORKSPACE_ID,
-        input.managedSystemId,
-        input.title ?? 'Seeded Evidence Finding',
-        input.sourceVocId,
-        adminActorId,
-      ],
-    );
-    const id = res.rows[0]?.id;
-    if (!id) throw new Error('seedFinding failed');
-    return { id };
+    return insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: input.managedSystemId,
+      title: input.title ?? 'Seeded Evidence Finding',
+      sourceId: input.sourceVocId,
+      createdBy: adminActorId,
+    });
   }
 
   function postHighlight(cookie: string, findingId: string, payload: Record<string, unknown>) {
@@ -238,6 +234,8 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
       finding_id: finding.id,
       source_type: 'voc',
       source_id: source.vocId,
+      source_title: source.title,
+      source_meta: source.vocDisplayId,
       quote_or_summary: 'Export failed after the billing cutoff.',
       sentiment: 'negative',
       importance: 'high',
@@ -273,6 +271,8 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
       expect.objectContaining({
         finding_id: finding.id,
         quote_or_summary: 'The saved highlight is visible to source readers.',
+        source_title: source.title,
+        source_meta: source.vocDisplayId,
       }),
     ]);
   });
@@ -310,8 +310,44 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
       finding_id: finding.id,
       source_type: 'voc',
       source_id: evidenceSource.vocId,
+      source_title: null,
+      source_meta: null,
     });
     expect(items[0]).not.toHaveProperty('quote_or_summary');
+  });
+
+  it('returns null source title and meta for note evidence highlights', async () => {
+    const source = await seedSource();
+    const finding = await seedFinding({
+      managedSystemId: source.msId,
+      sourceVocId: source.vocId,
+    });
+    const created = await postHighlight(adminCookie, finding.id, {
+      source_type: 'note',
+      quote_or_summary: 'Internal synthesis note.',
+    });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({
+      finding_id: finding.id,
+      source_type: 'note',
+      source_id: null,
+      source_title: null,
+      source_meta: null,
+      quote_or_summary: 'Internal synthesis note.',
+    });
+
+    const list = await getHighlights(adminCookie, finding.id);
+
+    expect(list.statusCode).toBe(200);
+    expect(list.json<{ items: Array<Record<string, unknown>> }>().items).toEqual([
+      expect.objectContaining({
+        source_type: 'note',
+        source_id: null,
+        source_title: null,
+        source_meta: null,
+      }),
+    ]);
   });
 
   it('links additional VOC evidence to a Finding using the evidence_of tuple', async () => {

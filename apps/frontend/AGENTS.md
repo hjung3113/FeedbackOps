@@ -12,7 +12,7 @@
 ## Design Consistency Rules
 
 - Consume semantic tokens such as `--text-primary`, `--surface-detail`, and `--border-selected`; do not hard-code hex colors in screens.
-- Keep the visual model dark, compact, and list-first. Avoid decorative cards, broad gradients, oversized hero sections, and empty whitespace.
+- Keep the visual model light, compact, and list-first. Avoid decorative cards, broad gradients, oversized hero sections, and empty whitespace.
 - Use one primary action per toolbar or panel. Secondary actions belong in subtle buttons, menus, or contextual rows.
 - Reuse `ObjectList`, `DetailPanel`, `StatusBadge`, `SignalBadge`, `PermissionBlockedPanel`, `RichContentEditor`, and `LinkedEntityTrail` before making a screen-specific variant.
 - Keep components feature-local until a second real feature needs the same behavior; then promote stable reusable components to `packages/ui`.
@@ -20,9 +20,8 @@
 - Keep row click, inline controls, keyboard focus, hover, selected, active, disabled, loading, error, and permission-limited states distinct.
 - Right detail panels preserve list context on desktop; they become drill-in panels on mobile.
 - Permission-limited content must show an approved summary or a request path, not a blank failure.
-- Top-level feature folders are `home`, `my-work`, `voc`, `surveys`, `tasks`, `integration`, and `admin`.
-- Findings, Evidence, Coverage, and Links live under Integration, not as top-level work routes.
-- Task Requests live under Tasks. Product Areas, Permission Requests, Managed System Registry, and workspace settings live under Admin.
+- Top-level feature folders and route ownership follow root `AGENTS.md` → Implementation Boundaries (canonical list, includes `voc-cluster`).
+- Integration owns component/hook code for Findings (mounted at top-level `/findings`, `/findings/$findingId`); it owns both code and URL for Links (`/integration/links`). Evidence and Coverage routes are planned, not yet built. See `apps/frontend/src/features/integration/AGENTS.md`.
 - Managed System scope is a filter/defaulting context, not duplicated navigation.
 - Use Role Level labels: Admin, Developer, and User. Backend capability checks remain authoritative.
 - Keep Public Update, Reporter Reply, and Internal Comment as separate communication surfaces.
@@ -32,7 +31,7 @@
 
 - Do not build repeated UI patterns directly inside screens. Create or reuse a feature-local component first, then compose it in the screen.
 - Before creating a new component, check `packages/ui`, the feature's existing components, and `docs/frontend/component-inventory.md`.
-- Use existing wrappers under `packages/ui/src/ui` before importing shadcn/Radix primitives directly.
+- Use existing wrappers under `packages/ui/src/components` (Radix wrappers live in `components/shadcn`) before importing shadcn/Radix primitives directly.
 - Do not import raw Radix primitives in feature screens when a wrapper exists.
 - Use installed libraries, shadcn/Radix wrappers, and `lucide-react` before hand-rolling interaction behavior, accessibility primitives, icons, popovers, menus, tabs, dialogs, or form controls.
 - Add new tokens or variants to docs before using them broadly.
@@ -80,10 +79,14 @@ Every page-level FE issue (route mount, full screen) runs a structured Playwrigh
 
 **Scope:** only when a prototype baseline exists. If absent, state "no prototype baseline" in PR body, capture a fresh screenshot, and queue a prototype refresh follow-up issue — do not silently ship UI without a baseline.
 
+### Durable visual harnesses
+
+For a route with a committed Playwright visual harness (currently `/voc-clusters`), the durable `test:visual` regression run replaces the manual Playwright-MCP recapture step above. The one-time CP-pixel fidelity table against `docs/design-prototype/screenshots/final-baselines/<page>.png` still happens once when introducing the harness, and again for an intentional redesign.
+
+The authority prototype baseline is `final-baselines/`, never `pack20-current/`. Committed Playwright screenshot baselines change only in a commit that declares the intended visual change. Blanket `--update-snapshots` to silence red is forbidden. A baseline-change commit must state the intended change, attach or point to the Playwright diff, and have a changed-PNG count equal to the intended-screen count.
+
 ## Prototype Copy Authority
 
-See root `AGENTS.md` → Prototype Is The Spec for full rules. Frontend reminders:
+See root `AGENTS.md` → Prototype Is The Spec for full rules.
 
-- Quote labels from `screen-*.jsx` and `data.js` exactly. Korean and English may mix freely per surface; copy the reference verbatim regardless of language.
-- Section headers like `Triage (Read only)` stay as-is.
-- Do not blanket-translate either direction — but per-surface variance (e.g. `BODY` label in detail panel coexisting with `설명` in create form) is allowed when the reference design/screenshot shows it that way.
+- Frontend-unique addition: per-surface variance (e.g. `BODY` label in detail panel coexisting with `설명` in create form) is allowed when the reference design/screenshot shows it that way.

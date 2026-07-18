@@ -161,6 +161,8 @@ implementation API contract. Endpoint behavior is owned by
 | Create Finding from VOC Cluster | FOP-FIND-001 | `POST /voc-clusters/:id/create-finding` |
 | Create Finding from Survey Response | FOP-SURVEY-005 | `POST /survey-responses/:id/create-finding` |
 | Request Task from Finding | FOP-TASK-001 | `POST /findings/:id/request-task` |
+| Request Task from VOC | FOP-TASK-001 | `POST /vocs/:id/request-task` |
+| Request Task from VOC Cluster | FOP-TASK-001 | `POST /voc-clusters/:id/request-task` |
 | Link Existing Task from Finding | FOP-FIND-003 | `POST /findings/:id/link-task` |
 | Create Milestone | FOP-TASK-004 | Task-system grouping |
 | Create Work Initiative from Finding | future | future execution grouping |

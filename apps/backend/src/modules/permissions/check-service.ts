@@ -96,10 +96,14 @@ export function createCheckService(deps: CheckServiceDeps) {
       return { allow: false, reason: 'workspace_mismatch', requestable: null };
     }
 
-    // (2) explicit deny — any active deny row (revoked_at IS NULL) blocks
-    // before any grant or role check. 05-policy:33.
+    // (2) explicit deny — a workspace-wide active deny blocks every check;
+    // an MS-scoped deny blocks only that same MS scope. Both precede grants
+    // and role checks. 05-policy:33.
     const denyRows = await db
-      .select({ id: permissionDenies.id })
+      .select({
+        id: permissionDenies.id,
+        managedSystemId: permissionDenies.managedSystemId,
+      })
       .from(permissionDenies)
       .where(
         and(
@@ -108,10 +112,11 @@ export function createCheckService(deps: CheckServiceDeps) {
           eq(permissionDenies.capability, capability),
           isNull(permissionDenies.revokedAt),
         ),
-      )
-      .limit(1);
-    if (denyRows.length > 0) {
-      return { allow: false, reason: 'explicit_deny', requestable: null };
+      );
+    for (const row of denyRows) {
+      if (row.managedSystemId === null || row.managedSystemId === scope.managed_system_id) {
+        return { allow: false, reason: 'explicit_deny', requestable: null };
+      }
     }
 
     // (3) direct capability grant. Active = NOT revoked AND (expires_at NULL

@@ -22,6 +22,10 @@ import type { CheckService } from '../permissions/check-service.js';
 import { lockTaskById } from '../tasks/repo.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
 import {
+  checkFindingRead,
+  checkFindingManage,
+} from './authorization.js';
+import {
   type FindingReadRow,
   findCreatedFindingSourceLink,
   findFindingById,
@@ -29,10 +33,12 @@ import {
 } from './repo-read.js';
 import {
   type EvidenceHighlightRow,
+  findVocSourceMeta,
   incrementFindingEvidenceCount,
   insertEvidenceHighlight,
   insertFinding,
   listEvidenceHighlightsByFinding,
+  listVocSourceMeta,
   lockFindingById,
   updateFindingLinkedTask,
   updateFindingStatus,
@@ -77,6 +83,7 @@ function toDto(
   return {
     id: row.id,
     workspace_id: row.workspace_id,
+    display_id: row.display_id,
     primary_managed_system_id: row.primary_managed_system_id,
     title: row.title,
     summary: row.summary,
@@ -107,7 +114,7 @@ function toDto(
 
 function evidenceHighlightToDto(
   row: EvidenceHighlightRow,
-  options: { includeQuote: boolean },
+  options: { includeQuote: boolean; source_title: string | null; source_meta: string | null },
 ): EvidenceHighlightDto {
   return {
     id: row.id,
@@ -116,6 +123,8 @@ function evidenceHighlightToDto(
     primary_managed_system_id: row.primary_managed_system_id,
     source_type: row.source_type,
     source_id: row.source_id,
+    source_title: options.source_title,
+    source_meta: options.source_meta,
     ...(options.includeQuote ? { quote_or_summary: row.quote_or_summary } : {}),
     analytics_area_id: row.analytics_area_id,
     sentiment: row.sentiment,
@@ -164,12 +173,8 @@ async function canManageFinding(
   managedSystemId: string,
   options: Parameters<FindingsServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'finding.manage',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
+  const decision = await checkFindingManage(
+    deps.checkService, actor, managedSystemId, { requireElevatedRole: false }, options,
   );
   return decision.allow;
 }
@@ -179,11 +184,8 @@ async function canReadFinding(
   actor: FindingsActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.role_level !== 'developer') return false;
-  const decision = await deps.checkService.checkCapability(actor, 'finding.read', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: managedSystemId,
+  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId, {
+    requireElevatedRole: true,
   });
   return decision.allow;
 }
@@ -457,7 +459,22 @@ export function createFindingsService(deps: FindingsServiceDeps) {
         },
       });
 
-      return { status: 201, body: evidenceHighlightToDto(row, { includeQuote: true }) };
+      const sourceMeta =
+        row.source_type === 'voc' && row.source_id
+          ? await findVocSourceMeta(tx, {
+              workspaceId: actor.workspace_id,
+              vocId: row.source_id,
+            })
+          : null;
+
+      return {
+        status: 201,
+        body: evidenceHighlightToDto(row, {
+          includeQuote: true,
+          source_title: sourceMeta?.title ?? null,
+          source_meta: sourceMeta?.display_id ?? null,
+        }),
+      };
     });
   }
 
@@ -497,9 +514,38 @@ export function createFindingsService(deps: FindingsServiceDeps) {
       findingId: finding.id,
     });
     const items: EvidenceHighlightDto[] = [];
+    const visibility: Array<{ row: EvidenceHighlightRow; includeQuote: boolean }> = [];
     for (const row of rows) {
       const includeQuote = await canReadEvidenceHighlightSource({ actor: args.actor, row });
-      items.push(evidenceHighlightToDto(row, { includeQuote }));
+      visibility.push({ row, includeQuote });
+    }
+    const readableVocIds = [
+      ...new Set(
+        visibility
+          .filter(
+            ({ row, includeQuote }) => includeQuote && row.source_type === 'voc' && row.source_id,
+          )
+          .map(({ row }) => row.source_id as string),
+      ),
+    ];
+    const sourceMetaRows = await listVocSourceMeta(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      vocIds: readableVocIds,
+    });
+    const sourceMetaById = new Map(sourceMetaRows.map((meta) => [meta.id, meta]));
+
+    for (const { row, includeQuote } of visibility) {
+      const sourceMeta =
+        includeQuote && row.source_type === 'voc' && row.source_id
+          ? sourceMetaById.get(row.source_id)
+          : null;
+      items.push(
+        evidenceHighlightToDto(row, {
+          includeQuote,
+          source_title: sourceMeta?.title ?? null,
+          source_meta: sourceMeta?.display_id ?? null,
+        }),
+      );
     }
     return { items };
   }
@@ -570,12 +616,9 @@ export function createFindingsService(deps: FindingsServiceDeps) {
           });
           if (!finding) throw new HttpError('not_found.record', 'finding not found');
 
-          const canManage = await canManageFinding(
-            deps,
-            actor,
-            finding.primary_managed_system_id,
-            { tx },
-          );
+          const canManage = await canManageFinding(deps, actor, finding.primary_managed_system_id, {
+            tx,
+          });
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }

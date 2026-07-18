@@ -1,5 +1,6 @@
-// Permission-request application service. Owns the write-side of permission
-// asks per docs/implementation/02-domain-module-boundaries.md and
+// Permission-request application service. Owns permission request commands and
+// permission_requests read models per
+// docs/implementation/02-domain-module-boundaries.md and
 // docs/implementation/05-permission-policy.md.
 //
 // Single transaction contract (AGENTS.md, ADR-0008):
@@ -21,7 +22,7 @@
 // values inside the index so duplicate inserts with all-NULL scope/source
 // still collide as expected.
 
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { DatabaseError } from 'pg';
 
 import {
@@ -37,7 +38,8 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
-import type { ActorContext, CheckService } from './check-service.js';
+import type { ActorContext, CheckScope, CheckService } from './check-service.js';
+import type { OpenRequestSummary } from './state-mapper.js';
 
 export interface CreatePermissionRequestBody {
   requested_capability: string;
@@ -78,6 +80,8 @@ export type RequestService = ReturnType<typeof createRequestService>;
 const PERMISSION_REQUESTED: AuditEventType = 'permission_requested';
 
 const ACTIVE_STATUSES = ['pending', 'needs_more_info'] as const;
+const REVIEW_STATUSES = ['pending', 'needs_more_info', 'approved', 'rejected'] as const;
+export type PermissionRequestReviewStatus = (typeof REVIEW_STATUSES)[number] | 'all';
 
 export function createRequestService(deps: RequestServiceDeps) {
   const { db, checkService, auditService, idempotencyService } = deps;
@@ -244,11 +248,43 @@ export function createRequestService(deps: RequestServiceDeps) {
     });
   }
 
+  async function findOpenRequestSummary(
+    actor: ActorContext,
+    capability: Capability,
+    scope: CheckScope,
+  ): Promise<OpenRequestSummary | null> {
+    const msFilter =
+      scope.managed_system_id !== undefined
+        ? eq(permissionRequests.requestedManagedSystemId, scope.managed_system_id)
+        : isNull(permissionRequests.requestedManagedSystemId);
+
+    const rows = await db
+      .select({ status: permissionRequests.status })
+      .from(permissionRequests)
+      .where(
+        and(
+          eq(permissionRequests.workspaceId, scope.workspace_id),
+          eq(permissionRequests.requesterActorId, actor.actor_id),
+          eq(permissionRequests.requestedCapability, capability),
+          msFilter,
+          inArray(permissionRequests.status, [...ACTIVE_STATUSES]),
+        ),
+      )
+      .limit(1);
+
+    const row = rows[0] ?? null;
+    if (!row) return null;
+    if (row.status === 'pending' || row.status === 'needs_more_info') {
+      return { status: row.status };
+    }
+    return null;
+  }
+
   // Admin-only workspace-wide list of open (pending|needs_more_info) requests.
   // Guarded by workspace.admin (issue #87). Mirrors the managed-system admin
   // gate: throws permission.denied (mapped to 403) for non-admins. The count
   // equals the returned row length (no separate pagination cap today).
-  async function listAllActive(actor: ActorContext) {
+  async function listAllActive(actor: ActorContext, status?: PermissionRequestReviewStatus) {
     const decision = await checkService.checkCapability(actor, 'workspace.admin', {
       workspace_id: actor.workspace_id,
     });
@@ -256,6 +292,8 @@ export function createRequestService(deps: RequestServiceDeps) {
       throw new HttpError('permission.denied', 'workspace.admin required');
     }
 
+    const selectedStatuses =
+      status === undefined ? ACTIVE_STATUSES : status === 'all' ? REVIEW_STATUSES : [status];
     const rows = await db
       .select({
         id: permissionRequests.id,
@@ -270,7 +308,7 @@ export function createRequestService(deps: RequestServiceDeps) {
       .where(
         and(
           eq(permissionRequests.workspaceId, actor.workspace_id),
-          inArray(permissionRequests.status, [...ACTIVE_STATUSES]),
+          inArray(permissionRequests.status, [...selectedStatuses]),
         ),
       )
       .orderBy(desc(permissionRequests.createdAt));
@@ -329,5 +367,5 @@ export function createRequestService(deps: RequestServiceDeps) {
     }));
   }
 
-  return { createRequest, listMine, listAllActive };
+  return { createRequest, findOpenRequestSummary, listMine, listAllActive };
 }

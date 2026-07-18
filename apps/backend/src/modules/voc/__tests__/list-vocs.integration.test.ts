@@ -407,11 +407,15 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
 
-  // ── AC17: similar_count=0 on every row ───────────────────────────────────
+  // ── AC17: similar_count is a bulk same-MS peer projection ────────────────
 
-  it('AC17: similar_count=0 on every returned row', async () => {
+  it('AC17: similar_count excludes self and different-MS rows', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sim-cnt`, 'SimCnt MS');
-    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'SimCnt VOC');
+    const otherMsId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sim-other`, 'SimCnt Other MS');
+    const source = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'SimCnt source');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'SimCnt peer one');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'SimCnt peer two');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, otherMsId, reporterId, 'SimCnt other MS');
 
     const res = await app.inject({
       method: 'GET',
@@ -419,10 +423,25 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ items: { similar_count: number }[] }>();
-    for (const item of body.items) {
-      expect(item.similar_count).toBe(0);
-    }
+    const body = res.json<{ items: { id: string; similar_count: number }[] }>();
+    expect(body.items.find((item) => item.id === source.id)?.similar_count).toBe(2);
+  });
+
+  it('AC17: reporter view=my excludes same-MS peers outside the reporter\'s read scope', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-sim-my-scope`, 'Sim My Scope MS');
+    const source = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Reporter-owned source');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Reporter-owned peer');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, adminActorId, 'Unauthorized peer');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=my&managed_system_id=${msId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${reporterCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json<{ items: { id: string; similar_count: number }[] }>();
+    expect(body.items.find((item) => item.id === source.id)?.similar_count).toBe(1);
   });
 
   // ── AC18: Cursor pagination 75 VOCs ──────────────────────────────────────

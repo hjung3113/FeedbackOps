@@ -2,20 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import {
-  vocCreatedDetailSchema,
-  vocTriageCommittedDetailSchema,
-  vocSeveritySetDetailSchema,
-  vocOwnerAssignedDetailSchema,
-  vocAnalyticsAreaLinkedDetailSchema,
-  vocClusterDecisionRecordedDetailSchema,
+  AUDIT_EVENT_DETAIL_SCHEMAS,
+  AUDIT_EVENT_TYPES,
+  vocClusterCreatedDetailSchema,
+  vocClusterUpdatedDetailSchema,
+} from '../../enums/audit-events.js';
+import {
+  internalCommentCreatedDetailSchema,
   publicUpdateCreatedDetailSchema,
   reporterFacingStatusChangedDetailSchema,
   reporterReplyCreatedDetailSchema,
-  internalCommentCreatedDetailSchema,
-  vocTriagePostponedDetailSchema,
+  vocAnalyticsAreaLinkedDetailSchema,
+  vocClusterDecisionRecordedDetailSchema,
+  vocCreatedDetailSchema,
   vocDescriptionEditedDetailSchema,
+  vocOwnerAssignedDetailSchema,
+  vocSeveritySetDetailSchema,
+  vocTriageCommittedDetailSchema,
+  vocTriagePostponedDetailSchema,
 } from '../voc.js';
-import { AUDIT_EVENT_TYPES, AUDIT_EVENT_DETAIL_SCHEMAS } from '../../enums/audit-events.js';
 
 const U = '01919b8c-0000-7000-8000-000000000001';
 
@@ -41,6 +46,36 @@ describe('vocCreatedDetailSchema', () => {
         analytics_area_id: null,
         reporter_id: U,
         source_context: 'phone_call',
+      }),
+    ).toThrow(z.ZodError);
+  });
+});
+
+describe('vocClusterUpdatedDetailSchema workspace fields', () => {
+  it('accepts workspace field and confirmation provenance changes', () => {
+    const confirmedAt = '2026-07-15T01:02:03.000Z';
+    const parsed = vocClusterUpdatedDetailSchema.parse({
+      voc_cluster_id: U,
+      primary_managed_system_id: U,
+      changes: {
+        severity: { from: null, to: 'critical' },
+        confidence: { from: null, to: 'high' },
+        rationale: { from: null, to: 'Repeated customer impact' },
+        owner_user_id: { from: null, to: U },
+        confirmed_by: { from: null, to: U },
+        confirmed_at: { from: null, to: confirmedAt },
+      },
+    });
+
+    expect(parsed.changes.confirmed_at?.to).toBe(confirmedAt);
+  });
+
+  it('rejects workspace field values outside the contract', () => {
+    expect(() =>
+      vocClusterUpdatedDetailSchema.parse({
+        voc_cluster_id: U,
+        primary_managed_system_id: U,
+        changes: { severity: { from: null, to: 'urgent' } },
       }),
     ).toThrow(z.ZodError);
   });
@@ -361,15 +396,11 @@ describe('vocTriagePostponedDetailSchema', () => {
   });
 
   it('rejects missing actor_id', () => {
-    expect(() =>
-      vocTriagePostponedDetailSchema.parse({ voc_id: U }),
-    ).toThrow(z.ZodError);
+    expect(() => vocTriagePostponedDetailSchema.parse({ voc_id: U })).toThrow(z.ZodError);
   });
 
   it('rejects missing voc_id', () => {
-    expect(() =>
-      vocTriagePostponedDetailSchema.parse({ actor_id: U }),
-    ).toThrow(z.ZodError);
+    expect(() => vocTriagePostponedDetailSchema.parse({ actor_id: U })).toThrow(z.ZodError);
   });
 
   it('rejects non-uuid voc_id', () => {
@@ -481,5 +512,57 @@ describe('AUDIT_EVENT_TYPES registry', () => {
   it.each(VOC_EVENTS)('%s is in AUDIT_EVENT_TYPES and has a detail schema', (event) => {
     expect(AUDIT_EVENT_TYPES).toContain(event);
     expect(AUDIT_EVENT_DETAIL_SCHEMAS).toHaveProperty(event);
+  });
+});
+
+describe('VOC cluster audit event registry', () => {
+  const VOC_CLUSTER_EVENTS = ['voc_cluster_created', 'voc_cluster_updated'] as const;
+
+  it.each(VOC_CLUSTER_EVENTS)('%s is in AUDIT_EVENT_TYPES and has a detail schema', (event) => {
+    expect(AUDIT_EVENT_TYPES).toContain(event);
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS).toHaveProperty(event);
+  });
+});
+
+describe('vocClusterCreatedDetailSchema', () => {
+  it('accepts required shape', () => {
+    expect(
+      vocClusterCreatedDetailSchema.parse({
+        voc_cluster_id: U,
+        primary_managed_system_id: U,
+        title: 'Cluster title',
+        summary_present: true,
+        status: 'draft',
+      }),
+    ).toMatchObject({ voc_cluster_id: U, status: 'draft' });
+  });
+});
+
+describe('vocClusterUpdatedDetailSchema', () => {
+  it('accepts changed title, summary, and status', () => {
+    expect(
+      vocClusterUpdatedDetailSchema.parse({
+        voc_cluster_id: U,
+        primary_managed_system_id: U,
+        changes: {
+          title: { from: 'Old title', to: 'New title' },
+          summary: { from: null, to: 'New summary' },
+          status: { from: 'draft', to: 'confirmed' },
+        },
+      }),
+    ).toMatchObject({
+      voc_cluster_id: U,
+      changes: { status: { from: 'draft', to: 'confirmed' } },
+    });
+  });
+
+  it('rejects an empty changes object', () => {
+    expect(() =>
+      vocClusterUpdatedDetailSchema.parse({
+        voc_cluster_id: U,
+        primary_managed_system_id: U,
+        changes: {},
+      }),
+    ).toThrow();
   });
 });

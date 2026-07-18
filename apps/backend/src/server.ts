@@ -40,6 +40,7 @@ import {
 } from './modules/managed-systems/index.js';
 import {
   createCheckService,
+  createDecisionService,
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
@@ -237,13 +238,13 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       max: 10,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'mutation') as never,
+      routeGroup: 'mutation',
     },
     sensitive: {
       max: 5,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'sensitive') as never,
+      routeGroup: 'sensitive',
     },
     // TODO(F18 follow-up): add admin bypass for the read tier once the
     // admin-role detection helper lands (see plan §C3 follow-up F18).
@@ -251,7 +252,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       max: 300,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'read') as never,
+      routeGroup: 'read',
     },
     // Slice 3 #17 — Reporter pre-triage edit (PATCH /vocs/:id/description).
     // 30/min per actor (more permissive than generic `mutation: 10/min` because
@@ -261,7 +262,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       max: 30,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'reporter_edit') as never,
+      routeGroup: 'reporter_edit',
     },
     // PLAN-22 C3a — POST /attachments. 20/min per actor. Admin bypass is a
     // documented follow-up: it depends on the same admin-role helper called
@@ -270,7 +271,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       max: 20,
       timeWindow: '1 minute',
       keyGenerator: actorAwareKeyGenerator,
-      store: createPgRateLimitStore(dbHandle.pool, 'attachment_mutation') as never,
+      routeGroup: 'attachment_mutation',
     },
   });
 
@@ -383,10 +384,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     idempotencyService,
   });
+  const decisionService = createDecisionService({
+    db: dbHandle.db,
+    checkService,
+    auditService,
+    idempotencyService,
+  });
   await app.register(permissionsRoutes, {
     sessionService,
     checkService,
     requestService,
+    decisionService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
@@ -482,6 +490,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     idempotencyService,
+    ...(boss ? { boss } : {}),
   });
   await app.register(tasksRoutes, {
     sessionService,
@@ -493,25 +502,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
-  const vocClustersService = createVocClustersService({
-    db: dbHandle.db,
-    auditService,
-    checkService,
-    idempotencyService,
-  });
-  await app.register(vocClustersRoutes, {
-    sessionService,
-    vocClustersService,
-    taskRequestsService,
-    workspaceId,
-    rateLimitConfig: {
-      mutation: app.rateLimitConfig.mutation,
-      read: app.rateLimitConfig.read,
-    },
-  });
-
-  // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
+  // VOC conversation command is constructed here so cluster candidate apply can
+  // delegate each selected VOC to the canonical per-VOC command.
   const vocService = createVocService({
     db: dbHandle.db,
     auditService,
@@ -527,6 +519,27 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     checkService,
     vocReadService,
   });
+
+  // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
+  const vocClustersService = createVocClustersService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+    postPublicUpdate: conversationService.postPublicUpdate,
+  });
+  await app.register(vocClustersRoutes, {
+    sessionService,
+    vocClustersService,
+    taskRequestsService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+    },
+  });
+
+  // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
   await app.register(vocRoutes, {
     db: dbHandle.db,
     sessionService,

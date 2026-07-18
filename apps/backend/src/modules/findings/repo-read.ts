@@ -7,6 +7,7 @@ import type { Tx } from '../../db/tx.js';
 export interface FindingReadRow {
   id: string;
   workspace_id: string;
+  display_id: string;
   primary_managed_system_id: string;
   title: string;
   summary: string;
@@ -32,6 +33,7 @@ export function mapFindingRow(row: Record<string, unknown>): FindingReadRow {
   return {
     id: row.id as string,
     workspace_id: row.workspace_id as string,
+    display_id: row.display_id as string,
     primary_managed_system_id: row.primary_managed_system_id as string,
     title: row.title as string,
     summary: row.summary as string,
@@ -56,7 +58,7 @@ export async function findFindingById(
 ): Promise<FindingReadRow | null> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, primary_managed_system_id, title, summary, source_type,
+      id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
       linked_task_id, linked_milestone_id, created_by, created_at, updated_at
     FROM ${findings}
@@ -78,7 +80,7 @@ export async function listFindingsByWorkspace(
       : sql`primary_managed_system_id = ${input.managedSystemId}`;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, primary_managed_system_id, title, summary, source_type,
+      id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
       source_id, evidence_count, severity, confidence, status, analytics_area_id,
       linked_task_id, linked_milestone_id, created_by, created_at, updated_at
     FROM ${findings}

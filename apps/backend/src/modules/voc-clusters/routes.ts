@@ -2,10 +2,14 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import {
   addVocClusterMemberRequestSchema,
+  applyVocClusterPublicUpdateRequestSchema,
   createFindingFromVocClusterRequestSchema,
+  linkExistingFindingToVocClusterRequestSchema,
+  unlinkExistingFindingFromVocClusterRequestSchema,
   createTaskRequestFromVocClusterRequestSchema,
   createVocClusterRequestSchema,
   updateVocClusterRequestSchema,
+  vocClusterPublicUpdateCandidateRequestSchema,
 } from '@fops/shared';
 
 import { HttpError } from '../../lib/errors.js';
@@ -126,6 +130,32 @@ export const vocClustersRoutes: FastifyPluginAsync<VocClustersRoutesOptions> = a
         });
       }
       const result = await vocClustersService.getCluster({
+        actor: actorFromSession({
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        }),
+        clusterId: id,
+      });
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
+    },
+  });
+
+  app.route({
+    method: 'GET',
+    url: '/voc-clusters/:id/candidate-peers',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const result = await vocClustersService.listCandidatePeers({
         actor: actorFromSession({
           actor_id: sess.actor_id,
           workspace_id: sess.workspace_id,
@@ -282,6 +312,162 @@ export const vocClustersRoutes: FastifyPluginAsync<VocClustersRoutesOptions> = a
         requestHash: hash,
       });
       return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/voc-clusters/:id/link-finding',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = linkExistingFindingToVocClusterRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const result = await vocClustersService.linkExistingFinding({
+        actor: actorFromSession({
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        }),
+        clusterId: id,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hashRequestBody({
+          ...rawBody,
+          clusterId: id,
+          route: 'voc_cluster.link_finding',
+        }),
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/voc-clusters/:id/unlink-finding',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = unlinkExistingFindingFromVocClusterRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const result = await vocClustersService.unlinkExistingFinding({
+        actor: actorFromSession({
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        }),
+        clusterId: id,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hashRequestBody({
+          ...rawBody,
+          clusterId: id,
+          route: 'voc_cluster.unlink_finding',
+        }),
+      });
+      return reply.code(result.status).send();
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/voc-clusters/:id/public-update-candidate',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const parsed = vocClusterPublicUpdateCandidateRequestSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const result = await vocClustersService.createPublicUpdateCandidate({
+        actor: actorFromSession({
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        }),
+        clusterId: id,
+        input: parsed.data,
+      });
+      return reply.code(200).send(result);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/voc-clusters/:id/apply-public-update-candidate',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const parsed = applyVocClusterPublicUpdateRequestSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const result = await vocClustersService.applyPublicUpdateCandidate({
+        actor: actorFromSession({
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        }),
+        clusterId: id,
+        input: parsed.data,
+      });
+      return reply.code(200).send(result);
     },
   });
 

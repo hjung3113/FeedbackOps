@@ -28,6 +28,16 @@ Workers run **inside the `apps/backend` process** alongside the HTTP server. Eac
 
 A future ADR can split workers into `apps/worker` if a specific job profile requires its own deploy or scaling envelope, but MVP load does not justify the second process today. The code structure (`registerJobs` per module, no top-level cron files) keeps that split low-cost.
 
+## Amended 2026-07-13
+
+The module registration convention is amended from a single
+`apps/backend/src/modules/<module>/jobs.ts` file exporting `registerJobs(boss)`
+to a module-owned jobs directory:
+`apps/backend/src/modules/<module>/jobs/index.ts` exporting
+`register<Module>Jobs(boss, deps)`. The original process decision stands:
+workers still run inside the backend process, modules still register their own
+jobs during boot, and a separate worker process still requires a future ADR.
+
 ## Retry, idempotency, and failure
 
 Defaults locked here:
@@ -47,3 +57,7 @@ Defaults locked here:
 ## Reopening
 
 Switching to BullMQ or Temporal, splitting workers into a separate process, or weakening the idempotency rule each warrants a new ADR with a migration story for existing jobs and queues. Adding a new job type is *not* a reopen — modules register their own jobs by the established convention.
+
+## Implementation note — Issue #165
+
+`tasks.create_public_update_review_candidates` is pre-created with the locked retry defaults (5 / 30 / exponential). The release transaction uses pg-boss's Drizzle adapter (`fromDrizzle(tx, sql)`) so the Task status mutation, audit, idempotency record, and publication commit or roll back together. The worker inserts candidates and their audit rows atomically with `ON CONFLICT DO NOTHING`.

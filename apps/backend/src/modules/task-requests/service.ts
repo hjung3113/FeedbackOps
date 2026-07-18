@@ -18,6 +18,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { insertActiveEntityLink, selectActiveLinksForEndpoint } from '../entity-links/repo.js';
+import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { lockFindingById } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { lockVocClusterById } from '../voc-clusters/repo.js';
@@ -77,6 +78,7 @@ function taskRequestToDto(
   return {
     id: row.id,
     workspace_id: row.workspace_id,
+    display_id: row.display_id,
     source_type: row.source_type,
     source_id: row.source_id,
     primary_managed_system_id: row.primary_managed_system_id,
@@ -100,39 +102,6 @@ function taskRequestToDto(
         }
       : {}),
   };
-}
-
-async function canManageFinding(
-  deps: Pick<TaskRequestsServiceDeps, 'checkService'>,
-  actor: TaskRequestsActor,
-  managedSystemId: string,
-  options: Parameters<TaskRequestsServiceDeps['checkService']['checkCapability']>[3],
-): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'finding.manage',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
-  );
-  return decision.allow;
-}
-
-async function canManageVocClusterSource(
-  deps: Pick<TaskRequestsServiceDeps, 'checkService'>,
-  actor: TaskRequestsActor,
-  managedSystemId: string,
-  options: Parameters<TaskRequestsServiceDeps['checkService']['checkCapability']>[3],
-): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.role_level !== 'developer') return false;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'finding.manage',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
-  );
-  return decision.allow;
 }
 
 async function canReadSourceVoc(
@@ -329,12 +298,15 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
           });
           if (!finding) throw new HttpError('not_found.record', 'finding not found');
 
-          const canManage = await canManageFinding(
-            deps,
-            args.actor,
-            finding.primary_managed_system_id,
-            { tx },
-          );
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              finding.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
@@ -385,9 +357,11 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             throw new HttpError('not_found.record', 'voc not found');
           }
 
-          const canManage = await canManageFinding(deps, args.actor, voc.primaryManagedSystemId, {
-            tx,
-          });
+          const canManage = (
+            await checkFindingManage(deps.checkService, args.actor, voc.primaryManagedSystemId, { requireElevatedRole: true }, {
+              tx,
+            })
+          ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
@@ -428,12 +402,15 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
           });
           if (!cluster) throw new HttpError('not_found.record', 'voc cluster not found');
 
-          const canManage = await canManageVocClusterSource(
-            deps,
-            args.actor,
-            cluster.primary_managed_system_id,
-            { tx },
-          );
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              cluster.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
@@ -469,7 +446,7 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     actor: TaskRequestsActor;
     status?: TaskRequestStatus;
   }): Promise<{ items: TaskRequestDto[] }> {
-    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
+    if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
 
@@ -479,7 +456,9 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     });
     const items: TaskRequestDto[] = [];
     for (const row of rows) {
-      const canManage = await canManageFinding(deps, args.actor, row.primary_managed_system_id, {});
+      const canManage = (
+        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
+      ).allow;
       if (!canManage) continue;
       items.push(taskRequestToDto(row, await sourceLinkForTaskRequest(row)));
     }
@@ -539,12 +518,15 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
           });
           if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
 
-          const canManage = await canManageFinding(
-            deps,
-            args.actor,
-            taskRequest.primary_managed_system_id,
-            { tx },
-          );
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              taskRequest.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }

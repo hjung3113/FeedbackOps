@@ -13,6 +13,7 @@
 
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   check,
   index,
   integer,
@@ -26,6 +27,18 @@ import {
 } from 'drizzle-orm/pg-core';
 
 export const coreSchema = pgSchema('core');
+
+export const displayCounters = coreSchema.table(
+  'display_counters',
+  {
+    workspaceId: uuid('workspace_id').notNull(),
+    entityType: text('entity_type').notNull(),
+    nextValue: bigint('next_value', { mode: 'number' }).notNull().default(1000),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.workspaceId, t.entityType] }),
+  }),
+);
 
 // ─────────────────────────────────────────────────────────────────────────
 // core.workspaces — outermost tenant boundary per CONTEXT.md.
@@ -282,7 +295,7 @@ export const analyticsAreas = coreSchema.table(
 
 // ─────────────────────────────────────────────────────────────────────────
 // core.entity_links — Slice 4.1 tracer. Canonical polymorphic relationship
-// table; this slice permits only active VOC↔VOC related_to links.
+// table; registered tuples are enforced by entity_links_tuple_check.
 // ─────────────────────────────────────────────────────────────────────────
 export const entityLinks = coreSchema.table(
   'entity_links',
@@ -313,7 +326,7 @@ export const entityLinks = coreSchema.table(
   (t) => ({
     tupleCheck: check(
       'entity_links_tuple_check',
-      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'), ('voc','finding','evidence_of'))`,
+      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'), ('voc','finding','evidence_of'), ('voc_cluster','finding','created_finding'), ('voc_cluster','finding','evidence_of'), ('finding','task_request','requested_task'), ('task_request','task','converted_to'), ('finding','task','requested_task'), ('voc','task','evidence_of'), ('voc','task_request','requested_task'), ('voc_cluster','task_request','requested_task'))`,
     ),
     visibilityCheck: check(
       'entity_links_visibility_check',

@@ -3,6 +3,7 @@ import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import type { TaskDetailDto, TaskDto } from '@fops/shared';
 import {
+  Button,
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
@@ -21,6 +22,7 @@ import {
 } from '@fops/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
 
 const PRIORITY_SEVERITY: Record<TaskDto['priority'], ObjectRowSeverity> = {
@@ -45,6 +47,10 @@ function shortId(id: string): string {
   return `${id.slice(0, 8)}...`;
 }
 
+function optionalDisplayId(value: { id: string; display_id?: string | null }): string {
+  return value.display_id?.trim() ? value.display_id : shortId(value.id);
+}
+
 function formatDate(raw: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -54,16 +60,20 @@ function formatDate(raw: string): string {
   }).format(new Date(raw));
 }
 
-function TaskDetailPanel({
+export function TaskDetailPanel({
   taskId,
   onClose,
   actorNamesById,
   managedSystemNamesById,
+  view = 'backlog',
+  onMoveToNextStatus,
 }: {
   taskId: string;
   onClose: () => void;
   actorNamesById: ReadonlyMap<string, string>;
   managedSystemNamesById: ReadonlyMap<string, string>;
+  view?: 'backlog' | 'board';
+  onMoveToNextStatus?: (taskId: string) => void;
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const taskQuery = useQuery({
@@ -81,17 +91,20 @@ function TaskDetailPanel({
 
   const task: TaskDetailDto = taskQuery.data;
   const source = task.source;
+  const sourceFinding = source?.finding as
+    | (NonNullable<TaskDetailDto['source']>['finding'] & { display_id?: string | null })
+    | undefined;
   return (
     <aside className="flex h-full flex-col bg-surface-detail">
       <DetailPanelHeader
         kind="task"
-        id={shortId(task.id)}
+        id={task.display_id}
         onClose={onClose}
         extras={
           <DetailPanelHeaderActions
             entityKind="task"
             entityId={task.id}
-            copyUrl={`/tasks?view=backlog&param=${task.id}`}
+            copyUrl={`/tasks?view=${view}&param=${task.id}`}
           />
         }
       />
@@ -136,19 +149,19 @@ function TaskDetailPanel({
 
         <div data-anchor="source" className="border-t border-border-subtle px-4 py-4">
           <PanelSectionTitle>Source evidence</PanelSectionTitle>
-          {source?.finding ? (
+          {sourceFinding ? (
             <div className="mt-2 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3">
               <span className="text-xs text-text-muted">From finding</span>
               <div className="text-sm font-medium text-text-primary">
-                {source.finding.title}
+                {sourceFinding.title}
                 <span className="ml-2 font-mono text-xs text-text-muted">
-                  {shortId(source.finding.id)}
+                  {optionalDisplayId(sourceFinding)}
                 </span>
               </div>
-              <p className="text-sm text-text-muted">{source.finding.summary}</p>
+              <p className="text-sm text-text-muted">{sourceFinding.summary}</p>
               <div className="flex flex-wrap gap-2">
-                <OutlineBadge>Evidence · {source.finding.evidence_count}</OutlineBadge>
-                {source.task_request && (
+                <OutlineBadge>Evidence · {sourceFinding.evidence_count}</OutlineBadge>
+                {source?.task_request && (
                   <OutlineBadge>Task Request · {source.task_request.status}</OutlineBadge>
                 )}
               </div>
@@ -163,22 +176,29 @@ function TaskDetailPanel({
           <div className="mt-2">
             <LinkedEntityTrail
               nodes={[
-                ...(source?.finding
+                ...(sourceFinding
                   ? [
                       {
                         type: 'finding' as const,
-                        id: source.finding.id,
-                        display_id: shortId(source.finding.id),
-                        title: source.finding.title,
+                        id: sourceFinding.id,
+                        display_id: optionalDisplayId(sourceFinding),
+                        title: sourceFinding.title,
                       },
                     ]
                   : []),
-                { type: 'task' as const, id: task.id, display_id: shortId(task.id), title: task.title },
+                { type: 'task' as const, id: task.id, display_id: task.display_id, title: task.title },
               ]}
             />
           </div>
         </div>
       </div>
+      {view === 'board' && task.status !== 'backlog' && task.status !== 'released' && onMoveToNextStatus && (
+        <div className="border-t border-border-subtle p-3">
+          <Button type="button" variant="primary" className="w-full" onClick={() => onMoveToNextStatus(task.id)}>
+            <ArrowRight className="h-4 w-4" />Move to next status
+          </Button>
+        </div>
+      )}
     </aside>
   );
 }
@@ -236,7 +256,7 @@ export function TaskListRoute({ selectedParam }: { selectedParam?: string | unde
           {items.map((task) => (
             <ObjectRow
               key={task.id}
-              id={shortId(task.id)}
+              id={task.display_id}
               title={task.title}
               selected={selected?.id === task.id}
               density="default"
@@ -272,6 +292,7 @@ export function TaskListRoute({ selectedParam }: { selectedParam?: string | unde
             taskId={selected.id}
             actorNamesById={actorNamesById}
             managedSystemNamesById={managedSystemNamesById}
+            view="backlog"
             onClose={() => {
               setSelectedId(null);
               void navigate({ to: '/tasks', search: { view: 'backlog' } });

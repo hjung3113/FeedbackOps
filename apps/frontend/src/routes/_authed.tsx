@@ -10,7 +10,7 @@
 // INSIDE AppFrame — not here. ADR-0020 §taxonomy lock.
 
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router';
-import { Database, Flag, Inbox, Layers, ListTodo, Plus, User } from 'lucide-react';
+import { Database, Flag, Inbox, Layers, ListChecks, ListTodo, Plus, User } from 'lucide-react';
 import { UnauthenticatedError, fetchMe } from '../lib/api';
 import { AppFrame } from '../lib/layout/AppFrame';
 
@@ -45,6 +45,13 @@ export const SIDEBAR_ENTRIES = [
     href: '/voc-clusters',
     section: 'VOC',
     icon: <Layers className="h-4 w-4" />,
+  },
+  {
+    id: 'findings',
+    label: 'Findings',
+    href: '/findings',
+    section: 'VOC',
+    icon: <ListChecks className="h-4 w-4" />,
   },
   {
     id: 'create',

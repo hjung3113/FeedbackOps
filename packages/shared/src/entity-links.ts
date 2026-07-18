@@ -18,6 +18,12 @@ export const entityLinkRelationTypeSchema = z.enum([
 ]);
 export type EntityLinkRelationType = z.infer<typeof entityLinkRelationTypeSchema>;
 
+export type EntityLinkPair = {
+  source_type: EntityLinkEntityType;
+  target_type: EntityLinkEntityType;
+  relation_type: EntityLinkRelationType;
+};
+
 export const entityLinkVisibilitySchema = z.enum([
   'internal_only',
   'summary_visible',
@@ -45,59 +51,115 @@ export const entityLinkRefSchema = z.object({
 });
 export type EntityLinkRef = z.infer<typeof entityLinkRefSchema>;
 
-export const registeredEntityLinkPairSchema = z.union([
-  z.object({
-    source_type: z.literal('voc'),
-    target_type: z.literal('voc'),
-    relation_type: z.literal('related_to'),
-  }),
-  z.object({
-    source_type: z.literal('voc'),
-    target_type: z.literal('finding'),
-    relation_type: z.literal('created_finding'),
-  }),
-  z.object({
-    source_type: z.literal('voc'),
-    target_type: z.literal('finding'),
-    relation_type: z.literal('evidence_of'),
-  }),
-  z.object({
-    source_type: z.literal('voc_cluster'),
-    target_type: z.literal('finding'),
-    relation_type: z.literal('created_finding'),
-  }),
-  z.object({
-    source_type: z.literal('finding'),
-    target_type: z.literal('task_request'),
-    relation_type: z.literal('requested_task'),
-  }),
-  z.object({
-    source_type: z.literal('voc'),
-    target_type: z.literal('task_request'),
-    relation_type: z.literal('requested_task'),
-  }),
-  z.object({
-    source_type: z.literal('voc_cluster'),
-    target_type: z.literal('task_request'),
-    relation_type: z.literal('requested_task'),
-  }),
-  z.object({
-    source_type: z.literal('task_request'),
-    target_type: z.literal('task'),
-    relation_type: z.literal('converted_to'),
-  }),
-  z.object({
-    source_type: z.literal('finding'),
-    target_type: z.literal('task'),
-    relation_type: z.literal('requested_task'),
-  }),
-  z.object({
-    source_type: z.literal('voc'),
-    target_type: z.literal('task'),
-    relation_type: z.literal('evidence_of'),
-  }),
+export const entityLinkTargetSummarySchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('finding'),
+      id: z.string().uuid(),
+      display_id: z.string(),
+      title: z.string(),
+      summary: z.string(),
+      severity: z.string(),
+      confidence: z.string().nullable(),
+      status: z.string(),
+      primary_managed_system_id: z.string().uuid(),
+      evidence_count: z.number(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('task'),
+      id: z.string().uuid(),
+      display_id: z.string(),
+      title: z.string(),
+      status: z.string(),
+      priority: z.string(),
+      primary_managed_system_id: z.string().uuid(),
+      assignee_actor_id: z.string().uuid().nullable(),
+      due_date: z.string().nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('task_request'),
+      id: z.string().uuid(),
+      display_id: z.string(),
+      source_type: z.string(),
+      source_id: z.string().uuid(),
+      evidence_summary: z.string(),
+      requested_outcome: z.string(),
+      status: z.string(),
+      primary_managed_system_id: z.string().uuid(),
+      requester_actor_id: z.string().uuid(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('voc_cluster'),
+      id: z.string().uuid(),
+      display_id: z.string(),
+      title: z.string(),
+      summary: z.string().nullable(),
+      status: z.string(),
+      primary_managed_system_id: z.string().uuid(),
+    })
+    .strict(),
 ]);
-export type RegisteredEntityLinkPair = z.infer<typeof registeredEntityLinkPairSchema>;
+export type EntityLinkTargetSummary = z.infer<typeof entityLinkTargetSummarySchema>;
+
+export const registeredEntityLinkPairs = [
+  { source_type: 'voc', target_type: 'voc', relation_type: 'related_to' },
+  { source_type: 'voc', target_type: 'finding', relation_type: 'created_finding' },
+  { source_type: 'voc', target_type: 'finding', relation_type: 'evidence_of' },
+  { source_type: 'voc_cluster', target_type: 'finding', relation_type: 'created_finding' },
+  { source_type: 'voc_cluster', target_type: 'finding', relation_type: 'evidence_of' },
+  { source_type: 'finding', target_type: 'task_request', relation_type: 'requested_task' },
+  { source_type: 'task_request', target_type: 'task', relation_type: 'converted_to' },
+  { source_type: 'finding', target_type: 'task', relation_type: 'requested_task' },
+  { source_type: 'voc', target_type: 'task', relation_type: 'evidence_of' },
+  { source_type: 'voc', target_type: 'task_request', relation_type: 'requested_task' },
+  {
+    source_type: 'voc_cluster',
+    target_type: 'task_request',
+    relation_type: 'requested_task',
+  },
+] as const satisfies readonly EntityLinkPair[];
+
+export type RegisteredEntityLinkPair = (typeof registeredEntityLinkPairs)[number];
+
+const entityLinkPairKey = (pair: EntityLinkPair) =>
+  `${pair.source_type}:${pair.target_type}:${pair.relation_type}`;
+
+const registeredEntityLinkPairKeys = new Set(registeredEntityLinkPairs.map(entityLinkPairKey));
+
+export function isRegisteredEntityLinkPair(input: unknown): input is RegisteredEntityLinkPair {
+  if (input === null || typeof input !== 'object') return false;
+  const maybePair = input as Partial<EntityLinkPair>;
+  if (
+    maybePair.source_type === undefined ||
+    maybePair.target_type === undefined ||
+    maybePair.relation_type === undefined
+  ) {
+    return false;
+  }
+  return registeredEntityLinkPairKeys.has(entityLinkPairKey(maybePair as EntityLinkPair));
+}
+
+function registeredEntityLinkPairOption(pair: RegisteredEntityLinkPair) {
+  return z.object({
+    source_type: z.literal(pair.source_type),
+    target_type: z.literal(pair.target_type),
+    relation_type: z.literal(pair.relation_type),
+  });
+}
+
+export const registeredEntityLinkPairSchema = z.union(
+  registeredEntityLinkPairs.map(registeredEntityLinkPairOption) as [
+    ReturnType<typeof registeredEntityLinkPairOption>,
+    ReturnType<typeof registeredEntityLinkPairOption>,
+    ...ReturnType<typeof registeredEntityLinkPairOption>[],
+  ],
+) as unknown as z.ZodType<RegisteredEntityLinkPair>;
 
 export const createEntityLinkRequestSchema = z
   .object({
@@ -189,6 +251,7 @@ export const allowedEntityLinkSchema = z.object({
   source_id: z.string().uuid(),
   target_type: entityLinkEntityTypeSchema,
   target_id: z.string().uuid(),
+  target_summary: entityLinkTargetSummarySchema.optional(),
   relation_type: entityLinkRelationTypeSchema,
   visibility: entityLinkVisibilitySchema,
   status: entityLinkStatusSchema,

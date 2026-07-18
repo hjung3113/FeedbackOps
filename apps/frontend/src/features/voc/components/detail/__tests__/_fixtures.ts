@@ -40,6 +40,7 @@ export const DETAIL_ENVELOPE: VocDetailEnvelope = {
   created_at: '2026-05-01T00:00:00Z',
   updated_at: '2026-05-01T00:00:00Z',
   similar_count: 0,
+  similar: { items: [] },
   description_rich_content: { type: 'doc', content: [] },
   next_actions: [],
   next_reporter_states: { allowed: ['reviewing'], forbidden: {} },

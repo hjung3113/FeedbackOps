@@ -2,41 +2,39 @@
 
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
-This is a **multi-context** repo. Start at `CONTEXT-MAP.md` at the root, then read the per-context `CONTEXT.md` files relevant to the touched code.
+This repo keeps one shared domain context document. Read the root `CONTEXT.md`, then the ADRs and technical-layer guide relevant to the touched code.
 
 ## Before exploring, read these
 
-- **`CONTEXT-MAP.md`** at the repo root — points at one `CONTEXT.md` per context. Read each one relevant to the topic.
-- **`CONTEXT.md`** at the repo root — system-wide overview (product domain, invariants, bounded contexts).
-- **`docs/adr/`** — system-wide ADRs. Read those that touch the area you're about to work in.
-- Per-context ADRs at `apps/<app>/docs/adr/` or `packages/<pkg>/docs/adr/` when they exist.
+- **`CONTEXT.md`** at the repo root — domain glossary and stable domain invariants.
+- **`docs/adr/`** — architectural decisions. Read those that touch the area you're about to work in.
+- The relevant per-directory **`AGENTS.md`** — technical-layer rules.
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The producer skill (`/grill-with-docs`) creates them lazily when terms or decisions actually get resolved.
+If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront.
 
 ## File structure
 
 ```
 /
-├── CONTEXT.md                          ← system-wide overview
-├── CONTEXT-MAP.md                      ← index of per-context CONTEXT.md files
-├── docs/adr/                           ← system-wide decisions
+├── CONTEXT.md                          ← domain glossary and stable invariants
+├── docs/
+│   ├── adr/                            ← architectural decisions
+│   └── implementation/                 ← detailed contracts
 ├── apps/
-│   ├── frontend/
-│   │   ├── CONTEXT.md
-│   │   └── docs/adr/                   ← frontend-specific decisions
-│   └── backend/
-│       ├── CONTEXT.md
-│       └── docs/adr/                   ← backend-specific decisions
+│   ├── frontend/AGENTS.md              ← frontend rules
+│   └── backend/AGENTS.md               ← backend rules
 └── packages/
-    ├── ui/
-    │   └── CONTEXT.md
-    └── shared/
-        └── CONTEXT.md
+    ├── ui/AGENTS.md                    ← UI-package rules
+    └── shared/AGENTS.md                ← shared-package rules
 ```
+
+## Local CONTEXT contract
+
+Root `CONTEXT.md` holds the domain glossary plus stable domain invariants. It does not hold implementation mechanics. `docs/adr/*` owns architectural decisions; `docs/implementation/*` owns detailed contracts. When `CONTEXT.md` and an ADR disagree on an architectural decision, the ADR wins.
 
 ## Use the glossary's vocabulary
 
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in the relevant `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
+When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in root `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
 
 If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/grill-with-docs`).
 

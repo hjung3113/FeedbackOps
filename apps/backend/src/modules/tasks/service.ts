@@ -1,11 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import {
   type ConvertTaskRequestRequest,
   type LinkExistingTaskRequest,
   type ListTasksQuery,
+  type PatchTaskStatusRequest,
   type TaskDetailDto,
   type TaskDto,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
+import { sql } from 'drizzle-orm';
+import { type PgBoss, fromDrizzle } from 'pg-boss';
 
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
@@ -15,9 +19,15 @@ import {
   type EntityLinkRow,
   insertActiveEntityLink,
   selectActiveLinksForEndpoint,
+  selectEligibleVocLinksForReleasedTask,
 } from '../entity-links/repo.js';
+import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
+import {
+  TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
+  type TaskReleasedReviewCandidatesPayload,
+} from './jobs/released-review-candidates.js';
 import {
   type TaskRow,
   findTaskById,
@@ -26,6 +36,7 @@ import {
   lockTaskById,
   markTaskRequestConverted,
   resolveTaskSource,
+  updateTaskStatus,
 } from './repo.js';
 
 export interface TasksActor {
@@ -39,12 +50,14 @@ export interface TasksServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  boss?: PgBoss;
 }
 
 function taskToDto(row: TaskRow): TaskDto {
   return {
     id: row.id,
     workspace_id: row.workspace_id,
+    display_id: row.display_id,
     primary_managed_system_id: row.primary_managed_system_id,
     title: row.title,
     status: row.status,
@@ -58,23 +71,6 @@ function taskToDto(row: TaskRow): TaskDto {
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
-}
-
-async function canManageFinding(
-  deps: Pick<TasksServiceDeps, 'checkService'>,
-  actor: TasksActor,
-  managedSystemId: string,
-  options: Parameters<TasksServiceDeps['checkService']['checkCapability']>[3],
-): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.role_level !== 'developer') return false;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'finding.manage',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
-  );
-  return decision.allow;
 }
 
 function assertApproved(taskRequest: TaskRequestRow): void {
@@ -169,6 +165,27 @@ async function preserveSourceLinks(args: {
     }
   }
 
+  for (const sourceLink of sourceLinks) {
+    if (sourceLink.source_type !== 'voc' || sourceLink.relation_type !== 'requested_task') continue;
+    const tuple = registeredEntityLinkPairSchema.parse({
+      source_type: 'voc',
+      target_type: 'task',
+      relation_type: 'evidence_of',
+    });
+    const taskEvidenceLink = await insertActiveEntityLink(args.tx, {
+      workspaceId: args.actor.workspace_id,
+      sourceType: tuple.source_type,
+      sourceId: sourceLink.source_id,
+      targetType: tuple.target_type,
+      targetId: args.task.id,
+      relationType: tuple.relation_type,
+      managedSystemId: args.task.primary_managed_system_id,
+      createdBy: args.actor.actor_id,
+      visibility: 'internal_only',
+    });
+    preserved.push(taskEvidenceLink.row);
+  }
+
   return preserved;
 }
 
@@ -177,7 +194,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     actor: TasksActor;
     taskId: string;
   }): Promise<TaskDetailDto> {
-    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
+    if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
 
@@ -187,7 +204,9 @@ export function createTasksService(deps: TasksServiceDeps) {
     });
     if (!row) throw new HttpError('not_found.record', 'task not found');
 
-    const canManage = await canManageFinding(deps, args.actor, row.primary_managed_system_id, {});
+    const canManage = (
+      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
+    ).allow;
     if (!canManage) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
@@ -221,12 +240,15 @@ export function createTasksService(deps: TasksServiceDeps) {
           });
           if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
 
-          const canManage = await canManageFinding(
-            deps,
-            args.actor,
-            taskRequest.primary_managed_system_id,
-            { tx },
-          );
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              taskRequest.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
@@ -298,12 +320,15 @@ export function createTasksService(deps: TasksServiceDeps) {
           });
           if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
 
-          const canManage = await canManageFinding(
-            deps,
-            args.actor,
-            taskRequest.primary_managed_system_id,
-            { tx },
-          );
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              taskRequest.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
@@ -359,11 +384,112 @@ export function createTasksService(deps: TasksServiceDeps) {
     });
   }
 
+  async function patchTaskStatus(args: {
+    actor: TasksActor;
+    taskId: string;
+    ifMatch: string;
+    input: PatchTaskStatusRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: TaskDetailDto }> {
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const task = await lockTaskById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: args.taskId,
+          });
+          if (!task) throw new HttpError('not_found.record', 'task not found');
+
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              task.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          if (task.updated_at.toISOString() !== args.ifMatch) {
+            throw new HttpError('conflict.stale_write', 'task updated_at does not match If-Match', {
+              current_updated_at: task.updated_at.toISOString(),
+            });
+          }
+
+          if (task.status === args.input.status) {
+            const source = task.source_task_request_id
+              ? await resolveTaskSource(tx, {
+                  workspaceId: args.actor.workspace_id,
+                  sourceTaskRequestId: task.source_task_request_id,
+                })
+              : null;
+            return { status: 200, body: { ...taskToDto(task), source } };
+          }
+
+          const updatedTask = await updateTaskStatus(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: task.id,
+            status: args.input.status,
+          });
+          if (task.status !== 'released' && updatedTask.status === 'released') {
+            if (!deps.boss) {
+              throw new Error('pg-boss is required to publish released Task review candidates');
+            }
+            const linkedVocs = await selectEligibleVocLinksForReleasedTask(tx, {
+              workspaceId: args.actor.workspace_id,
+              taskId: updatedTask.id,
+            });
+            if (linkedVocs.length > 0) {
+              const payload: TaskReleasedReviewCandidatesPayload = {
+                workspace_id: args.actor.workspace_id,
+                task_id: updatedTask.id,
+                release_event_id: randomUUID(),
+                correlation_id: args.idempotencyKey,
+                triggered_by_actor_id: args.actor.actor_id,
+                linked_vocs: linkedVocs.map((link) => ({
+                  voc_id: link.voc_id,
+                  entity_link_id: link.entity_link_id,
+                })),
+              };
+              await deps.boss.send(TASK_RELEASED_REVIEW_CANDIDATES_QUEUE, payload, {
+                db: fromDrizzle(tx, sql),
+              });
+            }
+          }
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_status_changed',
+            subject_type: 'task',
+            subject_id: task.id,
+            summary: 'Task status changed',
+            detail: { from: task.status, to: updatedTask.status },
+          });
+          const source = updatedTask.source_task_request_id
+            ? await resolveTaskSource(tx, {
+                workspaceId: args.actor.workspace_id,
+                sourceTaskRequestId: updatedTask.source_task_request_id,
+              })
+            : null;
+          return { status: 200, body: { ...taskToDto(updatedTask), source } };
+        },
+      );
+    });
+  }
+
   async function listTasks(args: {
     actor: TasksActor;
     query: ListTasksQuery;
   }): Promise<{ items: TaskDto[] }> {
-    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
+    if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
     const assigneeActorId =
@@ -375,7 +501,9 @@ export function createTasksService(deps: TasksServiceDeps) {
     });
     const items: TaskDto[] = [];
     for (const row of rows) {
-      const canManage = await canManageFinding(deps, args.actor, row.primary_managed_system_id, {});
+      const canManage = (
+        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
+      ).allow;
       if (!canManage) continue;
       items.push(taskToDto(row));
     }
@@ -386,6 +514,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     getTask,
     convertTaskRequest,
     linkExistingTask,
+    patchTaskStatus,
     listTasks,
   };
 }

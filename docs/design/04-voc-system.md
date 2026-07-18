@@ -253,6 +253,17 @@ Acceptance Criteria:
 - Recommended matches can be dismissed.
 ```
 
+> **Implementation status (2026-07-15).** NOT satisfied. The shipped
+> "similar VOC" surface (#141, ADR-0031) is a same-Managed-System peer
+> heuristic — no embedding similarity, no dismissal state. A #127 ARCHITECT
+> audit at develop `68f121e` confirmed no embedding/vector infrastructure
+> exists. Full satisfaction of this requirement is tracked by epic **#168**;
+> ADR-0031 has been amended to re-assign it there (it previously pointed at
+> #127, which is a UI slice and does not deliver similarity infrastructure).
+> The second criterion is already honoured: #127 does not auto-cluster —
+> recommendations stay a separate resource requiring authorized confirmation
+> (#127 decision D1).
+
 ### FR-VOC-005: Public Update
 
 Priority: MUST

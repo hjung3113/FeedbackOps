@@ -173,6 +173,27 @@ cluster endpoints may return status update candidates and shared draft content,
 but apply requests must resolve into separate per-VOC status decisions, Public
 Update records or skip reasons, and audit events.
 
+VOC Cluster member detail projects `voc_id`, `added_by`, `added_at`, and the
+optional enrichment fields `display_id`, `title`, `severity`, and
+`reporter_facing_status`. Both rows and `member_count` use the same predicate:
+Admin, `voc.read` on the member Managed System, or reporter ownership.
+Triage-only effective scope is not member-read authority.
+
+`DELETE /voc-clusters/:id/vocs/:voc_id` returns the identical
+`not_found.record` 404 envelope when the VOC is unreadable, missing, or exists
+but is not a member. A successful authorized removal returns 204 and records
+the normal membership-removal audit event.
+
+`POST /voc-clusters/:id/public-update-candidate` validates and returns shared
+draft content after `finding.manage`; it writes no VOC. `POST
+/voc-clusters/:id/apply-public-update-candidate` accepts selected `voc_ids` and
+the Public Update request. Each readable selected member is delegated to the
+existing per-VOC Public Update command in its own transaction, which rechecks
+`voc.triage`, archive state, transition validity, sanitization, and audit.
+Outcomes are `applied` or `skipped` with a reason. Hidden membership and absent
+membership both produce the same `not_found` skipped outcome; no unselected or
+hidden row is identified.
+
 Status-change requests that omit Public Update creation must include
 `skip_public_update: true` and a non-empty `skip_reason`. The audit event must
 record `public_update_created` or `skipped_with_reason`, the previous and next
@@ -521,8 +542,8 @@ events, and dashboard repair signals.
 | `POST /survey-findings/:id/request-task` | FOP-SURVEY-005 | Finding | Task Request | `requested_task` | task_request_created_from_survey_finding | moves survey-derived Finding to pending execution review | Survey Response creates VOC |
 | `POST /task-requests/:id/convert` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_created_from_request | satisfies approved execution candidate | folding conversion into approval |
 | `POST /task-requests/:id/link-task` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_linked_to_request | satisfies approved execution candidate with existing work | creating duplicate Task when suitable Task exists |
-| `POST /permission-requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_request_approved | may restore blocked object visibility | bypassing explicit deny checks |
-| `POST /permission-requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Deny | none | permission_request_rejected | keeps or creates permission-blocked state | exposing full restricted object |
+| `POST /permission-requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_request_approved (미구현 as of Slice 6) | may restore blocked object visibility | bypassing explicit deny checks |
+| `POST /permission-requests/:id/reject` | FOP-PERM-002 | Permission Request | Permission Deny | none | permission_request_rejected (미구현 as of Slice 6) | keeps or creates permission-blocked state | exposing full restricted object |
 
 Task Request review may be performed by a workspace Admin or by a Developer in
 the same Managed System Permission Scope. MVP allows a Developer to approve
@@ -546,6 +567,7 @@ but execution has not started until the Task moves to Todo or Doing.
 POST /vocs
 GET /vocs
 GET /vocs/:id
+GET /vocs/:id/conversation
 PATCH /vocs/:id
 PATCH /vocs/:id/description
 POST /vocs/:id/create-finding
@@ -579,10 +601,14 @@ POST /vocs/:id/internal-comments
 POST /voc-clusters
 GET /voc-clusters
 GET /voc-clusters/:id
+GET /voc-clusters/:id/candidate-peers
 PATCH /voc-clusters/:id
 POST /voc-clusters/:id/vocs
 DELETE /voc-clusters/:id/vocs/:voc_id
+POST /voc-clusters/:id/public-update-candidate
+POST /voc-clusters/:id/apply-public-update-candidate
 POST /voc-clusters/:id/create-finding
+POST /voc-clusters/:id/link-finding
 POST /voc-clusters/:id/request-task
 ```
 
@@ -593,18 +619,25 @@ records. Cluster merge and split endpoints are out of scope for MVP.
 
 | Aspect | Contract |
 |---|---|
-| Create body | `POST /voc-clusters` `{ title: string(1..200), summary?: string\|null, primary_managed_system_id: uuid }` → `201` `VocClusterDto` (`status='draft'`). |
-| List | `GET /voc-clusters` optional `?managed_system_id=<uuid>` → `{ items: VocClusterDto[] }`, workspace-scoped + MS-scope filtered. |
-| Detail | `GET /voc-clusters/:id` → `VocClusterDto` with `members: [{ voc_id, added_by, added_at }]`. |
-| Edit / confirm | `PATCH /voc-clusters/:id` `{ title?, summary?, status?: 'confirmed' }` → `200`. `status` only supports confirming (`draft`→`confirmed`). |
+| Create body | `POST /voc-clusters` `{ title: string(1..200), summary?: string\|null, primary_managed_system_id: uuid, severity?: 'low'\|'medium'\|'high'\|'critical'\|null, confidence?: 'low'\|'medium'\|'high'\|null, rationale?: string\|null, owner_user_id?: uuid\|null }` → `201` `VocClusterDto` (`status='draft'`). |
+| List | `GET /voc-clusters` optional `?managed_system_id=<uuid>` → `{ items: VocClusterDto[] }`, workspace-scoped + MS-scope filtered. DTOs include nullable `severity`, `confidence`, `rationale`, `owner_user_id`, `confirmed_by`, and `confirmed_at`. Each `member_count` is the authorized-member total, filtered by the same member predicate as detail. |
+| Detail | `GET /voc-clusters/:id` → `VocClusterDto` with the nullable workspace/provenance fields and authorized `members: [{ voc_id, added_by, added_at, display_id?, title?, severity?, reporter_facing_status? }]`; `member_count` equals the authorized `members` length. Member visibility is Admin, `voc.read` scope on that member's Managed System, or reporter ownership. |
+| Same-MS candidate peers | `GET /voc-clusters/:id/candidate-peers` → `{ candidate_basis: 'same_managed_system_active_voc', candidates: [{ voc_id, display_id, title, severity, reporter_facing_status }] }`. This is temporary same-Managed-System membership-picker scaffolding, not semantic or embedding similarity; it emits no score, confidence, or rationale. Candidates are active VOCs in the cluster workspace and Primary Managed System, excluding existing members/source VOCs. The cluster read gate is Admin or Developer with `finding.read` on the cluster MS. Within that readable cluster, a candidate is included only for Admin, `voc.read` scope on the candidate MS, or candidate reporter ownership. `finding.read`, `finding.manage`, and triage/effective-summary scope never substitute for candidate `voc.read`; unreadable candidates are absent and uncounted. A readable cluster with no readable candidates returns `200` with an empty `candidates` array. |
+| Edit / confirm | `PATCH /voc-clusters/:id` `{ title?, summary?, severity?, confidence?, rationale?, owner_user_id?, status?: 'confirmed' }` → `200`. `confirmed_by` and `confirmed_at` are rejected as unexpected client fields. A `draft`→`confirmed` transition atomically sets them to the actor and current time; subsequent confirmation requests preserve the original values. |
 | Add member | `POST /voc-clusters/:id/vocs` `{ voc_id }` → `201` (inserted) / `200` (already a member). Member VOC must be in the cluster's managed system (else `422 validation.failed`); archived/unreadable VOC ⇒ `404`. |
-| Remove member | `DELETE /voc-clusters/:id/vocs/:voc_id` → `204`; missing membership ⇒ `404`. (No request body — clients must not send `Content-Type: application/json` with an empty body.) |
+| Remove member | `DELETE /voc-clusters/:id/vocs/:voc_id` → authorized removal `204`; unreadable VOC, missing VOC, and existing non-member all return the identical `404 not_found.record` envelope. (No request body — clients must not send `Content-Type: application/json` with an empty body.) |
+| Bulk Public Update candidate | `POST /voc-clusters/:id/public-update-candidate` validates and returns shared draft content after `finding.manage`; it writes no Public Update or audit row. |
+| Bulk Public Update apply | `POST /voc-clusters/:id/apply-public-update-candidate` accepts selected member `voc_ids` plus the candidate. Each readable selected member is delegated in its own transaction to the canonical per-VOC Public Update command, including its `voc.triage` recheck and normal audits; outcomes are `applied` or `skipped`. Hidden and absent membership both return the same `not_found` skip reason. |
 | Create finding | `POST /voc-clusters/:id/create-finding` — body = `CreateFindingRequest` (same as `POST /vocs/:id/create-finding`); requires `Idempotency-Key` (UUIDv4). → `201` `FindingDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `source={ type:'voc_cluster', id, relation_type:'created_finding', link_id }`. Writes `finding_created_from_voc_cluster` + the `entity_link.created` audit in the finding txn. |
+| Link existing Finding | `POST /voc-clusters/:id/link-finding` — body `{ finding_id: uuid }`; requires `Idempotency-Key` (UUIDv4). It creates `(voc_cluster, finding, evidence_of)` and returns `201 { id, display_id, status }`; a duplicate active link returns `200` with the same body and writes no second audit. The actor must be able to read and manage both the cluster MS and the target Finding's own MS; an unreadable cluster or target is `404`, while a readable target without `finding.manage` is `403`. Writes `finding_linked_to_voc_cluster` and `entity_link.created`. |
+| Unlink existing Finding | `POST /voc-clusters/:id/unlink-finding` — body `{ finding_id: uuid, reason: trimmed non-empty string }`; requires `Idempotency-Key` (UUIDv4). It first locks and verifies readable cluster then readable target Finding, then requires `finding.manage` independently on both endpoint Managed Systems. Missing, foreign-workspace, or unreadable endpoints return the identical `404 {"code":"not_found.record","message":"record not found"}` envelope; readable endpoints without required scope return `403 permission.scope_required`. It soft-detaches only the exact active `(voc_cluster, finding, evidence_of)` tuple and returns `204` with an empty body. Never-linked and already-detached tuples also return `204` with no audit. Same key and request replays `204`; reuse with changed cluster, Finding, or reason returns `409 conflict.idempotency_key_reuse`. A changed active row writes `finding_unlinked_from_voc_cluster` (subject Finding) and `entity_link.detached` atomically; relinking creates a new active row and an old-key replay never detaches it. |
 | Request task | `POST /voc-clusters/:id/request-task` — body = `{ evidence_summary, requested_outcome }` (same as Finding request-task); requires `Idempotency-Key` (UUIDv4). → `201` `TaskRequestDto` with `source_type='voc_cluster'`, `source_id=<cluster id>`, `status='pending_review'`, `source={ type:'voc_cluster', id, relation_type:'requested_task', link_id }`. Writes `task_request_created_from_voc_cluster` + the `entity_link.created` audit in the task-request txn. |
-| Authz | Read/list = Admin OR Developer with `finding.read` on the cluster MS. Create/edit/confirm/member-add/remove/create-finding = Admin OR Developer with `finding.manage` on the cluster MS. Reuses the Finding capabilities (no `voc_cluster.*` caps) — see ADR-0024 §H. |
+| Authz | Read/list/candidate endpoint cluster gate = Admin OR Developer with `finding.read` on the cluster MS. Candidate item visibility additionally requires Admin, candidate-MS `voc.read`, or reporter ownership. Create/edit/confirm/member-add/remove/create-finding = Admin OR Developer with `finding.manage` on the cluster MS. Reuses the Finding capabilities (no `voc_cluster.*` caps) — see ADR-0024 §H. |
+| Candidate-peer errors | Invalid cluster UUID → `422 validation.failed`; missing or cluster-unreadable → `404 not_found.record`; missing session → `401 authentication.required`; workspace mismatch → `403 workspace.mismatch`. A readable cluster with zero candidate authority is not an error and returns `200` with `candidates: []`. |
 | Create-finding denial | Source-unreadable ⇒ `404 not_found.record` (hidden); readable-but-no-`finding.manage` ⇒ `403 permission.denied` (mirrors ADR-0024 §C). |
 | Idempotency | `Idempotency-Key`-scoped (same as `POST /vocs/:id/create-finding`): same key replays the same finding; distinct keys create distinct findings. |
-| Audit events | `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`, `task_request_created_from_voc_cluster`. |
+| Linked Findings visibility | `linked_findings` on both list and detail contains every active `created_finding` or `evidence_of` Finding link that is readable under Admin or `finding.read` on that Finding's own Primary Managed System. Unreadable targets are omitted entirely, including from list projections. |
+| Audit events | `voc_cluster_created`, `voc_cluster_updated`, `voc_cluster_member_added`, `voc_cluster_member_removed`, `finding_created_from_voc_cluster`, `finding_linked_to_voc_cluster`, `finding_unlinked_from_voc_cluster`, `entity_link.created`, `entity_link.detached`, `task_request_created_from_voc_cluster`. |
 
 ### Task Request Create From VOC / VOC Cluster Contract
 
@@ -644,7 +677,6 @@ idempotency behavior: Idempotency-Key required; hash includes body, source id,
 ### Finding
 
 ```text
-POST /findings
 GET /findings
 GET /findings/:id
 PATCH /findings/:id
@@ -653,6 +685,12 @@ POST /findings/:id/link-evidence
 POST /findings/:id/request-task
 POST /findings/:id/link-task
 ```
+
+Finding is not independently created through `POST /findings` as of Slice 6.
+Creation happens only through source conversion routes:
+`POST /vocs/:id/create-finding` and `POST /voc-clusters/:id/create-finding`.
+`POST /survey-responses/:id/create-finding` is a planned Slice 8 route (미구현 —
+the `surveys` backend module has no implementation as of this writing).
 
 Finding-to-Milestone linking is future cross-system behavior and is not an MVP
 Finding endpoint.
@@ -678,7 +716,6 @@ the existing `(finding, task, requested_task)` entity link, audit
 ### Task
 
 ```text
-POST /task-requests
 GET /task-requests
 GET /task-requests/:id
 POST /task-requests/:id/approve
@@ -690,8 +727,29 @@ POST /task-requests/:id/link-task
 GET /tasks
 GET /tasks/:id
 POST /tasks    # deferred in issue #134
-PATCH /tasks/:id
 ```
+
+### PATCH /tasks/:id — Task status transition (Slice 7 #138)
+
+| Aspect | Contract |
+|---|---|
+| Purpose | Mutate the internal Task status for the Task board. Transitions are free: any of `backlog`, `todo`, `doing`, `review`, `done`, `released`, or `reopened` may move to any other status. ADR-0027 defined the status vocabulary but no transition edges; the audit trail provides the required traceability. |
+| Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · `Authorization: Bearer <session>` |
+| Body | `{ status: TaskStatus }` only; `.strict()` (zod) rejects unknown fields. |
+| Permission | Admin or Developer with `finding.manage` on the Task `primary_managed_system_id`, matching `GET /tasks/:id`, convert, and link-existing authority. |
+| Optimistic concurrency | `If-Match` compared against `task.updated_at`; mismatch → 409 `conflict.stale_write` with `detail.current_updated_at`. |
+| Service ordering | `SELECT FOR UPDATE task → permission check → If-Match compare → same-status no-op check → UPDATE status + updated_at → audit emit → refresh Task Detail DTO`. |
+| Empty-diff semantics | A request whose `status` already equals the stored status returns 200 with the current Task Detail DTO. It performs no UPDATE and emits no audit row; the idempotency cache still records the 200 response. |
+| Response | 200 `TaskDetailDto`, with the same `source` projection as `GET /tasks/:id`. Missing task → 404 `not_found.record`. |
+| Audit event | `task_status_changed` with strict detail `{ from: TaskStatus, to: TaskStatus }`, written in the same transaction as the UPDATE. |
+| Idempotency hash | Includes `taskId`, `ifMatch`, route, and request body. A retry after refetching a stale Task has a distinct hash; clients must mint a fresh `Idempotency-Key` for each distinct `If-Match` value. |
+| Released side effect | ADR-0005/0009's Public-Update review-candidate background job remains deferred. Moving a Task to `released` in this endpoint does not yet enqueue or emit that candidate. |
+| Error codes | `validation.failed` · `validation.malformed_idempotency_key` · `permission.denied` · `not_found.record` · `conflict.stale_write` · `conflict.idempotency_key_reuse` · `rate_limited.actor` |
+
+Task Request is not independently created through `POST /task-requests` as of
+Slice 6. It is created only through source transition routes:
+`POST /findings/:id/request-task`, `POST /vocs/:id/request-task`, and
+`POST /voc-clusters/:id/request-task`.
 
 ### Survey
 
@@ -741,9 +799,9 @@ lists yield empty arrays. Response:
 POST /permission-requests
 GET /permission-requests          # admin-only workspace list (#87)
 GET /permission-requests/mine     # caller's open requests
-POST /permission-requests/:id/approve
-POST /permission-requests/:id/reject
-POST /permission-requests/:id/revoke
+POST /permission-requests/:id/approve   # 미구현 as of Slice 6 — permission request approval workflow not started
+POST /permission-requests/:id/reject    # 미구현 as of Slice 6 — permission request rejection workflow not started
+POST /permission-requests/:id/revoke    # 미구현 as of Slice 6 — permission grant/request revoke workflow not started
 ```
 
 `GET /permission-requests` (Slice 3 #87) — admin-only workspace-wide list of
@@ -774,8 +832,37 @@ non-admin caller receives `permission.denied` → `403`. Response:
 POST /entity-links
 GET /entity-links
 PATCH /entity-links/:id
-DELETE /entity-links/:id
 ```
+
+Link detach/revoke is represented by `PATCH /entity-links/:id` status
+transition. There is no hard-delete endpoint for entity links as of Slice 6.
+The command-only `(voc_cluster, finding, evidence_of)` tuple is unavailable on
+every generic entity-link surface: POST, both GET/list modes, and PATCH/detach.
+Generic PATCH treats that tuple exactly as an absent link, returning the same
+non-disclosing `404 not_found.record` envelope rather than a distinguishable
+`422` response.
+
+### VOC Similarity Projection
+
+`GET /vocs` returns a real `similar_count` for each list item. `GET /vocs/:id`
+returns that same sole total plus `similar: { items }`; items are capped at
+three, ordered `created_at DESC, id DESC`, and contain only `id`, `display_id`,
+`title`, `reporter_facing_status`, and `severity`.
+
+The peer predicate requires the same workspace and primary Managed System,
+active (non-archived) status, non-self identity, and peer visibility through
+the actor's `voc.read` scope or peer reporter ownership. Reporter ownership of
+the source does not broaden peer visibility. Summary/triage-only envelopes omit
+similarity entirely. Detail ignores `If-None-Match` and returns 200 while this
+peer-derived projection has no projection-aware validator. See ADR-0031.
+
+### Task release side effect (Issue #165)
+
+`PATCH /tasks/:id` changing Task status into `released` snapshots active direct
+`voc -> task evidence_of` links whose VOCs are active and in the same workspace,
+then atomically publishes `tasks.create_public_update_review_candidates` inside
+the request transaction. This endpoint exposes no candidate read/act API and
+does not change Reporter-Facing VOC Status or create a Public Update.
 
 ## Forbidden Endpoint
 

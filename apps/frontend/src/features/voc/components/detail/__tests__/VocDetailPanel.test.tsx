@@ -1,13 +1,18 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
 vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({ useWorkspaceActors: vi.fn() }));
 vi.mock('@/features/voc/hooks/usePermissionDecision', () => ({ usePermissionDecision: vi.fn() }));
 vi.mock('@/features/voc/hooks/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
 vi.mock('@/features/voc/hooks/useVocConversation', () => ({ useVocConversation: vi.fn() }));
+const navigate = vi.fn();
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>();
+  return { ...actual, useNavigate: () => navigate };
+});
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
   return { ...actual, getTask: vi.fn() };
@@ -56,20 +61,20 @@ vi.mock('@/features/voc/components/detail/ComposerSection', () => ({
   ),
 }));
 
+import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
+import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
+import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
-import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
-import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
-import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
 import { VocDetailPanel } from '../VocDetailPanel';
 import {
   DETAIL_ENVELOPE,
   ME_RESPONSE,
+  makeConversationQuery,
   makeDetailQuery,
   makeMeQuery,
-  makeConversationQuery,
 } from './_fixtures';
 
 function renderWithClient(ui: React.ReactElement) {
@@ -80,12 +85,17 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 beforeEach(() => {
+  navigate.mockReset();
   vi.mocked(useManagedSystem).mockReturnValue(null);
   vi.mocked(usePermissionDecision).mockReturnValue(null);
   vi.mocked(useVocConversation).mockReturnValue(makeConversationQuery());
   vi.mocked(useWorkspaceActors).mockReturnValue({
     actors: [
-      { id: DETAIL_ENVELOPE.reporter_id, display_name: ME_RESPONSE.actor.display_name, kind: 'user' },
+      {
+        id: DETAIL_ENVELOPE.reporter_id,
+        display_name: ME_RESPONSE.actor.display_name,
+        kind: 'user',
+      },
       { id: '00000000-0000-0000-0000-000000000002', display_name: '박운영', kind: 'user' },
     ],
   } as ReturnType<typeof useWorkspaceActors>);
@@ -102,9 +112,17 @@ describe('<VocDetailPanel>', () => {
 
   it('loading state: renders skeletons instead of content', () => {
     vi.mocked(useVocDetail).mockReturnValue(
-      makeDetailQuery({ isLoading: true, isPending: true, isSuccess: false, status: 'pending', data: undefined }),
+      makeDetailQuery({
+        isLoading: true,
+        isPending: true,
+        isSuccess: false,
+        status: 'pending',
+        data: undefined,
+      }),
     );
-    const { container } = renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />,
+    );
     expect(container.querySelector('.animate-pulse')).not.toBeNull();
     expect(screen.queryByText('테스트 VOC 제목')).not.toBeInTheDocument();
   });
@@ -175,12 +193,88 @@ describe('<VocDetailPanel>', () => {
     expect(screen.getByText('대화')).toBeInTheDocument();
   });
 
+  it('only renders the Similar section navigation entry and anchor when similar VOCs render', () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    const { container, rerender } = renderWithClient(
+      <VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Similar' })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-anchor="similar"]')).toBeNull();
+
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({
+        data: {
+          ...DETAIL_ENVELOPE,
+          similar_count: 1,
+          similar: {
+            items: [
+              {
+                id: '00000000-0000-0000-0000-000000000002',
+                display_id: 'VOC-0002',
+                title: '유사 VOC 제목',
+                reporter_facing_status: 'reviewing',
+                severity: 'medium',
+              },
+            ],
+          },
+        },
+      }),
+    );
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Similar' })).toBeInTheDocument();
+    expect(container.querySelector('[data-anchor="similar"]')).not.toBeNull();
+  });
+
   it('renders me.display_name when me matches reporter', () => {
     vi.mocked(useVocDetail).mockReturnValue(
       makeDetailQuery({ data: { ...DETAIL_ENVELOPE, reporter_id: ME_RESPONSE.actor.id } }),
     );
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getAllByText('김개발').length).toBeGreaterThan(0);
+  });
+
+  it('navigates to a selected similar VOC while preserving list search state', () => {
+    const peerId = '00000000-0000-0000-0000-000000000002';
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({
+        data: {
+          ...DETAIL_ENVELOPE,
+          similar_count: 1,
+          similar: {
+            items: [
+              {
+                id: peerId,
+                display_id: 'VOC-0002',
+                title: '유사 VOC 제목',
+                reporter_facing_status: 'reviewing',
+                severity: 'medium',
+              },
+            ],
+          },
+        },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /VOC-0002 유사 VOC 제목/i }));
+
+    expect(navigate).toHaveBeenCalledOnce();
+    const navigation = navigate.mock.calls[0]?.[0] as {
+      to: string;
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navigation.to).toBe('/vocs');
+    expect(navigation.search({ view: 'inbox', tab: 'similar' })).toEqual({
+      view: 'inbox',
+      tab: 'similar',
+      selected: peerId,
+    });
   });
 
   // REV-1 #6: dirty composer close must show DirtyConfirmation, not call onClose immediately.

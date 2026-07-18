@@ -5,7 +5,7 @@ import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecisio
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
-import { getTask, type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
 import type { EntityLinkDto, VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
@@ -16,8 +16,9 @@ import {
   PermissionBlockedPanel,
   Skeleton,
 } from '@fops/ui';
-import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import * as React from 'react';
 import { toast } from 'sonner';
 
 import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
@@ -31,6 +32,7 @@ import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
 import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { NextActionFooter } from './NextActionFooter';
+import { SimilarVocSection, hasSimilarVocSection } from './SimilarVocSection';
 import { TriageBlock } from './TriageBlock';
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -165,7 +167,7 @@ interface FullDetailViewProps {
 // Execution section only shown when there's an active finding/task (Slice 4+).
 // For Slice 3, show all static sections; Internal tab maps to the internal
 // conversation tab in ConversationTimeline.
-const DETAIL_SECTIONS = [
+const STATIC_DETAIL_SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'triage', label: 'Triage' },
   { id: 'description', label: 'Description' },
@@ -188,6 +190,7 @@ function FullDetailView({
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
   const [createFindingOpen, setCreateFindingOpen] = React.useState(false);
   const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
+  const navigate = useNavigate();
   const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
     useIdempotencyKey();
   // Scroll container ref for section nav anchor tracking
@@ -238,6 +241,14 @@ function FullDetailView({
   // FE display hint only (ADR-0024 §C): gate button to Admin or Developer.
   const canCreateFinding = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
   const canRequestTask = canCreateFinding;
+  const showsSimilarVocSection = hasSimilarVocSection(voc.similar, voc.similar_count);
+  const detailSections = showsSimilarVocSection
+    ? [
+        ...STATIC_DETAIL_SECTIONS.slice(0, 4),
+        { id: 'similar', label: 'Similar' },
+        ...STATIC_DETAIL_SECTIONS.slice(4),
+      ]
+    : STATIC_DETAIL_SECTIONS;
 
   const requestTaskMutation = useRequestTaskFromVoc({
     vocId,
@@ -270,6 +281,14 @@ function FullDetailView({
     setRequestTaskOpen(false);
   }
 
+  function handleSimilarVocSelect(id: string): void {
+    // Match VOC list-row selection: retain the current view and filters.
+    void navigate({
+      to: '/vocs',
+      search: (prev: Record<string, unknown>) => ({ ...prev, selected: id }),
+    });
+  }
+
   return (
     <>
       <div className="flex flex-col h-full" data-testid="voc-detail-panel">
@@ -281,7 +300,7 @@ function FullDetailView({
         />
 
         {/* Section nav — sticky anchor tabs (prototype: screen-voc.jsx:191) */}
-        <DetailPanelSectionNav sections={DETAIL_SECTIONS} scrollRef={scrollRef} />
+        <DetailPanelSectionNav sections={detailSections} scrollRef={scrollRef} />
 
         <div
           ref={scrollRef}
@@ -323,6 +342,15 @@ function FullDetailView({
             <LinkedExecutionSection voc={voc} linkedTask={linkedTask} />
             <LinkedEntityTrailSection />
           </div>
+          {showsSimilarVocSection && (
+            <div data-anchor="similar">
+              <SimilarVocSection
+                similar={voc.similar}
+                similarCount={voc.similar_count}
+                onSelect={handleSimilarVocSelect}
+              />
+            </div>
+          )}
           <div data-anchor="conversation">
             <ConversationTimeline voc={voc} actorNamesById={actorNamesById} />
           </div>

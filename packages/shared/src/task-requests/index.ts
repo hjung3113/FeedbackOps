@@ -62,6 +62,7 @@ export const taskRequestDtoSchema = z
   .object({
     id: z.string().uuid(),
     workspace_id: z.string().uuid(),
+    display_id: z.string(),
     source_type: taskRequestSourceTypeSchema,
     source_id: z.string().uuid(),
     primary_managed_system_id: z.string().uuid(),

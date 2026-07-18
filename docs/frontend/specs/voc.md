@@ -1,6 +1,6 @@
 # VOC Frontend Implementation Spec — Slice 3
 
-> Status: Draft for Slice 3 issue derivation (drives backend S3-001..S3-008 and frontend S3-006/S3-007/S3-008).
+> Status: Implemented. Slice 3 shipped (milestone closed, 42 issues); this spec is the as-built contract for the VOC surfaces below, not a forward-looking draft. It originally drove backend S3-001..S3-008 and frontend S3-006/S3-007/S3-008.
 > Stack: React 18 + TypeScript 5 + Tailwind 3 + shadcn/ui (production), TipTap (rich content, per ADR-0002 / ADR-0011), TanStack Router (production route shell — see `apps/frontend/src/routes/`).
 > Authority: AGENTS.md > CONTEXT.md > docs/adr > docs/implementation. Spec docs win every disagreement with the prototype (HANDOFF.md Rule 4).
 
@@ -18,11 +18,13 @@
 
 ### What this spec does NOT cover
 
-- **VOC Cluster** (`/vocs/clusters`) — Slice 3+ (separate spec).
-- **Finding create flow from VOC** (`POST /vocs/:id/create-finding` UI) — Slice 5 (`docs/frontend/specs/finding.md`, TBD).
-- **Task Request from VOC** (`POST /vocs/:id/request-task` UI) — Slice 6 (`docs/frontend/specs/task-request.md`, TBD).
-- **Entity Links create UI** (free-form linking, bulk detach) — Slice 4 (`docs/frontend/specs/entity-links.md`, TBD).
-- **Attachment upload backend** — separate slice (covered by ADR-0011 abstraction; spec assumes the API exists by the time S3-001 ships).
+These surfaces shipped in later slices and are governed by their ADRs plus the code itself — no separate frontend spec doc was ever written for them, so read the ADR and the route.
+
+- **VOC Cluster** (`/voc-clusters`) — shipped; ADR-0020 (shell), ADR-0031 (similarity). Route: `apps/frontend/src/routes/_authed/voc-clusters/`.
+- **Finding create flow from VOC** (`POST /vocs/:id/create-finding` UI) — shipped in Slice 5. ADR-0024.
+- **Task Request from VOC** (`POST /vocs/:id/request-task` UI) — shipped in Slice 6. ADR-0028.
+- **Entity Links create UI** (free-form linking, bulk detach) — shipped in Slice 4. ADR-0023.
+- **Attachment upload backend** — covered by the ADR-0011 abstraction.
 - **Mobile / tablet layouts** — desktop-only per HANDOFF §11; basic responsive guardrails inherited from `AppShell`.
 - **Permission Request in-product creation UI** — reuses existing `/admin/permissions/requests` route per `docs/frontend/routes-and-layout.md`.
 
@@ -718,17 +720,17 @@ These block specific routes/components and must be resolved before the correspon
 
 | Topic | Where it lives |
 |---|---|
-| VOC Cluster CRUD, cluster detail panel | Slice 3+ spec (`docs/frontend/specs/voc-cluster.md`, TBD) |
-| Finding create flow from VOC (`POST /vocs/:id/create-finding`) | Slice 5 (`docs/frontend/specs/finding.md`, TBD) |
-| Task Request from VOC (`POST /vocs/:id/request-task`) | Slice 6 (`docs/frontend/specs/task-request.md`, TBD) |
-| Entity Links create UI, bulk-detach | Slice 4 (`docs/frontend/specs/entity-links.md`, TBD) |
-| Attachment upload backend (storage abstraction wiring, virus scan policy) | Separate slice owning ADR-0011 implementation |
+| VOC Cluster CRUD, cluster detail panel | Shipped — ADR-0020 / ADR-0031 + `apps/frontend/src/routes/_authed/voc-clusters/` |
+| Finding create flow from VOC (`POST /vocs/:id/create-finding`) | Shipped in Slice 5 — ADR-0024 |
+| Task Request from VOC (`POST /vocs/:id/request-task`) | Shipped in Slice 6 — ADR-0028 |
+| Entity Links create UI, bulk-detach | Shipped in Slice 4 — ADR-0023 |
+| Attachment upload backend (storage abstraction wiring, virus scan policy) | ADR-0011 implementation |
 | Mobile / tablet layouts | Deferred per HANDOFF §11 |
-| In-product Permission Request creation UI | Slice 3+ (`docs/frontend/specs/permissions.md`, TBD); for now `<PermissionBlockedPanel state="request_access">` deep-links into `/admin/permissions/requests` |
-| Notifications (subscribe / unsubscribe on kebab menu) | ADR-0014 derivative spec (Slice 4+) |
-| VOC read-state, snooze, archive | Slice 3+; menu items render disabled in Slice 3 |
-| Saved list views (`/vocs?view=list`) | Slice 3+ |
-| Draft VOC ("초안 저장") | Slice 5+ |
+| In-product Permission Request creation UI | Not built; `<PermissionBlockedPanel state="request_access">` deep-links into `/admin/permissions/requests` |
+| Notifications (subscribe / unsubscribe on kebab menu) | Not built — ADR-0014 derivative |
+| VOC read-state, snooze, archive | Not built; menu items render disabled |
+| Saved list views (`/vocs?view=list`) | Not built — part of #143 (GlobalRail saved-view filters) |
+| Draft VOC ("초안 저장") | Not built |
 
 ---
 

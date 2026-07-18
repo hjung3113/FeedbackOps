@@ -9,9 +9,12 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:visual": "playwright test -c playwright.config.ts",
+    "test:visual:update": "playwright test -c playwright.config.ts --update-snapshots",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
     "@fops/shared": "workspace:*",
     "@fops/ui": "workspace:*",
     "@hookform/resolvers": "3.9.1",
@@ -28,6 +31,7 @@
     "zustand": "5.0.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tanstack/router-plugin": "1.168.2",
     "@testing-library/jest-dom": "6.6.3",
     "@testing-library/react": "16.1.0",

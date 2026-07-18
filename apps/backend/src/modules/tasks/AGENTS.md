@@ -4,6 +4,8 @@
 
 Task owns Task Request, Task, Milestone, internal task status, and execution read models.
 
+Task Requests are implemented as a separate top-level module directory (`../task-requests/`) but logically owned by Task for boundary/permission purposes.
+
 Managed System Registry belongs to Core. Task may consume Managed System scope and defaults, but must not own Managed System lifecycle. Future Work Initiative / Project grouping may live with Task only after MVP if needed.
 
 ## Invariants

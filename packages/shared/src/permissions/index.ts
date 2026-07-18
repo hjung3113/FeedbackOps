@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export * from './decisions.js';
+
 // State vocabulary per docs/frontend/specs/voc.md §4.2 (PermissionDecisionState).
 // Envelope appears ONLY for blocked states — 'allow' has no envelope; an
 // unblocked entity simply omits the key.

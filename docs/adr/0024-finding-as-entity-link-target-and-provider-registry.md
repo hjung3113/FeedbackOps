@@ -137,6 +137,40 @@ Authz reuses `finding.manage` on the Finding's `primary_managed_system_id`; no n
 introduced. Successful non-no-op transitions write audit event `finding_status_changed` with
 `finding_id`, `from_status`, `to_status`, `primary_managed_system_id`, and optional `reason`.
 
+### Section J — Existing Finding links from a VOC Cluster (#127)
+
+`POST /voc-clusters/:id/link-finding` creates the additive tuple
+`(voc_cluster → finding, evidence_of)`. This is evidence association, not
+creation provenance: `created_finding` remains exclusive to the command that
+actually creates the Finding, because using it for a pre-existing Finding would
+make a false statement in both the entity-link and audit history.
+
+This command-only tuple is categorically excluded from every generic
+entity-link surface: POST, both GET/list modes, and PATCH/detach. Generic
+surfaces respond non-disclosively; PATCH/detach returns the same 404 envelope
+as an absent link rather than revealing the tuple through a distinct response.
+
+Generic detach remains prohibited for this command-only tuple. The sole detach
+command is `POST /voc-clusters/:id/unlink-finding`: it soft-detaches only the
+active `(voc_cluster → finding, evidence_of)` tuple, is idempotent, and emits
+the domain plus generic detach audit events only when a row changed.
+
+**#170 decision (2026-07-18):** the `visibility_state: 'hidden'` stub remains
+as-is. Its link id, relation, status, Managed System id, and creator are a
+deliberate contract: UIs must be able to say that a relationship exists but is
+not visible, rather than silently misrepresenting an entity's shape. The
+target remains withheld; this is not a disclosure defect. The #112 contract
+and existing tests lock the shape. This is independent of #127's
+command-only tuple filter, which categorically excludes a tuple from generic
+surfaces rather than deciding visibility for a returned relationship.
+
+Cross-Managed-System targets remain valid. Every cluster list and detail
+projection instead applies the target Finding's own read scope (Admin or
+`finding.read` on its Primary Managed System) to every linked Finding. An
+unreadable target is omitted completely; no placeholder or count may reveal it.
+The link command hides an unreadable cluster or target as `404`, and requires
+`finding.manage` on both readable endpoint scopes.
+
 ## Consequences
 
 - The provider-registry refactor is the largest single piece of Slice 5 and a prerequisite for cluster (Slice 5 follow-on), Survey (Slice 8), and Task (Slice 6) link targets — all become additive provider registrations.

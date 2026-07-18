@@ -78,7 +78,7 @@ function installFetch(c: FetchCase) {
         total: (c.analyticsAreas ?? []).length,
       });
     }
-    if (url.endsWith('/permission-requests') && (!init?.method || init.method === 'GET')) {
+    if (url.endsWith('/permissions/requests') && (!init?.method || init.method === 'GET')) {
       return jsonResponse({ requests: [], count: c.requestsCount ?? 0 });
     }
     if (url.includes('/managed-systems') && init?.method === 'POST') {

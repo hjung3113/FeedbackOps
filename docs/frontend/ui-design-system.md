@@ -23,7 +23,7 @@ docs/design/12-ui-ux-principles.md
 `DESIGN.md` is the visual reference and token seed:
 
 ```text
-- dark Linear-like aesthetic
+- light Samsung One UI aesthetic
 - color palette
 - typography
 - spacing
@@ -82,7 +82,7 @@ Desktop layout:
 - LeftSidebar width: 240px default
 - LeftSidebar collapsed width: 56px
 - MainRegion: fills remaining width
-- RightDetailPanel width: 420px default
+- RightDetailPanel width: 440px default
 - RightDetailPanel min width: 360px
 - RightDetailPanel max width: 520px
 ```

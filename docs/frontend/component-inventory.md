@@ -25,7 +25,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 | Badge | status, signal, visibility, permission | default, muted, urgent, blocked | text label required |
 | TextInput | default, search, invalid | focus, disabled, invalid, loading | associated label and error |
 | Textarea | default, public-update, internal-note | focus, disabled, invalid | associated label and error |
-| RichContentEditor | voc-description, reporter-reply, public-update, internal-comment | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
+| RichEditor (+ RichContentRenderer for read) | voc-description, reporter-reply, public-update, internal-comment | focus, disabled, invalid, uploading, readonly | label, toolbar, and editor region required |
 | Select | single, multi | focus, disabled, invalid, loading | keyboard navigable |
 | Combobox | user, analytics-area, entity | focus, empty, loading, error | keyboard navigable |
 | Checkbox | default, indeterminate | focus, checked, disabled | label required |
@@ -44,10 +44,12 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 
 ## Composed Components
 
+This list is the original prescriptive inventory and several entries were never built under these names, or at all. The shell shipped as `AppFrame` / `AppRail` / `AppSidebar` (`apps/frontend/src/lib/layout/`), governed by ADR-0020, which supersedes the `AppShell` / `RoleLevelAwareSidebar` naming below. Route shells (`ListShell`, `PageShell`) and `ObjectRow` live in `@fops/ui`. Treat the code and ADR-0020 as authoritative when they disagree with a name here.
+
 ```text
-AppShell
-RoleLevelAwareSidebar
-ManagedSystemScopeSwitcher
+AppShell (built as AppFrame)
+RoleLevelAwareSidebar (built as AppRail + AppSidebar)
+ManagedSystemScopeSwitcher (not built — #143)
 ScopeFilterBar
 ObjectList
 InboxList
