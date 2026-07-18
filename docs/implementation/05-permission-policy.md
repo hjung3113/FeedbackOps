@@ -42,6 +42,12 @@ on the source Primary Managed System, with Admin bypass. `POST
 /voc-clusters/:id/request-task` mirrors cluster create-finding authority:
 Admin or Developer with `finding.manage` on the cluster Primary Managed System.
 
+The Findings module owns the canonical implementation of these predicates:
+`actorFindingReadScope` resolves `finding.read` list/read visibility and
+`checkFindingManage` resolves `finding.manage` decisions. Entity Links, VOC
+Clusters, Task Requests, and Tasks must consume those helpers; they must not
+reconstruct Finding scope or capability checks locally.
+
 ## Permission Check Order
 
 ```text

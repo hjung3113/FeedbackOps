@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   type ConvertTaskRequestRequest,
   type LinkExistingTaskRequest,
@@ -7,9 +8,8 @@ import {
   type TaskDto,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
-import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import { fromDrizzle, type PgBoss } from 'pg-boss';
+import { type PgBoss, fromDrizzle } from 'pg-boss';
 
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
@@ -18,9 +18,10 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import {
   type EntityLinkRow,
   insertActiveEntityLink,
-  selectEligibleVocLinksForReleasedTask,
   selectActiveLinksForEndpoint,
+  selectEligibleVocLinksForReleasedTask,
 } from '../entity-links/repo.js';
+import { checkFindingManage } from '../findings/authorization.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
 import {
@@ -70,23 +71,6 @@ function taskToDto(row: TaskRow): TaskDto {
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
-}
-
-async function canManageFinding(
-  deps: Pick<TasksServiceDeps, 'checkService'>,
-  actor: TasksActor,
-  managedSystemId: string,
-  options: Parameters<TasksServiceDeps['checkService']['checkCapability']>[3],
-): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.role_level !== 'developer') return false;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'finding.manage',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
-  );
-  return decision.allow;
 }
 
 function assertApproved(taskRequest: TaskRequestRow): void {
@@ -220,7 +204,9 @@ export function createTasksService(deps: TasksServiceDeps) {
     });
     if (!row) throw new HttpError('not_found.record', 'task not found');
 
-    const canManage = await canManageFinding(deps, args.actor, row.primary_managed_system_id, {});
+    const canManage = (
+      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id)
+    ).allow;
     if (!canManage) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
@@ -254,12 +240,14 @@ export function createTasksService(deps: TasksServiceDeps) {
           });
           if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
 
-          const canManage = await canManageFinding(
-            deps,
-            args.actor,
-            taskRequest.primary_managed_system_id,
-            { tx },
-          );
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              taskRequest.primary_managed_system_id,
+              { tx },
+            )
+          ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
@@ -331,12 +319,14 @@ export function createTasksService(deps: TasksServiceDeps) {
           });
           if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
 
-          const canManage = await canManageFinding(
-            deps,
-            args.actor,
-            taskRequest.primary_managed_system_id,
-            { tx },
-          );
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              taskRequest.primary_managed_system_id,
+              { tx },
+            )
+          ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
@@ -413,12 +403,14 @@ export function createTasksService(deps: TasksServiceDeps) {
           });
           if (!task) throw new HttpError('not_found.record', 'task not found');
 
-          const canManage = await canManageFinding(
-            deps,
-            args.actor,
-            task.primary_managed_system_id,
-            { tx },
-          );
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              task.primary_managed_system_id,
+              { tx },
+            )
+          ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
@@ -506,7 +498,9 @@ export function createTasksService(deps: TasksServiceDeps) {
     });
     const items: TaskDto[] = [];
     for (const row of rows) {
-      const canManage = await canManageFinding(deps, args.actor, row.primary_managed_system_id, {});
+      const canManage = (
+        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id)
+      ).allow;
       if (!canManage) continue;
       items.push(taskToDto(row));
     }

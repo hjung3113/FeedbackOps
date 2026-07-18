@@ -2,11 +2,11 @@ import {
   type AddVocClusterMemberRequest,
   type ApplyVocClusterPublicUpdateRequest,
   type CreateFindingFromVocClusterRequest,
-  type LinkExistingFindingToVocClusterRequest,
-  type UnlinkExistingFindingFromVocClusterRequest,
   type CreateVocClusterRequest,
+  type LinkExistingFindingToVocClusterRequest,
   type ListSameManagedSystemCandidatePeersResponse,
   type ListVocClustersResponse,
+  type UnlinkExistingFindingFromVocClusterRequest,
   type UpdateVocClusterRequest,
   type VocClusterDto,
   type VocClusterMemberDto,
@@ -25,10 +25,14 @@ import {
   insertActiveEntityLink,
   selectActiveEntityLink,
 } from '../entity-links/repo.js';
+import {
+  actorFindingReadScope,
+  checkFindingManage,
+  isFindingInReadScope,
+} from '../findings/authorization.js';
 import { insertFinding } from '../findings/repo.js';
 import { lockFindingById } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { actorScopeForCapability } from '../permissions/scope-service.js';
 import type { ConversationService } from '../voc/conversation-service.js';
 import { type Scope, actorReadScope } from '../voc/repo-read.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
@@ -120,17 +124,11 @@ function clusterToDto(
 }
 
 async function canReadCluster(
-  deps: Pick<VocClustersServiceDeps, 'checkService'>,
+  deps: Pick<VocClustersServiceDeps, 'db'>,
   actor: VocClustersActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.role_level !== 'developer') return false;
-  const decision = await deps.checkService.checkCapability(actor, 'finding.read', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: managedSystemId,
-  });
-  return decision.allow;
+  return isFindingInReadScope(await actorFindingReadScope(deps.db, actor), managedSystemId);
 }
 
 async function canManageCluster(
@@ -139,14 +137,7 @@ async function canManageCluster(
   managedSystemId: string,
   options?: Parameters<VocClustersServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.role_level !== 'developer') return false;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'finding.manage',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
-  );
+  const decision = await checkFindingManage(deps.checkService, actor, managedSystemId, options);
   return decision.allow;
 }
 
@@ -184,17 +175,6 @@ function authorizedMembers(
   return members.filter((member) =>
     isAuthorizedMember(readScope, actorId, member, clusterManagedSystemId),
   );
-}
-
-function isInScope(scope: Scope, managedSystemId: string): boolean {
-  return scope.kind === 'all' || scope.managedSystemIds.includes(managedSystemId);
-}
-
-async function actorFindingReadScope(
-  db: Db | Tx,
-  actor: VocClustersActor,
-): Promise<Scope> {
-  return actorScopeForCapability(db, actor, 'finding.read');
 }
 
 async function authorizedMembersByCluster(
@@ -324,7 +304,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     });
     const findingReadScope = await actorFindingReadScope(deps.db, args.actor);
     const readableRows = rows.filter((row) =>
-      isInScope(findingReadScope, row.primary_managed_system_id),
+      isFindingInReadScope(findingReadScope, row.primary_managed_system_id),
     );
     const readScope = await actorReadScope(deps.db, args.actor);
     const membersByCluster = await authorizedMembersByCluster(
@@ -928,7 +908,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
           if (!cluster) throw new HttpError('not_found.record', 'record not found');
 
           const findingReadScope = await actorFindingReadScope(tx, args.actor);
-          if (!isInScope(findingReadScope, cluster.primary_managed_system_id)) {
+          if (!isFindingInReadScope(findingReadScope, cluster.primary_managed_system_id)) {
             throw new HttpError('not_found.record', 'record not found');
           }
 
@@ -936,29 +916,20 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             workspaceId: args.actor.workspace_id,
             findingId: args.input.finding_id,
           });
-          if (!finding || !isInScope(findingReadScope, finding.primary_managed_system_id)) {
+          if (
+            !finding ||
+            !isFindingInReadScope(findingReadScope, finding.primary_managed_system_id)
+          ) {
             throw new HttpError('not_found.record', 'record not found');
           }
 
           const [clusterManageDecision, findingManageDecision] = await Promise.all([
-            deps.checkService.checkCapability(
-              args.actor,
-              'finding.manage',
-              {
-                workspace_id: args.actor.workspace_id,
-                managed_system_id: cluster.primary_managed_system_id,
-              },
-              { tx },
-            ),
-            deps.checkService.checkCapability(
-              args.actor,
-              'finding.manage',
-              {
-                workspace_id: args.actor.workspace_id,
-                managed_system_id: finding.primary_managed_system_id,
-              },
-              { tx },
-            ),
+            checkFindingManage(deps.checkService, args.actor, cluster.primary_managed_system_id, {
+              tx,
+            }),
+            checkFindingManage(deps.checkService, args.actor, finding.primary_managed_system_id, {
+              tx,
+            }),
           ]);
           if (!clusterManageDecision.allow || !findingManageDecision.allow) {
             const missingScope = [clusterManageDecision, findingManageDecision].some(
@@ -1067,7 +1038,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
           if (!cluster) throw new HttpError('not_found.record', 'record not found');
 
           const findingReadScope = await actorFindingReadScope(tx, args.actor);
-          if (!isInScope(findingReadScope, cluster.primary_managed_system_id)) {
+          if (!isFindingInReadScope(findingReadScope, cluster.primary_managed_system_id)) {
             throw new HttpError('not_found.record', 'record not found');
           }
 
@@ -1075,7 +1046,10 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             workspaceId: args.actor.workspace_id,
             findingId: args.input.finding_id,
           });
-          if (!finding || !isInScope(findingReadScope, finding.primary_managed_system_id)) {
+          if (
+            !finding ||
+            !isFindingInReadScope(findingReadScope, finding.primary_managed_system_id)
+          ) {
             throw new HttpError('not_found.record', 'record not found');
           }
 
@@ -1084,24 +1058,12 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
           // non-disclosing link-command authorization order.
           if (args.actor.role_level !== 'admin') {
             const [clusterManageDecision, findingManageDecision] = await Promise.all([
-              deps.checkService.checkCapability(
-                args.actor,
-                'finding.manage',
-                {
-                  workspace_id: args.actor.workspace_id,
-                  managed_system_id: cluster.primary_managed_system_id,
-                },
-                { tx },
-              ),
-              deps.checkService.checkCapability(
-                args.actor,
-                'finding.manage',
-                {
-                  workspace_id: args.actor.workspace_id,
-                  managed_system_id: finding.primary_managed_system_id,
-                },
-                { tx },
-              ),
+              checkFindingManage(deps.checkService, args.actor, cluster.primary_managed_system_id, {
+                tx,
+              }),
+              checkFindingManage(deps.checkService, args.actor, finding.primary_managed_system_id, {
+                tx,
+              }),
             ]);
             if (!clusterManageDecision.allow || !findingManageDecision.allow) {
               const missingScope = [clusterManageDecision, findingManageDecision].some(

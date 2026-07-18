@@ -22,6 +22,11 @@ import type { CheckService } from '../permissions/check-service.js';
 import { lockTaskById } from '../tasks/repo.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
 import {
+  actorFindingReadScope,
+  checkFindingManage,
+  isFindingInReadScope,
+} from './authorization.js';
+import {
   type FindingReadRow,
   findCreatedFindingSourceLink,
   findFindingById,
@@ -169,28 +174,17 @@ async function canManageFinding(
   managedSystemId: string,
   options: Parameters<FindingsServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  const decision = await deps.checkService.checkCapability(
-    actor,
-    'finding.manage',
-    { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
-    options,
-  );
+  const decision = await checkFindingManage(deps.checkService, actor, managedSystemId, options);
   return decision.allow;
 }
 
 async function canReadFinding(
-  deps: Pick<FindingsServiceDeps, 'checkService'>,
+  deps: Pick<FindingsServiceDeps, 'db'>,
   actor: FindingsActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.role_level !== 'developer') return false;
-  const decision = await deps.checkService.checkCapability(actor, 'finding.read', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: managedSystemId,
-  });
-  return decision.allow;
+  const scope = await actorFindingReadScope(deps.db, actor);
+  return isFindingInReadScope(scope, managedSystemId);
 }
 
 export function createFindingsService(deps: FindingsServiceDeps) {
