@@ -38,6 +38,15 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await page.getByTestId('permission-requests-list').getByText('workspace.read', { exact: true }).click();
     await expect(detail).toContainText('workspace.read');
     await expect(detail.getByLabel('사유 · 선택')).toBeVisible();
+    await detail.getByRole('button', { name: '승인', exact: true }).click();
+    await detail.getByTestId('permission-decision-submit').click();
+    await expect.poll(() => mock.postedRequests).toEqual([
+      {
+        pathname: `/permissions/requests/${PERMISSION_IDS.pendingRead}/approve`,
+        body: { reason: '' },
+        idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      },
+    ]);
   });
 
   test('posts a non-sensitive approval with its idempotency key and refetches the list', async ({ page }) => {
@@ -69,8 +78,8 @@ test.describe('/admin/permissions/requests visual harness', () => {
     const list = page.getByTestId('permission-requests-list');
     await expect(list.getByText('workspace.read', { exact: true })).toBeVisible();
     await expect(list.getByText('workspace.admin', { exact: true })).toHaveCount(0);
-    await expect(list.getByText('workspace.write', { exact: true })).toHaveCount(0);
-    await expect(list.getByText('workspace.delete', { exact: true })).toHaveCount(0);
+    await expect(list.getByText('voc.triage', { exact: true })).toHaveCount(0);
+    await expect(list.getByText('finding.manage', { exact: true })).toHaveCount(0);
     await expect(page.getByTestId('permission-request-detail-panel')).toContainText('승인됨');
     await expect(page.getByTestId('permission-decision-section')).toHaveCount(0);
   });
