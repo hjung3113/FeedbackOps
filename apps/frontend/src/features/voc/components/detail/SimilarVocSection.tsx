@@ -44,7 +44,7 @@ export function SimilarVocSection({
           <button
             key={item.id}
             type="button"
-            className={`flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-selected ${
+            className={`flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-row-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-selected ${
               index > 0 ? 'border-t border-border-subtle' : ''
             }`}
             onClick={() => onSelect(item.id)}

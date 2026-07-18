@@ -162,7 +162,7 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
     <div className="flex items-stretch gap-4 border-b border-border-subtle bg-surface-canvas px-5 py-2.5">
       <StatBlock label="Total tasks" value={items.length} />
       <StatDivider />
-      <StatBlock label="Unassigned" value={items.filter((task) => task.assignee_actor_id === null).length} valueClassName="text-accent-warning" />
+      <StatBlock label="Unassigned" value={items.filter((task) => task.assignee_actor_id === null).length} valueClassName="text-accent-warn" />
       <StatDivider />
       <StatBlock label="In progress" value={items.filter((task) => task.status === 'doing').length} valueClassName="text-accent-success" />
     </div>

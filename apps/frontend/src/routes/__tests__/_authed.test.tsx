@@ -90,7 +90,7 @@ describe('_authed beforeLoad', () => {
 });
 
 describe('_authed sidebar entries', () => {
-  it('exposes shipped VOC cluster and Tasks routes without linking missing finding list routes', () => {
+  it('exposes shipped VOC cluster, Findings, and Tasks routes', () => {
     const entries = SIDEBAR_ENTRIES.map(({ id, label, href, section }) => ({
       id,
       label,
@@ -111,6 +111,10 @@ describe('_authed sidebar entries', () => {
         { id: 'my-tasks', label: 'My Tasks', href: '/tasks?view=my', section: 'TASKS' },
       ]),
     );
-    expect(entries.some((entry) => entry.href === '/findings')).toBe(false);
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { id: 'findings', label: 'Findings', href: '/findings', section: 'VOC' },
+      ]),
+    );
   });
 });
