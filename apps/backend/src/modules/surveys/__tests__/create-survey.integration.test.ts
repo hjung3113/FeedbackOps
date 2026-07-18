@@ -68,6 +68,7 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
 
   afterAll(async () => {
     await cleanupFixtures();
+    await migrateHandle.pool.query('delete from core.sessions where actor_id = $1', [basicActorId]);
     await migrateHandle.pool.query(
       'delete from core.actors where workspace_id = $1 and external_id = $2',
       [WORKSPACE_ID, BASIC_EXTERNAL_ID],
@@ -101,6 +102,10 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
+      `delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'`,
+      [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
       `delete from permission.permission_grants where workspace_id = $1 and managed_system_id in (
         ${managedSystems}
       )`,
@@ -113,6 +118,12 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
     await migrateHandle.pool.query(
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from core.sessions where actor_id in (
+        select id from core.actors where workspace_id = $1 and external_id like $2
+      )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}-operator-%`],
     );
     await migrateHandle.pool.query(
       'delete from core.actors where workspace_id = $1 and external_id like $2',
