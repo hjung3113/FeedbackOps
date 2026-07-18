@@ -53,6 +53,17 @@ export async function updateQuestion(
   );
   return x.rows[0] ? mapQuestion(x.rows[0]) : null;
 }
+export async function updateQuestionSortOrders(
+  tx: Tx,
+  workspaceId: string,
+  questions: Array<{ id: string; sortOrder: number }>,
+) {
+  for (const question of questions) {
+    await tx.execute(
+      sql`update survey.survey_questions set sort_order=${question.sortOrder},updated_at=now() where workspace_id=${workspaceId} and id=${question.id}`,
+    );
+  }
+}
 export async function deleteQuestion(tx: Tx, workspaceId: string, id: string) {
   await tx.execute(
     sql`delete from survey.survey_questions where workspace_id=${workspaceId} and id=${id}`,

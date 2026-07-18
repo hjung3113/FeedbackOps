@@ -27,6 +27,7 @@ import {
   lockSurvey,
   setSurveyStatus,
   updateQuestion,
+  updateQuestionSortOrders,
 } from './repo.js';
 
 export interface SurveysActor {
@@ -217,6 +218,18 @@ function normalized(input: QuestionInput, existing?: QuestionRow) {
   };
 }
 
+function atPosition<T>(rows: T[], position: number, value: T): T[] {
+  if (position < 0 || position > rows.length)
+    throw new HttpError('validation.failed', 'question sort_order is out of range', {
+      fields: [{ path: ['sort_order'], code: 'out_of_range' }],
+    });
+  return [...rows.slice(0, position), value, ...rows.slice(position)];
+}
+
+function compactQuestionOrder(rows: QuestionRow[]): QuestionRow[] {
+  return rows.map((question, sort_order) => ({ ...question, sort_order }));
+}
+
 export function createSurveysService(deps: SurveysServiceDeps) {
   async function createSurvey(a: {
     actor: SurveysActor;
@@ -351,7 +364,19 @@ export function createSurveysService(deps: SurveysServiceDeps) {
               throw new HttpError('validation.failed', 'question has branches', {
                 fields: [{ path: ['question_id'], code: 'referenced' }],
               });
+            const candidate = compactQuestionOrder(rows.filter((q) => q.id !== old.id));
+            validateQuestions(candidate);
             await deleteQuestion(tx, a.actor.workspace_id, old.id);
+            await updateQuestionSortOrders(
+              tx,
+              a.actor.workspace_id,
+              candidate
+                .filter(
+                  (question) =>
+                    question.sort_order !== rows.find((q) => q.id === question.id)?.sort_order,
+                )
+                .map((question) => ({ id: question.id, sortOrder: question.sort_order })),
+            );
             await deps.auditService.record(tx, {
               workspace_id: a.actor.workspace_id,
               actor_id: a.actor.actor_id,
@@ -392,16 +417,31 @@ export function createSurveysService(deps: SurveysServiceDeps) {
             created_at: new Date(),
             updated_at: new Date(),
           };
-          const candidate =
-            mode === 'create'
-              ? [...rows, drafted]
-              : rows.map((q) => (q.id === old?.id ? { ...q, ...drafted, id: q.id } : q));
+          const position =
+            a.input.sort_order ?? (mode === 'create' ? rows.length : (old?.sort_order ?? 0));
+          const withoutTarget = mode === 'create' ? rows : rows.filter((q) => q.id !== old?.id);
+          const target =
+            mode === 'create' ? drafted : { ...old, ...drafted, id: old?.id ?? drafted.id };
+          const candidate = compactQuestionOrder(atPosition(withoutTarget, position, target));
           validateQuestions(candidate);
+          const orderingChanged = candidate.some(
+            (question) =>
+              question.sort_order !== rows.find((q) => q.id === question.id)?.sort_order,
+          );
+          const shifted = candidate
+            .filter(
+              (question) =>
+                question.id !== 'new' &&
+                question.sort_order !== rows.find((q) => q.id === question.id)?.sort_order,
+            )
+            .map((question) => ({ id: question.id, sortOrder: question.sort_order }));
           if (mode === 'create') {
+            await updateQuestionSortOrders(tx, a.actor.workspace_id, shifted);
             const q = await insertQuestion(tx, {
               workspaceId: a.actor.workspace_id,
               surveyId: s.id,
               ...n,
+              sortOrder: candidate.find((question) => question.id === 'new')?.sort_order ?? 0,
             });
             await deps.auditService.record(tx, {
               workspace_id: a.actor.workspace_id,
@@ -424,8 +464,6 @@ export function createSurveysService(deps: SurveysServiceDeps) {
             return { status: 201, body: questionDto(q) };
           }
           if (!old) throw new HttpError('not_found.record', 'question not found');
-          const q = await updateQuestion(tx, a.actor.workspace_id, old.id, n);
-          if (!q) throw new Error('question lost');
           const map: Record<(typeof fields)[number], keyof QuestionRow> = {
             is_required: 'is_required',
             rating_min: 'rating_min',
@@ -439,9 +477,18 @@ export function createSurveysService(deps: SurveysServiceDeps) {
             options: 'options',
             kind: 'kind',
           };
+          const updated = candidate.find((question) => question.id === old.id);
+          if (!updated) throw new Error('question lost from candidate');
           const changed = fields.filter(
-            (k) => JSON.stringify(old[map[k]]) !== JSON.stringify(q[map[k]]),
+            (k) => JSON.stringify(old[map[k]]) !== JSON.stringify(updated[map[k]]),
           );
+          if (!changed.length && !orderingChanged) return { status: 200, body: questionDto(old) };
+          await updateQuestionSortOrders(tx, a.actor.workspace_id, shifted);
+          const q = await updateQuestion(tx, a.actor.workspace_id, old.id, {
+            ...n,
+            sortOrder: updated.sort_order,
+          });
+          if (!q) throw new Error('question lost');
           await deps.auditService.record(tx, {
             workspace_id: a.actor.workspace_id,
             actor_id: a.actor.actor_id,
@@ -452,8 +499,8 @@ export function createSurveysService(deps: SurveysServiceDeps) {
             detail: {
               survey_id: s.id,
               question_id: q.id,
-              changed_fields: changed.length ? changed : ['sort_order'],
-              ordering_changed: old.sort_order !== q.sort_order,
+              changed_fields: changed,
+              ordering_changed: orderingChanged,
             },
           });
           return { status: 200, body: questionDto(q) };
@@ -520,7 +567,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     return dto(s, await listQuestions(deps.db, actor.workspace_id, id));
   }
   async function listSurvey(actor: SurveysActor, managedSystemId?: string) {
-    const scope = await actorSurveyReadScope(deps.db, actor);
+    const scope = await actorSurveyReadScope(deps.db, deps.checkService, actor);
     return (await listSurveys(deps.db, actor.workspace_id, managedSystemId))
       .filter((s) => isSurveyInReadScope(scope, s.primary_managed_system_id))
       .map((s) => dto(s));

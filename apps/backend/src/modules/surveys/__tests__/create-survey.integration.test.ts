@@ -14,7 +14,11 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
-import { checkSurveyPersonalResponseRead } from '../authorization.js';
+import {
+  checkSurveyManage,
+  checkSurveyPersonalResponseRead,
+  checkSurveyRead,
+} from '../authorization.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -245,7 +249,7 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
     expect(response.json<{ code: string }>().code).toBe('validation.failed');
   });
 
-  it('replays an idempotent create without a second row, audit, or display id', async () => {
+  it('replays an idempotent create without a second row, audit, display id, or counter increment', async () => {
     const managedSystemId = await seedManagedSystem();
     const idempotencyKey = randomUUID();
     const body = surveyBody(managedSystemId);
@@ -264,6 +268,16 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
       [createdId],
     );
     expect(rows.rows[0]).toEqual({ count: 1, audits: 1 });
+
+    const next = await postSurvey(
+      adminCookie,
+      surveyBody(managedSystemId, { title: 'Next survey' }),
+    );
+    expect(next.statusCode).toBe(201);
+    const parseDisplayId = (displayId: string) => Number(displayId.replace('SRV-', ''));
+    expect(parseDisplayId(next.json<{ display_id: string }>().display_id)).toBe(
+      parseDisplayId(first.json<{ display_id: string }>().display_id) + 1,
+    );
   });
 
   it('assigns strictly increasing display ids across distinct creates', async () => {
@@ -334,6 +348,35 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
 });
 
 describe('checkSurveyPersonalResponseRead (#184)', () => {
+  it('keeps explicit deny dominant over the admin survey role fallback', async () => {
+    const checkService = {
+      checkCapability: async () => ({
+        allow: false as const,
+        reason: 'explicit_deny' as const,
+        requestable: null,
+      }),
+    };
+    const actor = {
+      actor_id: randomUUID(),
+      workspace_id: randomUUID(),
+      role_level: 'admin',
+    } as const;
+    const managedSystemId = randomUUID();
+
+    await expect(
+      checkSurveyRead(checkService as never, actor, managedSystemId),
+    ).resolves.toMatchObject({
+      allow: false,
+      reason: 'explicit_deny',
+    });
+    await expect(
+      checkSurveyManage(checkService as never, actor, managedSystemId),
+    ).resolves.toMatchObject({
+      allow: false,
+      reason: 'explicit_deny',
+    });
+  });
+
   it('denies an admin without the explicit personal-response grant', async () => {
     const checkService = {
       checkCapability: async () => ({

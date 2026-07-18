@@ -100,6 +100,12 @@ export async function listSurveys(db: Db | Tx, workspaceId: string, managedSyste
   );
   return x.rows.map(mapSurvey);
 }
+export async function listSurveyManagedSystemIds(db: Db | Tx, workspaceId: string) {
+  const x = await db.execute<{ primary_managed_system_id: string }>(
+    sql`select distinct primary_managed_system_id from survey.surveys where workspace_id=${workspaceId}`,
+  );
+  return x.rows.map((row) => row.primary_managed_system_id);
+}
 export async function listQuestions(db: Db | Tx, workspaceId: string, surveyId: string) {
   const x = await db.execute<Record<string, unknown>>(
     sql`select id,workspace_id,survey_id,kind,prompt,is_required,options,rating_min,rating_max,rating_low_label,rating_high_label,sort_order,branch_depth,branch_parent_question_id,branch_parent_depth,branch_trigger_option_key,created_at,updated_at from survey.survey_questions where workspace_id=${workspaceId} and survey_id=${surveyId} order by sort_order,id`,

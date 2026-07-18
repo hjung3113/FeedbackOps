@@ -289,6 +289,7 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
   it('audits only allowed changed fields and ordering_changed on update', async () => {
     const surveyId = await createDraftSurvey();
     const created = await postQuestion(surveyId, choiceQuestion({ sort_order: 0 }));
+    await postQuestion(surveyId, choiceQuestion({ prompt: 'Second question' }));
     const questionId = created.json<{ id: string }>().id;
     const updated = await patchQuestion(
       surveyId,

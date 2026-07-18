@@ -6,14 +6,27 @@ import {
   type ScopeActorContext,
   actorScopeForCapability,
 } from '../permissions/scope-service.js';
+import { listSurveyManagedSystemIds } from './repo-read.js';
 
 export type SurveyAuthorizationActor = ScopeActorContext;
 
 export async function actorSurveyReadScope(
   db: Db | Tx,
+  checkService: CheckService,
   actor: SurveyAuthorizationActor,
 ): Promise<Scope> {
-  if (actor.role_level === 'admin') return { kind: 'all' };
+  if (actor.role_level === 'admin') {
+    const managedSystemIds = await listSurveyManagedSystemIds(db, actor.workspace_id);
+    const decisions = await Promise.all(
+      managedSystemIds.map((managedSystemId) =>
+        checkSurveyRead(checkService, actor, managedSystemId),
+      ),
+    );
+    return {
+      kind: 'scoped',
+      managedSystemIds: managedSystemIds.filter((_, index) => decisions[index]?.allow),
+    };
+  }
   return actorScopeForCapability(db, actor, 'survey.read');
 }
 
@@ -29,8 +42,7 @@ export async function checkSurveyRead(
   managedSystemId: string,
   options?: Parameters<CheckService['checkCapability']>[3],
 ): Promise<Decision> {
-  if (actor.role_level === 'admin') return { allow: true, via: 'role' };
-  return checkService.checkCapability(
+  const decision = await checkService.checkCapability(
     actor,
     'survey.read',
     {
@@ -39,6 +51,9 @@ export async function checkSurveyRead(
     },
     options,
   );
+  if (!decision.allow && decision.reason === 'explicit_deny') return decision;
+  if (actor.role_level === 'admin') return { allow: true, via: 'role' };
+  return decision;
 }
 
 export async function checkSurveyManage(
@@ -47,8 +62,7 @@ export async function checkSurveyManage(
   managedSystemId: string,
   options?: Parameters<CheckService['checkCapability']>[3],
 ): Promise<Decision> {
-  if (actor.role_level === 'admin') return { allow: true, via: 'role' };
-  return checkService.checkCapability(
+  const decision = await checkService.checkCapability(
     actor,
     'survey.manage',
     {
@@ -57,6 +71,9 @@ export async function checkSurveyManage(
     },
     options,
   );
+  if (!decision.allow && decision.reason === 'explicit_deny') return decision;
+  if (actor.role_level === 'admin') return { allow: true, via: 'role' };
+  return decision;
 }
 
 /** Deliberately no admin shortcut: personal data needs an explicit grant. */
