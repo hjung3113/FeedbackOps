@@ -364,6 +364,13 @@ export const entityLinkDetachedDetailSchema = z.union([
   }),
   z.object({
     link_id: z.string().uuid(),
+    source: vocClusterRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('evidence_of'),
+    reason: z.string().min(1),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
     source: findingRefDetailSchema,
     target: taskRequestRefDetailSchema,
     relation_type: z.literal('requested_task'),

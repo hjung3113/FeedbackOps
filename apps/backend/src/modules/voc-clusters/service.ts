@@ -1079,52 +1079,57 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             throw new HttpError('not_found.record', 'record not found');
           }
 
-          const [clusterManageDecision, findingManageDecision] = await Promise.all([
-            deps.checkService.checkCapability(
-              args.actor,
-              'finding.manage',
-              {
-                workspace_id: args.actor.workspace_id,
-                managed_system_id: cluster.primary_managed_system_id,
-              },
-              { tx },
-            ),
-            deps.checkService.checkCapability(
-              args.actor,
-              'finding.manage',
-              {
-                workspace_id: args.actor.workspace_id,
-                managed_system_id: finding.primary_managed_system_id,
-              },
-              { tx },
-            ),
-          ]);
-          if (!clusterManageDecision.allow || !findingManageDecision.allow) {
-            const missingScope = [clusterManageDecision, findingManageDecision].some(
-              (decision) => !decision.allow && decision.reason === 'no_grant',
-            );
-            if (args.actor.role_level === 'developer' && missingScope) {
-              throw new HttpError(
-                'permission.scope_required',
-                'finding.manage capability required; developer needs MS-scoped grant',
+          // Admin is workspace-wide by role. Developer grants are checked only
+          // after both endpoints have passed finding.read, preserving the
+          // non-disclosing link-command authorization order.
+          if (args.actor.role_level !== 'admin') {
+            const [clusterManageDecision, findingManageDecision] = await Promise.all([
+              deps.checkService.checkCapability(
+                args.actor,
+                'finding.manage',
                 {
-                  requiredScope: [
-                    ...new Set(
-                      [
-                        !clusterManageDecision.allow
-                          ? cluster.primary_managed_system_id
-                          : undefined,
-                        !findingManageDecision.allow
-                          ? finding.primary_managed_system_id
-                          : undefined,
-                      ].filter((id): id is string => id !== undefined),
-                    ),
-                  ],
-                  requestable_permission: { permission: 'finding.manage' },
+                  workspace_id: args.actor.workspace_id,
+                  managed_system_id: cluster.primary_managed_system_id,
                 },
+                { tx },
+              ),
+              deps.checkService.checkCapability(
+                args.actor,
+                'finding.manage',
+                {
+                  workspace_id: args.actor.workspace_id,
+                  managed_system_id: finding.primary_managed_system_id,
+                },
+                { tx },
+              ),
+            ]);
+            if (!clusterManageDecision.allow || !findingManageDecision.allow) {
+              const missingScope = [clusterManageDecision, findingManageDecision].some(
+                (decision) => !decision.allow && decision.reason === 'no_grant',
               );
+              if (args.actor.role_level === 'developer' && missingScope) {
+                throw new HttpError(
+                  'permission.scope_required',
+                  'finding.manage capability required; developer needs MS-scoped grant',
+                  {
+                    requiredScope: [
+                      ...new Set(
+                        [
+                          !clusterManageDecision.allow
+                            ? cluster.primary_managed_system_id
+                            : undefined,
+                          !findingManageDecision.allow
+                            ? finding.primary_managed_system_id
+                            : undefined,
+                        ].filter((id): id is string => id !== undefined),
+                      ),
+                    ],
+                    requestable_permission: { permission: 'finding.manage' },
+                  },
+                );
+              }
+              throw new HttpError('permission.denied', 'finding.manage capability required');
             }
-            throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
           const activeLink = await selectActiveEntityLink(tx, {

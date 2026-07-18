@@ -101,7 +101,7 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
   async function auditCount(linkId: string) {
     const result = await ops.pool.query<{ count: string }>(
       `select count(*)::text as count from core.audit_log
-       where (subject_id=$1 and event_type='entity_link.detached')
+       where (subject_id=$1::uuid and event_type='entity_link.detached')
           or (detail->>'link_id'=$1 and event_type='finding_unlinked_from_voc_cluster')`,
       [linkId],
     );
