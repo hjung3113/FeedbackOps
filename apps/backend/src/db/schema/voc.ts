@@ -12,7 +12,7 @@
 //
 // Tasks 4–7 will append additional table exports to this file.
 
-import { sql } from 'drizzle-orm';
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -25,11 +25,17 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
-} from 'drizzle-orm/pg-core';
+} from "drizzle-orm/pg-core";
 
-import { actors, analyticsAreas, managedSystems, teams, workspaces } from './core.js';
+import {
+  actors,
+  analyticsAreas,
+  managedSystems,
+  teams,
+  workspaces,
+} from "./core.js";
 
-export const vocSchema = pgSchema('voc');
+export const vocSchema = pgSchema("voc");
 
 // ─────────────────────────────────────────────────────────────────────────
 // voc.vocs — canonical VOC record.
@@ -37,73 +43,88 @@ export const vocSchema = pgSchema('voc');
 // severity / analytics_area_id / owner columns nullable until triage.
 // ─────────────────────────────────────────────────────────────────────────
 export const vocs = vocSchema.table(
-  'vocs',
+  "vocs",
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    workspaceId: uuid('workspace_id')
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id),
-    displayId: text('display_id').notNull(),
-    primaryManagedSystemId: uuid('primary_managed_system_id')
+    displayId: text("display_id").notNull(),
+    primaryManagedSystemId: uuid("primary_managed_system_id")
       .notNull()
       .references(() => managedSystems.id),
-    analyticsAreaId: uuid('analytics_area_id').references(() => analyticsAreas.id),
-    reporterId: uuid('reporter_id')
+    analyticsAreaId: uuid("analytics_area_id").references(
+      () => analyticsAreas.id,
+    ),
+    reporterId: uuid("reporter_id")
       .notNull()
       .references(() => actors.id),
-    title: text('title').notNull(),
-    descriptionRichContent: jsonb('description_rich_content').notNull(),
-    severity: text('severity'),
-    reporterFacingStatus: text('reporter_facing_status').notNull().default('received'),
-    triageState: text('triage_state').notNull().default('untriaged'),
-    triageStateReviewPostponedAt: timestamp('triage_state_review_postponed_at', {
-      withTimezone: true,
-    }),
-    ownerUserId: uuid('owner_user_id').references(() => actors.id),
-    ownerTeamId: uuid('owner_team_id').references(() => teams.id),
-    sourceContext: text('source_context').notNull(),
+    title: text("title").notNull(),
+    descriptionRichContent: jsonb("description_rich_content").notNull(),
+    severity: text("severity"),
+    reporterFacingStatus: text("reporter_facing_status")
+      .notNull()
+      .default("received"),
+    triageState: text("triage_state").notNull().default("untriaged"),
+    triageStateReviewPostponedAt: timestamp(
+      "triage_state_review_postponed_at",
+      {
+        withTimezone: true,
+      },
+    ),
+    ownerUserId: uuid("owner_user_id").references(() => actors.id),
+    ownerTeamId: uuid("owner_team_id").references(() => teams.id),
+    sourceContext: text("source_context").notNull(),
     // cluster_id reserved per spec; no FK (cluster service out of scope).
-    clusterId: uuid('cluster_id'),
-    archivedAt: timestamp('archived_at', { withTimezone: true }),
-    archivedByActorId: uuid('archived_by_actor_id').references(() => actors.id),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    clusterId: uuid("cluster_id"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByActorId: uuid("archived_by_actor_id").references(() => actors.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
-    workspaceDisplayUq: uniqueIndex('vocs_workspace_display_id_uq').on(
+    workspaceDisplayUq: uniqueIndex("vocs_workspace_display_id_uq").on(
       t.workspaceId,
       t.displayId,
     ),
-    inboxIdx: index('vocs_inbox_idx').on(
+    inboxIdx: index("vocs_inbox_idx").on(
       t.workspaceId,
       t.primaryManagedSystemId,
       t.createdAt.desc(),
     ),
-    myVocsIdx: index('vocs_my_vocs_idx').on(t.workspaceId, t.reporterId, t.createdAt.desc()),
-    triageQueueIdx: index('vocs_triage_queue_idx')
+    myVocsIdx: index("vocs_my_vocs_idx").on(
+      t.workspaceId,
+      t.reporterId,
+      t.createdAt.desc(),
+    ),
+    triageQueueIdx: index("vocs_triage_queue_idx")
       .on(t.workspaceId, t.triageState)
       .where(sql`${t.triageState} = 'untriaged'`),
-    activeIdx: index('vocs_active_idx')
+    activeIdx: index("vocs_active_idx")
       .on(t.workspaceId)
       .where(sql`${t.archivedAt} IS NULL`),
     severityEnum: check(
-      'vocs_severity_enum',
+      "vocs_severity_enum",
       sql`${t.severity} IS NULL OR ${t.severity} IN ('low','medium','high','critical')`,
     ),
     reporterFacingStatusEnum: check(
-      'vocs_reporter_facing_status_enum',
+      "vocs_reporter_facing_status_enum",
       sql`${t.reporterFacingStatus} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
     ),
     triageStateEnum: check(
-      'vocs_triage_state_enum',
+      "vocs_triage_state_enum",
       sql`${t.triageState} IN ('untriaged','triaged','needs_more_information','dismissed_not_actionable')`,
     ),
     sourceContextEnum: check(
-      'vocs_source_context_enum',
+      "vocs_source_context_enum",
       sql`${t.sourceContext} IN ('direct_use','proxy_report','operational_discovery','stakeholder_request')`,
     ),
     ownerXor: check(
-      'vocs_owner_xor',
+      "vocs_owner_xor",
       sql`${t.ownerUserId} IS NULL OR ${t.ownerTeamId} IS NULL`,
     ),
   }),
@@ -114,40 +135,94 @@ export const vocs = vocSchema.table(
 // fops_app gets SELECT + INSERT only (no UPDATE/DELETE) per ADR-0019.
 // ─────────────────────────────────────────────────────────────────────────
 export const vocPublicUpdates = vocSchema.table(
-  'voc_public_updates',
+  "voc_public_updates",
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    vocId: uuid('voc_id')
+    id: uuid("id").primaryKey().defaultRandom(),
+    vocId: uuid("voc_id")
       .notNull()
-      .references(() => vocs.id, { onDelete: 'cascade' }),
-    actorId: uuid('actor_id')
+      .references(() => vocs.id, { onDelete: "cascade" }),
+    actorId: uuid("actor_id")
       .notNull()
       .references(() => actors.id),
     // nullable: skip-path rows carry NULL body (migration 0012).
-    bodyRichContent: jsonb('body_rich_content'),
-    reporterFacingStatusBefore: text('reporter_facing_status_before').notNull(),
-    reporterFacingStatusAfter: text('reporter_facing_status_after').notNull(),
-    skipPublicUpdate: boolean('skip_public_update').notNull().default(false),
-    skipReason: text('skip_reason'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    bodyRichContent: jsonb("body_rich_content"),
+    reporterFacingStatusBefore: text("reporter_facing_status_before").notNull(),
+    reporterFacingStatusAfter: text("reporter_facing_status_after").notNull(),
+    skipPublicUpdate: boolean("skip_public_update").notNull().default(false),
+    skipReason: text("skip_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
-    vocCreatedIdx: index('voc_public_updates_voc_created_idx').on(t.vocId, t.createdAt),
+    vocCreatedIdx: index("voc_public_updates_voc_created_idx").on(
+      t.vocId,
+      t.createdAt,
+    ),
     statusBeforeEnum: check(
-      'voc_public_updates_status_before_enum',
+      "voc_public_updates_status_before_enum",
       sql`${t.reporterFacingStatusBefore} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
     ),
     statusAfterEnum: check(
-      'voc_public_updates_status_after_enum',
+      "voc_public_updates_status_after_enum",
       sql`${t.reporterFacingStatusAfter} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
     ),
     // Migration 0012 + 0013: full skip-row invariants.
     // skip=true  ⇒ body NULL, skip_reason ≥ 8 trimmed, status_before <> status_after
     // skip=false ⇒ body NOT NULL, skip_reason IS NULL
     skipInvariants: check(
-      'voc_public_updates_skip_invariants',
+      "voc_public_updates_skip_invariants",
       sql`(${t.skipPublicUpdate} = true AND ${t.bodyRichContent} IS NULL AND ${t.skipReason} IS NOT NULL AND length(trim(${t.skipReason})) >= 8 AND ${t.reporterFacingStatusBefore} <> ${t.reporterFacingStatusAfter}) OR (${t.skipPublicUpdate} = false AND ${t.bodyRichContent} IS NOT NULL AND ${t.skipReason} IS NULL)`,
     ),
+  }),
+);
+
+// Durable, human-reviewed obligation created asynchronously after a Task is
+// released. This table intentionally holds no suggested copy or status: ADR-
+// 0005 forbids deriving reporter-facing state from Task state.
+export const publicUpdateReviewCandidates = vocSchema.table(
+  "public_update_review_candidates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    vocId: uuid("voc_id")
+      .notNull()
+      .references(() => vocs.id),
+    sourceTaskId: uuid("source_task_id").notNull(),
+    sourceEntityLinkId: uuid("source_entity_link_id").notNull(),
+    releaseEventId: uuid("release_event_id").notNull(),
+    correlationId: uuid("correlation_id").notNull(),
+    triggeredByActorId: uuid("triggered_by_actor_id")
+      .notNull()
+      .references(() => actors.id),
+    status: text("status").notNull().default("pending"),
+    resolvedByActorId: uuid("resolved_by_actor_id").references(() => actors.id),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    dismissalReason: text("dismissal_reason"),
+    actionedPublicUpdateId: uuid("actioned_public_update_id").references(
+      () => vocPublicUpdates.id,
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    releaseVocUq: uniqueIndex(
+      "public_update_review_candidates_release_voc_uq",
+    ).on(t.workspaceId, t.releaseEventId, t.vocId),
+    pendingTaskVocUq: uniqueIndex(
+      "public_update_review_candidates_pending_task_voc_uq",
+    )
+      .on(t.workspaceId, t.sourceTaskId, t.vocId)
+      .where(sql`${t.status} = 'pending'`),
+    pendingQueueIdx: index(
+      "public_update_review_candidates_pending_queue_idx",
+    ).on(t.workspaceId, t.status, t.createdAt),
   }),
 );
 
@@ -157,20 +232,25 @@ export const vocPublicUpdates = vocSchema.table(
 // fops_app gets SELECT + INSERT only per ADR-0019.
 // ─────────────────────────────────────────────────────────────────────────
 export const vocReporterReplies = vocSchema.table(
-  'voc_reporter_replies',
+  "voc_reporter_replies",
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    vocId: uuid('voc_id')
+    id: uuid("id").primaryKey().defaultRandom(),
+    vocId: uuid("voc_id")
       .notNull()
-      .references(() => vocs.id, { onDelete: 'cascade' }),
-    actorId: uuid('actor_id')
+      .references(() => vocs.id, { onDelete: "cascade" }),
+    actorId: uuid("actor_id")
       .notNull()
       .references(() => actors.id),
-    bodyRichContent: jsonb('body_rich_content').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    bodyRichContent: jsonb("body_rich_content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
-    vocCreatedIdx: index('voc_reporter_replies_voc_created_idx').on(t.vocId, t.createdAt),
+    vocCreatedIdx: index("voc_reporter_replies_voc_created_idx").on(
+      t.vocId,
+      t.createdAt,
+    ),
   }),
 );
 
@@ -180,20 +260,25 @@ export const vocReporterReplies = vocSchema.table(
 // fops_app gets SELECT + INSERT only per ADR-0019.
 // ─────────────────────────────────────────────────────────────────────────
 export const vocInternalComments = vocSchema.table(
-  'voc_internal_comments',
+  "voc_internal_comments",
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    vocId: uuid('voc_id')
+    id: uuid("id").primaryKey().defaultRandom(),
+    vocId: uuid("voc_id")
       .notNull()
-      .references(() => vocs.id, { onDelete: 'cascade' }),
-    actorId: uuid('actor_id')
+      .references(() => vocs.id, { onDelete: "cascade" }),
+    actorId: uuid("actor_id")
       .notNull()
       .references(() => actors.id),
-    bodyRichContent: jsonb('body_rich_content').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    bodyRichContent: jsonb("body_rich_content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
-    vocCreatedIdx: index('voc_internal_comments_voc_created_idx').on(t.vocId, t.createdAt),
+    vocCreatedIdx: index("voc_internal_comments_voc_created_idx").on(
+      t.vocId,
+      t.createdAt,
+    ),
   }),
 );
 
@@ -207,32 +292,42 @@ export const vocInternalComments = vocSchema.table(
 // IM-03 / AGENTS.md; fops_app DELETE revoked.
 // ─────────────────────────────────────────────────────────────────────────
 export const vocAttachments = vocSchema.table(
-  'voc_attachments',
+  "voc_attachments",
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    vocId: uuid('voc_id').references(() => vocs.id, { onDelete: 'cascade' }),
-    commentId: uuid('comment_id'),
-    commentKind: text('comment_kind'),
-    name: text('name').notNull(),
-    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
-    mimeType: text('mime_type').notNull(),
+    id: uuid("id").primaryKey().defaultRandom(),
+    vocId: uuid("voc_id").references(() => vocs.id, { onDelete: "cascade" }),
+    commentId: uuid("comment_id"),
+    commentKind: text("comment_kind"),
+    name: text("name").notNull(),
+    sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+    mimeType: text("mime_type").notNull(),
     // Migration 0012 (#22 / C2): renamed from storage_uri; opaque object
     // key shaped `{workspace_id}/{uuidv7}/{sanitized_filename}` per D-03.
-    storageKey: text('storage_key').notNull().unique('voc_attachments_storage_key_unique'),
-    uploadedByActorId: uuid('uploaded_by_actor_id').notNull().references(() => actors.id),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    storageKey: text("storage_key")
+      .notNull()
+      .unique("voc_attachments_storage_key_unique"),
+    uploadedByActorId: uuid("uploaded_by_actor_id")
+      .notNull()
+      .references(() => actors.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     // IM-03: archive-over-delete columns (migration 0011).
-    archivedAt: timestamp('archived_at', { withTimezone: true }),
-    archivedByActorId: uuid('archived_by_actor_id').references(() => actors.id),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    archivedByActorId: uuid("archived_by_actor_id").references(() => actors.id),
     // Migration 0012 (#22 / C2): populated by C3 link step; purge job (C4)
     // reclaims rows where linked_at IS NULL AND created_at < now() - 24h.
-    linkedAt: timestamp('linked_at', { withTimezone: true }),
+    linkedAt: timestamp("linked_at", { withTimezone: true }),
   },
   (t) => ({
-    vocIdx: index('voc_attachments_voc_idx').on(t.vocId).where(sql`${t.vocId} IS NOT NULL`),
-    commentIdx: index('voc_attachments_comment_idx').on(t.commentId, t.commentKind).where(sql`${t.commentId} IS NOT NULL`),
+    vocIdx: index("voc_attachments_voc_idx")
+      .on(t.vocId)
+      .where(sql`${t.vocId} IS NOT NULL`),
+    commentIdx: index("voc_attachments_comment_idx")
+      .on(t.commentId, t.commentKind)
+      .where(sql`${t.commentId} IS NOT NULL`),
     // IM-03: active-only partial index for attachment queries (migration 0011).
-    activeIdx: index('voc_attachments_active_idx')
+    activeIdx: index("voc_attachments_active_idx")
       .on(t.vocId)
       .where(sql`${t.archivedAt} IS NULL AND ${t.vocId} IS NOT NULL`),
     // Migration 0012 (#22 / C2): the original 0010 XOR ("exactly one of
@@ -240,11 +335,11 @@ export const vocAttachments = vocSchema.table(
     // INSERT attachments BEFORE they are linked to a parent. The "exactly
     // one" invariant is now enforced at the service layer (link step).
     subjectNotBoth: check(
-      'voc_attachments_subject_not_both',
+      "voc_attachments_subject_not_both",
       sql`not (${t.vocId} is not null and ${t.commentId} is not null)`,
     ),
     commentKindPair: check(
-      'voc_attachments_comment_kind_pair',
+      "voc_attachments_comment_kind_pair",
       sql`(${t.commentId} is null and ${t.commentKind} is null)
         or (${t.commentId} is not null and ${t.commentKind} in ('public_update','reporter_reply','internal_comment'))`,
     ),
@@ -259,10 +354,12 @@ export const vocAttachments = vocSchema.table(
 // service. Production resolves envelopes per request.
 // ─────────────────────────────────────────────────────────────────────────
 export const vocPermissionDecisionsSeedFixture = vocSchema.table(
-  'voc_permission_decisions_seed_fixture',
+  "voc_permission_decisions_seed_fixture",
   {
-    vocId: uuid('voc_id').primaryKey().references(() => vocs.id, { onDelete: 'cascade' }),
-    envelope: jsonb('envelope').notNull(),
+    vocId: uuid("voc_id")
+      .primaryKey()
+      .references(() => vocs.id, { onDelete: "cascade" }),
+    envelope: jsonb("envelope").notNull(),
   },
 );
 
@@ -274,29 +371,29 @@ export const vocPermissionDecisionsSeedFixture = vocSchema.table(
 // fops_app gets SELECT only (data is seeded at migration time).
 // ─────────────────────────────────────────────────────────────────────────
 export const reporterFacingStatusTransitions = vocSchema.table(
-  'reporter_facing_status_transitions',
+  "reporter_facing_status_transitions",
   {
-    fromStatus: text('from_status').notNull(),
-    toStatus: text('to_status').notNull(),
-    allowed: boolean('allowed').notNull(),
-    forbiddenReason: text('forbidden_reason'),
+    fromStatus: text("from_status").notNull(),
+    toStatus: text("to_status").notNull(),
+    allowed: boolean("allowed").notNull(),
+    forbiddenReason: text("forbidden_reason"),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fromStatus, t.toStatus] }),
     rfstFromEnum: check(
-      'rfst_from_enum',
+      "rfst_from_enum",
       sql`${t.fromStatus} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
     ),
     rfstToEnum: check(
-      'rfst_to_enum',
+      "rfst_to_enum",
       sql`${t.toStatus} IN ('received','reviewing','assigned','progress','prep','resolved','reopened','closed')`,
     ),
     rfstAllowedNoReason: check(
-      'rfst_allowed_no_reason',
+      "rfst_allowed_no_reason",
       sql`${t.allowed} = false OR ${t.forbiddenReason} IS NULL`,
     ),
     rfstDisallowedHasReason: check(
-      'rfst_disallowed_has_reason',
+      "rfst_disallowed_has_reason",
       sql`${t.allowed} = true OR (${t.forbiddenReason} IS NOT NULL AND length(trim(${t.forbiddenReason})) > 0)`,
     ),
   }),

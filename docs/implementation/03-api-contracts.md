@@ -855,6 +855,14 @@ the source does not broaden peer visibility. Summary/triage-only envelopes omit
 similarity entirely. Detail ignores `If-None-Match` and returns 200 while this
 peer-derived projection has no projection-aware validator. See ADR-0031.
 
+### Task release side effect (Issue #165)
+
+`PATCH /tasks/:id` changing Task status into `released` snapshots active direct
+`voc -> task evidence_of` links whose VOCs are active and in the same workspace,
+then atomically publishes `tasks.create_public_update_review_candidates` inside
+the request transaction. This endpoint exposes no candidate read/act API and
+does not change Reporter-Facing VOC Status or create a Public Update.
+
 ## Forbidden Endpoint
 
 ```text

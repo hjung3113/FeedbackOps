@@ -15,3 +15,7 @@ We disallow automatic cross-mapping because every Reporter-Facing status change 
 We choose Korean strings for `Reporter-Facing VOC Status` because the primary Reporter audience is internal Korean-speaking AD users and the strings appear in reporter-visible UI; the internal `VOC Triage State` and `Task Status` enums stay in English because their audience is Developer/Admin tooling and code. Mixing English internal states with Korean public states is intentional — it makes accidental leakage into Reporter Summary visible at code-review time.
 
 Reopening this means proposing a specific automatic mapping (with its audit story and reversal path) or reunifying the public and internal vocabularies — both warrant a new ADR rather than a silent edit.
+
+## Implementation note — Issue #165
+
+Task release now durably creates a VOC-owned Public-Update review candidate through a background job. It does not write `reporter_facing_status` and does not create a `voc_public_updates` row; a later reviewer command remains the only path to either action.

@@ -104,3 +104,7 @@ Each pg-boss notification job carries the originating mutation's `correlation_id
 ## Reopening
 
 Adding per-Actor preferences, switching to a third-party transactional email service, introducing a new channel (Slack, Teams, push), or moving to DB-driven dispatch rules each warrants a new ADR.
+
+## Implementation note — Issue #165
+
+Issue #165 creates the durable review candidate only; notification delivery remains deferred until the notification-system slice exists. That slice must emit `task.released` once per newly inserted candidate (not merely per Task transition), target the candidate VOC's current owner, and deduplicate using the release `correlation_id`. The releasing actor, Task assignee, Reporter, and worker actor are not recipients by default.

@@ -6,11 +6,13 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
+import type { PgBoss } from "pg-boss";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { loadConfig } from "../../../config.js";
 import { type DbHandle, createDb } from "../../../db/client.js";
 import { buildServer } from "../../../server.js";
+import { initBoss, shutdownBoss } from "../../../lib/jobs.js";
 import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
@@ -18,6 +20,7 @@ import {
   insertMsDirectly,
   loginAs,
   uid,
+  insertVocDirectly,
 } from "../../voc/__tests__/_seed-helpers.js";
 import { insertTaskRow } from "./_seed-helpers.js";
 
@@ -35,12 +38,14 @@ describe.skipIf(!runIntegration)(
     let app: FastifyInstance;
     let adminCookie: string;
     let adminActorId: string;
+    let boss: PgBoss;
 
     beforeAll(async () => {
       process.env.NODE_ENV = "test";
       dbHandle = createDb(APP_URL);
       migrateHandle = createDb(MIGRATE_URL);
-      app = await buildServer({ config: loadConfig(), dbHandle });
+      boss = await initBoss({ connectionString: APP_URL });
+      app = await buildServer({ config: loadConfig(), dbHandle, boss });
       await app.ready();
       adminCookie = await loginAs(app, "mock-admin-1");
       const actors = await dbHandle.pool.query<{ id: string }>(
@@ -56,12 +61,20 @@ describe.skipIf(!runIntegration)(
     afterAll(async () => {
       await cleanupFixtures();
       await app?.close();
+      await shutdownBoss(boss);
       await dbHandle?.close();
       await migrateHandle?.close();
     });
 
     async function cleanupFixtures(): Promise<void> {
       if (!migrateHandle) return;
+      await migrateHandle.pool.query(
+        `delete from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+      );
+      await migrateHandle.pool.query(
+        `delete from voc.public_update_review_candidates where workspace_id = $1`,
+        [WORKSPACE_ID],
+      );
       await migrateHandle.pool.query(
         `delete from core.audit_log
           where workspace_id = $1
@@ -172,6 +185,47 @@ describe.skipIf(!runIntegration)(
       expect(audit.rows[0]?.detail).toEqual({ from: "backlog", to: "doing" });
     });
 
+    it("atomically snapshots an eligible direct VOC link into one real pg-boss job", async () => {
+      const task = await seedTask("doing");
+      const voc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        task.msId,
+        adminActorId,
+        "Release candidate VOC",
+      );
+      const link = await migrateHandle.pool.query<{ id: string }>(
+        `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        ) values ($1, 'voc', $2, 'task', $3, 'evidence_of', 'internal_only', 'active', $4, $5)
+        returning id`,
+        [WORKSPACE_ID, voc.id, task.id, task.msId, adminActorId],
+      );
+      const response = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "released" },
+        {
+          idempotencyKey: randomUUID(),
+          ifMatch: task.updatedAt,
+        },
+      );
+      expect(response.statusCode).toBe(200);
+      const jobs = await migrateHandle.pool.query<{
+        data: Record<string, unknown>;
+      }>(
+        `select data from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+      );
+      expect(jobs.rowCount).toBe(1);
+      expect(jobs.rows[0]?.data).toMatchObject({
+        workspace_id: WORKSPACE_ID,
+        task_id: task.id,
+        triggered_by_actor_id: adminActorId,
+        linked_vocs: [{ voc_id: voc.id, entity_link_id: link.rows[0]?.id }],
+      });
+    });
+
     it("returns 404 for a missing task", async () => {
       const res = await patchTask(
         adminCookie,
@@ -215,7 +269,9 @@ describe.skipIf(!runIntegration)(
       expect(res.statusCode).toBe(422);
       expect(res.json()).toMatchObject({
         code: "validation.failed",
-        detail: { fields: [{ path: ["headers", "if-match"], code: "required" }] },
+        detail: {
+          fields: [{ path: ["headers", "if-match"], code: "required" }],
+        },
       });
     });
 

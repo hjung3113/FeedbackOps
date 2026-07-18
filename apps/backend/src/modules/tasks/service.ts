@@ -6,19 +6,30 @@ import {
   type TaskDetailDto,
   type TaskDto,
   registeredEntityLinkPairSchema,
-} from '@fops/shared';
+} from "@fops/shared";
+import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
+import { fromDrizzle, type PgBoss } from "pg-boss";
 
-import type { Db } from '../../db/client.js';
-import { HttpError } from '../../lib/errors.js';
-import type { AuditService } from '../core/audit/audit-service.js';
-import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { Db } from "../../db/client.js";
+import { HttpError } from "../../lib/errors.js";
+import type { AuditService } from "../core/audit/audit-service.js";
+import type { IdempotencyService } from "../core/idempotency/idempotency-service.js";
 import {
   type EntityLinkRow,
   insertActiveEntityLink,
+  selectEligibleVocLinksForReleasedTask,
   selectActiveLinksForEndpoint,
-} from '../entity-links/repo.js';
-import type { CheckService } from '../permissions/check-service.js';
-import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
+} from "../entity-links/repo.js";
+import {
+  TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
+  type TaskReleasedReviewCandidatesPayload,
+} from "./jobs/released-review-candidates.js";
+import type { CheckService } from "../permissions/check-service.js";
+import {
+  type TaskRequestRow,
+  lockTaskRequestById,
+} from "../task-requests/repo.js";
 import {
   type TaskRow,
   findTaskById,
@@ -28,12 +39,12 @@ import {
   markTaskRequestConverted,
   resolveTaskSource,
   updateTaskStatus,
-} from './repo.js';
+} from "./repo.js";
 
 export interface TasksActor {
   actor_id: string;
   workspace_id: string;
-  role_level: 'admin' | 'developer' | 'user';
+  role_level: "admin" | "developer" | "user";
 }
 
 export interface TasksServiceDeps {
@@ -41,6 +52,8 @@ export interface TasksServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  /** Absent only in HTTP-only test harnesses; release publication requires it. */
+  boss?: PgBoss;
 }
 
 function taskToDto(row: TaskRow): TaskDto {
@@ -64,16 +77,16 @@ function taskToDto(row: TaskRow): TaskDto {
 }
 
 async function canManageFinding(
-  deps: Pick<TasksServiceDeps, 'checkService'>,
+  deps: Pick<TasksServiceDeps, "checkService">,
   actor: TasksActor,
   managedSystemId: string,
-  options: Parameters<TasksServiceDeps['checkService']['checkCapability']>[3],
+  options: Parameters<TasksServiceDeps["checkService"]["checkCapability"]>[3],
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  if (actor.role_level !== 'developer') return false;
+  if (actor.role_level === "admin") return true;
+  if (actor.role_level !== "developer") return false;
   const decision = await deps.checkService.checkCapability(
     actor,
-    'finding.manage',
+    "finding.manage",
     { workspace_id: actor.workspace_id, managed_system_id: managedSystemId },
     options,
   );
@@ -81,15 +94,19 @@ async function canManageFinding(
 }
 
 function assertApproved(taskRequest: TaskRequestRow): void {
-  if (taskRequest.status !== 'approved') {
-    throw new HttpError('validation.failed', 'task request must be approved before conversion', {
-      fields: [{ path: ['status'], code: 'not_approved' }],
-    });
+  if (taskRequest.status !== "approved") {
+    throw new HttpError(
+      "validation.failed",
+      "task request must be approved before conversion",
+      {
+        fields: [{ path: ["status"], code: "not_approved" }],
+      },
+    );
   }
 }
 
 async function preserveSourceLinks(args: {
-  tx: Parameters<TasksServiceDeps['auditService']['record']>[0];
+  tx: Parameters<TasksServiceDeps["auditService"]["record"]>[0];
   actor: TasksActor;
   taskRequest: TaskRequestRow;
   task: TaskRow;
@@ -97,9 +114,9 @@ async function preserveSourceLinks(args: {
   const preserved: EntityLinkRow[] = [];
 
   const requestTuple = registeredEntityLinkPairSchema.parse({
-    source_type: 'task_request',
-    target_type: 'task',
-    relation_type: 'converted_to',
+    source_type: "task_request",
+    target_type: "task",
+    relation_type: "converted_to",
   });
   const requestLink = await insertActiveEntityLink(args.tx, {
     workspaceId: args.actor.workspace_id,
@@ -110,24 +127,25 @@ async function preserveSourceLinks(args: {
     relationType: requestTuple.relation_type,
     managedSystemId: args.task.primary_managed_system_id,
     createdBy: args.actor.actor_id,
-    visibility: 'internal_only',
+    visibility: "internal_only",
   });
   preserved.push(requestLink.row);
 
   const sourceLinks = await selectActiveLinksForEndpoint(args.tx, {
     workspaceId: args.actor.workspace_id,
-    endpointType: 'task_request',
+    endpointType: "task_request",
     endpointId: args.taskRequest.id,
-    side: 'target',
+    side: "target",
   });
   const findingLink = sourceLinks.find(
-    (link) => link.source_type === 'finding' && link.relation_type === 'requested_task',
+    (link) =>
+      link.source_type === "finding" && link.relation_type === "requested_task",
   );
   if (findingLink) {
     const findingTuple = registeredEntityLinkPairSchema.parse({
-      source_type: 'finding',
-      target_type: 'task',
-      relation_type: 'requested_task',
+      source_type: "finding",
+      target_type: "task",
+      relation_type: "requested_task",
     });
     const taskFindingLink = await insertActiveEntityLink(args.tx, {
       workspaceId: args.actor.workspace_id,
@@ -138,24 +156,27 @@ async function preserveSourceLinks(args: {
       relationType: findingTuple.relation_type,
       managedSystemId: args.task.primary_managed_system_id,
       createdBy: args.actor.actor_id,
-      visibility: 'internal_only',
+      visibility: "internal_only",
     });
     preserved.push(taskFindingLink.row);
 
     const evidenceLinks = await selectActiveLinksForEndpoint(args.tx, {
       workspaceId: args.actor.workspace_id,
-      endpointType: 'finding',
+      endpointType: "finding",
       endpointId: findingLink.source_id,
-      side: 'target',
+      side: "target",
     });
     for (const evidenceLink of evidenceLinks) {
-      if (evidenceLink.source_type !== 'voc' || evidenceLink.relation_type !== 'evidence_of') {
+      if (
+        evidenceLink.source_type !== "voc" ||
+        evidenceLink.relation_type !== "evidence_of"
+      ) {
         continue;
       }
       const evidenceTuple = registeredEntityLinkPairSchema.parse({
-        source_type: 'voc',
-        target_type: 'task',
-        relation_type: 'evidence_of',
+        source_type: "voc",
+        target_type: "task",
+        relation_type: "evidence_of",
       });
       const taskEvidenceLink = await insertActiveEntityLink(args.tx, {
         workspaceId: args.actor.workspace_id,
@@ -166,10 +187,37 @@ async function preserveSourceLinks(args: {
         relationType: evidenceTuple.relation_type,
         managedSystemId: args.task.primary_managed_system_id,
         createdBy: args.actor.actor_id,
-        visibility: 'internal_only',
+        visibility: "internal_only",
       });
       preserved.push(taskEvidenceLink.row);
     }
+  }
+
+  // A direct VOC -> Task Request path has no Finding to traverse. Preserve it
+  // as the canonical direct evidence link so released-task review can find it.
+  for (const sourceLink of sourceLinks) {
+    if (
+      sourceLink.source_type !== "voc" ||
+      sourceLink.relation_type !== "requested_task"
+    )
+      continue;
+    const tuple = registeredEntityLinkPairSchema.parse({
+      source_type: "voc",
+      target_type: "task",
+      relation_type: "evidence_of",
+    });
+    const taskEvidenceLink = await insertActiveEntityLink(args.tx, {
+      workspaceId: args.actor.workspace_id,
+      sourceType: tuple.source_type,
+      sourceId: sourceLink.source_id,
+      targetType: tuple.target_type,
+      targetId: args.task.id,
+      relationType: tuple.relation_type,
+      managedSystemId: args.task.primary_managed_system_id,
+      createdBy: args.actor.actor_id,
+      visibility: "internal_only",
+    });
+    preserved.push(taskEvidenceLink.row);
   }
 
   return preserved;
@@ -180,19 +228,33 @@ export function createTasksService(deps: TasksServiceDeps) {
     actor: TasksActor;
     taskId: string;
   }): Promise<TaskDetailDto> {
-    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
-      throw new HttpError('permission.denied', 'finding.manage capability required');
+    if (
+      args.actor.role_level !== "admin" &&
+      args.actor.role_level !== "developer"
+    ) {
+      throw new HttpError(
+        "permission.denied",
+        "finding.manage capability required",
+      );
     }
 
     const row = await findTaskById(deps.db, {
       workspaceId: args.actor.workspace_id,
       taskId: args.taskId,
     });
-    if (!row) throw new HttpError('not_found.record', 'task not found');
+    if (!row) throw new HttpError("not_found.record", "task not found");
 
-    const canManage = await canManageFinding(deps, args.actor, row.primary_managed_system_id, {});
+    const canManage = await canManageFinding(
+      deps,
+      args.actor,
+      row.primary_managed_system_id,
+      {},
+    );
     if (!canManage) {
-      throw new HttpError('permission.denied', 'finding.manage capability required');
+      throw new HttpError(
+        "permission.denied",
+        "finding.manage capability required",
+      );
     }
 
     const source = row.source_task_request_id
@@ -222,7 +284,8 @@ export function createTasksService(deps: TasksServiceDeps) {
             workspaceId: args.actor.workspace_id,
             taskRequestId: args.taskRequestId,
           });
-          if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
+          if (!taskRequest)
+            throw new HttpError("not_found.record", "task request not found");
 
           const canManage = await canManageFinding(
             deps,
@@ -231,7 +294,10 @@ export function createTasksService(deps: TasksServiceDeps) {
             { tx },
           );
           if (!canManage) {
-            throw new HttpError('permission.denied', 'finding.manage capability required');
+            throw new HttpError(
+              "permission.denied",
+              "finding.manage capability required",
+            );
           }
           assertApproved(taskRequest);
 
@@ -263,10 +329,10 @@ export function createTasksService(deps: TasksServiceDeps) {
           await deps.auditService.record(tx, {
             workspace_id: args.actor.workspace_id,
             actor_id: args.actor.actor_id,
-            event_type: 'task_created_from_request',
-            subject_type: 'task',
+            event_type: "task_created_from_request",
+            subject_type: "task",
             subject_id: task.id,
-            summary: 'Task created from approved Task Request',
+            summary: "Task created from approved Task Request",
             detail: {
               task_id: task.id,
               source_task_request_id: taskRequest.id,
@@ -299,7 +365,8 @@ export function createTasksService(deps: TasksServiceDeps) {
             workspaceId: args.actor.workspace_id,
             taskRequestId: args.taskRequestId,
           });
-          if (!taskRequest) throw new HttpError('not_found.record', 'task request not found');
+          if (!taskRequest)
+            throw new HttpError("not_found.record", "task request not found");
 
           const canManage = await canManageFinding(
             deps,
@@ -308,7 +375,10 @@ export function createTasksService(deps: TasksServiceDeps) {
             { tx },
           );
           if (!canManage) {
-            throw new HttpError('permission.denied', 'finding.manage capability required');
+            throw new HttpError(
+              "permission.denied",
+              "finding.manage capability required",
+            );
           }
           assertApproved(taskRequest);
 
@@ -316,15 +386,21 @@ export function createTasksService(deps: TasksServiceDeps) {
             workspaceId: args.actor.workspace_id,
             taskId: args.input.task_id,
           });
-          if (!task) throw new HttpError('not_found.record', 'task not found');
-          if (task.primary_managed_system_id !== taskRequest.primary_managed_system_id) {
-            throw new HttpError('permission.denied', 'task is outside task request scope');
+          if (!task) throw new HttpError("not_found.record", "task not found");
+          if (
+            task.primary_managed_system_id !==
+            taskRequest.primary_managed_system_id
+          ) {
+            throw new HttpError(
+              "permission.denied",
+              "task is outside task request scope",
+            );
           }
 
           const tuple = registeredEntityLinkPairSchema.parse({
-            source_type: 'task_request',
-            target_type: 'task',
-            relation_type: 'converted_to',
+            source_type: "task_request",
+            target_type: "task",
+            relation_type: "converted_to",
           });
           await insertActiveEntityLink(tx, {
             workspaceId: args.actor.workspace_id,
@@ -335,7 +411,7 @@ export function createTasksService(deps: TasksServiceDeps) {
             relationType: tuple.relation_type,
             managedSystemId: task.primary_managed_system_id,
             createdBy: args.actor.actor_id,
-            visibility: 'internal_only',
+            visibility: "internal_only",
           });
 
           await markTaskRequestConverted(tx, {
@@ -346,10 +422,10 @@ export function createTasksService(deps: TasksServiceDeps) {
           await deps.auditService.record(tx, {
             workspace_id: args.actor.workspace_id,
             actor_id: args.actor.actor_id,
-            event_type: 'task_linked_to_request',
-            subject_type: 'task',
+            event_type: "task_linked_to_request",
+            subject_type: "task",
             subject_id: task.id,
-            summary: 'Existing Task linked to approved Task Request',
+            summary: "Existing Task linked to approved Task Request",
             detail: {
               task_id: task.id,
               task_request_id: taskRequest.id,
@@ -381,7 +457,7 @@ export function createTasksService(deps: TasksServiceDeps) {
             workspaceId: args.actor.workspace_id,
             taskId: args.taskId,
           });
-          if (!task) throw new HttpError('not_found.record', 'task not found');
+          if (!task) throw new HttpError("not_found.record", "task not found");
 
           const canManage = await canManageFinding(
             deps,
@@ -390,13 +466,20 @@ export function createTasksService(deps: TasksServiceDeps) {
             { tx },
           );
           if (!canManage) {
-            throw new HttpError('permission.denied', 'finding.manage capability required');
+            throw new HttpError(
+              "permission.denied",
+              "finding.manage capability required",
+            );
           }
 
           if (task.updated_at.toISOString() !== args.ifMatch) {
-            throw new HttpError('conflict.stale_write', 'task updated_at does not match If-Match', {
-              current_updated_at: task.updated_at.toISOString(),
-            });
+            throw new HttpError(
+              "conflict.stale_write",
+              "task updated_at does not match If-Match",
+              {
+                current_updated_at: task.updated_at.toISOString(),
+              },
+            );
           }
 
           if (task.status === args.input.status) {
@@ -417,12 +500,43 @@ export function createTasksService(deps: TasksServiceDeps) {
           await deps.auditService.record(tx, {
             workspace_id: args.actor.workspace_id,
             actor_id: args.actor.actor_id,
-            event_type: 'task_status_changed',
-            subject_type: 'task',
+            event_type: "task_status_changed",
+            subject_type: "task",
             subject_id: task.id,
-            summary: 'Task status changed',
+            summary: "Task status changed",
             detail: { from: task.status, to: updatedTask.status },
           });
+          if (task.status !== "released" && updatedTask.status === "released") {
+            if (!deps.boss) {
+              throw new Error(
+                "pg-boss is required to publish released Task review candidates",
+              );
+            }
+            const linkedVocs = await selectEligibleVocLinksForReleasedTask(tx, {
+              workspaceId: args.actor.workspace_id,
+              taskId: updatedTask.id,
+            });
+            if (linkedVocs.length > 0) {
+              const payload: TaskReleasedReviewCandidatesPayload = {
+                workspace_id: args.actor.workspace_id,
+                task_id: updatedTask.id,
+                release_event_id: randomUUID(),
+                correlation_id: args.idempotencyKey,
+                triggered_by_actor_id: args.actor.actor_id,
+                linked_vocs: linkedVocs.map((link) => ({
+                  voc_id: link.voc_id,
+                  entity_link_id: link.entity_link_id,
+                })),
+              };
+              await deps.boss.send(
+                TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
+                payload,
+                {
+                  db: fromDrizzle(tx, sql),
+                },
+              );
+            }
+          }
           const source = updatedTask.source_task_request_id
             ? await resolveTaskSource(tx, {
                 workspaceId: args.actor.workspace_id,
@@ -439,11 +553,17 @@ export function createTasksService(deps: TasksServiceDeps) {
     actor: TasksActor;
     query: ListTasksQuery;
   }): Promise<{ items: TaskDto[] }> {
-    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
-      throw new HttpError('permission.denied', 'finding.manage capability required');
+    if (
+      args.actor.role_level !== "admin" &&
+      args.actor.role_level !== "developer"
+    ) {
+      throw new HttpError(
+        "permission.denied",
+        "finding.manage capability required",
+      );
     }
     const assigneeActorId =
-      args.query.assignee === 'me' ? args.actor.actor_id : args.query.assignee;
+      args.query.assignee === "me" ? args.actor.actor_id : args.query.assignee;
     const rows = await listTasksByWorkspace(deps.db, {
       workspaceId: args.actor.workspace_id,
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),
@@ -451,7 +571,12 @@ export function createTasksService(deps: TasksServiceDeps) {
     });
     const items: TaskDto[] = [];
     for (const row of rows) {
-      const canManage = await canManageFinding(deps, args.actor, row.primary_managed_system_id, {});
+      const canManage = await canManageFinding(
+        deps,
+        args.actor,
+        row.primary_managed_system_id,
+        {},
+      );
       if (!canManage) continue;
       items.push(taskToDto(row));
     }

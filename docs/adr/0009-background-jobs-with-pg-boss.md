@@ -57,3 +57,7 @@ Defaults locked here:
 ## Reopening
 
 Switching to BullMQ or Temporal, splitting workers into a separate process, or weakening the idempotency rule each warrants a new ADR with a migration story for existing jobs and queues. Adding a new job type is *not* a reopen — modules register their own jobs by the established convention.
+
+## Implementation note — Issue #165
+
+`tasks.create_public_update_review_candidates` is pre-created with the locked retry defaults (5 / 30 / exponential). The release transaction uses pg-boss's Drizzle adapter (`fromDrizzle(tx, sql)`) so the Task status mutation, audit, idempotency record, and publication commit or roll back together. The worker inserts candidates and their audit rows atomically with `ON CONFLICT DO NOTHING`.

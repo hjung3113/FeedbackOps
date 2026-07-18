@@ -176,6 +176,15 @@ Examples:
 `drizzle-kit generate` assigns the 4-digit sequence. Timestamp prefixes are not
 used in the current migrations directory.
 
+## Issue #165: released Task review candidates
+
+`voc.public_update_review_candidates` is a VOC-owned durable queue of human
+review obligations. Its permanent `(workspace_id, release_event_id, voc_id)`
+unique key makes pg-boss retries safe; its partial pending Task/VOC key prevents
+two unresolved obligations for the same Task/VOC. `fops_app` has SELECT and
+INSERT only. Migration `0032_task_released_review_candidates.sql` also
+pre-creates the Task release queue with ADR-0009 retry defaults.
+
 ## Seed Data
 
 MVP seed data should include:
