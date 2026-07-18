@@ -18,6 +18,10 @@ export const CAPABILITIES = [
   'finding.read',
   'finding.manage',
   'task_request.self_approve',
+  'survey.read',
+  'survey.manage',
+  'survey.read_personal_responses',
+  'survey.export',
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -44,6 +48,16 @@ export const CAPABILITY_META: Readonly<Record<Capability, CapabilityMeta>> = {
   'finding.manage': { sensitive: false },
   // Self-approval is sensitive because it bypasses normal reviewer separation.
   'task_request.self_approve': { sensitive: true },
+  // survey.read: NOT sensitive — Developers may request scoped read access for a Managed System.
+  'survey.read': { sensitive: false },
+  // Survey creation and management are sensitive actions for a Managed System.
+  'survey.manage': { sensitive: true },
+  // Workspace Admin does not bypass this by role alone; explicit permission is required.
+  // See docs/design/07-survey-system.md:230-232.
+  'survey.read_personal_responses': { sensitive: true },
+  // Workspace Admin does not bypass this by role alone; explicit permission is required.
+  // See docs/design/07-survey-system.md:230-232.
+  'survey.export': { sensitive: true },
 };
 
 export function isCapability(value: string): value is Capability {
