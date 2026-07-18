@@ -34,6 +34,7 @@ import { createAuditService } from './modules/core/audit/index.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
 import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
 import { createFindingsService, findingsRoutes } from './modules/findings/index.js';
+import { createSurveysService, surveysRoutes } from './modules/surveys/index.js';
 import {
   createManagedSystemService,
   managedSystemsRoutes,
@@ -466,6 +467,19 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
     },
+  });
+
+  const surveysService = createSurveysService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(surveysRoutes, {
+    sessionService,
+    surveysService,
+    workspaceId,
+    rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
   });
 
   // ── Task Requests module — Slice 6 issue #132 ─────────────────────────────
