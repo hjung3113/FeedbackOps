@@ -1,17 +1,32 @@
 import type { Page, Route } from '@playwright/test';
-import { addVocClusterMemberRequestSchema, vocClusterDtoSchema } from '@fops/shared';
+import {
+  addVocClusterMemberRequestSchema,
+  approvePermissionRequestSchema,
+  denyPermissionRequestSchema,
+  needMoreInfoPermissionRequestSchema,
+  permissionDecisionResultSchema,
+  rejectPermissionRequestSchema,
+  vocClusterDtoSchema,
+} from '@fops/shared';
 
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
+import {
+  createPermissionRequestsScenario,
+  permissionDecisionResultTemplates,
+  type PermissionScenarioName,
+} from '../fixtures/permissions';
 import { createScenario, type ScenarioName, type VisualScenario } from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
 
 export interface InstalledMockApi {
   postedBodies: unknown[];
+  postedRequests: Array<{ body: unknown; idempotencyKey: string | null; pathname: string }>;
   scenario: VisualScenario;
 }
 
 interface InstallOptions {
+  permissionScenario?: PermissionScenarioName;
   role?: RoleLevel;
   scenario?: ScenarioName;
 }
@@ -49,6 +64,8 @@ export async function installMockApi(
 ): Promise<InstalledMockApi> {
   const scenario = createScenario(options.scenario);
   const postedBodies: unknown[] = [];
+  const postedRequests: InstalledMockApi['postedRequests'] = [];
+  const permissionRequests = createPermissionRequestsScenario(options.permissionScenario);
   const role = options.role ?? 'admin';
   const baseOrigin = new URL(`http://127.0.0.1:${process.env.PW_PORT ?? '4173'}`).origin;
 
@@ -71,6 +88,42 @@ export async function installMockApi(
         },
         workspace_id: IDS.workspace,
       });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/me/permissions/check')) {
+      await json(route, 200, {
+        state: role === 'admin' ? 'approved' : 'blocked_non_requestable',
+        decision: { allow: role === 'admin' },
+      });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/permissions/requests')) {
+      await json(route, 200, { requests: permissionRequests, count: permissionRequests.length });
+      return;
+    }
+
+    const permissionDecisionMatch = url.pathname.match(
+      /^\/permissions\/requests\/([^/]+)\/(approve|reject|need-more-info|deny)$/,
+    );
+    if (request.method() === 'POST' && permissionDecisionMatch) {
+      const [, requestId, rawAction] = permissionDecisionMatch;
+      const action = rawAction as keyof typeof permissionDecisionResultTemplates | undefined;
+      if (!requestId || !action) throw new Error(`Missing permission decision target for ${request.method()} ${url}`);
+      const rawBody = request.postDataJSON();
+      const body = parsePermissionDecisionBody(action, rawBody);
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      const target = permissionRequests.find((candidate) => candidate.id === requestId);
+      if (!target) throw new Error(`No mutable permission request fixture for ${request.method()} ${url}`);
+      const template = permissionDecisionResultTemplates[action];
+      target.status = template.status;
+      await json(route, 200, permissionDecisionResultSchema.parse({ ...template, id: requestId }));
       return;
     }
 
@@ -130,5 +183,21 @@ export async function installMockApi(
     throw new Error(`Unmatched same-origin ${request.resourceType()} request: ${request.method()} ${url}`);
   });
 
-  return { postedBodies, scenario };
+  return { postedBodies, postedRequests, scenario };
+}
+
+function parsePermissionDecisionBody(
+  action: keyof typeof permissionDecisionResultTemplates,
+  body: unknown,
+): unknown {
+  switch (action) {
+    case 'approve':
+      return approvePermissionRequestSchema.parse(body);
+    case 'reject':
+      return rejectPermissionRequestSchema.parse(body);
+    case 'need-more-info':
+      return needMoreInfoPermissionRequestSchema.parse(body);
+    case 'deny':
+      return denyPermissionRequestSchema.parse(body);
+  }
 }
