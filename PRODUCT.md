@@ -29,7 +29,7 @@ FeedbackOps closes the loop from internal voice-of-customer intake to documented
 
 The product solves the problem that, without it, feedback intake, triage decisions, evidence collection, execution tracking, and outcome validation each live in separate tools — and the trail between "what we heard" and "what we did about it" is reconstructed by hand. FeedbackOps makes the trail first-class via `entity_links`, makes the triage decision auditable, and makes the cross-system history canonical instead of incidental.
 
-Slice 3 (currently shipped) covers VOC Inbox + My + Detail panel + Create form. Future slices cover Cluster, Finding create flow, Task Request, Entity Links UI, and Survey result loops. The scope of this document is the whole product, not the current slice.
+The scope of this document is the whole product, not the current slice. Delivery progress is tracked in GitHub milestones — read those, not this file, for what has shipped.
 
 ## Brand Personality
 

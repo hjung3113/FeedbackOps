@@ -199,9 +199,15 @@ voc_clusters
 - display_id: text, required
 - title: text, required
 - summary: text, nullable
+- severity: enum(low, medium, high, critical), nullable
+- confidence: enum(low, medium, high), nullable
+- rationale: text, nullable
+- owner_user_id: uuid, nullable
 - status: enum(draft, confirmed), required
 - primary_managed_system_id: uuid, required
 - created_by: uuid, required
+- confirmed_by: uuid, nullable
+- confirmed_at: timestamp, nullable
 - created_at: timestamp, required
 - updated_at: timestamp, required
 - member_count: integer, non-negative, required
@@ -210,22 +216,54 @@ voc_clusters
 Read DTO extensions:
 
 ```text
-- members: optional array of { voc_id, added_by, added_at }
+- members: optional array of { voc_id, added_by, added_at, display_id?, title?, severity?, reporter_facing_status? }
 - linked_findings: optional array of { id, display_id, status }
+```
+
+Candidate-peer picker DTO (separate read endpoint):
+
+```text
+ListSameManagedSystemCandidatePeersResponse
+- candidate_basis: literal(same_managed_system_active_voc), required
+- candidates: array of SameManagedSystemCandidatePeerDto, required
+
+SameManagedSystemCandidatePeerDto
+- voc_id: uuid, required
+- display_id: text, required
+- title: text, required
+- severity: enum(low, medium, high, critical), nullable, required
+- reporter_facing_status: text, required
 ```
 
 Rules:
 
 ```text
+- Workspace fields are nullable and existing clusters receive no fabricated backfill.
+- owner_user_id references an assignable internal user in the cluster workspace.
+- confirmed_by and confirmed_at are server-owned. A draft-to-confirmed transition
+  writes both atomically; later confirmation requests preserve the original provenance.
 - linked_findings lists Findings created from the cluster where
   finding.source_type='voc_cluster' and finding.source_id=cluster.id.
 - linked_findings is derived at read time. It exposes only id, display_id, and
   status; title and summary are intentionally omitted to avoid content leakage.
 - Cluster detail and list reads include linked_findings as an array. Create and
   update responses may omit it.
-- member_count is derived at read time with `COUNT(*)` over
-  `voc_cluster_members` for the cluster. It is always present and does not
-  require a stored column.
+- `member_count` is the authorized membership total, not total membership. It
+  uses the same per-member predicate as `members`: Admin, `voc.read` on the
+  member Managed System, or reporter ownership. This contract change prevents
+  the count from disclosing hidden VOC existence. It is always present and
+  does not require a stored column.
+- Member enrichment fields are additive and optional. They are returned only
+  for authorized members; unreadable and corrupt cross-System memberships are
+  absent rather than masked or represented by placeholders.
+- `candidate_basis` deliberately names the temporary same-Managed-System active-
+  VOC heuristic. Candidate peers are membership-picker options, not semantic
+  matches or cluster recommendations; real embedding similarity belongs to
+  epic #168. The DTO must not add a similarity score, confidence, or rationale.
+- Candidate peers exclude existing members/source VOCs, archived VOCs, and
+  cross-Managed-System VOCs. Candidate item visibility is Admin, `voc.read` on
+  the candidate Managed System, or reporter ownership. Triage-only/effective
+  summary scope grants no candidate visibility; unreadable candidates are absent.
 ```
 
 ## Task Request

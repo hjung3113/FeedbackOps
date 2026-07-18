@@ -30,6 +30,7 @@ import {
   vocTriageCommittedDetailSchema,
   vocTriagePostponedDetailSchema,
 } from '../audit/voc.js';
+import { findingConfidenceSchema, findingSeveritySchema } from '../findings/index.js';
 
 export const AUDIT_EVENT_TYPES = [
   'permission_requested',
@@ -357,11 +358,33 @@ export const vocClusterUpdatedDetailSchema = z.object({
           to: z.string().nullable(),
         })
         .optional(),
+      severity: z
+        .object({
+          from: findingSeveritySchema.nullable(),
+          to: findingSeveritySchema.nullable(),
+        })
+        .optional(),
+      confidence: z
+        .object({
+          from: findingConfidenceSchema.nullable(),
+          to: findingConfidenceSchema.nullable(),
+        })
+        .optional(),
+      rationale: z.object({ from: z.string().nullable(), to: z.string().nullable() }).optional(),
+      owner_user_id: z
+        .object({ from: z.string().uuid().nullable(), to: z.string().uuid().nullable() })
+        .optional(),
       status: z
         .object({
           from: vocClusterStatusDetailSchema,
           to: vocClusterStatusDetailSchema,
         })
+        .optional(),
+      confirmed_by: z
+        .object({ from: z.string().uuid().nullable(), to: z.string().uuid().nullable() })
+        .optional(),
+      confirmed_at: z
+        .object({ from: z.string().datetime().nullable(), to: z.string().datetime().nullable() })
         .optional(),
     })
     .refine((changes) => Object.keys(changes).length > 0, {
