@@ -4,6 +4,7 @@ import {
   type LinkVisibilityEvaluationInput,
   evaluateLinkVisibility,
 } from '../evaluate-visibility.js';
+import { toTaskReporterSummaryResult } from '../service.js';
 
 const reporterId = '00000000-0000-4000-8000-000000000001';
 const otherReporterId = '00000000-0000-4000-8000-000000000002';
@@ -148,6 +149,62 @@ describe('evaluateLinkVisibility', () => {
     ).toBe('summary_visible');
   });
 
+  it('returns a safe summary to a Reporter with a readable source and unreadable target', () => {
+    expect(
+      evaluateLinkVisibility({
+        visibility: 'summary_visible',
+        actorContext: { actor_id: 'reporter', role_level: 'user' },
+        sourceReadable: true,
+        targetReadable: false,
+        targetSummaryAvailable: true,
+      }),
+    ).toBe('summary_visible');
+  });
+
+  it.each([
+    [
+      'User with unreadable source',
+      'summary_visible',
+      { role_level: 'user' as const, actor_id: userId },
+      false,
+    ],
+    ['Admin', 'summary_visible', { role_level: 'admin' as const, actor_id: adminId }, true],
+    [
+      'Developer',
+      'summary_visible',
+      { role_level: 'developer' as const, actor_id: developerId },
+      true,
+    ],
+    [
+      'User internal_only',
+      'internal_only',
+      { role_level: 'user' as const, actor_id: userId },
+      true,
+    ],
+    [
+      'User visible_to_reporter',
+      'visible_to_reporter',
+      { role_level: 'user' as const, actor_id: userId },
+      true,
+    ],
+    ['User admin_only', 'admin_only', { role_level: 'user' as const, actor_id: userId }, true],
+  ])(
+    'keeps the unchanged unreadable-target cell hidden for %s when a summary is available',
+    (_label, visibility, actorContext, sourceReadable) => {
+      expect(
+        evaluateLinkVisibility({
+          visibility: visibility as LinkVisibilityEvaluationInput['visibility'],
+          actorContext,
+          sourceReadable,
+          targetReadable: false,
+          targetSummaryAvailable: true,
+          sourceReporterId: reporterId,
+          targetReporterId: reporterId,
+        }),
+      ).toBe('hidden');
+    },
+  );
+
   it('hides visible_to_reporter when the actor is not the shared reporter', () => {
     expect(
       evaluateLinkVisibility({
@@ -160,5 +217,25 @@ describe('evaluateLinkVisibility', () => {
         targetReporterId: otherReporterId,
       }),
     ).toBe('hidden');
+  });
+});
+
+describe('Task reporter summary projection', () => {
+  it('returns unavailable for an out-of-enum stored Task status without exposing it', () => {
+    const invalidStoredStatus = 'invalid_task_status';
+
+    expect(() =>
+      toTaskReporterSummaryResult({
+        title: 'Task with invalid status',
+        status: invalidStoredStatus,
+      }),
+    ).not.toThrow();
+
+    const result = toTaskReporterSummaryResult({
+      title: 'Task with invalid status',
+      status: invalidStoredStatus,
+    });
+    expect(result).toEqual({ available: false });
+    expect(JSON.stringify(result)).not.toContain(invalidStoredStatus);
   });
 });

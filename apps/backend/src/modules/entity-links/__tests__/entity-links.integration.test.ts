@@ -1172,6 +1172,278 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     ).toBe(true);
   });
 
+  it('GET a VOC Task link projects only the reporter-safe Task summary', async () => {
+    const ms = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-task-summary`,
+      'Task Reporter Summary MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      ms,
+      reporterId,
+      'Task Reporter Summary Source VOC',
+    );
+    const internalComment = 'distinctive task-summary internal comment';
+    await migrateHandle.pool.query(
+      `insert into voc.voc_internal_comments (voc_id, actor_id, body_rich_content)
+       values ($1, $2, $3::jsonb)`,
+      [
+        sourceVoc.id,
+        adminActorId,
+        JSON.stringify({
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: internalComment }],
+            },
+          ],
+        }),
+      ],
+    );
+    const rootCauseDetail = 'root-cause detail';
+    const privateNotes = 'private notes';
+    const privateCustomerDetail = 'private customer detail';
+    const permissionDecisionInternals = 'permission decision internals';
+    const finding = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: ms,
+      sourceId: sourceVoc.id,
+      title: rootCauseDetail,
+      summary: privateNotes,
+      severity: 'critical',
+      confidence: 'high',
+      createdBy: adminActorId,
+    });
+    const taskRequest = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'voc',
+      sourceId: sourceVoc.id,
+      primaryManagedSystemId: ms,
+      evidenceSummary: privateCustomerDetail,
+      requestedOutcome: rootCauseDetail,
+      requesterActorId: reporterId,
+      reviewerActorId: adminActorId,
+      decisionReason: permissionDecisionInternals,
+      decided: true,
+    });
+    const { id: assigneeId, externalId: assigneeExternalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('task-summary-assignee'),
+    );
+    const statuses = [
+      ['backlog', '진행 예정'],
+      ['todo', '진행 예정'],
+      ['doing', '진행 중'],
+      ['review', '진행 중'],
+      ['done', '해결 준비 중'],
+      ['released', '반영됨'],
+      ['reopened', '다시 처리 중'],
+    ] as const;
+    const dueDate = '2099-12-31';
+    const taskLinks = await Promise.all(
+      statuses.map(async ([status], index) => {
+        const title = `Public Task ${index + 1}`;
+        const task = await insertTaskRow(migrateHandle, {
+          workspaceId: WORKSPACE_ID,
+          primaryManagedSystemId: ms,
+          title,
+          status,
+          priority: 'urgent',
+          assigneeActorId: assigneeId,
+          dueDate,
+          sourceTaskRequestId: index === 0 ? taskRequest.id : null,
+          createdBy: adminActorId,
+        });
+        const linkId = await seedEntityLinkDirectly({
+          sourceId: sourceVoc.id,
+          targetType: 'task',
+          targetId: task.id,
+          relationType: 'evidence_of',
+          managedSystemId: ms,
+          visibility: 'summary_visible',
+        });
+        return { linkId, task, status, title };
+      }),
+    );
+    await migrateHandle.pool.query(
+      'update finding.findings set linked_task_id = $1 where id = $2',
+      [taskLinks[0]?.task.id, finding.id],
+    );
+
+    const persistedForbidden = await migrateHandle.pool.query<{
+      title: string;
+      status: string;
+      priority: string;
+      due_date: string | null;
+      assignee_actor_id: string | null;
+      source_task_request_id: string | null;
+      evidence_summary: string;
+      requested_outcome: string;
+      decision_reason: string | null;
+      finding_title: string;
+      finding_summary: string;
+      severity: string;
+      confidence: string | null;
+      linked_task_id: string | null;
+    }>(
+      `select t.title, t.status, t.priority, t.due_date::text, t.assignee_actor_id,
+              t.source_task_request_id, tr.evidence_summary, tr.requested_outcome,
+              tr.decision_reason, f.title as finding_title, f.summary as finding_summary,
+              f.severity, f.confidence, f.linked_task_id
+         from task.tasks t
+         join task_request.task_requests tr on tr.id = t.source_task_request_id
+         join finding.findings f on f.linked_task_id = t.id
+        where t.id = $1`,
+      [taskLinks[0]?.task.id],
+    );
+    expect(persistedForbidden.rows[0]).toMatchObject({
+      status: taskLinks[0]?.status,
+      priority: 'urgent',
+      due_date: dueDate,
+      assignee_actor_id: assigneeId,
+      source_task_request_id: taskRequest.id,
+      evidence_summary: privateCustomerDetail,
+      requested_outcome: rootCauseDetail,
+      decision_reason: permissionDecisionInternals,
+      finding_title: rootCauseDetail,
+      finding_summary: privateNotes,
+      severity: 'critical',
+      confidence: 'high',
+      linked_task_id: taskLinks[0]?.task.id,
+    });
+    const persistedTaskStatuses = await migrateHandle.pool.query<{
+      title: string;
+      status: string;
+    }>(`select title, status from task.tasks where id = any($1::uuid[]) order by title`, [
+      taskLinks.map((link) => link.task.id),
+    ]);
+    expect(persistedTaskStatuses.rows).toEqual(
+      taskLinks
+        .map((link) => ({ title: link.title, status: link.status }))
+        .sort((left, right) => left.title.localeCompare(right.title)),
+    );
+    const persistedInternalComment = await migrateHandle.pool.query<{
+      body_rich_content: unknown;
+    }>(
+      `select body_rich_content from voc.voc_internal_comments
+        where voc_id = $1 and actor_id = $2`,
+      [sourceVoc.id, adminActorId],
+    );
+    expect(JSON.stringify(persistedInternalComment.rows[0]?.body_rich_content)).toContain(
+      internalComment,
+    );
+    expect(assigneeExternalId).toContain('task-summary-assignee');
+
+    const { id: scopedDevId, externalId: scopedDevExternalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('task-summary-scoped'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, scopedDevId, 'voc.read', ms, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, scopedDevId, 'finding.read', ms, adminActorId);
+    const scopedDevCookie = await loginAs(app, scopedDevExternalId);
+
+    const { id: outOfScopeDevId, externalId: outOfScopeDevExternalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('task-summary-out-of-scope'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, outOfScopeDevId, 'voc.read', ms, adminActorId);
+    const outOfScopeDevCookie = await loginAs(app, outOfScopeDevExternalId);
+
+    const query = `?source_type=voc&source_id=${sourceVoc.id}`;
+    const auditBefore = await dbHandle.pool.query<{ id: string }>(
+      'select id from core.audit_log where workspace_id = $1 order by id',
+      [WORKSPACE_ID],
+    );
+    const reporter = await getEntityLinks(await loginAs(app, 'mock-user-1'), query);
+    expect(reporter.statusCode).toBe(200);
+    const reporterItems = reporter.json<{ items: Array<Record<string, unknown>> }>().items;
+    expect(reporterItems).toHaveLength(statuses.length);
+
+    for (const [status, reporterFacingStatus] of statuses) {
+      const link = taskLinks.find((candidate) => candidate.status === status);
+      const item = reporterItems.find((candidate) => candidate.id === link?.linkId);
+      expect(item).toMatchObject({
+        visibility_state: 'summary_visible',
+        summary: {
+          target_type: 'task',
+          public_title: link?.title,
+          reporter_facing_status: reporterFacingStatus,
+        },
+      });
+      expect(item?.source_id).toBeUndefined();
+      expect(item?.target_id).toBeUndefined();
+      expect(item?.target_summary).toBeUndefined();
+      expect(Object.keys((item?.summary ?? {}) as Record<string, unknown>).sort()).toEqual([
+        'public_title',
+        'reporter_facing_status',
+        'target_type',
+      ]);
+    }
+
+    const reporterPayload = reporter.body;
+    for (const rawStatus of statuses.map(([status]) => status)) {
+      expect(reporterPayload).not.toContain(rawStatus);
+    }
+    for (const forbidden of [
+      'urgent',
+      dueDate,
+      assigneeId,
+      assigneeExternalId,
+      rootCauseDetail,
+      privateNotes,
+      privateCustomerDetail,
+      permissionDecisionInternals,
+      'critical',
+      'high',
+      internalComment,
+    ]) {
+      expect(reporterPayload).not.toContain(forbidden);
+    }
+
+    const auditAfter = await dbHandle.pool.query<{ id: string }>(
+      'select id from core.audit_log where workspace_id = $1 order by id',
+      [WORKSPACE_ID],
+    );
+    expect(auditAfter.rows).toEqual(auditBefore.rows);
+
+    const scopedDeveloper = await getEntityLinks(scopedDevCookie, query);
+    expect(scopedDeveloper.statusCode).toBe(200);
+    const scopedDeveloperItems = scopedDeveloper.json<{ items: Array<Record<string, unknown>> }>()
+      .items;
+    expect(scopedDeveloperItems).toHaveLength(taskLinks.length);
+    for (const link of taskLinks) {
+      expect(scopedDeveloperItems.find((item) => item.id === link.linkId)).toMatchObject({
+        visibility_state: 'allowed',
+        source_id: sourceVoc.id,
+        target_id: link.task.id,
+        target_type: 'task',
+      });
+    }
+
+    const outOfScopeDeveloper = await getEntityLinks(outOfScopeDevCookie, query);
+    expect(outOfScopeDeveloper.statusCode).toBe(200);
+    const outOfScopeDeveloperItems = outOfScopeDeveloper.json<{
+      items: Array<Record<string, unknown>>;
+    }>().items;
+    expect(outOfScopeDeveloperItems).toHaveLength(taskLinks.length);
+    for (const link of taskLinks) {
+      const item = outOfScopeDeveloperItems.find((candidate) => candidate.id === link.linkId);
+      expect(item).toMatchObject({ visibility_state: 'hidden' });
+      expect(item).not.toHaveProperty('summary');
+      expect(item).not.toHaveProperty('source_id');
+      expect(item).not.toHaveProperty('target_id');
+    }
+
+    // tasks_status_check makes an invalid stored status unrepresentable; unit coverage carries it.
+  });
+
   it('DB tuple check allows only registered entity-link tuples', async () => {
     const { msA, endpoints, vocTarget } = await seedRegisteredTupleEndpoints();
 
