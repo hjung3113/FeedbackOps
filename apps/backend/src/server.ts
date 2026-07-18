@@ -49,6 +49,7 @@ import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
 import {
   createConversationService,
+  createPublicUpdateReviewCandidateService,
   createVocReadService,
   createVocService,
   vocRoutes,
@@ -519,6 +520,12 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     checkService,
     vocReadService,
   });
+  const publicUpdateReviewCandidateService = createPublicUpdateReviewCandidateService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    conversationService,
+  });
 
   // ── VOC Cluster module — Slice 5 issue #126 ───────────────────────────────
   const vocClustersService = createVocClustersService({
@@ -548,6 +555,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     findingsService,
     taskRequestsService,
     conversationService,
+    publicUpdateReviewCandidateService,
     idempotencyService,
     workspaceId,
     rateLimitConfig: {

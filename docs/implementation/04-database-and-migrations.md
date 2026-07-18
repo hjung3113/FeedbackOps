@@ -182,7 +182,9 @@ used in the current migrations directory.
 review obligations. Its permanent `(workspace_id, release_event_id, voc_id)`
 unique key makes pg-boss retries safe; its partial pending Task/VOC key prevents
 two unresolved obligations for the same Task/VOC. `fops_app` has SELECT and
-INSERT only. Migration `0032_task_released_review_candidates.sql` also
+INSERT plus column-scoped UPDATE only for `status`, resolver/timestamp, dismissal
+reason, and actioned Public Update fields (migration 0033); it has no DELETE,
+TRUNCATE, or table-wide UPDATE. Migration `0032_task_released_review_candidates.sql` also
 pre-creates the Task release queue with ADR-0009 retry defaults. Its resolution
 CHECK validates pending/dismissed/actioned fields, and its terminal-immutability
 trigger rejects every rewrite of an actioned or dismissed candidate. A later

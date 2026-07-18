@@ -99,6 +99,7 @@ export const AUDIT_EVENT_TYPES = [
   // Slice 7 #138: Task board status transition.
   'task_status_changed',
   'public_update_review_candidate_created',
+  'public_update_review_candidate_dismissed',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -610,6 +611,13 @@ export const publicUpdateReviewCandidateCreatedDetailSchema = z
   })
   .strict();
 
+export const publicUpdateReviewCandidateDismissedDetailSchema = z
+  .object({
+    candidate_id: z.string().uuid(),
+    dismissal_reason: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   permission_approved: permissionApprovedDetailSchema,
@@ -675,4 +683,5 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   // Slice 7 #138.
   task_status_changed: taskStatusChangedDetailSchema,
   public_update_review_candidate_created: publicUpdateReviewCandidateCreatedDetailSchema,
+  public_update_review_candidate_dismissed: publicUpdateReviewCandidateDismissedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;
