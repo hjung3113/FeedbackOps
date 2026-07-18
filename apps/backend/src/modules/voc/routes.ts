@@ -22,6 +22,7 @@ import {
   patchVocRequestSchema,
   publicUpdateRequestSchema,
   reporterReplyRequestSchema,
+  resolvePublicUpdateReviewCandidateRequestSchema,
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
@@ -34,6 +35,7 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import type { FindingsService } from '../findings/index.js';
 import type { TaskRequestsService } from '../task-requests/index.js';
 import type { ConversationService } from './conversation-service.js';
+import type { PublicUpdateReviewCandidateService } from './public-update-review-candidates/review-service.js';
 import type { ReadActorContext, VocReadService } from './read-service.js';
 import type { VocService } from './service.js';
 
@@ -51,6 +53,7 @@ export interface VocRoutesOptions {
   taskRequestsService: TaskRequestsService;
   idempotencyService: IdempotencyService;
   conversationService: ConversationService;
+  publicUpdateReviewCandidateService: PublicUpdateReviewCandidateService;
   workspaceId: string;
   rateLimitConfig?: {
     mutation: Record<string, unknown>;
@@ -69,6 +72,7 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
     taskRequestsService,
     idempotencyService,
     conversationService,
+    publicUpdateReviewCandidateService,
     workspaceId,
     rateLimitConfig,
   } = opts;
@@ -100,6 +104,81 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
     }
     return headerKey;
   }
+
+  app.route({
+    method: 'GET',
+    url: '/vocs/:id/public-update-candidates',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+      const { id: vocId } = req.params as { id: string };
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const result = await publicUpdateReviewCandidateService.list({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        vocId,
+      });
+      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/vocs/:id/apply-public-update-candidate',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+      const { id: vocId } = req.params as { id: string };
+      if (!UUID_REGEX.test(vocId)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const parsed = resolvePublicUpdateReviewCandidateRequestSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      try {
+        const result = await db.transaction((tx) =>
+          publicUpdateReviewCandidateService.resolve({
+            tx,
+            actor: {
+              actor_id: sess.actor_id,
+              workspace_id: sess.workspace_id,
+              role_level: sess.role_level,
+            },
+            vocId,
+            input: parsed.data,
+          }),
+        );
+        return reply.code(201).send(result);
+      } catch (error) {
+        if (
+          error !== null &&
+          typeof error === 'object' &&
+          'message' in error &&
+          typeof error.message === 'string' &&
+          error.message.includes('public update review candidate terminal state is immutable')
+        ) {
+          throw new HttpError('conflict.stale_write', 'review candidate is already resolved');
+        }
+        throw error;
+      }
+    },
+  });
 
   app.route({
     method: 'POST',

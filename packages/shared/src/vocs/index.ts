@@ -9,4 +9,5 @@ export * from './list-item.js';
 export * from './list-query.js';
 export * from './patch-request.js';
 export * from './public-update-request.js';
+export * from './public-update-review-candidate.js';
 export * from './reporter-reply-request.js';

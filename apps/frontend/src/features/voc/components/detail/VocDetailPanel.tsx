@@ -4,6 +4,7 @@
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
+import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
@@ -24,6 +25,7 @@ import { toast } from 'sonner';
 import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
 import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
 import { ComposerSection } from './ComposerSection';
+import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
 import { ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
 import { DetailHeader } from './DetailHeader';
@@ -190,6 +192,7 @@ function FullDetailView({
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
   const [createFindingOpen, setCreateFindingOpen] = React.useState(false);
   const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
+  const [reviewOpen, setReviewOpen] = React.useState(false);
   const navigate = useNavigate();
   const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
     useIdempotencyKey();
@@ -240,6 +243,8 @@ function FullDetailView({
 
   // FE display hint only (ADR-0024 §C): gate button to Admin or Developer.
   const canCreateFinding = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
+  const reviewCandidates = usePublicUpdateReviewCandidates(voc.id, canCreateFinding);
+  const pendingReviewCount = reviewCandidates.data?.items.length ?? 0;
   const canRequestTask = canCreateFinding;
   const showsSimilarVocSection = hasSimilarVocSection(voc.similar, voc.similar_count);
   const detailSections = showsSimilarVocSection
@@ -357,6 +362,13 @@ function FullDetailView({
           <div data-anchor="internal" />
           <div data-anchor="compose">
             <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
+            {canCreateFinding && pendingReviewCount > 0 && (
+              <div className="mt-2 flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => setReviewOpen(true)} data-testid="public-update-review-button">
+                  리뷰 <span className="ml-1 rounded-full bg-surface-muted px-1.5 py-0.5 text-xs">{pendingReviewCount}</span>
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -408,6 +420,7 @@ function FullDetailView({
           });
         }}
       />
+      <PublicUpdateReviewModal voc={voc} open={reviewOpen} onOpenChange={setReviewOpen} />
     </>
   );
 }
