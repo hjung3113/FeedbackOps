@@ -35,6 +35,28 @@ CREATE TABLE voc.public_update_review_candidates (
 );
 --> statement-breakpoint
 
+-- Terminal candidates are historical review decisions. Resolution-field CHECKs
+-- validate each state; this trigger prevents terminal-to-pending or
+-- terminal-to-terminal rewrites. A new Task release creates a new row.
+CREATE FUNCTION voc.prevent_public_update_review_candidate_terminal_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF OLD.status IN ('dismissed', 'actioned') AND NEW IS DISTINCT FROM OLD THEN
+    RAISE EXCEPTION 'public update review candidate terminal state is immutable'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER public_update_review_candidates_terminal_immutable
+  BEFORE UPDATE ON voc.public_update_review_candidates
+  FOR EACH ROW
+  EXECUTE FUNCTION voc.prevent_public_update_review_candidate_terminal_mutation();
+--> statement-breakpoint
+
 CREATE UNIQUE INDEX public_update_review_candidates_release_voc_uq
   ON voc.public_update_review_candidates (workspace_id, release_event_id, voc_id);
 --> statement-breakpoint

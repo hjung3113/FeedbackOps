@@ -202,12 +202,13 @@ describe.skipIf(!runIntegration)(
         returning id`,
         [WORKSPACE_ID, voc.id, task.id, task.msId, adminActorId],
       );
+      const idempotencyKey = randomUUID();
       const response = await patchTask(
         adminCookie,
         task.id,
         { status: "released" },
         {
-          idempotencyKey: randomUUID(),
+          idempotencyKey,
           ifMatch: task.updatedAt,
         },
       );
@@ -221,9 +222,213 @@ describe.skipIf(!runIntegration)(
       expect(jobs.rows[0]?.data).toMatchObject({
         workspace_id: WORKSPACE_ID,
         task_id: task.id,
+        correlation_id: idempotencyKey,
         triggered_by_actor_id: adminActorId,
         linked_vocs: [{ voc_id: voc.id, entity_link_id: link.rows[0]?.id }],
       });
+      expect(jobs.rows[0]?.data.release_event_id).toEqual(expect.any(String));
+    });
+
+    it("publishes one two-VOC snapshot only for a real transition into released", async () => {
+      const task = await seedTask("doing");
+      const owner = await insertDevActor(dbHandle, WORKSPACE_ID, uid("release-owner"));
+      const vocs = await Promise.all(
+        ["First", "Second"].map((title) =>
+          insertVocDirectly(migrateHandle, WORKSPACE_ID, task.msId, owner.id, title),
+        ),
+      );
+      const links = await Promise.all(
+        vocs.map((voc) =>
+          migrateHandle.pool.query<{ id: string }>(
+            `insert into core.entity_links (
+              workspace_id, source_type, source_id, target_type, target_id,
+              relation_type, visibility, status, managed_system_id, created_by
+            ) values ($1, 'voc', $2, 'task', $3, 'evidence_of', 'internal_only', 'active', $4, $5)
+            returning id`,
+            [WORKSPACE_ID, voc.id, task.id, task.msId, adminActorId],
+          ),
+        ),
+      );
+      const key = randomUUID();
+      const released = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "released" },
+        { idempotencyKey: key, ifMatch: task.updatedAt },
+      );
+      expect(released.statusCode).toBe(200);
+      const jobRows = await migrateHandle.pool.query<{ data: Record<string, unknown> }>(
+        `select data from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+      );
+      expect(jobRows.rowCount).toBe(1);
+      expect(jobRows.rows[0]?.data).toMatchObject({
+        correlation_id: key,
+        triggered_by_actor_id: adminActorId,
+        linked_vocs: [
+          { voc_id: vocs[0]?.id, entity_link_id: links[0]?.rows[0]?.id },
+          { voc_id: vocs[1]?.id, entity_link_id: links[1]?.rows[0]?.id },
+        ],
+      });
+
+      const releaseBody = released.json<{ updated_at: string }>();
+      const same = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "released" },
+        { idempotencyKey: randomUUID(), ifMatch: releaseBody.updated_at },
+      );
+      expect(same.statusCode).toBe(200);
+      const reopened = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "reopened" },
+        { idempotencyKey: randomUUID(), ifMatch: releaseBody.updated_at },
+      );
+      expect(reopened.statusCode).toBe(200);
+      const replay = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "released" },
+        { idempotencyKey: key, ifMatch: task.updatedAt },
+      );
+      expect(replay.statusCode).toBe(200);
+      const after = await migrateHandle.pool.query(
+        `select 1 from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+      );
+      expect(after.rowCount).toBe(1);
+    });
+
+    it("does not publish for stale, unauthorized, or failed release mutations", async () => {
+      const task = await seedTask("doing");
+      const countJobs = async () =>
+        migrateHandle.pool.query(
+          `select 1 from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+        );
+      const stale = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "released" },
+        { idempotencyKey: randomUUID(), ifMatch: "2000-01-01T00:00:00.000Z" },
+      );
+      expect(stale.statusCode).toBe(409);
+      expect((await countJobs()).rowCount).toBe(0);
+      const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid("release-denied"));
+      const denied = await patchTask(
+        await loginAs(app, dev.externalId),
+        task.id,
+        { status: "released" },
+        { idempotencyKey: randomUUID(), ifMatch: task.updatedAt },
+      );
+      expect(denied.statusCode).toBe(403);
+      expect((await countJobs()).rowCount).toBe(0);
+      const invalid = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "not-a-status" },
+        { idempotencyKey: randomUUID(), ifMatch: task.updatedAt },
+      );
+      expect(invalid.statusCode).toBe(422);
+      expect((await countJobs()).rowCount).toBe(0);
+    });
+
+    it("excludes detached links and archived VOCs from the release snapshot", async () => {
+      const task = await seedTask("doing");
+      const archivedVoc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        task.msId,
+        adminActorId,
+        "Archived candidate VOC",
+      );
+      const detachedVoc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        task.msId,
+        adminActorId,
+        "Detached candidate VOC",
+      );
+      await migrateHandle.pool.query(
+        `update voc.vocs set archived_at = now() where id = $1`,
+        [archivedVoc.id],
+      );
+      await migrateHandle.pool.query(
+        `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        ) values
+          ($1, 'voc', $2, 'task', $4, 'evidence_of', 'internal_only', 'active', $5, $6),
+          ($1, 'voc', $3, 'task', $4, 'evidence_of', 'internal_only', 'detached', $5, $6)`,
+        [WORKSPACE_ID, archivedVoc.id, detachedVoc.id, task.id, task.msId, adminActorId],
+      );
+      const res = await patchTask(
+        adminCookie,
+        task.id,
+        { status: "released" },
+        { idempotencyKey: randomUUID(), ifMatch: task.updatedAt },
+      );
+      expect(res.statusCode).toBe(200);
+      const jobs = await migrateHandle.pool.query(
+        `select 1 from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+      );
+      expect(jobs.rowCount).toBe(0);
+    });
+
+    it("rolls back the status and leaves zero jobs when enqueue fails inside the transaction", async () => {
+      const task = await seedTask("doing");
+      const voc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        task.msId,
+        adminActorId,
+        "Rollback candidate VOC",
+      );
+      await migrateHandle.pool.query(
+        `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        ) values ($1, 'voc', $2, 'task', $3, 'evidence_of', 'internal_only', 'active', $4, $5)`,
+        [WORKSPACE_ID, voc.id, task.id, task.msId, adminActorId],
+      );
+      await migrateHandle.pool.query(`
+        create or replace function pgboss.fail_issue_165_enqueue()
+        returns trigger language plpgsql as $$
+        begin
+          raise exception 'forced enqueue failure';
+        end;
+        $$;
+        create trigger fail_issue_165_enqueue
+          before insert on pgboss.job
+          for each row execute function pgboss.fail_issue_165_enqueue();
+      `);
+      try {
+        const res = await patchTask(
+          adminCookie,
+          task.id,
+          { status: "released" },
+          { idempotencyKey: randomUUID(), ifMatch: task.updatedAt },
+        );
+        expect(res.statusCode).toBe(500);
+        const taskAfter = await migrateHandle.pool.query<{ status: string }>(
+          `select status from task.tasks where id = $1`,
+          [task.id],
+        );
+        expect(taskAfter.rows[0]?.status).toBe("doing");
+        const jobs = await migrateHandle.pool.query(
+          `select 1 from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+        );
+        expect(jobs.rowCount).toBe(0);
+        const audits = await migrateHandle.pool.query(
+          `select 1 from core.audit_log
+            where event_type = 'task_status_changed' and subject_id = $1`,
+          [task.id],
+        );
+        expect(audits.rowCount).toBe(0);
+      } finally {
+        await migrateHandle.pool.query(`
+          drop trigger if exists fail_issue_165_enqueue on pgboss.job;
+          drop function if exists pgboss.fail_issue_165_enqueue();
+        `);
+      }
     });
 
     it("returns 404 for a missing task", async () => {

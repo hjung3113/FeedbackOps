@@ -11,21 +11,19 @@
 // The migrate-role connection (DATABASE_URL_MIGRATE) is never imported here —
 // only drizzle-kit and the seed script touch it (ADR-0008).
 
-import { loadConfig } from "./config.js";
-import { createDb } from "./db/client.js";
-import { initBoss, shutdownBoss } from "./lib/jobs.js";
-import { getStorage } from "./lib/storage/factory.js";
-import { registerCoreJobs } from "./modules/core/jobs/index.js";
-import { registerTasksJobs } from "./modules/tasks/index.js";
-import { createAuditService } from "./modules/core/audit/index.js";
-import { createPublicUpdateReviewCandidatesService } from "./modules/voc/public-update-review-candidates/service.js";
-import { buildServer } from "./server.js";
+import { loadConfig } from './config.js';
+import { createDb } from './db/client.js';
+import { initBoss, shutdownBoss } from './lib/jobs.js';
+import { getStorage } from './lib/storage/factory.js';
+import { createAuditService } from './modules/core/audit/index.js';
+import { registerCoreJobs } from './modules/core/jobs/index.js';
+import { registerTasksJobs } from './modules/tasks/index.js';
+import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
+import { buildServer } from './server.js';
 
 const config = loadConfig();
 if (!config.DATABASE_URL) {
-  console.error(
-    "DATABASE_URL is required to start the backend (fops_app role).",
-  );
+  console.error('DATABASE_URL is required to start the backend (fops_app role).');
   process.exit(1);
 }
 
@@ -39,11 +37,10 @@ await registerCoreJobs(boss, {
 });
 await registerTasksJobs(boss, {
   db: dbHandle.db,
-  publicUpdateReviewCandidatesService:
-    createPublicUpdateReviewCandidatesService({
-      db: dbHandle.db,
-      auditService: createAuditService(),
-    }),
+  publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
+    db: dbHandle.db,
+    auditService: createAuditService(),
+  }),
 });
 
 const app = await buildServer({ config, dbHandle, boss });
@@ -55,7 +52,7 @@ let shuttingDown = false;
 async function shutdown(signal: string, code = 0): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
-  app.log.info({ signal }, "shutting down");
+  app.log.info({ signal }, 'shutting down');
   try {
     // ADR-0009: pg-boss drains BEFORE Fastify so in-flight jobs that need a
     // live HTTP path (e.g. webhook callouts) still have one.
@@ -63,17 +60,17 @@ async function shutdown(signal: string, code = 0): Promise<void> {
     await app.close();
     await dbHandle.close();
   } catch (err) {
-    app.log.error({ err }, "error during shutdown");
+    app.log.error({ err }, 'error during shutdown');
     process.exit(1);
   }
   process.exit(code);
 }
 
-process.on("SIGTERM", () => {
-  void shutdown("SIGTERM");
+process.on('SIGTERM', () => {
+  void shutdown('SIGTERM');
 });
-process.on("SIGINT", () => {
-  void shutdown("SIGINT");
+process.on('SIGINT', () => {
+  void shutdown('SIGINT');
 });
 
 try {

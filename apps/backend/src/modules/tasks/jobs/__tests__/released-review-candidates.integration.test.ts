@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAuditService } from "../../../core/audit/index.js";
 import { type DbHandle, createDb } from "../../../../db/client.js";
 import {
+  insertPublicUpdate,
   insertMsDirectly,
   insertVocDirectly,
   uid,
@@ -71,7 +72,22 @@ describe.skipIf(!runIntegration)(
       );
     }
 
-    it("inserts once, audits only inserted rows, and never changes VOC public state", async () => {
+    it('boot migration pre-creates the release queue with ADR-0009 retry settings', async () => {
+      const queue = await migrateHandle.pool.query<{
+        retry_limit: number;
+        retry_delay: number;
+        retry_backoff: boolean;
+      }>(
+        `select retry_limit, retry_delay, retry_backoff
+           from pgboss.queue
+          where name = 'tasks.create_public_update_review_candidates'`,
+      );
+      expect(queue.rows).toEqual([
+        { retry_limit: 5, retry_delay: 30, retry_backoff: true },
+      ]);
+    });
+
+    it("inserts one candidate per VOC, is retry-safe after actioning, and never changes reporter conversation", async () => {
       const msId = await insertMsDirectly(
         appHandle,
         WORKSPACE_ID,
@@ -90,16 +106,32 @@ describe.skipIf(!runIntegration)(
         actorId,
         "Candidate VOC",
       );
+      const secondVoc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        msId,
+        actorId,
+        "Second candidate VOC",
+      );
       const link = await migrateHandle.pool.query<{ id: string }>(
         `insert into core.entity_links (workspace_id, source_type, source_id, target_type, target_id, relation_type, visibility, status, managed_system_id, created_by)
        values ($1, 'voc', $2, 'task', $3, 'evidence_of', 'internal_only', 'active', $4, $5) returning id`,
         [WORKSPACE_ID, voc.id, task.id, msId, actorId],
       );
+      const secondLink = await migrateHandle.pool.query<{ id: string }>(
+        `insert into core.entity_links (workspace_id, source_type, source_id, target_type, target_id, relation_type, visibility, status, managed_system_id, created_by)
+       values ($1, 'voc', $2, 'task', $3, 'evidence_of', 'internal_only', 'active', $4, $5) returning id`,
+        [WORKSPACE_ID, secondVoc.id, task.id, msId, actorId],
+      );
       const before = await appHandle.pool.query<{
         reporter_facing_status: string;
         updates: string;
+        reporter_replies: string;
       }>(
-        `select reporter_facing_status, (select count(*)::text from voc.voc_public_updates where voc_id = $1) as updates from voc.vocs where id = $1`,
+        `select reporter_facing_status,
+                (select count(*)::text from voc.voc_public_updates where voc_id = $1) as updates,
+                (select count(*)::text from voc.voc_reporter_replies where voc_id = $1) as reporter_replies
+           from voc.vocs where id = $1`,
         [voc.id],
       );
       const handler = releasedReviewCandidatesHandler({
@@ -115,27 +147,34 @@ describe.skipIf(!runIntegration)(
         release_event_id: randomUUID(),
         correlation_id: randomUUID(),
         triggered_by_actor_id: actorId,
-        linked_vocs: [{ voc_id: voc.id, entity_link_id: link.rows[0]!.id }],
+        linked_vocs: [
+          { voc_id: voc.id, entity_link_id: link.rows[0]!.id },
+          { voc_id: secondVoc.id, entity_link_id: secondLink.rows[0]!.id },
+        ],
       };
       await handler([{ data: payload }]);
       await handler([{ data: payload }]);
       const candidates = await appHandle.pool.query(
-        `select * from voc.public_update_review_candidates where voc_id = $1`,
-        [voc.id],
+        `select * from voc.public_update_review_candidates where source_task_id = $1`,
+        [task.id],
       );
       const audit = await appHandle.pool.query(
-        `select * from core.audit_log where event_type = 'public_update_review_candidate_created' and subject_id = $1`,
-        [voc.id],
+        `select * from core.audit_log where event_type = 'public_update_review_candidate_created' and subject_type = 'voc' and workspace_id = $1`,
+        [WORKSPACE_ID],
       );
       const after = await appHandle.pool.query<{
         reporter_facing_status: string;
         updates: string;
+        reporter_replies: string;
       }>(
-        `select reporter_facing_status, (select count(*)::text from voc.voc_public_updates where voc_id = $1) as updates from voc.vocs where id = $1`,
+        `select reporter_facing_status,
+                (select count(*)::text from voc.voc_public_updates where voc_id = $1) as updates,
+                (select count(*)::text from voc.voc_reporter_replies where voc_id = $1) as reporter_replies
+           from voc.vocs where id = $1`,
         [voc.id],
       );
-      expect(candidates.rowCount).toBe(1);
-      expect(audit.rowCount).toBe(1);
+      expect(candidates.rowCount).toBe(2);
+      expect(audit.rowCount).toBe(2);
       expect(audit.rows[0]?.actor_id).toBe(actorId);
       expect(after.rows[0]).toEqual(before.rows[0]);
 
@@ -159,6 +198,43 @@ describe.skipIf(!runIntegration)(
         [voc.id],
       );
       expect(afterTerminal.rowCount).toBe(2);
+
+      const publicUpdateId = await insertPublicUpdate(
+        migrateHandle,
+        voc.id,
+        actorId,
+      );
+      await migrateHandle.pool.query(
+        `update voc.public_update_review_candidates
+            set status = 'actioned', resolved_by_actor_id = $2, resolved_at = now(), actioned_public_update_id = $3
+          where voc_id = $1 and status = 'pending'`,
+        [secondVoc.id, actorId, publicUpdateId],
+      );
+      await handler([{ data: payload }]);
+      const replayAfterActioned = await appHandle.pool.query(
+        `select 1 from voc.public_update_review_candidates
+          where source_task_id = $1 and release_event_id = $2`,
+        [task.id, payload.release_event_id],
+      );
+      expect(replayAfterActioned.rowCount).toBe(2);
+
+      await expect(
+        migrateHandle.pool.query(
+          `update voc.public_update_review_candidates
+              set status = 'pending', resolved_by_actor_id = null, resolved_at = null,
+                  dismissal_reason = null, actioned_public_update_id = null
+            where voc_id = $1 and status = 'dismissed'`,
+          [voc.id],
+        ),
+      ).rejects.toThrow(/terminal state is immutable/);
+      await expect(
+        migrateHandle.pool.query(
+          `update voc.public_update_review_candidates
+              set dismissal_reason = 'invalid while pending'
+            where voc_id = $1 and status = 'pending'`,
+          [voc.id],
+        ),
+      ).rejects.toThrow(/public_update_review_candidates_resolution_check/);
     });
   },
 );
