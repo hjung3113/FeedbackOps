@@ -398,13 +398,14 @@ describe.skipIf(!runIntegration)(
     });
 
     it("keeps explicit-grant reporter visibility through Entity Links consumers", async () => {
-      const listActiveVocLinks = (actorInput: Actor) =>
+      const listActiveFindingTargetLinks = (actorInput: Actor) =>
         entityLinksService.listLinks({
           actor: actorInput,
-          endpoint: { type: "voc", id: ids.activeVoc },
+          endpoint: { type: "finding", id: ids.activeFinding },
+          side: "target",
         });
 
-      await expect(listActiveVocLinks(actor("reporterWithGrant", "user"))).resolves.toEqual(
+      await expect(listActiveFindingTargetLinks(actor("reporterWithGrant", "user"))).resolves.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             source_id: ids.activeVoc,
@@ -417,7 +418,7 @@ describe.skipIf(!runIntegration)(
         ]),
       );
       await expect(
-        listActiveVocLinks(actor("unscopedDeveloper", "developer")),
+        listActiveFindingTargetLinks(actor("unscopedDeveloper", "developer")),
       ).rejects.toMatchObject({
         code: "not_found.record",
       } satisfies Partial<HttpError>);
@@ -531,7 +532,7 @@ describe.skipIf(!runIntegration)(
       const userWithGrant = actor("userWithGrant", "user");
       const reporterWithGrant = actor("reporterWithGrant", "user");
       const matrix = [
-        ["entity-links", () => expect(entityLinksService.listLinks({ actor: reporterWithGrant, endpoint: { type: "voc", id: ids.activeVoc } })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ source_id: ids.activeVoc, target_id: ids.activeFinding, relation_type: "evidence_of", visibility_state: "allowed" })]))],
+        ["entity-links", () => expect(entityLinksService.listLinks({ actor: reporterWithGrant, endpoint: { type: "finding", id: ids.activeFinding }, side: "target" })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ source_id: ids.activeVoc, target_id: ids.activeFinding, relation_type: "evidence_of", visibility_state: "allowed" })]))],
         ["voc-clusters", () => expect(vocClustersService.getCluster({ actor: userWithGrant, clusterId: ids.activeCluster })).rejects.toMatchObject({ code: "not_found.record" } satisfies Partial<HttpError>)],
         ["tasks", () => expect(tasksService.getTask({ actor: userWithGrant, taskId: ids.activeTask })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
         ["task-requests", () => expect(taskRequestsService.listTaskRequests({ actor: userWithGrant })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
