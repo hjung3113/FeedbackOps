@@ -74,6 +74,10 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
       [WORKSPACE_ID],
     );
     await migrateHandle.pool.query(
+      `delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'`,
+      [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );

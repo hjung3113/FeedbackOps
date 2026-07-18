@@ -21,6 +21,7 @@ const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 const SLUG_PREFIX = 'it-survey-create';
+const BASIC_EXTERNAL_ID = `${SLUG_PREFIX}-basic-${randomUUID().slice(0, 8)}`;
 
 describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
   let appHandle: DbHandle;
@@ -50,11 +51,11 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
       `insert into core.actors (workspace_id, external_id, email, display_name, role_level, actor_type)
        values ($1, $2, $3, $4, 'user', 'internal_member')
        returning id`,
-      [WORKSPACE_ID, `${SLUG_PREFIX}-basic`, `${SLUG_PREFIX}-basic@local`, 'Survey Basic User'],
+      [WORKSPACE_ID, BASIC_EXTERNAL_ID, `${BASIC_EXTERNAL_ID}@local`, 'Survey Basic User'],
     );
     basicActorId = basic.rows[0]?.id ?? '';
     if (!basicActorId) throw new Error('basic actor seed failed');
-    basicCookie = await loginAs(app, `${SLUG_PREFIX}-basic`);
+    basicCookie = await loginAs(app, BASIC_EXTERNAL_ID);
   });
 
   beforeEach(async () => {
@@ -65,7 +66,7 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
     await cleanupFixtures();
     await migrateHandle.pool.query(
       'delete from core.actors where workspace_id = $1 and external_id = $2',
-      [WORKSPACE_ID, `${SLUG_PREFIX}-basic`],
+      [WORKSPACE_ID, BASIC_EXTERNAL_ID],
     );
     await app?.close();
     await appHandle?.close();
@@ -96,8 +97,8 @@ describe.skipIf(!runIntegration)('POST /surveys (#184)', () => {
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
-      `delete from permission.permission_grants where workspace_id = $1 and actor_id in (
-        select id from core.actors where workspace_id = $1 and external_id like $2
+      `delete from permission.permission_grants where workspace_id = $1 and managed_system_id in (
+        ${managedSystems}
       )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
