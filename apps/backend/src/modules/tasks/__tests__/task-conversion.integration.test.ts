@@ -17,6 +17,7 @@ import {
   grantCapability,
   insertDevActor,
   insertMsDirectly,
+  insertVocDirectly,
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
@@ -112,6 +113,14 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     );
     await migrateHandle.pool.query(
       `delete from finding.findings
+        where workspace_id = $1
+          and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from voc.vocs
         where workspace_id = $1
           and primary_managed_system_id in (
             select id from core.managed_systems where workspace_id = $1 and slug like $2
@@ -356,6 +365,58 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       [WORKSPACE_ID, request.id],
     );
     expect(count.rows[0]?.n).toBe(1);
+  });
+
+  it('convert: direct VOC requested_task preserves exactly one active VOC evidence_of Task link on replay', async () => {
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Direct VOC conversion MS',
+    );
+    const voc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msId,
+      userActorId,
+      'Direct task-request VOC',
+    );
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceId: voc.id,
+      primaryManagedSystemId: msId,
+      evidenceSummary: 'Direct VOC evidence',
+      requestedOutcome: 'Preserve direct evidence',
+      requesterActorId: userActorId,
+      status: 'approved',
+      reviewerActorId: adminActorId,
+      decisionReason: 'Approved in seed',
+      decided: true,
+    });
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (
+        workspace_id, source_type, source_id, target_type, target_id,
+        relation_type, visibility, status, managed_system_id, created_by
+      ) values ($1, 'voc', $2, 'task_request', $3, 'requested_task',
+                'internal_only', 'active', $4, $5)`,
+      [WORKSPACE_ID, voc.id, request.id, msId, adminActorId],
+    );
+    const key = randomUUID();
+    const payload = { title: 'Task from direct VOC', priority: 'medium' };
+    const first = await convert(adminCookie, request.id, payload, key);
+    const second = await convert(adminCookie, request.id, payload, key);
+    expect(first.statusCode).toBe(201);
+    expect(second.statusCode).toBe(201);
+    const taskId = first.json<{ id: string }>().id;
+    const evidence = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n
+         from core.entity_links
+        where workspace_id = $1 and source_type = 'voc' and source_id = $2
+          and target_type = 'task' and target_id = $3
+          and relation_type = 'evidence_of' and status = 'active'`,
+      [WORKSPACE_ID, voc.id, taskId],
+    );
+    expect(evidence.rows[0]?.n).toBe(1);
   });
 
   it('link-task links an existing in-scope task, marks converted, and audits the link decision', async () => {

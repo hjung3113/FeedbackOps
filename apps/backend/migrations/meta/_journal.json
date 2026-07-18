@@ -225,6 +225,13 @@
       "when": 1782000000000,
       "tag": "0031_voc_cluster_finding_evidence_link",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1782100000000,
+      "tag": "0032_task_released_review_candidates",
+      "breakpoints": true
     }
   ]
 }

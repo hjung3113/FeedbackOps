@@ -1,10 +1,13 @@
-import { sql } from 'drizzle-orm';
+import { sql } from "drizzle-orm";
 
-import type { EntityLinkEntityType, EntityLinkRelationType } from '@fops/shared';
+import type {
+  EntityLinkEntityType,
+  EntityLinkRelationType,
+} from "@fops/shared";
 
-import type { Db } from '../../db/client.js';
-import { vocs } from '../../db/schema/voc.js';
-import type { Tx } from '../../db/tx.js';
+import type { Db } from "../../db/client.js";
+import { vocs } from "../../db/schema/voc.js";
+import type { Tx } from "../../db/tx.js";
 
 export interface LinkEndpointRow {
   workspace_id: string;
@@ -20,8 +23,12 @@ export interface EntityLinkRow {
   target_type: EntityLinkEntityType;
   target_id: string;
   relation_type: EntityLinkRelationType;
-  visibility: 'internal_only' | 'summary_visible' | 'visible_to_reporter' | 'admin_only';
-  status: 'active' | 'stale' | 'detached' | 'revoked';
+  visibility:
+    | "internal_only"
+    | "summary_visible"
+    | "visible_to_reporter"
+    | "admin_only";
+  status: "active" | "stale" | "detached" | "revoked";
   managed_system_id: string;
   created_by: string;
   created_at: Date;
@@ -29,6 +36,41 @@ export interface EntityLinkRow {
   detached_by: string | null;
   detach_reason: string | null;
   detached_at: Date | null;
+}
+
+/** A release-time, canonical VOC -> Task link snapshot. */
+export interface ReleasedTaskVocLink {
+  voc_id: string;
+  entity_link_id: string;
+}
+
+// This query deliberately lives with Entity Links: it defines a canonical
+// relationship, while the Task service only snapshots its result.  The VOC
+// join prevents a detached/archived/cross-workspace source from becoming a
+// later public-update obligation.
+export async function selectEligibleVocLinksForReleasedTask(
+  db: Db | Tx,
+  input: { workspaceId: string; taskId: string },
+): Promise<ReleasedTaskVocLink[]> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT link.source_id AS voc_id, link.id AS entity_link_id
+    FROM core.entity_links AS link
+    JOIN voc.vocs AS voc
+      ON voc.id = link.source_id
+     AND voc.workspace_id = link.workspace_id
+     AND voc.archived_at IS NULL
+    WHERE link.workspace_id = ${input.workspaceId}
+      AND link.source_type = 'voc'
+      AND link.target_type = 'task'
+      AND link.target_id = ${input.taskId}
+      AND link.relation_type = 'evidence_of'
+      AND link.status = 'active'
+    ORDER BY link.created_at ASC, link.id ASC
+  `);
+  return result.rows.map((row) => ({
+    voc_id: row.voc_id as string,
+    entity_link_id: row.entity_link_id as string,
+  }));
 }
 
 function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
@@ -40,12 +82,14 @@ function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
     target_type: row.target_type as EntityLinkEntityType,
     target_id: row.target_id as string,
     relation_type: row.relation_type as EntityLinkRelationType,
-    visibility: row.visibility as EntityLinkRow['visibility'],
-    status: row.status as EntityLinkRow['status'],
+    visibility: row.visibility as EntityLinkRow["visibility"],
+    status: row.status as EntityLinkRow["status"],
     managed_system_id: row.managed_system_id as string,
     created_by: row.created_by as string,
     created_at:
-      row.created_at instanceof Date ? row.created_at : new Date(row.created_at as string),
+      row.created_at instanceof Date
+        ? row.created_at
+        : new Date(row.created_at as string),
     updated_at:
       row.updated_at === null || row.updated_at === undefined
         ? null
@@ -101,7 +145,7 @@ export async function insertActiveEntityLink(
     relationType: EntityLinkRelationType;
     managedSystemId: string;
     createdBy: string;
-    visibility: 'internal_only';
+    visibility: "internal_only";
   },
 ): Promise<{ row: EntityLinkRow; inserted: boolean }> {
   const inserted = await (tx as Db).execute<Record<string, unknown>>(sql`
@@ -123,7 +167,8 @@ export async function insertActiveEntityLink(
       created_at, updated_at, detached_by, detach_reason, detached_at
   `);
   const insertedRow = inserted.rows[0];
-  if (insertedRow) return { row: mapEntityLinkRow(insertedRow), inserted: true };
+  if (insertedRow)
+    return { row: mapEntityLinkRow(insertedRow), inserted: true };
 
   const existing = await selectActiveEntityLink(tx, {
     workspaceId: input.workspaceId,
@@ -134,7 +179,7 @@ export async function insertActiveEntityLink(
     relationType: input.relationType,
   });
   if (!existing) {
-    throw new Error('entity link conflict did not return existing active row');
+    throw new Error("entity link conflict did not return existing active row");
   }
   return { row: existing, inserted: false };
 }
@@ -175,13 +220,13 @@ export async function selectActiveLinksForEndpoint(
     workspaceId: string;
     endpointType: EntityLinkEntityType;
     endpointId: string;
-    side?: 'source' | 'target';
+    side?: "source" | "target";
   },
 ): Promise<EntityLinkRow[]> {
   const sidePredicate =
-    input.side === 'source'
+    input.side === "source"
       ? sql`source_type = ${input.endpointType} AND source_id = ${input.endpointId}`
-      : input.side === 'target'
+      : input.side === "target"
         ? sql`target_type = ${input.endpointType} AND target_id = ${input.endpointId}`
         : sql`(
             (source_type = ${input.endpointType} AND source_id = ${input.endpointId})
@@ -206,8 +251,8 @@ export async function selectLinksByWorkspace(
   db: Db | Tx,
   input: {
     workspaceId: string;
-    statuses?: EntityLinkRow['status'][];
-    relationType?: EntityLinkRow['relation_type'];
+    statuses?: EntityLinkRow["status"][];
+    relationType?: EntityLinkRow["relation_type"];
     managedSystemId?: string;
   },
 ): Promise<EntityLinkRow[]> {

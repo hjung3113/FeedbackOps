@@ -51,6 +51,7 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'voc.voc_public_updates': ['SELECT', 'INSERT'],
   'voc.voc_reporter_replies': ['SELECT', 'INSERT'],
   'voc.voc_internal_comments': ['SELECT', 'INSERT'],
+  'voc.public_update_review_candidates': ['SELECT', 'INSERT'],
   'voc.reporter_facing_status_transitions': ['SELECT'],
 };
 

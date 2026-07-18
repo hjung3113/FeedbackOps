@@ -63,3 +63,7 @@ prototype shows that strip only on the backlog view.
 - The frontend board contract is intentionally broader than the six-column
   prototype where the accepted Issue #138 requirements require seven columns
   and a stats strip.
+
+## Implementation note — Issue #165
+
+The deferred release side effect is implemented: a real transition into `released` snapshots eligible active direct `voc -> task evidence_of` links and publishes one atomic pg-boss job. Same-status, away-from-released, stale, failed, and unauthorized mutations publish nothing. Candidate creation remains asynchronous and never updates reporter-facing VOC state.

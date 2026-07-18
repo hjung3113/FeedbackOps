@@ -98,6 +98,7 @@ export const AUDIT_EVENT_TYPES = [
   'finding_task_linked',
   // Slice 7 #138: Task board status transition.
   'task_status_changed',
+  'public_update_review_candidate_created',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -598,6 +599,17 @@ export const taskStatusChangedDetailSchema = z
   .strict();
 export type TaskStatusChangedDetail = z.infer<typeof taskStatusChangedDetailSchema>;
 
+export const publicUpdateReviewCandidateCreatedDetailSchema = z
+  .object({
+    candidate_id: z.string().uuid(),
+    voc_id: z.string().uuid(),
+    source_task_id: z.string().uuid(),
+    source_entity_link_id: z.string().uuid(),
+    release_event_id: z.string().uuid(),
+    correlation_id: z.string().uuid(),
+  })
+  .strict();
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   permission_approved: permissionApprovedDetailSchema,
@@ -662,4 +674,5 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   finding_task_linked: findingTaskLinkedDetailSchema,
   // Slice 7 #138.
   task_status_changed: taskStatusChangedDetailSchema,
+  public_update_review_candidate_created: publicUpdateReviewCandidateCreatedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

@@ -7,6 +7,9 @@ import {
   type TaskDto,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
+import { randomUUID } from 'node:crypto';
+import { sql } from 'drizzle-orm';
+import { fromDrizzle, type PgBoss } from 'pg-boss';
 
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
@@ -15,10 +18,15 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import {
   type EntityLinkRow,
   insertActiveEntityLink,
+  selectEligibleVocLinksForReleasedTask,
   selectActiveLinksForEndpoint,
 } from '../entity-links/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
+import {
+  TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
+  type TaskReleasedReviewCandidatesPayload,
+} from './jobs/released-review-candidates.js';
 import {
   type TaskRow,
   findTaskById,
@@ -41,6 +49,7 @@ export interface TasksServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  boss?: PgBoss;
 }
 
 function taskToDto(row: TaskRow): TaskDto {
@@ -170,6 +179,27 @@ async function preserveSourceLinks(args: {
       });
       preserved.push(taskEvidenceLink.row);
     }
+  }
+
+  for (const sourceLink of sourceLinks) {
+    if (sourceLink.source_type !== 'voc' || sourceLink.relation_type !== 'requested_task') continue;
+    const tuple = registeredEntityLinkPairSchema.parse({
+      source_type: 'voc',
+      target_type: 'task',
+      relation_type: 'evidence_of',
+    });
+    const taskEvidenceLink = await insertActiveEntityLink(args.tx, {
+      workspaceId: args.actor.workspace_id,
+      sourceType: tuple.source_type,
+      sourceId: sourceLink.source_id,
+      targetType: tuple.target_type,
+      targetId: args.task.id,
+      relationType: tuple.relation_type,
+      managedSystemId: args.task.primary_managed_system_id,
+      createdBy: args.actor.actor_id,
+      visibility: 'internal_only',
+    });
+    preserved.push(taskEvidenceLink.row);
   }
 
   return preserved;
@@ -414,6 +444,31 @@ export function createTasksService(deps: TasksServiceDeps) {
             taskId: task.id,
             status: args.input.status,
           });
+          if (task.status !== 'released' && updatedTask.status === 'released') {
+            if (!deps.boss) {
+              throw new Error('pg-boss is required to publish released Task review candidates');
+            }
+            const linkedVocs = await selectEligibleVocLinksForReleasedTask(tx, {
+              workspaceId: args.actor.workspace_id,
+              taskId: updatedTask.id,
+            });
+            if (linkedVocs.length > 0) {
+              const payload: TaskReleasedReviewCandidatesPayload = {
+                workspace_id: args.actor.workspace_id,
+                task_id: updatedTask.id,
+                release_event_id: randomUUID(),
+                correlation_id: args.idempotencyKey,
+                triggered_by_actor_id: args.actor.actor_id,
+                linked_vocs: linkedVocs.map((link) => ({
+                  voc_id: link.voc_id,
+                  entity_link_id: link.entity_link_id,
+                })),
+              };
+              await deps.boss.send(TASK_RELEASED_REVIEW_CANDIDATES_QUEUE, payload, {
+                db: fromDrizzle(tx, sql),
+              });
+            }
+          }
           await deps.auditService.record(tx, {
             workspace_id: args.actor.workspace_id,
             actor_id: args.actor.actor_id,

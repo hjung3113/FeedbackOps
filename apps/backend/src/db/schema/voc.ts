@@ -27,7 +27,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { actors, analyticsAreas, managedSystems, teams, workspaces } from './core.js';
+import { actors, analyticsAreas, entityLinks, managedSystems, teams, workspaces } from './core.js';
+import { tasks } from './task.js';
 
 export const vocSchema = pgSchema('voc');
 
@@ -147,6 +148,46 @@ export const vocPublicUpdates = vocSchema.table(
     skipInvariants: check(
       'voc_public_updates_skip_invariants',
       sql`(${t.skipPublicUpdate} = true AND ${t.bodyRichContent} IS NULL AND ${t.skipReason} IS NOT NULL AND length(trim(${t.skipReason})) >= 8 AND ${t.reporterFacingStatusBefore} <> ${t.reporterFacingStatusAfter}) OR (${t.skipPublicUpdate} = false AND ${t.bodyRichContent} IS NOT NULL AND ${t.skipReason} IS NULL)`,
+    ),
+  }),
+);
+
+export const publicUpdateReviewCandidates = vocSchema.table(
+  'public_update_review_candidates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id),
+    vocId: uuid('voc_id').notNull().references(() => vocs.id),
+    sourceTaskId: uuid('source_task_id').notNull().references(() => tasks.id),
+    sourceEntityLinkId: uuid('source_entity_link_id').notNull().references(() => entityLinks.id),
+    releaseEventId: uuid('release_event_id').notNull(),
+    correlationId: uuid('correlation_id').notNull(),
+    triggeredByActorId: uuid('triggered_by_actor_id').notNull().references(() => actors.id),
+    status: text('status').notNull().default('pending'),
+    resolvedByActorId: uuid('resolved_by_actor_id').references(() => actors.id),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    dismissalReason: text('dismissal_reason'),
+    actionedPublicUpdateId: uuid('actioned_public_update_id').references(() => vocPublicUpdates.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    releaseVocUq: uniqueIndex('public_update_review_candidates_release_voc_uq').on(
+      t.workspaceId, t.releaseEventId, t.vocId,
+    ),
+    pendingTaskVocUq: uniqueIndex('public_update_review_candidates_pending_task_voc_uq')
+      .on(t.workspaceId, t.sourceTaskId, t.vocId)
+      .where(sql`${t.status} = 'pending'`),
+    pendingQueueIdx: index('public_update_review_candidates_pending_queue_idx').on(
+      t.workspaceId, t.status, t.createdAt,
+    ),
+    statusCheck: check(
+      'public_update_review_candidates_status_check',
+      sql`${t.status} IN ('pending', 'dismissed', 'actioned')`,
+    ),
+    resolutionCheck: check(
+      'public_update_review_candidates_resolution_check',
+      sql`(${t.status} = 'pending' AND ${t.resolvedByActorId} IS NULL AND ${t.resolvedAt} IS NULL AND ${t.dismissalReason} IS NULL AND ${t.actionedPublicUpdateId} IS NULL) OR (${t.status} = 'dismissed' AND ${t.resolvedByActorId} IS NOT NULL AND ${t.resolvedAt} IS NOT NULL AND ${t.dismissalReason} IS NOT NULL AND length(trim(${t.dismissalReason})) > 0 AND ${t.actionedPublicUpdateId} IS NULL) OR (${t.status} = 'actioned' AND ${t.resolvedByActorId} IS NOT NULL AND ${t.resolvedAt} IS NOT NULL AND ${t.dismissalReason} IS NULL AND ${t.actionedPublicUpdateId} IS NOT NULL)`,
     ),
   }),
 );

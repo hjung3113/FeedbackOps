@@ -490,6 +490,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     idempotencyService,
+    ...(boss ? { boss } : {}),
   });
   await app.register(tasksRoutes, {
     sessionService,
