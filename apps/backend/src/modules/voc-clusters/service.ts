@@ -128,6 +128,7 @@ async function canReadCluster(
   actor: VocClustersActor,
   managedSystemId: string,
 ): Promise<boolean> {
+  if (actor.role_level !== 'admin' && actor.role_level !== 'developer') return false;
   return isFindingInReadScope(await actorFindingReadScope(deps.db, actor), managedSystemId);
 }
 
@@ -137,6 +138,7 @@ async function canManageCluster(
   managedSystemId: string,
   options?: Parameters<VocClustersServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
+  if (actor.role_level !== 'admin' && actor.role_level !== 'developer') return false;
   const decision = await checkFindingManage(deps.checkService, actor, managedSystemId, options);
   return decision.allow;
 }

@@ -16,9 +16,8 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import {
-  actorFindingReadScope,
+  checkFindingRead,
   checkFindingManage,
-  isFindingInReadScope,
 } from '../findings/authorization.js';
 import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
 import type { CheckService } from '../permissions/check-service.js';
@@ -231,11 +230,12 @@ async function assertVocReadScope(
 }
 
 async function assertFindingReadScope(
-  deps: Pick<EntityLinksServiceDeps, 'db'>,
+  deps: Pick<EntityLinksServiceDeps, 'checkService'>,
   actor: EntityLinksActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  return isFindingInReadScope(await actorFindingReadScope(deps.db, actor), managedSystemId);
+  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId);
+  return decision.allow;
 }
 
 async function assertFindingManageScope(

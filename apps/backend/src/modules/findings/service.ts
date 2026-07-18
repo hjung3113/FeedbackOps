@@ -22,9 +22,8 @@ import type { CheckService } from '../permissions/check-service.js';
 import { lockTaskById } from '../tasks/repo.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
 import {
-  actorFindingReadScope,
+  checkFindingRead,
   checkFindingManage,
-  isFindingInReadScope,
 } from './authorization.js';
 import {
   type FindingReadRow,
@@ -179,12 +178,12 @@ async function canManageFinding(
 }
 
 async function canReadFinding(
-  deps: Pick<FindingsServiceDeps, 'db'>,
+  deps: Pick<FindingsServiceDeps, 'checkService'>,
   actor: FindingsActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  const scope = await actorFindingReadScope(deps.db, actor);
-  return isFindingInReadScope(scope, managedSystemId);
+  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId);
+  return decision.allow;
 }
 
 export function createFindingsService(deps: FindingsServiceDeps) {

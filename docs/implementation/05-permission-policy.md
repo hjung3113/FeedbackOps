@@ -43,10 +43,13 @@ on the source Primary Managed System, with Admin bypass. `POST
 Admin or Developer with `finding.manage` on the cluster Primary Managed System.
 
 The Findings module owns the canonical implementation of these predicates:
-`actorFindingReadScope` resolves `finding.read` list/read visibility and
-`checkFindingManage` resolves `finding.manage` decisions. Entity Links, VOC
-Clusters, Task Requests, and Tasks must consume those helpers; they must not
-reconstruct Finding scope or capability checks locally.
+`checkFindingRead` resolves a point `finding.read` decision, preserving the
+Permission Check Service clock and archived Managed System behavior;
+`actorFindingReadScope` resolves `finding.read` list-filter scope; and
+`checkFindingManage` resolves point `finding.manage` decisions. Entity Links,
+VOC Clusters, Task Requests, and Tasks must consume the form matching their
+original call-site semantics; they must not reconstruct Finding scope or
+capability checks locally.
 
 ## Permission Check Order
 
