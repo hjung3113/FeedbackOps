@@ -12,7 +12,8 @@ test.describe('/voc-clusters visual harness', () => {
 
     await expect(page.locator('[data-shell="list"]')).toHaveCount(1);
     await expect(page.locator('[data-shell="page"]')).toHaveCount(0);
-    await expect(page.getByTestId('cluster-detail-title')).toHaveText('인증 흐름 불안정');
+    // The canonical created_at DESC, id DESC fixture order selects the invite-delay cluster first.
+    await expect(page.getByTestId('cluster-detail-title')).toHaveText('초대 메일 지연');
   });
 
   test('renders the designed empty state', async ({ page }) => {
