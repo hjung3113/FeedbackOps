@@ -5,6 +5,7 @@ import type {
   ResolvePublicUpdateReviewCandidateRequest,
   ResolvePublicUpdateReviewCandidateResponse,
 } from '@fops/shared';
+import { resolvePublicUpdateReviewCandidateResponseSchema } from '@fops/shared';
 
 import type { Db } from '../../../db/client.js';
 import type { Tx } from '../../../db/tx.js';
@@ -113,11 +114,11 @@ export function createPublicUpdateReviewCandidateService(deps: {
       if (!changed.rows[0]) {
         throw new HttpError('conflict.stale_write', 'review candidate is already resolved');
       }
-      return {
+      return resolvePublicUpdateReviewCandidateResponseSchema.parse({
         candidate_id: args.input.candidate_id,
         action: 'apply' as const,
         public_update: publicUpdate,
-      };
+      });
     }
 
     const changed = await args.tx.execute<{ id: string }>(sql`

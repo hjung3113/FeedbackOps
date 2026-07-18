@@ -4,6 +4,7 @@ import type {
   ResolvePublicUpdateReviewCandidateRequest,
   ResolvePublicUpdateReviewCandidateResponse,
 } from '@fops/shared';
+import { resolvePublicUpdateReviewCandidateResponseSchema } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export function usePublicUpdateReviewCandidates(vocId: string, enabled: boolean) {
@@ -29,14 +30,14 @@ export function useResolvePublicUpdateReviewCandidate(vocId: string) {
     ResolvePublicUpdateReviewCandidateRequest
   >({
     mutationFn: async (body) => {
-      const response = await apiClient<ResolvePublicUpdateReviewCandidateResponse>(
+      const response = await apiClient<unknown>(
         'POST',
         `/vocs/${vocId}/apply-public-update-candidate`,
         {
           body,
         },
       );
-      return response.data;
+      return resolvePublicUpdateReviewCandidateResponseSchema.parse(response.data);
     },
     onSuccess: async () => {
       await Promise.all([

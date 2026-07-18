@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { tipTapDocSchema } from './create-request.js';
 import { vocDetailEnvelopeSchema } from './detail.js';
 import { reporterFacingStatusEnumSchema } from './list-item.js';
 import { publicUpdateRequestSchema } from './public-update-request.js';
@@ -45,7 +46,7 @@ export type ResolvePublicUpdateReviewCandidateRequest = z.infer<
 const appliedPublicUpdateSchema = z.object({
   id: z.string().uuid(),
   voc_id: z.string().uuid(),
-  body_rich_content: z.unknown().nullable(),
+  body_rich_content: tipTapDocSchema.nullable(),
   reporter_facing_status_before: reporterFacingStatusEnumSchema,
   reporter_facing_status_after: reporterFacingStatusEnumSchema,
   skip_public_update: z.boolean(),

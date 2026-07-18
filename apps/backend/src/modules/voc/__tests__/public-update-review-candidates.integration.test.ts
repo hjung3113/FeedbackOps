@@ -132,7 +132,9 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
     );
   }
 
-  async function seedReleasedCandidate(opts: { reporterFacingStatus?: 'received' | 'reviewing' } = {}) {
+  async function seedReleasedCandidate(
+    opts: { reporterFacingStatus?: 'received' | 'reviewing' | 'progress' } = {},
+  ) {
     const msId = await insertMsDirectly(
       dbHandle,
       WORKSPACE_ID,
@@ -146,11 +148,11 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
       reporterId,
       'Released task candidate VOC',
     );
-    if (opts.reporterFacingStatus === 'reviewing') {
-      await dbHandle.pool.query(
-        "update voc.vocs set reporter_facing_status = 'reviewing' where id = $1",
-        [voc.id],
-      );
+    if (opts.reporterFacingStatus && opts.reporterFacingStatus !== 'received') {
+      await dbHandle.pool.query('update voc.vocs set reporter_facing_status = $1 where id = $2', [
+        opts.reporterFacingStatus,
+        voc.id,
+      ]);
     }
     const task = await insertTaskRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
@@ -215,7 +217,7 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
   });
 
   it('Admin lists then applies a released-task candidate; candidate and public update are actioned end-to-end', async () => {
-    const seeded = await seedReleasedCandidate({ reporterFacingStatus: 'reviewing' });
+    const seeded = await seedReleasedCandidate({ reporterFacingStatus: 'progress' });
     const listed = await list(adminCookie, seeded.vocId);
     expect(listed.statusCode).toBe(200);
     expect(listed.json<{ items: Array<{ id: string }> }>().items).toEqual([
@@ -258,7 +260,7 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
     );
   });
 
-  it('in-scope Developer with voc.triage may list and dismiss; Reporter is denied list and apply', async () => {
+  it('in-scope Developer with voc.triage may list, dismiss, and apply; Reporter is denied list and apply', async () => {
     const seeded = await seedReleasedCandidate();
     const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid('review-dev'));
     const devCookie = await loginAs(app, dev.externalId);
@@ -270,6 +272,34 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
       dismissal_reason: 'No reporter-safe release message is available yet.',
     });
     expect(dismissed.statusCode).toBe(201);
+    const applySeed = await seedReleasedCandidate({ reporterFacingStatus: 'progress' });
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      dev.id,
+      'voc.triage',
+      applySeed.msId,
+      adminActorId,
+    );
+    const applied = await resolve(devCookie, applySeed.vocId, {
+      action: 'apply',
+      candidate_id: applySeed.candidateId,
+      public_update: {
+        skip_public_update: false,
+        body_rich_content: paragraphDoc('Developer reviewed this released task.'),
+        next_reporter_facing_status: 'resolved',
+      },
+    });
+    expect(applied.statusCode).toBe(201);
+    expect(applied.json<{ action: string }>().action).toBe('apply');
+    const developerActioned = await dbHandle.pool.query<{
+      status: string;
+      resolved_by_actor_id: string;
+    }>(
+      'select status, resolved_by_actor_id from voc.public_update_review_candidates where id = $1',
+      [applySeed.candidateId],
+    );
+    expect(developerActioned.rows[0]).toEqual({ status: 'actioned', resolved_by_actor_id: dev.id });
     expect((await list(reporterCookie, seeded.vocId)).statusCode).toBe(403);
     const reporterApply = await resolve(reporterCookie, seeded.vocId, {
       action: 'apply',
@@ -294,6 +324,17 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
     const dev = await insertDevActor(dbHandle, WORKSPACE_ID, uid('review-hidden'));
     const devCookie = await loginAs(app, dev.externalId);
     expect((await list(devCookie, seeded.vocId)).statusCode).toBe(404);
+    const hiddenApply = await resolve(devCookie, seeded.vocId, {
+      action: 'apply',
+      candidate_id: seeded.candidateId,
+      public_update: {
+        skip_public_update: false,
+        body_rich_content: paragraphDoc('Out-of-scope developers cannot apply this.'),
+        next_reporter_facing_status: 'reviewing',
+      },
+    });
+    expect(hiddenApply.statusCode).toBe(404);
+    expect(hiddenApply.json<{ code: string }>().code).toBe('not_found.record');
     const noStatus = await resolve(adminCookie, seeded.vocId, {
       action: 'apply',
       candidate_id: seeded.candidateId,
@@ -311,17 +352,48 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
     expect(state.rows[0]).toEqual({ status: 'pending', reporter_facing_status: 'received' });
   });
 
-  it('terminal replay and concurrent apply fail cleanly with conflict.stale_write', async () => {
-    const terminal = await seedReleasedCandidate();
+  it('terminal candidates reject apply replays, the terminal trigger blocks direct mutation, and concurrent apply fails cleanly', async () => {
+    const dismissedTerminal = await seedReleasedCandidate();
     const dismiss = {
       action: 'dismiss',
-      candidate_id: terminal.candidateId,
+      candidate_id: dismissedTerminal.candidateId,
       dismissal_reason: 'Reviewer chose not to notify.',
     };
-    expect((await resolve(adminCookie, terminal.vocId, dismiss)).statusCode).toBe(201);
-    const replay = await resolve(adminCookie, terminal.vocId, dismiss);
-    expect(replay.statusCode).toBe(409);
-    expect(replay.json<{ code: string }>().code).toBe('conflict.stale_write');
+    expect((await resolve(adminCookie, dismissedTerminal.vocId, dismiss)).statusCode).toBe(201);
+    const dismissedApplyReplay = await resolve(adminCookie, dismissedTerminal.vocId, {
+      action: 'apply',
+      candidate_id: dismissedTerminal.candidateId,
+      public_update: {
+        skip_public_update: false,
+        body_rich_content: paragraphDoc('Terminal candidates cannot be applied.'),
+        next_reporter_facing_status: 'reviewing',
+      },
+    });
+    expect(dismissedApplyReplay.statusCode).toBe(409);
+    expect(dismissedApplyReplay.json<{ code: string }>().code).toBe('conflict.stale_write');
+
+    const actionedTerminal = await seedReleasedCandidate();
+    const actionedPayload = {
+      action: 'apply',
+      candidate_id: actionedTerminal.candidateId,
+      public_update: {
+        skip_public_update: false,
+        body_rich_content: paragraphDoc('This candidate is actioned.'),
+        next_reporter_facing_status: 'reviewing',
+      },
+    };
+    expect((await resolve(adminCookie, actionedTerminal.vocId, actionedPayload)).statusCode).toBe(
+      201,
+    );
+    const actionedApplyReplay = await resolve(adminCookie, actionedTerminal.vocId, actionedPayload);
+    expect(actionedApplyReplay.statusCode).toBe(409);
+    expect(actionedApplyReplay.json<{ code: string }>().code).toBe('conflict.stale_write');
+    await expect(
+      migrateHandle.pool.query(
+        'update voc.public_update_review_candidates set updated_at = now() where id = $1',
+        [actionedTerminal.candidateId],
+      ),
+    ).rejects.toThrow(/terminal state is immutable/);
 
     const concurrent = await seedReleasedCandidate();
     const payload = {

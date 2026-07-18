@@ -21,8 +21,8 @@ import {
   listVocsQuerySchema,
   patchVocRequestSchema,
   publicUpdateRequestSchema,
-  resolvePublicUpdateReviewCandidateRequestSchema,
   reporterReplyRequestSchema,
+  resolvePublicUpdateReviewCandidateRequestSchema,
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
@@ -120,7 +120,11 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
       const result = await publicUpdateReviewCandidateService.list({
-        actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id, role_level: sess.role_level },
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
         vocId,
       });
       return reply.header('cache-control', 'private, no-cache').code(200).send(result);
@@ -151,7 +155,11 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         const result = await db.transaction((tx) =>
           publicUpdateReviewCandidateService.resolve({
             tx,
-            actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id, role_level: sess.role_level },
+            actor: {
+              actor_id: sess.actor_id,
+              workspace_id: sess.workspace_id,
+              role_level: sess.role_level,
+            },
             vocId,
             input: parsed.data,
           }),
