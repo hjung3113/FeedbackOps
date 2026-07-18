@@ -1172,6 +1172,169 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     ).toBe(true);
   });
 
+  it('GET a VOC Task link projects only the reporter-safe Task summary', async () => {
+    const ms = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-task-summary`,
+      'Task Reporter Summary MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      ms,
+      reporterId,
+      'Task Reporter Summary Source VOC',
+    );
+    const { id: assigneeId, externalId: assigneeExternalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('task-summary-assignee'),
+    );
+    const statuses = [
+      ['backlog', '진행 예정'],
+      ['todo', '진행 예정'],
+      ['doing', '진행 중'],
+      ['review', '진행 중'],
+      ['done', '해결 준비 중'],
+      ['released', '반영됨'],
+      ['reopened', '다시 처리 중'],
+    ] as const;
+    const dueDate = '2099-12-31';
+    const taskLinks = await Promise.all(
+      statuses.map(async ([status], index) => {
+        const title = `Public Task ${index + 1}`;
+        const task = await insertTaskRow(migrateHandle, {
+          workspaceId: WORKSPACE_ID,
+          primaryManagedSystemId: ms,
+          title,
+          status,
+          priority: 'urgent',
+          assigneeActorId: assigneeId,
+          dueDate,
+          createdBy: adminActorId,
+        });
+        const linkId = await seedEntityLinkDirectly({
+          sourceId: sourceVoc.id,
+          targetType: 'task',
+          targetId: task.id,
+          relationType: 'evidence_of',
+          managedSystemId: ms,
+          visibility: 'summary_visible',
+        });
+        return { linkId, task, status, title };
+      }),
+    );
+
+    const persistedForbidden = await migrateHandle.pool.query<{
+      title: string;
+      status: string;
+      priority: string;
+      due_date: string | null;
+      assignee_actor_id: string | null;
+    }>(
+      `select title, status, priority, due_date::text, assignee_actor_id
+         from task.tasks
+        where id = $1`,
+      [taskLinks[0]?.task.id],
+    );
+    expect(persistedForbidden.rows[0]).toMatchObject({
+      priority: 'urgent',
+      due_date: dueDate,
+      assignee_actor_id: assigneeId,
+    });
+    expect(assigneeExternalId).toContain('task-summary-assignee');
+
+    const { id: scopedDevId, externalId: scopedDevExternalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('task-summary-scoped'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, scopedDevId, 'voc.read', ms, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, scopedDevId, 'finding.read', ms, adminActorId);
+    const scopedDevCookie = await loginAs(app, scopedDevExternalId);
+
+    const { id: outOfScopeDevId, externalId: outOfScopeDevExternalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('task-summary-out-of-scope'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, outOfScopeDevId, 'voc.read', ms, adminActorId);
+    const outOfScopeDevCookie = await loginAs(app, outOfScopeDevExternalId);
+
+    const query = `?source_type=voc&source_id=${sourceVoc.id}`;
+    const auditBefore = await dbHandle.pool.query<{ n: number }>(
+      'select count(*)::int as n from core.audit_log where subject_id = $1',
+      [taskLinks[0]?.linkId],
+    );
+    const reporter = await getEntityLinks(await loginAs(app, 'mock-user-1'), query);
+    expect(reporter.statusCode).toBe(200);
+    const reporterItems = reporter.json<{ items: Array<Record<string, unknown>> }>().items;
+    expect(reporterItems).toHaveLength(statuses.length);
+
+    for (const [status, reporterFacingStatus] of statuses) {
+      const link = taskLinks.find((candidate) => candidate.status === status);
+      const item = reporterItems.find((candidate) => candidate.id === link?.linkId);
+      expect(item).toMatchObject({
+        visibility_state: 'summary_visible',
+        summary: {
+          target_type: 'task',
+          public_title: link?.title,
+          reporter_facing_status: reporterFacingStatus,
+        },
+      });
+      expect(item?.source_id).toBeUndefined();
+      expect(item?.target_id).toBeUndefined();
+      expect(item?.target_summary).toBeUndefined();
+      expect(Object.keys((item?.summary ?? {}) as Record<string, unknown>).sort()).toEqual([
+        'public_title',
+        'reporter_facing_status',
+        'target_type',
+      ]);
+    }
+
+    const reporterPayload = reporter.body;
+    for (const rawStatus of statuses.map(([status]) => status)) {
+      expect(reporterPayload).not.toContain(rawStatus);
+    }
+    for (const forbidden of [
+      'urgent',
+      dueDate,
+      assigneeId,
+      assigneeExternalId,
+      'root-cause detail',
+      'severity',
+      'confidence',
+      'private notes',
+      'private customer detail',
+      'permission decision internals',
+    ]) {
+      expect(reporterPayload).not.toContain(forbidden);
+    }
+
+    const auditAfter = await dbHandle.pool.query<{ n: number }>(
+      'select count(*)::int as n from core.audit_log where subject_id = $1',
+      [taskLinks[0]?.linkId],
+    );
+    expect(auditAfter.rows[0]?.n).toBe(auditBefore.rows[0]?.n);
+
+    const scopedDeveloper = await getEntityLinks(scopedDevCookie, query);
+    expect(scopedDeveloper.statusCode).toBe(200);
+    expect(
+      scopedDeveloper
+        .json<{ items: Array<Record<string, unknown>> }>()
+        .items.every((item) => item.visibility_state === 'allowed' && 'target_id' in item),
+    ).toBe(true);
+
+    const outOfScopeDeveloper = await getEntityLinks(outOfScopeDevCookie, query);
+    expect(outOfScopeDeveloper.statusCode).toBe(200);
+    expect(
+      outOfScopeDeveloper
+        .json<{ items: Array<Record<string, unknown>> }>()
+        .items.every((item) => item.visibility_state === 'hidden' && !('summary' in item)),
+    ).toBe(true);
+  });
+
   it('DB tuple check allows only registered entity-link tuples', async () => {
     const { msA, endpoints, vocTarget } = await seedRegisteredTupleEndpoints();
 

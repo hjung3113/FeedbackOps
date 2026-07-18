@@ -286,7 +286,7 @@ export const taskReporterSummarySchema = z
     reporter_facing_status: z.string(),
     owning_team_public_name: z.string().optional(),
     expected_resolution_date: z.string().optional(),
-    last_public_update_at: z.string().datetime(),
+    last_public_update_at: z.string().datetime().optional(),
     public_update_excerpt: z.string().optional(),
   })
   .strict();
