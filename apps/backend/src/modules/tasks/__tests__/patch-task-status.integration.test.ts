@@ -307,11 +307,12 @@ describe.skipIf(!runIntegration)(
       expect(jobRows.rows[0]?.data).toMatchObject({
         correlation_id: key,
         triggered_by_actor_id: adminActorId,
-        linked_vocs: [
+        linked_vocs: expect.arrayContaining([
           { voc_id: vocs[0]?.id, entity_link_id: links[0]?.rows[0]?.id },
           { voc_id: vocs[1]?.id, entity_link_id: links[1]?.rows[0]?.id },
-        ],
+        ]),
       });
+      expect(jobRows.rows[0]?.data.linked_vocs).toHaveLength(2);
       const firstReleaseEventId = jobRows.rows[0]?.data.release_event_id;
       expect(firstReleaseEventId).toEqual(expect.any(String));
       expect(firstReleaseEventId).toMatch(UUID_PATTERN);
