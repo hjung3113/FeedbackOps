@@ -117,6 +117,12 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
       [WORKSPACE_ID],
     );
     await migrateHandle.pool.query(
+      `delete from core.sessions where actor_id in (
+         select id from core.actors where workspace_id = $1 and external_id like 'mock-dev-read-%'
+       )`,
+      [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
       `delete from core.actors where workspace_id = $1 and external_id like 'mock-dev-read-%'`,
       [WORKSPACE_ID],
     );
@@ -126,7 +132,7 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
     );
   }
 
-  async function seedReleasedCandidate() {
+  async function seedReleasedCandidate(opts: { reporterFacingStatus?: 'received' | 'reviewing' } = {}) {
     const msId = await insertMsDirectly(
       dbHandle,
       WORKSPACE_ID,
@@ -140,6 +146,12 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
       reporterId,
       'Released task candidate VOC',
     );
+    if (opts.reporterFacingStatus === 'reviewing') {
+      await dbHandle.pool.query(
+        "update voc.vocs set reporter_facing_status = 'reviewing' where id = $1",
+        [voc.id],
+      );
+    }
     const task = await insertTaskRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: msId,
@@ -203,7 +215,7 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
   });
 
   it('Admin lists then applies a released-task candidate; candidate and public update are actioned end-to-end', async () => {
-    const seeded = await seedReleasedCandidate();
+    const seeded = await seedReleasedCandidate({ reporterFacingStatus: 'reviewing' });
     const listed = await list(adminCookie, seeded.vocId);
     expect(listed.statusCode).toBe(200);
     expect(listed.json<{ items: Array<{ id: string }> }>().items).toEqual([

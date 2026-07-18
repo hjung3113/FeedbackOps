@@ -129,6 +129,7 @@ describe.skipIf(!runIntegration)(
         'resolved_at',
         'resolved_by_actor_id',
         'status',
+        'updated_at',
       ]);
       const { rows: tablePrivileges } = await migrateHandle.pool.query<{
         has_table_update: boolean;

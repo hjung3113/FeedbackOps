@@ -102,7 +102,8 @@ export function createPublicUpdateReviewCandidateService(deps: {
            SET status = 'actioned',
                resolved_by_actor_id = ${args.actor.actor_id},
                resolved_at = now(),
-               actioned_public_update_id = ${publicUpdate.public_update.id}
+               actioned_public_update_id = ${publicUpdate.public_update.id},
+               updated_at = now()
          WHERE id = ${args.input.candidate_id}
            AND workspace_id = ${args.actor.workspace_id}
            AND voc_id = ${args.vocId}
@@ -124,7 +125,8 @@ export function createPublicUpdateReviewCandidateService(deps: {
          SET status = 'dismissed',
              resolved_by_actor_id = ${args.actor.actor_id},
              resolved_at = now(),
-             dismissal_reason = ${args.input.dismissal_reason}
+             dismissal_reason = ${args.input.dismissal_reason},
+             updated_at = now()
        WHERE id = ${args.input.candidate_id}
          AND workspace_id = ${args.actor.workspace_id}
          AND voc_id = ${args.vocId}
