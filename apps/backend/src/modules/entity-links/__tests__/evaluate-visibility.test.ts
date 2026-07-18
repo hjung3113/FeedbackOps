@@ -148,6 +148,18 @@ describe('evaluateLinkVisibility', () => {
     ).toBe('summary_visible');
   });
 
+  it('returns a safe summary to a Reporter with a readable source and unreadable target', () => {
+    expect(
+      evaluateLinkVisibility({
+        visibility: 'summary_visible',
+        actorContext: { actor_id: 'reporter', role_level: 'user' },
+        sourceReadable: true,
+        targetReadable: false,
+        targetSummaryAvailable: true,
+      }),
+    ).toBe('summary_visible');
+  });
+
   it('hides visible_to_reporter when the actor is not the shared reporter', () => {
     expect(
       evaluateLinkVisibility({

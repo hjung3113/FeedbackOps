@@ -18,7 +18,17 @@ export type LinkVisibilityDecision = EntityLinkVisibilityState;
 export function evaluateLinkVisibility(
   input: LinkVisibilityEvaluationInput,
 ): LinkVisibilityDecision {
-  if (!input.sourceReadable || !input.targetReadable) return 'hidden';
+  if (!input.sourceReadable) return 'hidden';
+  if (!input.targetReadable) {
+    if (
+      input.visibility === 'summary_visible' &&
+      input.actorContext.role_level === 'user' &&
+      input.targetSummaryAvailable
+    ) {
+      return 'summary_visible';
+    }
+    return 'hidden';
+  }
 
   const { actorContext, visibility } = input;
   const isAdmin = actorContext.role_level === 'admin';

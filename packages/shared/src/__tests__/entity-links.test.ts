@@ -16,4 +16,16 @@ describe('taskReporterSummarySchema', () => {
       reporter_facing_status: '진행 중',
     });
   });
+
+  it('rejects unknown fields so forbidden Task internals cannot enter the summary', () => {
+    expect(() =>
+      taskReporterSummarySchema.parse({
+        target_type: 'task',
+        public_title: 'Reporter-safe Task title',
+        reporter_facing_status: '진행 중',
+        priority: 'urgent',
+        due_date: '2099-12-31',
+      }),
+    ).toThrow();
+  });
 });

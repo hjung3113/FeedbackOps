@@ -1,3 +1,4 @@
+import { taskReporterSummarySchema, taskStatusSchema } from '@fops/shared';
 import type {
   DetachedEntityLinkResponse,
   EntityLinkDto,
@@ -66,6 +67,11 @@ interface EntityLinkProvider {
     subject: LinkEndpointRow,
   ): Promise<boolean>;
   getReporterSummary(db: Db, workspaceId: string, id: string): Promise<ReporterSummaryResult>;
+  getReporterSummaries?(
+    db: Db,
+    workspaceId: string,
+    ids: readonly string[],
+  ): Promise<Map<string, ReporterSummaryResult>>;
   getInternalSummary(
     db: Db,
     workspaceId: string,
@@ -258,6 +264,10 @@ const unavailableReporterSummary = async (
   available: false,
 });
 
+function assertNever(value: never): never {
+  throw new Error(`unrecognized Task status in reporter summary: ${String(value)}`);
+}
+
 function projectTaskStatusForReporter(status: TaskStatus): string {
   switch (status) {
     case 'backlog':
@@ -272,11 +282,18 @@ function projectTaskStatusForReporter(status: TaskStatus): string {
       return '반영됨';
     case 'reopened':
       return '다시 처리 중';
-    default: {
-      const exhaustive: never = status;
-      return exhaustive;
-    }
+    default:
+      return assertNever(status);
   }
+}
+
+function toTaskReporterSummary(task: { title: string; status: unknown }): TaskReporterSummary {
+  const status = taskStatusSchema.parse(task.status);
+  return taskReporterSummarySchema.parse({
+    target_type: 'task',
+    public_title: task.title,
+    reporter_facing_status: projectTaskStatusForReporter(status),
+  });
 }
 
 async function getTaskReporterSummary(
@@ -284,7 +301,7 @@ async function getTaskReporterSummary(
   workspaceId: string,
   taskId: string,
 ): Promise<ReporterSummaryResult> {
-  const result = await db.execute<{ title: string; status: TaskStatus }>(sql`
+  const result = await db.execute<{ title: string; status: unknown }>(sql`
     SELECT title, status
       FROM task.tasks
      WHERE id = ${taskId}
@@ -296,12 +313,32 @@ async function getTaskReporterSummary(
 
   return {
     available: true,
-    summary: {
-      target_type: 'task',
-      public_title: task.title,
-      reporter_facing_status: projectTaskStatusForReporter(task.status),
-    },
+    summary: toTaskReporterSummary(task),
   };
+}
+
+async function getTaskReporterSummaries(
+  db: Db,
+  workspaceId: string,
+  taskIds: readonly string[],
+): Promise<Map<string, ReporterSummaryResult>> {
+  if (taskIds.length === 0) return new Map();
+
+  const result = await db.execute<{ id: string; title: string; status: unknown }>(sql`
+    SELECT id, title, status
+      FROM task.tasks
+     WHERE workspace_id = ${workspaceId}
+       AND id IN (${sql.join(
+         taskIds.map((id) => sql`${id}`),
+         sql`, `,
+       )})
+  `);
+  return new Map(
+    result.rows.map((task) => [
+      task.id,
+      { available: true, summary: toTaskReporterSummary(task) } satisfies ReporterSummaryResult,
+    ]),
+  );
 }
 
 const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
@@ -432,6 +469,7 @@ const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
     canCreateTarget: (deps, actor, subject) =>
       assertFindingManageScope(deps, actor, subject.managed_system_id),
     getReporterSummary: getTaskReporterSummary,
+    getReporterSummaries: getTaskReporterSummaries,
     getInternalSummary: async (db, workspaceId, id) => {
       const task = await findTaskById(db, { workspaceId, taskId: id });
       return task ? taskToInternalSummary(task) : null;
@@ -521,6 +559,7 @@ async function evaluateRowVisibility(
   actor: EntityLinksActor,
   row: EntityLinkRow,
   resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
+  reporterSummaries: ReadonlyMap<string, ReporterSummaryResult>,
 ): Promise<{ decision: LinkVisibilityDecision; summary?: TaskReporterSummary }> {
   const sourceRef = { type: row.source_type, id: row.source_id };
   const targetRef = { type: row.target_type, id: row.target_id };
@@ -529,13 +568,12 @@ async function evaluateRowVisibility(
     resolveEndpointForRow(deps, actor, targetRef, resolvedByEndpoint),
   ]);
   const sourceProvider = providerFor(row.source_type);
-  const targetProvider = providerFor(row.target_type);
-  const [sourceReadable, targetReadable, targetSummary] = await Promise.all([
+  const targetSummary: ReporterSummaryResult = reporterSummaries.get(
+    `${row.target_type}:${row.target_id}`,
+  ) ?? { available: false };
+  const [sourceReadable, targetReadable] = await Promise.all([
     source ? sourceProvider.canRead(deps, actor, source) : Promise.resolve(false),
-    target ? targetProvider.canRead(deps, actor, target) : Promise.resolve(false),
-    target
-      ? targetProvider.getReporterSummary(deps.db, actor.workspace_id, row.target_id)
-      : Promise.resolve<ReporterSummaryResult>({ available: false }),
+    target ? providerFor(row.target_type).canRead(deps, actor, target) : Promise.resolve(false),
   ]);
 
   const decision = evaluateLinkVisibility({
@@ -545,16 +583,39 @@ async function evaluateRowVisibility(
       role_level: actor.role_level,
     },
     sourceReadable,
-    targetReadable:
-      targetReadable ||
-      (targetSummary.available &&
-        actor.role_level === 'user' &&
-        source?.reporter_id === actor.actor_id),
+    targetReadable,
     targetSummaryAvailable: targetSummary.available,
     sourceReporterId: source?.reporter_id ?? null,
     targetReporterId: target?.reporter_id ?? null,
   });
   return targetSummary.available ? { decision, summary: targetSummary.summary } : { decision };
+}
+
+async function preloadReporterSummaries(
+  deps: Pick<EntityLinksServiceDeps, 'db'>,
+  actor: EntityLinksActor,
+  rows: readonly EntityLinkRow[],
+): Promise<Map<string, ReporterSummaryResult>> {
+  if (actor.role_level !== 'user') return new Map();
+
+  const taskIds = [
+    ...new Set(
+      rows
+        .filter((row) => row.visibility === 'summary_visible' && row.target_type === 'task')
+        .map((row) => row.target_id),
+    ),
+  ];
+  const summaries = await entityLinkProviders.task.getReporterSummaries?.(
+    deps.db,
+    actor.workspace_id,
+    taskIds,
+  );
+  return new Map(
+    [...(summaries ?? new Map<string, ReporterSummaryResult>())].map(([id, summary]) => [
+      `task:${id}`,
+      summary,
+    ]),
+  );
 }
 
 async function getTargetInternalSummary(
@@ -701,6 +762,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     const resolvedByEndpoint = new Map<string, LinkEndpointRow | null>([
       [`${endpoint.type}:${endpoint.id}`, focus],
     ]);
+    const reporterSummaries = await preloadReporterSummaries(deps, actor, rows);
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       if (
@@ -717,6 +779,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         actor,
         row,
         resolvedByEndpoint,
+        reporterSummaries,
       );
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
@@ -740,6 +803,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     });
 
     const resolvedByEndpoint = new Map<string, LinkEndpointRow | null>();
+    const reporterSummaries = await preloadReporterSummaries(deps, actor, rows);
     const items: EntityLinkDto[] = [];
     for (const row of rows) {
       if (
@@ -756,6 +820,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         actor,
         row,
         resolvedByEndpoint,
+        reporterSummaries,
       );
       const targetSummary =
         decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;

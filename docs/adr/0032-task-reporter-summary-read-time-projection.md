@@ -46,6 +46,24 @@ The Task provider omits it, along with `public_update_excerpt`,
 `tasks.due_date` is an internal execution field and must never populate
 `expected_resolution_date`.
 
+This ADR explicitly amends ADR-0023 Sections C and E for the first
+Task-reporter-summary slice. Before the normal both-readable gate, the
+canonical evaluator returns `summary_visible` exactly when the source is
+readable, the stored token is `summary_visible`, the actor is role-level
+`user`, the target summary is available, and the target is otherwise
+unreadable. This realizes the intended Reporter cell in Section C: a Reporter
+can read their own VOC but never has Task read, so the previous early gate made
+the Section C note about `targetSummaryAvailable` dead code. The exception does
+not affect Developers, an unrelated User who cannot read the source, or any
+`admin_only` row.
+
+Production reachability remains intentionally out of scope. `POST
+/entity-links` stays locked to `internal_only`; no write path, migration, or
+product decision creates `summary_visible` Task rows in this slice. Tests seed
+such rows directly to enforce this evaluator contract, while a dedicated POST
+test continues to prove non-`internal_only` creation is rejected. A later issue
+must decide whether product behavior may create these rows.
+
 ADR-0023 Section F's forbidden-fields list remains authoritative. The summary
 query and mapper must not read raw Task status beyond this projection, internal
 comments, internal assignee notes, backlog priority, individual Developer
@@ -56,8 +74,9 @@ internals.
 ## Consequences
 
 - A Reporter can receive only the strict Task reporter summary through the
-  existing entity-link visibility decision path.
+  ADR-0023 Section C/E-amended entity-link visibility decision path.
 - Scoped Developers retain full linked-object access through existing
-  authorization helpers; no new authorization predicate is introduced.
+  authorization helpers; the evaluator exception is the only authorized
+  summary-specific rule.
 - A future Task-owned public-update source may populate the optional update
   fields only through a separately approved contract change.

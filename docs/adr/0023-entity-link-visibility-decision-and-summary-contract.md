@@ -37,6 +37,7 @@ The hidden/denied boundary:
 Notes:
 
 - **`summary_visible` for a `voc` target is `hidden`, never a synthesised summary.** A VOC has no reporter-facing summary contract (Section F defines summaries only for future non-VOC targets). The evaluator returns `summary_visible` only when `targetSummaryAvailable` is true, which no `voc` target satisfies in this slice — so the realised cell is `hidden`.
+- **ADR-0032 amendment (Task target only):** when a role-level User can read the source (their own VOC), has no Task read, and a stored `summary_visible` Task link has an available safe summary, the evaluator returns `summary_visible`. This is the Reporter cell intended by this section; all other unreadable-target cases remain `hidden`.
 - **`visible_to_reporter` on VOC↔VOC collapses to `allowed`/`hidden`.** It is meaningful only when both VOCs share the same reporter, and then the correct decision is full `allowed` (the Reporter already has read on both), not a summary. Otherwise it leaks another reporter's existence and is `hidden`. Re-purposing `related_to` into reporter-facing product copy was rejected; that needs explicit product approval in a later slice.
 - **`admin_only` + non-Admin** is `denied` only when both endpoints are readable (Section A); an out-of-scope actor gets `hidden`.
 
@@ -52,6 +53,7 @@ Notes:
 **Locked:**
 
 - **Evaluator** `evaluateLinkVisibility({ visibility, actorContext, sourceReadable, targetReadable, targetSummaryAvailable }): UIVisibilityDecision` is a pure function in the backend `apps/backend/src/modules/entity-links` module. It depends on actor semantics and readable-endpoint facts, so it does not belong in `packages/shared`; the **decision enum and DTO types** do live in `packages/shared/src/entity-links.ts`.
+- **ADR-0032 amendment:** the evaluator checks the narrowly authorized Task-summary condition after source readability and before its normal target-readability gate. It does not change the creation lock or introduce a service-layer authorization predicate.
 - **DTO** extends the discriminated union with `summary_visible` and `denied` variants (not `request_access` — Section B). Hidden-like variants (`hidden`, `denied`) expose audit/list metadata only (`id`, endpoint types, relation/status/managed_system/created metadata, `visibility_state`) and never `source_id`, `target_id`, or a summary. Only the `summary_visible` variant carries a `summary` payload (Section F).
 - **Endpoints**: both endpoint-mode and inventory reads route through the evaluator. `POST /entity-links` stays locked to `internal_only`; the contract that the API cannot yet create non-`internal_only` links is asserted by a dedicated test so seeded-row enforcement tests are not misread as product behaviour.
 - **No DB migration.** #115 is read-path + DTO + ADR only. A migration is forced only by new stored columns, enum/CHECK changes, indexes, or persisted request/access state — none of which this slice adds.
@@ -101,6 +103,7 @@ The Frontend renders the backend-decided state (via `PermissionBlockedPanel` whe
 
 - A slice introduces a non-VOC link target (Task/Finding) with a reporter summary. That slice implements `getReporterSummary`, makes `summary_visible` reachable, and re-adds `request_access` plus its minimum-requestable-scope candidates — reopening Sections B and F.
   - **Partially fired by ADR-0032 (Slice 7a-1a).** Task now exposes the Section F safe summary through a read-time projection; `last_public_update_at` is optional because Task has no public-update source. `request_access` remains deferred.
+    ADR-0032 also amends the Section C/Section E evaluator path so the intended Reporter Task-summary cell is reachable only from directly seeded `summary_visible` rows; POST creation remains `internal_only`-only.
   - **Partially fired by ADR-0024 (Slice 5).** Finding is the first non-VOC link target, but it has **no** reporter-facing summary (`05-finding-insight-system.md:215`, `CONTEXT.md`). ADR-0024 therefore amends Section C (adds the `finding`-target row) and registers a `getReporterSummary` that returns UNAVAILABLE, but does **not** make `summary_visible` reachable, does **not** add a `finding` member to Section F, and does **not** re-add `request_access`. Sections B and F stay as written here until a Finding reporter summary is actually introduced. See `docs/adr/0024-finding-as-entity-link-target-and-provider-registry.md`.
 - Product approves reporter-facing VOC↔VOC visibility. That reopens the `visible_to_reporter` collapse in Section C.
 - `POST /entity-links` is unlocked beyond `internal_only`. That reopens the creation-side note in Section E.
