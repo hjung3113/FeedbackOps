@@ -253,6 +253,13 @@
       "when": 1782400000000,
       "tag": "0035_voc_task_conversion_summary_visible",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1782500000000,
+      "tag": "0036_survey_foundation",
+      "breakpoints": true
     }
   ]
 }
