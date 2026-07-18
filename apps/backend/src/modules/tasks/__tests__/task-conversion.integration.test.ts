@@ -453,6 +453,38 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       expect.objectContaining({ visibility_state: 'allowed', target_id: taskId }),
     );
 
+    const sourceReadableTargetUnreadableDev = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+    );
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      sourceReadableTargetUnreadableDev.id,
+      'voc.read',
+      msId,
+      adminActorId,
+    );
+    const sourceReadableTargetUnreadable = await getEntityLinks(
+      await loginAs(app, sourceReadableTargetUnreadableDev.externalId),
+      `?source_type=voc&source_id=${voc.id}`,
+    );
+    expect(sourceReadableTargetUnreadable.statusCode).toBe(200);
+    const hiddenStub = sourceReadableTargetUnreadable
+      .json<{ items: Array<Record<string, unknown>> }>()
+      .items.find(
+        (item) =>
+          item.visibility_state === 'hidden' &&
+          item.source_type === 'voc' &&
+          item.target_type === 'task' &&
+          item.relation_type === 'evidence_of',
+      );
+    expect(hiddenStub).toEqual(expect.objectContaining({ visibility_state: 'hidden' }));
+    expect(hiddenStub).not.toHaveProperty('summary');
+    expect(hiddenStub).not.toHaveProperty('source_id');
+    expect(hiddenStub).not.toHaveProperty('target_id');
+
     const outOfScopeDev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
     const outOfScope = await getEntityLinks(
       await loginAs(app, outOfScopeDev.externalId),
