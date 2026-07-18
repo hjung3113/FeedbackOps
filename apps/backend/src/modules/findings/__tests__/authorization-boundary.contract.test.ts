@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
 
+import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { loadConfig } from "../../../config.js";
 import { type DbHandle, createDb } from "../../../db/client.js";
-import { HttpError } from "../../../lib/errors.js";
+import type { HttpError } from "../../../lib/errors.js";
+import { SESSION_COOKIE_NAME } from "../../../middleware/require-session.js";
+import { buildServer } from "../../../server.js";
 import { createAuditService } from "../../core/audit/audit-service.js";
 import { createIdempotencyService } from "../../core/idempotency/idempotency-service.js";
 import {
@@ -28,7 +32,13 @@ import {
   createVocClustersService,
   type VocClustersService,
 } from "../../voc-clusters/service.js";
-import { insertVocDirectly } from "../../voc/__tests__/_seed-helpers.js";
+import {
+  grantCapability,
+  insertDevActor,
+  insertVocDirectly,
+  loginAs,
+  uid,
+} from "../../voc/__tests__/_seed-helpers.js";
 import { createFindingsService, type FindingsService } from "../service.js";
 
 const APP_URL = process.env.DATABASE_URL ?? "";
@@ -49,6 +59,7 @@ describe.skipIf(!runIntegration)(
   () => {
     let dbHandle: DbHandle;
     let migrateHandle: DbHandle;
+    let app: FastifyInstance;
     let findingsService: FindingsService;
     let expiringFindingsService: FindingsService;
     let entityLinksService: EntityLinksService;
@@ -56,6 +67,7 @@ describe.skipIf(!runIntegration)(
     let tasksService: TasksService;
     let taskRequestsService: TaskRequestsService;
     let applicationNow = new Date("2040-01-01T00:00:00.000Z");
+    let reporterCookie = "";
 
     const workspaceId = randomUUID();
     const actorIds: Record<string, string> = {};
@@ -77,6 +89,7 @@ describe.skipIf(!runIntegration)(
       archivedTaskRequest: "",
       activeCluster: "",
       activeVoc: "",
+      activeEvidenceLink: "",
     };
 
     function actor(name: string, role_level: RoleLevel): Actor {
@@ -132,8 +145,14 @@ describe.skipIf(!runIntegration)(
     }
 
     beforeAll(async () => {
+      process.env.NODE_ENV = "test";
       dbHandle = createDb(APP_URL);
       migrateHandle = createDb(MIGRATE_URL);
+      app = await buildServer({
+        config: { ...loadConfig(), WORKSPACE_ID: workspaceId },
+        dbHandle,
+      });
+      await app.ready();
       const auditService = createAuditService();
       const idempotencyService = createIdempotencyService();
       const checkService = createCheckService({ db: dbHandle.db });
@@ -190,7 +209,6 @@ describe.skipIf(!runIntegration)(
         ["scopedDeveloper", "developer"],
         ["unscopedDeveloper", "developer"],
         ["userWithGrant", "user"],
-        ["reporterWithGrant", "user"],
         ["expiringDeveloper", "developer"],
       ] as const) {
         actorIds[name] = (
@@ -201,6 +219,14 @@ describe.skipIf(!runIntegration)(
           })
         ).id;
       }
+
+      const reporter = await insertDevActor(
+        dbHandle,
+        workspaceId,
+        uid("authorization-boundary-reporter"),
+      );
+      actorIds.reporterWithGrant = reporter.id;
+      reporterCookie = await loginAs(app, reporter.externalId);
 
       ids.activeMs = await insertManagedSystem("authorization-boundary-active");
       ids.archivedMs = await insertManagedSystem(
@@ -218,7 +244,26 @@ describe.skipIf(!runIntegration)(
         await grant(actorIds.userWithGrant!, "finding.read", managedSystemId);
         await grant(actorIds.userWithGrant!, "finding.manage", managedSystemId);
       }
-      await grant(actorIds.reporterWithGrant!, "finding.read", ids.activeMs);
+      grantIds.push(
+        await grantCapability(
+          dbHandle,
+          workspaceId,
+          actorIds.reporterWithGrant,
+          "voc.read",
+          ids.activeMs,
+          actorIds.admin,
+        ),
+      );
+      grantIds.push(
+        await grantCapability(
+          dbHandle,
+          workspaceId,
+          actorIds.reporterWithGrant,
+          "finding.read",
+          ids.activeMs,
+          actorIds.admin,
+        ),
+      );
       await grant(
         actorIds.expiringDeveloper!,
         "finding.read",
@@ -298,14 +343,18 @@ describe.skipIf(!runIntegration)(
       ).id;
       vocIds.push(ids.activeVoc);
 
-      await migrateHandle.pool.query(
+      const links = await migrateHandle.pool.query<{
+        id: string;
+        relation_type: string;
+      }>(
         `insert into core.entity_links (
           workspace_id, source_type, source_id, target_type, target_id,
           relation_type, visibility, status, managed_system_id, created_by
         ) values
           ($1, 'finding', $2, 'task', $3, 'requested_task', 'internal_only', 'active', $4, $5),
           ($1, 'finding', $6, 'task', $7, 'requested_task', 'internal_only', 'active', $8, $5),
-          ($1, 'voc', $9, 'finding', $2, 'evidence_of', 'internal_only', 'active', $4, $5)`,
+          ($1, 'voc', $9, 'finding', $2, 'evidence_of', 'internal_only', 'active', $4, $5)
+        returning id, relation_type`,
         [
           workspaceId,
           ids.activeFinding,
@@ -318,6 +367,9 @@ describe.skipIf(!runIntegration)(
           ids.activeVoc,
         ],
       );
+      ids.activeEvidenceLink =
+        links.rows.find((row) => row.relation_type === "evidence_of")?.id ?? "";
+      if (!ids.activeEvidenceLink) throw new Error("missing evidence_of fixture link");
     });
 
     afterAll(async () => {
@@ -345,6 +397,7 @@ describe.skipIf(!runIntegration)(
           deleteWorkspace: true,
         });
       }
+      await app?.close();
       await dbHandle?.close();
       await migrateHandle?.close();
     });
@@ -398,27 +451,31 @@ describe.skipIf(!runIntegration)(
     });
 
     it("keeps explicit-grant reporter visibility through Entity Links consumers", async () => {
-      const listActiveFindingTargetLinks = (actorInput: Actor) =>
+      const targetQuery = `?target_type=finding&target_id=${ids.activeFinding}`;
+      const reporterList = await app.inject({
+        method: "GET",
+        url: `/entity-links${targetQuery}`,
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${reporterCookie}` },
+      });
+      expect(reporterList.statusCode).toBe(200);
+      expect(
+        reporterList
+          .json<{ items: Array<Record<string, unknown>> }>()
+          .items.find((item) => item.id === ids.activeEvidenceLink),
+      ).toMatchObject({
+        source_type: "voc",
+        source_id: ids.activeVoc,
+        target_type: "finding",
+        target_id: ids.activeFinding,
+        relation_type: "evidence_of",
+        visibility_state: "allowed",
+      });
+      await expect(
         entityLinksService.listLinks({
-          actor: actorInput,
+          actor: actor("unscopedDeveloper", "developer"),
           endpoint: { type: "finding", id: ids.activeFinding },
           side: "target",
-        });
-
-      await expect(listActiveFindingTargetLinks(actor("reporterWithGrant", "user"))).resolves.toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            source_id: ids.activeVoc,
-            source_type: "voc",
-            target_id: ids.activeFinding,
-            target_type: "finding",
-            relation_type: "evidence_of",
-            visibility_state: "allowed",
-          }),
-        ]),
-      );
-      await expect(
-        listActiveFindingTargetLinks(actor("unscopedDeveloper", "developer")),
+        }),
       ).rejects.toMatchObject({
         code: "not_found.record",
       } satisfies Partial<HttpError>);
@@ -530,9 +587,28 @@ describe.skipIf(!runIntegration)(
 
     it("locks the user-with-grant policy matrix for every Finding authorization consumer", async () => {
       const userWithGrant = actor("userWithGrant", "user");
-      const reporterWithGrant = actor("reporterWithGrant", "user");
       const matrix = [
-        ["entity-links", () => expect(entityLinksService.listLinks({ actor: reporterWithGrant, endpoint: { type: "finding", id: ids.activeFinding }, side: "target" })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ source_id: ids.activeVoc, target_id: ids.activeFinding, relation_type: "evidence_of", visibility_state: "allowed" })]))],
+        ["entity-links", async () => {
+          const targetQuery = `?target_type=finding&target_id=${ids.activeFinding}`;
+          const reporterList = await app.inject({
+            method: "GET",
+            url: `/entity-links${targetQuery}`,
+            headers: { cookie: `${SESSION_COOKIE_NAME}=${reporterCookie}` },
+          });
+          expect(reporterList.statusCode).toBe(200);
+          expect(
+            reporterList
+              .json<{ items: Array<Record<string, unknown>> }>()
+              .items.find((item) => item.id === ids.activeEvidenceLink),
+          ).toMatchObject({
+            source_type: "voc",
+            source_id: ids.activeVoc,
+            target_type: "finding",
+            target_id: ids.activeFinding,
+            relation_type: "evidence_of",
+            visibility_state: "allowed",
+          });
+        }],
         ["voc-clusters", () => expect(vocClustersService.getCluster({ actor: userWithGrant, clusterId: ids.activeCluster })).rejects.toMatchObject({ code: "not_found.record" } satisfies Partial<HttpError>)],
         ["tasks", () => expect(tasksService.getTask({ actor: userWithGrant, taskId: ids.activeTask })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
         ["task-requests", () => expect(taskRequestsService.listTaskRequests({ actor: userWithGrant })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
