@@ -233,7 +233,7 @@ function FullDetailView({
     staleTime: 30 * 1000,
   });
   const linkedTask =
-    linkedTaskQuery.data !== undefined
+    canRenderAllowedTask && linkedTaskQuery.data !== undefined
       ? { title: linkedTaskQuery.data.title, status: linkedTaskQuery.data.status }
       : null;
 

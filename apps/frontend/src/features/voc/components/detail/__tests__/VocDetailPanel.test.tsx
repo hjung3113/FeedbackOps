@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { TaskDetailDto } from '@fops/shared';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -79,10 +80,13 @@ import {
   makeMeQuery,
 } from './_fixtures';
 
-function renderWithClient(ui: React.ReactElement) {
-  const queryClient = new QueryClient({
+function createQueryClient() {
+  return new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+}
+
+function renderWithClient(ui: React.ReactElement, queryClient = createQueryClient()) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
@@ -133,6 +137,24 @@ describe('<VocDetailPanel>', () => {
       due_date: null,
     },
   };
+  const cachedTask: TaskDetailDto = {
+    id: allowedTaskLink.target_id,
+    workspace_id: '11111111-1111-4111-8111-111111111111',
+    display_id: 'TASK-CACHED-SECRET',
+    primary_managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
+    title: '캐시된 내부 Task 제목',
+    status: 'done',
+    priority: 'urgent',
+    assignee_actor_id: OTHER_ACTOR_ID,
+    due_date: '2026-07-31',
+    milestone_id: null,
+    analytics_area_id: null,
+    source_task_request_id: null,
+    created_by: OTHER_ACTOR_ID,
+    created_at: '2026-07-18T09:00:00.000Z',
+    updated_at: '2026-07-18T09:00:00.000Z',
+    source: null,
+  };
 
   it('fails closed while /me is unresolved: no Task fetch or allowed Task fields', () => {
     vi.mocked(useVocDetail).mockReturnValue(
@@ -172,6 +194,70 @@ describe('<VocDetailPanel>', () => {
 
     expect(screen.queryByText('내부 Task 제목')).not.toBeInTheDocument();
     expect(screen.queryByText('TASK-SECRET')).not.toBeInTheDocument();
+    expect(getTask).not.toHaveBeenCalled();
+  });
+
+  it('does not consume a cached Task while /me is unresolved', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links: [allowedTaskLink] } }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: undefined,
+        isLoading: true,
+        isPending: true,
+        isSuccess: false,
+        status: 'pending',
+      }),
+    );
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(['task', allowedTaskLink.target_id], cachedTask);
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />, queryClient);
+
+    expect(screen.queryByText('캐시된 내부 Task 제목')).not.toBeInTheDocument();
+    expect(screen.queryByText('done')).not.toBeInTheDocument();
+    expect(getTask).not.toHaveBeenCalled();
+  });
+
+  it('does not consume a cached Task for a User actor', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links: [allowedTaskLink] } }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'user' },
+        },
+      }),
+    );
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(['task', allowedTaskLink.target_id], cachedTask);
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />, queryClient);
+
+    expect(screen.queryByText('캐시된 내부 Task 제목')).not.toBeInTheDocument();
+    expect(screen.queryByText('done')).not.toBeInTheDocument();
+    expect(getTask).not.toHaveBeenCalled();
+  });
+
+  it('renders a cached Task for an operator actor', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links: [allowedTaskLink] } }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
+      }),
+    );
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(['task', allowedTaskLink.target_id], cachedTask);
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />, queryClient);
+
+    expect(screen.getByText('캐시된 내부 Task 제목')).toBeInTheDocument();
+    expect(screen.getByText('done')).toBeInTheDocument();
     expect(getTask).not.toHaveBeenCalled();
   });
 
