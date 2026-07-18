@@ -61,15 +61,21 @@ describe('<LinkedEntityTrailSection>', () => {
       visibility: 'internal_only',
       visibility_state: 'allowed',
       target_summary: {
-        type: 'task', id: IDS.task, display_id: 'TASK-SECRET', title: '내부 우선순위 P0 작업',
-        status: 'in_progress', priority: 'critical', primary_managed_system_id: IDS.system,
-        assignee_actor_id: IDS.actor, due_date: '2026-07-31',
+        type: 'task',
+        id: IDS.task,
+        display_id: 'TASK-SECRET',
+        title: '내부 우선순위 P0 작업',
+        status: 'in_progress',
+        priority: 'critical',
+        primary_managed_system_id: IDS.system,
+        assignee_actor_id: IDS.actor,
+        due_date: '2026-07-31',
       },
     };
 
     render(<LinkedEntityTrailSection links={[allowedTask]} isReporterContext />);
 
-    expect(screen.getByTestId('linked-task-hidden')).toBeInTheDocument();
+    expect(screen.queryByText('관련 엔티티')).not.toBeInTheDocument();
     expect(screen.queryByText('내부 우선순위 P0 작업')).not.toBeInTheDocument();
     expect(screen.queryByText('critical')).not.toBeInTheDocument();
     expect(screen.queryByText('TASK-SECRET')).not.toBeInTheDocument();
@@ -77,10 +83,21 @@ describe('<LinkedEntityTrailSection>', () => {
 
   it('renders an allowed Task only for an operator view', () => {
     const allowedTask: EntityLinkDto = {
-      ...baseLink(), source_id: IDS.voc, target_id: IDS.task, visibility: 'internal_only', visibility_state: 'allowed',
+      ...baseLink(),
+      source_id: IDS.voc,
+      target_id: IDS.task,
+      visibility: 'internal_only',
+      visibility_state: 'allowed',
       target_summary: {
-        type: 'task', id: IDS.task, display_id: 'TASK-42', title: '운영자 전용 Task', status: 'in_progress',
-        priority: 'high', primary_managed_system_id: IDS.system, assignee_actor_id: null, due_date: null,
+        type: 'task',
+        id: IDS.task,
+        display_id: 'TASK-42',
+        title: '운영자 전용 Task',
+        status: 'in_progress',
+        priority: 'high',
+        primary_managed_system_id: IDS.system,
+        assignee_actor_id: null,
+        due_date: null,
       },
     };
 
@@ -88,10 +105,20 @@ describe('<LinkedEntityTrailSection>', () => {
     expect(screen.getByTestId('linked-task-allowed')).toHaveTextContent('운영자 전용 Task');
   });
 
-  it.each(['hidden', 'denied'] as const)('renders the safe %s branch', (visibility_state) => {
-    const link: EntityLinkDto = { ...baseLink(), visibility_state };
+  it('conceals hidden Task links completely', () => {
+    const link: EntityLinkDto = { ...baseLink(), visibility_state: 'hidden' };
     render(<LinkedEntityTrailSection links={[link]} isReporterContext />);
-    expect(screen.getByTestId(`linked-task-${visibility_state}`)).toBeInTheDocument();
+
+    expect(screen.queryByText('관련 엔티티')).not.toBeInTheDocument();
+    expect(screen.queryByText('연결된 항목')).not.toBeInTheDocument();
+    expect(screen.queryByText('연결된 Task')).not.toBeInTheDocument();
+  });
+
+  it('renders an acknowledged minimal blocked surface for denied Task links', () => {
+    const link: EntityLinkDto = { ...baseLink(), visibility_state: 'denied' };
+    render(<LinkedEntityTrailSection links={[link]} isReporterContext />);
+
+    expect(screen.getByTestId('linked-task-denied')).toBeInTheDocument();
     expect(screen.queryByText('공개 가능한 개선 작업')).not.toBeInTheDocument();
   });
 });

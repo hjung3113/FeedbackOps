@@ -136,7 +136,10 @@ export function VocDetailPanel({
   // 4. Full detail envelope
   const voc: VocDetailEnvelope = data;
   const isReporterOnOwnVoc = me?.actor.id === voc.reporter_id && voc.triage_state === 'untriaged';
-  const isReporterContext = me?.actor.id === voc.reporter_id;
+  // Raw Task DTOs are an operator-only surface. Identity uncertainty and every
+  // User role fail closed, including the reporter who owns this VOC.
+  const canRenderAllowedTask =
+    me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
 
   return (
     <FullDetailView
@@ -145,7 +148,7 @@ export function VocDetailPanel({
       onClose={onClose}
       {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
       isReporterOnOwnVoc={isReporterOnOwnVoc}
-      isReporterContext={isReporterContext}
+      canRenderAllowedTask={canRenderAllowedTask}
       me={me ?? null}
     />
   );
@@ -159,7 +162,7 @@ interface FullDetailViewProps {
   onClose: () => void;
   onExpandToggle?: () => void;
   isReporterOnOwnVoc: boolean;
-  isReporterContext: boolean;
+  canRenderAllowedTask: boolean;
   me: import('@/lib/auth/useMe').MeResponse | null;
 }
 
@@ -183,7 +186,7 @@ function FullDetailView({
   onClose,
   onExpandToggle,
   isReporterOnOwnVoc,
-  isReporterContext,
+  canRenderAllowedTask,
   me,
 }: FullDetailViewProps): React.ReactElement {
   // REV-1 #6: track composer dirty state; intercept panel close to show DirtyConfirmation.
@@ -226,7 +229,7 @@ function FullDetailView({
   const linkedTaskQuery = useQuery({
     queryKey: ['task', linkedTaskId] as const,
     queryFn: ({ signal }) => getTask(linkedTaskId as string, signal),
-    enabled: linkedTaskId !== null && !isReporterContext,
+    enabled: linkedTaskId !== null && canRenderAllowedTask,
     staleTime: 30 * 1000,
   });
   const linkedTask =
@@ -337,8 +340,21 @@ function FullDetailView({
             />
           </div>
           <div data-anchor="trail">
-            <LinkedExecutionSection voc={voc} linkedTask={linkedTask} />
-            <LinkedEntityTrailSection links={voc.links ?? []} isReporterContext={isReporterContext} />
+            <LinkedExecutionSection
+              voc={voc}
+              linkedTask={linkedTask}
+              hasReporterTaskSummary={
+                voc.links?.some(
+                  (link) =>
+                    link.visibility_state === 'summary_visible' &&
+                    (link.source_type === 'task' || link.target_type === 'task'),
+                ) ?? false
+              }
+            />
+            <LinkedEntityTrailSection
+              links={voc.links ?? []}
+              isReporterContext={!canRenderAllowedTask}
+            />
           </div>
           {showsSimilarVocSection && (
             <div data-anchor="similar">
@@ -357,8 +373,16 @@ function FullDetailView({
             <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
             {canCreateFinding && pendingReviewCount > 0 && (
               <div className="mt-2 flex justify-end">
-                <Button variant="outline" size="sm" onClick={() => setReviewOpen(true)} data-testid="public-update-review-button">
-                  리뷰 <span className="ml-1 rounded-full bg-surface-muted px-1.5 py-0.5 text-xs">{pendingReviewCount}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReviewOpen(true)}
+                  data-testid="public-update-review-button"
+                >
+                  리뷰{' '}
+                  <span className="ml-1 rounded-full bg-surface-muted px-1.5 py-0.5 text-xs">
+                    {pendingReviewCount}
+                  </span>
                 </Button>
               </div>
             )}
