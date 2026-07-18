@@ -194,12 +194,14 @@ terminal decision.
 ## Issue #182: conversion-link visibility backfill
 
 Migration `0035_voc_task_conversion_summary_visible.sql` changes only
-`core.entity_links.visibility`. Its join predicate requires an active
-`(voc, task, evidence_of)` link whose target Task has a
-`source_task_request_id` pointing to a Task Request with `source_type='voc'`
-and matching `source_id`. This is the durable conversion provenance signal;
-untraceable links remain `internal_only`. The update is idempotent because it
-targets only currently `internal_only` rows.
+`core.entity_links.visibility`. Its audit-provenance predicate requires an
+active `(voc, task, evidence_of)` link whose exact ID is present in the
+matching `task_created_from_request` audit row's `detail.preserved_links`
+array. This covers direct-VOC and Finding-propagated conversion links while
+leaving manually created same-endpoint links `internal_only`. Audit payloads
+without preserved-link IDs are deliberately outside backfill coverage;
+provenance is never inferred from endpoint or Task Request shape. The update
+is idempotent because it targets only currently `internal_only` rows.
 
 ## Seed Data
 

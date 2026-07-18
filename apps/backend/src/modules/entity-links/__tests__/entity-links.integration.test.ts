@@ -446,15 +446,25 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     }
   });
 
-  it('POST refuses to create a non-internal_only link', async () => {
-    const { sourceVoc, targetVoc } = await seedVocPair();
+  it('POST refuses a summary_visible VOC→Task evidence_of link without inserting it', async () => {
+    const { endpoints } = await seedRegisteredTupleEndpoints();
 
-    const res = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id, {
+    const res = await postEntityLink(adminCookie, endpoints.voc.id, endpoints.task.id, {
+      target: { type: 'task', id: endpoints.task.id },
+      relation_type: 'evidence_of',
       visibility: 'summary_visible',
     });
 
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
+    const rows = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.entity_links
+        where workspace_id = $1 and source_type = 'voc' and source_id = $2
+          and target_type = 'task' and target_id = $3
+          and relation_type = 'evidence_of' and status = 'active'`,
+      [WORKSPACE_ID, endpoints.voc.id, endpoints.task.id],
+    );
+    expect(rows.rows[0]?.n).toBe(0);
   });
 
   it('POST duplicate returns the existing active link without duplicating', async () => {
