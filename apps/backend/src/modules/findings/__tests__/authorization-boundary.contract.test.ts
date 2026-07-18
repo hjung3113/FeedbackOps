@@ -28,6 +28,7 @@ import {
   createVocClustersService,
   type VocClustersService,
 } from "../../voc-clusters/service.js";
+import { insertVocDirectly } from "../../voc/__tests__/_seed-helpers.js";
 import { createFindingsService, type FindingsService } from "../service.js";
 
 const APP_URL = process.env.DATABASE_URL ?? "";
@@ -63,6 +64,7 @@ describe.skipIf(!runIntegration)(
     const taskIds: string[] = [];
     const taskRequestIds: string[] = [];
     const clusterIds: string[] = [];
+    const vocIds: string[] = [];
     const grantIds: string[] = [];
     const ids = {
       activeMs: "",
@@ -74,6 +76,7 @@ describe.skipIf(!runIntegration)(
       activeTaskRequest: "",
       archivedTaskRequest: "",
       activeCluster: "",
+      activeVoc: "",
     };
 
     function actor(name: string, role_level: RoleLevel): Actor {
@@ -282,13 +285,25 @@ describe.skipIf(!runIntegration)(
       ).id;
       clusterIds.push(ids.activeCluster);
 
+      ids.activeVoc = (
+        await insertVocDirectly(
+          migrateHandle,
+          workspaceId,
+          ids.activeMs,
+          actorIds.userWithGrant!,
+          "Finding authorization boundary evidence VOC",
+        )
+      ).id;
+      vocIds.push(ids.activeVoc);
+
       await migrateHandle.pool.query(
         `insert into core.entity_links (
           workspace_id, source_type, source_id, target_type, target_id,
           relation_type, visibility, status, managed_system_id, created_by
         ) values
           ($1, 'finding', $2, 'task', $3, 'requested_task', 'internal_only', 'active', $4, $5),
-          ($1, 'finding', $6, 'task', $7, 'requested_task', 'internal_only', 'active', $8, $5)`,
+          ($1, 'finding', $6, 'task', $7, 'requested_task', 'internal_only', 'active', $8, $5),
+          ($1, 'voc', $9, 'finding', $2, 'evidence_of', 'internal_only', 'active', $4, $5)`,
         [
           workspaceId,
           ids.activeFinding,
@@ -298,6 +313,7 @@ describe.skipIf(!runIntegration)(
           ids.archivedFinding,
           ids.archivedTask,
           ids.archivedMs,
+          ids.activeVoc,
         ],
       );
     });
@@ -322,6 +338,7 @@ describe.skipIf(!runIntegration)(
           managedSystemIds,
           clusterIds,
           findingIds,
+          vocIds,
           permissionGrantIds: grantIds,
           deleteWorkspace: true,
         });
@@ -379,25 +396,40 @@ describe.skipIf(!runIntegration)(
     });
 
     it("keeps explicit-grant reporter visibility through Entity Links consumers", async () => {
-      const listActiveFindingLinks = (actorInput: Actor) =>
+      const listActiveVocLinks = (actorInput: Actor) =>
         entityLinksService.listLinks({
           actor: actorInput,
-          endpoint: { type: "finding", id: ids.activeFinding },
+          endpoint: { type: "voc", id: ids.activeVoc },
         });
 
-      await expect(listActiveFindingLinks(actor("userWithGrant", "user"))).resolves.toEqual(
-        expect.arrayContaining([expect.objectContaining({ source_id: ids.activeFinding })]),
+      await expect(listActiveVocLinks(actor("userWithGrant", "user"))).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            source_id: ids.activeVoc,
+            source_type: "voc",
+            target_id: ids.activeFinding,
+            target_type: "finding",
+            relation_type: "evidence_of",
+            visibility_state: "allowed",
+          }),
+        ]),
       );
       await expect(
-        listActiveFindingLinks(actor("unscopedDeveloper", "developer")),
+        listActiveVocLinks(actor("unscopedDeveloper", "developer")),
       ).rejects.toMatchObject({
         code: "not_found.record",
       } satisfies Partial<HttpError>);
       await expect(
-        listActiveFindingLinks(actor("scopedDeveloper", "developer")),
+        entityLinksService.listLinks({
+          actor: actor("scopedDeveloper", "developer"),
+          endpoint: { type: "finding", id: ids.activeFinding },
+        }),
       ).resolves.toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ source_id: ids.activeFinding }),
+          expect.objectContaining({
+            source_id: ids.activeFinding,
+            relation_type: "requested_task",
+          }),
         ]),
       );
       await expect(
@@ -496,7 +528,7 @@ describe.skipIf(!runIntegration)(
     it("locks the user-with-grant policy matrix for every Finding authorization consumer", async () => {
       const userWithGrant = actor("userWithGrant", "user");
       const matrix = [
-        ["entity-links", () => expect(entityLinksService.listLinks({ actor: userWithGrant, endpoint: { type: "finding", id: ids.activeFinding } })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ source_id: ids.activeFinding })]))],
+        ["entity-links", () => expect(entityLinksService.listLinks({ actor: userWithGrant, endpoint: { type: "voc", id: ids.activeVoc } })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ source_id: ids.activeVoc, target_id: ids.activeFinding, relation_type: "evidence_of", visibility_state: "allowed" })]))],
         ["voc-clusters", () => expect(vocClustersService.getCluster({ actor: userWithGrant, clusterId: ids.activeCluster })).rejects.toMatchObject({ code: "not_found.record" } satisfies Partial<HttpError>)],
         ["tasks", () => expect(tasksService.getTask({ actor: userWithGrant, taskId: ids.activeTask })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
         ["task-requests", () => expect(taskRequestsService.listTaskRequests({ actor: userWithGrant })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
