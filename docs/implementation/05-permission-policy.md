@@ -25,7 +25,10 @@ Capability vocabulary is module-prefixed (`{module}.{action}`,
 (create/update a Finding). Both are Developer-requestable per Managed System and
 are NOT sensitive. Reading or creating a Finding is Admin (workspace) or
 Developer scoped to the Finding's `primary_managed_system_id`; User and Reporter
-never read Findings. Creating a Finding from a VOC additionally requires
+never read Findings directly. The #112/#124 Entity Links Finding endpoint and
+command surfaces are the documented exception: a User/Reporter holding an
+explicit `finding.read` or `finding.manage` grant retains that point capability
+there, without an Admin-or-Developer role gate. Creating a Finding from a VOC additionally requires
 `voc.read` on the source VOC's Managed System (no forging a Finding from an
 unreadable VOC). Slice 6 issue #133 adds `task_request.self_approve` for
 same-requester Task Request approval. It is Developer-requestable per Managed
@@ -41,6 +44,15 @@ without adding a new capability. `POST /vocs/:id/request-task` mirrors
 on the source Primary Managed System, with Admin bypass. `POST
 /voc-clusters/:id/request-task` mirrors cluster create-finding authority:
 Admin or Developer with `finding.manage` on the cluster Primary Managed System.
+
+The Findings module owns the canonical implementation of these predicates:
+`checkFindingRead` resolves a point `finding.read` decision, preserving the
+Permission Check Service clock and archived Managed System behavior;
+`actorFindingReadScope` resolves `finding.read` list-filter scope; and
+`checkFindingManage` resolves point `finding.manage` decisions. Entity Links,
+VOC Clusters, Task Requests, and Tasks must consume the form matching their
+original call-site semantics; they must not reconstruct Finding scope or
+capability checks locally.
 
 ## Permission Check Order
 

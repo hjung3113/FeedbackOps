@@ -15,6 +15,10 @@ import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
+import {
+  checkFindingRead,
+  checkFindingManage,
+} from '../findings/authorization.js';
 import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, findTaskRequestById } from '../task-requests/repo.js';
@@ -53,7 +57,7 @@ interface EntityLinkProvider {
   assertExists(db: Db, workspaceId: string, id: string): Promise<LinkEndpointRow | null>;
   getPermissionSubject(db: Db, workspaceId: string, id: string): Promise<LinkEndpointRow | null>;
   canRead(
-    deps: Pick<EntityLinksServiceDeps, 'checkService'>,
+    deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
     actor: EntityLinksActor,
     subject: LinkEndpointRow,
   ): Promise<boolean>;
@@ -230,10 +234,8 @@ async function assertFindingReadScope(
   actor: EntityLinksActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  const decision = await deps.checkService.checkCapability(actor, 'finding.read', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: managedSystemId,
+  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId, {
+    requireElevatedRole: false,
   });
   return decision.allow;
 }
@@ -243,10 +245,8 @@ async function assertFindingManageScope(
   actor: EntityLinksActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  if (actor.role_level === 'admin') return true;
-  const decision = await deps.checkService.checkCapability(actor, 'finding.manage', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: managedSystemId,
+  const decision = await checkFindingManage(deps.checkService, actor, managedSystemId, {
+    requireElevatedRole: false,
   });
   return decision.allow;
 }
