@@ -27,6 +27,8 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
   let ops: DbHandle;
   let adminId: string;
   let adminCookie: string;
+  let concurrentAdminCookie: string;
+  let provenanceAdminCookie: string;
   let developerCookie: string;
   let targetUnreadableCookie: string;
   let plainUserCookie: string;
@@ -116,6 +118,17 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
     return result.rows[0]?.response_body;
   }
 
+  async function createIsolatedAdminCookie(label: string): Promise<string> {
+    const externalId = `unlink-${label}-${randomUUID()}`;
+    const actor = await insertActorRow(ops, {
+      workspaceId: WORKSPACE_ID,
+      externalId,
+      roleLevel: 'admin',
+    });
+    actorIds.push(actor.id);
+    return loginAs(app, externalId);
+  }
+
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     appDb = createDb(APP_URL);
@@ -128,6 +141,8 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
     );
     adminId = admin.rows[0]?.id ?? '';
     adminCookie = await loginAs(app, admin.rows[0]?.external_id ?? '');
+    concurrentAdminCookie = await createIsolatedAdminCookie('concurrent-admin');
+    provenanceAdminCookie = await createIsolatedAdminCookie('provenance-admin');
     const managedSystems = await Promise.all(
       ['cluster', 'target'].map((kind) =>
         ops.pool.query<{ id: string }>(
@@ -517,8 +532,8 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
   it('concurrent distinct keys produce one detach and one audit pair without a 500', async () => {
     const linkId = await seedLink();
     const responses = await Promise.all([
-      unlink(adminCookie, { key: randomUUID() }),
-      unlink(adminCookie, { key: randomUUID() }),
+      unlink(concurrentAdminCookie, { key: randomUUID() }),
+      unlink(concurrentAdminCookie, { key: randomUUID() }),
     ]);
     expect(responses.map((response) => response.statusCode)).toEqual([204, 204]);
     expect(responses.every((response) => response.statusCode < 500)).toBe(true);
@@ -528,16 +543,16 @@ describe.skipIf(!runIntegration)('VOC cluster unlink existing Finding (#172)', (
 
   it('leaves created_finding provenance active and an old key cannot detach a later relink', async () => {
     const provenance = await seedLink(clusterId, findingId, 'created_finding');
-    expect((await unlink(adminCookie)).statusCode).toBe(204);
+    expect((await unlink(provenanceAdminCookie)).statusCode).toBe(204);
     expect((await linkState(provenance)).rows[0]?.status).toBe('active');
     const first = await seedLink();
     const key = randomUUID();
-    expect((await unlink(adminCookie, { key })).statusCode).toBe(204);
+    expect((await unlink(provenanceAdminCookie, { key })).statusCode).toBe(204);
     const relink = await seedLink();
-    expect((await unlink(adminCookie, { key })).statusCode).toBe(204);
+    expect((await unlink(provenanceAdminCookie, { key })).statusCode).toBe(204);
     expect((await linkState(first)).rows[0]?.status).toBe('detached');
     expect((await linkState(relink)).rows[0]?.status).toBe('active');
-    expect((await unlink(adminCookie)).statusCode).toBe(204);
+    expect((await unlink(provenanceAdminCookie)).statusCode).toBe(204);
     expect((await linkState(relink)).rows[0]?.status).toBe('detached');
   });
 });
