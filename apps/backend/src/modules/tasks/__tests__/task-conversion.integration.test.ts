@@ -4,6 +4,7 @@
 // this outside the sandbox after applying migration 0025.
 
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -265,6 +266,14 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     });
   }
 
+  function getEntityLinks(cookie: string, query: string) {
+    return app.inject({
+      method: 'GET',
+      url: `/entity-links${query}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+  }
+
   it('convert: approved request creates backlog task, marks converted, preserves finding link, and audits separately', async () => {
     const request = await seedApprovedTaskRequest();
 
@@ -367,7 +376,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     expect(count.rows[0]?.n).toBe(1);
   });
 
-  it('convert: direct VOC requested_task preserves exactly one active VOC evidence_of Task link on replay', async () => {
+  it('convert: direct VOC request creates the reporter-visible evidence link and preserves its actor boundary', async () => {
     const msId = await insertMsDirectly(
       dbHandle,
       WORKSPACE_ID,
@@ -408,8 +417,8 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     expect(first.statusCode).toBe(201);
     expect(second.statusCode).toBe(201);
     const taskId = first.json<{ id: string }>().id;
-    const evidence = await dbHandle.pool.query<{ n: number }>(
-      `select count(*)::int as n
+    const evidence = await dbHandle.pool.query<{ n: number; visibility: string }>(
+      `select count(*)::int as n, max(visibility) as visibility
          from core.entity_links
         where workspace_id = $1 and source_type = 'voc' and source_id = $2
           and target_type = 'task' and target_id = $3
@@ -417,6 +426,85 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       [WORKSPACE_ID, voc.id, taskId],
     );
     expect(evidence.rows[0]?.n).toBe(1);
+    expect(evidence.rows[0]?.visibility).toBe('summary_visible');
+
+    const reporter = await getEntityLinks(userCookie, `?source_type=voc&source_id=${voc.id}`);
+    expect(reporter.statusCode).toBe(200);
+    expect(reporter.json<{ items: Array<Record<string, unknown>> }>().items).toContainEqual(
+      expect.objectContaining({
+        visibility_state: 'summary_visible',
+        summary: {
+          target_type: 'task',
+          public_title: 'Task from direct VOC',
+          reporter_facing_status: '진행 예정',
+        },
+      }),
+    );
+
+    const inScopeDev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+    await grantCapability(dbHandle, WORKSPACE_ID, inScopeDev.id, 'finding.read', msId, adminActorId);
+    const inScope = await getEntityLinks(
+      await loginAs(app, inScopeDev.externalId),
+      `?source_type=voc&source_id=${voc.id}`,
+    );
+    expect(inScope.statusCode).toBe(200);
+    expect(inScope.json<{ items: Array<Record<string, unknown>> }>().items).toContainEqual(
+      expect.objectContaining({ visibility_state: 'allowed', target_id: taskId }),
+    );
+
+    const outOfScopeDev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
+    const outOfScope = await getEntityLinks(
+      await loginAs(app, outOfScopeDev.externalId),
+      `?source_type=voc&source_id=${voc.id}`,
+    );
+    expect(outOfScope.statusCode).toBe(404);
+  });
+
+  it('0035 backfill flips only conversion-traceable VOC evidence links', async () => {
+    const msId = await insertMsDirectly(migrateHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Backfill conversion MS');
+    const traceableVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, msId, userActorId, 'Traceable conversion VOC');
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'voc', sourceId: traceableVoc.id, primaryManagedSystemId: msId,
+      requesterActorId: userActorId, status: 'converted', reviewerActorId: adminActorId,
+      decisionReason: 'Converted before visibility backfill', decided: true,
+    });
+    const traceableTask = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID, primaryManagedSystemId: msId,
+      title: 'Traceable conversion task', sourceTaskRequestId: request.id, createdBy: adminActorId,
+    });
+    const untraceableVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, msId, userActorId, 'Untraceable evidence VOC');
+    const untraceableTask = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID, primaryManagedSystemId: msId,
+      title: 'Untraceable evidence task', createdBy: adminActorId,
+    });
+    const seeded = await migrateHandle.pool.query<{ id: string }>(
+      `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        ) values
+          ($1, 'voc', $2, 'task', $3, 'evidence_of', 'internal_only', 'active', $4, $5),
+          ($1, 'voc', $6, 'task', $7, 'evidence_of', 'internal_only', 'active', $4, $5)
+        returning id`,
+      [WORKSPACE_ID, traceableVoc.id, traceableTask.id, msId, adminActorId, untraceableVoc.id, untraceableTask.id],
+    );
+    expect(seeded.rowCount).toBe(2);
+
+    const client = await migrateHandle.pool.connect();
+    try {
+      await client.query('begin');
+      await client.query(readFileSync(new URL('../../../../migrations/0035_voc_task_conversion_summary_visible.sql', import.meta.url), 'utf8'));
+      const rows = await client.query<{ source_id: string; visibility: string }>(
+        `select source_id, visibility from core.entity_links
+          where id = any($1::uuid[]) order by source_id`,
+        [seeded.rows.map((row) => row.id)],
+      );
+      expect(rows.rows).toContainEqual({ source_id: traceableVoc.id, visibility: 'summary_visible' });
+      expect(rows.rows).toContainEqual({ source_id: untraceableVoc.id, visibility: 'internal_only' });
+    } finally {
+      await client.query('rollback');
+      client.release();
+    }
   });
 
   it('link-task links an existing in-scope task, marks converted, and audits the link decision', async () => {

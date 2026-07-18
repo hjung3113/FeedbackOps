@@ -681,7 +681,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     source: EntityLinkRef;
     target: EntityLinkRef;
     relation_type: EntityLinkRelationType;
-    visibility?: 'internal_only';
+    visibility?: 'internal_only' | 'summary_visible';
+    /** Internal-only capability; HTTP routes never supply this. */
+    internalWritePath?: 'task_request_conversion';
     tx?: Tx;
   }): Promise<{ link: EntityLinkDto; status: 200 | 201 }> {
     const { actor, source, target } = args;
@@ -698,7 +700,13 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         fields: [{ path: [], code: 'unsupported_tuple' }],
       });
     }
-    if (visibility !== 'internal_only') {
+    const isConversionSummaryLink =
+      visibility === 'summary_visible' &&
+      args.internalWritePath === 'task_request_conversion' &&
+      source.type === 'voc' &&
+      target.type === 'task' &&
+      args.relation_type === 'evidence_of';
+    if (visibility !== 'internal_only' && !isConversionSummaryLink) {
       throw new HttpError('validation.failed', 'unsupported visibility', {
         fields: [{ path: ['visibility'], code: 'unsupported_visibility' }],
       });
@@ -744,6 +752,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         managedSystemId: sourceRow.managed_system_id,
         createdBy: actor.actor_id,
         visibility,
+        ...(args.internalWritePath !== undefined
+          ? { internalWritePath: args.internalWritePath }
+          : {}),
       });
 
       if (inserted.inserted) {
