@@ -45,6 +45,9 @@ export default defineConfig({
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
       },
+      // #175 permission review console uses /permissions/requests. This is a
+      // backend-only root prefix, so forward it unconditionally in dev.
+      '/permissions': 'http://127.0.0.1:3011',
       '/task-requests': {
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
