@@ -14,12 +14,17 @@ import {
  * must consume these helpers instead of rebuilding a capability predicate.
  */
 export type FindingAuthorizationActor = ScopeActorContext;
+export type FindingPointAuthorizationPolicy = { requireElevatedRole: boolean };
+export function hasElevatedFindingRole(actor: FindingAuthorizationActor): boolean {
+  return actor.role_level === 'admin' || actor.role_level === 'developer';
+}
 
 export async function actorFindingReadScope(
   db: Db | Tx,
   actor: FindingAuthorizationActor,
+  policy: FindingPointAuthorizationPolicy,
 ): Promise<Scope> {
-  if (actor.role_level !== 'admin' && actor.role_level !== 'developer') {
+  if (policy.requireElevatedRole && !hasElevatedFindingRole(actor)) {
     return { kind: 'scoped', managedSystemIds: [] };
   }
   return actorScopeForCapability(db, actor, 'finding.read');
@@ -46,10 +51,11 @@ export async function checkFindingRead(
   checkService: CheckService,
   actor: FindingAuthorizationActor,
   managedSystemId: string,
+  policy: FindingPointAuthorizationPolicy,
   options?: Parameters<CheckService['checkCapability']>[3],
 ): Promise<Decision> {
   if (actor.role_level === 'admin') return { allow: true, via: 'role' };
-  if (actor.role_level !== 'developer') return findingRoleDenied;
+  if (policy.requireElevatedRole && actor.role_level !== 'developer') return findingRoleDenied;
   return checkService.checkCapability(
     actor,
     'finding.read',
@@ -62,15 +68,13 @@ export async function checkFindingManage(
   checkService: CheckService,
   actor: FindingAuthorizationActor,
   managedSystemId: string,
+  policy: FindingPointAuthorizationPolicy,
   options?: Parameters<CheckService['checkCapability']>[3],
 ): Promise<Decision> {
   // Preserve the workspace-admin bypass before delegating scoped decisions to
   // Permission. This mirrors the Finding policy and avoids needless DB reads.
   if (actor.role_level === 'admin') return { allow: true, via: 'role' };
-  // Finding manage historically delegates non-admin decisions to Permission.
-  // In particular, an explicitly granted reporter must retain the authority
-  // used by the VOC -> Finding evidence_of command. Do not apply the
-  // Finding-read role gate to this distinct mutation predicate.
+  if (policy.requireElevatedRole && actor.role_level !== 'developer') return findingRoleDenied;
   return checkService.checkCapability(
     actor,
     'finding.manage',

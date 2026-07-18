@@ -25,7 +25,10 @@ Capability vocabulary is module-prefixed (`{module}.{action}`,
 (create/update a Finding). Both are Developer-requestable per Managed System and
 are NOT sensitive. Reading or creating a Finding is Admin (workspace) or
 Developer scoped to the Finding's `primary_managed_system_id`; User and Reporter
-never read Findings. Creating a Finding from a VOC additionally requires
+never read Findings directly. The #112/#124 Entity Links Finding endpoint and
+command surfaces are the documented exception: a User/Reporter holding an
+explicit `finding.read` or `finding.manage` grant retains that point capability
+there, without an Admin-or-Developer role gate. Creating a Finding from a VOC additionally requires
 `voc.read` on the source VOC's Managed System (no forging a Finding from an
 unreadable VOC). Slice 6 issue #133 adds `task_request.self_approve` for
 same-requester Task Request approval. It is Developer-requestable per Managed

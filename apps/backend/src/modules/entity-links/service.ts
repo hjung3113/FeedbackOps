@@ -234,7 +234,9 @@ async function assertFindingReadScope(
   actor: EntityLinksActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId);
+  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId, {
+    requireElevatedRole: false,
+  });
   return decision.allow;
 }
 
@@ -243,7 +245,9 @@ async function assertFindingManageScope(
   actor: EntityLinksActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  const decision = await checkFindingManage(deps.checkService, actor, managedSystemId);
+  const decision = await checkFindingManage(deps.checkService, actor, managedSystemId, {
+    requireElevatedRole: false,
+  });
   return decision.allow;
 }
 

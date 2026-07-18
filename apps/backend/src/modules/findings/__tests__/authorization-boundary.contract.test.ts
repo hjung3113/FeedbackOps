@@ -378,18 +378,16 @@ describe.skipIf(!runIntegration)(
       } satisfies Partial<HttpError>);
     });
 
-    it("enforces Finding endpoint visibility through Entity Links consumers", async () => {
+    it("keeps explicit-grant reporter visibility through Entity Links consumers", async () => {
       const listActiveFindingLinks = (actorInput: Actor) =>
         entityLinksService.listLinks({
           actor: actorInput,
           endpoint: { type: "finding", id: ids.activeFinding },
         });
 
-      await expect(
-        listActiveFindingLinks(actor("userWithGrant", "user")),
-      ).rejects.toMatchObject({
-        code: "not_found.record",
-      } satisfies Partial<HttpError>);
+      await expect(listActiveFindingLinks(actor("userWithGrant", "user"))).resolves.toEqual(
+        expect.arrayContaining([expect.objectContaining({ source_id: ids.activeFinding })]),
+      );
       await expect(
         listActiveFindingLinks(actor("unscopedDeveloper", "developer")),
       ).rejects.toMatchObject({
@@ -493,6 +491,21 @@ describe.skipIf(!runIntegration)(
           expect.objectContaining({ id: ids.archivedTaskRequest }),
         ]),
       });
+    });
+
+    it("locks the user-with-grant policy matrix for every Finding authorization consumer", async () => {
+      const userWithGrant = actor("userWithGrant", "user");
+      const matrix = [
+        ["entity-links", () => expect(entityLinksService.listLinks({ actor: userWithGrant, endpoint: { type: "finding", id: ids.activeFinding } })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ source_id: ids.activeFinding })]))],
+        ["voc-clusters", () => expect(vocClustersService.getCluster({ actor: userWithGrant, clusterId: ids.activeCluster })).rejects.toMatchObject({ code: "not_found.record" } satisfies Partial<HttpError>)],
+        ["tasks", () => expect(tasksService.getTask({ actor: userWithGrant, taskId: ids.activeTask })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
+        ["task-requests", () => expect(taskRequestsService.listTaskRequests({ actor: userWithGrant })).rejects.toMatchObject({ code: "permission.denied" } satisfies Partial<HttpError>)],
+      ] as const;
+
+      expect(matrix.map(([surface]) => surface)).toEqual([
+        "entity-links", "voc-clusters", "tasks", "task-requests",
+      ]);
+      for (const [, exercise] of matrix) await exercise();
     });
   },
 );

@@ -173,7 +173,9 @@ async function canManageFinding(
   managedSystemId: string,
   options: Parameters<FindingsServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
-  const decision = await checkFindingManage(deps.checkService, actor, managedSystemId, options);
+  const decision = await checkFindingManage(
+    deps.checkService, actor, managedSystemId, { requireElevatedRole: false }, options,
+  );
   return decision.allow;
 }
 
@@ -182,7 +184,9 @@ async function canReadFinding(
   actor: FindingsActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId);
+  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId, {
+    requireElevatedRole: true,
+  });
   return decision.allow;
 }
 

@@ -21,7 +21,7 @@ import {
   selectActiveLinksForEndpoint,
   selectEligibleVocLinksForReleasedTask,
 } from '../entity-links/repo.js';
-import { checkFindingManage } from '../findings/authorization.js';
+import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
 import {
@@ -194,7 +194,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     actor: TasksActor;
     taskId: string;
   }): Promise<TaskDetailDto> {
-    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
+    if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
 
@@ -205,7 +205,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     if (!row) throw new HttpError('not_found.record', 'task not found');
 
     const canManage = (
-      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id)
+      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
     ).allow;
     if (!canManage) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
@@ -245,6 +245,7 @@ export function createTasksService(deps: TasksServiceDeps) {
               deps.checkService,
               args.actor,
               taskRequest.primary_managed_system_id,
+              { requireElevatedRole: true },
               { tx },
             )
           ).allow;
@@ -324,6 +325,7 @@ export function createTasksService(deps: TasksServiceDeps) {
               deps.checkService,
               args.actor,
               taskRequest.primary_managed_system_id,
+              { requireElevatedRole: true },
               { tx },
             )
           ).allow;
@@ -408,6 +410,7 @@ export function createTasksService(deps: TasksServiceDeps) {
               deps.checkService,
               args.actor,
               task.primary_managed_system_id,
+              { requireElevatedRole: true },
               { tx },
             )
           ).allow;
@@ -486,7 +489,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     actor: TasksActor;
     query: ListTasksQuery;
   }): Promise<{ items: TaskDto[] }> {
-    if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
+    if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
     const assigneeActorId =
@@ -499,7 +502,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     const items: TaskDto[] = [];
     for (const row of rows) {
       const canManage = (
-        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id)
+        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
       ).allow;
       if (!canManage) continue;
       items.push(taskToDto(row));
