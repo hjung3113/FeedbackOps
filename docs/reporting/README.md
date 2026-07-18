@@ -14,14 +14,12 @@ report-template.html
 - Replace values in {{placeholder}} slots.
 - Keep the section order stable unless the reporting purpose changes.
 
-current-project-report.html
-- Filled project report based on the current documentation state.
-- Use as the first example of the report format.
-
-wireframes.html
-- Static low-fidelity wireframes for the MVP operating surfaces.
-- Focuses on Dashboard, VOC Inbox, detail panel, Finding, Task Request, and Survey Result flows.
+archive/
+- Past report snapshots, renamed with their reporting date (e.g. project-report-2026-05.html).
+- Kept for format reference and historical comparison; not maintained.
 ```
+
+New reports are generated only when the user explicitly requests one. Do not regenerate or refresh reports as part of routine doc sync.
 
 ## Reporting Rule
 
