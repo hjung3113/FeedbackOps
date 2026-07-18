@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api";
 const navigateMock = vi.fn();
 const addClusterMemberMutate = vi.hoisted(() => vi.fn());
 const linkFindingMutate = vi.hoisted(() => vi.fn());
+const currentRole = vi.hoisted(() => ({ role_level: "admin" as string }));
 const listQueryState = vi.hoisted(() => ({
   status: "success" as "pending" | "success",
 }));
@@ -392,7 +393,7 @@ vi.mock("@/features/tasks/components/RequestTaskModal", () => ({
 }));
 
 vi.mock("@/lib/auth/useMe", () => ({
-  useMe: () => ({ data: { actor: { role_level: "admin" } } }),
+  useMe: () => ({ data: { actor: currentRole } }),
 }));
 
 vi.mock("@/lib/api", async () => {
@@ -424,6 +425,7 @@ describe("VOC cluster route shells", () => {
     addClusterMemberMutate.mockClear();
     linkFindingMutate.mockClear();
     listQueryState.status = "success";
+    currentRole.role_level = "admin";
     routeParams = { clusterId: "11111111-1111-1111-1111-111111111111" };
     clusters.splice(1);
     clusters[0]!.status = "draft";
@@ -705,6 +707,22 @@ describe("VOC cluster route shells", () => {
     expect(
       screen.queryByTestId("cluster-linked-findings-list"),
     ).not.toBeInTheDocument();
+  });
+
+  it("disables the link-existing-Finding CTA for non-mutating roles", async () => {
+    currentRole.role_level = "user";
+    const { VocClusterDetailPanel } = await import("../$clusterId");
+
+    render(
+      <VocClusterDetailPanel
+        clusterId="11111111-1111-1111-1111-111111111111"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByTestId("cluster-link-existing-finding-button"),
+    ).toBeDisabled();
   });
 
   it("renders rich nullable fields, five section anchors, member reporter status, and truncates members", async () => {

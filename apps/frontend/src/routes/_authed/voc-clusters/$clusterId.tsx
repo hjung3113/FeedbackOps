@@ -653,6 +653,7 @@ export function VocClusterDetailPanel({
                   variant="outline"
                   size="sm"
                   onClick={() => setLinkFindingOpen(true)}
+                  disabled={!canMutate}
                   data-testid="cluster-link-existing-finding-button"
                 >
                   기존 Finding 연결
