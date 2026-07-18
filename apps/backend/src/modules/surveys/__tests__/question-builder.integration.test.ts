@@ -113,6 +113,13 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     };
   }
 
+  function bodylessMutationHeaders(idempotencyKey = randomUUID()) {
+    return {
+      cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+      'idempotency-key': idempotencyKey,
+    };
+  }
+
   async function postQuestion(surveyId: string, body: Record<string, unknown>) {
     return app.inject({
       method: 'POST',
@@ -171,7 +178,7 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     const opened = await app.inject({
       method: 'POST',
       url: `/surveys/${surveyId}/open`,
-      headers: mutationHeaders(),
+      headers: bodylessMutationHeaders(),
     });
     expect(opened.statusCode).toBe(200);
 
@@ -187,7 +194,7 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     const deleteOnOpen = await app.inject({
       method: 'DELETE',
       url: `/surveys/${surveyId}/questions/${questionId}`,
-      headers: mutationHeaders(),
+      headers: bodylessMutationHeaders(),
     });
     expect([409, 422]).toContain(createOnOpen.statusCode);
     expect(createOnOpen.json<{ code: string }>().code).toBe('validation.failed');
@@ -252,7 +259,7 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     const deleted = await app.inject({
       method: 'DELETE',
       url: `/surveys/${surveyId}/questions/${parentId}`,
-      headers: mutationHeaders(),
+      headers: bodylessMutationHeaders(),
     });
     expect(deleted.statusCode).toBe(422);
     expect(deleted.json<{ code: string }>().code).toBe('validation.failed');
@@ -335,7 +342,7 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     const deleted = await app.inject({
       method: 'DELETE',
       url: `/surveys/${surveyId}/questions/${questionId}`,
-      headers: mutationHeaders(),
+      headers: bodylessMutationHeaders(),
     });
 
     expect(deleted.statusCode).toBe(200);

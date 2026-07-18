@@ -91,6 +91,13 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     };
   }
 
+  function bodylessMutationHeaders() {
+    return {
+      cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+      'idempotency-key': randomUUID(),
+    };
+  }
+
   async function createSurvey(): Promise<string> {
     const managedSystemId = await insertMsDirectly(
       appHandle,
@@ -134,7 +141,7 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     return app.inject({
       method: 'POST',
       url: `/surveys/${surveyId}/${target}`,
-      headers: mutationHeaders(),
+      headers: bodylessMutationHeaders(),
     });
   }
 
