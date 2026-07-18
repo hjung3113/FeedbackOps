@@ -192,6 +192,38 @@ describe.skipIf(!runIntegration)(
           where voc_id = $1`,
         [voc.id, actorId],
       );
+      const dismissed = await migrateHandle.pool.query<{ id: string }>(
+        `select id from voc.public_update_review_candidates
+          where voc_id = $1 and status = 'dismissed'`,
+        [voc.id],
+      );
+      const dismissedCandidateId = dismissed.rows[0]?.id;
+      if (!dismissedCandidateId) throw new Error("dismissed candidate missing");
+      const publicUpdateId = await insertPublicUpdate(
+        migrateHandle,
+        voc.id,
+        actorId,
+      );
+      // Exercise the immutable terminal row before creating a later pending
+      // candidate, so the partial pending index cannot mask this guard.
+      await expect(
+        migrateHandle.pool.query(
+          `update voc.public_update_review_candidates
+              set status = 'pending', resolved_by_actor_id = null, resolved_at = null,
+                  dismissal_reason = null, actioned_public_update_id = null
+            where id = $1`,
+          [dismissedCandidateId],
+        ),
+      ).rejects.toThrow(/terminal state is immutable/);
+      await expect(
+        migrateHandle.pool.query(
+          `update voc.public_update_review_candidates
+              set status = 'actioned', dismissal_reason = null,
+                  actioned_public_update_id = $2
+            where id = $1`,
+          [dismissedCandidateId, publicUpdateId],
+        ),
+      ).rejects.toThrow(/terminal state is immutable/);
       await handler([{ data: { ...payload, release_event_id: randomUUID() } }]);
       const afterTerminal = await appHandle.pool.query(
         `select 1 from voc.public_update_review_candidates where voc_id = $1`,
@@ -199,11 +231,6 @@ describe.skipIf(!runIntegration)(
       );
       expect(afterTerminal.rowCount).toBe(2);
 
-      const publicUpdateId = await insertPublicUpdate(
-        migrateHandle,
-        voc.id,
-        actorId,
-      );
       await migrateHandle.pool.query(
         `update voc.public_update_review_candidates
             set status = 'actioned', resolved_by_actor_id = $2, resolved_at = now(), actioned_public_update_id = $3
@@ -218,15 +245,6 @@ describe.skipIf(!runIntegration)(
       );
       expect(replayAfterActioned.rowCount).toBe(2);
 
-      await expect(
-        migrateHandle.pool.query(
-          `update voc.public_update_review_candidates
-              set status = 'pending', resolved_by_actor_id = null, resolved_at = null,
-                  dismissal_reason = null, actioned_public_update_id = null
-            where voc_id = $1 and status = 'dismissed'`,
-          [voc.id],
-        ),
-      ).rejects.toThrow(/terminal state is immutable/);
       await expect(
         migrateHandle.pool.query(
           `update voc.public_update_review_candidates

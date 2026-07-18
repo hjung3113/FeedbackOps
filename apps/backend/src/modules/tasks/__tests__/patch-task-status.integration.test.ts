@@ -69,11 +69,23 @@ describe.skipIf(!runIntegration)(
     async function cleanupFixtures(): Promise<void> {
       if (!migrateHandle) return;
       await migrateHandle.pool.query(
-        `delete from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+        `delete from pgboss.job_common where name = 'tasks.create_public_update_review_candidates'`,
       );
       await migrateHandle.pool.query(
         `delete from voc.public_update_review_candidates where workspace_id = $1`,
         [WORKSPACE_ID],
+      );
+      // #165 fixtures create direct VOC -> Task links. They reference the
+      // fixture Managed System, so remove them before the shared VOC cleanup
+      // deletes that parent.
+      await migrateHandle.pool.query(
+        `delete from core.entity_links
+          where workspace_id = $1
+            and managed_system_id in (
+              select id from core.managed_systems
+               where workspace_id = $1 and slug like $2
+            )`,
+        [WORKSPACE_ID, `${SLUG_PREFIX}%`],
       );
       await migrateHandle.pool.query(
         `delete from core.audit_log
@@ -216,7 +228,7 @@ describe.skipIf(!runIntegration)(
       const jobs = await migrateHandle.pool.query<{
         data: Record<string, unknown>;
       }>(
-        `select data from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+        `select data from pgboss.job_common where name = 'tasks.create_public_update_review_candidates'`,
       );
       expect(jobs.rowCount).toBe(1);
       expect(jobs.rows[0]?.data).toMatchObject({
@@ -258,7 +270,7 @@ describe.skipIf(!runIntegration)(
       );
       expect(released.statusCode).toBe(200);
       const jobRows = await migrateHandle.pool.query<{ data: Record<string, unknown> }>(
-        `select data from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+        `select data from pgboss.job_common where name = 'tasks.create_public_update_review_candidates'`,
       );
       expect(jobRows.rowCount).toBe(1);
       expect(jobRows.rows[0]?.data).toMatchObject({
@@ -293,7 +305,7 @@ describe.skipIf(!runIntegration)(
       );
       expect(replay.statusCode).toBe(200);
       const after = await migrateHandle.pool.query(
-        `select 1 from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+        `select 1 from pgboss.job_common where name = 'tasks.create_public_update_review_candidates'`,
       );
       expect(after.rowCount).toBe(1);
     });
@@ -302,7 +314,7 @@ describe.skipIf(!runIntegration)(
       const task = await seedTask("doing");
       const countJobs = async () =>
         migrateHandle.pool.query(
-          `select 1 from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+          `select 1 from pgboss.job_common where name = 'tasks.create_public_update_review_candidates'`,
         );
       const stale = await patchTask(
         adminCookie,
@@ -368,7 +380,7 @@ describe.skipIf(!runIntegration)(
       );
       expect(res.statusCode).toBe(200);
       const jobs = await migrateHandle.pool.query(
-        `select 1 from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+        `select 1 from pgboss.job_common where name = 'tasks.create_public_update_review_candidates'`,
       );
       expect(jobs.rowCount).toBe(0);
     });
@@ -397,7 +409,7 @@ describe.skipIf(!runIntegration)(
         end;
         $$;
         create trigger fail_issue_165_enqueue
-          before insert on pgboss.job
+          before insert on pgboss.job_common
           for each row execute function pgboss.fail_issue_165_enqueue();
       `);
       try {
@@ -414,7 +426,7 @@ describe.skipIf(!runIntegration)(
         );
         expect(taskAfter.rows[0]?.status).toBe("doing");
         const jobs = await migrateHandle.pool.query(
-          `select 1 from pgboss.job where name = 'tasks.create_public_update_review_candidates'`,
+          `select 1 from pgboss.job_common where name = 'tasks.create_public_update_review_candidates'`,
         );
         expect(jobs.rowCount).toBe(0);
         const audits = await migrateHandle.pool.query(
@@ -425,7 +437,7 @@ describe.skipIf(!runIntegration)(
         expect(audits.rowCount).toBe(0);
       } finally {
         await migrateHandle.pool.query(`
-          drop trigger if exists fail_issue_165_enqueue on pgboss.job;
+          drop trigger if exists fail_issue_165_enqueue on pgboss.job_common;
           drop function if exists pgboss.fail_issue_165_enqueue();
         `);
       }
