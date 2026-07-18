@@ -2,7 +2,7 @@
 
 ## Ownership
 
-VOC Cluster owns frontend route composition and mutations for VOC Cluster list, detail, membership management, and cluster-originated Create Finding / Request Task flows (`useCreateVocCluster`, `useConfirmCluster`, `useAddClusterMember`, `useRemoveClusterMember`, `useVocClusterDetail`, `useVocClusterList`, `useCreateFindingFromCluster`, `useRequestTaskFromCluster`).
+VOC Cluster owns frontend route composition and mutations for VOC Cluster list, detail, membership management, cluster-to-existing-Finding association, and cluster-originated Create Finding / Request Task flows (`useCreateVocCluster`, `useConfirmCluster`, `useAddClusterMember`, `useRemoveClusterMember`, `useVocClusterDetail`, `useVocClusterList`, `useCreateFindingFromCluster`, `useLinkExistingFindingToVocCluster`, `useRequestTaskFromCluster`).
 
 It does not own VOC record lifecycle, reporter-facing VOC status, or Finding/Task persistence — those belong to VOC, Integration, and Tasks respectively.
 
