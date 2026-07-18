@@ -1441,36 +1441,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       expect(item).not.toHaveProperty('target_id');
     }
 
-    const invalidStoredStatus = 'invalid_task_status';
-    const invalidTask = await insertTaskRow(migrateHandle, {
-      workspaceId: WORKSPACE_ID,
-      primaryManagedSystemId: ms,
-      title: 'Invalid Status Task',
-      status: 'backlog',
-      createdBy: adminActorId,
-    });
-    await migrateHandle.pool.query('update task.tasks set status = $1 where id = $2', [
-      invalidStoredStatus,
-      invalidTask.id,
-    ]);
-    const invalidLinkId = await seedEntityLinkDirectly({
-      sourceId: sourceVoc.id,
-      targetType: 'task',
-      targetId: invalidTask.id,
-      relationType: 'evidence_of',
-      managedSystemId: ms,
-      visibility: 'summary_visible',
-    });
-    const reporterWithInvalidStatus = await getEntityLinks(
-      await loginAs(app, 'mock-user-1'),
-      query,
-    );
-    expect(reporterWithInvalidStatus.statusCode).toBe(200);
-    const invalidStatusItem = reporterWithInvalidStatus
-      .json<{ items: Array<Record<string, unknown>> }>()
-      .items.find((item) => item.id === invalidLinkId);
-    expect(invalidStatusItem).toMatchObject({ visibility_state: 'hidden' });
-    expect(invalidStatusItem).not.toHaveProperty('summary');
+    // tasks_status_check makes an invalid stored status unrepresentable; unit coverage carries it.
   });
 
   it('DB tuple check allows only registered entity-link tuples', async () => {

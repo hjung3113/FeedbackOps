@@ -48,7 +48,7 @@ export interface EntityLinksServiceDeps {
   auditService: AuditService;
 }
 
-type ReporterSummaryResult =
+export type ReporterSummaryResult =
   | { available: false }
   | { available: true; summary: TaskReporterSummary };
 
@@ -287,14 +287,20 @@ function projectTaskStatusForReporter(status: TaskStatus): string {
   }
 }
 
-function toTaskReporterSummary(task: { title: string; status: unknown }): TaskReporterSummary | undefined {
+export function toTaskReporterSummaryResult(task: {
+  title: string;
+  status: unknown;
+}): ReporterSummaryResult {
   const parsedStatus = taskStatusSchema.safeParse(task.status);
-  if (!parsedStatus.success) return undefined;
-  return taskReporterSummarySchema.parse({
-    target_type: 'task',
-    public_title: task.title,
-    reporter_facing_status: projectTaskStatusForReporter(parsedStatus.data),
-  });
+  if (!parsedStatus.success) return { available: false };
+  return {
+    available: true,
+    summary: taskReporterSummarySchema.parse({
+      target_type: 'task',
+      public_title: task.title,
+      reporter_facing_status: projectTaskStatusForReporter(parsedStatus.data),
+    }),
+  };
 }
 
 async function getTaskReporterSummary(
@@ -312,8 +318,7 @@ async function getTaskReporterSummary(
   const task = result.rows[0];
   if (!task) return { available: false };
 
-  const summary = toTaskReporterSummary(task);
-  return summary ? { available: true, summary } : { available: false };
+  return toTaskReporterSummaryResult(task);
 }
 
 async function getTaskReporterSummaries(
@@ -334,13 +339,7 @@ async function getTaskReporterSummaries(
   `);
   return new Map(
     result.rows.map((task) => {
-      const summary = toTaskReporterSummary(task);
-      return [
-        task.id,
-        summary
-          ? ({ available: true, summary } satisfies ReporterSummaryResult)
-          : ({ available: false } satisfies ReporterSummaryResult),
-      ];
+      return [task.id, toTaskReporterSummaryResult(task)];
     }),
   );
 }

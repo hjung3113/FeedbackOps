@@ -4,6 +4,7 @@ import {
   type LinkVisibilityEvaluationInput,
   evaluateLinkVisibility,
 } from '../evaluate-visibility.js';
+import { toTaskReporterSummaryResult } from '../service.js';
 
 const reporterId = '00000000-0000-4000-8000-000000000001';
 const otherReporterId = '00000000-0000-4000-8000-000000000002';
@@ -216,5 +217,25 @@ describe('evaluateLinkVisibility', () => {
         targetReporterId: otherReporterId,
       }),
     ).toBe('hidden');
+  });
+});
+
+describe('Task reporter summary projection', () => {
+  it('returns unavailable for an out-of-enum stored Task status without exposing it', () => {
+    const invalidStoredStatus = 'invalid_task_status';
+
+    expect(() =>
+      toTaskReporterSummaryResult({
+        title: 'Task with invalid status',
+        status: invalidStoredStatus,
+      }),
+    ).not.toThrow();
+
+    const result = toTaskReporterSummaryResult({
+      title: 'Task with invalid status',
+      status: invalidStoredStatus,
+    });
+    expect(result).toEqual({ available: false });
+    expect(JSON.stringify(result)).not.toContain(invalidStoredStatus);
   });
 });
