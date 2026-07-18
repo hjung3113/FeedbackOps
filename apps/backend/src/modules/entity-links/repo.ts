@@ -145,9 +145,25 @@ export async function insertActiveEntityLink(
     relationType: EntityLinkRelationType;
     managedSystemId: string;
     createdBy: string;
-    visibility: "internal_only";
+    visibility: "internal_only" | "summary_visible";
+    /**
+     * Capability for the sole non-public creation path allowed to persist a
+     * reporter summary token. This is intentionally not inferred from tuple
+     * shape: direct POST /entity-links must remain internal_only.
+     */
+    internalWritePath?: "task_request_conversion";
   },
 ): Promise<{ row: EntityLinkRow; inserted: boolean }> {
+  const isConversionSummaryLink =
+    input.visibility === "summary_visible" &&
+    input.internalWritePath === "task_request_conversion" &&
+    input.sourceType === "voc" &&
+    input.targetType === "task" &&
+    input.relationType === "evidence_of";
+  if (input.visibility !== "internal_only" && !isConversionSummaryLink) {
+    throw new Error("summary_visible requires the task-request conversion write path");
+  }
+
   const inserted = await (tx as Db).execute<Record<string, unknown>>(sql`
     INSERT INTO core.entity_links (
       workspace_id, source_type, source_id, target_type, target_id,

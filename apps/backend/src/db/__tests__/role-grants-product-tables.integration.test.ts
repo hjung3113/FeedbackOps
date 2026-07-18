@@ -51,6 +51,8 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'voc.voc_public_updates': ['SELECT', 'INSERT'],
   'voc.voc_reporter_replies': ['SELECT', 'INSERT'],
   'voc.voc_internal_comments': ['SELECT', 'INSERT'],
+  // UPDATE is deliberately column-scoped and asserted below. role_table_grants
+  // must remain without table-wide UPDATE.
   'voc.public_update_review_candidates': ['SELECT', 'INSERT'],
   'voc.reporter_facing_status_transitions': ['SELECT'],
 };
@@ -109,6 +111,41 @@ describe.skipIf(!runIntegration)(
       }
 
       expect(failures, failures.join('\n')).toEqual([]);
+    });
+
+    it('fops_app UPDATE on review candidates is limited to resolution columns', async () => {
+      const { rows } = await migrateHandle.pool.query<{ column_name: string }>(
+        `select column_name
+           from information_schema.column_privileges
+          where grantee = 'fops_app'
+            and table_schema = 'voc'
+            and table_name = 'public_update_review_candidates'
+            and privilege_type = 'UPDATE'
+          order by column_name`,
+      );
+      expect(rows.map((row) => row.column_name)).toEqual([
+        'actioned_public_update_id',
+        'dismissal_reason',
+        'resolved_at',
+        'resolved_by_actor_id',
+        'status',
+        'updated_at',
+      ]);
+      const { rows: tablePrivileges } = await migrateHandle.pool.query<{
+        has_table_update: boolean;
+        has_delete: boolean;
+        has_truncate: boolean;
+      }>(
+        `select
+           has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'UPDATE') as has_table_update,
+           has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'DELETE') as has_delete,
+           has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'TRUNCATE') as has_truncate`,
+      );
+      expect(tablePrivileges[0]).toEqual({
+        has_table_update: false,
+        has_delete: false,
+        has_truncate: false,
+      });
     });
   },
 );

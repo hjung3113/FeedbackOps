@@ -159,7 +159,8 @@ async function preserveSourceLinks(args: {
         relationType: evidenceTuple.relation_type,
         managedSystemId: args.task.primary_managed_system_id,
         createdBy: args.actor.actor_id,
-        visibility: 'internal_only',
+        visibility: 'summary_visible',
+        internalWritePath: 'task_request_conversion',
       });
       preserved.push(taskEvidenceLink.row);
     }
@@ -181,7 +182,8 @@ async function preserveSourceLinks(args: {
       relationType: tuple.relation_type,
       managedSystemId: args.task.primary_managed_system_id,
       createdBy: args.actor.actor_id,
-      visibility: 'internal_only',
+      visibility: 'summary_visible',
+      internalWritePath: 'task_request_conversion',
     });
     preserved.push(taskEvidenceLink.row);
   }

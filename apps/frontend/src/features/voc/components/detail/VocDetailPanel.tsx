@@ -4,6 +4,7 @@
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
+import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
@@ -24,6 +25,7 @@ import { toast } from 'sonner';
 import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
 import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
 import { ComposerSection } from './ComposerSection';
+import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
 import { ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
 import { DetailHeader } from './DetailHeader';
@@ -55,7 +57,6 @@ function isSummaryEnvelope(
 }
 
 type AllowedEntityLink = Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
-type SummaryVisibleEntityLink = Extract<EntityLinkDto, { visibility_state: 'summary_visible' }>;
 
 function isAllowedTaskLinkForVoc(link: EntityLinkDto, vocId: string): link is AllowedEntityLink {
   if (link.visibility_state !== 'allowed') return false;
@@ -63,10 +64,6 @@ function isAllowedTaskLinkForVoc(link: EntityLinkDto, vocId: string): link is Al
     (link.source_type === 'voc' && link.source_id === vocId && link.target_type === 'task') ||
     (link.target_type === 'voc' && link.target_id === vocId && link.source_type === 'task')
   );
-}
-
-function isSummaryVisibleTaskLink(link: EntityLinkDto): link is SummaryVisibleEntityLink {
-  return link.visibility_state === 'summary_visible' && link.target_type === 'task';
 }
 
 // ── Loading skeleton ─────────────────────────────────────────────────────────
@@ -139,6 +136,10 @@ export function VocDetailPanel({
   // 4. Full detail envelope
   const voc: VocDetailEnvelope = data;
   const isReporterOnOwnVoc = me?.actor.id === voc.reporter_id && voc.triage_state === 'untriaged';
+  // Raw Task DTOs are an operator-only surface. Identity uncertainty and every
+  // User role fail closed, including the reporter who owns this VOC.
+  const canRenderAllowedTask =
+    me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
 
   return (
     <FullDetailView
@@ -147,6 +148,7 @@ export function VocDetailPanel({
       onClose={onClose}
       {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
       isReporterOnOwnVoc={isReporterOnOwnVoc}
+      canRenderAllowedTask={canRenderAllowedTask}
       me={me ?? null}
     />
   );
@@ -160,6 +162,7 @@ interface FullDetailViewProps {
   onClose: () => void;
   onExpandToggle?: () => void;
   isReporterOnOwnVoc: boolean;
+  canRenderAllowedTask: boolean;
   me: import('@/lib/auth/useMe').MeResponse | null;
 }
 
@@ -183,6 +186,7 @@ function FullDetailView({
   onClose,
   onExpandToggle,
   isReporterOnOwnVoc,
+  canRenderAllowedTask,
   me,
 }: FullDetailViewProps): React.ReactElement {
   // REV-1 #6: track composer dirty state; intercept panel close to show DirtyConfirmation.
@@ -190,6 +194,7 @@ function FullDetailView({
   const [dirtyConfirmOpen, setDirtyConfirmOpen] = React.useState(false);
   const [createFindingOpen, setCreateFindingOpen] = React.useState(false);
   const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
+  const [reviewOpen, setReviewOpen] = React.useState(false);
   const navigate = useNavigate();
   const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
     useIdempotencyKey();
@@ -215,7 +220,6 @@ function FullDetailView({
     [analyticsAreasQuery.data?.items],
   );
   const allowedTaskLink = voc.links?.find((link) => isAllowedTaskLinkForVoc(link, voc.id));
-  const summaryTaskLink = voc.links?.find(isSummaryVisibleTaskLink);
   const linkedTaskId =
     allowedTaskLink?.source_type === 'task'
       ? allowedTaskLink.source_id
@@ -225,21 +229,18 @@ function FullDetailView({
   const linkedTaskQuery = useQuery({
     queryKey: ['task', linkedTaskId] as const,
     queryFn: ({ signal }) => getTask(linkedTaskId as string, signal),
-    enabled: linkedTaskId !== null,
+    enabled: linkedTaskId !== null && canRenderAllowedTask,
     staleTime: 30 * 1000,
   });
   const linkedTask =
-    linkedTaskQuery.data !== undefined
+    canRenderAllowedTask && linkedTaskQuery.data !== undefined
       ? { title: linkedTaskQuery.data.title, status: linkedTaskQuery.data.status }
-      : summaryTaskLink?.summary.target_type === 'task'
-        ? {
-            title: summaryTaskLink.summary.public_title,
-            status: summaryTaskLink.summary.reporter_facing_status,
-          }
-        : null;
+      : null;
 
   // FE display hint only (ADR-0024 §C): gate button to Admin or Developer.
   const canCreateFinding = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
+  const reviewCandidates = usePublicUpdateReviewCandidates(voc.id, canCreateFinding);
+  const pendingReviewCount = reviewCandidates.data?.items.length ?? 0;
   const canRequestTask = canCreateFinding;
   const showsSimilarVocSection = hasSimilarVocSection(voc.similar, voc.similar_count);
   const detailSections = showsSimilarVocSection
@@ -339,8 +340,21 @@ function FullDetailView({
             />
           </div>
           <div data-anchor="trail">
-            <LinkedExecutionSection voc={voc} linkedTask={linkedTask} />
-            <LinkedEntityTrailSection />
+            <LinkedExecutionSection
+              voc={voc}
+              linkedTask={linkedTask}
+              hasReporterTaskSummary={
+                voc.links?.some(
+                  (link) =>
+                    link.visibility_state === 'summary_visible' &&
+                    (link.source_type === 'task' || link.target_type === 'task'),
+                ) ?? false
+              }
+            />
+            <LinkedEntityTrailSection
+              links={voc.links ?? []}
+              isReporterContext={!canRenderAllowedTask}
+            />
           </div>
           {showsSimilarVocSection && (
             <div data-anchor="similar">
@@ -357,6 +371,21 @@ function FullDetailView({
           <div data-anchor="internal" />
           <div data-anchor="compose">
             <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
+            {canCreateFinding && pendingReviewCount > 0 && (
+              <div className="mt-2 flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReviewOpen(true)}
+                  data-testid="public-update-review-button"
+                >
+                  리뷰{' '}
+                  <span className="ml-1 rounded-full bg-surface-muted px-1.5 py-0.5 text-xs">
+                    {pendingReviewCount}
+                  </span>
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -408,6 +437,7 @@ function FullDetailView({
           });
         }}
       />
+      <PublicUpdateReviewModal voc={voc} open={reviewOpen} onOpenChange={setReviewOpen} />
     </>
   );
 }

@@ -864,6 +864,16 @@ then atomically publishes `tasks.create_public_update_review_candidates` inside
 the request transaction. This endpoint exposes no candidate read/act API and
 does not change Reporter-Facing VOC Status or create a Public Update.
 
+`GET /vocs/:id/public-update-candidates` returns pending released-Task review
+candidates only to Admins and Developers with `voc.triage` on the VOC's Managed
+System. `POST /vocs/:id/apply-public-update-candidate` accepts a discriminated
+`apply` or `dismiss` action. Apply requires the reviewer-supplied Public Update,
+including `next_reporter_facing_status`; it never derives reporter status from
+Task state (ADR-0005), creates the normal Public Update/audits, then actions the
+candidate. Dismiss requires a non-empty `dismissal_reason` and records
+`public_update_review_candidate_dismissed`. An out-of-scope Developer receives
+the same `404 not_found.record` as an absent VOC; a Reporter receives `403`.
+
 ## Forbidden Endpoint
 
 ```text
