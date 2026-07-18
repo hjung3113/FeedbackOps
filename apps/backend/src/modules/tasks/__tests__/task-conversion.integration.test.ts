@@ -442,7 +442,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     );
 
     const inScopeDev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
-    await grantCapability(dbHandle, WORKSPACE_ID, inScopeDev.id, 'finding.read', msId, adminActorId);
+    await grantCapability(dbHandle, WORKSPACE_ID, inScopeDev.id, 'voc.read', msId, adminActorId);
     const inScope = await getEntityLinks(
       await loginAs(app, inScopeDev.externalId),
       `?source_type=voc&source_id=${voc.id}`,
