@@ -191,6 +191,18 @@ trigger rejects every rewrite of an actioned or dismissed candidate. A later
 Task release must create a new candidate row; it must never reopen or mutate a
 terminal decision.
 
+## Issue #182: conversion-link visibility backfill
+
+Migration `0035_voc_task_conversion_summary_visible.sql` changes only
+`core.entity_links.visibility`. Its audit-provenance predicate requires an
+active `(voc, task, evidence_of)` link whose exact ID is present in the
+matching `task_created_from_request` audit row's `detail.preserved_links`
+array. This covers direct-VOC and Finding-propagated conversion links while
+leaving manually created same-endpoint links `internal_only`. Audit payloads
+without preserved-link IDs are deliberately outside backfill coverage;
+provenance is never inferred from endpoint or Task Request shape. The update
+is idempotent because it targets only currently `internal_only` rows.
+
 ## Seed Data
 
 MVP seed data should include:

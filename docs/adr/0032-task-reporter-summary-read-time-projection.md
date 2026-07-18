@@ -64,6 +64,22 @@ such rows directly to enforce this evaluator contract, while a dedicated POST
 test continues to prove non-`internal_only` creation is rejected. A later issue
 must decide whether product behavior may create these rows.
 
+### Amendment: Issue #182 conversion write path and backfill
+
+Task-request conversion is the approved product write path. When
+`preserveSourceLinks()` creates a `(voc, task, evidence_of)` link during
+conversion, it persists `summary_visible`; generic and public entity-link
+creation remain `internal_only`. Migration 0035 backfills only active
+`(voc, task, evidence_of)` links whose exact IDs occur in the matching
+`task_created_from_request` audit row's `detail.preserved_links` array. That
+explicit provenance covers direct-VOC and Finding-propagated conversion links,
+without promoting manually created links that happen to share a VOC and Task.
+Older audit rows without `preserved_links` IDs are intentionally outside
+backfill coverage; migration 0035 does not infer provenance from endpoint or
+Task Request shape. This changes link metadata only: it does not write Task
+status, VOC status, or a public update, so ADR-0005's state-machine boundary
+remains intact.
+
 ADR-0023 Section F's forbidden-fields list remains authoritative. The summary
 query and mapper must not read raw Task status beyond this projection, internal
 comments, internal assignee notes, backlog priority, individual Developer
