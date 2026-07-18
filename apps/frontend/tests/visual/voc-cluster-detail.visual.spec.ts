@@ -33,7 +33,9 @@ test.describe("/voc-clusters/$clusterId visual harness", () => {
     }
     // Severity is intentionally rendered in both Overview and Properties; assert the Overview badge.
     await expect(
-      detail.locator('[data-anchor="overview"] [data-token="--severity-high"]'),
+      detail
+        .locator('[data-anchor="overview"] [data-token="--severity-high"]')
+        .filter({ hasText: "높음" }),
     ).toBeVisible();
     await expect(detail.getByTestId("cluster-detail-confidence-badge")).toContainText(
       "Confidence · high",
