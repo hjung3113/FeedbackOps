@@ -1,32 +1,29 @@
-import type { Page, Route } from "@playwright/test";
 import {
   addVocClusterMemberRequestSchema,
-  linkExistingFindingToVocClusterRequestSchema,
   approvePermissionRequestSchema,
   denyPermissionRequestSchema,
+  linkExistingFindingToVocClusterRequestSchema,
   needMoreInfoPermissionRequestSchema,
   permissionDecisionResultSchema,
   rejectPermissionRequestSchema,
   vocClusterDtoSchema,
-} from "@fops/shared";
+} from '@fops/shared';
+import type { Page, Route } from '@playwright/test';
+import {
+  VOC_REVIEW_IDS,
+  populatedReviewCandidates,
+  populatedReviewVoc,
+} from '../fixtures/voc-public-update-review';
 
 import {
-  IDS,
-  managedSystems,
-  memberFromCandidate,
-} from "../fixtures/voc-clusters";
-import {
+  type PermissionScenarioName,
   createPermissionRequestsScenario,
   permissionDecisionResultTemplates,
-  type PermissionScenarioName,
-} from "../fixtures/permissions";
-import {
-  createScenario,
-  type ScenarioName,
-  type VisualScenario,
-} from "../scenarios";
+} from '../fixtures/permissions';
+import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
+import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
-export type RoleLevel = "admin" | "developer" | "user";
+export type RoleLevel = 'admin' | 'developer' | 'user';
 
 export interface InstalledMockApi {
   postedBodies: unknown[];
@@ -42,22 +39,24 @@ interface InstallOptions {
   permissionScenario?: PermissionScenarioName;
   role?: RoleLevel;
   scenario?: ScenarioName;
+  /** Issue #180 VOC detail surface; schemas validate its fixture at import. */
+  vocReview?: boolean;
 }
 
-const fetchResourceTypes = new Set(["fetch", "xhr"]);
+const fetchResourceTypes = new Set(['fetch', 'xhr']);
 
 function json(route: Route, status: number, body: unknown): Promise<void> {
   return route.fulfill({
     status,
-    contentType: "application/json",
+    contentType: 'application/json',
     body: JSON.stringify(body),
   });
 }
 
 function errorEnvelope(status: number): { code: string; message: string } {
   return {
-    code: status === 404 ? "not_found.record" : "internal.unexpected",
-    message: status === 404 ? "record not found" : "unexpected test error",
+    code: status === 404 ? 'not_found.record' : 'internal.unexpected',
+    message: status === 404 ? 'record not found' : 'unexpected test error',
   };
 }
 
@@ -81,27 +80,20 @@ export async function installMockApi(
 ): Promise<InstalledMockApi> {
   const scenario = createScenario(options.scenario);
   const postedBodies: unknown[] = [];
-  const postedRequests: InstalledMockApi["postedRequests"] = [];
-  const permissionRequests = createPermissionRequestsScenario(
-    options.permissionScenario,
-  );
-  const role = options.role ?? "admin";
-  const baseOrigin = new URL(
-    `http://127.0.0.1:${process.env.PW_PORT ?? "4173"}`,
-  ).origin;
+  const postedRequests: InstalledMockApi['postedRequests'] = [];
+  const permissionRequests = createPermissionRequestsScenario(options.permissionScenario);
+  const role = options.role ?? 'admin';
+  const baseOrigin = new URL(`http://127.0.0.1:${process.env.PW_PORT ?? '4173'}`).origin;
 
-  await page.route("**/*", async (route) => {
+  await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (
-      url.origin !== baseOrigin ||
-      !fetchResourceTypes.has(request.resourceType())
-    ) {
+    if (url.origin !== baseOrigin || !fetchResourceTypes.has(request.resourceType())) {
       await route.continue();
       return;
     }
 
-    if (isRequest(route, "GET", "/me")) {
+    if (isRequest(route, 'GET', '/me')) {
       await json(route, 200, {
         actor: {
           id: IDS.actor,
@@ -115,15 +107,43 @@ export async function installMockApi(
       return;
     }
 
-    if (isRequest(route, "GET", "/me/permissions/check")) {
+    if (options.vocReview && isRequest(route, 'GET', '/vocs')) {
+      await json(route, 200, { items: [populatedReviewVoc] });
+      return;
+    }
+
+    if (options.vocReview && isRequest(route, 'GET', `/vocs/${VOC_REVIEW_IDS.voc}`)) {
+      await json(route, 200, populatedReviewVoc);
+      return;
+    }
+
+    if (
+      options.vocReview &&
+      isRequest(route, 'GET', `/vocs/${VOC_REVIEW_IDS.voc}/public-update-candidates`)
+    ) {
+      await json(route, 200, populatedReviewCandidates);
+      return;
+    }
+
+    if (options.vocReview && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, { actors: [] });
+      return;
+    }
+
+    if (options.vocReview && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, { items: [], total: 0 });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/me/permissions/check')) {
       await json(route, 200, {
-        state: role === "admin" ? "approved" : "blocked_non_requestable",
-        decision: { allow: role === "admin" },
+        state: role === 'admin' ? 'approved' : 'blocked_non_requestable',
+        decision: { allow: role === 'admin' },
       });
       return;
     }
 
-    if (isRequest(route, "GET", "/permissions/requests")) {
+    if (isRequest(route, 'GET', '/permissions/requests')) {
       await json(route, 200, {
         requests: permissionRequests,
         count: permissionRequests.length,
@@ -134,41 +154,29 @@ export async function installMockApi(
     const permissionDecisionMatch = url.pathname.match(
       /^\/permissions\/requests\/([^/]+)\/(approve|reject|need-more-info|deny)$/,
     );
-    if (request.method() === "POST" && permissionDecisionMatch) {
+    if (request.method() === 'POST' && permissionDecisionMatch) {
       const [, requestId, rawAction] = permissionDecisionMatch;
-      const action = rawAction as
-        | keyof typeof permissionDecisionResultTemplates
-        | undefined;
+      const action = rawAction as keyof typeof permissionDecisionResultTemplates | undefined;
       if (!requestId || !action)
-        throw new Error(
-          `Missing permission decision target for ${request.method()} ${url}`,
-        );
+        throw new Error(`Missing permission decision target for ${request.method()} ${url}`);
       const rawBody = request.postDataJSON();
       const body = parsePermissionDecisionBody(action, rawBody);
       postedBodies.push(body);
       postedRequests.push({
         body,
-        idempotencyKey: await request.headerValue("Idempotency-Key"),
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
         pathname: url.pathname,
       });
-      const target = permissionRequests.find(
-        (candidate) => candidate.id === requestId,
-      );
+      const target = permissionRequests.find((candidate) => candidate.id === requestId);
       if (!target)
-        throw new Error(
-          `No mutable permission request fixture for ${request.method()} ${url}`,
-        );
+        throw new Error(`No mutable permission request fixture for ${request.method()} ${url}`);
       const template = permissionDecisionResultTemplates[action];
       target.status = template.status;
-      await json(
-        route,
-        200,
-        permissionDecisionResultSchema.parse({ ...template, id: requestId }),
-      );
+      await json(route, 200, permissionDecisionResultSchema.parse({ ...template, id: requestId }));
       return;
     }
 
-    if (isRequest(route, "GET", "/voc-clusters")) {
+    if (isRequest(route, 'GET', '/voc-clusters')) {
       await json(
         route,
         scenario.list.status,
@@ -179,46 +187,33 @@ export async function installMockApi(
       return;
     }
 
-    if (isRequest(route, "GET", "/managed-systems")) {
+    if (isRequest(route, 'GET', '/managed-systems')) {
       await json(route, 200, managedSystems);
       return;
     }
 
-    if (isRequest(route, "GET", "/findings")) {
+    if (isRequest(route, 'GET', '/findings')) {
       await json(route, 200, { items: scenario.findings });
       return;
     }
 
-    const candidateMatch = url.pathname.match(
-      /^\/voc-clusters\/([^/]+)\/candidate-peers$/,
-    );
-    if (request.method() === "GET" && candidateMatch) {
+    const candidateMatch = url.pathname.match(/^\/voc-clusters\/([^/]+)\/candidate-peers$/);
+    if (request.method() === 'GET' && candidateMatch) {
       await json(route, 200, scenario.candidates);
       return;
     }
 
-    const addMemberMatch = url.pathname.match(
-      /^\/voc-clusters\/([^/]+)\/vocs$/,
-    );
-    if (request.method() === "POST" && addMemberMatch) {
+    const addMemberMatch = url.pathname.match(/^\/voc-clusters\/([^/]+)\/vocs$/);
+    if (request.method() === 'POST' && addMemberMatch) {
       const clusterId = addMemberMatch[1];
-      if (!clusterId)
-        throw new Error(`Missing cluster id for ${request.method()} ${url}`);
-      const body = addVocClusterMemberRequestSchema.parse(
-        request.postDataJSON(),
-      );
+      if (!clusterId) throw new Error(`Missing cluster id for ${request.method()} ${url}`);
+      const body = addVocClusterMemberRequestSchema.parse(request.postDataJSON());
       postedBodies.push(body);
       const detail = scenario.details[clusterId];
       if (!detail?.cluster)
-        throw new Error(
-          `No mutable cluster fixture for ${request.method()} ${url}`,
-        );
-      if (
-        detail.cluster.members?.some((member) => member.voc_id === body.voc_id)
-      ) {
-        throw new Error(
-          `Candidate is already a member for ${request.method()} ${url}`,
-        );
+        throw new Error(`No mutable cluster fixture for ${request.method()} ${url}`);
+      if (detail.cluster.members?.some((member) => member.voc_id === body.voc_id)) {
+        throw new Error(`Candidate is already a member for ${request.method()} ${url}`);
       }
       detail.cluster = vocClusterDtoSchema.parse({
         ...detail.cluster,
@@ -229,30 +224,21 @@ export async function installMockApi(
       return;
     }
 
-    const linkFindingMatch = url.pathname.match(
-      /^\/voc-clusters\/([^/]+)\/link-finding$/,
-    );
-    if (request.method() === "POST" && linkFindingMatch) {
+    const linkFindingMatch = url.pathname.match(/^\/voc-clusters\/([^/]+)\/link-finding$/);
+    if (request.method() === 'POST' && linkFindingMatch) {
       const clusterId = linkFindingMatch[1];
-      if (!clusterId)
-        throw new Error(`Missing cluster id for ${request.method()} ${url}`);
-      const body = linkExistingFindingToVocClusterRequestSchema.parse(
-        request.postDataJSON(),
-      );
+      if (!clusterId) throw new Error(`Missing cluster id for ${request.method()} ${url}`);
+      const body = linkExistingFindingToVocClusterRequestSchema.parse(request.postDataJSON());
       postedBodies.push(body);
       postedRequests.push({
         body,
-        idempotencyKey: await request.headerValue("Idempotency-Key"),
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
         pathname: url.pathname,
       });
       const detail = scenario.details[clusterId];
-      const finding = scenario.findings.find(
-        (candidate) => candidate.id === body.finding_id,
-      );
+      const finding = scenario.findings.find((candidate) => candidate.id === body.finding_id);
       if (!detail?.cluster || !finding)
-        throw new Error(
-          `No linkable Finding fixture for ${request.method()} ${url}`,
-        );
+        throw new Error(`No linkable Finding fixture for ${request.method()} ${url}`);
       const linked = {
         id: finding.id,
         display_id: finding.display_id,
@@ -261,9 +247,7 @@ export async function installMockApi(
       detail.cluster = vocClusterDtoSchema.parse({
         ...detail.cluster,
         linked_findings: [
-          ...(detail.cluster.linked_findings ?? []).filter(
-            (item) => item.id !== finding.id,
-          ),
+          ...(detail.cluster.linked_findings ?? []).filter((item) => item.id !== finding.id),
           linked,
         ],
       });
@@ -272,17 +256,14 @@ export async function installMockApi(
     }
 
     const detailMatch = url.pathname.match(/^\/voc-clusters\/([^/]+)$/);
-    if (request.method() === "GET" && detailMatch) {
+    if (request.method() === 'GET' && detailMatch) {
       const clusterId = detailMatch[1];
-      if (!clusterId)
-        throw new Error(`Missing cluster id for ${request.method()} ${url}`);
+      if (!clusterId) throw new Error(`Missing cluster id for ${request.method()} ${url}`);
       const response = scenario.details[clusterId] ?? { status: 404 };
       await json(
         route,
         response.status,
-        response.status === 200
-          ? response.cluster
-          : errorEnvelope(response.status),
+        response.status === 200 ? response.cluster : errorEnvelope(response.status),
       );
       return;
     }
@@ -300,13 +281,13 @@ function parsePermissionDecisionBody(
   body: unknown,
 ): unknown {
   switch (action) {
-    case "approve":
+    case 'approve':
       return approvePermissionRequestSchema.parse(body);
-    case "reject":
+    case 'reject':
       return rejectPermissionRequestSchema.parse(body);
-    case "need-more-info":
+    case 'need-more-info':
       return needMoreInfoPermissionRequestSchema.parse(body);
-    case "deny":
+    case 'deny':
       return denyPermissionRequestSchema.parse(body);
   }
 }

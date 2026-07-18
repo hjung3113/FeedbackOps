@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolvePublicUpdateReviewCandidateRequestSchema } from '../public-update-review-candidate.js';
+import {
+  resolvePublicUpdateReviewCandidateRequestSchema,
+  resolvePublicUpdateReviewCandidateResponseSchema,
+} from '../public-update-review-candidate.js';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const DOC = { type: 'doc' as const, content: [] };
@@ -22,6 +25,21 @@ describe('resolvePublicUpdateReviewCandidateRequestSchema', () => {
         action: 'dismiss',
         candidate_id: ID,
         dismissal_reason: '  ',
+      }),
+    ).toThrow();
+  });
+
+  it('discriminates apply and dismiss resolve responses', () => {
+    expect(
+      resolvePublicUpdateReviewCandidateResponseSchema.parse({
+        candidate_id: ID,
+        action: 'dismiss',
+      }),
+    ).toEqual({ candidate_id: ID, action: 'dismiss' });
+    expect(() =>
+      resolvePublicUpdateReviewCandidateResponseSchema.parse({
+        candidate_id: ID,
+        action: 'apply',
       }),
     ).toThrow();
   });

@@ -1,7 +1,8 @@
-import { apiClient, type ApiError } from '@/lib/api';
+import { type ApiError, apiClient } from '@/lib/api';
 import type {
   ListPublicUpdateReviewCandidatesResponse,
   ResolvePublicUpdateReviewCandidateRequest,
+  ResolvePublicUpdateReviewCandidateResponse,
 } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -22,11 +23,19 @@ export function usePublicUpdateReviewCandidates(vocId: string, enabled: boolean)
 
 export function useResolvePublicUpdateReviewCandidate(vocId: string) {
   const queryClient = useQueryClient();
-  return useMutation<unknown, ApiError, ResolvePublicUpdateReviewCandidateRequest>({
+  return useMutation<
+    ResolvePublicUpdateReviewCandidateResponse,
+    ApiError,
+    ResolvePublicUpdateReviewCandidateRequest
+  >({
     mutationFn: async (body) => {
-      const response = await apiClient<unknown>('POST', `/vocs/${vocId}/apply-public-update-candidate`, {
-        body,
-      });
+      const response = await apiClient<ResolvePublicUpdateReviewCandidateResponse>(
+        'POST',
+        `/vocs/${vocId}/apply-public-update-candidate`,
+        {
+          body,
+        },
+      );
       return response.data;
     },
     onSuccess: async () => {

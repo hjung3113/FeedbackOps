@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import type {
   ListPublicUpdateReviewCandidatesResponse,
   ResolvePublicUpdateReviewCandidateRequest,
+  ResolvePublicUpdateReviewCandidateResponse,
 } from '@fops/shared';
 
 import type { Db } from '../../../db/client.js';
@@ -48,8 +49,11 @@ export function createPublicUpdateReviewCandidateService(deps: {
     );
     if (decision.allow !== true) {
       // Scoped developers must not be able to probe the existence of another MS's VOC.
-      if (actor.role_level === 'developer') throw new HttpError('not_found.record', 'voc not found');
-      throw new HttpError('permission.denied', 'voc.triage capability required', { reason: decision.reason });
+      if (actor.role_level === 'developer')
+        throw new HttpError('not_found.record', 'voc not found');
+      throw new HttpError('permission.denied', 'voc.triage capability required', {
+        reason: decision.reason,
+      });
     }
     return voc;
   }
@@ -84,7 +88,7 @@ export function createPublicUpdateReviewCandidateService(deps: {
     actor: ReviewCandidateActor;
     vocId: string;
     input: ResolvePublicUpdateReviewCandidateRequest;
-  }) {
+  }): Promise<ResolvePublicUpdateReviewCandidateResponse> {
     const voc = await requireTriage(args.tx, args.actor, args.vocId);
     if (args.input.action === 'apply') {
       const publicUpdate = await deps.conversationService.postPublicUpdate({
@@ -102,10 +106,17 @@ export function createPublicUpdateReviewCandidateService(deps: {
          WHERE id = ${args.input.candidate_id}
            AND workspace_id = ${args.actor.workspace_id}
            AND voc_id = ${args.vocId}
+           AND status = 'pending'
         RETURNING id
       `);
-      if (!changed.rows[0]) throw new HttpError('not_found.record', 'review candidate not found');
-      return { candidate_id: args.input.candidate_id, action: 'apply' as const, public_update: publicUpdate };
+      if (!changed.rows[0]) {
+        throw new HttpError('conflict.stale_write', 'review candidate is already resolved');
+      }
+      return {
+        candidate_id: args.input.candidate_id,
+        action: 'apply' as const,
+        public_update: publicUpdate,
+      };
     }
 
     const changed = await args.tx.execute<{ id: string }>(sql`
@@ -117,9 +128,12 @@ export function createPublicUpdateReviewCandidateService(deps: {
        WHERE id = ${args.input.candidate_id}
          AND workspace_id = ${args.actor.workspace_id}
          AND voc_id = ${args.vocId}
+         AND status = 'pending'
       RETURNING id
     `);
-    if (!changed.rows[0]) throw new HttpError('not_found.record', 'review candidate not found');
+    if (!changed.rows[0]) {
+      throw new HttpError('conflict.stale_write', 'review candidate is already resolved');
+    }
     await deps.auditService.record(args.tx, {
       workspace_id: args.actor.workspace_id,
       actor_id: args.actor.actor_id,
