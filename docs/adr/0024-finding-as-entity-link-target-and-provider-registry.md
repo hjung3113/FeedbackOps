@@ -150,6 +150,11 @@ entity-link surface: POST, both GET/list modes, and PATCH/detach. Generic
 surfaces respond non-disclosively; PATCH/detach returns the same 404 envelope
 as an absent link rather than revealing the tuple through a distinct response.
 
+Generic detach remains prohibited for this command-only tuple. The sole detach
+command is `POST /voc-clusters/:id/unlink-finding`: it soft-detaches only the
+active `(voc_cluster → finding, evidence_of)` tuple, is idempotent, and emits
+the domain plus generic detach audit events only when a row changed.
+
 Cross-Managed-System targets remain valid. Every cluster list and detail
 projection instead applies the target Finding's own read scope (Admin or
 `finding.read` on its Primary Managed System) to every linked Finding. An

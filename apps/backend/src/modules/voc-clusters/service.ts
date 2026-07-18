@@ -3,6 +3,7 @@ import {
   type ApplyVocClusterPublicUpdateRequest,
   type CreateFindingFromVocClusterRequest,
   type LinkExistingFindingToVocClusterRequest,
+  type UnlinkExistingFindingFromVocClusterRequest,
   type CreateVocClusterRequest,
   type ListSameManagedSystemCandidatePeersResponse,
   type ListVocClustersResponse,
@@ -19,7 +20,11 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
-import { insertActiveEntityLink } from '../entity-links/repo.js';
+import {
+  detachEntityLink,
+  insertActiveEntityLink,
+  selectActiveEntityLink,
+} from '../entity-links/repo.js';
 import { insertFinding } from '../findings/repo.js';
 import { lockFindingById } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
@@ -1041,6 +1046,142 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     });
   }
 
+  async function unlinkExistingFinding(args: {
+    actor: VocClustersActor;
+    clusterId: string;
+    input: UnlinkExistingFindingFromVocClusterRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: 204; body: undefined }> {
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const cluster = await lockVocClusterById(tx, {
+            workspaceId: args.actor.workspace_id,
+            clusterId: args.clusterId,
+          });
+          if (!cluster) throw new HttpError('not_found.record', 'record not found');
+
+          const findingReadScope = await actorFindingReadScope(tx, args.actor);
+          if (!isInScope(findingReadScope, cluster.primary_managed_system_id)) {
+            throw new HttpError('not_found.record', 'record not found');
+          }
+
+          const finding = await lockFindingById(tx, {
+            workspaceId: args.actor.workspace_id,
+            findingId: args.input.finding_id,
+          });
+          if (!finding || !isInScope(findingReadScope, finding.primary_managed_system_id)) {
+            throw new HttpError('not_found.record', 'record not found');
+          }
+
+          const [clusterManageDecision, findingManageDecision] = await Promise.all([
+            deps.checkService.checkCapability(
+              args.actor,
+              'finding.manage',
+              {
+                workspace_id: args.actor.workspace_id,
+                managed_system_id: cluster.primary_managed_system_id,
+              },
+              { tx },
+            ),
+            deps.checkService.checkCapability(
+              args.actor,
+              'finding.manage',
+              {
+                workspace_id: args.actor.workspace_id,
+                managed_system_id: finding.primary_managed_system_id,
+              },
+              { tx },
+            ),
+          ]);
+          if (!clusterManageDecision.allow || !findingManageDecision.allow) {
+            const missingScope = [clusterManageDecision, findingManageDecision].some(
+              (decision) => !decision.allow && decision.reason === 'no_grant',
+            );
+            if (args.actor.role_level === 'developer' && missingScope) {
+              throw new HttpError(
+                'permission.scope_required',
+                'finding.manage capability required; developer needs MS-scoped grant',
+                {
+                  requiredScope: [
+                    ...new Set(
+                      [
+                        !clusterManageDecision.allow
+                          ? cluster.primary_managed_system_id
+                          : undefined,
+                        !findingManageDecision.allow
+                          ? finding.primary_managed_system_id
+                          : undefined,
+                      ].filter((id): id is string => id !== undefined),
+                    ),
+                  ],
+                  requestable_permission: { permission: 'finding.manage' },
+                },
+              );
+            }
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          const activeLink = await selectActiveEntityLink(tx, {
+            workspaceId: args.actor.workspace_id,
+            sourceType: 'voc_cluster',
+            sourceId: cluster.id,
+            targetType: 'finding',
+            targetId: finding.id,
+            relationType: 'evidence_of',
+          });
+          if (!activeLink) return { status: 204 as const, body: undefined };
+
+          const detached = await detachEntityLink(tx, {
+            workspaceId: args.actor.workspace_id,
+            linkId: activeLink.id,
+            actorId: args.actor.actor_id,
+            reason: args.input.reason,
+          });
+          if (!detached) return { status: 204 as const, body: undefined };
+
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'finding_unlinked_from_voc_cluster',
+            subject_type: 'finding',
+            subject_id: finding.id,
+            summary: 'Finding unlinked from VOC Cluster',
+            detail: {
+              link_id: detached.id,
+              finding_id: finding.id,
+              voc_cluster_id: cluster.id,
+              primary_managed_system_id: finding.primary_managed_system_id,
+              relation_type: 'evidence_of',
+              reason: args.input.reason,
+            },
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'entity_link.detached',
+            subject_type: 'entity_link',
+            subject_id: detached.id,
+            summary: 'Entity link detached',
+            detail: {
+              link_id: detached.id,
+              source: { type: detached.source_type, id: detached.source_id },
+              target: { type: detached.target_type, id: detached.target_id },
+              relation_type: detached.relation_type,
+              reason: args.input.reason,
+            },
+          });
+          return { status: 204 as const, body: undefined };
+        },
+      );
+    });
+  }
+
   return {
     createCluster,
     listClusters,
@@ -1053,6 +1194,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
     applyPublicUpdateCandidate,
     createFindingFromCluster,
     linkExistingFinding,
+    unlinkExistingFinding,
   };
 }
 
