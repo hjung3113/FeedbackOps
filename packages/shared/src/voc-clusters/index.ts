@@ -161,3 +161,13 @@ export const linkExistingFindingToVocClusterRequestSchema = z
 export type LinkExistingFindingToVocClusterRequest = z.infer<
   typeof linkExistingFindingToVocClusterRequestSchema
 >;
+
+export const unlinkExistingFindingFromVocClusterRequestSchema = z
+  .object({
+    finding_id: z.string().uuid(),
+    reason: z.string().trim().min(1),
+  })
+  .strict();
+export type UnlinkExistingFindingFromVocClusterRequest = z.infer<
+  typeof unlinkExistingFindingFromVocClusterRequestSchema
+>;

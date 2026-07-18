@@ -76,6 +76,7 @@ export const AUDIT_EVENT_TYPES = [
   'voc_cluster_member_removed',
   'finding_created_from_voc_cluster',
   'finding_linked_to_voc_cluster',
+  'finding_unlinked_from_voc_cluster',
   // Slice 5 #124: Evidence preserved on a Finding.
   'evidence_highlight_added',
   // Slice 6 #131: Finding status machine.
@@ -363,6 +364,13 @@ export const entityLinkDetachedDetailSchema = z.union([
   }),
   z.object({
     link_id: z.string().uuid(),
+    source: vocClusterRefDetailSchema,
+    target: findingRefDetailSchema,
+    relation_type: z.literal('evidence_of'),
+    reason: z.string().min(1),
+  }),
+  z.object({
+    link_id: z.string().uuid(),
     source: findingRefDetailSchema,
     target: taskRequestRefDetailSchema,
     relation_type: z.literal('requested_task'),
@@ -397,6 +405,18 @@ export const findingLinkedToVocClusterDetailSchema = z.object({
 });
 export type FindingLinkedToVocClusterDetail = z.infer<
   typeof findingLinkedToVocClusterDetailSchema
+>;
+
+export const findingUnlinkedFromVocClusterDetailSchema = z.object({
+  link_id: z.string().uuid(),
+  finding_id: z.string().uuid(),
+  voc_cluster_id: z.string().uuid(),
+  primary_managed_system_id: z.string().uuid(),
+  relation_type: z.literal('evidence_of'),
+  reason: z.string().min(1),
+});
+export type FindingUnlinkedFromVocClusterDetail = z.infer<
+  typeof findingUnlinkedFromVocClusterDetailSchema
 >;
 
 const vocClusterStatusDetailSchema = z.enum(['draft', 'confirmed']);
@@ -620,6 +640,7 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   voc_cluster_member_removed: vocClusterMemberRemovedDetailSchema,
   finding_created_from_voc_cluster: findingCreatedFromVocClusterDetailSchema,
   finding_linked_to_voc_cluster: findingLinkedToVocClusterDetailSchema,
+  finding_unlinked_from_voc_cluster: findingUnlinkedFromVocClusterDetailSchema,
   // Slice 5 #124.
   evidence_highlight_added: evidenceHighlightAddedDetailSchema,
   // Slice 6 #131.

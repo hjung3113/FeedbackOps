@@ -139,11 +139,12 @@ created by routes, not by direct `POST /entity-links`:
 ```
 
 `(voc_cluster, finding, evidence_of)` is registered for DB validation and is
-created only by `POST /voc-clusters/:id/link-finding`; it is intentionally not
-available through generic `POST /entity-links`, generic link listings, or
-generic `PATCH /entity-links/:id` detach. Every generic surface excludes the
-tuple categorically; PATCH/detach returns the same non-disclosing 404 envelope
-as an absent link.
+created only by `POST /voc-clusters/:id/link-finding`. Generic
+`POST /entity-links`, generic link listings, and generic `PATCH /entity-links/:id`
+detach are prohibited categorically; PATCH/detach returns the same
+non-disclosing 404 envelope as an absent link. Domain unlink is permitted only
+through `POST /voc-clusters/:id/unlink-finding`, which soft-detaches the exact
+active tuple.
 
 Independent value CHECKs are forbidden because they would admit invalid tuples.
 Creatable visibility stays `internal_only`.

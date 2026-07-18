@@ -150,6 +150,20 @@ entity-link surface: POST, both GET/list modes, and PATCH/detach. Generic
 surfaces respond non-disclosively; PATCH/detach returns the same 404 envelope
 as an absent link rather than revealing the tuple through a distinct response.
 
+Generic detach remains prohibited for this command-only tuple. The sole detach
+command is `POST /voc-clusters/:id/unlink-finding`: it soft-detaches only the
+active `(voc_cluster → finding, evidence_of)` tuple, is idempotent, and emits
+the domain plus generic detach audit events only when a row changed.
+
+**#170 decision (2026-07-18):** the `visibility_state: 'hidden'` stub remains
+as-is. Its link id, relation, status, Managed System id, and creator are a
+deliberate contract: UIs must be able to say that a relationship exists but is
+not visible, rather than silently misrepresenting an entity's shape. The
+target remains withheld; this is not a disclosure defect. The #112 contract
+and existing tests lock the shape. This is independent of #127's
+command-only tuple filter, which categorically excludes a tuple from generic
+surfaces rather than deciding visibility for a returned relationship.
+
 Cross-Managed-System targets remain valid. Every cluster list and detail
 projection instead applies the target Finding's own read scope (Admin or
 `finding.read` on its Primary Managed System) to every linked Finding. An
