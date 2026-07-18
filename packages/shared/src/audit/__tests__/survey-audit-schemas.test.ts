@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  SURVEY_QUESTION_AUDIT_FIELDS,
   surveyClosedDetailSchema,
   surveyCreatedDetailSchema,
   surveyOpenedDetailSchema,
@@ -93,6 +94,26 @@ describe('Survey audit detail schemas', () => {
     expect(() =>
       surveyQuestionUpdatedDetailSchema.parse({ ...surveyQuestionUpdated, changed_fields: [] }),
     ).toThrow();
+  });
+
+  it.each([
+    'What is your favorite color?',
+    'respondent@example.com',
+    '01919b8c-0000-7000-8000-000000000004',
+  ])('rejects non-field changed_fields values', (changedField) => {
+    expect(() =>
+      surveyQuestionUpdatedDetailSchema.parse({ ...surveyQuestionUpdated, changed_fields: [changedField] }),
+    ).toThrow();
+  });
+
+  it('accepts a valid subset of survey question audit fields', () => {
+    const changed_fields = ['prompt', 'options', 'sort_order'] as const;
+
+    expect(SURVEY_QUESTION_AUDIT_FIELDS).toEqual(expect.arrayContaining([...changed_fields]));
+    expect(surveyQuestionUpdatedDetailSchema.parse({ ...surveyQuestionUpdated, changed_fields })).toEqual({
+      ...surveyQuestionUpdated,
+      changed_fields,
+    });
   });
 
   it('rejects a zero question_count', () => {

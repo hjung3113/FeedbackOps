@@ -14,6 +14,22 @@ const surveyTypeSchema = z.enum(['discovery', 'validation', 'outcome']);
 const questionKindSchema = z.enum(['single_choice', 'multiple_choice', 'rating', 'text']);
 const branchDepthSchema = z.union([z.literal(0), z.literal(1)]);
 
+// Field names only. Audit detail records which mutable question fields changed,
+// never the field values themselves.
+export const SURVEY_QUESTION_AUDIT_FIELDS = [
+  'prompt',
+  'is_required',
+  'options',
+  'rating_min',
+  'rating_max',
+  'rating_low_label',
+  'rating_high_label',
+  'sort_order',
+  'branch_parent_question_id',
+  'branch_trigger_option_key',
+  'kind',
+] as const;
+
 // ── survey_created ────────────────────────────────────────────────────────
 export const surveyCreatedDetailSchema = z
   .object({
@@ -47,7 +63,7 @@ export const surveyQuestionUpdatedDetailSchema = z
   .object({
     survey_id: uuid(),
     question_id: uuid(),
-    changed_fields: z.array(z.string().min(1)).nonempty(),
+    changed_fields: z.array(z.enum(SURVEY_QUESTION_AUDIT_FIELDS)).nonempty(),
     ordering_changed: z.boolean(),
   })
   .strict();
