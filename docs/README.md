@@ -2,22 +2,11 @@
 
 This directory separates product design, frontend UI contracts, and implementation decisions.
 
-## Reading Order For Implementation
+## Reading For Implementation
 
-```text
-1. docs/design/00-product-overview.md
-2. docs/design/01-domain-model.md
-3. docs/design/02-requirements-matrix.md
-4. docs/design/10-cross-system-workflows.md
-5. docs/design/11-entity-linking.md
-6. docs/design/12-ui-ux-principles.md
-7. docs/frontend/README.md
-8. docs/implementation/README.md
-9. The target system design document
-10. DESIGN.md when visual token input is needed
-```
+Root `AGENTS.md` → "Required Reading" and "Source Of Truth" decide what to read for a given change.
 
-## Source Of Truth
+## What Lives Where
 
 ```text
 docs/design/
@@ -36,15 +25,7 @@ docs/implementation/
 - Implementation architecture, API, data, permission, entity-linking, testing, and slice plan.
 ```
 
-When documents appear to conflict, use this precedence:
-
-```text
-1. Domain names, invariants, and ownership: docs/design/01-domain-model.md
-2. Requirement IDs and scope status: docs/design/02-requirements-matrix.md
-3. Implementation structure and code boundaries: docs/implementation/*
-4. Frontend component and interaction contracts: docs/frontend/*
-5. Raw visual tokens: DESIGN.md
-```
+Conflict resolution lives in root `AGENTS.md` → "Source Of Truth" (authority by subject + tiebreaks); this file only describes what each `docs/` directory contains.
 
 ## Non-Negotiable Rules
 

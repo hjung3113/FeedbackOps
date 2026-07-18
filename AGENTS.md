@@ -10,7 +10,7 @@
 - For multi-step work, define success criteria and verify them before claiming completion.
 - If domain rules conflict with generic framework habits, follow the domain rules.
 - Finish one issue fully (tests + typecheck + boundaries + commit + PR + merge + close) before starting the next.
-- Stop on locked-decision ambiguity. Collision with an ADR (`docs/adr/*.md`), `CONTEXT.md`, `AGENTS.md`, or a grill-locked Q → stop and report which doc needs to reopen. Never resolve unilaterally.
+- Stop on locked-decision ambiguity. A grill-locked Q collision, or a contradiction the [Source Of Truth](#source-of-truth) tiebreaks do not cover → stop and report which doc must reopen. Never resolve unilaterally.
 
 ## Prototype Is The Spec
 
@@ -39,33 +39,31 @@ For pixel-diff enforcement on page-level FE issues, see `apps/frontend/AGENTS.md
 - Product systems (VOC, Finding/Insight, Task, Survey, Dashboard, Permission, Entity Linking, Core Platform) are bounded contexts inside the app shells — not separate deployable apps. Do not create `systems/{system}/frontend|backend`.
 - Backend implementation lives under `apps/backend/src/modules/*`. Frontend route composition lives under `apps/frontend/src/features/*`.
 
-## Required Reading Order
+## Required Reading
 
-Before implementation that changes product behavior, API contracts, domain rules, routing, or shared components, read:
-
-1. `docs/README.md`
-2. `docs/design/00-product-overview.md`
-3. `docs/design/01-domain-model.md`
-4. `docs/design/02-requirements-matrix.md`
-5. `docs/design/10-cross-system-workflows.md`
-6. `docs/design/11-entity-linking.md`
-7. `docs/design/12-ui-ux-principles.md`
-8. `docs/frontend/README.md`
-9. `docs/implementation/README.md`
-10. The `docs/design/*` file matching the touched product system.
+Before implementation, read every applicable `AGENTS.md` on the path from the repo root to the target directory and the authorities for every touched subject under [Source Of Truth](#source-of-truth). Cross-system workflow changes also require `docs/design/10-cross-system-workflows.md`; product-system behavior changes require the matching `docs/design/*` contract.
 
 ## Source Of Truth
 
-Resolve conflicts in this order. Lower tiers never override higher tiers within their column.
+Authority follows subject; there is no universal conflict ladder.
 
-**BEHAVIOR / contracts / API shapes:**
+**Authority by subject:**
 
-1. `AGENTS.md` (root + per-directory)
-2. `CONTEXT.md` (domain vocabulary)
-3. `docs/adr/*.md` (architectural decisions)
-4. `docs/implementation/00-08-*.md` (implementation contracts)
+- `AGENTS.md` (root + per-directory) — agent conduct and repository/ownership boundaries
+- `CONTEXT.md` (root) — domain vocabulary and stable domain invariants
+- `docs/adr/*.md` — architectural decisions
+- `docs/implementation/*.md` and `docs/design/*.md` — detailed contracts
 
-**USER-FACING COPY (labels, headers, buttons, microcopy):**
+**Tiebreaks — apply, do not escalate:**
+
+- An ADR supersedes any other document — `docs/implementation/*`, `docs/design/*`, `CONTEXT.md`, `docs/design-prototype/`, and any `AGENTS.md` — on the decision it made. Note stale docs and fix them in the same chunk.
+- `CONTEXT.md` owns vocabulary and stable domain invariants, not architecture.
+- The most specific `AGENTS.md` wins: a per-directory `AGENTS.md` supersedes root within its directory.
+- Prototype vs spec text → see [Prototype Is The Spec](#prototype-is-the-spec).
+
+**Stop and report:** A disagreement between detailed contracts (`docs/implementation/*` vs `docs/design/*`) stops by design: neither is a decision record, so no tiebreak can pick a winner without fabricating a decision. A grill-locked Q collision, or any contradiction no tiebreak above covers → report which doc must reopen. Never resolve unilaterally.
+
+**USER-FACING COPY (labels, headers, buttons, microcopy) — fallback chain when a source is silent:**
 
 1. `docs/design-prototype/` (HANDOFF.md + `screen-*.jsx` + `data.js`) — verbatim authority. Korean and English may coexist freely; mirror the prototype string regardless of language. Surface-level convention (what the reference shows) matters more than blanket language consistency; do not reflexively translate either direction.
 2. `docs/frontend/specs/*.md` when prototype is silent
@@ -92,7 +90,7 @@ Resolve conflicts in this order. Lower tiers never override higher tiers within 
 - Source-shaped routes do not grant write ownership to the source module.
 - Frontend screens compose typed API hooks and shared components; they do not enforce backend permissions as truth.
 - Frontend feature folders follow top-level route ownership: `home`, `my-work`, `voc`, `voc-cluster`, `surveys`, `tasks`, `integration`, `admin`.
-- Integration owns Findings, Evidence, Coverage, and Links feature code. Per the 2026-07-13 URL decision, Findings routes at top-level `/findings`; Evidence, Coverage, and Links stay under `/integration/*` (Evidence and Coverage not yet built). VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
+- Integration owns Findings, Evidence, Coverage, and Links feature code. Findings routes at top-level `/findings`; Evidence, Coverage, and Links stay under `/integration/*`. VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
 - Managed System Registry, Analytics Areas, Permission Requests, and workspace settings live under Admin routes.
 - `packages/shared` must not import either app. `packages/ui` must not call APIs or own domain mutations.
 
@@ -124,7 +122,8 @@ When reviewing a PR, prioritize product invariant violations, ownership boundary
 
 ## Agent Skills
 
-- **Issue tracker.** GitHub issues on `hjung3113/FeedbackOps` via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+- **Issue tracker.** GitHub issues on `hjung3113/FeedbackOps` via the `gh` CLI; external PRs are not a request surface. Includes wayfinding operations for `/wayfinder`. See `docs/agents/issue-tracker.md`.
 - **Triage labels.** Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
-- **Domain docs.** Multi-context. Start at `CONTEXT-MAP.md`, then read the relevant per-context `CONTEXT.md`. See `docs/agents/domain.md`.
+- **Domain docs.** Root `CONTEXT.md` owns the domain glossary and stable invariants; `docs/adr/` owns architectural decisions; per-directory `AGENTS.md` owns technical-layer rules. See `docs/agents/domain.md`.
 - **Workflow.** Model tiers, REV cycles, dispatch patterns: the `/agent-workflow` skill (external toolkit).
+- **Vendored skills.** `.agents/skills/` holds the vendored `mattpocock/skills`, symlinked into `.claude/skills/`. `caveman` and `zoom-out` are local-only additions. Upstream `code-review` is deliberately not vendored, so `/code-review` resolves to the Claude Code built-in.
