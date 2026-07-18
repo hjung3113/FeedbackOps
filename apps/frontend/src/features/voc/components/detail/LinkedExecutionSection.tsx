@@ -8,11 +8,14 @@ import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecisio
 export interface LinkedExecutionSectionProps {
   voc: VocDetailEnvelope;
   linkedTask?: { title: string; status: string } | null;
+  /** A reporter-safe Task summary renders in the following related-entity section. */
+  hasReporterTaskSummary?: boolean;
 }
 
 export function LinkedExecutionSection({
   voc,
   linkedTask = null,
+  hasReporterTaskSummary = false,
 }: LinkedExecutionSectionProps): React.ReactElement {
   const linkedFindingDecision = usePermissionDecision(voc, 'linkedFinding');
 
@@ -23,9 +26,15 @@ export function LinkedExecutionSection({
         <PermissionBlockedPanel
           state={linkedFindingDecision.state}
           category="Linked Finding"
-          {...(linkedFindingDecision.reason !== undefined ? { reason: linkedFindingDecision.reason } : {})}
-          {...(linkedFindingDecision.requiredScope !== undefined ? { requiredScope: linkedFindingDecision.requiredScope } : {})}
-          {...(linkedFindingDecision.decisionId !== undefined ? { decisionId: linkedFindingDecision.decisionId } : {})}
+          {...(linkedFindingDecision.reason !== undefined
+            ? { reason: linkedFindingDecision.reason }
+            : {})}
+          {...(linkedFindingDecision.requiredScope !== undefined
+            ? { requiredScope: linkedFindingDecision.requiredScope }
+            : {})}
+          {...(linkedFindingDecision.decisionId !== undefined
+            ? { decisionId: linkedFindingDecision.decisionId }
+            : {})}
         />
       </div>
     );
@@ -39,9 +48,9 @@ export function LinkedExecutionSection({
           <span className="text-sm font-medium text-text-primary">{linkedTask.title}</span>
           <OutlineBadge>{linkedTask.status}</OutlineBadge>
         </div>
-      ) : (
+      ) : !hasReporterTaskSummary ? (
         <EmptyState size="sm" title="연결된 실행 없음" />
-      )}
+      ) : null}
     </div>
   );
 }

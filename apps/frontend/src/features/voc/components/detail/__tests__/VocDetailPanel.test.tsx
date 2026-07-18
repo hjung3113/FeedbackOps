@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { TaskDetailDto } from '@fops/shared';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -66,26 +67,32 @@ import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecisio
 import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
+import { getTask } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
 import { VocDetailPanel } from '../VocDetailPanel';
 import {
   DETAIL_ENVELOPE,
   ME_RESPONSE,
+  OTHER_ACTOR_ID,
   makeConversationQuery,
   makeDetailQuery,
   makeMeQuery,
 } from './_fixtures';
 
-function renderWithClient(ui: React.ReactElement) {
-  const queryClient = new QueryClient({
+function createQueryClient() {
+  return new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+}
+
+function renderWithClient(ui: React.ReactElement, queryClient = createQueryClient()) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
 beforeEach(() => {
   navigate.mockReset();
+  vi.mocked(getTask).mockReset();
   vi.mocked(useManagedSystem).mockReturnValue(null);
   vi.mocked(usePermissionDecision).mockReturnValue(null);
   vi.mocked(useVocConversation).mockReturnValue(makeConversationQuery());
@@ -104,6 +111,156 @@ beforeEach(() => {
 });
 
 describe('<VocDetailPanel>', () => {
+  const allowedTaskLink = {
+    id: '11111111-1111-4111-8111-111111111179',
+    source_type: 'voc' as const,
+    source_id: DETAIL_ENVELOPE.id,
+    target_type: 'task' as const,
+    target_id: '33333333-3333-4333-8333-333333333179',
+    relation_type: 'evidence_of' as const,
+    visibility: 'internal_only' as const,
+    status: 'active' as const,
+    managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
+    created_by: OTHER_ACTOR_ID,
+    created_at: '2026-07-18T09:00:00.000Z',
+    updated_at: null,
+    visibility_state: 'allowed' as const,
+    target_summary: {
+      type: 'task' as const,
+      id: '33333333-3333-4333-8333-333333333179',
+      display_id: 'TASK-SECRET',
+      title: '내부 Task 제목',
+      status: 'in_progress',
+      priority: 'critical',
+      primary_managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
+      assignee_actor_id: OTHER_ACTOR_ID,
+      due_date: null,
+    },
+  };
+  const cachedTask: TaskDetailDto = {
+    id: allowedTaskLink.target_id,
+    workspace_id: '11111111-1111-4111-8111-111111111111',
+    display_id: 'TASK-CACHED-SECRET',
+    primary_managed_system_id: DETAIL_ENVELOPE.primary_managed_system_id,
+    title: '캐시된 내부 Task 제목',
+    status: 'done',
+    priority: 'urgent',
+    assignee_actor_id: OTHER_ACTOR_ID,
+    due_date: '2026-07-31',
+    milestone_id: null,
+    analytics_area_id: null,
+    source_task_request_id: null,
+    created_by: OTHER_ACTOR_ID,
+    created_at: '2026-07-18T09:00:00.000Z',
+    updated_at: '2026-07-18T09:00:00.000Z',
+    source: null,
+  };
+
+  it('fails closed while /me is unresolved: no Task fetch or allowed Task fields', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links: [allowedTaskLink] } }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: undefined,
+        isLoading: true,
+        isPending: true,
+        isSuccess: false,
+        status: 'pending',
+      }),
+    );
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+
+    expect(screen.queryByText('내부 Task 제목')).not.toBeInTheDocument();
+    expect(screen.queryByText('TASK-SECRET')).not.toBeInTheDocument();
+    expect(getTask).not.toHaveBeenCalled();
+  });
+
+  it('fails closed for a non-owner User: no Task fetch or allowed Task fields', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links: [allowedTaskLink] } }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'user' },
+        },
+      }),
+    );
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+
+    expect(screen.queryByText('내부 Task 제목')).not.toBeInTheDocument();
+    expect(screen.queryByText('TASK-SECRET')).not.toBeInTheDocument();
+    expect(getTask).not.toHaveBeenCalled();
+  });
+
+  it('does not consume a cached Task while /me is unresolved', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links: [allowedTaskLink] } }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: undefined,
+        isLoading: true,
+        isPending: true,
+        isSuccess: false,
+        status: 'pending',
+      }),
+    );
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(['task', allowedTaskLink.target_id], cachedTask);
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />, queryClient);
+
+    expect(screen.queryByText('캐시된 내부 Task 제목')).not.toBeInTheDocument();
+    expect(screen.queryByText('done')).not.toBeInTheDocument();
+    expect(getTask).not.toHaveBeenCalled();
+  });
+
+  it('does not consume a cached Task for a User actor', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links: [allowedTaskLink] } }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'user' },
+        },
+      }),
+    );
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(['task', allowedTaskLink.target_id], cachedTask);
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />, queryClient);
+
+    expect(screen.queryByText('캐시된 내부 Task 제목')).not.toBeInTheDocument();
+    expect(screen.queryByText('done')).not.toBeInTheDocument();
+    expect(getTask).not.toHaveBeenCalled();
+  });
+
+  it('renders a cached Task for an operator actor', () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: { ...DETAIL_ENVELOPE, links: [allowedTaskLink] } }),
+    );
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
+      }),
+    );
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(['task', allowedTaskLink.target_id], cachedTask);
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />, queryClient);
+
+    expect(screen.getByText('캐시된 내부 Task 제목')).toBeInTheDocument();
+    expect(screen.getByText('done')).toBeInTheDocument();
+    expect(getTask).not.toHaveBeenCalled();
+  });
+
   it('happy path: renders the detail panel with title', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
@@ -181,7 +338,7 @@ describe('<VocDetailPanel>', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('renders all 7 section titles in happy path', () => {
+  it('does not render an empty related-entity section in the happy path', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
@@ -189,7 +346,7 @@ describe('<VocDetailPanel>', () => {
     // reference image (see .review/title-reference.png + relaxed copy rule).
     expect(screen.getByText('BODY')).toBeInTheDocument();
     expect(screen.getByText('연결된 실행')).toBeInTheDocument();
-    expect(screen.getByText('관련 엔티티')).toBeInTheDocument();
+    expect(screen.queryByText('관련 엔티티')).not.toBeInTheDocument();
     expect(screen.getByText('대화')).toBeInTheDocument();
   });
 
