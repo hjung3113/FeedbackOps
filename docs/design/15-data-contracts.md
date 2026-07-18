@@ -30,7 +30,7 @@ core.managed_systems
 - default_voc_owner_user_id: uuid, nullable
 - default_voc_owner_team_id: uuid, nullable
 - default_task_reviewer_user_id: uuid, nullable
-- default_survey_operator_user_id: uuid, nullable
+- default_survey_operator_actor_id: uuid, nullable
 - status: enum(active, archived), required
 - created_at: timestamp, required
 - updated_at: timestamp, required
@@ -44,6 +44,39 @@ Rules:
 - Defaults prefill responsibility but can be overridden by authorized users.
 - Default owner or team may prefill actual owner fields but does not mean the record is triaged.
 - Project language in older contracts is superseded by Managed System for MVP scope.
+```
+
+## Survey
+
+Owner: Survey
+
+```text
+survey.surveys
+- id, workspace_id, display_id: uuid/uuid/text, required; display_id unique per workspace
+- type: enum(discovery, validation, outcome), required
+- status: enum(draft, open, closed), required
+- title: text, required; description: text, nullable
+- primary_managed_system_id: uuid, required; analytics_area_id: uuid, nullable
+- operator_actor_id, created_by: uuid, required
+- responses_identity_protected: boolean, required
+- opened_at, closed_at: timestamp, nullable; created_at, updated_at: timestamp, required
+
+survey.survey_questions
+- survey_id, workspace_id, kind, prompt, sort_order, branch_depth: required
+- choice options, rating bounds/labels, and one-level branch-parent metadata are nullable by kind
+
+survey.survey_responses / survey.survey_response_answers
+- responses snapshot respondent_actor_id and identity_protected; answers reference both a
+  response and question through survey-qualified foreign keys.
+```
+
+Rules:
+
+```text
+- A draft Survey has neither lifecycle timestamp; open has opened_at only; closed has both.
+- Question branches are limited to depth 0 or 1; a branch parent must be depth 0.
+- Response identity protection is stored on the response and inherited by its answers.
+- Response/answer write commands are deferred to #185.
 ```
 
 ## Analytics Area

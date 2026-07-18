@@ -94,7 +94,7 @@ The backend returns effective navigation and capability states for the current w
 | Read Task internal comments | no | assigned/scoped | yes |
 | Create Survey | no | scoped | yes |
 | Answer assigned Survey | yes | yes | yes |
-| Read personal Survey responses | no | permission required | yes |
+| Read personal Survey responses | no | permission required | no — explicit capability required |
 | Export data | no | permission required | yes |
 | Approve Permission Request | no | no | yes |
 

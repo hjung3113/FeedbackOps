@@ -96,3 +96,11 @@ Finding, VOC Cluster, and Task Request.
 Migration `0028_display_id_not_null.sql` has landed and sets the Task, Finding,
 VOC Cluster, and Task Request `display_id` columns to `NOT NULL`. The nullable
 phase described for migration 0027 is complete.
+
+## Amended 2026-07-19 — Survey stream
+
+Issue #184 adds the fifth shared stream: `survey -> SRV-`. Survey IDs are
+allocated through the same `core.display_counters` and
+`core.next_display_id(uuid, text)` contract, begin at `SRV-1000` per workspace,
+and are unique within `survey.surveys` by `(workspace_id, display_id)`. VOC
+remains the grandfathered exception described above.

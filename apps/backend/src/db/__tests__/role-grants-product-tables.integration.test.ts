@@ -38,7 +38,7 @@ const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 
 const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
-const PRODUCT_SCHEMAS = ['voc'] as const;
+const PRODUCT_SCHEMAS = ['voc', 'survey'] as const;
 const DML_PRIVILEGES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] as const;
 type DmlPrivilege = (typeof DML_PRIVILEGES)[number];
 
@@ -47,6 +47,10 @@ const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
 // Tables intentionally narrower than full-DML for fops_app, keyed by the
 // fully-qualified `schema.table` name. Grants come from migration 0010.
 const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
+  'survey.surveys': ['SELECT', 'INSERT', 'UPDATE'],
+  'survey.survey_questions': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  'survey.survey_responses': [],
+  'survey.survey_response_answers': [],
   'voc.workspace_display_counters': ['SELECT'],
   'voc.voc_public_updates': ['SELECT', 'INSERT'],
   'voc.voc_reporter_replies': ['SELECT', 'INSERT'],
@@ -57,95 +61,131 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'voc.reporter_facing_status_transitions': ['SELECT'],
 };
 
-describe.skipIf(!runIntegration)(
-  'ADR-0008 role grants — product tables (Slice 3 #22)',
-  () => {
-    let migrateHandle: DbHandle;
+describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice 3 #22)', () => {
+  let migrateHandle: DbHandle;
+  let appHandle: DbHandle;
 
-    beforeAll(() => {
-      migrateHandle = createDb(MIGRATE_URL);
-    });
+  beforeAll(() => {
+    migrateHandle = createDb(MIGRATE_URL);
+    appHandle = createDb(APP_URL);
+  });
 
-    afterAll(async () => {
-      await migrateHandle?.close();
-    });
+  afterAll(async () => {
+    await migrateHandle?.close();
+    await appHandle?.close();
+  });
 
-    it('fops_app holds exactly the designed DML privileges on every voc.* base table', async () => {
-      const { rows: tables } = await migrateHandle.pool.query<{
-        table_schema: string;
-        table_name: string;
-      }>(
-        `select table_schema, table_name
+  it('fops_app holds exactly the designed DML privileges on every voc.* base table', async () => {
+    const { rows: tables } = await migrateHandle.pool.query<{
+      table_schema: string;
+      table_name: string;
+    }>(
+      `select table_schema, table_name
            from information_schema.tables
           where table_schema = ANY($1::text[])
             and table_type = 'BASE TABLE'
           order by table_schema, table_name`,
-        [PRODUCT_SCHEMAS as unknown as string[]],
-      );
-      expect(tables.length, 'should discover at least one product table').toBeGreaterThan(0);
+      [PRODUCT_SCHEMAS as unknown as string[]],
+    );
+    expect(tables.length, 'should discover at least one product table').toBeGreaterThan(0);
 
-      const failures: string[] = [];
-      for (const t of tables) {
-        const fq = `${t.table_schema}.${t.table_name}`;
-        const expected = new Set<DmlPrivilege>(EXPECTED_GRANTS[fq] ?? FULL_DML);
+    const failures: string[] = [];
+    for (const t of tables) {
+      const fq = `${t.table_schema}.${t.table_name}`;
+      const expected = new Set<DmlPrivilege>(EXPECTED_GRANTS[fq] ?? FULL_DML);
 
-        const { rows: grants } = await migrateHandle.pool.query<{ privilege_type: string }>(
-          `select privilege_type
+      const { rows: grants } = await migrateHandle.pool.query<{ privilege_type: string }>(
+        `select privilege_type
              from information_schema.role_table_grants
             where grantee = 'fops_app'
               and table_schema = $1
               and table_name = $2`,
-          [t.table_schema, t.table_name],
-        );
-        const got = new Set(grants.map((g) => g.privilege_type));
-        for (const priv of DML_PRIVILEGES) {
-          if (expected.has(priv) && !got.has(priv)) {
-            failures.push(`fops_app missing GRANT ${priv} ON ${fq}; add to a new migration`);
-          }
-          if (!expected.has(priv) && got.has(priv)) {
-            failures.push(
-              `fops_app has unexpected GRANT ${priv} ON ${fq}; ${fq} is append-only by design (migration 0010) — REVOKE it or update EXPECTED_GRANTS if the design changed`,
-            );
-          }
+        [t.table_schema, t.table_name],
+      );
+      const got = new Set(grants.map((g) => g.privilege_type));
+      for (const priv of DML_PRIVILEGES) {
+        if (expected.has(priv) && !got.has(priv)) {
+          failures.push(`fops_app missing GRANT ${priv} ON ${fq}; add to a new migration`);
+        }
+        if (!expected.has(priv) && got.has(priv)) {
+          failures.push(
+            `fops_app has unexpected GRANT ${priv} ON ${fq}; ${fq} is append-only by design (migration 0010) — REVOKE it or update EXPECTED_GRANTS if the design changed`,
+          );
         }
       }
+    }
 
-      expect(failures, failures.join('\n')).toEqual([]);
-    });
+    expect(failures, failures.join('\n')).toEqual([]);
+  });
 
-    it('fops_app UPDATE on review candidates is limited to resolution columns', async () => {
-      const { rows } = await migrateHandle.pool.query<{ column_name: string }>(
-        `select column_name
+  it('fops_app UPDATE on review candidates is limited to resolution columns', async () => {
+    const { rows } = await migrateHandle.pool.query<{ column_name: string }>(
+      `select column_name
            from information_schema.column_privileges
           where grantee = 'fops_app'
             and table_schema = 'voc'
             and table_name = 'public_update_review_candidates'
             and privilege_type = 'UPDATE'
           order by column_name`,
-      );
-      expect(rows.map((row) => row.column_name)).toEqual([
-        'actioned_public_update_id',
-        'dismissal_reason',
-        'resolved_at',
-        'resolved_by_actor_id',
-        'status',
-        'updated_at',
-      ]);
-      const { rows: tablePrivileges } = await migrateHandle.pool.query<{
-        has_table_update: boolean;
-        has_delete: boolean;
-        has_truncate: boolean;
-      }>(
-        `select
+    );
+    expect(rows.map((row) => row.column_name)).toEqual([
+      'actioned_public_update_id',
+      'dismissal_reason',
+      'resolved_at',
+      'resolved_by_actor_id',
+      'status',
+      'updated_at',
+    ]);
+    const { rows: tablePrivileges } = await migrateHandle.pool.query<{
+      has_table_update: boolean;
+      has_delete: boolean;
+      has_truncate: boolean;
+    }>(
+      `select
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'UPDATE') as has_table_update,
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'DELETE') as has_delete,
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'TRUNCATE') as has_truncate`,
-      );
-      expect(tablePrivileges[0]).toEqual({
-        has_table_update: false,
-        has_delete: false,
-        has_truncate: false,
-      });
+    );
+    expect(tablePrivileges[0]).toEqual({
+      has_table_update: false,
+      has_delete: false,
+      has_truncate: false,
     });
-  },
-);
+  });
+
+  it('fops_app may create Surveys but cannot submit responses before #185', async () => {
+    const actor = await migrateHandle.pool.query<{ id: string }>(
+      'select id from core.actors where workspace_id = $1 order by created_at limit 1',
+      [WORKSPACE_ID],
+    );
+    const managedSystem = await migrateHandle.pool.query<{ id: string }>(
+      'select id from core.managed_systems where workspace_id = $1 order by created_at limit 1',
+      [WORKSPACE_ID],
+    );
+    const actorId = actor.rows[0]?.id;
+    const managedSystemId = managedSystem.rows[0]?.id;
+    if (!actorId || !managedSystemId)
+      throw new Error('seed must contain an actor and managed system');
+
+    const survey = await appHandle.pool.query<{ id: string }>(
+      `insert into survey.surveys (
+           workspace_id, display_id, type, title, primary_managed_system_id,
+           operator_actor_id, created_by
+         ) values ($1, $2, 'discovery', 'Role grant survey', $3, $4, $4) returning id`,
+      [WORKSPACE_ID, `SRV-role-grant-${Date.now()}`, managedSystemId, actorId],
+    );
+    const surveyId = survey.rows[0]?.id;
+    expect(surveyId).toBeTruthy();
+
+    await expect(
+      appHandle.pool.query(
+        `insert into survey.survey_responses (
+           workspace_id, survey_id, respondent_actor_id, identity_protected, submitted_at
+         ) values ($1, $2, $3, false, now())`,
+        [WORKSPACE_ID, surveyId, actorId],
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+
+    await migrateHandle.pool.query('delete from survey.surveys where id = $1', [surveyId]);
+  });
+});
