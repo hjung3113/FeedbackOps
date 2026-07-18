@@ -57,7 +57,6 @@ function isSummaryEnvelope(
 }
 
 type AllowedEntityLink = Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
-type SummaryVisibleEntityLink = Extract<EntityLinkDto, { visibility_state: 'summary_visible' }>;
 
 function isAllowedTaskLinkForVoc(link: EntityLinkDto, vocId: string): link is AllowedEntityLink {
   if (link.visibility_state !== 'allowed') return false;
@@ -65,10 +64,6 @@ function isAllowedTaskLinkForVoc(link: EntityLinkDto, vocId: string): link is Al
     (link.source_type === 'voc' && link.source_id === vocId && link.target_type === 'task') ||
     (link.target_type === 'voc' && link.target_id === vocId && link.source_type === 'task')
   );
-}
-
-function isSummaryVisibleTaskLink(link: EntityLinkDto): link is SummaryVisibleEntityLink {
-  return link.visibility_state === 'summary_visible' && link.target_type === 'task';
 }
 
 // ── Loading skeleton ─────────────────────────────────────────────────────────
@@ -141,6 +136,7 @@ export function VocDetailPanel({
   // 4. Full detail envelope
   const voc: VocDetailEnvelope = data;
   const isReporterOnOwnVoc = me?.actor.id === voc.reporter_id && voc.triage_state === 'untriaged';
+  const isReporterContext = me?.actor.id === voc.reporter_id;
 
   return (
     <FullDetailView
@@ -149,6 +145,7 @@ export function VocDetailPanel({
       onClose={onClose}
       {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
       isReporterOnOwnVoc={isReporterOnOwnVoc}
+      isReporterContext={isReporterContext}
       me={me ?? null}
     />
   );
@@ -162,6 +159,7 @@ interface FullDetailViewProps {
   onClose: () => void;
   onExpandToggle?: () => void;
   isReporterOnOwnVoc: boolean;
+  isReporterContext: boolean;
   me: import('@/lib/auth/useMe').MeResponse | null;
 }
 
@@ -185,6 +183,7 @@ function FullDetailView({
   onClose,
   onExpandToggle,
   isReporterOnOwnVoc,
+  isReporterContext,
   me,
 }: FullDetailViewProps): React.ReactElement {
   // REV-1 #6: track composer dirty state; intercept panel close to show DirtyConfirmation.
@@ -218,7 +217,6 @@ function FullDetailView({
     [analyticsAreasQuery.data?.items],
   );
   const allowedTaskLink = voc.links?.find((link) => isAllowedTaskLinkForVoc(link, voc.id));
-  const summaryTaskLink = voc.links?.find(isSummaryVisibleTaskLink);
   const linkedTaskId =
     allowedTaskLink?.source_type === 'task'
       ? allowedTaskLink.source_id
@@ -228,18 +226,13 @@ function FullDetailView({
   const linkedTaskQuery = useQuery({
     queryKey: ['task', linkedTaskId] as const,
     queryFn: ({ signal }) => getTask(linkedTaskId as string, signal),
-    enabled: linkedTaskId !== null,
+    enabled: linkedTaskId !== null && !isReporterContext,
     staleTime: 30 * 1000,
   });
   const linkedTask =
     linkedTaskQuery.data !== undefined
       ? { title: linkedTaskQuery.data.title, status: linkedTaskQuery.data.status }
-      : summaryTaskLink?.summary.target_type === 'task'
-        ? {
-            title: summaryTaskLink.summary.public_title,
-            status: summaryTaskLink.summary.reporter_facing_status,
-          }
-        : null;
+      : null;
 
   // FE display hint only (ADR-0024 §C): gate button to Admin or Developer.
   const canCreateFinding = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
@@ -345,7 +338,7 @@ function FullDetailView({
           </div>
           <div data-anchor="trail">
             <LinkedExecutionSection voc={voc} linkedTask={linkedTask} />
-            <LinkedEntityTrailSection />
+            <LinkedEntityTrailSection links={voc.links ?? []} isReporterContext={isReporterContext} />
           </div>
           {showsSimilarVocSection && (
             <div data-anchor="similar">

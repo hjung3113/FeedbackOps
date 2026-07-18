@@ -15,6 +15,11 @@ import {
   populatedReviewConversationPage,
   populatedReviewVoc,
 } from '../fixtures/voc-public-update-review';
+import {
+  VOC_REPORTER_TASK_SUMMARY_IDS,
+  reporterTaskSummaryConversationPage,
+  reporterTaskSummaryVoc,
+} from '../fixtures/voc-reporter-task-summary';
 
 import {
   type PermissionScenarioName,
@@ -42,6 +47,8 @@ interface InstallOptions {
   scenario?: ScenarioName;
   /** Issue #180 VOC detail surface; schemas validate its fixture at import. */
   vocReview?: boolean;
+  /** Issue #179 reporter-safe linked Task summary surface. */
+  vocReporterTaskSummary?: boolean;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -84,6 +91,9 @@ export async function installMockApi(
   const postedRequests: InstalledMockApi['postedRequests'] = [];
   const permissionRequests = createPermissionRequestsScenario(options.permissionScenario);
   const role = options.role ?? 'admin';
+  const reporterActorId = options.vocReporterTaskSummary
+    ? VOC_REPORTER_TASK_SUMMARY_IDS.reporter
+    : IDS.actor;
   const baseOrigin = new URL(`http://127.0.0.1:${process.env.PW_PORT ?? '4173'}`).origin;
 
   await page.route('**/*', async (route) => {
@@ -97,7 +107,7 @@ export async function installMockApi(
     if (isRequest(route, 'GET', '/me')) {
       await json(route, 200, {
         actor: {
-          id: IDS.actor,
+          id: reporterActorId,
           external_id: `visual-${role}`,
           email: `${role}@example.test`,
           display_name: `Visual ${role}`,
@@ -110,6 +120,27 @@ export async function installMockApi(
 
     if (options.vocReview && isRequest(route, 'GET', '/vocs')) {
       await json(route, 200, { items: [populatedReviewVoc] });
+      return;
+    }
+
+    if (options.vocReporterTaskSummary && isRequest(route, 'GET', '/vocs')) {
+      await json(route, 200, { items: [reporterTaskSummaryVoc] });
+      return;
+    }
+
+    if (
+      options.vocReporterTaskSummary &&
+      isRequest(route, 'GET', `/vocs/${VOC_REPORTER_TASK_SUMMARY_IDS.voc}`)
+    ) {
+      await json(route, 200, reporterTaskSummaryVoc);
+      return;
+    }
+
+    if (
+      options.vocReporterTaskSummary &&
+      isRequest(route, 'GET', `/vocs/${VOC_REPORTER_TASK_SUMMARY_IDS.voc}/conversation`)
+    ) {
+      await json(route, 200, reporterTaskSummaryConversationPage);
       return;
     }
 
@@ -136,7 +167,17 @@ export async function installMockApi(
       return;
     }
 
+    if (options.vocReporterTaskSummary && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, { actors: [] });
+      return;
+    }
+
     if (options.vocReview && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, { items: [], total: 0 });
+      return;
+    }
+
+    if (options.vocReporterTaskSummary && isRequest(route, 'GET', '/analytics-areas')) {
       await json(route, 200, { items: [], total: 0 });
       return;
     }
