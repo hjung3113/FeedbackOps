@@ -11,6 +11,9 @@ const currentRole = vi.hoisted(() => ({ role_level: "admin" as string }));
 const listQueryState = vi.hoisted(() => ({
   status: "success" as "pending" | "success",
 }));
+const detailQueryState = vi.hoisted(() => ({
+  status: "success" as "loading" | "success",
+}));
 let routeParams: Record<string, string> = {
   clusterId: "11111111-1111-1111-1111-111111111111",
 };
@@ -291,8 +294,8 @@ vi.mock("@/features/voc-cluster/hooks/useVocClusterList", () => ({
 
 vi.mock("@/features/voc-cluster/hooks/useVocClusterDetail", () => ({
   useVocClusterDetail: () => ({
-    data: clusters[0],
-    isLoading: false,
+    data: detailQueryState.status === "success" ? clusters[0] : undefined,
+    isLoading: detailQueryState.status === "loading",
     isError: false,
     error: null,
   }),
@@ -425,6 +428,7 @@ describe("VOC cluster route shells", () => {
     addClusterMemberMutate.mockClear();
     linkFindingMutate.mockClear();
     listQueryState.status = "success";
+    detailQueryState.status = "success";
     currentRole.role_level = "admin";
     routeParams = { clusterId: "11111111-1111-1111-1111-111111111111" };
     clusters.splice(1);
@@ -524,6 +528,30 @@ describe("VOC cluster route shells", () => {
     expect(screen.getByText("결제 실패 문의")).toBeInTheDocument();
     expect(screen.queryByText(/VOC 33333333/)).not.toBeInTheDocument();
     expect(screen.getAllByText("CLU-31").length).toBeGreaterThan(0);
+  });
+
+  it("keeps hook order stable when detail data changes from loading to loaded", async () => {
+    detailQueryState.status = "loading";
+    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { rerender } = render(
+      <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
+    );
+
+    expect(screen.getByTestId("cluster-detail-skeleton")).toBeInTheDocument();
+
+    detailQueryState.status = "success";
+    expect(() =>
+      rerender(
+        <VocClusterDetailPanel
+          clusterId={clusters[0]!.id}
+          onClose={vi.fn()}
+        />,
+      ),
+    ).not.toThrow();
+
+    expect(screen.getByTestId("cluster-detail-title")).toHaveTextContent(
+      "반복 결제 문의",
+    );
   });
 
   it("filters list rows by All, Confirmed, and No finding without a backend filter", async () => {

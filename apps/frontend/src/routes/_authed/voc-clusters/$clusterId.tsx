@@ -436,6 +436,7 @@ export function VocClusterDetailPanel({
     onError: (err: ApiError) => toast.error(errorMapper(err.envelope).message),
   });
   const navigate = useNavigate();
+  const sectionScrollRef = React.useRef<HTMLDivElement>(null);
 
   if (isLoading) {
     return (
@@ -478,7 +479,6 @@ export function VocClusterDetailPanel({
 
   const members: VocClusterMemberPresentation[] = presentation?.members ?? [];
   const linkedFindings = presentation?.linked_findings ?? [];
-  const sectionScrollRef = React.useRef<HTMLDivElement>(null);
 
   function handleConfirm() {
     confirmMutation.mutate(clusterId, {
