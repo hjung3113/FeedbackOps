@@ -148,26 +148,26 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     targetVoc: { id: string };
   }> {
     const msA = await insertMsDirectly(
-      dbHandle,
+      migrateHandle,
       WORKSPACE_ID,
       `${uid(SLUG_PREFIX)}-a`,
       'Links MS-A',
     );
     const msB = await insertMsDirectly(
-      dbHandle,
+      migrateHandle,
       WORKSPACE_ID,
       `${uid(SLUG_PREFIX)}-b`,
       'Links MS-B',
     );
     const sourceVoc = await insertVocDirectly(
-      dbHandle,
+      migrateHandle,
       WORKSPACE_ID,
       msA,
       reporterId,
       'Link Source VOC',
     );
     const targetVoc = await insertVocDirectly(
-      dbHandle,
+      migrateHandle,
       WORKSPACE_ID,
       msB,
       reporterId,
@@ -804,6 +804,9 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       expect(listedItems.some((item) => item.id === surveyLinkId)).toBe(false);
       expect(listed.body).not.toContain(responseId);
 
+      // Follow the module convention for multi-probe tests: rate-limit state
+      // is not part of this generic-surface assertion.
+      await migrateHandle.pool.query('delete from core.rate_limits');
       const detached = await patchEntityLink(adminCookie, surveyLinkId, {
         reason: 'Generic detach must not disclose survey lineage',
       });
