@@ -25,3 +25,28 @@ export function useSurveyManageGate(managedSystemId?: string) {
           : ("absent" as const),
   };
 }
+
+/** Survey Result content stays fail-closed until /me and survey.read agree. */
+export function useSurveyReadGate(managedSystemId?: string) {
+  const me = useMe();
+  const permission = usePermissionCheck({
+    capability: "survey.read",
+    ...(managedSystemId ? { managedSystemId } : {}),
+  });
+  const loading = me.isLoading || me.isPending || permission.isPending;
+  const canRead =
+    !loading &&
+    !me.isError &&
+    !permission.isError &&
+    permission.data?.state === "approved";
+  return {
+    canRead,
+    gateState: loading
+      ? ("loading" as const)
+      : me.isError || permission.isError
+        ? ("error" as const)
+        : canRead
+          ? undefined
+          : ("absent" as const),
+  };
+}

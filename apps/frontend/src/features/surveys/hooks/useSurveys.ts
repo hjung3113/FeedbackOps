@@ -1,10 +1,12 @@
 import { apiClient } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { surveyResultDtoSchema, type SurveyResultDto } from "@fops/shared";
 import type { QuestionInput, Survey } from "../types";
 
 export const surveyKeys = {
   list: ["surveys"] as const,
   detail: (id: string) => ["surveys", id] as const,
+  results: (id: string) => ["surveys", id, "results"] as const,
 };
 
 export function useSurveys() {
@@ -13,6 +15,18 @@ export function useSurveys() {
     queryFn: async ({ signal }) =>
       (await apiClient<Survey[]>("GET", "/surveys", { signal })).data,
     retry: 1,
+  });
+}
+
+export function useSurveyResults(id: string, enabled = true) {
+  return useQuery({
+    queryKey: surveyKeys.results(id),
+    queryFn: async ({ signal }): Promise<SurveyResultDto> =>
+      surveyResultDtoSchema.parse(
+        (await apiClient<unknown>("GET", `/surveys/${id}/results`, { signal })).data,
+      ),
+    enabled: Boolean(id) && enabled,
+    retry: false,
   });
 }
 
