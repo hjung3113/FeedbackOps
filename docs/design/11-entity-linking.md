@@ -212,6 +212,15 @@ are `allowed | hidden | denied`; `summary_visible` is defined but never emitted
 for a `voc` target. `POST /entity-links` stays locked to `internal_only`; each
 visibility token is enforced via seeded rows, not API-created data.
 
+Issue #187 C5 ships the Survey Response→Finding registry rows
+`(survey_response → finding, generated_finding)` and `(survey_response →
+finding, evidence_of)` as command-only provider relations. Generic
+`POST /entity-links` rejects them, generic lists hide them, and generic detach
+treats them as absent. Survey-domain commands are their only writers;
+`generated_finding` is reserved for the forthcoming
+`POST /survey-responses/:id/create-finding` lineage. `created_finding` is
+explicitly not used for Survey Response lineage.
+
 ### FR-LINK-003: Support Dashboard Missing-Link Queries
 
 Priority: MUST

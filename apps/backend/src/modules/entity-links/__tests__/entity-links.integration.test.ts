@@ -7,7 +7,11 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { type EntityLinkEntityType, registeredEntityLinkPairs } from '@fops/shared';
+import {
+  type EntityLinkEntityType,
+  type EntityLinkRelationType,
+  registeredEntityLinkPairs,
+} from '@fops/shared';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
@@ -217,6 +221,39 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       sourceId: input.sourceVocId,
       createdBy: adminActorId,
     });
+  }
+
+  async function seedSurveyResponse(managedSystemId: string): Promise<{
+    surveyId: string;
+    responseId: string;
+  }> {
+    const survey = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.surveys
+         (workspace_id, display_id, type, status, title, primary_managed_system_id,
+          operator_actor_id, responses_identity_protected, created_by, opened_at)
+       values ($1, $2, 'validation', 'open', $3, $4, $5, true, $5, now())
+       returning id`,
+      [
+        WORKSPACE_ID,
+        `S-${randomUUID()}`,
+        `${SLUG_PREFIX}-command-only-survey-${randomUUID()}`,
+        managedSystemId,
+        adminActorId,
+      ],
+    );
+    const surveyId = survey.rows[0]?.id;
+    if (!surveyId) throw new Error('survey fixture seed failed');
+
+    const response = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_responses
+         (workspace_id, survey_id, respondent_actor_id, identity_protected, submitted_at)
+       values ($1, $2, $3, true, now())
+       returning id`,
+      [WORKSPACE_ID, surveyId, reporterId],
+    );
+    const responseId = response.rows[0]?.id;
+    if (!responseId) throw new Error('survey response fixture seed failed');
+    return { surveyId, responseId };
   }
 
   async function seedRegisteredTupleEndpoints(): Promise<{
@@ -679,6 +716,127 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(commandOnly.body).toBe(absent.body);
     expect(privilegedCommandOnly.statusCode).toBe(404);
     expect(privilegedCommandOnly.body).toBe(absent.body);
+  });
+
+  it('generic surfaces reject and hide command-only Survey Response Finding links', async () => {
+    const { msA, sourceVoc } = await seedVocPair();
+    const finding = await seedFindingDirectly({
+      managedSystemId: msA,
+      sourceVocId: sourceVoc.id,
+      title: 'Survey command-only Finding',
+    });
+    const { surveyId, responseId } = await seedSurveyResponse(msA);
+    const surveyLinkId = await seedEntityLinkDirectly({
+      sourceType: 'survey_response',
+      sourceId: responseId,
+      targetType: 'finding',
+      targetId: finding.id,
+      relationType: 'generated_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+    const controlLinkId = await seedEntityLinkDirectly({
+      sourceType: 'voc',
+      sourceId: sourceVoc.id,
+      targetType: 'finding',
+      targetId: finding.id,
+      relationType: 'created_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+
+    try {
+      const unsupportedTuple = {
+        code: 'validation.failed',
+        message: 'unsupported entity link tuple',
+        detail: { fields: [{ path: [], code: 'unsupported_tuple' }] },
+      };
+      const surveyToVocRelations: EntityLinkRelationType[] = [
+        'related_to',
+        'created_finding',
+        'generated_finding',
+        'evidence_of',
+        'requested_task',
+        'converted_to',
+      ];
+      const rejectedCreates = [
+        {
+          source: { type: 'survey_response', id: responseId },
+          target: { type: 'finding', id: finding.id },
+          relation_type: 'generated_finding',
+        },
+        {
+          source: { type: 'survey_response', id: responseId },
+          target: { type: 'finding', id: finding.id },
+          relation_type: 'evidence_of',
+        },
+        {
+          source: { type: 'survey_response', id: responseId },
+          target: { type: 'finding', id: finding.id },
+          relation_type: 'created_finding',
+        },
+        {
+          source: { type: 'finding', id: finding.id },
+          target: { type: 'survey_response', id: responseId },
+          relation_type: 'generated_finding',
+        },
+        ...surveyToVocRelations.map((relation_type) => ({
+          source: { type: 'survey_response', id: responseId },
+          target: { type: 'voc', id: sourceVoc.id },
+          relation_type,
+        })),
+      ];
+
+      for (const payload of rejectedCreates) {
+        const rejected = await postEntityLink(adminCookie, sourceVoc.id, sourceVoc.id, payload);
+        expect(rejected.statusCode).toBe(422);
+        expect(rejected.json()).toEqual(unsupportedTuple);
+        expect(rejected.body).not.toContain(responseId);
+      }
+
+      const listed = await getEntityLinks(
+        adminCookie,
+        `?target_type=finding&target_id=${finding.id}`,
+      );
+      expect(listed.statusCode).toBe(200);
+      const listedItems = listed.json<{ items: Array<{ id: string }> }>().items;
+      expect(listedItems.some((item) => item.id === controlLinkId)).toBe(true);
+      expect(listedItems.some((item) => item.id === surveyLinkId)).toBe(false);
+      expect(listed.body).not.toContain(responseId);
+
+      const detached = await patchEntityLink(adminCookie, surveyLinkId, {
+        reason: 'Generic detach must not disclose survey lineage',
+      });
+      expect(detached.statusCode).toBe(404);
+      expect(detached.json()).toEqual({
+        code: 'not_found.record',
+        message: 'entity link not found',
+      });
+      expect(detached.body).not.toContain(responseId);
+    } finally {
+      const beforeCleanup = await migrateHandle.pool.query<{ n: number }>(
+        `select count(*)::int as n
+           from core.entity_links
+          where workspace_id = $1 and source_id = $2`,
+        [WORKSPACE_ID, responseId],
+      );
+      expect(beforeCleanup.rows[0]?.n ?? 0).toBeGreaterThan(0);
+      await migrateHandle.pool.query(
+        'delete from core.entity_links where workspace_id = $1 and source_id = $2',
+        [WORKSPACE_ID, responseId],
+      );
+      const afterCleanup = await migrateHandle.pool.query<{ n: number }>(
+        `select count(*)::int as n
+           from core.entity_links
+          where workspace_id = $1 and source_id = $2`,
+        [WORKSPACE_ID, responseId],
+      );
+      expect(afterCleanup.rows[0]?.n ?? 0).toBe(0);
+      await migrateHandle.pool.query('delete from survey.survey_responses where id = $1', [
+        responseId,
+      ]);
+      await migrateHandle.pool.query('delete from survey.surveys where id = $1', [surveyId]);
+    }
   });
 
   it('GET by VOC source accepts managed-system scoped voc.triage without voc.read', async () => {

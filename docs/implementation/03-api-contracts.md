@@ -876,6 +876,15 @@ Generic PATCH treats that tuple exactly as an absent link, returning the same
 non-disclosing `404 not_found.record` envelope rather than a distinguishable
 `422` response.
 
+The `(survey_response, finding, generated_finding)` and `(survey_response,
+finding, evidence_of)` tuples are also command-only. Generic POST rejects them,
+generic endpoint and workspace lists omit their rows, and generic PATCH/detach
+returns the same non-disclosing `404 not_found.record` envelope as an absent
+link. Only Survey-domain commands may write these tuples; the forthcoming
+`POST /survey-responses/:id/create-finding` command writes
+`generated_finding`. `created_finding` is not a Survey Response lineage
+relation.
+
 ### VOC Similarity Projection
 
 `GET /vocs` returns a real `similar_count` for each list item. `GET /vocs/:id`
