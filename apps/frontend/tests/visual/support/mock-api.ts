@@ -27,6 +27,12 @@ import {
   permissionDecisionResultTemplates,
 } from '../fixtures/permissions';
 import {
+  type SurveyResultsVisualScenario,
+  surveyResultVisualFixture,
+  surveyResultVisualListFixture,
+  surveyResultsFixtureFor,
+} from '../fixtures/survey-results';
+import {
   type SurveyVisualScenario,
   surveyVisualFixture,
   surveyVisualFixtureSchema,
@@ -55,6 +61,7 @@ interface InstallOptions {
   /** Issue #179 reporter-safe linked Task summary surface. */
   vocReporterTaskSummary?: boolean;
   surveyScenario?: SurveyVisualScenario;
+  surveyResultsScenario?: SurveyResultsVisualScenario;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -207,6 +214,27 @@ export async function installMockApi(
             ? []
             : [surveyVisualFixtureSchema.parse(surveyVisualFixture)],
       );
+      return;
+    }
+
+    if (options.surveyResultsScenario && isRequest(route, 'GET', '/surveys')) {
+      await json(route, 200, surveyResultVisualListFixture);
+      return;
+    }
+
+    if (
+      options.surveyResultsScenario &&
+      isRequest(route, 'GET', `/surveys/${surveyResultVisualFixture.id}`)
+    ) {
+      await json(route, 200, surveyResultVisualFixture);
+      return;
+    }
+
+    if (
+      options.surveyResultsScenario &&
+      isRequest(route, 'GET', `/surveys/${surveyResultVisualFixture.id}/results`)
+    ) {
+      await json(route, 200, surveyResultsFixtureFor(options.surveyResultsScenario));
       return;
     }
 

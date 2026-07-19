@@ -1,3 +1,9 @@
+import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail';
+import { SurveyList } from '@/features/surveys/components/list/SurveyList';
+import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
+import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
+import type { Survey, SurveyType } from '@/features/surveys/types';
+import { apiClient } from '@/lib/api';
 import {
   Button,
   Dialog,
@@ -10,19 +16,13 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@fops/ui";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
-import * as React from "react";
-import { ListShell } from "@fops/ui";
-import { SurveyList } from "@/features/surveys/components/list/SurveyList";
-import { SurveyDetail } from "@/features/surveys/components/detail/SurveyDetail";
-import { useSurvey, useSurveys } from "@/features/surveys/hooks/useSurveys";
-import { useSurveyManageGate } from "@/features/surveys/routes/SurveyPermissionGate";
-import type { Survey, SurveyType } from "@/features/surveys/types";
-import { apiClient } from "@/lib/api";
+} from '@fops/ui';
+import { ListShell } from '@fops/ui';
+import { useMutation } from '@tanstack/react-query';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import * as React from 'react';
 
-export const Route = createFileRoute("/_authed/surveys/")({
+export const Route = createFileRoute('/_authed/surveys/')({
   component: SurveysIndexRoute,
 });
 
@@ -32,15 +32,13 @@ export function SurveysIndexRoute() {
   const gate = useSurveyManageGate();
   const [createOpen, setCreateOpen] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const selected = useSurvey(selectedId ?? "");
-  const selectedGate = useSurveyManageGate(
-    selected.data?.primary_managed_system_id,
-  );
+  const selected = useSurvey(selectedId ?? '');
+  const selectedGate = useSurveyManageGate(selected.data?.primary_managed_system_id);
   return (
     <>
       <ListShell
         toolbar={{
-          title: "Surveys",
+          title: 'Surveys',
           actions: gate.canManage ? (
             <Button
               size="sm"
@@ -76,7 +74,7 @@ export function SurveysIndexRoute() {
           onClose={() => setCreateOpen(false)}
           onCreated={(survey) =>
             void navigate({
-              to: "/surveys/$surveyId",
+              to: '/surveys/$surveyId',
               params: { surveyId: survey.id },
               search: { builder: true },
             })
@@ -96,13 +94,13 @@ function CreateSurveyDialog({
   onClose: () => void;
   onCreated: (survey: Survey) => void;
 }) {
-  const [title, setTitle] = React.useState("");
-  const [type, setType] = React.useState<SurveyType>("discovery");
-  const [system, setSystem] = React.useState("");
+  const [title, setTitle] = React.useState('');
+  const [type, setType] = React.useState<SurveyType>('discovery');
+  const [system, setSystem] = React.useState('');
   const create = useMutation({
     mutationFn: async () =>
       (
-        await apiClient<Survey>("POST", "/surveys", {
+        await apiClient<Survey>('POST', '/surveys', {
           body: {
             title,
             type,
@@ -126,21 +124,19 @@ function CreateSurveyDialog({
             create.mutate();
           }}
         >
-          <label className="block text-sm">
+          <label className="block text-sm" htmlFor="survey-title">
             제목
             <Input
+              id="survey-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               required
             />
           </label>
-          <label className="block text-sm">
+          <label className="block text-sm" htmlFor="survey-type">
             Survey type
-            <Select
-              value={type}
-              onValueChange={(value) => setType(value as SurveyType)}
-            >
-              <SelectTrigger>
+            <Select value={type} onValueChange={(value) => setType(value as SurveyType)}>
+              <SelectTrigger id="survey-type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -150,19 +146,16 @@ function CreateSurveyDialog({
               </SelectContent>
             </Select>
           </label>
-          <label className="block text-sm">
+          <label className="block text-sm" htmlFor="managed-system-id">
             Managed System ID
             <Input
+              id="managed-system-id"
               value={system}
               onChange={(event) => setSystem(event.target.value)}
               required
             />
           </label>
-          {create.isError && (
-            <p className="text-sm text-text-danger">
-              설문을 만들지 못했습니다.
-            </p>
-          )}
+          {create.isError && <p className="text-sm text-text-danger">설문을 만들지 못했습니다.</p>}
           <Button type="submit" disabled={create.isPending}>
             초안 만들기
           </Button>
