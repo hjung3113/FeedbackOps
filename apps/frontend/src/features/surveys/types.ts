@@ -1,10 +1,6 @@
-export type SurveyType = "discovery" | "validation" | "outcome";
-export type SurveyStatus = "draft" | "open" | "closed";
-export type QuestionKind =
-  | "single_choice"
-  | "multiple_choice"
-  | "rating"
-  | "text";
+export type SurveyType = 'discovery' | 'validation' | 'outcome';
+export type SurveyStatus = 'draft' | 'open' | 'closed';
+export type QuestionKind = 'single_choice' | 'multiple_choice' | 'rating' | 'text';
 
 export interface SurveyQuestion {
   id: string;
