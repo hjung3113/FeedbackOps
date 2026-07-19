@@ -600,19 +600,20 @@ describe.skipIf(!runIntegration)(
         "insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,visibility,status,managed_system_id,created_by) values ($1,'finding',$2,'task',$3,'requested_task','internal_only','active',$4,$5)",
         [WORKSPACE_ID, findingId, task.id, source.msId, adminId],
       );
-      for (const [label, cookie, visibility] of [
-        ["creator", creator.cookie, "hidden"],
-        ["personal-cap-holder", capHolder.cookie, "hidden"],
-        ["admin", adminCookie, "allowed"],
-        ["aggregate-reader", aggregateReader.cookie, "hidden"],
-        ["no-permission", noPermission.cookie, "hidden"],
+      for (const [label, cookie, visibility, expectedStatus] of [
+        ["creator", creator.cookie, "hidden", 200],
+        ["personal-cap-holder", capHolder.cookie, "hidden", 200],
+        ["admin", adminCookie, "allowed", 200],
+        ["aggregate-reader", aggregateReader.cookie, "hidden", 200],
+        ["no-permission", noPermission.cookie, undefined, 404],
       ] as const) {
         const links = await app.inject({
           method: "GET",
           url: `/entity-links?source_type=finding&source_id=${findingId}`,
           headers: headers(cookie),
         });
-        expect(links.statusCode, label).toBe(200);
+        expect(links.statusCode, label).toBe(expectedStatus);
+        if (expectedStatus !== 200) continue;
         const linked = links
           .json<{ items: Array<Record<string, unknown>> }>()
           .items.find(
