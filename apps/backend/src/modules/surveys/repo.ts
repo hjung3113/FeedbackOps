@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { Tx } from '../../db/tx.js';
+import type { QuestionKind } from './repo-read.js';
 import { type QuestionRow, type SurveyRow, mapQuestion, mapSurvey } from './repo-read.js';
 
 const surveyCols = sql`id, workspace_id, display_id, type, status, title, description, primary_managed_system_id, analytics_area_id, operator_actor_id, responses_identity_protected, created_by, opened_at, closed_at, created_at, updated_at`;
@@ -83,4 +84,47 @@ export async function setSurveyStatus(
   );
   if (!x.rows[0]) throw new Error('survey status update failed');
   return mapSurvey(x.rows[0]);
+}
+
+export async function insertResponse(
+  tx: Tx,
+  input: {
+    id: string;
+    workspaceId: string;
+    surveyId: string;
+    respondentActorId: string;
+    identityProtected: boolean;
+    submittedAt: Date;
+  },
+): Promise<boolean> {
+  const result = await tx.execute(
+    sql`insert into survey.survey_responses (id,workspace_id,survey_id,respondent_actor_id,identity_protected,submitted_at) values (${input.id},${input.workspaceId},${input.surveyId},${input.respondentActorId},${input.identityProtected},${input.submittedAt}) on conflict do nothing`,
+  );
+  return result.rowCount === 1;
+}
+
+export async function insertResponseAnswers(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    surveyId: string;
+    responseId: string;
+    answers: Array<{
+      questionId: string;
+      answerKind: QuestionKind;
+      value: string | string[] | number;
+    }>;
+  },
+) {
+  if (!input.answers.length) return;
+  const values = sql.join(
+    input.answers.map(
+      (answer) =>
+        sql`(${input.workspaceId},${input.surveyId},${input.responseId},${answer.questionId},${answer.answerKind},${JSON.stringify(answer.value)}::jsonb)`,
+    ),
+    sql`,`,
+  );
+  await tx.execute(
+    sql`insert into survey.survey_response_answers (workspace_id,survey_id,response_id,question_id,answer_kind,answer_value) values ${values}`,
+  );
 }

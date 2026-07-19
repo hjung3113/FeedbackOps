@@ -38,6 +38,20 @@ const question = z
     branch_trigger_option_key: z.string().min(1).optional(),
   })
   .strict();
+const responseSubmission = z
+  .object({
+    answers: z
+      .array(
+        z
+          .object({
+            question_id: uuid,
+            value: z.union([z.string(), z.array(z.string()), z.number()]),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict();
 export interface SurveysRoutesOptions {
   sessionService: SessionService;
   surveysService: SurveysService;
@@ -63,6 +77,7 @@ function validId(id: string): boolean {
   return uuid.safeParse(id).success;
 }
 export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (app, opts) => {
+  const session = [requireSession(opts.sessionService)];
   const pre = [requireSession(opts.sessionService), requireWorkspace(opts.workspaceId)];
   const rate = (kind: 'read' | 'mutation') =>
     opts.rateLimitConfig?.[kind]
@@ -98,6 +113,29 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
     return reply.send(await opts.surveysService.getSurvey(actor(req), id));
   });
+  app.get('/surveys/:id/form', { preHandler: session, ...rate('read') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+    return reply.send(await opts.surveysService.getRespondentForm(actor(req), id));
+  });
+  app.post(
+    '/surveys/:id/responses',
+    { preHandler: session, ...rate('mutation') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const b = parse(responseSubmission, req.body, reply);
+      if (!b) return;
+      const r = await opts.surveysService.submitResponse({
+        actor: actor(req),
+        surveyId: id,
+        input: b,
+        idempotencyKey: key(req.headers as Record<string, unknown>),
+        requestHash: hashRequestBody({ body: b, route: 'survey.submit_response', surveyId: id }),
+      });
+      return reply.code(r.status).send(r.body);
+    },
+  );
   app.post('/surveys', { preHandler: pre, ...rate('mutation') }, async (req, reply) => {
     const b = parse(create, req.body, reply);
     if (!b) return;
