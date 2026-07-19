@@ -23,6 +23,7 @@ import {
   surveyQuestionCreatedDetailSchema,
   surveyQuestionDeletedDetailSchema,
   surveyQuestionUpdatedDetailSchema,
+  surveyResponseSubmittedDetailSchema,
 } from '../audit/survey.js';
 import {
   internalCommentCreatedDetailSchema,
@@ -115,6 +116,7 @@ export const AUDIT_EVENT_TYPES = [
   'survey_question_deleted',
   'survey_opened',
   'survey_closed',
+  'survey_response_submitted',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -420,9 +422,7 @@ export const findingLinkedToVocClusterDetailSchema = z.object({
   primary_managed_system_id: z.string().uuid(),
   relation_type: z.literal('evidence_of'),
 });
-export type FindingLinkedToVocClusterDetail = z.infer<
-  typeof findingLinkedToVocClusterDetailSchema
->;
+export type FindingLinkedToVocClusterDetail = z.infer<typeof findingLinkedToVocClusterDetailSchema>;
 
 export const findingUnlinkedFromVocClusterDetailSchema = z.object({
   link_id: z.string().uuid(),
@@ -706,4 +706,5 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   survey_question_deleted: surveyQuestionDeletedDetailSchema,
   survey_opened: surveyOpenedDetailSchema,
   survey_closed: surveyClosedDetailSchema,
+  survey_response_submitted: surveyResponseSubmittedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;
