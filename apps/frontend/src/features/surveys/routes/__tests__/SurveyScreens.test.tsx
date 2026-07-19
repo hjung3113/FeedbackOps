@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -90,6 +91,9 @@ describe("Survey screens", () => {
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("Q3 사용성 진단"));
     expect(select).toHaveBeenCalledWith("survey-1");
+    fireEvent.click(screen.getByRole("button", { name: "카드 보기" }));
+    expect(screen.getByTestId("survey-list-cards")).toBeInTheDocument();
+    expect(screen.getByText("— / —")).toBeInTheDocument();
     rerender(
       <SurveyList
         surveys={[]}
@@ -123,11 +127,20 @@ describe("Survey screens", () => {
       />,
     );
     expect(
-      screen.getByText("Open 상태 — 질문 변경은 잠겨 있습니다."),
+      screen.getByText("open 상태 — 질문 변경은 잠겨 있습니다."),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "새 질문 추가" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("renders the actual closed status in builder and detail lock copy", () => {
+    const closedSurvey = { ...survey, status: "closed" as const };
+    const { rerender } = renderWithQuery(<SurveyBuilder survey={closedSurvey} canManage onBack={vi.fn()} />);
+    expect(screen.getByText("closed · discovery")).toBeInTheDocument();
+    expect(screen.getByText("closed 상태 — 질문 변경은 잠겨 있습니다.")).toBeInTheDocument();
+    rerender(<QueryClientProvider client={new QueryClient()}><SurveyDetail survey={closedSurvey} canManage /></QueryClientProvider>);
+    expect(screen.getByText("closed 상태 — 질문 변경은 잠겨 있습니다.")).toBeInTheDocument();
   });
 
   it("renders a survey detail title, type, status, and questions", () => {
@@ -205,6 +218,33 @@ describe("Survey screens", () => {
         "/surveys/survey-1/questions/question-created",
       ),
     );
+  });
+
+  it("patches the current question state after an edit during its pending create", async () => {
+    let resolveCreate: ((value: { data: { id: string } }) => void) | undefined;
+    apiClient.mockImplementation((method: string, path: string) => {
+      if (method === "POST" && path.endsWith("/questions")) return new Promise((resolve) => { resolveCreate = resolve; });
+      return Promise.resolve({ data: { id: "question-created" } });
+    });
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "새 질문 추가" }));
+    await waitFor(() => expect(resolveCreate).toBeDefined());
+    fireEvent.change(screen.getByDisplayValue("새 질문"), { target: { value: "POST 중 수정" } });
+    await act(async () => resolveCreate?.({ data: { id: "question-created" } }));
+    await waitFor(() => expect(apiClient).toHaveBeenCalledWith("PATCH", "/surveys/survey-1/questions/question-created", expect.objectContaining({ body: expect.objectContaining({ prompt: "POST 중 수정" }) })));
+  });
+
+  it("recreates a persisted branched question when its branch is removed", async () => {
+    const parentQuestion = survey.questions?.[0] as SurveyQuestion;
+    const child: SurveyQuestion = { ...parentQuestion, id: "question-2", prompt: "추가 질문", branch_depth: 1, branch_parent_question_id: "question-1", branch_trigger_option_key: "no", sort_order: 1 };
+    renderWithQuery(<SurveyBuilder survey={{ ...survey, questions: [...(survey.questions ?? []), child] }} canManage onBack={vi.fn()} />);
+    fireEvent.click(screen.getByText("Q2"));
+    fireEvent.change(screen.getByLabelText("분기 부모 질문"), { target: { value: "" } });
+    await waitFor(() => expect(apiClient).toHaveBeenCalledWith("DELETE", "/surveys/survey-1/questions/question-2"));
+    await waitFor(() => expect(apiClient).toHaveBeenCalledWith("POST", "/surveys/survey-1/questions", expect.objectContaining({ body: expect.objectContaining({ prompt: "추가 질문", sort_order: 1 }) })));
+    const recreateBody = apiClient.mock.calls.find((call) => call[0] === "POST" && call[1] === "/surveys/survey-1/questions" && call[2].body.prompt === "추가 질문")?.[2].body;
+    expect(recreateBody).not.toHaveProperty("branch_parent_question_id");
+    expect(recreateBody).not.toHaveProperty("branch_trigger_option_key");
   });
 
   it("uses the selected parent option to reveal a branched preview question", async () => {

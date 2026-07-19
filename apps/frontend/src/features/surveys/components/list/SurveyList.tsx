@@ -1,4 +1,5 @@
 import { EmptyState, Input, Skeleton } from "@fops/ui";
+import { Grid2X2, List } from "lucide-react";
 import * as React from "react";
 import type { Survey, SurveyStatus } from "../../types";
 
@@ -29,6 +30,7 @@ export function SurveyList({
 }) {
   const [status, setStatus] = React.useState<SurveyStatus | "all">("all");
   const [search, setSearch] = React.useState("");
+  const [viewMode, setViewMode] = React.useState<"list" | "card">("list");
   const visible = surveys.filter(
     (survey) =>
       (status === "all" || survey.status === status) &&
@@ -82,6 +84,10 @@ export function SurveyList({
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Survey 검색…"
         />
+        <div className="flex rounded border border-border-subtle p-0.5">
+          <button type="button" aria-label="목록 보기" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")} className={`rounded p-1 ${viewMode === "list" ? "bg-surface-card" : ""}`}><List className="h-3.5 w-3.5" /></button>
+          <button type="button" aria-label="카드 보기" aria-pressed={viewMode === "card"} onClick={() => setViewMode("card")} className={`rounded p-1 ${viewMode === "card" ? "bg-surface-card" : ""}`}><Grid2X2 className="h-3.5 w-3.5" /></button>
+        </div>
       </div>
       {visible.length === 0 ? (
         <EmptyState
@@ -89,13 +95,13 @@ export function SurveyList({
           body="설문을 만들어 응답을 수집하세요."
         />
       ) : (
-        <div className="divide-y divide-border-subtle">
+        <div className={viewMode === "list" ? "divide-y divide-border-subtle" : "grid grid-cols-1 gap-3 p-4 md:grid-cols-2"} data-testid={viewMode === "list" ? "survey-list-rows" : "survey-list-cards"}>
           {visible.map((survey) => (
             <button
               key={survey.id}
               type="button"
               onClick={() => onSelect(survey.id)}
-              className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-card ${selectedId === survey.id ? "bg-surface-detail" : ""}`}
+              className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-card ${viewMode === "card" ? "rounded border border-border-subtle" : ""} ${selectedId === survey.id ? "bg-surface-detail" : ""}`}
               data-testid={`survey-row-${survey.id}`}
             >
               <span className="min-w-0 flex-1">
@@ -111,7 +117,7 @@ export function SurveyList({
               </span>
               <span className="text-right text-xs text-text-muted">
                 <span className="block">Responses</span>
-                <span>{survey.status === "draft" ? "0 / —" : "— / —"}</span>
+                <span>— / —</span>
               </span>
               <span className="max-w-24 truncate text-xs text-text-muted">
                 {survey.operator_actor_id ?? "Unassigned"}

@@ -82,6 +82,7 @@ export function SurveyBuilder({
   const [questions, setQuestions] = React.useState<SurveyQuestion[]>(
     survey.questions ?? [],
   );
+  const questionsRef = React.useRef(questions);
   const [selectedId, setSelectedId] = React.useState<string | null>(
     questions[0]?.id ?? null,
   );
@@ -90,11 +91,28 @@ export function SurveyBuilder({
   const editable = canManage && survey.status === "draft" && !gateState;
   const selected =
     questions.find((question) => question.id === selectedId) ?? null;
+  const updateQuestions = (update: (current: SurveyQuestion[]) => SurveyQuestion[]) => {
+    setQuestions((current) => {
+      const next = update(current);
+      questionsRef.current = next;
+      return next;
+    });
+  };
 
   const patch = (next: SurveyQuestion) => {
-    setQuestions((all) =>
+    const current = questionsRef.current.find((question) => question.id === next.id);
+    updateQuestions((all) =>
       all.map((question) => (question.id === next.id ? next : question)),
     );
+    if (Boolean(current?.branch_parent_question_id) && !next.branch_parent_question_id && !next.id.startsWith("local-")) {
+      void (async () => {
+        await mutations.remove.mutateAsync(next.id);
+        const recreated = await mutations.create.mutateAsync(toInput(next));
+        updateQuestions((all) => all.map((question) => question.id === next.id ? { ...next, id: recreated.id } : question));
+        setSelectedId((id) => (id === next.id ? recreated.id : id));
+      })();
+      return;
+    }
     if (!next.id.startsWith("local-")) {
       mutations.update.mutate({ id: next.id, body: toInput(next) });
     }
@@ -102,26 +120,31 @@ export function SurveyBuilder({
 
   const add = () => {
     const localQuestion = newQuestion(survey.id, questions.length);
-    setQuestions((all) => [...all, localQuestion]);
+    const snapshot = toInput(localQuestion);
+    updateQuestions((all) => [...all, localQuestion]);
     setSelectedId(localQuestion.id);
     void mutations.create
-      .mutateAsync(toInput(localQuestion))
+      .mutateAsync(snapshot)
       .then((created) => {
-        setQuestions((all) =>
+        const current = questionsRef.current.find((question) => question.id === localQuestion.id);
+        if (!current) return;
+        const currentInput = toInput(current);
+        updateQuestions((all) =>
           all.map((question) =>
             question.id === localQuestion.id
-              ? { ...question, id: created.id }
+              ? { ...current, id: created.id }
               : question,
           ),
         );
         setSelectedId((current) =>
           current === localQuestion.id ? created.id : current,
         );
+        if (JSON.stringify(snapshot) !== JSON.stringify(currentInput)) mutations.update.mutate({ id: created.id, body: currentInput });
       });
   };
 
   const remove = (id: string) => {
-    setQuestions((all) => all.filter((question) => question.id !== id));
+    updateQuestions((all) => all.filter((question) => question.id !== id));
     if (selectedId === id)
       setSelectedId(
         questions.find((question) => question.id !== id)?.id ?? null,
@@ -140,7 +163,7 @@ export function SurveyBuilder({
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-semibold">{survey.title}</h1>
-          <span className="text-xs text-text-muted">Draft · {survey.type}</span>
+          <span className="text-xs text-text-muted">{survey.status} · {survey.type}</span>
         </div>
         <Button variant="subtle" size="sm" onClick={() => setPreview(true)}>
           <Eye className="h-4 w-4" />
@@ -150,7 +173,7 @@ export function SurveyBuilder({
       {!editable && (
         <div className="border-b border-border-subtle bg-surface-detail px-4 py-3 text-sm text-text-muted">
           {survey.status !== "draft"
-            ? "Open 상태 — 질문 변경은 잠겨 있습니다."
+            ? `${survey.status} 상태 — 질문 변경은 잠겨 있습니다.`
             : "설문 관리 권한이 없습니다."}
         </div>
       )}

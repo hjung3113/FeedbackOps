@@ -57,7 +57,7 @@ export function SurveyDetail({
           <p className="text-sm text-text-muted">
             {survey.status === "draft"
               ? "설문 관리 권한이 없습니다."
-              : "Open 상태 — 질문 변경은 잠겨 있습니다."}
+              : `${survey.status} 상태 — 질문 변경은 잠겨 있습니다.`}
           </p>
         )}
       </section>
