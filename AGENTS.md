@@ -114,7 +114,17 @@ Test code is a liability. Fewer, sharper tests beat more tests.
 
 ## Workflow Operations
 
-Execution playbook (model tiers, task sizing, REV cycles, user confirms, HTML artifacts, plan/REV doc layout, prototype copy authority): see the `/agent-workflow` skill (external toolkit).
+Execution playbook (model tiers, task sizing, REV cycles, user confirms, HTML artifacts, plan/REV doc layout, prototype copy authority): see the `/agent-workflow` skill (external toolkit). The toolkit installs here via `install-into.sh --mode symlink` → `.agent-workflow/` + `.claude/skills/agent-workflow` (absolute machine-local links, gitignored — worktrees need their own install run).
+
+### Target Profile (toolkit adapter answers for THIS repo)
+
+Answers to the toolkit's compatibility interview (`references/adoption.md`) — target-specific facts that must not migrate into the shared skill:
+
+- **Verify signal traps.** A narrow test filter yields false PASS; a superuser app handle yields false FAIL. Gate runs use a whole-touched-module filter + the low-priv `fops_app` role (`VERIFY_DATABASE_URL`), with migrations applied via the separate `fops_migrate` URL. Cross-module verify noise is known debt (other modules' suites attempt `audit_log` DELETE with the app handle — fails by design).
+- **Verify DBs.** Per-issue throwaway DBs via `prepare-verify-db.sh` (admin URL must be `postgres`, port 5434 — `fops_migrate` lacks CREATEDB). Rebuild after crashed runs or migration chunks; crash-polluted DBs produce phantom failures.
+- **FE visual harness.** Committed Playwright harness at `apps/frontend/tests/visual` (vite-preview IPv4, fail-closed Zod-validated mock, CP-pixel sign-off). Sandboxed codex has no browser — the conductor generates baselines outside the sandbox. Every new screen needs fixture + spec.
+- **FE design review.** Reviews compare the implementation against the RENDERED prototype (`docs/design-prototype/`), not prose specs; hand the implementing agent the prototype screen up front.
+- **Migrations.** Every new drizzle migration must be registered in the drizzle journal in the same chunk (omission has cost a review round).
 
 ## PR Review Priorities
 
