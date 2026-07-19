@@ -429,9 +429,7 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     expect(draftResponse.json<{ code: string }>().code).toBe('conflict.survey_results_unavailable');
     const invalidQuery = await get(closed.id, adminCookie, '?segment=internal');
     expect(invalidQuery.statusCode).toBe(422);
-    expect(invalidQuery.json()).toMatchObject({
-      error: { code: 'validation.failed' },
-    });
+    expect(invalidQuery.json<{ code: string }>().code).toBe('validation.failed');
     const foreignWorkspace = randomUUID();
     await migrateHandle.pool.query('insert into core.workspaces (id,name) values ($1,$2)', [
       foreignWorkspace,
