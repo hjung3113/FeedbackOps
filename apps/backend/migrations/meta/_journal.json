@@ -267,6 +267,13 @@
       "when": 1782600000000,
       "tag": "0037_survey_response_submission",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1782700000000,
+      "tag": "0038_survey_result_aggregate",
+      "breakpoints": true
     }
   ]
 }
