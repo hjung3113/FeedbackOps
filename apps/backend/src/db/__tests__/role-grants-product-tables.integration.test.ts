@@ -200,6 +200,16 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
       appHandle.pool.query('delete from survey.survey_responses where false'),
     ).rejects.toMatchObject({ code: '42501' });
 
+    await migrateHandle.pool.query(
+      `delete from survey.survey_response_answers
+       where response_id in (
+         select id from survey.survey_responses where survey_id = $1
+       )`,
+      [surveyId],
+    );
+    await migrateHandle.pool.query('delete from survey.survey_responses where survey_id = $1', [
+      surveyId,
+    ]);
     await migrateHandle.pool.query('delete from survey.surveys where id = $1', [surveyId]);
   });
 });
