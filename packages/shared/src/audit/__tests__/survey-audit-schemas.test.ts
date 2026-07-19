@@ -246,6 +246,15 @@ describe('Survey-response Finding audit privacy', () => {
       AUDIT_EVENT_DETAIL_SCHEMAS[event].parse({ ...detail, raw_text: 'raw answer' }),
     ).toThrow();
   });
+
+  it('rejects redacted_excerpt in survey_response_excerpt_approved audit detail', () => {
+    expect(() =>
+      AUDIT_EVENT_DETAIL_SCHEMAS.survey_response_excerpt_approved.parse({
+        ...surveyResponseExcerptApproved,
+        redacted_excerpt: 'Approved text must not enter the audit detail.',
+      }),
+    ).toThrow();
+  });
 });
 
 describe('Survey audit event registration', () => {

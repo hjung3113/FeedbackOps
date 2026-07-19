@@ -149,6 +149,39 @@ describe('survey-response Finding provenance and safe evidence DTOs', () => {
     ).toThrow();
   });
 
+  it('continues to parse VOC evidence DTOs with their source ID', () => {
+    const vocHighlight = {
+      ...highlightBase,
+      source_type: 'voc' as const,
+      source_id: U1,
+      source_title: 'Export failures',
+      source_meta: 'VOC-001',
+    };
+
+    expect(evidenceHighlightDtoSchema.parse(vocHighlight)).toEqual(vocHighlight);
+  });
+
+  it('continues to accept a nullable note source ID and reject a malformed one', () => {
+    expect(
+      evidenceHighlightDtoSchema.parse({
+        ...highlightBase,
+        source_type: 'note',
+        source_id: null,
+        source_title: null,
+        source_meta: null,
+      }),
+    ).toMatchObject({ source_type: 'note', source_id: null });
+    expect(() =>
+      evidenceHighlightDtoSchema.parse({
+        ...highlightBase,
+        source_type: 'note',
+        source_id: 'not-a-uuid',
+        source_title: null,
+        source_meta: null,
+      }),
+    ).toThrow();
+  });
+
   it('accepts the backend-generated Survey Finding request with no excerpts', () => {
     expect(
       createFindingFromSurveyResponseRequestSchema.parse({
@@ -158,7 +191,7 @@ describe('survey-response Finding provenance and safe evidence DTOs', () => {
     ).toEqual({ severity: 'high', approved_excerpt_ids: [] });
   });
 
-  it('rejects title, summary, and malformed approval IDs on the Survey Finding request', () => {
+  it('rejects title and summary keys on an otherwise-valid Survey Finding request', () => {
     expect(() =>
       createFindingFromSurveyResponseRequestSchema.parse({
         severity: 'high',
@@ -169,9 +202,24 @@ describe('survey-response Finding provenance and safe evidence DTOs', () => {
     expect(() =>
       createFindingFromSurveyResponseRequestSchema.parse({
         severity: 'high',
-        approved_excerpt_ids: ['not-a-uuid'],
+        approved_excerpt_ids: [U1],
         summary: 'Must be backend generated',
       }),
+    ).toThrow();
+  });
+
+  it('rejects malformed approval IDs on the Survey Finding request', () => {
+    expect(() =>
+      createFindingFromSurveyResponseRequestSchema.parse({
+        severity: 'high',
+        approved_excerpt_ids: ['not-a-uuid'],
+      }),
+    ).toThrow();
+  });
+
+  it('requires approved_excerpt_ids on the Survey Finding request', () => {
+    expect(() =>
+      createFindingFromSurveyResponseRequestSchema.parse({ severity: 'high' }),
     ).toThrow();
   });
 
