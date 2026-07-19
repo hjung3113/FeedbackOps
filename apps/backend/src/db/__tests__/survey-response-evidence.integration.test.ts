@@ -298,21 +298,16 @@ describe.skipIf(!runIntegration)('Survey response evidence access migration 0039
       update_columns: string[];
       privilege_types: string[];
     }>(
-      `select c.relname as table_name,
-              array_agg(a.attname::text order by a.attname)::text[] as update_columns,
-              array_agg(acl.privilege_type::text order by acl.privilege_type)::text[] as privilege_types
-         from pg_catalog.pg_class c
-         join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-         join pg_catalog.pg_attribute a on a.attrelid = c.oid
-         join lateral pg_catalog.aclexplode(coalesce(a.attacl, '{}'::aclitem[])) acl on true
-         join pg_catalog.pg_roles grantee on grantee.oid = acl.grantee
-        where n.nspname = 'survey'
-          and c.relname in ('survey_responses', 'survey_response_answers', 'survey_response_excerpt_approvals')
-          and a.attnum > 0
-          and not a.attisdropped
-          and grantee.rolname = 'fops_app'
-        group by c.relname
-        order by c.relname`,
+      `select table_name,
+              array_agg(column_name order by column_name)
+                filter (where privilege_type = 'UPDATE')::text[] as update_columns,
+              array_agg(distinct privilege_type order by privilege_type)::text[] as privilege_types
+         from information_schema.column_privileges
+        where grantee = 'fops_app'
+          and table_schema = 'survey'
+          and table_name in ('survey_responses', 'survey_response_answers', 'survey_response_excerpt_approvals')
+        group by table_name
+        order by table_name`,
     );
     expect(appColumnPrivileges).toEqual([
       {
