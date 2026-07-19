@@ -490,7 +490,18 @@ describe.skipIf(!runIntegration)(
         expect(linkedFinding.statusCode).toBe(200);
         expect(linkedEvidence.statusCode).toBe(200);
         expect(linkedRequests.statusCode).toBe(200);
-        expect(linkedTask.statusCode).toBe(200);
+        if (actorLabel === "reader") {
+          expect(linkedTask.statusCode).toBe(403);
+          expect(linkedTask.json()).toEqual({
+            code: "permission.denied",
+            message: "finding.manage capability required",
+          });
+          for (const privateValue of [RAW, source.responseId, "mock-admin-1"]) {
+            expect(linkedTask.body, actorLabel).not.toContain(privateValue);
+          }
+        } else {
+          expect(linkedTask.statusCode).toBe(200);
+        }
         const parsedFinding = findingDtoSchema.parse(linkedFinding.json());
         expectExactKeys("finding", actorLabel, parsedFinding);
         expect(linkedFinding.body, actorLabel).toContain(APPROVED);
@@ -518,8 +529,10 @@ describe.skipIf(!runIntegration)(
           actorLabel,
           taskRequestDtoSchema.parse(listedRequest),
         );
-        const parsedTask = taskDetailDtoSchema.parse(linkedTask.json());
-        expectExactKeys("task", actorLabel, parsedTask);
+        if (actorLabel !== "reader") {
+          const parsedTask = taskDetailDtoSchema.parse(linkedTask.json());
+          expectExactKeys("task", actorLabel, parsedTask);
+        }
       }
       const deniedRaw = await app.inject({
         method: "POST",
