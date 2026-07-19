@@ -52,6 +52,7 @@ const responseSubmission = z
       .min(1),
   })
   .strict();
+const emptyQuery = z.object({}).strict();
 export interface SurveysRoutesOptions {
   sessionService: SessionService;
   surveysService: SurveysService;
@@ -116,6 +117,16 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     const id = (req.params as { id: string }).id;
     if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
     return reply.send(await opts.surveysService.getRespondentForm(actor(req), id));
+  });
+  app.get('/surveys/:id/results', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+    const q = emptyQuery.safeParse(req.query);
+    if (!q.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(q.error.issues),
+      });
+    return reply.send(await opts.surveysService.getSurveyResults(actor(req), id));
   });
   app.post(
     '/surveys/:id/responses',

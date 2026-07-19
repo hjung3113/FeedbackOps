@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
+import { getRatingBandForValue, type SurveyResultDto } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
@@ -9,6 +10,7 @@ import type { CheckService } from '../permissions/check-service.js';
 import {
   actorSurveyReadScope,
   checkSurveyManage,
+  checkSurveyPersonalResponseRead,
   checkSurveyRead,
   isSurveyInReadScope,
 } from './authorization.js';
@@ -20,6 +22,7 @@ import {
   listQuestions,
   listSurveys,
 } from './repo-read.js';
+import { readSurveyResultAggregates, readSurveyResultResponseCount } from './repo-results.js';
 import {
   deleteQuestion,
   insertQuestion,
@@ -660,6 +663,72 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       })),
     };
   }
+  async function getSurveyResults(actor: SurveysActor, id: string): Promise<SurveyResultDto> {
+    const survey = await findSurvey(deps.db, actor.workspace_id, id);
+    if (!survey) throw new HttpError('not_found.record', 'survey not found');
+    const read = await checkSurveyRead(deps.checkService, actor, survey.primary_managed_system_id);
+    if (!read.allow) throw new HttpError('not_found.record', 'survey not found');
+    const personal = await checkSurveyPersonalResponseRead(
+      deps.checkService,
+      actor,
+      survey.primary_managed_system_id,
+    );
+    if (survey.status === 'draft')
+      throw new HttpError('conflict.survey_results_unavailable', 'survey results unavailable');
+    const [questions, responseCount, aggregateRows] = await Promise.all([
+      listQuestions(deps.db, actor.workspace_id, survey.id),
+      readSurveyResultResponseCount(deps.db, actor.workspace_id, survey.id),
+      readSurveyResultAggregates(deps.db, actor.workspace_id, survey.id),
+    ]);
+    const rowsByQuestion = new Map<string, typeof aggregateRows>();
+    for (const row of aggregateRows) {
+      const rows = rowsByQuestion.get(row.question_id) ?? [];
+      rows.push(row);
+      rowsByQuestion.set(row.question_id, rows);
+    }
+    const suppressed = (questionId: string) => ({
+      question_id: questionId,
+      visibility: 'suppressed' as const,
+      response_count: null,
+      suppression: { code: 'anonymity_threshold' as const },
+    });
+    const holder = personal.allow;
+    return {
+      survey_id: survey.id,
+      status: survey.status,
+      identity_protected: survey.responses_identity_protected,
+      questions: questions.map((question) => {
+        if (!holder && responseCount < 5) return suppressed(question.id);
+        const rows = rowsByQuestion.get(question.id) ?? [];
+        const answerCount = rows.find((row) => row.bucket_key === null)?.bucket_count ?? 0;
+        if (question.kind === 'text') {
+          return answerCount > 0 && answerCount < 5 && !holder
+            ? suppressed(question.id)
+            : { question_id: question.id, visibility: 'visible' as const, kind: 'text' as const,
+                answer_count: answerCount, distribution: null, excerpts: [] as [] };
+        }
+        if (question.kind === 'rating') {
+          const distribution = { low: 0, mid: 0, high: 0 };
+          for (const row of rows) {
+            if (row.bucket_key === null) continue;
+            const value = Number(row.bucket_key);
+            if (!Number.isInteger(value) || question.rating_min === null || question.rating_max === null || value < question.rating_min || value > question.rating_max) continue;
+            distribution[getRatingBandForValue(question.rating_min, question.rating_max, value)] += row.bucket_count;
+          }
+          const includedCount = distribution.low + distribution.mid + distribution.high;
+          if (!holder && Object.values(distribution).some((count) => count > 0 && count < 5)) return suppressed(question.id);
+          return { question_id: question.id, visibility: 'visible' as const, kind: 'rating' as const,
+            answer_count: includedCount, distribution };
+        }
+        const rowCounts = new Map(rows.filter((row) => row.bucket_key !== null).map((row) => [row.bucket_key!, row.bucket_count]));
+        const option_buckets = (question.options ?? []).map((option) => ({ key: option.key, label: option.label, count: rowCounts.get(option.key) ?? 0 }));
+        if (!holder && option_buckets.some((bucket) => bucket.count > 0 && bucket.count < 5)) return suppressed(question.id);
+        return { question_id: question.id, visibility: 'visible' as const, kind: 'choice' as const,
+          answer_count: answerCount, option_buckets };
+      }),
+      next_actions: [],
+    };
+  }
   async function submitResponse(a: {
     actor: SurveysActor;
     surveyId: string;
@@ -744,6 +813,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     closeSurvey: (a: Parameters<typeof transition>[0]) => transition({ ...a, target: 'closed' }),
     getSurvey,
     getRespondentForm,
+    getSurveyResults,
     listSurvey,
     submitResponse,
   };

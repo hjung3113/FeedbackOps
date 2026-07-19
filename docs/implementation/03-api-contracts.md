@@ -785,6 +785,20 @@ validation.failed` matrix covers malformed or duplicate question IDs, unknown
 or inactive-branch answers, missing required answers, answer-kind/value and
 choice mismatches, rating bounds, and trimmed text length.
 
+#### GET /surveys/:id/results — aggregate-only safe result summary
+
+This read-only endpoint requires a session and matching workspace context. It first looks up the Survey by `(workspace_id, survey_id)`, then checks `survey.read` on the Survey's primary Managed System. A missing, cross-workspace, or denied Survey returns `404 not_found.record`; an explicit deny also returns 404 so the route does not disclose existence. Admin role may satisfy `survey.read` under the normal Survey authorization rule, but does not bypass the anonymity policy.
+
+`survey.read_personal_responses` is a separate explicit capability. Its holder receives exact aggregate counts, never personal response records, identities, response IDs, timestamps, raw text, or excerpts. Admin role alone never grants this capability. Open and closed Surveys return results; a draft Survey returns `409 conflict.survey_results_unavailable`.
+
+The query schema is a strict empty object. Result filters are deferred because responses do not retain immutable cohort dimensions and overlapping filtered cohorts would permit subtraction attacks. Future filters require stored cohort snapshots plus an explicit privacy policy.
+
+For a non-holder, a response cohort below five suppresses every question using `{ question_id, visibility: "suppressed", response_count: null, suppression: { code: "anonymity_threshold" } }`; zero through four responses are indistinguishable. At five or more responses, a choice or rating question is also fully suppressed when any positive exposed option or collapsed rating-band count is one through four. Text is suppressed when its answer count is one through four. Zero-count buckets do not trigger low-bucket suppression.
+
+Visible choice results contain configured option `key`, `label`, and count plus the question answer count. Visible rating results contain only deterministic `low`, `mid`, and `high` counts derived from the configured rating domain; raw values and averages are not returned. Visible text results contain only `answer_count`, `distribution: null`, and `excerpts: []`. Question order follows the Survey configuration and `identity_protected` mirrors the Survey setting.
+
+`next_actions` is always `[]` until #187 provides an executable result-to-Finding route. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
+
 ### Core / Managed System / Analytics Area
 
 ```text

@@ -137,7 +137,7 @@ Acceptance Criteria:
 ```text
 - Result screen shows question summary and response distribution.
 - Text responses can be highlighted as evidence.
-- Results can be filtered by Managed System, segment, or Analytics Area when data exists.
+- Result filters require immutable response-level cohort dimensions and a privacy policy that prevents subtraction attacks; they are unavailable until those prerequisites exist.
 ```
 
 ### FR-SURVEY-005: Convert Result To Action
