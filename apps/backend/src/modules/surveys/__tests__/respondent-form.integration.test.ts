@@ -69,8 +69,10 @@ describe.skipIf(!runIntegration)('respondent survey form routes (#185)', () => {
       [WORKSPACE_ID],
     );
     const survey = await migrateHandle.pool.query<{ id: string }>(
-      `insert into survey.surveys (workspace_id,display_id,type,status,title,primary_managed_system_id,operator_actor_id,responses_identity_protected,created_by)
-       values ($1, $2, 'validation', $3, $4, $5, $6, true, $6) returning id`,
+      `insert into survey.surveys (workspace_id,display_id,type,status,title,primary_managed_system_id,operator_actor_id,responses_identity_protected,created_by,opened_at,closed_at)
+       values ($1, $2, 'validation', $3, $4, $5, $6, true, $6,
+               case when $3 in ('open', 'closed') then now() else null end,
+               case when $3 = 'closed' then now() else null end) returning id`,
       [
         WORKSPACE_ID,
         `S-${randomUUID()}`,
