@@ -92,6 +92,25 @@ describe('findingDtoSchema', () => {
     expect(findingDtoSchema.parse(surveyResponseFinding)).toEqual(surveyResponseFinding);
     expect(() => findingDtoSchema.parse({ ...surveyResponseFinding, source_id: U1 })).toThrow();
   });
+
+  it('rejects a raw survey response ID from survey_response Finding provenance', () => {
+    const surveyResponseFinding = {
+      ...base,
+      source_type: 'survey_response' as const,
+      source: {
+        type: 'survey_response' as const,
+        relation_type: 'generated_finding' as const,
+      },
+    };
+
+    expect(findingDtoSchema.parse(surveyResponseFinding)).toEqual(surveyResponseFinding);
+    expect(() =>
+      findingDtoSchema.parse({
+        ...surveyResponseFinding,
+        source: { ...surveyResponseFinding.source, id: U1 },
+      }),
+    ).toThrow();
+  });
 });
 
 describe('findingStatusSchema', () => {
@@ -127,11 +146,10 @@ describe('survey-response Finding provenance and safe evidence DTOs', () => {
     created_at: '2026-01-01T00:00:00.000Z',
   };
 
-  it('accepts survey_response provenance and rejects an unknown source type', () => {
+  it('accepts safe survey_response provenance and rejects an unknown source type', () => {
     expect(
       findingSourceSchema.parse({
         type: 'survey_response',
-        id: U1,
         relation_type: 'generated_finding',
       }),
     ).toMatchObject({ type: 'survey_response', relation_type: 'generated_finding' });

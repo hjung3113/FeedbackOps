@@ -115,9 +115,7 @@ export const findingSourceSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('survey_response'),
-      id: z.string().uuid(),
       relation_type: z.literal('generated_finding'),
-      link_id: z.string().uuid().optional(),
     })
     .strict(),
 ]);
