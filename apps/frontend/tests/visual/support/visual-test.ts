@@ -1,4 +1,4 @@
-import { test as base, expect } from '@playwright/test';
+import { expect, test as base } from '@playwright/test';
 
 // `reducedMotion` is page media emulation in the installed Playwright API.
 // Apply it before each navigation, alongside the config-level browser context defaults.

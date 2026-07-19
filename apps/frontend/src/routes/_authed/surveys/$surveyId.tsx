@@ -23,12 +23,11 @@ export function SurveyDetailRoute() {
     params: { surveyId },
     fuzzy: false,
   });
-
-  if (isResultsRoute) return <Outlet />;
-
   const query = useSurvey(surveyId);
   const gate = useSurveyManageGate(query.data?.primary_managed_system_id);
   const list = useSurveys();
+
+  if (isResultsRoute) return <Outlet />;
   if (query.isLoading) return <div className="p-6 text-sm text-text-muted">불러오는 중…</div>;
   if (query.isError || !query.data)
     return (

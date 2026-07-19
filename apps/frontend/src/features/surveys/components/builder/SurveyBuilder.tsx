@@ -232,18 +232,23 @@ function QuestionList({
         {questions.map((question, index) => (
           <div
             key={question.id}
-            className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-surface-card ${selectedId === question.id ? 'bg-surface-card' : ''}`}
+            className={`relative w-full rounded text-left text-sm hover:bg-surface-card ${selectedId === question.id ? 'bg-surface-card' : ''}`}
           >
             <button
               type="button"
               onClick={() => onSelect(question.id)}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              className="flex w-full items-center gap-2 px-2 py-2 pr-8 text-left"
             >
               <span>Q{index + 1}</span>
               <span className="min-w-0 flex-1 truncate">{question.prompt || '제목 없음'}</span>
             </button>
             {editable && (
-              <button type="button" onClick={() => onRemove(question.id)} aria-label="질문 삭제">
+              <button
+                type="button"
+                onClick={() => onRemove(question.id)}
+                aria-label="질문 삭제"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+              >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             )}

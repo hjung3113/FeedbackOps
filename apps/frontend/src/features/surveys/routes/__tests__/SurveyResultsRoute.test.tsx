@@ -4,14 +4,20 @@ import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/rea
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { useSurvey, useSurveyResults, useSurveyReadGate } = vi.hoisted(() => ({
-  useSurvey: vi.fn(),
-  useSurveyResults: vi.fn(),
-  useSurveyReadGate: vi.fn(),
-}));
+const { useSurvey, useSurveyResults, useSurveyReadGate, useSurveyManageGate, useSurveys } =
+  vi.hoisted(() => ({
+    useSurvey: vi.fn(),
+    useSurveyResults: vi.fn(),
+    useSurveyReadGate: vi.fn(),
+    useSurveyManageGate: vi.fn(),
+    useSurveys: vi.fn(),
+  }));
 
-vi.mock('@/features/surveys/hooks/useSurveys', () => ({ useSurvey, useSurveyResults }));
-vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({ useSurveyReadGate }));
+vi.mock('@/features/surveys/hooks/useSurveys', () => ({ useSurvey, useSurveyResults, useSurveys }));
+vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
+  useSurveyManageGate,
+  useSurveyReadGate,
+}));
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   fetchMe: vi.fn().mockResolvedValue({}),
@@ -37,7 +43,7 @@ const survey = {
   questions: [],
 };
 
-function renderResultsRoute() {
+function renderSurveyRoute() {
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [`/surveys/${surveyId}`] }),
@@ -50,20 +56,27 @@ function renderResultsRoute() {
     </QueryClientProvider>,
   );
 
-  return router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+  return router;
 }
 
 describe('/surveys/:surveyId/results route', () => {
   afterEach(() => vi.clearAllMocks());
 
+  function mockParentRoute() {
+    useSurveyManageGate.mockReturnValue({ canManage: false, gateState: 'absent' });
+    useSurveys.mockReturnValue({ data: [survey], isLoading: false, error: null });
+  }
+
   it.each(['loading', 'error', 'absent'] as const)(
     'fails closed and does not render result content when the read gate is %s',
     async (gateState) => {
       useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+      mockParentRoute();
       useSurveyReadGate.mockReturnValue({ canRead: false, gateState });
       useSurveyResults.mockReturnValue({ data: undefined, isLoading: false, isError: false });
 
-      await renderResultsRoute();
+      const router = renderSurveyRoute();
+      await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
 
       await waitFor(() => {
         expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
@@ -74,6 +87,7 @@ describe('/surveys/:surveyId/results route', () => {
 
   it('renders the results route through the nested router composition', async () => {
     useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
     useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
     useSurveyResults.mockReturnValue({
       data: {
@@ -87,20 +101,49 @@ describe('/surveys/:surveyId/results route', () => {
       isError: false,
     });
 
-    await renderResultsRoute();
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
 
     await waitFor(() => expect(screen.getByTestId('survey-results-summary')).toBeInTheDocument());
   });
 
   it('renders not-found state when results cannot be loaded', async () => {
     useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
     useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
     useSurveyResults.mockReturnValue({ data: undefined, isLoading: false, isError: true });
 
-    await renderResultsRoute();
+    const router = renderSurveyRoute();
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
 
     await waitFor(() =>
       expect(screen.getByText('설문 결과를 찾을 수 없습니다.')).toBeInTheDocument(),
     );
+  });
+
+  it('preserves a stable parent hook order when navigating to results and back', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    mockParentRoute();
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: {
+        survey_id: surveyId,
+        status: 'closed',
+        identity_protected: false,
+        questions: [],
+        next_actions: [],
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    const router = renderSurveyRoute();
+
+    await waitFor(() => expect(screen.getByTestId('survey-list')).toBeInTheDocument());
+    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+    await waitFor(() => expect(screen.getByTestId('survey-results-summary')).toBeInTheDocument());
+    await router.navigate({ to: '/surveys/$surveyId', params: { surveyId } });
+    await waitFor(() => expect(screen.getByTestId('survey-list')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument();
   });
 });

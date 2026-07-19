@@ -31,9 +31,7 @@ test.describe('/voc-clusters visual harness', () => {
 
     await page.goto('/voc-clusters');
 
-    await expect(page.getByTestId('cluster-list-error')).toHaveText(
-      '데이터를 불러오지 못했습니다.',
-    );
+    await expect(page.getByTestId('cluster-list-error')).toHaveText('데이터를 불러오지 못했습니다.');
   });
 
   test('filters the list through one real Confirmed tab click', async ({ page }) => {
