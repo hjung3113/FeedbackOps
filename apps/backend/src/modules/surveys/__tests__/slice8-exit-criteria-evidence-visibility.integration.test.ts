@@ -40,6 +40,7 @@ type Source = {
   surveyId: string;
   questionId: string;
   responseId: string;
+  respondentActorId: string;
 };
 
 describe.skipIf(!runIntegration)(
@@ -203,16 +204,27 @@ describe.skipIf(!runIntegration)(
         [WORKSPACE_ID, surveyId],
       );
       const questionId = question.rows[0]?.id ?? "";
+      const respondent = await insertDevActor(
+        migrateHandle,
+        WORKSPACE_ID,
+        `${SLUG}-respondent-${randomUUID()}`,
+      );
       const response = await migrateHandle.pool.query<{ id: string }>(
         "insert into survey.survey_responses (workspace_id,survey_id,respondent_actor_id,identity_protected,submitted_at) values ($1,$2,$3,true,now()) returning id",
-        [WORKSPACE_ID, surveyId, adminId],
+        [WORKSPACE_ID, surveyId, respondent.id],
       );
       const responseId = response.rows[0]?.id ?? "";
       await migrateHandle.pool.query(
         "insert into survey.survey_response_answers (workspace_id,survey_id,response_id,question_id,answer_kind,answer_value) values ($1,$2,$3,$4,'text',$5::jsonb)",
         [WORKSPACE_ID, surveyId, responseId, questionId, JSON.stringify(RAW)],
       );
-      return { msId, surveyId, questionId, responseId };
+      return {
+        msId,
+        surveyId,
+        questionId,
+        responseId,
+        respondentActorId: respondent.id,
+      };
     }
     async function approveAndCreate(
       source: Source,
@@ -314,7 +326,7 @@ describe.skipIf(!runIntegration)(
       // Derived actor × surface oracle (routes/services, not fixture assumptions):
       // actor      | Finding detail             | Evidence list              | pending Task Request list                              | linked Task detail
       // reader     | 200, visible (finding.read) | 200, visible (finding.read) | 200, seeded item absent (no finding.manage in MS scope) | 403, permission.denied (finding.manage required)
-      // creator    | 200, visible (manage grants read) | 200, visible (manage grants read) | 200, seeded item visible (finding.manage in MS scope) | 200, visible (finding.manage in MS scope)
+      // creator    | 200, visible (explicit finding.read grant) | 200, visible (explicit finding.read grant) | 200, seeded item visible (finding.manage in MS scope) | 200, visible (finding.manage in MS scope)
       // cap-holder | 200, visible (finding.read) | 200, visible (finding.read) | 200, seeded item visible (finding.manage in MS scope) | 200, visible (finding.manage in MS scope)
       const source = await seed();
       const creator = await authorizeCreator(source);
@@ -412,6 +424,18 @@ describe.skipIf(!runIntegration)(
         expect(serialized, `${actorLabel} ${surface}`).not.toContain(
           "respondent_actor_id",
         );
+        expect(serialized, `${actorLabel} ${surface}`).not.toContain(
+          source.respondentActorId,
+        );
+      }
+      function expectNoPrivacyPayload(label: string, payload: unknown) {
+        const serialized = JSON.stringify(payload);
+        expect(serialized, label).not.toContain(RAW);
+        expect(serialized, label).not.toContain(source.responseId);
+        expect(serialized, label).not.toContain("mock-admin-1");
+        expect(serialized, label).not.toContain("raw_text");
+        expect(serialized, label).not.toContain("respondent_actor_id");
+        expect(serialized, label).not.toContain(source.respondentActorId);
       }
       await grant(reader.id, "survey.read", source.msId);
       await grant(reader.id, "finding.read", source.msId);
@@ -464,7 +488,12 @@ describe.skipIf(!runIntegration)(
           "workspace_id",
         ].sort(),
       );
-      for (const privateValue of [RAW, source.responseId, "mock-admin-1"]) {
+      for (const privateValue of [
+        RAW,
+        source.responseId,
+        "mock-admin-1",
+        source.respondentActorId,
+      ]) {
         expect(requested.body).not.toContain(privateValue);
       }
       const actorMatrix = [
@@ -537,10 +566,15 @@ describe.skipIf(!runIntegration)(
           expect(linkedTask.json(), `${actorLabel} task error`).toEqual(
             expectations.task.error,
           );
-          for (const privateValue of [RAW, source.responseId, "mock-admin-1"]) {
-            expect(linkedTask.body, actorLabel).not.toContain(privateValue);
-          }
+          expectNoPrivacyPayload(actorLabel, linkedTask.json());
         }
+        expectNoPrivacyPayload(`${actorLabel} finding`, linkedFinding.json());
+        expectNoPrivacyPayload(`${actorLabel} evidence`, linkedEvidence.json());
+        expectNoPrivacyPayload(
+          `${actorLabel} task request list`,
+          linkedRequests.json(),
+        );
+        expectNoPrivacyPayload(`${actorLabel} task`, linkedTask.json());
         const parsedFinding = findingDtoSchema.parse(linkedFinding.json());
         expectExactKeys("finding", actorLabel, parsedFinding);
         expect(linkedFinding.body, actorLabel).toContain(APPROVED);
@@ -714,6 +748,7 @@ describe.skipIf(!runIntegration)(
         expect(serialized, label).not.toContain("mock-admin-1");
         expect(serialized, label).not.toContain("raw_text");
         expect(serialized, label).not.toContain("respondent_actor_id");
+        expect(serialized, label).not.toContain(source.respondentActorId);
       }
       for (const [label, cookie, visibility, expectedStatus] of [
         ["creator", creator.cookie, "hidden", 200],
@@ -735,14 +770,16 @@ describe.skipIf(!runIntegration)(
           expectNoPrivacyPayload(label, error);
           continue;
         }
-        const linked = links
-          .json<{ items: Array<Record<string, unknown>> }>()
-          .items.find(
-            (item) =>
-              item.source_type === "finding" &&
-              item.target_type === "task" &&
-              item.relation_type === "requested_task",
-          );
+        const linksPayload = links.json<{
+          items: Array<Record<string, unknown>>;
+        }>();
+        expectNoPrivacyPayload(label, linksPayload);
+        const linked = linksPayload.items.find(
+          (item) =>
+            item.source_type === "finding" &&
+            item.target_type === "task" &&
+            item.relation_type === "requested_task",
+        );
         expect(linked, label).toEqual(
           expect.objectContaining({ visibility_state: visibility }),
         );
