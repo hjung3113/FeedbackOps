@@ -230,20 +230,30 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
        ) values ($1,$2,$3,$4,'rating','1'::jsonb)`,
       [WORKSPACE_ID, source.surveyId, source.responseId, questionId],
     );
-    await migrateHandle.pool.query(
-      `with responses as (
-         insert into survey.survey_responses (
+    for (let index = 0; index < 4; index += 1) {
+      const respondent = await migrateHandle.pool.query<{ id: string }>(
+        `insert into core.actors (
+           workspace_id,external_id,email,display_name,role_level,actor_type
+         ) values ($1,$2,$3,'Suppressed aggregate respondent','user','internal_member') returning id`,
+        [
+          WORKSPACE_ID,
+          `${SLUG}-suppressed-${randomUUID()}`,
+          `${SLUG}-suppressed-${randomUUID()}@example.test`,
+        ],
+      );
+      const response = await migrateHandle.pool.query<{ id: string }>(
+        `insert into survey.survey_responses (
            workspace_id,survey_id,respondent_actor_id,identity_protected,submitted_at
-         )
-         select $1,$2,$3,true,now() from generate_series(1,4)
-         returning id
-       )
-       insert into survey.survey_response_answers (
-         workspace_id,survey_id,response_id,question_id,answer_kind,answer_value
-       )
-       select $1,$2,id,$4,'rating','3'::jsonb from responses`,
-      [WORKSPACE_ID, source.surveyId, adminId, questionId],
-    );
+         ) values ($1,$2,$3,true,now()) returning id`,
+        [WORKSPACE_ID, source.surveyId, respondent.rows[0]?.id],
+      );
+      await migrateHandle.pool.query(
+        `insert into survey.survey_response_answers (
+           workspace_id,survey_id,response_id,question_id,answer_kind,answer_value
+         ) values ($1,$2,$3,$4,'rating','3'::jsonb)`,
+        [WORKSPACE_ID, source.surveyId, response.rows[0]?.id, questionId],
+      );
+    }
     return questionId;
   }
   async function approve(source: Source, cookie: string, text = APPROVED): Promise<string> {
