@@ -4,6 +4,12 @@
 
 import { randomUUID } from 'node:crypto';
 
+import {
+  entityLinkDtoSchema,
+  evidenceHighlightDtoSchema,
+  findingDtoSchema,
+  surveyResultDtoSchema,
+} from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -436,6 +442,12 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       highlights: 0,
       audits: 0,
     });
+    expect(await counts(foreign)).toEqual({
+      findings: 0,
+      links: 0,
+      highlights: 0,
+      audits: 0,
+    });
   });
 
   it('returns 403 for a readable personal source when finding.manage is missing', async () => {
@@ -495,6 +507,16 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     await grant(creator.id, 'survey.read', source.msId);
     await grant(creator.id, 'survey.read_personal_responses', source.msId);
     await grant(creator.id, 'finding.manage', source.msId);
+    const results = await app.inject({
+      method: 'GET',
+      url: `/surveys/${source.surveyId}/results`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${creator.cookie}` },
+    });
+    expect(results.statusCode).toBe(200);
+    const parsedResults = surveyResultDtoSchema.parse(results.json());
+    expect(parsedResults.questions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ visibility: 'suppressed' })]),
+    );
     expect(
       (
         await post(creator.cookie, source.responseId, {
@@ -530,7 +552,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     ).toBe(404);
   });
 
-  it('rejects foreign and revoked excerpt ids with 422, accepts duplicate ids, and accepts an empty excerpt array', async () => {
+  it('rejects foreign, revoked, and duplicate excerpt ids with 422, and accepts an empty excerpt array', async () => {
     const source = await seed();
     const other = await seed();
     const creator = await actor();
@@ -609,6 +631,38 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     ]);
   });
 
+  it('hides a highlight when its attached approval is revoked despite a duplicate active approval', async () => {
+    const source = await seed();
+    const creator = await actor();
+    const safeReader = await actor();
+    await grant(creator.id, 'survey.read', source.msId);
+    await grant(creator.id, 'survey.read_personal_responses', source.msId);
+    await grant(creator.id, 'survey.manage', source.msId);
+    await grant(creator.id, 'finding.manage', source.msId);
+    await grant(safeReader.id, 'survey.read', source.msId);
+    await grant(safeReader.id, 'finding.read', source.msId);
+    const attached = await approve(source, creator.cookie);
+    await approve(source, creator.cookie); // Same text, independently revocable approval.
+    const created = await post(creator.cookie, source.responseId, {
+      severity: 'medium',
+      approved_excerpt_ids: [attached],
+    });
+    expect(created.statusCode).toBe(201);
+    await migrateHandle.pool.query(
+      'update survey.survey_response_excerpt_approvals set revoked_at=now() where id=$1',
+      [attached],
+    );
+    const evidence = await app.inject({
+      method: 'GET',
+      url: `/findings/${created.json<{ id: string }>().id}/evidence-highlights`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${safeReader.cookie}` },
+    });
+    expect(evidence.statusCode).toBe(200);
+    expect(evidence.json<{ items: Array<{ quote_or_summary?: string }> }>().items).toEqual([
+      expect.not.objectContaining({ quote_or_summary: APPROVED }),
+    ]);
+  });
+
   it('omits the response UUID and raw answer from Finding, evidence, and entity-link serializations', async () => {
     const source = await seed();
     const creator = await actor();
@@ -638,6 +692,14 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       url: `/entity-links?target_type=finding&target_id=${findingId}`,
       headers: { cookie: `${SESSION_COOKIE_NAME}=${creator.cookie}` },
     });
+    expect(finding.statusCode).toBe(200);
+    expect(evidence.statusCode).toBe(200);
+    expect(links.statusCode).toBe(200);
+    findingDtoSchema.parse(finding.json());
+    const parsedEvidence = evidence.json<{ items: unknown[] }>();
+    for (const item of parsedEvidence.items) evidenceHighlightDtoSchema.parse(item);
+    const parsedLinks = links.json<{ items: unknown[] }>();
+    for (const item of parsedLinks.items) entityLinkDtoSchema.parse(item);
     for (const payload of [finding.body, evidence.body, links.body]) {
       expect(payload).not.toContain(source.responseId);
       expect(payload).not.toContain(RAW_ANSWER);
@@ -661,7 +723,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     expect(body.summary).not.toContain(RAW_ANSWER);
   });
 
-  it('rolls back all residue when a late approved-excerpt validation failure is forced', async () => {
+  it('rolls back all residue when a post-finding highlight insert fails', async () => {
     const source = await seed();
     const creator = await actor();
     await grant(creator.id, 'survey.read', source.msId);
@@ -669,18 +731,23 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     await grant(creator.id, 'survey.manage', source.msId);
     await grant(creator.id, 'finding.manage', source.msId);
     const active = await approve(source, creator.cookie);
-    await migrateHandle.pool.query(
-      'update survey.survey_response_excerpt_approvals set revoked_at=now() where id=$1',
-      [active],
-    );
-    expect(
-      (
-        await post(creator.cookie, source.responseId, {
-          severity: 'medium',
-          approved_excerpt_ids: [active],
-        })
-      ).statusCode,
-    ).toBe(422);
+    // The Finding is inserted before evidence highlights. Removing only this
+    // privilege makes the request fail after that insert and pins tx rollback.
+    await migrateHandle.pool.query('revoke insert on finding.evidence_highlights from fops_app');
+    try {
+      expect(
+        (
+          await post(creator.cookie, source.responseId, {
+            severity: 'medium',
+            approved_excerpt_ids: [active],
+          })
+        ).statusCode,
+      ).toBe(500);
+    } finally {
+      await migrateHandle.pool.query(
+        'grant select, insert, update on finding.evidence_highlights to fops_app',
+      );
+    }
     expect(await counts(source.responseId)).toEqual({
       findings: 0,
       links: 0,

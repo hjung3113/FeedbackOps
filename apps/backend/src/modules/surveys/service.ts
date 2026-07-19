@@ -30,6 +30,7 @@ import {
   readApprovedResponseExcerpts,
   readApprovedResultExcerpts,
   readResponseTextCandidate,
+  readSurveyQuestionLabel,
 } from './repo-evidence.js';
 import {
   type QuestionKind,
@@ -302,10 +303,10 @@ export async function resolveApprovedSurveyResponseExcerpts(
     });
   const labels = await Promise.all(
     approvals.map(async (approval) => {
-      const candidate = await readResponseTextCandidate(
+      const candidate = await readSurveyQuestionLabel(
         tx,
         actor.workspace_id,
-        subject.response_id,
+        subject.survey_id,
         approval.question_id,
       );
       if (!candidate)
@@ -336,7 +337,7 @@ export async function resolveSurveyResponseHighlightAccess(
   tx: Tx,
   actor: SurveysActor,
   responseId: string,
-  redactedExcerpt: string,
+  approvedExcerptId: string,
 ): Promise<SurveyResponseEvidenceSubject | null> {
   const { subject } = await resolveSurveyResponseEvidenceAccess(
     deps,
@@ -349,7 +350,7 @@ export async function resolveSurveyResponseHighlightAccess(
     tx,
     actor.workspace_id,
     subject.response_id,
-    redactedExcerpt,
+    approvedExcerptId,
   );
   return approved ? subject : null;
 }

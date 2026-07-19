@@ -485,6 +485,7 @@ export function createFindingsService(deps: FindingsServiceDeps) {
               primaryManagedSystemId: targetManagedSystemId,
               sourceType: 'survey_response',
               sourceId: subject.response_id,
+              approvedExcerptId: approved.approved_excerpt_id,
               quoteOrSummary: approved.redacted_excerpt,
               analyticsAreaId: input.analytics_area_id ?? null,
               sentiment: null,
@@ -646,6 +647,7 @@ export function createFindingsService(deps: FindingsServiceDeps) {
         primaryManagedSystemId: finding.primary_managed_system_id,
         sourceType: input.source_type,
         sourceId: input.source_id ?? null,
+        approvedExcerptId: null,
         quoteOrSummary: input.quote_or_summary,
         analyticsAreaId: input.analytics_area_id ?? null,
         sentiment: input.sentiment ?? null,
@@ -706,7 +708,7 @@ export function createFindingsService(deps: FindingsServiceDeps) {
             tx,
             args.actor,
             args.row.source_id ?? '',
-            args.row.quote_or_summary,
+            args.row.approved_excerpt_id ?? '',
           ),
         );
         return access !== null;
@@ -762,7 +764,7 @@ export function createFindingsService(deps: FindingsServiceDeps) {
               tx,
               args.actor,
               row.source_id ?? '',
-              row.quote_or_summary,
+              row.approved_excerpt_id ?? '',
             );
           } catch (error) {
             if (error instanceof HttpError && error.code === 'not_found.record') return null;

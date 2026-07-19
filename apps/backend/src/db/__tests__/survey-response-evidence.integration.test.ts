@@ -13,7 +13,7 @@ function requiredId(row: { id: string } | undefined, label: string): string {
   return row.id;
 }
 
-describe.skipIf(!runIntegration)('Survey response evidence access migration 0039', () => {
+describe.skipIf(!runIntegration)('Survey response evidence access migrations 0039/0040', () => {
   let appHandle: DbHandle;
   let migrateHandle: DbHandle;
   const workspaceId = randomUUID();
@@ -27,6 +27,34 @@ describe.skipIf(!runIntegration)('Survey response evidence access migration 0039
   let activeApprovalId: string;
   const rawText = 'raw response text that may only cross the definer boundary';
   const otherRawText = 'a second answer must not be returned for the first question';
+
+  it('pins the 0040 highlight approval identity FK and unchanged fops_app SELECT surface', async () => {
+    const columns = await migrateHandle.pool.query<{ is_nullable: string }>(
+      `select is_nullable
+         from information_schema.columns
+        where table_schema='finding'
+          and table_name='evidence_highlights'
+          and column_name='approved_excerpt_id'`,
+    );
+    expect(columns.rows).toEqual([{ is_nullable: 'YES' }]);
+    const foreignKeys = await migrateHandle.pool.query<{ target: string }>(
+      `select concat(ccu.table_schema, '.', ccu.table_name, '.', ccu.column_name) as target
+         from information_schema.table_constraints tc
+         join information_schema.key_column_usage kcu
+           on tc.constraint_name=kcu.constraint_name and tc.table_schema=kcu.table_schema
+         join information_schema.constraint_column_usage ccu
+           on ccu.constraint_name=tc.constraint_name and ccu.table_schema=tc.table_schema
+        where tc.constraint_type='FOREIGN KEY'
+          and tc.table_schema='finding'
+          and tc.table_name='evidence_highlights'
+          and kcu.column_name='approved_excerpt_id'`,
+    );
+    expect(foreignKeys.rows).toEqual([{ target: 'survey.survey_response_excerpt_approvals.id' }]);
+    const privileges = await migrateHandle.pool.query<{ can_select: boolean }>(
+      "select has_table_privilege('fops_app', 'finding.evidence_highlights', 'SELECT') as can_select",
+    );
+    expect(privileges.rows).toEqual([{ can_select: true }]);
+  });
 
   beforeAll(async () => {
     appHandle = createDb(APP_URL);

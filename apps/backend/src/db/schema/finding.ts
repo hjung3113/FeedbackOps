@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { actors, analyticsAreas, managedSystems, workspaces } from './core.js';
+import { surveyResponseExcerptApprovals } from './survey.js';
 
 export const findingSchema = pgSchema('finding');
 
@@ -29,6 +30,9 @@ export const findings = findingSchema.table(
     summary: text('summary').notNull(),
     sourceType: text('source_type').notNull(),
     sourceId: uuid('source_id'),
+    approvedExcerptId: uuid('approved_excerpt_id').references(
+      () => surveyResponseExcerptApprovals.id,
+    ),
     evidenceCount: integer('evidence_count').notNull().default(0),
     severity: text('severity').notNull(),
     confidence: text('confidence'),

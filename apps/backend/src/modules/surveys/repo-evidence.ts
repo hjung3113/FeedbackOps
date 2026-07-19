@@ -113,12 +113,34 @@ export async function readApprovedResponseExcerpts(
   return result.rows;
 }
 
-/** A stored highlight is safe to project only while its approval remains active. */
+/**
+ * Direct fops_app metadata projection. Unlike readResponseTextCandidate this
+ * cannot reach survey_response_answers, so resolving a template label never
+ * crosses the audited raw-answer seam.
+ */
+export async function readSurveyQuestionLabel(
+  tx: Tx,
+  workspaceId: string,
+  surveyId: string,
+  questionId: string,
+): Promise<{ question_id: string; question_label: string } | null> {
+  const result = await tx.execute<{ question_id: string; question_label: string }>(sql`
+    select id as question_id, prompt as question_label
+      from survey.survey_questions
+     where workspace_id = ${workspaceId}
+       and survey_id = ${surveyId}
+       and id = ${questionId}
+       and kind = 'text'
+  `);
+  return result.rows[0] ?? null;
+}
+
+/** A stored highlight is safe to project only while its own approval remains active. */
 export async function hasActiveApprovedResponseExcerpt(
   tx: Tx,
   workspaceId: string,
   responseId: string,
-  redactedExcerpt: string,
+  approvedExcerptId: string,
 ): Promise<boolean> {
   const result = await tx.execute<{ exists: boolean }>(sql`
     select exists(
@@ -126,7 +148,7 @@ export async function hasActiveApprovedResponseExcerpt(
         from survey.survey_response_excerpt_approvals a
        where a.workspace_id = ${workspaceId}
          and a.response_id = ${responseId}
-         and a.redacted_excerpt = ${redactedExcerpt}
+         and a.id = ${approvedExcerptId}
          and a.revoked_at is null
     ) as exists
   `);
