@@ -45,12 +45,15 @@ type DmlPrivilege = (typeof DML_PRIVILEGES)[number];
 const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
 
 // Tables intentionally narrower than full-DML for fops_app, keyed by the
-// fully-qualified `schema.table` name. Grants come from migrations 0010 and 0037.
+// fully-qualified `schema.table` name. Grants come from migrations 0010, 0037, and 0039.
 const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'survey.surveys': ['SELECT', 'INSERT', 'UPDATE'],
   'survey.survey_questions': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   'survey.survey_responses': ['INSERT'],
   'survey.survey_response_answers': ['INSERT'],
+  // UPDATE is deliberately column-scoped and asserted by the #187 evidence
+  // access integration test. role_table_grants must remain without table-wide UPDATE.
+  'survey.survey_response_excerpt_approvals': ['SELECT', 'INSERT'],
   'voc.workspace_display_counters': ['SELECT'],
   'voc.voc_public_updates': ['SELECT', 'INSERT'],
   'voc.voc_reporter_replies': ['SELECT', 'INSERT'],

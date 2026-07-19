@@ -68,6 +68,34 @@ survey.survey_questions
 survey.survey_responses / survey.survey_response_answers
 - responses snapshot respondent_actor_id and identity_protected; answers reference both a
   response and question through survey-qualified foreign keys.
+
+survey.survey_response_excerpt_approvals
+- id, workspace_id, survey_id, response_id, question_id, redacted_excerpt, approved_by,
+  approved_at: required; revoked_at: nullable.
+- Stores an explicit, redacted evidence excerpt only. It never stores respondent identity
+  or raw response text; revocation preserves the approval row.
+- Raw response text is available only through the single-question, workspace-scoped Survey
+  evidence reader used during Finding creation. Result reads expose active redacted approvals only.
+```
+
+Survey response evidence reader contracts:
+
+```text
+survey.lock_response_evidence_subject(workspace_id, response_id)
+- Takes a transaction-scoped advisory lock derived deterministically from the response UUID.
+- Returns either no row or exactly the safe eight-column subject projection: response_id,
+  survey_id, survey_display_id, survey_type, survey_status, primary_managed_system_id,
+  analytics_area_id, identity_protected.
+- The response must belong to the supplied workspace. The lock serializes evidence work for
+  that response without granting raw-table UPDATE privilege to the definer owner.
+
+survey.read_response_text_candidate(workspace_id, response_id, question_id)
+- Returns either no row or exactly question_id, question_label, raw_text for the requested
+  text answer in the supplied workspace. It never returns another answer from the response.
+
+survey.read_approved_result_excerpts(workspace_id, survey_id)
+- Returns only approved_excerpt_id, question_id, redacted_excerpt for active (not revoked)
+  approvals belonging to the supplied workspace and survey. Raw response text is never exposed.
 ```
 
 Rules:
@@ -163,7 +191,7 @@ findings
 - primary_managed_system_id: uuid, required
 - title: text, required
 - summary: text, required
-- source_type: enum(voc, voc_cluster, survey, manual), required
+- source_type: enum(voc, voc_cluster, survey, survey_response, manual), required
 - source_id: uuid, nullable when source_type=manual
 - evidence_count: integer, required
 - severity: enum(low, medium, high, critical), required
@@ -457,6 +485,9 @@ Rules:
 - VOC/cluster Task Request source tuples added by ADR-0028:
   - (voc, task_request, requested_task)
   - (voc_cluster, task_request, requested_task)
+- Survey response provenance tuples added by #187:
+  - (survey_response, finding, generated_finding)
+  - (survey_response, finding, evidence_of)
 ```
 
 ## Reporter-Facing VOC Status
