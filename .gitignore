@@ -33,3 +33,6 @@ visual-*.png
 # Workflow toolkit lives in a separate repo (see project-workflow-extraction);
 # never commit a symlink into it — product repo stays product-only.
 scripts/codex-safe.sh
+# install-into.sh --mode symlink output: absolute machine-local links
+.agent-workflow/
+.claude/skills/agent-workflow
