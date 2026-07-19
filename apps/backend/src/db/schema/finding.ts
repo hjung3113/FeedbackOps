@@ -30,9 +30,6 @@ export const findings = findingSchema.table(
     summary: text('summary').notNull(),
     sourceType: text('source_type').notNull(),
     sourceId: uuid('source_id'),
-    approvedExcerptId: uuid('approved_excerpt_id').references(
-      () => surveyResponseExcerptApprovals.id,
-    ),
     evidenceCount: integer('evidence_count').notNull().default(0),
     severity: text('severity').notNull(),
     confidence: text('confidence'),
@@ -94,6 +91,9 @@ export const evidenceHighlights = findingSchema.table(
       .references(() => managedSystems.id),
     sourceType: text('source_type').notNull(),
     sourceId: uuid('source_id'),
+    approvedExcerptId: uuid('approved_excerpt_id').references(
+      () => surveyResponseExcerptApprovals.id,
+    ),
     quoteOrSummary: text('quote_or_summary').notNull(),
     analyticsAreaId: uuid('analytics_area_id').references(() => analyticsAreas.id),
     sentiment: text('sentiment'),
