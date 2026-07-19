@@ -68,6 +68,10 @@ describe.skipIf(!runIntegration)('survey response submission routes (#185)', () 
       'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
+    await migrateHandle.pool.query(
+      `delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'`,
+      [WORKSPACE_ID],
+    );
   }
 
   async function seed(status: 'draft' | 'open' | 'closed' = 'open') {
@@ -199,7 +203,13 @@ describe.skipIf(!runIntegration)('survey response submission routes (#185)', () 
     );
     for (const status of ['draft', 'closed'] as const) {
       const seeded = await seed(status);
-      const response = await submit(seeded.surveyId, []);
+      const response = await submit(seeded.surveyId, [
+        { question_id: seeded.questions.single_choice, value: 'yes' },
+        { question_id: seeded.questions.multiple_choice, value: ['a'] },
+        { question_id: seeded.questions.rating, value: 1 },
+        { question_id: seeded.questions.text, value: 'valid' },
+      ]);
+      expect(response.statusCode).toBe(409);
       expect(response.json<{ code: string }>().code).toBe('conflict.survey_not_open');
     }
   });
