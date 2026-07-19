@@ -29,6 +29,7 @@ import {
 import {
   type SurveyResultsVisualScenario,
   surveyResultVisualFixture,
+  surveyResultVisualListFixture,
   surveyResultsFixtureFor,
 } from '../fixtures/survey-results';
 import {
@@ -213,6 +214,11 @@ export async function installMockApi(
             ? []
             : [surveyVisualFixtureSchema.parse(surveyVisualFixture)],
       );
+      return;
+    }
+
+    if (options.surveyResultsScenario && isRequest(route, 'GET', '/surveys')) {
+      await json(route, 200, surveyResultVisualListFixture);
       return;
     }
 

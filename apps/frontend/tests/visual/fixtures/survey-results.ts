@@ -1,11 +1,15 @@
 import { surveyResultDtoSchema } from '@fops/shared';
 import { z } from 'zod';
-import { surveyVisualFixture } from './surveys';
+import { surveyVisualFixture, surveyVisualFixtureSchema } from './surveys';
 
-export const surveyResultVisualFixture = {
+export const surveyResultVisualFixture = surveyVisualFixtureSchema.parse({
   ...surveyVisualFixture,
   status: 'closed' as const,
-};
+});
+
+export const surveyResultVisualListFixture = z
+  .array(surveyVisualFixtureSchema)
+  .parse([surveyResultVisualFixture]);
 
 const ids = {
   choice: '11111111-1111-4111-8111-111111111111',
