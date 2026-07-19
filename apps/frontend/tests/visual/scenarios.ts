@@ -1,4 +1,4 @@
-import type { FindingDto, VocClusterDto } from "@fops/shared";
+import type { FindingDto, VocClusterDto } from '@fops/shared';
 
 import {
   IDS,
@@ -9,14 +9,14 @@ import {
   emptyList,
   existingFinding,
   populatedList,
-} from "./fixtures/voc-clusters";
+} from './fixtures/voc-clusters';
 
 export type ScenarioName =
-  | "populated"
-  | "empty-list"
-  | "list-error"
-  | "detail-404"
-  | "detail-error";
+  | 'populated'
+  | 'empty-list'
+  | 'list-error'
+  | 'detail-404'
+  | 'detail-error';
 
 export interface VisualScenario {
   list: { status: number; items: VocClusterDto[] };
@@ -29,9 +29,7 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-export function createScenario(
-  name: ScenarioName = "populated",
-): VisualScenario {
+export function createScenario(name: ScenarioName = 'populated'): VisualScenario {
   const base: VisualScenario = {
     list: { status: 200, items: clone(populatedList.items) },
     details: {
@@ -47,16 +45,16 @@ export function createScenario(
   };
 
   switch (name) {
-    case "empty-list":
+    case 'empty-list':
       return { ...base, list: { status: 200, items: clone(emptyList.items) } };
-    case "list-error":
+    case 'list-error':
       return { ...base, list: { status: 500, items: [] } };
-    case "detail-404":
+    case 'detail-404':
       return {
         ...base,
         details: { ...base.details, [IDS.draft]: { status: 404 } },
       };
-    case "detail-error":
+    case 'detail-error':
       return {
         ...base,
         details: { ...base.details, [IDS.draft]: { status: 500 } },

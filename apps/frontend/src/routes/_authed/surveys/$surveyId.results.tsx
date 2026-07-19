@@ -1,8 +1,8 @@
-import { EmptyState, PermissionBlockedPanel } from '@fops/ui';
-import { createFileRoute } from '@tanstack/react-router';
 import { SurveyResultsSummary } from '@/features/surveys/components/results/SurveyResultsSummary';
 import { useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyReadGate } from '@/features/surveys/routes/SurveyPermissionGate';
+import { EmptyState, PermissionBlockedPanel } from '@fops/ui';
+import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_authed/surveys/$surveyId/results')({
   component: SurveyResultsRoute,

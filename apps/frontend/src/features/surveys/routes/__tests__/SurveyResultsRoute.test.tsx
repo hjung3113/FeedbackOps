@@ -1,5 +1,8 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { routeTree } from '@/routeTree.gen';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
+import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { useSurvey, useSurveyResults, useSurveyReadGate } = vi.hoisted(() => ({
   useSurvey: vi.fn(),
@@ -9,18 +12,14 @@ const { useSurvey, useSurveyResults, useSurveyReadGate } = vi.hoisted(() => ({
 
 vi.mock('@/features/surveys/hooks/useSurveys', () => ({ useSurvey, useSurveyResults }));
 vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({ useSurveyReadGate }));
-vi.mock('@tanstack/react-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
-  createFileRoute: () => (options: { component: unknown }) => ({
-    ...options,
-    useParams: () => ({ surveyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }),
-  }),
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api')>()),
+  fetchMe: vi.fn().mockResolvedValue({}),
 }));
 
-import { SurveyResultsRoute } from '@/routes/_authed/surveys/$surveyId.results';
-
+const surveyId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const survey = {
-  id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  id: surveyId,
   display_id: 'SRV-21',
   title: 'Results',
   type: 'outcome' as const,
@@ -38,28 +37,70 @@ const survey = {
   questions: [],
 };
 
+function renderResultsRoute() {
+  const router = createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: [`/surveys/${surveyId}`] }),
+  });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+
+  return router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+}
+
 describe('/surveys/:surveyId/results route', () => {
+  afterEach(() => vi.clearAllMocks());
+
   it.each(['loading', 'error', 'absent'] as const)(
     'fails closed and does not render result content when the read gate is %s',
-    (gateState) => {
+    async (gateState) => {
       useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
       useSurveyReadGate.mockReturnValue({ canRead: false, gateState });
       useSurveyResults.mockReturnValue({ data: undefined, isLoading: false, isError: false });
 
-      render(<SurveyResultsRoute />);
+      await renderResultsRoute();
 
-      expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.queryByTestId('survey-results-summary')).not.toBeInTheDocument();
+      });
       if (gateState !== 'loading') expect(screen.getByText('Survey Result')).toBeInTheDocument();
     },
   );
 
-  it('renders not-found state when results cannot be loaded', () => {
+  it('renders the results route through the nested router composition', async () => {
+    useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
+    useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
+    useSurveyResults.mockReturnValue({
+      data: {
+        survey_id: surveyId,
+        status: 'closed',
+        identity_protected: false,
+        questions: [],
+        next_actions: [],
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    await renderResultsRoute();
+
+    await waitFor(() => expect(screen.getByTestId('survey-results-summary')).toBeInTheDocument());
+  });
+
+  it('renders not-found state when results cannot be loaded', async () => {
     useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
     useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
     useSurveyResults.mockReturnValue({ data: undefined, isLoading: false, isError: true });
 
-    render(<SurveyResultsRoute />);
+    await renderResultsRoute();
 
-    expect(screen.getByText('설문 결과를 찾을 수 없습니다.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText('설문 결과를 찾을 수 없습니다.')).toBeInTheDocument(),
+    );
   });
 });

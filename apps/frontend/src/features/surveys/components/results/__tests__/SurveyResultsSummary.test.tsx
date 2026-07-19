@@ -134,7 +134,11 @@ const results = {
     },
   ],
   next_actions: [
-    { id: 'create_finding' as const, availability: 'allowed' as const, intent: 'open_finding_draft' as const },
+    {
+      id: 'create_finding' as const,
+      availability: 'allowed' as const,
+      intent: 'open_finding_draft' as const,
+    },
   ],
 };
 
@@ -191,6 +195,30 @@ describe('SurveyResultsSummary', () => {
     expect(screen.queryByText('Create VOC')).not.toBeInTheDocument();
     expect(screen.queryByText('Convert to VOC')).not.toBeInTheDocument();
     expect(screen.queryByText('Request Task')).not.toBeInTheDocument();
+  });
+
+  it('keeps a blocked requestable action visible when its permission details are absent', () => {
+    render(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          next_actions: [
+            {
+              id: 'create_finding',
+              availability: 'blocked_requestable',
+              intent: 'open_finding_draft',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('survey-result-next-actions')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request access' })).toBeDisabled();
+    expect(
+      screen.getByText('Access details are unavailable, so this request cannot be submitted.'),
+    ).toBeInTheDocument();
   });
 
   it('renders no follow-up CTA when next_actions is empty', () => {

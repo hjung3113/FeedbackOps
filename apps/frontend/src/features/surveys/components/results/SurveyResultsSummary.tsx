@@ -1,6 +1,6 @@
-import { Button } from '@fops/ui';
-import type { SurveyResultDto } from '@fops/shared';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import type { SurveyResultDto } from '@fops/shared';
+import { Button } from '@fops/ui';
 import type { Survey } from '../../types';
 
 export interface SurveyResultsSummaryProps {
@@ -102,7 +102,18 @@ function NextActions({ actions }: { actions: SurveyResultDto['next_actions'] }) 
         {actions.map((action) => {
           const label = action.id === 'create_finding' ? 'Create Finding' : 'Request Task';
           if (action.availability === 'blocked_requestable') {
-            if (!action.requestable_permission) return null;
+            if (!action.requestable_permission) {
+              return (
+                <div className="space-y-1" data-action-id={action.id} key={action.id}>
+                  <Button disabled type="button" variant="secondary">
+                    Request access
+                  </Button>
+                  <p className="text-sm text-text-muted">
+                    Access details are unavailable, so this request cannot be submitted.
+                  </p>
+                </div>
+              );
+            }
             return (
               <div data-action-id={action.id} key={action.id}>
                 <RequestAccessButton

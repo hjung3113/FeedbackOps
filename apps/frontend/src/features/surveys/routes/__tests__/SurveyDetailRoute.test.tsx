@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import type { Survey } from "../../types";
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import type { Survey } from '../../types';
 
 const { useSurvey, useSurveys, useSurveyManageGate } = vi.hoisted(() => ({
   useSurvey: vi.fn(),
@@ -8,45 +8,46 @@ const { useSurvey, useSurveys, useSurveyManageGate } = vi.hoisted(() => ({
   useSurveyManageGate: vi.fn(),
 }));
 
-vi.mock("@/features/surveys/hooks/useSurveys", () => ({
+vi.mock('@/features/surveys/hooks/useSurveys', () => ({
   useSurvey,
   useSurveys,
 }));
-vi.mock("@/features/surveys/routes/SurveyPermissionGate", () => ({
+vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
   useSurveyManageGate,
 }));
-vi.mock("@tanstack/react-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
   createFileRoute: () => () => ({
-    useParams: () => ({ surveyId: "survey-1" }),
+    useParams: () => ({ surveyId: 'survey-1' }),
     useSearch: () => ({}),
   }),
+  useMatchRoute: () => () => false,
   useNavigate: () => vi.fn(),
 }));
 
-import { SurveyDetailRoute } from "@/routes/_authed/surveys/$surveyId";
+import { SurveyDetailRoute } from '@/routes/_authed/surveys/$surveyId';
 
 const survey: Survey = {
-  id: "survey-1",
-  display_id: "SRV-1",
-  title: "Q3 사용성 진단",
-  type: "discovery",
-  status: "draft",
+  id: 'survey-1',
+  display_id: 'SRV-1',
+  title: 'Q3 사용성 진단',
+  type: 'discovery',
+  status: 'draft',
   description: null,
-  primary_managed_system_id: "system-1",
+  primary_managed_system_id: 'system-1',
   analytics_area_id: null,
   operator_actor_id: null,
   responses_identity_protected: true,
-  created_by: "actor-1",
+  created_by: 'actor-1',
   opened_at: null,
   closed_at: null,
-  created_at: "2026-07-20T00:00:00.000Z",
-  updated_at: "2026-07-20T00:00:00.000Z",
+  created_at: '2026-07-20T00:00:00.000Z',
+  updated_at: '2026-07-20T00:00:00.000Z',
   questions: [],
 };
 
-describe("/surveys/:surveyId route", () => {
-  it("renders the detail screen when the survey exists", () => {
+describe('/surveys/:surveyId route', () => {
+  it('renders the detail screen when the survey exists', () => {
     useSurvey.mockReturnValue({
       data: survey,
       isLoading: false,
@@ -54,7 +55,7 @@ describe("/surveys/:surveyId route", () => {
     });
     useSurveyManageGate.mockReturnValue({
       canManage: false,
-      gateState: "absent",
+      gateState: 'absent',
     });
     useSurveys.mockReturnValue({
       data: [survey],
@@ -64,11 +65,11 @@ describe("/surveys/:surveyId route", () => {
 
     render(<SurveyDetailRoute />);
 
-    expect(screen.getByTestId("survey-list")).toBeInTheDocument();
-    expect(screen.getByText("Q3 사용성 진단")).toBeInTheDocument();
+    expect(screen.getByTestId('survey-list')).toBeInTheDocument();
+    expect(screen.getByText('Q3 사용성 진단')).toBeInTheDocument();
   });
 
-  it("renders not-found when the survey is unavailable", () => {
+  it('renders not-found when the survey is unavailable', () => {
     useSurvey.mockReturnValue({
       data: undefined,
       isLoading: false,
@@ -76,12 +77,12 @@ describe("/surveys/:surveyId route", () => {
     });
     useSurveyManageGate.mockReturnValue({
       canManage: false,
-      gateState: "absent",
+      gateState: 'absent',
     });
     useSurveys.mockReturnValue({ data: [], isLoading: false, error: null });
 
     render(<SurveyDetailRoute />);
 
-    expect(screen.getByText("설문을 찾을 수 없습니다.")).toBeInTheDocument();
+    expect(screen.getByText('설문을 찾을 수 없습니다.')).toBeInTheDocument();
   });
 });
