@@ -2,6 +2,13 @@ import { z } from 'zod';
 
 const nonnegativeCountSchema = z.number().int().nonnegative();
 
+const approvedExcerptItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    text: z.string().min(1),
+  })
+  .strict();
+
 export const surveyResultVisibilitySchema = z.enum(['suppressed', 'visible']);
 export type SurveyResultVisibility = z.infer<typeof surveyResultVisibilitySchema>;
 
@@ -70,7 +77,8 @@ const textSurveyQuestionResultSchema = z
     kind: z.literal('text'),
     answer_count: nonnegativeCountSchema,
     distribution: z.null(),
-    excerpts: z.tuple([]),
+    // The service keeps returning [] until approved-excerpt storage lands.
+    excerpts: z.array(approvedExcerptItemSchema),
   })
   .strict();
 
@@ -179,7 +187,11 @@ export function getRatingBandPartition(min: number, max: number): RatingBandPart
     return range;
   });
 
-  return { low: ranges[0]!, mid: ranges[1]!, high: ranges[2]! };
+  const [low, mid, high] = ranges;
+  if (low === undefined || mid === undefined || high === undefined) {
+    throw new Error('rating band partition must contain exactly three bands');
+  }
+  return { low, mid, high };
 }
 
 /** Returns the deterministic low/mid/high band containing a configured rating value. */

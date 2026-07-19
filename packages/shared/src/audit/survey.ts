@@ -112,3 +112,31 @@ export const surveyResponseSubmittedDetailSchema = z
   })
   .strict();
 export type SurveyResponseSubmittedDetail = z.infer<typeof surveyResponseSubmittedDetailSchema>;
+
+// ── survey_response_personal_read ─────────────────────────────────────────
+// Personal candidate reads are auditable, but details must never record raw
+// text or respondent identity.
+export const surveyResponsePersonalReadDetailSchema = z
+  .object({
+    survey_id: uuid(),
+    survey_response_id: uuid(),
+    question_id: uuid(),
+  })
+  .strict();
+export type SurveyResponsePersonalReadDetail = z.infer<
+  typeof surveyResponsePersonalReadDetailSchema
+>;
+
+// ── survey_response_excerpt_approved ──────────────────────────────────────
+// The audit identifies the approval record but intentionally omits its text.
+export const surveyResponseExcerptApprovedDetailSchema = z
+  .object({
+    survey_id: uuid(),
+    survey_response_id: uuid(),
+    question_id: uuid(),
+    approved_excerpt_id: uuid(),
+  })
+  .strict();
+export type SurveyResponseExcerptApprovedDetail = z.infer<
+  typeof surveyResponseExcerptApprovedDetailSchema
+>;

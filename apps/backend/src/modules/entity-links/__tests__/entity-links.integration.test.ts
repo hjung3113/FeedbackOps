@@ -3,8 +3,8 @@
 // Gate: DATABASE_URL + WORKSPACE_ID + DATABASE_URL_MIGRATE. The migrate role is
 // required because core.entity_links is append-only to fops_app.
 
-import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type EntityLinkEntityType, registeredEntityLinkPairs } from '@fops/shared';
@@ -255,6 +255,9 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       msA,
       endpoints: {
         voc: sourceVoc,
+        // Survey-response pairs are command-only, so generic routes reject this
+        // opaque fixture ID before attempting a source lookup.
+        survey_response: { id: sourceVoc.id },
         finding,
         voc_cluster: cluster,
         task_request: taskRequest,
@@ -399,15 +402,15 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         relation_type: tuple.relation_type,
       });
       if (
-        tuple.source_type === 'voc_cluster' &&
-        tuple.target_type === 'finding' &&
-        tuple.relation_type === 'evidence_of'
+        (tuple.source_type === 'voc_cluster' &&
+          tuple.target_type === 'finding' &&
+          tuple.relation_type === 'evidence_of') ||
+        tuple.source_type === 'survey_response'
       ) {
         expect(created.statusCode, JSON.stringify(tuple)).toBe(422);
         continue;
-      } else {
-        expect(created.statusCode, JSON.stringify(tuple)).toBeGreaterThanOrEqual(200);
       }
+      expect(created.statusCode, JSON.stringify(tuple)).toBeGreaterThanOrEqual(200);
       expect(created.statusCode, JSON.stringify(tuple)).toBeLessThanOrEqual(201);
       const createdBody = created.json<{
         id: string;
@@ -1329,7 +1332,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     const persistedTaskStatuses = await migrateHandle.pool.query<{
       title: string;
       status: string;
-    }>(`select title, status from task.tasks where id = any($1::uuid[]) order by title`, [
+    }>('select title, status from task.tasks where id = any($1::uuid[]) order by title', [
       taskLinks.map((link) => link.task.id),
     ]);
     expect(persistedTaskStatuses.rows).toEqual(

@@ -74,22 +74,28 @@ describe('rating result bands', () => {
       const max = min + size - 1;
       const partition = getRatingBandPartition(min, max);
       const values = Array.from({ length: size }, (_, index) => min + index);
-      const ranges = (Object.entries(partition) as [
-        'low' | 'mid' | 'high',
-        { min: number; max: number } | null,
-      ][]).filter((entry): entry is ['low' | 'mid' | 'high', { min: number; max: number }] => entry[1] !== null);
+      const ranges = (
+        Object.entries(partition) as ['low' | 'mid' | 'high', { min: number; max: number } | null][]
+      ).filter(
+        (entry): entry is ['low' | 'mid' | 'high', { min: number; max: number }] =>
+          entry[1] !== null,
+      );
 
       expect(ranges[0]?.[1].min).toBe(min);
       expect(ranges.at(-1)?.[1].max).toBe(max);
-      expect(ranges.flatMap(([, range]) =>
-        Array.from({ length: range.max - range.min + 1 }, (_, index) => range.min + index),
-      )).toEqual(values);
+      expect(
+        ranges.flatMap(([, range]) =>
+          Array.from({ length: range.max - range.min + 1 }, (_, index) => range.min + index),
+        ),
+      ).toEqual(values);
 
       for (const value of values) {
-        const containingBands = ranges.filter(([, range]) => value >= range.min && value <= range.max);
+        const containingBands = ranges.filter(
+          ([, range]) => value >= range.min && value <= range.max,
+        );
 
         expect(containingBands).toHaveLength(1);
-        expect(getRatingBandForValue(min, max, value)).toBe(containingBands[0]![0]);
+        expect(getRatingBandForValue(min, max, value)).toBe(containingBands[0]?.[0]);
       }
     },
   );
@@ -117,6 +123,33 @@ describe('rating result bands', () => {
 });
 
 describe('SurveyResultDto privacy boundary', () => {
+  it('accepts empty and approved excerpt projections, but rejects extra excerpt fields', () => {
+    const payload = maximalValidResult();
+    const textQuestion = payload.questions[2];
+
+    expect(surveyResultDtoSchema.parse(payload).questions[2]).toMatchObject({ excerpts: [] });
+    expect(
+      surveyResultDtoSchema.parse({
+        ...payload,
+        questions: [
+          ...payload.questions.slice(0, 2),
+          { ...textQuestion, excerpts: [{ id: V, text: 'Approved redacted excerpt' }] },
+          payload.questions[3],
+        ],
+      }).questions[2],
+    ).toMatchObject({ excerpts: [{ id: V, text: 'Approved redacted excerpt' }] });
+    expect(() =>
+      surveyResultDtoSchema.parse({
+        ...payload,
+        questions: [
+          ...payload.questions.slice(0, 2),
+          { ...textQuestion, excerpts: [{ id: V, text: 'Approved', respondent_actor_id: U }] },
+          payload.questions[3],
+        ],
+      }),
+    ).toThrow();
+  });
+
   it.each([
     { count: 1 },
     { answer_count: 1 },
@@ -162,7 +195,8 @@ describe('SurveyResultDto privacy boundary', () => {
   });
 
   it('contains no forbidden identity or raw-answer keys', () => {
-    const forbidden = /^(respondent.*|actor_id|email|external_id|response_id|submitted_at|created_at|session.*|ip.*|user_agent|answer_value|text|excerpt)$/;
+    const forbidden =
+      /^(respondent.*|actor_id|email|external_id|response_id|submitted_at|created_at|session.*|ip.*|user_agent|answer_value|text|excerpt)$/;
     const seen: string[] = [];
     const walk = (value: unknown): void => {
       if (Array.isArray(value)) value.forEach(walk);

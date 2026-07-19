@@ -21,10 +21,7 @@ import type { EntityLinksService } from '../entity-links/service.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { lockTaskById } from '../tasks/repo.js';
 import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
-import {
-  checkFindingRead,
-  checkFindingManage,
-} from './authorization.js';
+import { checkFindingManage, checkFindingRead } from './authorization.js';
 import {
   type FindingReadRow,
   findCreatedFindingSourceLink,
@@ -80,15 +77,14 @@ function toDto(
   row: FindingReadRow,
   source?: Awaited<ReturnType<typeof findCreatedFindingSourceLink>>,
 ): FindingDto {
-  return {
+  const sourceType = row.source_type as FindingDto['source_type'];
+  const base = {
     id: row.id,
     workspace_id: row.workspace_id,
     display_id: row.display_id,
     primary_managed_system_id: row.primary_managed_system_id,
     title: row.title,
     summary: row.summary,
-    source_type: row.source_type,
-    source_id: row.source_id,
     evidence_count: row.evidence_count,
     severity: row.severity,
     confidence: row.confidence,
@@ -104,33 +100,54 @@ function toDto(
           source: {
             type: source.source_type,
             id: source.source_id,
-            relation_type: 'created_finding',
+            relation_type: 'created_finding' as const,
             link_id: source.link_id,
           },
         }
       : {}),
   };
+
+  if (sourceType === 'survey_response') {
+    return { ...base, source_type: sourceType };
+  }
+
+  return { ...base, source_type: sourceType, source_id: row.source_id } as FindingDto;
 }
 
 function evidenceHighlightToDto(
   row: EvidenceHighlightRow,
   options: { includeQuote: boolean; source_title: string | null; source_meta: string | null },
 ): EvidenceHighlightDto {
-  return {
+  const base = {
     id: row.id,
     workspace_id: row.workspace_id,
     finding_id: row.finding_id,
     primary_managed_system_id: row.primary_managed_system_id,
-    source_type: row.source_type,
-    source_id: row.source_id,
-    source_title: options.source_title,
-    source_meta: options.source_meta,
     ...(options.includeQuote ? { quote_or_summary: row.quote_or_summary } : {}),
     analytics_area_id: row.analytics_area_id,
     sentiment: row.sentiment,
     importance: row.importance,
     created_by: row.created_by,
     created_at: row.created_at.toISOString(),
+  };
+
+  if (row.source_type === 'survey_response') {
+    return {
+      ...base,
+      source_type: 'survey_response',
+      source_title: 'Survey response',
+      // C4 will supply the approved survey type and display ID. Until then,
+      // expose neither the stored response UUID nor source-derived text.
+      source_meta: 'Survey response · Unknown · Identity protected',
+    };
+  }
+
+  return {
+    ...base,
+    source_type: row.source_type,
+    source_id: row.source_id,
+    source_title: options.source_title,
+    source_meta: options.source_meta,
   };
 }
 
@@ -174,7 +191,11 @@ async function canManageFinding(
   options: Parameters<FindingsServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
   const decision = await checkFindingManage(
-    deps.checkService, actor, managedSystemId, { requireElevatedRole: false }, options,
+    deps.checkService,
+    actor,
+    managedSystemId,
+    { requireElevatedRole: false },
+    options,
   );
   return decision.allow;
 }
