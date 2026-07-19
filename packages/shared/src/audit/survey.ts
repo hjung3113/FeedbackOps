@@ -98,3 +98,17 @@ export const surveyClosedDetailSchema = z
   })
   .strict();
 export type SurveyClosedDetail = z.infer<typeof surveyClosedDetailSchema>;
+
+// ── survey_response_submitted ─────────────────────────────────────────────
+// ADR-0033 privacy invariant: NO raw answer text, question prompts, option
+// labels, or answer combinations may ever appear in this detail. `.strict()`
+// enforces that boundary.
+export const surveyResponseSubmittedDetailSchema = z
+  .object({
+    survey_id: uuid(),
+    response_id: uuid(),
+    question_count: z.number().int().positive(),
+    identity_protected: z.boolean(),
+  })
+  .strict();
+export type SurveyResponseSubmittedDetail = z.infer<typeof surveyResponseSubmittedDetailSchema>;

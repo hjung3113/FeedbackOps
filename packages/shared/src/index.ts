@@ -9,6 +9,7 @@ export * from './entity-links.js';
 export * from './permissions/index.js';
 export * from './audit/voc.js';
 export * from './audit/attachments.js';
+export * from './audit/survey.js';
 export * from './entity-links.js';
 export * from './findings/index.js';
 export * from './task-requests/index.js';
