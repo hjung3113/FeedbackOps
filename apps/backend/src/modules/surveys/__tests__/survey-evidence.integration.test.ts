@@ -48,7 +48,7 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
     approvals: { count: 0, message: 'personal candidate read approval rows before cleanup' },
   };
   const approvedExcerptSideEffects: SideEffectExpectations = {
-    audit: { count: 2, message: 'approved excerpt audit rows before cleanup' },
+    audit: { count: 4, message: 'approved excerpt audit rows before cleanup' },
     approvals: { count: 2, message: 'approved excerpt rows before cleanup' },
   };
   let expectedSideEffects = deniedPathSideEffects;
