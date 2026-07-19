@@ -215,6 +215,37 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     );
     return { msId, surveyId, questionId, responseId };
   }
+  async function seedSuppressedRatingAggregate(source: Source): Promise<string> {
+    const question = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_questions (
+         workspace_id,survey_id,kind,prompt,is_required,rating_min,rating_max,sort_order,branch_depth
+       ) values ($1,$2,'rating','How would you rate this?',false,1,5,1,0) returning id`,
+      [WORKSPACE_ID, source.surveyId],
+    );
+    const questionId = question.rows[0]?.id ?? '';
+    if (!questionId) throw new Error('rating question seed failed');
+    await migrateHandle.pool.query(
+      `insert into survey.survey_response_answers (
+         workspace_id,survey_id,response_id,question_id,answer_kind,answer_value
+       ) values ($1,$2,$3,$4,'rating','1'::jsonb)`,
+      [WORKSPACE_ID, source.surveyId, source.responseId, questionId],
+    );
+    await migrateHandle.pool.query(
+      `with responses as (
+         insert into survey.survey_responses (
+           workspace_id,survey_id,respondent_actor_id,identity_protected,submitted_at
+         )
+         select $1,$2,$3,true,now() from generate_series(1,4)
+         returning id
+       )
+       insert into survey.survey_response_answers (
+         workspace_id,survey_id,response_id,question_id,answer_kind,answer_value
+       )
+       select $1,$2,id,$4,'rating','3'::jsonb from responses`,
+      [WORKSPACE_ID, source.surveyId, adminId, questionId],
+    );
+    return questionId;
+  }
   async function approve(source: Source, cookie: string, text = APPROVED): Promise<string> {
     const response = await app.inject({
       method: 'POST',
@@ -503,20 +534,26 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
 
   it('allows a personally authorized response even when aggregate suppression would apply', async () => {
     const source = await seed();
+    const ratingQuestionId = await seedSuppressedRatingAggregate(source);
+    const aggregateReader = await actor();
     const creator = await actor();
+    await grant(aggregateReader.id, 'survey.read', source.msId);
     await grant(creator.id, 'survey.read', source.msId);
     await grant(creator.id, 'survey.read_personal_responses', source.msId);
     await grant(creator.id, 'finding.manage', source.msId);
     const results = await app.inject({
       method: 'GET',
       url: `/surveys/${source.surveyId}/results`,
-      headers: { cookie: `${SESSION_COOKIE_NAME}=${creator.cookie}` },
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${aggregateReader.cookie}` },
     });
     expect(results.statusCode).toBe(200);
     const parsedResults = surveyResultDtoSchema.parse(results.json());
-    expect(parsedResults.questions).toEqual(
-      expect.arrayContaining([expect.objectContaining({ visibility: 'suppressed' })]),
-    );
+    expect(parsedResults.questions).toContainEqual({
+      question_id: ratingQuestionId,
+      visibility: 'suppressed',
+      response_count: null,
+      suppression: { code: 'anonymity_threshold' },
+    });
     expect(
       (
         await post(creator.cookie, source.responseId, {
