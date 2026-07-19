@@ -805,7 +805,7 @@ Visible choice results contain configured option `key`, `label`, and count plus 
 
 Candidate reads write `survey_response_personal_read` in the same transaction; approvals write `survey_response_excerpt_approved` in the same transaction as the approval row. Audit detail contains IDs only—never raw or redacted text. Duplicate approvals are intentional separate rows. Revoked approvals are omitted from results. These per-response commands do not make aggregate result `next_actions` executable, so that field remains `[]`.
 
-`next_actions` is always `[]` until #187 provides an executable result-to-Finding route. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
+`next_actions` is always `[]` until #187 provides an executable result-to-Finding route: either aggregate `POST /surveys/:id/create-finding`, or an approved-excerpt/personal-response selector with opaque execution intent. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
 
 ### Core / Managed System / Analytics Area
 

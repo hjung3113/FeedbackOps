@@ -3,7 +3,9 @@ import {
   type ApprovedExcerptDto,
   type SurveyResponseExcerptCandidateDto,
   type SurveyResultDto,
+  approvedExcerptDtoSchema,
   getRatingBandForValue,
+  surveyResponseExcerptCandidateDtoSchema,
   surveyResultDtoSchema,
 } from '@fops/shared';
 import { sql } from 'drizzle-orm';
@@ -858,7 +860,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
           question_id: questionId,
         },
       });
-      return candidate;
+      return surveyResponseExcerptCandidateDtoSchema.parse(candidate);
     });
   }
   async function approveEvidenceExcerpt(
@@ -919,7 +921,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
           approved_excerpt_id: approved.approved_excerpt_id,
         },
       });
-      return approved;
+      return approvedExcerptDtoSchema.parse(approved);
     });
   }
   async function submitResponse(a: {
