@@ -256,61 +256,69 @@ describe.skipIf(!runIntegration)('Survey response evidence access migration 0039
       'surveys.type.SELECT',
       'surveys.workspace_id.SELECT',
     ]);
-    const { rows: appResponsePrivileges } = await migrateHandle.pool.query<{
+    const { rows: appTablePrivileges } = await migrateHandle.pool.query<{
       table_name: string;
-      can_insert: boolean;
-      can_select: boolean;
-      can_update: boolean;
-      can_delete: boolean;
+      privilege_types: string[];
     }>(
-      `select table_name,
-              has_table_privilege('fops_app', format('survey.%I', table_name), 'INSERT') as can_insert,
-              has_table_privilege('fops_app', format('survey.%I', table_name), 'SELECT') as can_select,
-              has_table_privilege('fops_app', format('survey.%I', table_name), 'UPDATE') as can_update,
-              has_table_privilege('fops_app', format('survey.%I', table_name), 'DELETE') as can_delete
-         from (values ('survey_responses'::text), ('survey_response_answers'::text)) tables(table_name)
-        order by table_name`,
+      `with tables(table_name) as (
+         values
+           ('survey_responses'::text),
+           ('survey_response_answers'::text),
+           ('survey_response_excerpt_approvals'::text)
+       ), privilege_kinds(privilege_type) as (
+         values ('SELECT'::text), ('INSERT'::text), ('UPDATE'::text), ('DELETE'::text),
+                ('TRUNCATE'::text), ('REFERENCES'::text), ('TRIGGER'::text)
+       )
+       select tables.table_name,
+              coalesce(array_agg(privilege_kinds.privilege_type order by privilege_kinds.privilege_type)
+                filter (where has_table_privilege(
+                  'fops_app', format('survey.%I', tables.table_name), privilege_kinds.privilege_type
+                )), '{}'::text[]) as privilege_types
+         from tables
+         cross join privilege_kinds
+        group by tables.table_name
+        order by tables.table_name`,
     );
-    expect(appResponsePrivileges).toEqual([
+    expect(appTablePrivileges).toEqual([
       {
         table_name: 'survey_response_answers',
-        can_insert: true,
-        can_select: false,
-        can_update: false,
-        can_delete: false,
+        privilege_types: ['INSERT'],
+      },
+      {
+        table_name: 'survey_response_excerpt_approvals',
+        privilege_types: ['INSERT', 'SELECT'],
       },
       {
         table_name: 'survey_responses',
-        can_insert: true,
-        can_select: false,
-        can_update: false,
-        can_delete: false,
+        privilege_types: ['INSERT'],
       },
     ]);
-    const { rows: approvalPrivileges } = await migrateHandle.pool.query<{
-      can_insert: boolean;
-      can_select: boolean;
-      can_update: boolean;
-      can_delete: boolean;
+    const { rows: appColumnPrivileges } = await migrateHandle.pool.query<{
+      table_name: string;
       update_columns: string[];
+      privilege_types: string[];
     }>(
-      `select has_table_privilege('fops_app', 'survey.survey_response_excerpt_approvals', 'INSERT') as can_insert,
-              has_table_privilege('fops_app', 'survey.survey_response_excerpt_approvals', 'SELECT') as can_select,
-              has_table_privilege('fops_app', 'survey.survey_response_excerpt_approvals', 'UPDATE') as can_update,
-              has_table_privilege('fops_app', 'survey.survey_response_excerpt_approvals', 'DELETE') as can_delete,
-              coalesce((select array_agg(column_name order by column_name)
-                          from information_schema.column_privileges
-                         where grantee = 'fops_app' and table_schema = 'survey'
-                           and table_name = 'survey_response_excerpt_approvals' and privilege_type = 'UPDATE'),
-                       '{}'::text[]) as update_columns`,
+      `select c.relname as table_name,
+              array_agg(a.attname::text order by a.attname)::text[] as update_columns,
+              array_agg(acl.privilege_type::text order by acl.privilege_type)::text[] as privilege_types
+         from pg_catalog.pg_class c
+         join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+         join pg_catalog.pg_attribute a on a.attrelid = c.oid
+         join lateral pg_catalog.aclexplode(coalesce(a.attacl, '{}'::aclitem[])) acl on true
+         join pg_catalog.pg_roles grantee on grantee.oid = acl.grantee
+        where n.nspname = 'survey'
+          and c.relname in ('survey_responses', 'survey_response_answers', 'survey_response_excerpt_approvals')
+          and a.attnum > 0
+          and not a.attisdropped
+          and grantee.rolname = 'fops_app'
+        group by c.relname
+        order by c.relname`,
     );
-    expect(approvalPrivileges).toEqual([
+    expect(appColumnPrivileges).toEqual([
       {
-        can_insert: true,
-        can_select: true,
-        can_update: false,
-        can_delete: false,
+        table_name: 'survey_response_excerpt_approvals',
         update_columns: ['revoked_at'],
+        privilege_types: ['UPDATE'],
       },
     ]);
   });
@@ -370,7 +378,7 @@ describe.skipIf(!runIntegration)('Survey response evidence access migration 0039
     ]);
   });
 
-  it('returns only allowlisted response metadata and the requested text candidate', async () => {
+  it('locks and returns only the allowlisted response subject metadata', async () => {
     const subject = await appHandle.pool.query<Record<string, unknown>>(
       'select * from survey.lock_response_evidence_subject($1::uuid, $2::uuid)',
       [workspaceId, responseId],
@@ -396,7 +404,9 @@ describe.skipIf(!runIntegration)('Survey response evidence access migration 0039
         [otherWorkspaceId, responseId],
       ),
     ).resolves.toMatchObject({ rows: [] });
+  });
 
+  it('returns only the requested text candidate', async () => {
     const candidate = await appHandle.pool.query<{
       question_id: string;
       question_label: string;
@@ -420,9 +430,14 @@ describe.skipIf(!runIntegration)('Survey response evidence access migration 0039
       );
       expect(result.rows).toEqual([]);
     }
+    await expect(
+      appHandle.pool.query('select * from survey.survey_responses'),
+    ).rejects.toMatchObject({
+      code: '42501',
+    });
   });
 
-  it('returns active approved excerpts only and preserves raw-table denial', async () => {
+  it('returns active approved excerpts only', async () => {
     const excerpts = await appHandle.pool.query<{
       approved_excerpt_id: string;
       question_id: string;
@@ -443,10 +458,5 @@ describe.skipIf(!runIntegration)('Survey response evidence access migration 0039
       [otherWorkspaceId, surveyId],
     );
     expect(crossWorkspaceExcerpts.rows).toEqual([]);
-    await expect(
-      appHandle.pool.query('select * from survey.survey_responses'),
-    ).rejects.toMatchObject({
-      code: '42501',
-    });
   });
 });

@@ -1,16 +1,19 @@
 -- Issue #187 C2: survey-response evidence can cross the database boundary only
--- through these narrow SECURITY DEFINER readers. Existing databases need a
--- migration role with CREATEROLE; init.sql provides the empty-database path.
+-- through these narrow SECURITY DEFINER readers. Existing databases must have
+-- the NOLOGIN owner and one-way fops_migrate membership bootstrapped by a
+-- privileged operator; scripts/db/init.sql provides the empty-database path.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'fops_survey_evidence_reader_owner') THEN
-    CREATE ROLE fops_survey_evidence_reader_owner WITH NOLOGIN NOINHERIT;
+    RAISE EXCEPTION
+      'migration 0039 requires role fops_survey_evidence_reader_owner; run the privileged bootstrap prerequisite from scripts/db/init.sql first';
+  END IF;
+  IF NOT pg_catalog.pg_has_role(current_user, 'fops_survey_evidence_reader_owner', 'MEMBER') THEN
+    RAISE EXCEPTION
+      'migration 0039 requires % to be a member of fops_survey_evidence_reader_owner; run the privileged bootstrap prerequisite from scripts/db/init.sql first', current_user;
   END IF;
 END
 $$;
---> statement-breakpoint
-GRANT fops_survey_evidence_reader_owner TO fops_migrate;
---> statement-breakpoint
 
 -- PostgreSQL requires temporary CREATE on the containing schema to transfer
 -- function ownership. It is revoked immediately after the transfers.
@@ -77,6 +80,12 @@ VOLATILE
 SECURITY DEFINER
 SET search_path = pg_catalog
 AS $$
+  -- The transaction-scoped advisory key is hashtextextended(response UUID text, 0),
+  -- so every call for one response serializes without requiring UPDATE on its row.
+  SELECT pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_response_id::text, 0)
+  );
+
   SELECT r.id, s.id, s.display_id, s.type, s.status, s.primary_managed_system_id,
          s.analytics_area_id, r.identity_protected
     FROM survey.survey_responses AS r
@@ -85,7 +94,6 @@ AS $$
      AND s.workspace_id = r.workspace_id
    WHERE r.workspace_id = p_workspace_id
      AND r.id = p_response_id
-   FOR KEY SHARE OF r
 $$;
 --> statement-breakpoint
 

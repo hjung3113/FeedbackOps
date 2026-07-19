@@ -90,6 +90,7 @@ describe('Survey foundation migration 0036', () => {
     expect(rows.map((row) => row.table_name)).toEqual([
       'survey_questions',
       'survey_response_answers',
+      'survey_response_excerpt_approvals',
       'survey_responses',
       'surveys',
     ]);

@@ -78,6 +78,26 @@ survey.survey_response_excerpt_approvals
   evidence reader used during Finding creation. Result reads expose active redacted approvals only.
 ```
 
+Survey response evidence reader contracts:
+
+```text
+survey.lock_response_evidence_subject(workspace_id, response_id)
+- Takes a transaction-scoped advisory lock derived deterministically from the response UUID.
+- Returns either no row or exactly the safe eight-column subject projection: response_id,
+  survey_id, survey_display_id, survey_type, survey_status, primary_managed_system_id,
+  analytics_area_id, identity_protected.
+- The response must belong to the supplied workspace. The lock serializes evidence work for
+  that response without granting raw-table UPDATE privilege to the definer owner.
+
+survey.read_response_text_candidate(workspace_id, response_id, question_id)
+- Returns either no row or exactly question_id, question_label, raw_text for the requested
+  text answer in the supplied workspace. It never returns another answer from the response.
+
+survey.read_approved_result_excerpts(workspace_id, survey_id)
+- Returns only approved_excerpt_id, question_id, redacted_excerpt for active (not revoked)
+  approvals belonging to the supplied workspace and survey. Raw response text is never exposed.
+```
+
 Rules:
 
 ```text

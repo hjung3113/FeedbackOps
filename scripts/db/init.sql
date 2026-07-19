@@ -1,6 +1,6 @@
 -- Postgres bootstrap for local dev / CI.
--- Provisions the two runtime roles per ADR-0008 plus the NOLOGIN owner for
--- the aggregate-only survey result read interface:
+-- Provisions the two runtime roles per ADR-0008 plus the two NOLOGIN owners
+-- for the aggregate-only result and response-evidence read interfaces:
 --   * fops_migrate — owns the schema, runs migrations, has ALL privileges.
 --   * fops_app     — runtime app role. Migrations grant INSERT+SELECT only on
 --                    core.audit_log, plus INSERT+SELECT+UPDATE+DELETE on every
@@ -14,8 +14,8 @@
 -- data directory. Migration SQL (apps/backend/migrations/*.sql) does the
 -- per-table GRANT/REVOKE work; this file only creates the roles, the
 -- database, and ensures `fops_migrate` owns it.
--- Existing databases must follow the pre-migration role prerequisite at the
--- top of apps/backend/migrations/0038_survey_result_aggregate.sql.
+-- Existing databases must provision the matching role and one-way membership
+-- before applying migrations 0038 or 0039.
 --
 -- The superuser bootstrap user comes from POSTGRES_USER/POSTGRES_PASSWORD on
 -- the container; the Drizzle CLI and the app both connect as the two roles
@@ -40,7 +40,7 @@ $$;
 
 -- Migrations create the functions as fops_migrate, then transfer ownership to
 -- this NOLOGIN role and SET ROLE to set their ACLs. Membership is intentionally
--- one-way: the aggregate owner never inherits fops_migrate's broad privileges.
+-- one-way: neither definer owner inherits fops_migrate's broad privileges.
 GRANT fops_survey_aggregate_owner TO fops_migrate;
 GRANT fops_survey_evidence_reader_owner TO fops_migrate;
 
