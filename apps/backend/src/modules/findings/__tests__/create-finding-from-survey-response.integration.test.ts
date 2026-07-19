@@ -71,9 +71,17 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
     const systems = 'select id from core.managed_systems where workspace_id=$1 and slug like $2';
     const surveys = `select id from survey.surveys where workspace_id=$1 and primary_managed_system_id in (${systems})`;
     const responses = `select id from survey.survey_responses where survey_id in (${surveys})`;
+    const approvals = `select id from survey.survey_response_excerpt_approvals where survey_id in (${surveys})`;
     const findings = `select id from finding.findings where workspace_id=$1 and primary_managed_system_id in (${systems})`;
+    const links = `select id from core.entity_links where workspace_id=$1 and (source_id in (${responses}) or target_id in (${findings}))`;
     await migrateHandle.pool.query(
-      `delete from core.audit_log where workspace_id=$1 and (subject_id in (${responses}) or subject_id in (${findings}))`,
+      `delete from core.audit_log
+        where workspace_id=$1
+          and (subject_id in (${responses})
+            or subject_id in (${findings})
+            or subject_id in (${approvals})
+            or subject_id in (${links})
+            or actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2))`,
       [WORKSPACE_ID, `${SLUG}%`],
     );
     await migrateHandle.pool.query(
@@ -231,10 +239,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       audits: string;
     }>(
       `select
-         (select count(*) from finding.findings where source_type='survey_response' and source_id=$1)::text as findings,
-         (select count(*) from core.entity_links where source_type='survey_response' and source_id=$1)::text as links,
-         (select count(*) from finding.evidence_highlights where source_type='survey_response' and source_id=$1)::text as highlights,
-         (select count(*) from core.audit_log where detail->>'source_survey_response_id'=$1)::text as audits`,
+         (select count(*) from finding.findings where source_type='survey_response' and source_id=$1::uuid)::text as findings,
+         (select count(*) from core.entity_links where source_type='survey_response' and source_id=$1::uuid)::text as links,
+         (select count(*) from finding.evidence_highlights where source_type='survey_response' and source_id=$1::uuid)::text as highlights,
+         (select count(*) from core.audit_log where detail->>'source_survey_response_id'=$1::text)::text as audits`,
       [responseId],
     );
     const row = result.rows[0];
