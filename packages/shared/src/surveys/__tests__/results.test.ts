@@ -74,21 +74,23 @@ describe('rating result bands', () => {
       const max = min + size - 1;
       const partition = getRatingBandPartition(min, max);
       const values = Array.from({ length: size }, (_, index) => min + index);
-      const ranks = { low: 0, mid: 1, high: 2 } as const;
-      const mapped = values.map((value) => getRatingBandForValue(min, max, value));
-      const ranges = [partition.low, partition.mid, partition.high].filter(
-        (range): range is { min: number; max: number } => range !== null,
-      );
+      const ranges = (Object.entries(partition) as [
+        'low' | 'mid' | 'high',
+        { min: number; max: number } | null,
+      ][]).filter((entry): entry is ['low' | 'mid' | 'high', { min: number; max: number }] => entry[1] !== null);
 
-      expect(new Set(mapped).size).toBeLessThanOrEqual(3);
-      expect(ranges[0]?.min).toBe(min);
-      expect(ranges.at(-1)?.max).toBe(max);
-      expect(ranges.flatMap((range) =>
+      expect(ranges[0]?.[1].min).toBe(min);
+      expect(ranges.at(-1)?.[1].max).toBe(max);
+      expect(ranges.flatMap(([, range]) =>
         Array.from({ length: range.max - range.min + 1 }, (_, index) => range.min + index),
       )).toEqual(values);
-      expect(mapped.map((band) => ranks[band])).toEqual(
-        [...mapped.map((band) => ranks[band])].sort((left, right) => left - right),
-      );
+
+      for (const value of values) {
+        const containingBands = ranges.filter(([, range]) => value >= range.min && value <= range.max);
+
+        expect(containingBands).toHaveLength(1);
+        expect(getRatingBandForValue(min, max, value)).toBe(containingBands[0]![0]);
+      }
     },
   );
 
@@ -129,6 +131,32 @@ describe('SurveyResultDto privacy boundary', () => {
       surveyResultDtoSchema.parse({
         ...payload,
         questions: [...payload.questions.slice(0, 3), { ...suppressed, ...leak }],
+      }),
+    ).toThrow();
+  });
+
+  it('requires the exact suppressed-question key set', () => {
+    const payload = maximalValidResult();
+    const suppressed = payload.questions[3];
+
+    expect(Object.keys(suppressed).sort()).toEqual([
+      'question_id',
+      'response_count',
+      'suppression',
+      'visibility',
+    ]);
+    expect(surveyResultDtoSchema.parse(payload).questions[3]).toEqual(suppressed);
+    expect(() =>
+      surveyResultDtoSchema.parse({
+        ...payload,
+        questions: [...payload.questions.slice(0, 3), { ...suppressed, extra: true }],
+      }),
+    ).toThrow();
+    const { question_id: _questionId, ...withoutQuestionId } = suppressed;
+    expect(() =>
+      surveyResultDtoSchema.parse({
+        ...payload,
+        questions: [...payload.questions.slice(0, 3), withoutQuestionId],
       }),
     ).toThrow();
   });

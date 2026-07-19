@@ -12,6 +12,12 @@ export const surveyResultSuppressionSchema = z
   .strict();
 export type SurveyResultSuppression = z.infer<typeof surveyResultSuppressionSchema>;
 
+/**
+ * The suppressed variant has exactly `question_id`, `visibility`,
+ * `response_count`, and `suppression`. `question_id` remains because it is
+ * survey-configuration data needed by the frontend to correlate the result;
+ * it is not respondent identity data.
+ */
 const suppressedSurveyQuestionResultSchema = z
   .object({
     question_id: z.string().uuid(),
