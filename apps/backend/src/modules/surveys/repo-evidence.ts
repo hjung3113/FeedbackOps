@@ -79,3 +79,56 @@ export async function readApprovedResultExcerpts(
   }>(sql`select * from survey.read_approved_result_excerpts(${workspaceId}, ${surveyId})`);
   return result.rows;
 }
+
+/** Safe approval projection for one response. It never reads response answers. */
+export async function readApprovedResponseExcerpts(
+  tx: Tx,
+  workspaceId: string,
+  responseId: string,
+  approvedExcerptIds: string[],
+): Promise<
+  Array<{
+    approved_excerpt_id: string;
+    question_id: string;
+    redacted_excerpt: string;
+  }>
+> {
+  if (approvedExcerptIds.length === 0) return [];
+  const ids = sql`ARRAY[${sql.join(
+    approvedExcerptIds.map((id) => sql`${id}`),
+    sql`, `,
+  )}]::uuid[]`;
+  const result = await tx.execute<{
+    approved_excerpt_id: string;
+    question_id: string;
+    redacted_excerpt: string;
+  }>(sql`
+    select a.id as approved_excerpt_id, a.question_id, a.redacted_excerpt
+      from survey.survey_response_excerpt_approvals a
+     where a.workspace_id = ${workspaceId}
+       and a.response_id = ${responseId}
+       and a.id = any(${ids})
+       and a.revoked_at is null
+  `);
+  return result.rows;
+}
+
+/** A stored highlight is safe to project only while its approval remains active. */
+export async function hasActiveApprovedResponseExcerpt(
+  tx: Tx,
+  workspaceId: string,
+  responseId: string,
+  redactedExcerpt: string,
+): Promise<boolean> {
+  const result = await tx.execute<{ exists: boolean }>(sql`
+    select exists(
+      select 1
+        from survey.survey_response_excerpt_approvals a
+       where a.workspace_id = ${workspaceId}
+         and a.response_id = ${responseId}
+         and a.redacted_excerpt = ${redactedExcerpt}
+         and a.revoked_at is null
+    ) as exists
+  `);
+  return result.rows[0]?.exists ?? false;
+}

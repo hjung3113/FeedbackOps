@@ -34,7 +34,6 @@ import { createAuditService } from './modules/core/audit/index.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
 import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
 import { createFindingsService, findingsRoutes } from './modules/findings/index.js';
-import { createSurveysService, surveysRoutes } from './modules/surveys/index.js';
 import {
   createManagedSystemService,
   managedSystemsRoutes,
@@ -45,6 +44,7 @@ import {
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
+import { createSurveysService, surveysRoutes } from './modules/surveys/index.js';
 import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-requests/index.js';
 import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
@@ -478,6 +478,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   await app.register(surveysRoutes, {
     sessionService,
     surveysService,
+    findingsService,
     workspaceId,
     rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
   });
