@@ -11,7 +11,7 @@ const runIntegration = Boolean(APP_URL && MIGRATE_URL);
 type AggregateRow = {
   question_id: string;
   question_kind: string;
-  bucket_key: string;
+  bucket_key: string | null;
   bucket_count: string;
 };
 
@@ -174,7 +174,7 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
     }
   });
 
-  it('returns only exact choice, multiple-choice, and rating buckets plus the submitted response count', async () => {
+  it('returns choice, multiple-choice, rating, and count-only text buckets plus the submitted response count', async () => {
     const aggregates = await appHandle.pool.query<AggregateRow>(
       'select * from survey.read_result_aggregates($1::uuid, $2::uuid) order by question_kind, bucket_key',
       [workspaceId, surveyId],
@@ -187,8 +187,12 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
       { question_id: ratingQuestionId, question_kind: 'rating', bucket_key: '5', bucket_count: '1' },
       { question_id: choiceQuestionId, question_kind: 'single_choice', bucket_key: 'no', bucket_count: '1' },
       { question_id: choiceQuestionId, question_kind: 'single_choice', bucket_key: 'yes', bucket_count: '2' },
+      { question_id: textQuestionId, question_kind: 'text', bucket_key: null, bucket_count: '3' },
     ]);
     expect(JSON.stringify(aggregates.rows)).not.toContain(textAnswer);
+    expect(aggregates.rows).not.toContainEqual(
+      expect.objectContaining({ question_id: mismatchedTextQuestionId }),
+    );
 
     const count = await appHandle.pool.query<{ count: string }>(
       'select survey.read_result_response_count($1::uuid, $2::uuid) as count',

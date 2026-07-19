@@ -3,8 +3,8 @@
 --   GRANT fops_survey_aggregate_owner TO fops_migrate;
 -- See scripts/db/init.sql for the empty-database bootstrap equivalent.
 --
--- Issue #186: aggregate-only survey result read interface. Text answers deliberately
--- produce no rows: their bodies must never cross this database privilege boundary.
+-- Issue #186: aggregate-only survey result read interface. Text answers produce
+-- count-only rows; their bodies must never cross this database privilege boundary.
 
 -- PostgreSQL requires temporary CREATE on the containing schema to transfer
 -- ownership. It is revoked immediately after both transfers complete.
@@ -45,6 +45,24 @@ AS $$
        AND s.id = p_survey_id
        AND a.answer_kind = q.kind
        AND a.answer_kind IN ('single_choice', 'multiple_choice', 'rating')
+  ), text_answers AS (
+    SELECT a.question_id, q.kind AS question_kind
+      FROM survey.surveys AS s
+      JOIN survey.survey_responses AS r
+        ON r.survey_id = s.id
+       AND r.workspace_id = s.workspace_id
+      JOIN survey.survey_response_answers AS a
+        ON a.survey_id = r.survey_id
+       AND a.response_id = r.id
+       AND a.workspace_id = r.workspace_id
+      JOIN survey.survey_questions AS q
+        ON q.id = a.question_id
+       AND q.survey_id = a.survey_id
+       AND q.workspace_id = a.workspace_id
+     WHERE s.workspace_id = p_workspace_id
+       AND s.id = p_survey_id
+       AND a.answer_kind = 'text'
+       AND q.kind = 'text'
   ), buckets AS (
     SELECT question_id, question_kind, answer_value #>> '{}' AS bucket_key
       FROM valid_answers
@@ -59,6 +77,10 @@ AS $$
   SELECT question_id, question_kind, bucket_key, pg_catalog.count(*) AS bucket_count
     FROM buckets
    GROUP BY question_id, question_kind, bucket_key
+  UNION ALL
+  SELECT question_id, question_kind, NULL::text AS bucket_key, pg_catalog.count(*) AS bucket_count
+    FROM text_answers
+   GROUP BY question_id, question_kind
 $$;
 --> statement-breakpoint
 
