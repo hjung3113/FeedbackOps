@@ -315,6 +315,99 @@ describe.skipIf(!runIntegration)(
       const creator = await authorizeCreator(source);
       const reader = await actor("safe-reader");
       const capHolder = await actor("personal-cap-holder");
+      const expectedKeys = {
+        finding: [
+          "analytics_area_id",
+          "confidence",
+          "created_at",
+          "created_by",
+          "display_id",
+          "evidence_count",
+          "id",
+          "linked_milestone_id",
+          "linked_task_id",
+          "primary_managed_system_id",
+          "severity",
+          "source_type",
+          "status",
+          "summary",
+          "title",
+          "updated_at",
+          "workspace_id",
+        ],
+        evidence: [
+          "analytics_area_id",
+          "created_at",
+          "created_by",
+          "finding_id",
+          "id",
+          "importance",
+          "primary_managed_system_id",
+          "quote_or_summary",
+          "sentiment",
+          "source_meta",
+          "source_title",
+          "source_type",
+          "workspace_id",
+        ],
+        taskRequest: [
+          "created_at",
+          "decision_reason",
+          "decided_at",
+          "display_id",
+          "evidence_summary",
+          "id",
+          "primary_managed_system_id",
+          "requested_outcome",
+          "requester_actor_id",
+          "reviewer_actor_id",
+          "source",
+          "source_id",
+          "source_type",
+          "status",
+          "updated_at",
+          "workspace_id",
+        ],
+        task: [
+          "analytics_area_id",
+          "assignee_actor_id",
+          "created_at",
+          "created_by",
+          "display_id",
+          "due_date",
+          "id",
+          "milestone_id",
+          "primary_managed_system_id",
+          "priority",
+          "source",
+          "source_task_request_id",
+          "status",
+          "title",
+          "updated_at",
+          "workspace_id",
+        ],
+      } as const;
+      function expectExactKeys(
+        surface: keyof typeof expectedKeys,
+        actorLabel: string,
+        payload: Record<string, unknown>,
+      ) {
+        expect(Object.keys(payload).sort(), `${actorLabel} ${surface}`).toEqual(
+          [...expectedKeys[surface]].sort(),
+        );
+        const serialized = JSON.stringify(payload);
+        expect(serialized, `${actorLabel} ${surface}`).not.toContain(RAW);
+        expect(serialized, `${actorLabel} ${surface}`).not.toContain(
+          source.responseId,
+        );
+        expect(serialized, `${actorLabel} ${surface}`).not.toContain(
+          "mock-admin-1",
+        );
+        expect(serialized, `${actorLabel} ${surface}`).not.toContain("raw_text");
+        expect(serialized, `${actorLabel} ${surface}`).not.toContain(
+          "respondent_actor_id",
+        );
+      }
       await grant(reader.id, "survey.read", source.msId);
       await grant(reader.id, "finding.read", source.msId);
       for (const capability of [
@@ -346,62 +439,6 @@ describe.skipIf(!runIntegration)(
         "insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,visibility,status,managed_system_id,created_by) values ($1,'finding',$2,'task',$3,'requested_task','internal_only','active',$4,$5)",
         [WORKSPACE_ID, findingId, task.id, source.msId, adminId],
       );
-      const finding = await app.inject({
-        method: "GET",
-        url: `/findings/${findingId}`,
-        headers: headers(reader.cookie),
-      });
-      const evidence = await app.inject({
-        method: "GET",
-        url: `/findings/${findingId}/evidence-highlights`,
-        headers: headers(reader.cookie),
-      });
-      expect(finding.statusCode).toBe(200);
-      expect(evidence.statusCode).toBe(200);
-      const parsedFinding = findingDtoSchema.parse(finding.json());
-      expect(Object.keys(parsedFinding).sort()).toEqual(
-        [
-          "analytics_area_id",
-          "confidence",
-          "created_at",
-          "created_by",
-          "display_id",
-          "evidence_count",
-          "id",
-          "linked_milestone_id",
-          "linked_task_id",
-          "primary_managed_system_id",
-          "severity",
-          "source_type",
-          "status",
-          "summary",
-          "title",
-          "updated_at",
-          "workspace_id",
-        ].sort(),
-      );
-      const items = evidence.json<{ items: unknown[] }>().items;
-      expect(items).toHaveLength(1);
-      for (const item of items) {
-        const parsed = evidenceHighlightDtoSchema.parse(item);
-        expect(Object.keys(parsed).sort()).toEqual(
-          [
-            "analytics_area_id",
-            "created_at",
-            "created_by",
-            "finding_id",
-            "id",
-            "importance",
-            "primary_managed_system_id",
-            "quote_or_summary",
-            "sentiment",
-            "source_meta",
-            "source_title",
-            "source_type",
-            "workspace_id",
-          ].sort(),
-        );
-      }
       expect(Object.keys(taskRequest).sort()).toEqual(
         [
           "created_at",
@@ -422,15 +459,14 @@ describe.skipIf(!runIntegration)(
           "workspace_id",
         ].sort(),
       );
-      for (const payload of [finding.body, evidence.body]) {
-        expect(payload).toContain(APPROVED);
+      for (const privateValue of [RAW, source.responseId, "mock-admin-1"]) {
+        expect(requested.body).not.toContain(privateValue);
       }
-      for (const payload of [finding.body, evidence.body, requested.body]) {
-        expect(payload).not.toContain(RAW);
-        expect(payload).not.toContain(source.responseId);
-        expect(payload).not.toContain("mock-admin-1");
-      }
-      for (const cookie of [creator.cookie, capHolder.cookie]) {
+      for (const [actorLabel, cookie] of [
+        ["reader", reader.cookie],
+        ["creator", creator.cookie],
+        ["cap-holder", capHolder.cookie],
+      ] as const) {
         const linkedFinding = await app.inject({
           method: "GET",
           url: `/findings/${findingId}`,
@@ -455,6 +491,19 @@ describe.skipIf(!runIntegration)(
         expect(linkedEvidence.statusCode).toBe(200);
         expect(linkedRequests.statusCode).toBe(200);
         expect(linkedTask.statusCode).toBe(200);
+        const parsedFinding = findingDtoSchema.parse(linkedFinding.json());
+        expectExactKeys("finding", actorLabel, parsedFinding);
+        expect(linkedFinding.body, actorLabel).toContain(APPROVED);
+        const evidenceItems = linkedEvidence.json<{ items: unknown[] }>().items;
+        expect(evidenceItems).toHaveLength(1);
+        for (const item of evidenceItems) {
+          expectExactKeys(
+            "evidence",
+            actorLabel,
+            evidenceHighlightDtoSchema.parse(item),
+          );
+        }
+        expect(linkedEvidence.body, actorLabel).toContain(APPROVED);
         const listedRequest = linkedRequests
           .json<{ items: unknown[] }>()
           .items.find(
@@ -464,40 +513,13 @@ describe.skipIf(!runIntegration)(
               (item as Record<string, unknown>).id === taskRequest.id,
           );
         expect(listedRequest).toBeDefined();
-        expect(Object.keys(taskRequestDtoSchema.parse(listedRequest)).sort()).toEqual(
-          Object.keys(taskRequest).sort(),
+        expectExactKeys(
+          "taskRequest",
+          actorLabel,
+          taskRequestDtoSchema.parse(listedRequest),
         );
         const parsedTask = taskDetailDtoSchema.parse(linkedTask.json());
-        expect(Object.keys(parsedTask).sort()).toEqual(
-          [
-            "analytics_area_id",
-            "assignee_actor_id",
-            "created_at",
-            "created_by",
-            "display_id",
-            "due_date",
-            "id",
-            "milestone_id",
-            "primary_managed_system_id",
-            "priority",
-            "source",
-            "source_task_request_id",
-            "status",
-            "title",
-            "updated_at",
-            "workspace_id",
-          ].sort(),
-        );
-        for (const payload of [
-          linkedFinding.body,
-          linkedEvidence.body,
-          linkedRequests.body,
-          linkedTask.body,
-        ]) {
-          expect(payload).not.toContain(RAW);
-          expect(payload).not.toContain(source.responseId);
-          expect(payload).not.toContain("mock-admin-1");
-        }
+        expectExactKeys("task", actorLabel, parsedTask);
       }
       const deniedRaw = await app.inject({
         method: "POST",
@@ -509,7 +531,7 @@ describe.skipIf(!runIntegration)(
       const allowedRaw = await app.inject({
         method: "POST",
         url: `/survey-responses/${source.responseId}/evidence-excerpt-candidates`,
-        headers: headers(creator.cookie),
+        headers: headers(capHolder.cookie),
         payload: { question_id: source.questionId },
       });
       expect(allowedRaw.statusCode).toBe(200);
@@ -600,6 +622,42 @@ describe.skipIf(!runIntegration)(
         "insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,visibility,status,managed_system_id,created_by) values ($1,'finding',$2,'task',$3,'requested_task','internal_only','active',$4,$5)",
         [WORKSPACE_ID, findingId, task.id, source.msId, adminId],
       );
+      const hiddenKeys = [
+        "created_at",
+        "created_by",
+        "id",
+        "managed_system_id",
+        "relation_type",
+        "source_type",
+        "status",
+        "target_type",
+        "updated_at",
+        "visibility_state",
+      ];
+      const allowedKeys = [
+        "created_at",
+        "created_by",
+        "id",
+        "managed_system_id",
+        "relation_type",
+        "source_id",
+        "source_type",
+        "status",
+        "target_id",
+        "target_summary",
+        "target_type",
+        "updated_at",
+        "visibility",
+        "visibility_state",
+      ];
+      function expectNoPrivacyPayload(label: string, payload: unknown) {
+        const serialized = JSON.stringify(payload);
+        expect(serialized, label).not.toContain(RAW);
+        expect(serialized, label).not.toContain(source.responseId);
+        expect(serialized, label).not.toContain("mock-admin-1");
+        expect(serialized, label).not.toContain("raw_text");
+        expect(serialized, label).not.toContain("respondent_actor_id");
+      }
       for (const [label, cookie, visibility, expectedStatus] of [
         ["creator", creator.cookie, "hidden", 200],
         ["personal-cap-holder", capHolder.cookie, "hidden", 200],
@@ -613,7 +671,13 @@ describe.skipIf(!runIntegration)(
           headers: headers(cookie),
         });
         expect(links.statusCode, label).toBe(expectedStatus);
-        if (expectedStatus !== 200) continue;
+        if (expectedStatus !== 200) {
+          const error = links.json<Record<string, unknown>>();
+          expect(Object.keys(error).sort(), label).toEqual(["code", "message"]);
+          expect(error.code, label).toBe("not_found.record");
+          expectNoPrivacyPayload(label, error);
+          continue;
+        }
         const linked = links
           .json<{ items: Array<Record<string, unknown>> }>()
           .items.find(
@@ -625,11 +689,11 @@ describe.skipIf(!runIntegration)(
         expect(linked, label).toEqual(
           expect.objectContaining({ visibility_state: visibility }),
         );
-        if (visibility === "hidden") {
-          expect(linked, label).not.toHaveProperty("source_id");
-          expect(linked, label).not.toHaveProperty("target_id");
-          expect(linked, label).not.toHaveProperty("summary");
-        }
+        expect(linked, label).toBeDefined();
+        expect(Object.keys(linked ?? {}).sort(), label).toEqual(
+          (visibility === "hidden" ? hiddenKeys : allowedKeys).sort(),
+        );
+        expectNoPrivacyPayload(label, linked);
       }
     });
   },
