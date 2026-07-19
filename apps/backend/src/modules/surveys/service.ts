@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { type SurveyResultDto, getRatingBandForValue, surveyResultDtoSchema } from '@fops/shared';
 import { sql } from 'drizzle-orm';
-import { getRatingBandForValue, surveyResultDtoSchema, type SurveyResultDto } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
@@ -704,26 +704,59 @@ export function createSurveysService(deps: SurveysServiceDeps) {
         if (question.kind === 'text') {
           return answerCount > 0 && answerCount < 5 && !holder
             ? suppressed(question.id)
-            : { question_id: question.id, visibility: 'visible' as const, kind: 'text' as const,
-                answer_count: answerCount, distribution: null, excerpts: [] as [] };
+            : {
+                question_id: question.id,
+                visibility: 'visible' as const,
+                kind: 'text' as const,
+                answer_count: answerCount,
+                distribution: null,
+                excerpts: [] as [],
+              };
         }
         if (question.kind === 'rating') {
           const distribution = { low: 0, mid: 0, high: 0 };
           for (const row of rows) {
             if (row.bucket_key === null) continue;
             const value = Number(row.bucket_key);
-            if (!Number.isInteger(value) || question.rating_min === null || question.rating_max === null || value < question.rating_min || value > question.rating_max) continue;
-            distribution[getRatingBandForValue(question.rating_min, question.rating_max, value)] += row.bucket_count;
+            if (
+              !Number.isInteger(value) ||
+              question.rating_min === null ||
+              question.rating_max === null ||
+              value < question.rating_min ||
+              value > question.rating_max
+            )
+              continue;
+            distribution[getRatingBandForValue(question.rating_min, question.rating_max, value)] +=
+              row.bucket_count;
           }
-          if (!holder && Object.values(distribution).some((count) => count > 0 && count < 5)) return suppressed(question.id);
-          return { question_id: question.id, visibility: 'visible' as const, kind: 'rating' as const,
-            answer_count: answerCount, distribution };
+          if (!holder && Object.values(distribution).some((count) => count > 0 && count < 5))
+            return suppressed(question.id);
+          return {
+            question_id: question.id,
+            visibility: 'visible' as const,
+            kind: 'rating' as const,
+            answer_count: answerCount,
+            distribution,
+          };
         }
-        const rowCounts = new Map(rows.filter((row) => row.bucket_key !== null).map((row) => [row.bucket_key!, row.bucket_count]));
-        const option_buckets = (question.options ?? []).map((option) => ({ key: option.key, label: option.label, count: rowCounts.get(option.key) ?? 0 }));
-        if (!holder && option_buckets.some((bucket) => bucket.count > 0 && bucket.count < 5)) return suppressed(question.id);
-        return { question_id: question.id, visibility: 'visible' as const, kind: 'choice' as const,
-          answer_count: answerCount, option_buckets };
+        const rowCounts = new Map<string, number>();
+        for (const row of rows) {
+          if (row.bucket_key !== null) rowCounts.set(row.bucket_key, row.bucket_count);
+        }
+        const option_buckets = (question.options ?? []).map((option) => ({
+          key: option.key,
+          label: option.label,
+          count: rowCounts.get(option.key) ?? 0,
+        }));
+        if (!holder && option_buckets.some((bucket) => bucket.count > 0 && bucket.count < 5))
+          return suppressed(question.id);
+        return {
+          question_id: question.id,
+          visibility: 'visible' as const,
+          kind: 'choice' as const,
+          answer_count: answerCount,
+          option_buckets,
+        };
       }),
       next_actions: [],
     });

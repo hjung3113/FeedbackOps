@@ -1,9 +1,9 @@
-import { sql } from "drizzle-orm";
-import type { Db } from "../../db/client.js";
+import { sql } from 'drizzle-orm';
+import type { Db } from '../../db/client.js';
 
 export type SurveyResultAggregateRow = {
   question_id: string;
-  question_kind: "single_choice" | "multiple_choice" | "rating" | "text";
+  question_kind: 'single_choice' | 'multiple_choice' | 'rating' | 'text';
   bucket_key: string | null;
   bucket_count: number;
 };
@@ -16,7 +16,7 @@ export async function readSurveyResultAggregates(
 ): Promise<SurveyResultAggregateRow[]> {
   const result = await db.execute<{
     question_id: string;
-    question_kind: SurveyResultAggregateRow["question_kind"];
+    question_kind: SurveyResultAggregateRow['question_kind'];
     bucket_key: string | null;
     bucket_count: number | string;
   }>(
