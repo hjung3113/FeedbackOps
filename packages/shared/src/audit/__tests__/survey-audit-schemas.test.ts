@@ -6,7 +6,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AUDIT_EVENT_DETAIL_SCHEMAS, AUDIT_EVENT_TYPES } from '../../enums/audit-events.js';
+import {
+  AUDIT_EVENT_DETAIL_SCHEMAS,
+  AUDIT_EVENT_TYPES,
+  findingCreatedFromSurveyResponseDetailSchema,
+} from '../../enums/audit-events.js';
 import { CAPABILITIES, CAPABILITY_META } from '../../enums/capabilities.js';
 import {
   SURVEY_QUESTION_AUDIT_FIELDS,
@@ -16,6 +20,8 @@ import {
   surveyQuestionCreatedDetailSchema,
   surveyQuestionDeletedDetailSchema,
   surveyQuestionUpdatedDetailSchema,
+  surveyResponseExcerptApprovedDetailSchema,
+  surveyResponsePersonalReadDetailSchema,
   surveyResponseSubmittedDetailSchema,
 } from '../survey.js';
 
@@ -74,6 +80,20 @@ const surveyResponseSubmitted = {
   identity_protected: true,
 } as const;
 
+const surveyResponsePersonalRead = { survey_id: U, survey_response_id: V, question_id: W } as const;
+const surveyResponseExcerptApproved = {
+  ...surveyResponsePersonalRead,
+  approved_excerpt_id: '01919b8c-0000-7000-8000-000000000004',
+} as const;
+const findingCreatedFromSurveyResponse = {
+  finding_id: U,
+  source_survey_response_id: V,
+  source_survey_id: W,
+  primary_managed_system_id: '01919b8c-0000-7000-8000-000000000004',
+  identity_protected: true,
+  source_type: 'survey_response',
+} as const;
+
 describe('Survey audit detail schemas', () => {
   it.each([
     ['survey_created', surveyCreatedDetailSchema, surveyCreated],
@@ -83,6 +103,21 @@ describe('Survey audit detail schemas', () => {
     ['survey_opened', surveyOpenedDetailSchema, surveyOpened],
     ['survey_closed', surveyClosedDetailSchema, surveyClosed],
     ['survey_response_submitted', surveyResponseSubmittedDetailSchema, surveyResponseSubmitted],
+    [
+      'survey_response_personal_read',
+      surveyResponsePersonalReadDetailSchema,
+      surveyResponsePersonalRead,
+    ],
+    [
+      'survey_response_excerpt_approved',
+      surveyResponseExcerptApprovedDetailSchema,
+      surveyResponseExcerptApproved,
+    ],
+    [
+      'finding_created_from_survey_response',
+      findingCreatedFromSurveyResponseDetailSchema,
+      findingCreatedFromSurveyResponse,
+    ],
   ])('%s round-trips canonical detail', (_event, schema, payload) => {
     expect(schema.parse(payload)).toEqual(payload);
   });
@@ -191,6 +226,28 @@ describe('Survey audit detail schemas', () => {
   });
 });
 
+describe('Survey-response Finding audit privacy', () => {
+  it.each([
+    ['survey_response_personal_read', surveyResponsePersonalRead],
+    ['survey_response_excerpt_approved', surveyResponseExcerptApproved],
+    ['finding_created_from_survey_response', findingCreatedFromSurveyResponse],
+  ] as const)('rejects respondent_actor_id smuggling for %s', (event, detail) => {
+    expect(() =>
+      AUDIT_EVENT_DETAIL_SCHEMAS[event].parse({ ...detail, respondent_actor_id: U }),
+    ).toThrow();
+  });
+
+  it.each([
+    ['survey_response_personal_read', surveyResponsePersonalRead],
+    ['survey_response_excerpt_approved', surveyResponseExcerptApproved],
+    ['finding_created_from_survey_response', findingCreatedFromSurveyResponse],
+  ] as const)('rejects raw_text in %s audit detail', (event, detail) => {
+    expect(() =>
+      AUDIT_EVENT_DETAIL_SCHEMAS[event].parse({ ...detail, raw_text: 'raw answer' }),
+    ).toThrow();
+  });
+});
+
 describe('Survey audit event registration', () => {
   const surveyEvents = [
     'survey_created',
@@ -200,6 +257,9 @@ describe('Survey audit event registration', () => {
     'survey_opened',
     'survey_closed',
     'survey_response_submitted',
+    'survey_response_personal_read',
+    'survey_response_excerpt_approved',
+    'finding_created_from_survey_response',
   ] as const;
 
   it.each(surveyEvents)('registers %s in the event vocabulary and detail schemas', (event) => {

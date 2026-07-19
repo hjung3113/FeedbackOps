@@ -23,6 +23,8 @@ import {
   surveyQuestionCreatedDetailSchema,
   surveyQuestionDeletedDetailSchema,
   surveyQuestionUpdatedDetailSchema,
+  surveyResponseExcerptApprovedDetailSchema,
+  surveyResponsePersonalReadDetailSchema,
   surveyResponseSubmittedDetailSchema,
 } from '../audit/survey.js';
 import {
@@ -117,6 +119,10 @@ export const AUDIT_EVENT_TYPES = [
   'survey_opened',
   'survey_closed',
   'survey_response_submitted',
+  // Slice 8 #187: audited personal candidate read and approval lifecycle.
+  'survey_response_personal_read',
+  'survey_response_excerpt_approved',
+  'finding_created_from_survey_response',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -405,6 +411,20 @@ export const findingCreatedFromVocDetailSchema = z.object({
   source_type: z.literal('voc'),
 });
 export type FindingCreatedFromVocDetail = z.infer<typeof findingCreatedFromVocDetailSchema>;
+
+export const findingCreatedFromSurveyResponseDetailSchema = z
+  .object({
+    finding_id: z.string().uuid(),
+    source_survey_response_id: z.string().uuid(),
+    source_survey_id: z.string().uuid(),
+    primary_managed_system_id: z.string().uuid(),
+    identity_protected: z.boolean(),
+    source_type: z.literal('survey_response'),
+  })
+  .strict();
+export type FindingCreatedFromSurveyResponseDetail = z.infer<
+  typeof findingCreatedFromSurveyResponseDetailSchema
+>;
 
 export const findingCreatedFromVocClusterDetailSchema = z.object({
   finding_id: z.string().uuid(),
@@ -707,4 +727,7 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   survey_opened: surveyOpenedDetailSchema,
   survey_closed: surveyClosedDetailSchema,
   survey_response_submitted: surveyResponseSubmittedDetailSchema,
+  survey_response_personal_read: surveyResponsePersonalReadDetailSchema,
+  survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
+  finding_created_from_survey_response: findingCreatedFromSurveyResponseDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

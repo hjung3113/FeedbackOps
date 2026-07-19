@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  approvedExcerptDtoSchema,
+  createFindingFromSurveyResponseRequestSchema,
   createFindingRequestSchema,
+  evidenceHighlightDtoSchema,
   findingDtoSchema,
+  findingSourceSchema,
   findingStatusSchema,
   linkTaskRequestSchema,
+  surveyResponseExcerptCandidateDtoSchema,
 } from '../index.js';
 
 const U1 = '01919b8c-0000-7000-8000-000000000001';
@@ -87,5 +92,103 @@ describe('linkTaskRequestSchema', () => {
 
   it('rejects undeclared fields', () => {
     expect(() => linkTaskRequestSchema.parse({ task_id: U1, finding_id: U2 })).toThrow();
+  });
+});
+
+describe('survey-response Finding provenance and safe evidence DTOs', () => {
+  const highlightBase = {
+    id: U1,
+    workspace_id: U2,
+    finding_id: U3,
+    primary_managed_system_id: U1,
+    quote_or_summary: 'Approved redacted excerpt',
+    analytics_area_id: null,
+    sentiment: null,
+    importance: null,
+    created_by: U2,
+    created_at: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('accepts survey_response provenance and rejects an unknown source type', () => {
+    expect(
+      findingSourceSchema.parse({
+        type: 'survey_response',
+        id: U1,
+        relation_type: 'generated_finding',
+      }),
+    ).toMatchObject({ type: 'survey_response', relation_type: 'generated_finding' });
+    expect(() =>
+      findingSourceSchema.parse({
+        type: 'survey_result',
+        id: U1,
+        relation_type: 'generated_finding',
+      }),
+    ).toThrow();
+  });
+
+  it('omits the response UUID from survey-response evidence DTOs', () => {
+    const safeHighlight = {
+      ...highlightBase,
+      source_type: 'survey_response',
+      source_title: 'Survey response',
+      source_meta: 'validation · SRV-001 · Identity protected',
+    };
+
+    expect(evidenceHighlightDtoSchema.parse(safeHighlight)).toEqual(safeHighlight);
+    expect(() => evidenceHighlightDtoSchema.parse({ ...safeHighlight, source_id: U1 })).toThrow();
+  });
+
+  it('continues to require the source_id key for VOC evidence DTOs', () => {
+    expect(() =>
+      evidenceHighlightDtoSchema.parse({
+        ...highlightBase,
+        source_type: 'voc',
+        source_title: 'Export failures',
+        source_meta: 'VOC-001',
+      }),
+    ).toThrow();
+  });
+
+  it('accepts the backend-generated Survey Finding request with no excerpts', () => {
+    expect(
+      createFindingFromSurveyResponseRequestSchema.parse({
+        severity: 'high',
+        approved_excerpt_ids: [],
+      }),
+    ).toEqual({ severity: 'high', approved_excerpt_ids: [] });
+  });
+
+  it('rejects title, summary, and malformed approval IDs on the Survey Finding request', () => {
+    expect(() =>
+      createFindingFromSurveyResponseRequestSchema.parse({
+        severity: 'high',
+        approved_excerpt_ids: [U1],
+        title: 'Must be backend generated',
+      }),
+    ).toThrow();
+    expect(() =>
+      createFindingFromSurveyResponseRequestSchema.parse({
+        severity: 'high',
+        approved_excerpt_ids: ['not-a-uuid'],
+        summary: 'Must be backend generated',
+      }),
+    ).toThrow();
+  });
+
+  it('models approved excerpts and the audited-only raw-text candidate shape', () => {
+    expect(
+      approvedExcerptDtoSchema.parse({
+        approved_excerpt_id: U1,
+        question_id: U2,
+        redacted_excerpt: 'Approved excerpt',
+      }),
+    ).toMatchObject({ approved_excerpt_id: U1, question_id: U2 });
+    expect(
+      surveyResponseExcerptCandidateDtoSchema.parse({
+        question_id: U1,
+        question_label: 'What should improve?',
+        raw_text: 'Only the audited personal-candidate route may return this.',
+      }),
+    ).toMatchObject({ question_id: U1 });
   });
 });

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const entityLinkEntityTypeSchema = z.enum([
   'voc',
+  'survey_response',
   'finding',
   'voc_cluster',
   'task_request',
@@ -12,6 +13,7 @@ export type EntityLinkEntityType = z.infer<typeof entityLinkEntityTypeSchema>;
 export const entityLinkRelationTypeSchema = z.enum([
   'related_to',
   'created_finding',
+  'generated_finding',
   'evidence_of',
   'requested_task',
   'converted_to',
@@ -111,6 +113,12 @@ export const registeredEntityLinkPairs = [
   { source_type: 'voc', target_type: 'voc', relation_type: 'related_to' },
   { source_type: 'voc', target_type: 'finding', relation_type: 'created_finding' },
   { source_type: 'voc', target_type: 'finding', relation_type: 'evidence_of' },
+  {
+    source_type: 'survey_response',
+    target_type: 'finding',
+    relation_type: 'generated_finding',
+  },
+  { source_type: 'survey_response', target_type: 'finding', relation_type: 'evidence_of' },
   { source_type: 'voc_cluster', target_type: 'finding', relation_type: 'created_finding' },
   { source_type: 'voc_cluster', target_type: 'finding', relation_type: 'evidence_of' },
   { source_type: 'finding', target_type: 'task_request', relation_type: 'requested_task' },
