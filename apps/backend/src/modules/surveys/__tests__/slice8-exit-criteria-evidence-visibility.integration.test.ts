@@ -311,6 +311,11 @@ describe.skipIf(!runIntegration)(
     });
 
     it("uses the positive public DTO allowlist on Finding/evidence surfaces and allows raw respondent detail only on the Survey source route", async () => {
+      // Derived actor × surface oracle (routes/services, not fixture assumptions):
+      // actor      | Finding detail             | Evidence list              | pending Task Request list                              | linked Task detail
+      // reader     | 200, visible (finding.read) | 200, visible (finding.read) | 200, seeded item absent (no finding.manage in MS scope) | 403, permission.denied (finding.manage required)
+      // creator    | 200, visible (manage grants read) | 200, visible (manage grants read) | 200, seeded item visible (finding.manage in MS scope) | 200, visible (finding.manage in MS scope)
+      // cap-holder | 200, visible (finding.read) | 200, visible (finding.read) | 200, seeded item visible (finding.manage in MS scope) | 200, visible (finding.manage in MS scope)
       const source = await seed();
       const creator = await authorizeCreator(source);
       const reader = await actor("safe-reader");
@@ -462,11 +467,40 @@ describe.skipIf(!runIntegration)(
       for (const privateValue of [RAW, source.responseId, "mock-admin-1"]) {
         expect(requested.body).not.toContain(privateValue);
       }
-      for (const [actorLabel, cookie] of [
-        ["reader", reader.cookie],
-        ["creator", creator.cookie],
-        ["cap-holder", capHolder.cookie],
-      ] as const) {
+      const actorMatrix = [
+        {
+          actorLabel: "reader",
+          cookie: reader.cookie,
+          finding: { status: 200 },
+          evidence: { status: 200 },
+          taskRequestList: { status: 200, seededItemVisible: false },
+          task: {
+            status: 403,
+            error: {
+              code: "permission.denied",
+              message: "finding.manage capability required",
+            },
+          },
+        },
+        {
+          actorLabel: "creator",
+          cookie: creator.cookie,
+          finding: { status: 200 },
+          evidence: { status: 200 },
+          taskRequestList: { status: 200, seededItemVisible: true },
+          task: { status: 200 },
+        },
+        {
+          actorLabel: "cap-holder",
+          cookie: capHolder.cookie,
+          finding: { status: 200 },
+          evidence: { status: 200 },
+          taskRequestList: { status: 200, seededItemVisible: true },
+          task: { status: 200 },
+        },
+      ] as const;
+      for (const expectations of actorMatrix) {
+        const { actorLabel, cookie } = expectations;
         const linkedFinding = await app.inject({
           method: "GET",
           url: `/findings/${findingId}`,
@@ -487,20 +521,25 @@ describe.skipIf(!runIntegration)(
           url: `/tasks/${task.id}`,
           headers: headers(cookie),
         });
-        expect(linkedFinding.statusCode).toBe(200);
-        expect(linkedEvidence.statusCode).toBe(200);
-        expect(linkedRequests.statusCode).toBe(200);
-        if (actorLabel === "reader") {
-          expect(linkedTask.statusCode).toBe(403);
-          expect(linkedTask.json()).toEqual({
-            code: "permission.denied",
-            message: "finding.manage capability required",
-          });
+        expect(linkedFinding.statusCode, `${actorLabel} finding`).toBe(
+          expectations.finding.status,
+        );
+        expect(linkedEvidence.statusCode, `${actorLabel} evidence`).toBe(
+          expectations.evidence.status,
+        );
+        expect(linkedRequests.statusCode, `${actorLabel} task request list`).toBe(
+          expectations.taskRequestList.status,
+        );
+        expect(linkedTask.statusCode, `${actorLabel} task`).toBe(
+          expectations.task.status,
+        );
+        if (expectations.task.status !== 200) {
+          expect(linkedTask.json(), `${actorLabel} task error`).toEqual(
+            expectations.task.error,
+          );
           for (const privateValue of [RAW, source.responseId, "mock-admin-1"]) {
             expect(linkedTask.body, actorLabel).not.toContain(privateValue);
           }
-        } else {
-          expect(linkedTask.statusCode).toBe(200);
         }
         const parsedFinding = findingDtoSchema.parse(linkedFinding.json());
         expectExactKeys("finding", actorLabel, parsedFinding);
@@ -515,21 +554,26 @@ describe.skipIf(!runIntegration)(
           );
         }
         expect(linkedEvidence.body, actorLabel).toContain(APPROVED);
-        const listedRequest = linkedRequests
-          .json<{ items: unknown[] }>()
-          .items.find(
+        const listedRequests = linkedRequests.json<{ items: unknown[] }>().items;
+        for (const item of listedRequests) {
+          expectExactKeys(
+            "taskRequest",
+            actorLabel,
+            taskRequestDtoSchema.parse(item),
+          );
+        }
+        const listedRequest = listedRequests.find(
             (item): item is Record<string, unknown> =>
               typeof item === "object" &&
               item !== null &&
               (item as Record<string, unknown>).id === taskRequest.id,
           );
-        expect(listedRequest).toBeDefined();
-        expectExactKeys(
-          "taskRequest",
-          actorLabel,
-          taskRequestDtoSchema.parse(listedRequest),
-        );
-        if (actorLabel !== "reader") {
+        if (expectations.taskRequestList.seededItemVisible) {
+          expect(listedRequest, `${actorLabel} seeded Task Request`).toBeDefined();
+        } else {
+          expect(listedRequest, `${actorLabel} scoped Task Request`).toBeUndefined();
+        }
+        if (expectations.task.status === 200) {
           const parsedTask = taskDetailDtoSchema.parse(linkedTask.json());
           expectExactKeys("task", actorLabel, parsedTask);
         }
