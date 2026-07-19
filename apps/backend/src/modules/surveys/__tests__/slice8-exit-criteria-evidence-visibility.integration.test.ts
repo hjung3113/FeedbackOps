@@ -7,6 +7,8 @@ import {
   evidenceHighlightDtoSchema,
   findingDtoSchema,
   surveyResultDtoSchema,
+  taskDetailDtoSchema,
+  taskRequestDtoSchema,
 } from "@fops/shared";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -47,6 +49,7 @@ describe.skipIf(!runIntegration)(
     let migrateHandle: DbHandle;
     let app: FastifyInstance;
     let adminId: string;
+    let adminCookie: string;
 
     beforeAll(async () => {
       process.env.NODE_ENV = "test";
@@ -54,6 +57,7 @@ describe.skipIf(!runIntegration)(
       migrateHandle = createDb(MIGRATE_URL);
       app = await buildServer({ config: loadConfig(), dbHandle: appHandle });
       await app.ready();
+      adminCookie = await loginAs(app, "mock-admin-1");
       const admin = await migrateHandle.pool.query<{ id: string }>(
         "select id from core.actors where workspace_id=$1 and external_id='mock-admin-1'",
         [WORKSPACE_ID],
@@ -265,15 +269,30 @@ describe.skipIf(!runIntegration)(
           highlight_id: source.responseId,
         },
       ]);
-      const audit = await migrateHandle.pool.query<{ event_type: string }>(
-        "select event_type from core.audit_log where subject_id=$1 or detail->>'source_survey_response_id'=$2",
+      const audit = await migrateHandle.pool.query<{
+        event_type: string;
+        subject_type: string;
+        detail: Record<string, unknown>;
+      }>(
+        "select event_type,subject_type,detail from core.audit_log where subject_id=$1 or detail->>'survey_response_id'=$2 or detail->>'source_survey_response_id'=$2",
         [findingId, source.responseId],
       );
-      expect(audit.rows.map((row) => row.event_type)).toEqual(
+      expect(audit.rows).toEqual(
         expect.arrayContaining([
-          "survey_response_excerpt_approved",
-          "finding_created_from_survey_response",
-          "evidence_highlight_added",
+          expect.objectContaining({
+            event_type: "survey_response_excerpt_approved",
+            subject_type: "survey_response_excerpt_approval",
+            detail: expect.objectContaining({ survey_response_id: source.responseId }),
+          }),
+          expect.objectContaining({
+            event_type: "finding_created_from_survey_response",
+            detail: expect.objectContaining({ source_survey_response_id: source.responseId }),
+          }),
+          expect.objectContaining({
+            event_type: "evidence_highlight_added",
+            subject_type: "finding",
+            detail: expect.objectContaining({ source_id: source.responseId }),
+          }),
         ]),
       );
       const raw = await app.inject({
@@ -290,9 +309,38 @@ describe.skipIf(!runIntegration)(
       const source = await seed();
       const creator = await authorizeCreator(source);
       const reader = await actor("safe-reader");
+      const capHolder = await actor("personal-cap-holder");
       await grant(reader.id, "survey.read", source.msId);
       await grant(reader.id, "finding.read", source.msId);
+      for (const capability of [
+        "survey.read",
+        "survey.read_personal_responses",
+        "finding.read",
+        "finding.manage",
+      ])
+        await grant(capHolder.id, capability, source.msId);
       const findingId = await approveAndCreate(source, creator);
+      const requested = await app.inject({
+        method: "POST",
+        url: `/findings/${findingId}/request-task`,
+        headers: headers(creator.cookie, true),
+        payload: {
+          evidence_summary: "Safe operational handoff",
+          requested_outcome: "Review without respondent disclosure",
+        },
+      });
+      expect(requested.statusCode).toBe(201);
+      const taskRequest = taskRequestDtoSchema.parse(requested.json());
+      const task = await insertTaskRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: source.msId,
+        createdBy: adminId,
+        title: "Safe linked task surface",
+      });
+      await migrateHandle.pool.query(
+        "insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,visibility,status,managed_system_id,created_by) values ($1,'finding',$2,'task',$3,'requested_task','internal_only','active',$4,$5)",
+        [WORKSPACE_ID, findingId, task.id, source.msId, adminId],
+      );
       const finding = await app.inject({
         method: "GET",
         url: `/findings/${findingId}`,
@@ -319,7 +367,6 @@ describe.skipIf(!runIntegration)(
           "linked_task_id",
           "primary_managed_system_id",
           "severity",
-          "source",
           "source_type",
           "status",
           "summary",
@@ -330,12 +377,122 @@ describe.skipIf(!runIntegration)(
       );
       const items = evidence.json<{ items: unknown[] }>().items;
       expect(items).toHaveLength(1);
-      for (const item of items) evidenceHighlightDtoSchema.parse(item);
+      for (const item of items) {
+        const parsed = evidenceHighlightDtoSchema.parse(item);
+        expect(Object.keys(parsed).sort()).toEqual(
+          [
+            "analytics_area_id",
+            "created_at",
+            "created_by",
+            "finding_id",
+            "id",
+            "importance",
+            "primary_managed_system_id",
+            "quote_or_summary",
+            "sentiment",
+            "source_meta",
+            "source_title",
+            "source_type",
+            "workspace_id",
+          ].sort(),
+        );
+      }
+      expect(Object.keys(taskRequest).sort()).toEqual(
+        [
+          "created_at",
+          "decision_reason",
+          "decided_at",
+          "display_id",
+          "evidence_summary",
+          "id",
+          "primary_managed_system_id",
+          "requested_outcome",
+          "requester_actor_id",
+          "reviewer_actor_id",
+          "source",
+          "source_id",
+          "source_type",
+          "status",
+          "updated_at",
+          "workspace_id",
+        ].sort(),
+      );
       for (const payload of [finding.body, evidence.body]) {
         expect(payload).toContain(APPROVED);
+      }
+      for (const payload of [finding.body, evidence.body, requested.body]) {
         expect(payload).not.toContain(RAW);
         expect(payload).not.toContain(source.responseId);
         expect(payload).not.toContain("mock-admin-1");
+      }
+      for (const cookie of [creator.cookie, capHolder.cookie]) {
+        const linkedFinding = await app.inject({
+          method: "GET",
+          url: `/findings/${findingId}`,
+          headers: headers(cookie),
+        });
+        const linkedEvidence = await app.inject({
+          method: "GET",
+          url: `/findings/${findingId}/evidence-highlights`,
+          headers: headers(cookie),
+        });
+        const linkedRequests = await app.inject({
+          method: "GET",
+          url: "/task-requests?status=pending_review",
+          headers: headers(cookie),
+        });
+        const linkedTask = await app.inject({
+          method: "GET",
+          url: `/tasks/${task.id}`,
+          headers: headers(cookie),
+        });
+        expect(linkedFinding.statusCode).toBe(200);
+        expect(linkedEvidence.statusCode).toBe(200);
+        expect(linkedRequests.statusCode).toBe(200);
+        expect(linkedTask.statusCode).toBe(200);
+        const listedRequest = linkedRequests
+          .json<{ items: unknown[] }>()
+          .items.find(
+            (item): item is Record<string, unknown> =>
+              typeof item === "object" &&
+              item !== null &&
+              (item as Record<string, unknown>).id === taskRequest.id,
+          );
+        expect(listedRequest).toBeDefined();
+        expect(Object.keys(taskRequestDtoSchema.parse(listedRequest)).sort()).toEqual(
+          Object.keys(taskRequest).sort(),
+        );
+        const parsedTask = taskDetailDtoSchema.parse(linkedTask.json());
+        expect(Object.keys(parsedTask).sort()).toEqual(
+          [
+            "analytics_area_id",
+            "assignee_actor_id",
+            "created_at",
+            "created_by",
+            "display_id",
+            "due_date",
+            "id",
+            "milestone_id",
+            "primary_managed_system_id",
+            "priority",
+            "source",
+            "source_task_request_id",
+            "status",
+            "title",
+            "updated_at",
+            "workspace_id",
+          ].sort(),
+        );
+        for (const payload of [
+          linkedFinding.body,
+          linkedEvidence.body,
+          linkedRequests.body,
+          linkedTask.body,
+        ]) {
+          expect(payload).not.toContain(RAW);
+          expect(payload).not.toContain(source.responseId);
+          expect(payload).not.toContain("mock-admin-1");
+        }
       }
       const deniedRaw = await app.inject({
         method: "POST",
@@ -358,8 +515,16 @@ describe.skipIf(!runIntegration)(
       const source = await seed();
       const creator = await authorizeCreator(source);
       const aggregateReader = await actor("aggregate-reader");
+      const capHolder = await actor("personal-cap-holder");
+      const noPermission = await actor("no-permission");
       await grant(aggregateReader.id, "survey.read", source.msId);
       await grant(aggregateReader.id, "finding.read", source.msId);
+      for (const capability of [
+        "survey.read",
+        "survey.read_personal_responses",
+        "finding.read",
+      ])
+        await grant(capHolder.id, capability, source.msId);
       const rating = await migrateHandle.pool.query<{ id: string }>(
         "insert into survey.survey_questions (workspace_id,survey_id,kind,prompt,is_required,rating_min,rating_max,sort_order,branch_depth) values ($1,$2,'rating','Rate this',false,1,5,1,0) returning id",
         [WORKSPACE_ID, source.surveyId],
@@ -396,6 +561,7 @@ describe.skipIf(!runIntegration)(
         response_count: null,
         suppression: { code: "anonymity_threshold" },
       });
+      expect(before.next_actions).toEqual([]);
       const findingId = await approveAndCreate(source, creator);
       const after = surveyResultDtoSchema.parse(
         (
@@ -412,6 +578,7 @@ describe.skipIf(!runIntegration)(
         response_count: null,
         suppression: { code: "anonymity_threshold" },
       });
+      expect(after.next_actions).toEqual([]);
       const targetMs = await insertMsDirectly(
         migrateHandle,
         WORKSPACE_ID,
@@ -428,27 +595,36 @@ describe.skipIf(!runIntegration)(
         "insert into core.entity_links (workspace_id,source_type,source_id,target_type,target_id,relation_type,visibility,status,managed_system_id,created_by) values ($1,'finding',$2,'task',$3,'requested_task','internal_only','active',$4,$5)",
         [WORKSPACE_ID, findingId, task.id, source.msId, adminId],
       );
-      const links = await app.inject({
-        method: "GET",
-        url: `/entity-links?source_type=finding&source_id=${findingId}`,
-        headers: headers(aggregateReader.cookie),
-      });
-      expect(links.statusCode).toBe(200);
-      const hidden = links
-        .json<{ items: Array<Record<string, unknown>> }>()
-        .items.find(
-          (item) =>
-            item.visibility_state === "hidden" &&
-            item.source_type === "finding" &&
-            item.target_type === "task" &&
-            item.relation_type === "requested_task",
+      for (const [label, cookie, visibility] of [
+        ["creator", creator.cookie, "hidden"],
+        ["personal-cap-holder", capHolder.cookie, "hidden"],
+        ["admin", adminCookie, "allowed"],
+        ["aggregate-reader", aggregateReader.cookie, "hidden"],
+        ["no-permission", noPermission.cookie, "hidden"],
+      ] as const) {
+        const links = await app.inject({
+          method: "GET",
+          url: `/entity-links?source_type=finding&source_id=${findingId}`,
+          headers: headers(cookie),
+        });
+        expect(links.statusCode, label).toBe(200);
+        const linked = links
+          .json<{ items: Array<Record<string, unknown>> }>()
+          .items.find(
+            (item) =>
+              item.source_type === "finding" &&
+              item.target_type === "task" &&
+              item.relation_type === "requested_task",
+          );
+        expect(linked, label).toEqual(
+          expect.objectContaining({ visibility_state: visibility }),
         );
-      expect(hidden).toEqual(
-        expect.objectContaining({ visibility_state: "hidden" }),
-      );
-      expect(hidden).not.toHaveProperty("source_id");
-      expect(hidden).not.toHaveProperty("target_id");
-      expect(hidden).not.toHaveProperty("summary");
+        if (visibility === "hidden") {
+          expect(linked, label).not.toHaveProperty("source_id");
+          expect(linked, label).not.toHaveProperty("target_id");
+          expect(linked, label).not.toHaveProperty("summary");
+        }
+      }
     });
   },
 );

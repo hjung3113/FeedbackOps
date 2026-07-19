@@ -5,6 +5,8 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  entityLinkRelationTypeSchema,
+  registeredEntityLinkPairs,
   type SurveyResultNextAction,
   surveyResultDtoSchema,
 } from "@fops/shared";
@@ -232,6 +234,13 @@ describe.skipIf(!runIntegration)(
       );
       return Number(count.rows[0]?.count ?? 0);
     }
+    function assertNoCreateVoc(results: unknown): void {
+      const body = surveyResultDtoSchema.parse(results);
+      expect(body.next_actions).toEqual([]);
+      expect(body.next_actions.map((action) => action.id)).not.toContain(
+        "create_voc",
+      );
+    }
 
     it("returns the route-miss 404 for admin, operator, personal-cap, basic, and no-permission actors", async () => {
       const source = await seed();
@@ -244,6 +253,16 @@ describe.skipIf(!runIntegration)(
       await grant(personal.id, "survey.read_personal_responses", source.msId);
       await grant(basic.id, "survey.read", source.msId);
       const before = await vocCount();
+      const unmatchedPath = `/definitely-not-a-route-${randomUUID()}`;
+      const unmatched = await app.inject({ method: "POST", url: unmatchedPath });
+      const unmatchedBody = unmatched.json<Record<string, unknown>>();
+      expect(unmatched.statusCode).toBe(404);
+      expect(unmatchedBody).toEqual({
+        statusCode: 404,
+        error: "Not Found",
+        message: expect.stringMatching(/^Route POST:.* not found$/),
+      });
+      expect(unmatchedBody).not.toHaveProperty("code");
       for (const cookie of [
         adminCookie,
         operator.cookie,
@@ -257,11 +276,16 @@ describe.skipIf(!runIntegration)(
           headers: headers(cookie),
         });
         expect(response.statusCode).toBe(404);
-        expect(response.json()).toMatchObject({
-          statusCode: 404,
-          error: "Not Found",
+        const body = response.json<Record<string, unknown>>();
+        expect(Object.keys(body).sort()).toEqual(Object.keys(unmatchedBody).sort());
+        expect(body).toEqual({
+          ...unmatchedBody,
+          message: (unmatchedBody.message as string).replace(
+            unmatchedPath,
+            `/survey-responses/${source.responseId}/create-voc`,
+          ),
         });
-        expect(response.body).not.toContain("create_voc");
+        expect(body).not.toHaveProperty("code");
       }
       expect(await vocCount()).toBe(before);
     });
@@ -275,11 +299,13 @@ describe.skipIf(!runIntegration)(
         adminId,
         "Slice 8 forbidden VOC target",
       );
-      const relationTypes = [
-        "created_finding",
-        "generated_finding",
-        "converted_to",
-      ] as const;
+      const relationTypes = entityLinkRelationTypeSchema.options.filter(
+        (relationType) =>
+          registeredEntityLinkPairs.some(
+            (pair) => pair.relation_type === relationType,
+          ),
+      );
+      expect(relationTypes).toEqual(entityLinkRelationTypeSchema.options);
       for (const relation_type of relationTypes) {
         const before = await migrateHandle.pool.query<{ count: string }>(
           "select count(*)::text as count from core.entity_links where workspace_id=$1",
@@ -325,7 +351,16 @@ describe.skipIf(!runIntegration)(
       ])
         await grant(creator.id, capability, source.msId);
       await grant(reader.id, "survey.read", source.msId);
-      const before = await vocCount();
+      const beforeFinding = await vocCount();
+      for (const cookie of [creator.cookie, reader.cookie, adminCookie]) {
+        const results = await app.inject({
+          method: "GET",
+          url: `/surveys/${source.surveyId}/results`,
+          headers: headers(cookie),
+        });
+        expect(results.statusCode).toBe(200);
+        assertNoCreateVoc(results.json());
+      }
       const created = await app.inject({
         method: "POST",
         url: `/survey-responses/${source.responseId}/create-finding`,
@@ -334,7 +369,17 @@ describe.skipIf(!runIntegration)(
       });
       expect(created.statusCode).toBe(201);
       const findingId = created.json<{ id: string }>().id;
-      expect(await vocCount()).toBe(before);
+      expect(await vocCount()).toBe(beforeFinding);
+      for (const cookie of [creator.cookie, reader.cookie, adminCookie]) {
+        const results = await app.inject({
+          method: "GET",
+          url: `/surveys/${source.surveyId}/results`,
+          headers: headers(cookie),
+        });
+        expect(results.statusCode).toBe(200);
+        assertNoCreateVoc(results.json());
+      }
+      const beforeTaskRequest = await vocCount();
       const requested = await app.inject({
         method: "POST",
         url: `/findings/${findingId}/request-task`,
@@ -345,9 +390,9 @@ describe.skipIf(!runIntegration)(
         },
       });
       expect(requested.statusCode).toBe(201);
-      expect(await vocCount()).toBe(before);
+      expect(await vocCount()).toBe(beforeTaskRequest);
       const audits = await migrateHandle.pool.query<{ event_type: string }>(
-        "select event_type from core.audit_log where subject_id=$1 or detail->>'source_survey_response_id'=$2",
+        "select event_type from core.audit_log where subject_id=$1 or detail->>'source_survey_response_id'=$2 or detail->>'source_finding_id'=$1",
         [findingId, source.responseId],
       );
       expect(audits.rows.map((row) => row.event_type)).toEqual(
@@ -363,12 +408,7 @@ describe.skipIf(!runIntegration)(
           headers: headers(cookie),
         });
         expect(results.statusCode).toBe(200);
-        const body = surveyResultDtoSchema.parse(results.json());
-        expect(
-          new Set<string>(body.next_actions.map((action) => action.id)).has(
-            "create_voc",
-          ),
-        ).toBe(false);
+        assertNoCreateVoc(results.json());
       }
     });
   },
