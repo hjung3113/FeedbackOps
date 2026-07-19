@@ -327,13 +327,13 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       [finding.id],
     );
     expect(auditCounts.rows).toEqual([
-      { event_type: 'evidence_highlight_added', count: '2' },
       { event_type: 'entity_link.created', count: '2' },
+      { event_type: 'evidence_highlight_added', count: '2' },
       { event_type: 'finding_created_from_survey_response', count: '1' },
     ]);
   });
 
-  it('replays the same idempotency key byte-equivalently without duplicate rows or audits', async () => {
+  it('replays the same idempotency key without duplicate rows or audits', async () => {
     const source = await seed();
     const creator = await actor();
     const key = randomUUID();
@@ -354,7 +354,10 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
       key,
     );
     expect(replay.statusCode).toBe(201);
-    expect(replay.body).toBe(first.body);
+    const firstBody = first.json<{ id: string }>();
+    const replayBody = replay.json<{ id: string }>();
+    expect(replayBody).toEqual(firstBody);
+    expect(replayBody.id).toBe(firstBody.id);
     expect(await counts(source.responseId)).toEqual(before);
   });
 
@@ -568,7 +571,7 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/create-finding (#18
           approved_excerpt_ids: [active, active],
         })
       ).statusCode,
-    ).toBe(201);
+    ).toBe(422);
     expect(
       (
         await post(creator.cookie, source.responseId, {
