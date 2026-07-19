@@ -174,7 +174,7 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
     }
   });
 
-  it('returns choice, multiple-choice, rating, and count-only text buckets plus the submitted response count', async () => {
+  it('returns one answer-count row per question plus choice and rating distribution buckets', async () => {
     const aggregates = await appHandle.pool.query<AggregateRow>(
       'select * from survey.read_result_aggregates($1::uuid, $2::uuid) order by question_kind, bucket_key',
       [workspaceId, surveyId],
@@ -183,10 +183,13 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
       { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: 'alpha', bucket_count: '2' },
       { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: 'beta', bucket_count: '2' },
       { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: 'gamma', bucket_count: '2' },
+      { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: null, bucket_count: '3' },
       { question_id: ratingQuestionId, question_kind: 'rating', bucket_key: '3', bucket_count: '2' },
       { question_id: ratingQuestionId, question_kind: 'rating', bucket_key: '5', bucket_count: '1' },
+      { question_id: ratingQuestionId, question_kind: 'rating', bucket_key: null, bucket_count: '3' },
       { question_id: choiceQuestionId, question_kind: 'single_choice', bucket_key: 'no', bucket_count: '1' },
       { question_id: choiceQuestionId, question_kind: 'single_choice', bucket_key: 'yes', bucket_count: '2' },
+      { question_id: choiceQuestionId, question_kind: 'single_choice', bucket_key: null, bucket_count: '3' },
       { question_id: textQuestionId, question_kind: 'text', bucket_key: null, bucket_count: '3' },
     ]);
     expect(JSON.stringify(aggregates.rows)).not.toContain(textAnswer);

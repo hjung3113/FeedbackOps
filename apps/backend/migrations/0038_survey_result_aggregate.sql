@@ -3,8 +3,9 @@
 --   GRANT fops_survey_aggregate_owner TO fops_migrate;
 -- See scripts/db/init.sql for the empty-database bootstrap equivalent.
 --
--- Issue #186: aggregate-only survey result read interface. Text answers produce
--- count-only rows; their bodies must never cross this database privilege boundary.
+-- Issue #186: aggregate-only survey result read interface. NULL bucket_key is
+-- the per-question answer count for every kind; non-NULL keys are distribution
+-- buckets. Text answer bodies must never cross this database privilege boundary.
 
 -- PostgreSQL requires temporary CREATE on the containing schema to transfer
 -- ownership. It is revoked immediately after both transfers complete.
@@ -63,6 +64,12 @@ AS $$
        AND s.id = p_survey_id
        AND a.answer_kind = 'text'
        AND q.kind = 'text'
+  ), answer_counts AS (
+    SELECT question_id, question_kind
+      FROM valid_answers
+    UNION ALL
+    SELECT question_id, question_kind
+      FROM text_answers
   ), buckets AS (
     SELECT question_id, question_kind, answer_value #>> '{}' AS bucket_key
       FROM valid_answers
@@ -79,7 +86,7 @@ AS $$
    GROUP BY question_id, question_kind, bucket_key
   UNION ALL
   SELECT question_id, question_kind, NULL::text AS bucket_key, pg_catalog.count(*) AS bucket_count
-    FROM text_answers
+    FROM answer_counts
    GROUP BY question_id, question_kind
 $$;
 --> statement-breakpoint
