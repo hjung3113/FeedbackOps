@@ -68,6 +68,14 @@ survey.survey_questions
 survey.survey_responses / survey.survey_response_answers
 - responses snapshot respondent_actor_id and identity_protected; answers reference both a
   response and question through survey-qualified foreign keys.
+
+survey.survey_response_excerpt_approvals
+- id, workspace_id, survey_id, response_id, question_id, redacted_excerpt, approved_by,
+  approved_at: required; revoked_at: nullable.
+- Stores an explicit, redacted evidence excerpt only. It never stores respondent identity
+  or raw response text; revocation preserves the approval row.
+- Raw response text is available only through the single-question, workspace-scoped Survey
+  evidence reader used during Finding creation. Result reads expose active redacted approvals only.
 ```
 
 Rules:
@@ -163,7 +171,7 @@ findings
 - primary_managed_system_id: uuid, required
 - title: text, required
 - summary: text, required
-- source_type: enum(voc, voc_cluster, survey, manual), required
+- source_type: enum(voc, voc_cluster, survey, survey_response, manual), required
 - source_id: uuid, nullable when source_type=manual
 - evidence_count: integer, required
 - severity: enum(low, medium, high, critical), required
@@ -457,6 +465,9 @@ Rules:
 - VOC/cluster Task Request source tuples added by ADR-0028:
   - (voc, task_request, requested_task)
   - (voc_cluster, task_request, requested_task)
+- Survey response provenance tuples added by #187:
+  - (survey_response, finding, generated_finding)
+  - (survey_response, finding, evidence_of)
 ```
 
 ## Reporter-Facing VOC Status

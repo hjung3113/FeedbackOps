@@ -186,3 +186,39 @@ export const surveyResponseAnswers = surveySchema.table(
     }),
   }),
 );
+
+export const surveyResponseExcerptApprovals = surveySchema.table(
+  'survey_response_excerpt_approvals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    surveyId: uuid('survey_id')
+      .notNull()
+      .references(() => surveys.id),
+    responseId: uuid('response_id').notNull(),
+    questionId: uuid('question_id').notNull(),
+    redactedExcerpt: text('redacted_excerpt').notNull(),
+    approvedBy: uuid('approved_by')
+      .notNull()
+      .references(() => actors.id),
+    approvedAt: timestamp('approved_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => ({
+    workspaceSurveyActiveIdx: index('survey_response_excerpt_approvals_workspace_survey_active_idx')
+      .on(t.workspaceId, t.surveyId, t.approvedAt.desc())
+      .where(sql`${t.revokedAt} is null`),
+    responseSurveyFk: foreignKey({
+      name: 'survey_response_excerpt_approvals_response_survey_fk',
+      columns: [t.surveyId, t.responseId],
+      foreignColumns: [surveyResponses.surveyId, surveyResponses.id],
+    }),
+    questionSurveyFk: foreignKey({
+      name: 'survey_response_excerpt_approvals_question_survey_fk',
+      columns: [t.surveyId, t.questionId],
+      foreignColumns: [surveyQuestions.surveyId, surveyQuestions.id],
+    }),
+  }),
+);

@@ -7,6 +7,8 @@
 --                    other Slice 1 table.
 --   * fops_survey_aggregate_owner — owns only SECURITY DEFINER aggregate
 --                    functions and their minimum raw-column reads.
+--   * fops_survey_evidence_reader_owner — owns only SECURITY DEFINER
+--                    response-evidence readers and their minimum column reads.
 --
 -- This file runs once when the Postgres container initialises an empty
 -- data directory. Migration SQL (apps/backend/migrations/*.sql) does the
@@ -30,6 +32,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fops_survey_aggregate_owner') THEN
     CREATE ROLE fops_survey_aggregate_owner WITH NOLOGIN NOINHERIT;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fops_survey_evidence_reader_owner') THEN
+    CREATE ROLE fops_survey_evidence_reader_owner WITH NOLOGIN NOINHERIT;
+  END IF;
 END
 $$;
 
@@ -37,6 +42,7 @@ $$;
 -- this NOLOGIN role and SET ROLE to set their ACLs. Membership is intentionally
 -- one-way: the aggregate owner never inherits fops_migrate's broad privileges.
 GRANT fops_survey_aggregate_owner TO fops_migrate;
+GRANT fops_survey_evidence_reader_owner TO fops_migrate;
 
 -- CREATE DATABASE cannot run inside a DO block; the dollar-quoted shell entry
 -- script handles re-entrancy by checking existence before running this file.

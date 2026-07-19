@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { check, index, integer, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  pgSchema,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { actors, analyticsAreas, managedSystems, workspaces } from './core.js';
 
@@ -44,7 +53,7 @@ export const findings = findingSchema.table(
     ),
     sourceTypeCheck: check(
       'findings_source_type_check',
-      sql`${t.sourceType} in ('voc','voc_cluster','survey','manual')`,
+      sql`${t.sourceType} in ('voc','voc_cluster','survey','survey_response','manual')`,
     ),
     sourceIdRequiredCheck: check(
       'findings_source_id_required_check',
