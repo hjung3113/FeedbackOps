@@ -1,14 +1,32 @@
-import { expect, test } from './support/visual-test';
-import { surveyVisualFixture, surveyVisualScenarios } from './fixtures/surveys';
+import { expect, test } from "./support/visual-test";
+import { surveyVisualFixture, surveyVisualScenarios } from "./fixtures/surveys";
+import { installMockApi } from "./support/mock-api";
+import { expectVisual } from "./support/screenshot";
 
-// The shared mock-api router is deliberately outside Issue #188's allowlist.
-// Keep the fixture fail-closed and enumerate all required captures; the conductor
-// wires these scenarios into that router and generates baselines outside sandbox.
-test.describe('/surveys visual harness', () => {
+test.describe("/surveys visual harness", () => {
   for (const scenario of surveyVisualScenarios) {
-    test.skip(`${scenario} fixture is schema-valid`, async ({ page }) => {
-      await page.goto(`/surveys?visualScenario=${scenario}&selected=${surveyVisualFixture.id}`);
-      await expect(page.locator('body')).toBeVisible();
+    test(`renders ${scenario}`, async ({ page }) => {
+      await installMockApi(page, {
+        surveyScenario: scenario,
+        role: scenario === "no-permission" ? "user" : "admin",
+      });
+      const url =
+        scenario === "detail"
+          ? `/surveys/${surveyVisualFixture.id}`
+          : scenario === "builder"
+            ? `/surveys/${surveyVisualFixture.id}?builder=true`
+            : "/surveys";
+      await page.goto(url);
+      const target =
+        scenario === "builder"
+          ? page.getByTestId("survey-builder")
+          : scenario === "detail"
+            ? page.getByTestId("survey-detail")
+            : scenario === "error"
+              ? page.getByTestId("survey-list-error")
+              : page.getByTestId("survey-list");
+      await expect(target).toBeVisible();
+      await expectVisual(page, target, `surveys-${scenario}.png`);
     });
   }
 });

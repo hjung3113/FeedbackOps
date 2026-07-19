@@ -1,6 +1,10 @@
-export type SurveyType = 'discovery' | 'validation' | 'outcome';
-export type SurveyStatus = 'draft' | 'live' | 'closed';
-export type QuestionKind = 'single_choice' | 'multiple_choice' | 'rating' | 'text';
+export type SurveyType = "discovery" | "validation" | "outcome";
+export type SurveyStatus = "draft" | "open" | "closed";
+export type QuestionKind =
+  | "single_choice"
+  | "multiple_choice"
+  | "rating"
+  | "text";
 
 export interface SurveyQuestion {
   id: string;
@@ -39,4 +43,17 @@ export interface Survey {
   questions?: SurveyQuestion[];
 }
 
-export type QuestionInput = Omit<SurveyQuestion, 'id' | 'survey_id' | 'branch_depth'>;
+/** Strict question-route input: absent optional fields must be omitted, never null. */
+export interface QuestionInput {
+  kind: QuestionKind;
+  prompt: string;
+  is_required?: boolean;
+  options?: Array<{ key: string; label: string }>;
+  rating_min?: number;
+  rating_max?: number;
+  rating_low_label?: string;
+  rating_high_label?: string;
+  sort_order?: number;
+  branch_parent_question_id?: string;
+  branch_trigger_option_key?: string;
+}
