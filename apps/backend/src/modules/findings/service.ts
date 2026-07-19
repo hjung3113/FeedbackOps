@@ -77,15 +77,14 @@ function toDto(
   row: FindingReadRow,
   source?: Awaited<ReturnType<typeof findCreatedFindingSourceLink>>,
 ): FindingDto {
-  return {
+  const sourceType = row.source_type as FindingDto['source_type'];
+  const base = {
     id: row.id,
     workspace_id: row.workspace_id,
     display_id: row.display_id,
     primary_managed_system_id: row.primary_managed_system_id,
     title: row.title,
     summary: row.summary,
-    source_type: row.source_type,
-    source_id: row.source_id,
     evidence_count: row.evidence_count,
     severity: row.severity,
     confidence: row.confidence,
@@ -101,12 +100,18 @@ function toDto(
           source: {
             type: source.source_type,
             id: source.source_id,
-            relation_type: 'created_finding',
+            relation_type: 'created_finding' as const,
             link_id: source.link_id,
           },
         }
       : {}),
   };
+
+  if (sourceType === 'survey_response') {
+    return { ...base, source_type: sourceType };
+  }
+
+  return { ...base, source_type: sourceType, source_id: row.source_id } as FindingDto;
 }
 
 function evidenceHighlightToDto(

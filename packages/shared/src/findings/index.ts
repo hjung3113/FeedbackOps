@@ -123,29 +123,62 @@ export const findingSourceSchema = z.discriminatedUnion('type', [
 ]);
 export type FindingSource = z.infer<typeof findingSourceSchema>;
 
-export const findingDtoSchema = z
-  .object({
-    id: z.string().uuid(),
-    workspace_id: z.string().uuid(),
-    display_id: z.string(),
-    primary_managed_system_id: z.string().uuid(),
-    title: z.string(),
-    summary: z.string(),
-    source_type: z.enum(['voc', 'voc_cluster', 'survey', 'survey_response', 'manual']),
-    source_id: z.string().uuid().nullable(),
-    evidence_count: z.number().int().nonnegative(),
-    severity: findingSeveritySchema,
-    confidence: findingConfidenceSchema.nullable(),
-    status: findingStatusSchema,
-    analytics_area_id: z.string().uuid().nullable(),
-    linked_task_id: z.string().uuid().nullable(),
-    linked_milestone_id: z.string().uuid().nullable(),
-    created_by: z.string().uuid(),
-    created_at: z.string().datetime(),
-    updated_at: z.string().datetime(),
-    source: findingSourceSchema.nullable().optional(),
-  })
-  .strict();
+const findingDtoBaseSchema = {
+  id: z.string().uuid(),
+  workspace_id: z.string().uuid(),
+  display_id: z.string(),
+  primary_managed_system_id: z.string().uuid(),
+  title: z.string(),
+  summary: z.string(),
+  evidence_count: z.number().int().nonnegative(),
+  severity: findingSeveritySchema,
+  confidence: findingConfidenceSchema.nullable(),
+  status: findingStatusSchema,
+  analytics_area_id: z.string().uuid().nullable(),
+  linked_task_id: z.string().uuid().nullable(),
+  linked_milestone_id: z.string().uuid().nullable(),
+  created_by: z.string().uuid(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+  source: findingSourceSchema.nullable().optional(),
+};
+
+export const findingDtoSchema = z.discriminatedUnion('source_type', [
+  z
+    .object({
+      ...findingDtoBaseSchema,
+      source_type: z.literal('voc'),
+      source_id: z.string().uuid().nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      ...findingDtoBaseSchema,
+      source_type: z.literal('voc_cluster'),
+      source_id: z.string().uuid().nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      ...findingDtoBaseSchema,
+      source_type: z.literal('survey'),
+      source_id: z.string().uuid().nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      ...findingDtoBaseSchema,
+      source_type: z.literal('survey_response'),
+    })
+    .strict(),
+  z
+    .object({
+      ...findingDtoBaseSchema,
+      source_type: z.literal('manual'),
+      source_id: z.string().uuid().nullable(),
+    })
+    .strict(),
+]);
 export type FindingDto = z.infer<typeof findingDtoSchema>;
 
 export const listFindingsResponseSchema = z

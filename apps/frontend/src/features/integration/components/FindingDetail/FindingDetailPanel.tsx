@@ -737,6 +737,7 @@ function RequestTaskModal({ finding, open, onClose }: RequestTaskModalProps): Re
     mode: 'onBlur',
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: finding.id resets the form when switching findings with equal summaries.
   React.useEffect(() => {
     if (open) {
       form.reset({
@@ -744,7 +745,7 @@ function RequestTaskModal({ finding, open, onClose }: RequestTaskModalProps): Re
         requested_outcome: '',
       });
     }
-  }, [finding.summary, form, open]);
+  }, [finding.id, finding.summary, form, open]);
 
   const mutation = useRequestTaskFromFinding({
     findingId: finding.id,

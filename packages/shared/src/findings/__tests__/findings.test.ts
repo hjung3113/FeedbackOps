@@ -44,35 +44,53 @@ describe('createFindingRequestSchema', () => {
 });
 
 describe('findingDtoSchema', () => {
-  it('accepts a finding with immutable source columns and source link metadata', () => {
-    expect(() =>
-      findingDtoSchema.parse({
+  const base = {
+    id: U1,
+    workspace_id: U2,
+    display_id: 'FIN-1000',
+    primary_managed_system_id: U3,
+    title: 'Export failures',
+    summary: 'VOC evidence needs synthesis.',
+    evidence_count: 0,
+    severity: 'high' as const,
+    confidence: null,
+    status: 'draft' as const,
+    analytics_area_id: null,
+    linked_task_id: null,
+    linked_milestone_id: null,
+    created_by: U2,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('continues to require and accept source_id for VOC findings', () => {
+    const vocFinding = {
+      ...base,
+      source_type: 'voc' as const,
+      source_id: U1,
+      source: {
+        type: 'voc' as const,
         id: U1,
-        workspace_id: U2,
-        display_id: 'FIN-1000',
-        primary_managed_system_id: U3,
-        title: 'Export failures',
-        summary: 'VOC evidence needs synthesis.',
-        source_type: 'voc',
-        source_id: U1,
-        evidence_count: 0,
-        severity: 'high',
-        confidence: null,
-        status: 'draft',
-        analytics_area_id: null,
-        linked_task_id: null,
-        linked_milestone_id: null,
-        created_by: U2,
-        created_at: '2026-01-01T00:00:00.000Z',
-        updated_at: '2026-01-01T00:00:00.000Z',
-        source: {
-          type: 'voc',
-          id: U1,
-          relation_type: 'created_finding',
-          link_id: U3,
-        },
-      }),
-    ).not.toThrow();
+        relation_type: 'created_finding' as const,
+        link_id: U3,
+      },
+    };
+
+    expect(findingDtoSchema.parse(vocFinding)).toEqual(vocFinding);
+    expect(() => {
+      const { source_id: _sourceId, ...missingSourceId } = vocFinding;
+      findingDtoSchema.parse(missingSourceId);
+    }).toThrow();
+  });
+
+  it('omits source_id for survey_response findings', () => {
+    const surveyResponseFinding = {
+      ...base,
+      source_type: 'survey_response' as const,
+    };
+
+    expect(findingDtoSchema.parse(surveyResponseFinding)).toEqual(surveyResponseFinding);
+    expect(() => findingDtoSchema.parse({ ...surveyResponseFinding, source_id: U1 })).toThrow();
   });
 });
 
@@ -180,6 +198,18 @@ describe('survey-response Finding provenance and safe evidence DTOs', () => {
         source_meta: null,
       }),
     ).toThrow();
+  });
+
+  it('continues to parse a note evidence DTO with a valid source ID', () => {
+    const noteHighlight = {
+      ...highlightBase,
+      source_type: 'note' as const,
+      source_id: U1,
+      source_title: null,
+      source_meta: null,
+    };
+
+    expect(evidenceHighlightDtoSchema.parse(noteHighlight)).toMatchObject({ source_id: U1 });
   });
 
   it('accepts the backend-generated Survey Finding request with no excerpts', () => {
