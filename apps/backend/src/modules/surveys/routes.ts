@@ -53,6 +53,10 @@ const responseSubmission = z
   })
   .strict();
 const emptyQuery = z.object({}).strict();
+const evidenceCandidate = z.object({ question_id: uuid }).strict();
+const approvedExcerpt = z
+  .object({ question_id: uuid, redacted_excerpt: z.string().min(1) })
+  .strict();
 export interface SurveysRoutesOptions {
   sessionService: SessionService;
   surveysService: SurveysService;
@@ -128,6 +132,32 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       });
     return reply.send(await opts.surveysService.getSurveyResults(actor(req), id));
   });
+  app.post(
+    '/survey-responses/:id/evidence-excerpt-candidates',
+    { preHandler: pre, ...rate('mutation') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const b = parse(evidenceCandidate, req.body, reply);
+      if (!b) return;
+      return reply.send(
+        await opts.surveysService.readEvidenceExcerptCandidate(actor(req), id, b.question_id),
+      );
+    },
+  );
+  app.post(
+    '/survey-responses/:id/approved-excerpts',
+    { preHandler: pre, ...rate('mutation') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const b = parse(approvedExcerpt, req.body, reply);
+      if (!b) return;
+      return reply
+        .code(201)
+        .send(await opts.surveysService.approveEvidenceExcerpt(actor(req), id, b));
+    },
+  );
   app.post(
     '/surveys/:id/responses',
     { preHandler: pre, ...rate('mutation') },

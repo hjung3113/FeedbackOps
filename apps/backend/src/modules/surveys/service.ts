@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { type SurveyResultDto, getRatingBandForValue, surveyResultDtoSchema } from '@fops/shared';
+import {
+  type ApprovedExcerptDto,
+  type SurveyResponseExcerptCandidateDto,
+  type SurveyResultDto,
+  getRatingBandForValue,
+  surveyResultDtoSchema,
+} from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -14,6 +20,13 @@ import {
   checkSurveyRead,
   isSurveyInReadScope,
 } from './authorization.js';
+import {
+  type SurveyResponseEvidenceSubject,
+  insertApprovedExcerpt,
+  lockResponseEvidenceSubject,
+  readApprovedResultExcerpts,
+  readResponseTextCandidate,
+} from './repo-evidence.js';
 import {
   type QuestionKind,
   type QuestionRow,
@@ -71,6 +84,10 @@ export type QuestionInput = {
 };
 export type ResponseSubmissionInput = {
   answers: Array<{ question_id: string; value: string | string[] | number }>;
+};
+export type SurveyResponseEvidencePurpose = 'personal_read' | 'approve_excerpt';
+export type SurveyResponseEvidenceAccess = {
+  subject: SurveyResponseEvidenceSubject;
 };
 const dto = (s: SurveyRow, questions?: QuestionRow[]) => ({
   id: s.id,
@@ -200,6 +217,46 @@ function draft(s: SurveyRow) {
     throw new HttpError('validation.failed', 'survey questions can only be changed in draft', {
       fields: [{ path: ['status'], code: 'not_draft' }],
     });
+}
+
+/**
+ * The only Survey-owned personal-response access seam.  It locks and resolves
+ * the source before capability checks so response existence, workspace scope,
+ * survey.read, and personal-read denial collapse to the same 404.
+ */
+export async function resolveSurveyResponseEvidenceAccess(
+  deps: Pick<SurveysServiceDeps, 'checkService'>,
+  tx: Tx,
+  actor: SurveysActor,
+  responseId: string,
+  purpose: SurveyResponseEvidencePurpose,
+): Promise<SurveyResponseEvidenceAccess> {
+  const subject = await lockResponseEvidenceSubject(tx, actor.workspace_id, responseId);
+  if (!subject) throw new HttpError('not_found.record', 'survey response not found');
+  const read = await checkSurveyRead(deps.checkService, actor, subject.primary_managed_system_id, {
+    tx,
+  });
+  if (!read.allow) throw new HttpError('not_found.record', 'survey response not found');
+  const personal = await checkSurveyPersonalResponseRead(
+    deps.checkService,
+    actor,
+    subject.primary_managed_system_id,
+    { tx },
+  );
+  if (!personal.allow) throw new HttpError('not_found.record', 'survey response not found');
+  if (subject.survey_status === 'draft')
+    throw new HttpError('conflict.survey_results_unavailable', 'survey results unavailable');
+  if (purpose === 'approve_excerpt') {
+    const manage = await checkSurveyManage(
+      deps.checkService,
+      actor,
+      subject.primary_managed_system_id,
+      { tx },
+    );
+    if (!manage.allow)
+      throw new HttpError('permission.denied', 'survey.manage capability required');
+  }
+  return { subject };
 }
 function normalized(input: QuestionInput, existing?: QuestionRow) {
   const kind = input.kind;
@@ -675,10 +732,11 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     );
     if (survey.status === 'draft')
       throw new HttpError('conflict.survey_results_unavailable', 'survey results unavailable');
-    const [questions, responseCount, aggregateRows] = await Promise.all([
+    const [questions, responseCount, aggregateRows, approvedExcerpts] = await Promise.all([
       listQuestions(deps.db, actor.workspace_id, survey.id),
       readSurveyResultResponseCount(deps.db, actor.workspace_id, survey.id),
       readSurveyResultAggregates(deps.db, actor.workspace_id, survey.id),
+      readApprovedResultExcerpts(deps.db, actor.workspace_id, survey.id),
     ]);
     const rowsByQuestion = new Map<string, typeof aggregateRows>();
     for (const row of aggregateRows) {
@@ -693,6 +751,12 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       suppression: { code: 'anonymity_threshold' as const },
     });
     const holder = personal.allow;
+    const excerptsByQuestion = new Map<string, Array<{ id: string; text: string }>>();
+    for (const excerpt of approvedExcerpts) {
+      const excerpts = excerptsByQuestion.get(excerpt.question_id) ?? [];
+      excerpts.push({ id: excerpt.approved_excerpt_id, text: excerpt.redacted_excerpt });
+      excerptsByQuestion.set(excerpt.question_id, excerpts);
+    }
     return surveyResultDtoSchema.parse({
       survey_id: survey.id,
       status: survey.status,
@@ -710,7 +774,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
                 kind: 'text' as const,
                 answer_count: answerCount,
                 distribution: null,
-                excerpts: [] as [],
+                excerpts: excerptsByQuestion.get(question.id) ?? [],
               };
         }
         if (question.kind === 'rating') {
@@ -759,6 +823,103 @@ export function createSurveysService(deps: SurveysServiceDeps) {
         };
       }),
       next_actions: [],
+    });
+  }
+  async function readEvidenceExcerptCandidate(
+    actor: SurveysActor,
+    responseId: string,
+    questionId: string,
+  ): Promise<SurveyResponseExcerptCandidateDto> {
+    return deps.db.transaction(async (tx) => {
+      const { subject } = await resolveSurveyResponseEvidenceAccess(
+        deps,
+        tx,
+        actor,
+        responseId,
+        'personal_read',
+      );
+      const candidate = await readResponseTextCandidate(
+        tx,
+        actor.workspace_id,
+        responseId,
+        questionId,
+      );
+      if (!candidate) throw new HttpError('not_found.record', 'survey response not found');
+      await deps.auditService.record(tx, {
+        workspace_id: actor.workspace_id,
+        actor_id: actor.actor_id,
+        event_type: 'survey_response_personal_read',
+        subject_type: 'survey_response',
+        subject_id: responseId,
+        summary: 'Survey response personal text read',
+        detail: {
+          survey_id: subject.survey_id,
+          survey_response_id: responseId,
+          question_id: questionId,
+        },
+      });
+      return candidate;
+    });
+  }
+  async function approveEvidenceExcerpt(
+    actor: SurveysActor,
+    responseId: string,
+    input: { question_id: string; redacted_excerpt: string },
+  ): Promise<ApprovedExcerptDto> {
+    return deps.db.transaction(async (tx) => {
+      const { subject } = await resolveSurveyResponseEvidenceAccess(
+        deps,
+        tx,
+        actor,
+        responseId,
+        'approve_excerpt',
+      );
+      // Validate membership through the narrow definer before the app writes its approval row.
+      const candidate = await readResponseTextCandidate(
+        tx,
+        actor.workspace_id,
+        responseId,
+        input.question_id,
+      );
+      if (!candidate) throw new HttpError('not_found.record', 'survey response not found');
+      // The candidate definer crosses the raw-text boundary even though this
+      // command discards its text, so it receives the same sensitive-read audit.
+      await deps.auditService.record(tx, {
+        workspace_id: actor.workspace_id,
+        actor_id: actor.actor_id,
+        event_type: 'survey_response_personal_read',
+        subject_type: 'survey_response',
+        subject_id: responseId,
+        summary: 'Survey response personal text read for excerpt approval',
+        detail: {
+          survey_id: subject.survey_id,
+          survey_response_id: responseId,
+          question_id: input.question_id,
+        },
+      });
+      const approved = await insertApprovedExcerpt(tx, {
+        workspaceId: actor.workspace_id,
+        surveyId: subject.survey_id,
+        responseId,
+        questionId: input.question_id,
+        redactedExcerpt: input.redacted_excerpt,
+        approvedBy: actor.actor_id,
+      });
+      await deps.auditService.record(tx, {
+        workspace_id: actor.workspace_id,
+        actor_id: actor.actor_id,
+        event_type: 'survey_response_excerpt_approved',
+        subject_type: 'survey_response_excerpt_approval',
+        subject_id: approved.approved_excerpt_id,
+        summary: 'Survey response excerpt approved',
+        detail: {
+          survey_id: subject.survey_id,
+          survey_response_id: responseId,
+          question_id: input.question_id,
+          approved_excerpt_id: approved.approved_excerpt_id,
+        },
+      });
+      return approved;
     });
   }
   async function submitResponse(a: {
@@ -846,6 +1007,8 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     getSurvey,
     getRespondentForm,
     getSurveyResults,
+    readEvidenceExcerptCandidate,
+    approveEvidenceExcerpt,
     listSurvey,
     submitResponse,
   };
