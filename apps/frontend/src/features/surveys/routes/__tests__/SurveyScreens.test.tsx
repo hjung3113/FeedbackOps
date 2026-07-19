@@ -278,6 +278,65 @@ describe("Survey screens", () => {
     await waitFor(() => expect(screen.getByDisplayValue("추가 질문")).not.toBeDisabled());
   });
 
+  it("keeps the second question editor disabled while overlapping unbranch work is pending", async () => {
+    const resolveDelete = new Map<string, () => void>();
+    apiClient.mockImplementation((method: string, path: string) => {
+      if (method === "DELETE") {
+        return new Promise((resolve) => {
+          resolveDelete.set(path, () => resolve({ data: {} }));
+        });
+      }
+      return Promise.resolve({ data: { id: "question-recreated" } });
+    });
+    const parentQuestion = survey.questions?.[0] as SurveyQuestion;
+    const secondQuestion: SurveyQuestion = {
+      ...parentQuestion,
+      id: "question-2",
+      prompt: "두 번째 질문",
+      branch_depth: 1,
+      branch_parent_question_id: "question-1",
+      branch_trigger_option_key: "no",
+      sort_order: 1,
+    };
+    const thirdQuestion: SurveyQuestion = {
+      ...secondQuestion,
+      id: "question-3",
+      prompt: "세 번째 질문",
+      sort_order: 2,
+    };
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{
+          ...survey,
+          questions: [...(survey.questions ?? []), secondQuestion, thirdQuestion],
+        }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Q2"));
+    fireEvent.change(screen.getByLabelText("분기 부모 질문"), {
+      target: { value: "" },
+    });
+    await waitFor(() =>
+      expect(resolveDelete.get("/surveys/survey-1/questions/question-2")).toBeDefined(),
+    );
+    fireEvent.click(screen.getByText("Q3"));
+    fireEvent.change(screen.getByLabelText("분기 부모 질문"), {
+      target: { value: "" },
+    });
+    await waitFor(() =>
+      expect(resolveDelete.get("/surveys/survey-1/questions/question-3")).toBeDefined(),
+    );
+
+    await act(async () =>
+      resolveDelete.get("/surveys/survey-1/questions/question-2")?.(),
+    );
+
+    expect(screen.getByDisplayValue("세 번째 질문")).toBeDisabled();
+  });
+
   it("uses the selected parent option to reveal a branched preview question", async () => {
     const parentQuestion = survey.questions?.[0] as SurveyQuestion;
     const child: SurveyQuestion = {
