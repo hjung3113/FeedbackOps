@@ -31,6 +31,27 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
   let adminId: string;
   let adminCookie: string;
   const foreignWorkspaceIds = new Set<string>();
+  type SideEffectExpectation = { count: number; message: string };
+  type SideEffectExpectations = {
+    audit: SideEffectExpectation;
+    approvals: SideEffectExpectation;
+  };
+  const deniedPathSideEffects: SideEffectExpectations = {
+    audit: { count: 0, message: 'denied probes leave no audit side effects before cleanup' },
+    approvals: {
+      count: 0,
+      message: 'denied probes leave no approval side effects before cleanup',
+    },
+  };
+  const personalCandidateReadSideEffects: SideEffectExpectations = {
+    audit: { count: 1, message: 'personal candidate read audit rows before cleanup' },
+    approvals: { count: 0, message: 'personal candidate read approval rows before cleanup' },
+  };
+  const approvedExcerptSideEffects: SideEffectExpectations = {
+    audit: { count: 2, message: 'approved excerpt audit rows before cleanup' },
+    approvals: { count: 2, message: 'approved excerpt rows before cleanup' },
+  };
+  let expectedSideEffects = deniedPathSideEffects;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -45,7 +66,10 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
     );
     adminId = actor.rows[0]?.id ?? '';
   });
-  beforeEach(async () => cleanup());
+  beforeEach(async () => {
+    expectedSideEffects = deniedPathSideEffects;
+    await cleanup();
+  });
   afterEach(async () => cleanup(true));
   afterAll(async () => {
     await cleanup();
@@ -103,9 +127,12 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
     };
     const before = await scopedCounts();
     if (assertTeardown) {
-      for (const [table, count] of Object.entries(before)) {
-        expect(count, `${table} rows before cleanup`).toBeGreaterThan(0);
-      }
+      for (const table of ['answers', 'responses', 'questions', 'surveys', 'grants', 'sessions', 'actors', 'systems'] as const)
+        expect(before[table], `${table} fixture rows before cleanup`).toBeGreaterThan(0);
+      expect(before.audit, expectedSideEffects.audit.message).toBe(expectedSideEffects.audit.count);
+      expect(before.approvals, expectedSideEffects.approvals.message).toBe(
+        expectedSideEffects.approvals.count,
+      );
     }
     await migrateHandle.pool.query(
       `delete from core.audit_log where subject_id in (${surveys}) or subject_id in (${responses}) or subject_id in (${approvals})`,
@@ -175,9 +202,23 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       };
       const foreignBefore = await foreignCounts();
       if (assertTeardown) {
-        for (const [table, count] of Object.entries(foreignBefore)) {
-          expect(count, `foreign ${table} rows before cleanup`).toBeGreaterThan(0);
-        }
+        for (const table of [
+          'answers',
+          'responses',
+          'questions',
+          'surveys',
+          'actors',
+          'systems',
+          'workspaces',
+        ] as const)
+          expect(foreignBefore[table], `foreign ${table} fixture rows before cleanup`).toBeGreaterThan(0);
+        expect(foreignBefore.audit, 'foreign denied probes leave no audit side effects before cleanup').toBe(0);
+        expect(
+          foreignBefore.approvals,
+          'foreign denied probes leave no approval side effects before cleanup',
+        ).toBe(0);
+        expect(foreignBefore.grants, 'foreign fixture grant rows before cleanup').toBe(0);
+        expect(foreignBefore.sessions, 'foreign fixture session rows before cleanup').toBe(0);
       }
       await migrateHandle.pool.query('delete from core.audit_log where workspace_id=$1', [
         workspaceId,
@@ -331,6 +372,7 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
   }
 
   it('reads one personal candidate and audits without raw text', async () => {
+    expectedSideEffects = personalCandidateReadSideEffects;
     const source = await seed();
     const reader = await actor();
     await grant(reader.id, 'survey.read', source.msId);
@@ -360,6 +402,7 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
   });
 
   it('collapses all candidate existence and read probes to the identical 404 body', async () => {
+    expectedSideEffects = deniedPathSideEffects;
     const source = await seed();
     const foreign = await seedForeignResponse();
     const unreadable = await actor();
@@ -410,6 +453,7 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
   });
 
   it('returns draft conflict only to a fully authorized personal reader', async () => {
+    expectedSideEffects = deniedPathSideEffects;
     const source = await seed('draft');
     const authorized = await actor();
     const unauthorized = await actor();
@@ -437,6 +481,7 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
   });
 
   it('collapses all approval source and access probes to 404, including an authorized wrong question', async () => {
+    expectedSideEffects = deniedPathSideEffects;
     const source = await seed();
     const foreign = await seedForeignResponse();
     const unreadable = await actor();
@@ -464,6 +509,7 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
   });
 
   it('approves duplicate excerpts, records ID-only audit detail, and flips active results excerpts', async () => {
+    expectedSideEffects = approvedExcerptSideEffects;
     const source = await seed();
     const approver = await actor();
     await grant(approver.id, 'survey.read', source.msId);
@@ -559,6 +605,7 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
   });
 
   it('returns 403 only after a personal reader lacks survey.manage and preserves 404 for admin without personal grant', async () => {
+    expectedSideEffects = deniedPathSideEffects;
     const source = await seed();
     const personalReader = await actor();
     await grant(personalReader.id, 'survey.read', source.msId);
