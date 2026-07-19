@@ -117,14 +117,14 @@ Acceptance Criteria:
 - Responses are stored in Survey System.
 - Responses are not converted into VOC.
 - Personal response visibility follows permission rules.
-- The implemented #185 submission path is `POST /surveys/:id/responses`: one
-  immutable response per respondent per Survey, enforced by the unique index
+- Response submission through `POST /surveys/:id/responses` creates one immutable
+  response per respondent per Survey, enforced by the unique index
   `(survey_id, respondent_actor_id)`.
 - The database boundary is INSERT-only for responses and answers; it grants no
   UPDATE or DELETE, and `identity_protected` is propagated from the Survey into
   the submission acknowledgement and stored response.
-- #185 exposes no personal-response read surface. Respondents read an open,
-  same-Workspace Survey through `GET /surveys/:id/form`, which returns only a
+- No personal-response read surface is exposed. The respondent form endpoint
+  `GET /surveys/:id/form` returns an open, same-Workspace Survey with only a
   respondent-safe form DTO.
 ```
 

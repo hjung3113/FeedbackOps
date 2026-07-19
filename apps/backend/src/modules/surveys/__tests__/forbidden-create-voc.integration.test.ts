@@ -25,6 +25,7 @@ describe.skipIf(!runIntegration)('forbidden Survey Response create-VOC route (#1
   let app: FastifyInstance;
   let userCookie: string;
   const idempotencyKeys = new Set<string>();
+  const sessionIds = new Set<string>();
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -33,18 +34,19 @@ describe.skipIf(!runIntegration)('forbidden Survey Response create-VOC route (#1
     app = await buildServer({ config: loadConfig(), dbHandle: appHandle });
     await app.ready();
     userCookie = await loginAs(app, 'mock-user-1');
+    sessionIds.add(userCookie);
   });
 
   beforeEach(async () => cleanupFixtures());
 
   afterAll(async () => {
-    await cleanupFixtures();
+    await cleanupFixtures({ includeSessions: true });
     await app?.close();
     await appHandle?.close();
     await migrateHandle?.close();
   });
 
-  async function cleanupFixtures(): Promise<void> {
+  async function cleanupFixtures({ includeSessions = false } = {}): Promise<void> {
     if (idempotencyKeys.size) {
       await migrateHandle.pool.query(
         'delete from core.idempotency_keys where key = any($1::uuid[])',
@@ -90,6 +92,12 @@ describe.skipIf(!runIntegration)('forbidden Survey Response create-VOC route (#1
       `delete from core.rate_limits where key like $1 || ':%' or key like '127.0.0.%'`,
       [WORKSPACE_ID],
     );
+    if (includeSessions && sessionIds.size) {
+      await migrateHandle.pool.query('delete from core.sessions where id = any($1::uuid[])', [
+        [...sessionIds],
+      ]);
+      sessionIds.clear();
+    }
   }
 
   async function seedSubmittedResponse(): Promise<string> {
@@ -161,14 +169,34 @@ describe.skipIf(!runIntegration)('forbidden Survey Response create-VOC route (#1
   it('returns 404 without creating a VOC, entity link, or audit record for any response id', async () => {
     const responseId = await seedSubmittedResponse();
     const before = await snapshotCounts();
+    const unmatchedPath = `/definitely-not-a-route-${randomUUID()}`;
+    const unmatched = await app.inject({ method: 'POST', url: unmatchedPath });
+    const unmatchedBody = unmatched.json<Record<string, unknown>>();
+
+    expect(unmatched.statusCode).toBe(404);
+    expect(unmatchedBody).toEqual({
+      statusCode: 404,
+      error: 'Not Found',
+      message: expect.stringMatching(/^Route POST:.* not found$/),
+    });
+    expect(unmatchedBody).not.toHaveProperty('code');
 
     for (const id of [responseId, randomUUID()]) {
+      const createVocPath = `/survey-responses/${id}/create-voc`;
       const response = await app.inject({
         method: 'POST',
-        url: `/survey-responses/${id}/create-voc`,
+        url: createVocPath,
         headers: { cookie: `${SESSION_COOKIE_NAME}=${userCookie}` },
       });
+      const body = response.json<Record<string, unknown>>();
+
       expect(response.statusCode).toBe(404);
+      expect(Object.keys(body).sort()).toEqual(Object.keys(unmatchedBody).sort());
+      expect(body).toEqual({
+        ...unmatchedBody,
+        message: (unmatchedBody.message as string).replace(unmatchedPath, createVocPath),
+      });
+      expect(body).not.toHaveProperty('code');
     }
 
     const after = await snapshotCounts();
