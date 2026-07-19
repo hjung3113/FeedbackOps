@@ -217,23 +217,4 @@ describe.skipIf(!runIntegration)('survey lifecycle routes (#184)', () => {
     expect(reopen.statusCode).toBe(422);
     expect(reopen.json<{ code: string }>().code).toBe('validation.failed');
   });
-
-  it('does not register response submission routes', async () => {
-    const surveyId = await createSurvey();
-    const nested = await app.inject({
-      method: 'POST',
-      url: `/surveys/${surveyId}/responses`,
-      headers: mutationHeaders(),
-      payload: {},
-    });
-    const topLevel = await app.inject({
-      method: 'POST',
-      url: '/survey-responses',
-      headers: mutationHeaders(),
-      payload: {},
-    });
-
-    expect(nested.statusCode).toBe(404);
-    expect(topLevel.statusCode).toBe(404);
-  });
 });

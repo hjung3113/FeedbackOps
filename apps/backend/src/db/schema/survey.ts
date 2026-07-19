@@ -142,7 +142,13 @@ export const surveyResponses = surveySchema.table(
     submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ surveyIdIdUq: unique('survey_responses_survey_id_id_uq').on(t.surveyId, t.id) }),
+  (t) => ({
+    surveyIdIdUq: unique('survey_responses_survey_id_id_uq').on(t.surveyId, t.id),
+    surveyRespondentActorUq: uniqueIndex('survey_responses_survey_respondent_actor_uq').on(
+      t.surveyId,
+      t.respondentActorId,
+    ),
+  }),
 );
 
 export const surveyResponseAnswers = surveySchema.table(

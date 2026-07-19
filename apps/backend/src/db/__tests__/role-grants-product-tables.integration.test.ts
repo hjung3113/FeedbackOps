@@ -45,12 +45,12 @@ type DmlPrivilege = (typeof DML_PRIVILEGES)[number];
 const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
 
 // Tables intentionally narrower than full-DML for fops_app, keyed by the
-// fully-qualified `schema.table` name. Grants come from migration 0010.
+// fully-qualified `schema.table` name. Grants come from migrations 0010 and 0037.
 const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'survey.surveys': ['SELECT', 'INSERT', 'UPDATE'],
   'survey.survey_questions': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
-  'survey.survey_responses': [],
-  'survey.survey_response_answers': [],
+  'survey.survey_responses': ['INSERT'],
+  'survey.survey_response_answers': ['INSERT'],
   'voc.workspace_display_counters': ['SELECT'],
   'voc.voc_public_updates': ['SELECT', 'INSERT'],
   'voc.voc_reporter_replies': ['SELECT', 'INSERT'],
@@ -109,7 +109,7 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
         }
         if (!expected.has(priv) && got.has(priv)) {
           failures.push(
-            `fops_app has unexpected GRANT ${priv} ON ${fq}; ${fq} is append-only by design (migration 0010) — REVOKE it or update EXPECTED_GRANTS if the design changed`,
+            `fops_app has unexpected GRANT ${priv} ON ${fq}; ${fq} is append-only by design (migration 0010 or 0037) — REVOKE it or update EXPECTED_GRANTS if the design changed`,
           );
         }
       }
@@ -153,7 +153,7 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
     });
   });
 
-  it('fops_app may create Surveys but cannot submit responses before #185', async () => {
+  it('fops_app may submit survey responses (INSERT-only, #185 migration 0037)', async () => {
     const actor = await migrateHandle.pool.query<{ id: string }>(
       'select id from core.actors where workspace_id = $1 order by created_at limit 1',
       [WORKSPACE_ID],
@@ -184,8 +184,32 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
          ) values ($1, $2, $3, false, now())`,
         [WORKSPACE_ID, surveyId, actorId],
       ),
+    ).resolves.toBeDefined();
+
+    await expect(
+      appHandle.pool.query('select * from survey.survey_responses'),
+    ).rejects.toMatchObject({
+      code: '42501',
+    });
+    await expect(
+      appHandle.pool.query(
+        'update survey.survey_responses set submitted_at = submitted_at where false',
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    await expect(
+      appHandle.pool.query('delete from survey.survey_responses where false'),
     ).rejects.toMatchObject({ code: '42501' });
 
+    await migrateHandle.pool.query(
+      `delete from survey.survey_response_answers
+       where response_id in (
+         select id from survey.survey_responses where survey_id = $1
+       )`,
+      [surveyId],
+    );
+    await migrateHandle.pool.query('delete from survey.survey_responses where survey_id = $1', [
+      surveyId,
+    ]);
     await migrateHandle.pool.query('delete from survey.surveys where id = $1', [surveyId]);
   });
 });

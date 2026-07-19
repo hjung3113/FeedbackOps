@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -22,6 +23,8 @@ import {
 import {
   deleteQuestion,
   insertQuestion,
+  insertResponse,
+  insertResponseAnswers,
   insertSurvey,
   lockQuestions,
   lockSurvey,
@@ -62,6 +65,9 @@ export type QuestionInput = {
   sort_order?: number;
   branch_parent_question_id?: string;
   branch_trigger_option_key?: string;
+};
+export type ResponseSubmissionInput = {
+  answers: Array<{ question_id: string; value: string | string[] | number }>;
 };
 const dto = (s: SurveyRow, questions?: QuestionRow[]) => ({
   id: s.id,
@@ -228,6 +234,65 @@ function atPosition<T>(rows: T[], position: number, value: T): T[] {
 
 function compactQuestionOrder(rows: QuestionRow[]): QuestionRow[] {
   return rows.map((question, sort_order) => ({ ...question, sort_order }));
+}
+
+function validation(message: string, path: Array<string | number>) {
+  throw new HttpError('validation.failed', message, { fields: [{ path, code: 'invalid' }] });
+}
+
+function validateResponseAnswers(input: ResponseSubmissionInput, questions: QuestionRow[]) {
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  const answers = new Map<string, string | string[] | number>();
+  for (const [index, answer] of input.answers.entries()) {
+    const question = byId.get(answer.question_id);
+    if (!question)
+      validation('question does not belong to survey', ['answers', index, 'question_id']);
+    if (answers.has(answer.question_id))
+      validation('duplicate question answer', ['answers', index, 'question_id']);
+    answers.set(answer.question_id, answer.value);
+  }
+  for (const question of questions) {
+    const value = answers.get(question.id);
+    const active =
+      question.branch_depth === 0 ||
+      answers.get(question.branch_parent_question_id ?? '') === question.branch_trigger_option_key;
+    if (!active && value !== undefined)
+      validation('answer submitted for inactive branch', ['answers']);
+    if (active && question.is_required && value === undefined)
+      validation('required question is unanswered', ['answers']);
+  }
+  return [...answers.entries()].map(([questionId, rawValue]) => {
+    const question = byId.get(questionId);
+    if (!question) throw new Error('question disappeared during validation');
+    let value: string | string[] | number = rawValue;
+    const optionKeys = new Set(question.options?.map((option) => option.key) ?? []);
+    if (question.kind === 'single_choice') {
+      if (typeof value !== 'string' || !value || !optionKeys.has(value))
+        validation('invalid single choice answer', ['answers']);
+    } else if (question.kind === 'multiple_choice') {
+      if (
+        !Array.isArray(value) ||
+        !value.length ||
+        new Set(value).size !== value.length ||
+        value.some((option) => !option || !optionKeys.has(option))
+      )
+        validation('invalid multiple choice answer', ['answers']);
+    } else if (question.kind === 'rating') {
+      if (
+        typeof value !== 'number' ||
+        !Number.isInteger(value) ||
+        value < (question.rating_min ?? 0) ||
+        value > (question.rating_max ?? 0)
+      )
+        validation('invalid rating answer', ['answers']);
+    } else {
+      if (typeof value !== 'string') validation('invalid text answer', ['answers']);
+      const text = value as string;
+      value = text.trim();
+      if (!value || [...value].length > 4000) validation('invalid text answer', ['answers']);
+    }
+    return { questionId, answerKind: question.kind, value };
+  });
 }
 
 export function createSurveysService(deps: SurveysServiceDeps) {
@@ -566,6 +631,104 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     if (!r.allow) throw new HttpError('not_found.record', 'survey not found');
     return dto(s, await listQuestions(deps.db, actor.workspace_id, id));
   }
+  async function getRespondentForm(actor: SurveysActor, id: string) {
+    const survey = await findSurvey(deps.db, actor.workspace_id, id);
+    if (!survey) throw new HttpError('not_found.record', 'survey not found');
+    if (survey.status !== 'open')
+      throw new HttpError('conflict.survey_not_open', 'survey is not open');
+    const questions = await listQuestions(deps.db, actor.workspace_id, id);
+    return {
+      survey: {
+        id: survey.id,
+        title: survey.title,
+        type: survey.type,
+        identity_protected: survey.responses_identity_protected,
+      },
+      questions: questions.map((question) => ({
+        id: question.id,
+        kind: question.kind,
+        prompt: question.prompt,
+        is_required: question.is_required,
+        sort_order: question.sort_order,
+        options: question.options,
+        rating_min: question.rating_min,
+        rating_max: question.rating_max,
+        rating_low_label: question.rating_low_label,
+        rating_high_label: question.rating_high_label,
+        branch_parent_question_id: question.branch_parent_question_id,
+        branch_trigger_option_key: question.branch_trigger_option_key,
+      })),
+    };
+  }
+  async function submitResponse(a: {
+    actor: SurveysActor;
+    surveyId: string;
+    input: ResponseSubmissionInput;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return deps.db.transaction((tx) =>
+      deps.idempotencyService.runIdempotent(
+        tx,
+        a.actor.actor_id,
+        a.idempotencyKey,
+        a.requestHash,
+        async () => {
+          const survey = await lockSurvey(tx, a.actor.workspace_id, a.surveyId);
+          if (!survey) throw new HttpError('not_found.record', 'survey not found');
+          if (survey.status !== 'open')
+            throw new HttpError('conflict.survey_not_open', 'survey is not open');
+          const answers = validateResponseAnswers(
+            a.input,
+            await lockQuestions(tx, a.actor.workspace_id, survey.id),
+          );
+          const id = randomUUID();
+          const submittedAt = new Date();
+          if (
+            !(await insertResponse(tx, {
+              id,
+              workspaceId: a.actor.workspace_id,
+              surveyId: survey.id,
+              respondentActorId: a.actor.actor_id,
+              identityProtected: survey.responses_identity_protected,
+              submittedAt,
+            }))
+          )
+            throw new HttpError(
+              'conflict.survey_response_already_submitted',
+              'survey response already submitted',
+            );
+          await insertResponseAnswers(tx, {
+            workspaceId: a.actor.workspace_id,
+            surveyId: survey.id,
+            responseId: id,
+            answers,
+          });
+          const body = {
+            id,
+            survey_id: survey.id,
+            submitted_at: submittedAt.toISOString(),
+            identity_protected: survey.responses_identity_protected,
+          };
+          await deps.auditService.record(tx, {
+            workspace_id: a.actor.workspace_id,
+            actor_id: a.actor.actor_id,
+            event_type: 'survey_response_submitted',
+            subject_type: 'survey_response',
+            subject_id: id,
+            summary: 'Survey response submitted',
+            detail: {
+              survey_id: survey.id,
+              response_id: id,
+              question_count: answers.length,
+              identity_protected: survey.responses_identity_protected,
+            },
+          });
+          return { status: 201, body };
+        },
+      ),
+    );
+  }
   async function listSurvey(actor: SurveysActor, managedSystemId?: string) {
     const scope = await actorSurveyReadScope(deps.db, deps.checkService, actor);
     return (await listSurveys(deps.db, actor.workspace_id, managedSystemId))
@@ -580,7 +743,9 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     openSurvey: (a: Parameters<typeof transition>[0]) => transition({ ...a, target: 'open' }),
     closeSurvey: (a: Parameters<typeof transition>[0]) => transition({ ...a, target: 'closed' }),
     getSurvey,
+    getRespondentForm,
     listSurvey,
+    submitResponse,
   };
 }
 export type SurveysService = ReturnType<typeof createSurveysService>;
