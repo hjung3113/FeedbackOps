@@ -93,7 +93,7 @@ describe.skipIf(!runIntegration)('forbidden Survey Response create-VOC route (#1
       [WORKSPACE_ID],
     );
     if (includeSessions && sessionIds.size) {
-      await migrateHandle.pool.query('delete from core.sessions where id = any($1::uuid[])', [
+      await migrateHandle.pool.query('delete from core.sessions where id = any($1::text[])', [
         [...sessionIds],
       ]);
       sessionIds.clear();
