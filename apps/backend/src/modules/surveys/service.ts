@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import { getRatingBandForValue, type SurveyResultDto } from '@fops/shared';
+import { getRatingBandForValue, surveyResultDtoSchema, type SurveyResultDto } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
@@ -693,7 +693,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       suppression: { code: 'anonymity_threshold' as const },
     });
     const holder = personal.allow;
-    return {
+    return surveyResultDtoSchema.parse({
       survey_id: survey.id,
       status: survey.status,
       identity_protected: survey.responses_identity_protected,
@@ -715,10 +715,9 @@ export function createSurveysService(deps: SurveysServiceDeps) {
             if (!Number.isInteger(value) || question.rating_min === null || question.rating_max === null || value < question.rating_min || value > question.rating_max) continue;
             distribution[getRatingBandForValue(question.rating_min, question.rating_max, value)] += row.bucket_count;
           }
-          const includedCount = distribution.low + distribution.mid + distribution.high;
           if (!holder && Object.values(distribution).some((count) => count > 0 && count < 5)) return suppressed(question.id);
           return { question_id: question.id, visibility: 'visible' as const, kind: 'rating' as const,
-            answer_count: includedCount, distribution };
+            answer_count: answerCount, distribution };
         }
         const rowCounts = new Map(rows.filter((row) => row.bucket_key !== null).map((row) => [row.bucket_key!, row.bucket_count]));
         const option_buckets = (question.options ?? []).map((option) => ({ key: option.key, label: option.label, count: rowCounts.get(option.key) ?? 0 }));
@@ -727,7 +726,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
           answer_count: answerCount, option_buckets };
       }),
       next_actions: [],
-    };
+    });
   }
   async function submitResponse(a: {
     actor: SurveysActor;
