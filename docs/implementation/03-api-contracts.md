@@ -689,8 +689,9 @@ POST /findings/:id/link-task
 Finding is not independently created through `POST /findings` as of Slice 6.
 Creation happens only through source conversion routes:
 `POST /vocs/:id/create-finding` and `POST /voc-clusters/:id/create-finding`.
-`POST /survey-responses/:id/create-finding` is a planned Slice 8 route (미구현 —
-the `surveys` backend module has no implementation as of this writing).
+`POST /survey-responses/:id/create-finding` is a planned Slice 8 route
+(미구현); Survey creation, lifecycle, respondent form, and response submission
+are implemented separately.
 
 Finding-to-Milestone linking is future cross-system behavior and is not an MVP
 Finding endpoint.
@@ -757,6 +758,7 @@ Slice 6. It is created only through source transition routes:
 POST /surveys
 GET /surveys
 GET /surveys/:id
+GET /surveys/:id/form
 POST /surveys/:id/responses
 GET /surveys/:id/results
 POST /survey-responses/:id/create-finding
@@ -764,6 +766,24 @@ POST /survey-findings/:id/request-task
 POST /survey-findings/:id/link-task
 # future: POST /survey-findings/:id/link-milestone
 ```
+
+`GET /surveys/:id/form` is the respondent form read surface. Any authenticated
+Actor in the same Workspace may read an open Survey without `survey.read`; a
+missing or cross-Workspace Survey returns `404 not_found.record`, and a
+non-open Survey returns `409 conflict.survey_not_open`. Its DTO is respondent
+safe: form fields, questions, choices, and rating bounds only—never operator or
+personal-response data.
+
+`POST /surveys/:id/responses` is implemented for an authenticated Actor in the
+same Workspace and requires `Idempotency-Key`. It returns `201` with only
+`{ id, survey_id, submitted_at, identity_protected }`; it never echoes answers.
+A missing or cross-Workspace Survey returns `404 not_found.record`; a non-open
+Survey returns `409 conflict.survey_not_open`; a second submission returns
+`409 conflict.survey_response_already_submitted`; and reusing a key with a
+different payload returns `409 conflict.idempotency_key_reuse`. The `422
+validation.failed` matrix covers malformed or duplicate question IDs, unknown
+or inactive-branch answers, missing required answers, answer-kind/value and
+choice mismatches, rating bounds, and trimmed text length.
 
 ### Core / Managed System / Analytics Area
 
@@ -880,4 +900,4 @@ the same `404 not_found.record` as an absent VOC; a Reporter receives `403`.
 POST /survey-responses/:id/create-voc
 ```
 
-If compatibility handling is ever needed, return `404` or `410`. Never create a VOC or `generated_voc` link from a Survey Response.
+If compatibility handling is ever needed, return `404` or `410`. Never create a VOC or `generated_voc` link from a Survey Response. Issue #185 pins the unregistered route to Fastify's `404` behavior with an integration test.
