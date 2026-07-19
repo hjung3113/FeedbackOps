@@ -231,18 +231,17 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
               aggregate_owner.rolcanlogin, aggregate_owner.rolinherit,
               pg_catalog.has_schema_privilege('fops_survey_aggregate_owner', 'survey', 'CREATE') as schema_create,
               pg_catalog.has_schema_privilege('fops_survey_aggregate_owner', 'survey', 'USAGE') as schema_usage,
-              array(
-                select distinct privilege_principal
+              coalesce((
+                select array_agg(privilege_principal order by privilege_principal)
                   from (
-                    select owner_role.rolname as privilege_principal
+                    select owner_role.rolname::text as privilege_principal
                     union
-                    select coalesce(grantee.rolname, 'PUBLIC') as privilege_principal
+                    select coalesce(grantee.rolname::text, 'PUBLIC') as privilege_principal
                       from pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) acl
                       left join pg_catalog.pg_roles grantee on grantee.oid = acl.grantee
                      where acl.privilege_type = 'EXECUTE'
                   ) execute_acl
-                 order by privilege_principal
-              ) as execute_principals
+              ), '{}'::text[]) as execute_principals
          from pg_catalog.pg_proc p
          join pg_catalog.pg_namespace n on n.oid = p.pronamespace
          join pg_catalog.pg_roles owner_role on owner_role.oid = p.proowner
@@ -267,38 +266,39 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
     }
 
     const columnPrivileges = await migrateHandle.pool.query<{ privilege: string }>(
-      `select table_name || '.' || column_name as privilege
+      `select table_name || '.' || column_name || '.' || privilege_type as privilege
          from information_schema.column_privileges
         where grantee = 'fops_survey_aggregate_owner'
           and table_schema = 'survey'
-          and privilege_type = 'SELECT'
-        order by table_name, column_name`,
+        order by table_name, column_name, privilege_type`,
     );
     expect(columnPrivileges.rows.map((row) => row.privilege)).toEqual([
-      'survey_questions.id',
-      'survey_questions.kind',
-      'survey_questions.survey_id',
-      'survey_questions.workspace_id',
-      'survey_response_answers.answer_kind',
-      'survey_response_answers.answer_value',
-      'survey_response_answers.question_id',
-      'survey_response_answers.response_id',
-      'survey_response_answers.survey_id',
-      'survey_response_answers.workspace_id',
-      'survey_responses.id',
-      'survey_responses.survey_id',
-      'survey_responses.workspace_id',
-      'surveys.id',
-      'surveys.workspace_id',
+      'survey_questions.id.SELECT',
+      'survey_questions.kind.SELECT',
+      'survey_questions.survey_id.SELECT',
+      'survey_questions.workspace_id.SELECT',
+      'survey_response_answers.answer_kind.SELECT',
+      'survey_response_answers.answer_value.SELECT',
+      'survey_response_answers.question_id.SELECT',
+      'survey_response_answers.response_id.SELECT',
+      'survey_response_answers.survey_id.SELECT',
+      'survey_response_answers.workspace_id.SELECT',
+      'survey_responses.id.SELECT',
+      'survey_responses.survey_id.SELECT',
+      'survey_responses.workspace_id.SELECT',
+      'surveys.id.SELECT',
+      'surveys.workspace_id.SELECT',
     ]);
 
-    const tablePrivileges = await migrateHandle.pool.query<{ table_name: string }>(
-      `select table_name
+    const tablePrivileges = await migrateHandle.pool.query<{
+      table_schema: string;
+      table_name: string;
+      privilege_type: string;
+    }>(
+      `select table_schema, table_name, privilege_type
          from information_schema.table_privileges
         where grantee = 'fops_survey_aggregate_owner'
-          and table_schema = 'survey'
-          and privilege_type = 'SELECT'
-        order by table_name`,
+        order by table_schema, table_name, privilege_type`,
     );
     expect(tablePrivileges.rows).toEqual([]);
 
