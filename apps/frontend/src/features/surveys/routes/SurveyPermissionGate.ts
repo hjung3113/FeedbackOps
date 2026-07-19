@@ -7,5 +7,8 @@ export function useSurveyManageGate(managedSystemId?: string) {
   const permission = usePermissionCheck({ capability: 'survey.manage', ...(managedSystemId ? { managedSystemId } : {}) });
   const loading = me.isLoading || me.isPending || permission.isPending;
   const canManage = !loading && !me.isError && !permission.isError && permission.data?.state === 'approved';
-  return { canManage, gateState: loading ? 'loading' as const : me.isError || permission.isError ? 'error' as const : 'absent' as const };
+  return {
+    canManage,
+    gateState: loading ? 'loading' as const : me.isError || permission.isError ? 'error' as const : canManage ? undefined : 'absent' as const,
+  };
 }

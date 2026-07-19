@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SurveyBuilder } from '../../components/builder/SurveyBuilder';
+import { SurveyDetail } from '../../components/detail/SurveyDetail';
 import { SurveyList } from '../../components/list/SurveyList';
 import type { Survey } from '../../types';
 
@@ -35,6 +36,15 @@ describe('Survey screens', () => {
     renderWithQuery(<SurveyBuilder survey={{ ...survey, status: 'live' }} canManage onBack={vi.fn()} />);
     expect(screen.getByText('Live 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '새 질문 추가' })).not.toBeInTheDocument();
+  });
+
+  it('renders a survey detail title, type, status, and questions', () => {
+    render(<SurveyDetail survey={survey} canManage={false} />);
+
+    expect(screen.getByText('Q3 사용성 진단')).toBeInTheDocument();
+    expect(screen.getByText('SRV-1 · discovery')).toBeInTheDocument();
+    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.getByText('Q1. 도움이 되었나요?')).toBeInTheDocument();
   });
 
   it.each(['single_choice', 'multiple_choice', 'rating', 'text'] as const)(
