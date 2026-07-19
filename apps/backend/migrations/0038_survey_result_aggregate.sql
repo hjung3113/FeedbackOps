@@ -1,8 +1,13 @@
+-- Existing environments must run these prerequisites before applying this migration:
+--   CREATE ROLE fops_survey_aggregate_owner WITH NOLOGIN NOINHERIT;
+--   GRANT fops_survey_aggregate_owner TO fops_migrate;
+-- See scripts/db/init.sql for the empty-database bootstrap equivalent.
+--
 -- Issue #186: aggregate-only survey result read interface. Text answers deliberately
 -- produce no rows: their bodies must never cross this database privilege boundary.
 
--- PostgreSQL requires CREATE on the containing schema to transfer ownership.
--- The NOLOGIN role otherwise receives only the column reads declared below.
+-- PostgreSQL requires temporary CREATE on the containing schema to transfer
+-- ownership. It is revoked immediately after both transfers complete.
 GRANT USAGE, CREATE ON SCHEMA "survey" TO fops_survey_aggregate_owner;
 --> statement-breakpoint
 GRANT SELECT ("id", "workspace_id") ON "survey"."surveys" TO fops_survey_aggregate_owner;
@@ -77,6 +82,8 @@ $$;
 ALTER FUNCTION "survey"."read_result_aggregates"(uuid, uuid) OWNER TO fops_survey_aggregate_owner;
 --> statement-breakpoint
 ALTER FUNCTION "survey"."read_result_response_count"(uuid, uuid) OWNER TO fops_survey_aggregate_owner;
+--> statement-breakpoint
+REVOKE CREATE ON SCHEMA "survey" FROM fops_survey_aggregate_owner;
 --> statement-breakpoint
 SET ROLE fops_survey_aggregate_owner;
 --> statement-breakpoint

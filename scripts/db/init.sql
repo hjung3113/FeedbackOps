@@ -12,6 +12,8 @@
 -- data directory. Migration SQL (apps/backend/migrations/*.sql) does the
 -- per-table GRANT/REVOKE work; this file only creates the roles, the
 -- database, and ensures `fops_migrate` owns it.
+-- Existing databases must follow the pre-migration role prerequisite at the
+-- top of apps/backend/migrations/0038_survey_result_aggregate.sql.
 --
 -- The superuser bootstrap user comes from POSTGRES_USER/POSTGRES_PASSWORD on
 -- the container; the Drizzle CLI and the app both connect as the two roles

@@ -29,8 +29,10 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
   let managedSystemId: string;
   let surveyId: string;
   let choiceQuestionId: string;
+  let multipleChoiceQuestionId: string;
   let ratingQuestionId: string;
   let textQuestionId: string;
+  let mismatchedTextQuestionId: string;
   const textAnswer = 'must never leave the aggregate interface';
 
   beforeAll(async () => {
@@ -75,14 +77,22 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
       `insert into survey.survey_questions (workspace_id, survey_id, kind, prompt, options, rating_min, rating_max, sort_order)
        values
          ($1, $2, 'single_choice', 'Choice', '[{"key":"yes","label":"Yes"},{"key":"no","label":"No"}]'::jsonb, null, null, 0),
-         ($1, $2, 'rating', 'Rating', null, 1, 5, 1),
-         ($1, $2, 'text', 'Text', null, null, null, 2)
+         ($1, $2, 'multiple_choice', 'Multiple choice', '[{"key":"alpha","label":"Alpha"},{"key":"beta","label":"Beta"},{"key":"gamma","label":"Gamma"}]'::jsonb, null, null, 1),
+         ($1, $2, 'rating', 'Rating', null, 1, 5, 2),
+         ($1, $2, 'text', 'Text', null, null, null, 3),
+         ($1, $2, 'text', 'Mismatched text', null, null, null, 4)
        returning id, kind`,
       [workspaceId, surveyId],
     );
     choiceQuestionId = requiredId(questions.rows.find((row) => row.kind === 'single_choice'), 'choice question');
+    multipleChoiceQuestionId = requiredId(
+      questions.rows.find((row) => row.kind === 'multiple_choice'),
+      'multiple-choice question',
+    );
     ratingQuestionId = requiredId(questions.rows.find((row) => row.kind === 'rating'), 'rating question');
-    textQuestionId = requiredId(questions.rows.find((row) => row.kind === 'text'), 'text question');
+    const textQuestions = questions.rows.filter((row) => row.kind === 'text');
+    textQuestionId = requiredId(textQuestions[0], 'text question');
+    mismatchedTextQuestionId = requiredId(textQuestions[1], 'mismatched text question');
 
     for (const [index, actorId] of actorIds.entries()) {
       const response = await migrateHandle.pool.query<{ id: string }>(
@@ -94,25 +104,42 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
       const responseId = requiredId(response.rows[0], `response ${index}`);
       const choice = index === 2 ? 'no' : 'yes';
       const rating = index === 2 ? 5 : 3;
+      const multipleChoice = [
+        ['alpha', 'beta'],
+        ['beta', 'gamma'],
+        ['alpha', 'gamma'],
+      ][index];
       await migrateHandle.pool.query(
         `insert into survey.survey_response_answers (
            workspace_id, survey_id, response_id, question_id, answer_kind, answer_value
          ) values
            ($1, $2, $3, $4, 'single_choice', $5::jsonb),
-           ($1, $2, $3, $6, 'rating', $7::jsonb),
-           ($1, $2, $3, $8, 'text', $9::jsonb)`,
+           ($1, $2, $3, $6, 'multiple_choice', $7::jsonb),
+           ($1, $2, $3, $8, 'rating', $9::jsonb),
+           ($1, $2, $3, $10, 'text', $11::jsonb)`,
         [
           workspaceId,
           surveyId,
           responseId,
           choiceQuestionId,
           JSON.stringify(choice),
+          multipleChoiceQuestionId,
+          JSON.stringify(multipleChoice),
           ratingQuestionId,
           JSON.stringify(rating),
           textQuestionId,
           JSON.stringify(textAnswer),
         ],
       );
+
+      if (index === 0) {
+        await migrateHandle.pool.query(
+          `insert into survey.survey_response_answers (
+             workspace_id, survey_id, response_id, question_id, answer_kind, answer_value
+           ) values ($1, $2, $3, $4, 'rating', '1'::jsonb)`,
+          [workspaceId, surveyId, responseId, mismatchedTextQuestionId],
+        );
+      }
     }
   });
 
@@ -147,12 +174,15 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
     }
   });
 
-  it('returns only exact choice and rating buckets plus the submitted response count', async () => {
+  it('returns only exact choice, multiple-choice, and rating buckets plus the submitted response count', async () => {
     const aggregates = await appHandle.pool.query<AggregateRow>(
       'select * from survey.read_result_aggregates($1::uuid, $2::uuid) order by question_kind, bucket_key',
       [workspaceId, surveyId],
     );
     expect(aggregates.rows).toEqual([
+      { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: 'alpha', bucket_count: '2' },
+      { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: 'beta', bucket_count: '2' },
+      { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: 'gamma', bucket_count: '2' },
       { question_id: ratingQuestionId, question_kind: 'rating', bucket_key: '3', bucket_count: '2' },
       { question_id: ratingQuestionId, question_kind: 'rating', bucket_key: '5', bucket_count: '1' },
       { question_id: choiceQuestionId, question_kind: 'single_choice', bucket_key: 'no', bucket_count: '1' },
@@ -190,11 +220,29 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
       public_execute: boolean;
       app_execute: boolean;
       rolcanlogin: boolean;
+      rolinherit: boolean;
+      schema_create: boolean;
+      schema_usage: boolean;
+      execute_principals: string[];
     }>(
       `select p.proname, owner_role.rolname as owner, p.prosecdef, p.proconfig, p.provolatile,
               pg_catalog.has_function_privilege('public', p.oid, 'EXECUTE') as public_execute,
               pg_catalog.has_function_privilege('fops_app', p.oid, 'EXECUTE') as app_execute,
-              aggregate_owner.rolcanlogin
+              aggregate_owner.rolcanlogin, aggregate_owner.rolinherit,
+              pg_catalog.has_schema_privilege('fops_survey_aggregate_owner', 'survey', 'CREATE') as schema_create,
+              pg_catalog.has_schema_privilege('fops_survey_aggregate_owner', 'survey', 'USAGE') as schema_usage,
+              array(
+                select distinct privilege_principal
+                  from (
+                    select owner_role.rolname as privilege_principal
+                    union
+                    select coalesce(grantee.rolname, 'PUBLIC') as privilege_principal
+                      from pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) acl
+                      left join pg_catalog.pg_roles grantee on grantee.oid = acl.grantee
+                     where acl.privilege_type = 'EXECUTE'
+                  ) execute_acl
+                 order by privilege_principal
+              ) as execute_principals
          from pg_catalog.pg_proc p
          join pg_catalog.pg_namespace n on n.oid = p.pronamespace
          join pg_catalog.pg_roles owner_role on owner_role.oid = p.proowner
@@ -212,6 +260,55 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
       expect(row.public_execute).toBe(false);
       expect(row.app_execute).toBe(true);
       expect(row.rolcanlogin).toBe(false);
+      expect(row.rolinherit).toBe(false);
+      expect(row.schema_create).toBe(false);
+      expect(row.schema_usage).toBe(true);
+      expect(row.execute_principals).toEqual(['fops_app', 'fops_survey_aggregate_owner']);
     }
+
+    const columnPrivileges = await migrateHandle.pool.query<{ privilege: string }>(
+      `select table_name || '.' || column_name as privilege
+         from information_schema.column_privileges
+        where grantee = 'fops_survey_aggregate_owner'
+          and table_schema = 'survey'
+          and privilege_type = 'SELECT'
+        order by table_name, column_name`,
+    );
+    expect(columnPrivileges.rows.map((row) => row.privilege)).toEqual([
+      'survey_questions.id',
+      'survey_questions.kind',
+      'survey_questions.survey_id',
+      'survey_questions.workspace_id',
+      'survey_response_answers.answer_kind',
+      'survey_response_answers.answer_value',
+      'survey_response_answers.question_id',
+      'survey_response_answers.response_id',
+      'survey_response_answers.survey_id',
+      'survey_response_answers.workspace_id',
+      'survey_responses.id',
+      'survey_responses.survey_id',
+      'survey_responses.workspace_id',
+      'surveys.id',
+      'surveys.workspace_id',
+    ]);
+
+    const tablePrivileges = await migrateHandle.pool.query<{ table_name: string }>(
+      `select table_name
+         from information_schema.table_privileges
+        where grantee = 'fops_survey_aggregate_owner'
+          and table_schema = 'survey'
+          and privilege_type = 'SELECT'
+        order by table_name`,
+    );
+    expect(tablePrivileges.rows).toEqual([]);
+
+    const membership = await migrateHandle.pool.query<{
+      migrate_is_owner_member: boolean;
+      owner_is_migrate_member: boolean;
+    }>(
+      `select pg_catalog.pg_has_role('fops_migrate', 'fops_survey_aggregate_owner', 'MEMBER') as migrate_is_owner_member,
+              pg_catalog.pg_has_role('fops_survey_aggregate_owner', 'fops_migrate', 'MEMBER') as owner_is_migrate_member`,
+    );
+    expect(membership.rows).toEqual([{ migrate_is_owner_member: true, owner_is_migrate_member: false }]);
   });
 });
