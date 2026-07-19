@@ -77,7 +77,6 @@ function validId(id: string): boolean {
   return uuid.safeParse(id).success;
 }
 export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (app, opts) => {
-  const session = [requireSession(opts.sessionService)];
   const pre = [requireSession(opts.sessionService), requireWorkspace(opts.workspaceId)];
   const rate = (kind: 'read' | 'mutation') =>
     opts.rateLimitConfig?.[kind]
@@ -113,14 +112,14 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
     return reply.send(await opts.surveysService.getSurvey(actor(req), id));
   });
-  app.get('/surveys/:id/form', { preHandler: session, ...rate('read') }, async (req, reply) => {
+  app.get('/surveys/:id/form', { preHandler: pre, ...rate('read') }, async (req, reply) => {
     const id = (req.params as { id: string }).id;
     if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
     return reply.send(await opts.surveysService.getRespondentForm(actor(req), id));
   });
   app.post(
     '/surveys/:id/responses',
-    { preHandler: session, ...rate('mutation') },
+    { preHandler: pre, ...rate('mutation') },
     async (req, reply) => {
       const id = (req.params as { id: string }).id;
       if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
