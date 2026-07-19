@@ -88,7 +88,7 @@ describe.skipIf(!runIntegration)('Survey response submission migration 0037', ()
       indexName: string;
       columns: string[];
     }>(
-      `select index_class.relname as "indexName", array_agg(attribute.attname order by key_column.ordinality) as columns
+      `select index_class.relname as "indexName", array_agg(attribute.attname::text order by key_column.ordinality) as columns
          from pg_class index_class
          join pg_namespace index_namespace on index_namespace.oid = index_class.relnamespace
          join pg_index index_definition on index_definition.indexrelid = index_class.oid
@@ -118,10 +118,10 @@ describe.skipIf(!runIntegration)('Survey response submission migration 0037', ()
         canDelete: boolean;
       }>(
         `select
-           has_table_privilege('fops_app', format('survey.%I', $1), 'INSERT') as "canInsert",
-           has_table_privilege('fops_app', format('survey.%I', $1), 'SELECT') as "canSelect",
-           has_table_privilege('fops_app', format('survey.%I', $1), 'UPDATE') as "canUpdate",
-           has_table_privilege('fops_app', format('survey.%I', $1), 'DELETE') as "canDelete"`,
+           has_table_privilege('fops_app', format('survey.%I', $1::text), 'INSERT') as "canInsert",
+           has_table_privilege('fops_app', format('survey.%I', $1::text), 'SELECT') as "canSelect",
+           has_table_privilege('fops_app', format('survey.%I', $1::text), 'UPDATE') as "canUpdate",
+           has_table_privilege('fops_app', format('survey.%I', $1::text), 'DELETE') as "canDelete"`,
         [tableName],
       );
       const privileges = rows[0];
