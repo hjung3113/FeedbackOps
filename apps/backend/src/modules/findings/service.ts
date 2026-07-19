@@ -751,22 +751,38 @@ export function createFindingsService(deps: FindingsServiceDeps) {
       surveyMeta: string | null;
     }> = [];
     for (const row of rows) {
-      const includeQuote = await canReadEvidenceHighlightSource({ actor: args.actor, row });
-      let surveyMeta: string | null = null;
-      if (includeQuote && row.source_type === 'survey_response' && row.source_id) {
-        const access = await deps.db.transaction((tx) =>
-          resolveSurveyResponseHighlightAccess(
-            deps,
-            tx,
-            args.actor,
-            row.source_id ?? '',
-            row.quote_or_summary,
-          ),
-        );
-        if (access)
-          surveyMeta = `${access.survey_type} · ${access.survey_display_id} · Identity protected`;
+      // Resolve visibility and the safe source metadata from one snapshot. A
+      // second lookup after a successful visibility check could otherwise let
+      // an approval revoked between calls serialize a stale excerpt.
+      if (row.source_type === 'survey_response' && row.source_id) {
+        const access = await deps.db.transaction(async (tx) => {
+          try {
+            return await resolveSurveyResponseHighlightAccess(
+              deps,
+              tx,
+              args.actor,
+              row.source_id ?? '',
+              row.quote_or_summary,
+            );
+          } catch (error) {
+            if (error instanceof HttpError && error.code === 'not_found.record') return null;
+            throw error;
+          }
+        });
+        visibility.push({
+          row,
+          includeQuote: access !== null,
+          surveyMeta: access
+            ? `${access.survey_type} · ${access.survey_display_id} · Identity protected`
+            : null,
+        });
+        continue;
       }
-      visibility.push({ row, includeQuote, surveyMeta });
+      visibility.push({
+        row,
+        includeQuote: await canReadEvidenceHighlightSource({ actor: args.actor, row }),
+        surveyMeta: null,
+      });
     }
     const readableVocIds = [
       ...new Set(
