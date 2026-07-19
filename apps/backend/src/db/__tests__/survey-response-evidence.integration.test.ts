@@ -311,9 +311,19 @@ describe.skipIf(!runIntegration)('Survey response evidence access migration 0039
     );
     expect(appColumnPrivileges).toEqual([
       {
+        table_name: 'survey_response_answers',
+        privilege_types: ['INSERT'],
+        update_columns: null,
+      },
+      {
         table_name: 'survey_response_excerpt_approvals',
+        privilege_types: ['INSERT', 'SELECT', 'UPDATE'],
         update_columns: ['revoked_at'],
-        privilege_types: ['UPDATE'],
+      },
+      {
+        table_name: 'survey_responses',
+        privilege_types: ['INSERT'],
+        update_columns: null,
       },
     ]);
   });
