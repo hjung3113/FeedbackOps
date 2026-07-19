@@ -104,7 +104,7 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
     const before = await scopedCounts();
     if (assertTeardown) {
       for (const [table, count] of Object.entries(before)) {
-        if (count > 0) expect(count, `${table} rows before cleanup`).toBeGreaterThan(0);
+        expect(count, `${table} rows before cleanup`).toBeGreaterThan(0);
       }
     }
     await migrateHandle.pool.query(
@@ -176,7 +176,7 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       const foreignBefore = await foreignCounts();
       if (assertTeardown) {
         for (const [table, count] of Object.entries(foreignBefore)) {
-          if (count > 0) expect(count, `foreign ${table} rows before cleanup`).toBeGreaterThan(0);
+          expect(count, `foreign ${table} rows before cleanup`).toBeGreaterThan(0);
         }
       }
       await migrateHandle.pool.query('delete from core.audit_log where workspace_id=$1', [
