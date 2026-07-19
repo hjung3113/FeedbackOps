@@ -13,7 +13,7 @@ function requiredId(row: { id: string } | undefined, label: string): string {
   return row.id;
 }
 
-describe.skipIf(!runIntegration)('Survey response evidence access migration 0039', () => {
+describe.skipIf(!runIntegration)('Survey response evidence access migrations 0039/0040', () => {
   let appHandle: DbHandle;
   let migrateHandle: DbHandle;
   const workspaceId = randomUUID();
@@ -27,6 +27,34 @@ describe.skipIf(!runIntegration)('Survey response evidence access migration 0039
   let activeApprovalId: string;
   const rawText = 'raw response text that may only cross the definer boundary';
   const otherRawText = 'a second answer must not be returned for the first question';
+
+  it('pins the 0040 highlight approval identity FK and unchanged fops_app SELECT surface', async () => {
+    const columns = await migrateHandle.pool.query<{ is_nullable: string }>(
+      `select is_nullable
+         from information_schema.columns
+        where table_schema='finding'
+          and table_name='evidence_highlights'
+          and column_name='approved_excerpt_id'`,
+    );
+    expect(columns.rows).toEqual([{ is_nullable: 'YES' }]);
+    const foreignKeys = await migrateHandle.pool.query<{ conname: string; definition: string }>(
+      `select conname, pg_get_constraintdef(oid) as definition
+         from pg_constraint
+        where conrelid='finding.evidence_highlights'::regclass
+          and conname='evidence_highlights_approved_excerpt_id_fkey'`,
+    );
+    expect(foreignKeys.rows).toEqual([
+      {
+        conname: 'evidence_highlights_approved_excerpt_id_fkey',
+        definition:
+          'FOREIGN KEY (approved_excerpt_id) REFERENCES survey.survey_response_excerpt_approvals(id)',
+      },
+    ]);
+    const privileges = await migrateHandle.pool.query<{ can_select: boolean }>(
+      "select has_table_privilege('fops_app', 'finding.evidence_highlights', 'SELECT') as can_select",
+    );
+    expect(privileges.rows).toEqual([{ can_select: true }]);
+  });
 
   beforeAll(async () => {
     appHandle = createDb(APP_URL);

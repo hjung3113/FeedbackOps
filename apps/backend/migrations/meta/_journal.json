@@ -281,6 +281,13 @@
       "when": 1782800000000,
       "tag": "0039_survey_response_evidence_access",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1782900000000,
+      "tag": "0040_evidence_highlight_approval_identity",
+      "breakpoints": true
     }
   ]
 }

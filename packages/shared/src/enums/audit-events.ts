@@ -257,6 +257,14 @@ const vocRefDetailSchema = z.object({
   id: z.string().uuid(),
 });
 
+// Entity-link audits are internal-only operational records.  Like the VOC
+// variants above they identify the source by UUID, but never carry response
+// content or respondent fields.
+const surveyResponseRefDetailSchema = z.object({
+  type: z.literal('survey_response'),
+  id: z.string().uuid(),
+});
+
 const vocClusterRefDetailSchema = z.object({
   type: z.literal('voc_cluster'),
   id: z.string().uuid(),
@@ -355,6 +363,24 @@ export const entityLinkCreatedDetailSchema = z.union([
     relation_type: z.literal('evidence_of'),
     visibility: z.literal('internal_only'),
   }),
+  z
+    .object({
+      link_id: z.string().uuid(),
+      source: surveyResponseRefDetailSchema,
+      target: findingRefDetailSchema,
+      relation_type: z.literal('generated_finding'),
+      visibility: z.literal('internal_only'),
+    })
+    .strict(),
+  z
+    .object({
+      link_id: z.string().uuid(),
+      source: surveyResponseRefDetailSchema,
+      target: findingRefDetailSchema,
+      relation_type: z.literal('evidence_of'),
+      visibility: z.literal('internal_only'),
+    })
+    .strict(),
 ]);
 export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
 

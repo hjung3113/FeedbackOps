@@ -688,10 +688,8 @@ POST /findings/:id/link-task
 
 Finding is not independently created through `POST /findings` as of Slice 6.
 Creation happens only through source conversion routes:
-`POST /vocs/:id/create-finding` and `POST /voc-clusters/:id/create-finding`.
-`POST /survey-responses/:id/create-finding` is a planned Slice 8 route
-(미구현); Survey creation, lifecycle, respondent form, and response submission
-are implemented separately.
+`POST /vocs/:id/create-finding`, `POST /voc-clusters/:id/create-finding`, and
+`POST /survey-responses/:id/create-finding`.
 
 Finding-to-Milestone linking is future cross-system behavior and is not an MVP
 Finding endpoint.
@@ -805,7 +803,15 @@ Visible choice results contain configured option `key`, `label`, and count plus 
 
 Candidate reads write `survey_response_personal_read` in the same transaction; approvals write `survey_response_excerpt_approved` in the same transaction as the approval row. Audit detail contains IDs only—never raw or redacted text. Duplicate approvals are intentional separate rows. Revoked approvals are omitted from results. These per-response commands do not make aggregate result `next_actions` executable, so that field remains `[]`.
 
-`next_actions` is always `[]` until #187 provides an executable result-to-Finding route: either aggregate `POST /surveys/:id/create-finding`, or an approved-excerpt/personal-response selector with opaque execution intent. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
+#### POST /survey-responses/:id/create-finding
+
+This source-shaped route accepts strict `{ severity, confidence?, analytics_area_id?, primary_managed_system_id?, approved_excerpt_ids: uuid[] }`, requires an `Idempotency-Key` UUIDv4, and delegates transaction, permission, Finding, link, audit, and idempotency ownership to the Finding command. It never accepts caller title, summary, or evidence text. The command resolves the response through the Survey evidence seam in this order: request validation; source plus `survey.read` and explicit `survey.read_personal_responses` (missing, foreign, denied-read, and denied-personal all return identical `404 not_found.record`); draft state (`409 conflict.survey_results_unavailable` only after complete source access); target Managed System; then `finding.manage` (`403 permission.denied` only after source access).
+
+The Finding has database provenance `source_type='survey_response'` and stores the response UUID only internally. Its DTO omits `source_id`; backend-generated title and summary use only survey type/display ID, approved question label, and approved redacted excerpt. Active approved excerpts must belong to this response; revoked, foreign, or mismatched IDs return `422 validation.failed`. Duplicate `approved_excerpt_ids` also return `422 validation.failed`. Each excerpt becomes an evidence-highlight snapshot plus internal-only `(survey_response, finding, evidence_of)` link; the command also writes internal-only `(survey_response, finding, generated_finding)`, `finding_created_from_survey_response`, and normal entity-link/evidence audits atomically. An empty excerpt array is valid.
+
+Same actor/key/body/source replays the original Finding with no duplicate side effects; changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic survey-response highlight attachment remains deferred.
+
+`next_actions` remains `[]`; it is an aggregate-read field and does not expose the approved-excerpt/personal-response Finding command. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
 
 ### Core / Managed System / Analytics Area
 

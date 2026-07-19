@@ -24,10 +24,13 @@ import {
 } from './authorization.js';
 import {
   type SurveyResponseEvidenceSubject,
+  hasActiveApprovedResponseExcerpt,
   insertApprovedExcerpt,
   lockResponseEvidenceSubject,
+  readApprovedResponseExcerpts,
   readApprovedResultExcerpts,
   readResponseTextCandidate,
+  readSurveyQuestionLabel,
 } from './repo-evidence.js';
 import {
   type QuestionKind,
@@ -87,7 +90,11 @@ export type QuestionInput = {
 export type ResponseSubmissionInput = {
   answers: Array<{ question_id: string; value: string | string[] | number }>;
 };
-export type SurveyResponseEvidencePurpose = 'personal_read' | 'approve_excerpt';
+export type SurveyResponseEvidencePurpose =
+  | 'personal_read'
+  | 'approve_excerpt'
+  | 'create_finding'
+  | 'read_highlight';
 export type SurveyResponseEvidenceAccess = {
   subject: SurveyResponseEvidenceSubject;
 };
@@ -239,6 +246,11 @@ export async function resolveSurveyResponseEvidenceAccess(
     tx,
   });
   if (!read.allow) throw new HttpError('not_found.record', 'survey response not found');
+  // Approved highlight projections are safe linked content. They deliberately do
+  // not pass through the personal-response seam.
+  if (purpose === 'read_highlight') {
+    return { subject };
+  }
   const personal = await checkSurveyPersonalResponseRead(
     deps.checkService,
     actor,
@@ -259,6 +271,88 @@ export async function resolveSurveyResponseEvidenceAccess(
       throw new HttpError('permission.denied', 'survey.manage capability required');
   }
   return { subject };
+}
+
+/**
+ * Resolves active approval snapshots only after the caller has crossed the
+ * personal-response access seam in this transaction. Question labels remain
+ * definer-provided metadata; raw answer text is never returned from here.
+ */
+export async function resolveApprovedSurveyResponseExcerpts(
+  tx: Tx,
+  actor: SurveysActor,
+  subject: SurveyResponseEvidenceSubject,
+  approvedExcerptIds: string[],
+): Promise<
+  Array<{
+    approved_excerpt_id: string;
+    question_id: string;
+    question_label: string;
+    redacted_excerpt: string;
+  }>
+> {
+  const approvals = await readApprovedResponseExcerpts(
+    tx,
+    actor.workspace_id,
+    subject.response_id,
+    approvedExcerptIds,
+  );
+  if (approvals.length !== approvedExcerptIds.length)
+    throw new HttpError('validation.failed', 'approved excerpt is not active for survey response', {
+      fields: [{ path: ['approved_excerpt_ids'], code: 'invalid' }],
+    });
+  const labels = await Promise.all(
+    approvals.map(async (approval) => {
+      const candidate = await readSurveyQuestionLabel(
+        tx,
+        actor.workspace_id,
+        subject.survey_id,
+        approval.question_id,
+      );
+      if (!candidate)
+        throw new HttpError('validation.failed', 'approved excerpt question is invalid', {
+          fields: [{ path: ['approved_excerpt_ids'], code: 'invalid' }],
+        });
+      return { ...approval, question_label: candidate.question_label };
+    }),
+  );
+  const byId = new Map(labels.map((label) => [label.approved_excerpt_id, label]));
+  return approvedExcerptIds.map((id) => {
+    const approval = byId.get(id);
+    if (!approval)
+      throw new HttpError(
+        'validation.failed',
+        'approved excerpt is not active for survey response',
+        {
+          fields: [{ path: ['approved_excerpt_ids'], code: 'invalid' }],
+        },
+      );
+    return approval;
+  });
+}
+
+/** Safe-highlight read seam: survey.read plus an active approval snapshot only. */
+export async function resolveSurveyResponseHighlightAccess(
+  deps: Pick<SurveysServiceDeps, 'checkService'>,
+  tx: Tx,
+  actor: SurveysActor,
+  responseId: string,
+  approvedExcerptId: string,
+): Promise<SurveyResponseEvidenceSubject | null> {
+  const { subject } = await resolveSurveyResponseEvidenceAccess(
+    deps,
+    tx,
+    actor,
+    responseId,
+    'read_highlight',
+  );
+  const approved = await hasActiveApprovedResponseExcerpt(
+    tx,
+    actor.workspace_id,
+    subject.response_id,
+    approvedExcerptId,
+  );
+  return approved ? subject : null;
 }
 function normalized(input: QuestionInput, existing?: QuestionRow) {
   const kind = input.kind;

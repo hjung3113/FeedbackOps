@@ -1,3 +1,4 @@
+import { createFindingFromSurveyResponseRequestSchema } from '@fops/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
@@ -5,6 +6,7 @@ import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
+import type { FindingsService } from '../findings/service.js';
 import type { SurveysService } from './service.js';
 const v4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const uuid = z.string().uuid();
@@ -60,6 +62,7 @@ const approvedExcerpt = z
 export interface SurveysRoutesOptions {
   sessionService: SessionService;
   surveysService: SurveysService;
+  findingsService: FindingsService;
   workspaceId: string;
   rateLimitConfig?: { mutation?: Record<string, unknown>; read?: Record<string, unknown> };
 }
@@ -132,6 +135,28 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       });
     return reply.send(await opts.surveysService.getSurveyResults(actor(req), id));
   });
+  app.post(
+    '/survey-responses/:id/create-finding',
+    { preHandler: pre, ...rate('mutation') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const body = parse(createFindingFromSurveyResponseRequestSchema, req.body, reply);
+      if (!body) return;
+      const r = await opts.findingsService.createFindingFromSurveyResponse({
+        actor: actor(req),
+        responseId: id,
+        input: body,
+        idempotencyKey: key(req.headers as Record<string, unknown>),
+        requestHash: hashRequestBody({
+          body,
+          route: 'survey_response.create_finding',
+          responseId: id,
+        }),
+      });
+      return reply.code(r.status).send(r.body);
+    },
+  );
   app.post(
     '/survey-responses/:id/evidence-excerpt-candidates',
     { preHandler: pre, ...rate('mutation') },
