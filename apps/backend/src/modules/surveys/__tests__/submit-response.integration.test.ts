@@ -40,11 +40,19 @@ describe.skipIf(!runIntegration)('survey response submission routes (#185)', () 
   });
   beforeEach(async () => cleanupFixtures());
   afterAll(async () => {
+    await dropAnswerFailureTrigger();
     await cleanupFixtures();
     await app?.close();
     await appHandle?.close();
     await migrateHandle?.close();
   });
+
+  async function dropAnswerFailureTrigger() {
+    await migrateHandle.pool.query(
+      'drop trigger if exists survey_test_fail_answers_trg on survey.survey_response_answers',
+    );
+    await migrateHandle.pool.query('drop function if exists survey.survey_test_fail_answers()');
+  }
 
   async function cleanupFixtures() {
     if (idempotencyKeys.size) {
@@ -384,27 +392,55 @@ describe.skipIf(!runIntegration)('survey response submission routes (#185)', () 
     expect(response.json<{ code: string }>().code).toBe('conflict.survey_not_open');
   });
 
-  it('leaves no response, answer, or audit row when the last answer fails validation', async () => {
+  it('rolls back a response when answer persistence fails after the response insert', async () => {
     const { surveyId, questions } = await seed();
-    const response = await submit(surveyId, [
+    const answers = [
       { question_id: questions.single_choice, value: 'yes' },
       { question_id: questions.multiple_choice, value: ['a'] },
       { question_id: questions.rating, value: 3 },
-      { question_id: questions.text, value: '   ' },
-    ]);
-    expect(response.statusCode).toBe(422);
-    const rows = await migrateHandle.pool.query<{
-      responses: number;
-      answers: number;
-      audits: number;
-    }>(
-      `select
-         (select count(*)::int from survey.survey_responses where survey_id = $1) as responses,
-         (select count(*)::int from survey.survey_response_answers where survey_id = $1) as answers,
-         (select count(*)::int from core.audit_log where detail ->> 'survey_id' = $1::text) as audits`,
-      [surveyId],
+      { question_id: questions.text, value: 'valid' },
+    ];
+    const failingKey = randomUUID();
+    await migrateHandle.pool.query(
+      `create function survey.survey_test_fail_answers() returns trigger language plpgsql as $$
+         begin
+           raise exception 'forced test failure';
+         end;
+       $$`,
     );
-    expect(rows.rows).toEqual([{ responses: 0, answers: 0, audits: 0 }]);
+    await migrateHandle.pool.query(
+      `create trigger survey_test_fail_answers_trg
+       before insert on survey.survey_response_answers
+       for each row execute function survey.survey_test_fail_answers()`,
+    );
+
+    try {
+      const response = await submit(surveyId, answers, failingKey);
+      expect(response.statusCode).toBe(500);
+      const rows = await migrateHandle.pool.query<{
+        responses: number;
+        answers: number;
+        audits: number;
+        idempotency_keys: number;
+      }>(
+        `select
+         (select count(*)::int from survey.survey_responses
+          where survey_id = $1
+            and respondent_actor_id = (
+              select id from core.actors where workspace_id = $2 and external_id = 'mock-user-1'
+            )) as responses,
+         (select count(*)::int from survey.survey_response_answers where survey_id = $1) as answers,
+         (select count(*)::int from core.audit_log
+          where event_type = 'survey_response_submitted' and detail ->> 'survey_id' = $1::text) as audits,
+         (select count(*)::int from core.idempotency_keys where key = $3) as idempotency_keys`,
+        [surveyId, WORKSPACE_ID, failingKey],
+      );
+      expect(rows.rows).toEqual([{ responses: 0, answers: 0, audits: 0, idempotency_keys: 0 }]);
+    } finally {
+      await dropAnswerFailureTrigger();
+    }
+
+    expect((await submit(surveyId, answers, randomUUID())).statusCode).toBe(201);
   });
 
   it('does not create VOCs or entity links when a response is submitted', async () => {
