@@ -242,9 +242,40 @@ describe("Survey screens", () => {
     fireEvent.change(screen.getByLabelText("분기 부모 질문"), { target: { value: "" } });
     await waitFor(() => expect(apiClient).toHaveBeenCalledWith("DELETE", "/surveys/survey-1/questions/question-2"));
     await waitFor(() => expect(apiClient).toHaveBeenCalledWith("POST", "/surveys/survey-1/questions", expect.objectContaining({ body: expect.objectContaining({ prompt: "추가 질문", sort_order: 1 }) })));
+    const deleteIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === "DELETE" && call[1] === "/surveys/survey-1/questions/question-2",
+    );
+    const recreateIndex = apiClient.mock.calls.findIndex(
+      (call) => call[0] === "POST" && call[1] === "/surveys/survey-1/questions" && call[2].body.prompt === "추가 질문",
+    );
+    expect(deleteIndex).toBeLessThan(recreateIndex);
     const recreateBody = apiClient.mock.calls.find((call) => call[0] === "POST" && call[1] === "/surveys/survey-1/questions" && call[2].body.prompt === "추가 질문")?.[2].body;
     expect(recreateBody).not.toHaveProperty("branch_parent_question_id");
     expect(recreateBody).not.toHaveProperty("branch_trigger_option_key");
+  });
+
+  it("disables a question editor while removing its branch", async () => {
+    let resolveDelete: (() => void) | undefined;
+    apiClient.mockImplementation((method: string, path: string) => {
+      if (method === "DELETE" && path.endsWith("/question-2")) {
+        return new Promise((resolve) => {
+          resolveDelete = () => resolve({ data: {} });
+        });
+      }
+      return Promise.resolve({ data: { id: "question-recreated" } });
+    });
+    const parentQuestion = survey.questions?.[0] as SurveyQuestion;
+    const child: SurveyQuestion = { ...parentQuestion, id: "question-2", prompt: "추가 질문", branch_depth: 1, branch_parent_question_id: "question-1", branch_trigger_option_key: "no", sort_order: 1 };
+    renderWithQuery(<SurveyBuilder survey={{ ...survey, questions: [...(survey.questions ?? []), child] }} canManage onBack={vi.fn()} />);
+    fireEvent.click(screen.getByText("Q2"));
+    fireEvent.change(screen.getByLabelText("분기 부모 질문"), { target: { value: "" } });
+    await waitFor(() => expect(resolveDelete).toBeDefined());
+    const title = screen.getByDisplayValue("추가 질문");
+    expect(title).toBeDisabled();
+    fireEvent.change(title, { target: { value: "삭제 중 수정" } });
+    expect(apiClient).not.toHaveBeenCalledWith("PATCH", "/surveys/survey-1/questions/question-2", expect.anything());
+    await act(async () => resolveDelete?.());
+    await waitFor(() => expect(screen.getByDisplayValue("추가 질문")).not.toBeDisabled());
   });
 
   it("uses the selected parent option to reveal a branched preview question", async () => {

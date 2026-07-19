@@ -87,6 +87,9 @@ export function SurveyBuilder({
     questions[0]?.id ?? null,
   );
   const [preview, setPreview] = React.useState(false);
+  const [busyQuestionId, setBusyQuestionId] = React.useState<string | null>(
+    null,
+  );
   const mutations = useSurveyQuestionMutations(survey.id);
   const editable = canManage && survey.status === "draft" && !gateState;
   const selected =
@@ -105,11 +108,16 @@ export function SurveyBuilder({
       all.map((question) => (question.id === next.id ? next : question)),
     );
     if (Boolean(current?.branch_parent_question_id) && !next.branch_parent_question_id && !next.id.startsWith("local-")) {
+      setBusyQuestionId(next.id);
       void (async () => {
-        await mutations.remove.mutateAsync(next.id);
-        const recreated = await mutations.create.mutateAsync(toInput(next));
-        updateQuestions((all) => all.map((question) => question.id === next.id ? { ...next, id: recreated.id } : question));
-        setSelectedId((id) => (id === next.id ? recreated.id : id));
+        try {
+          await mutations.remove.mutateAsync(next.id);
+          const recreated = await mutations.create.mutateAsync(toInput(next));
+          updateQuestions((all) => all.map((question) => question.id === next.id ? { ...next, id: recreated.id } : question));
+          setSelectedId((id) => (id === next.id ? recreated.id : id));
+        } finally {
+          setBusyQuestionId(null);
+        }
       })();
       return;
     }
@@ -191,7 +199,7 @@ export function SurveyBuilder({
             <QuestionEditor
               question={selected}
               questions={questions}
-              editable={editable}
+              editable={editable && selected.id !== busyQuestionId}
               onChange={patch}
             />
           ) : (
