@@ -215,14 +215,19 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
   }
-  function assertNoForbidden(value: unknown) {
+  function assertNoForbidden(value: unknown, inApprovedExcerpt = false) {
     const forbidden =
       /^(respondent.*|actor_id|email|external_id|response_id|submitted_at|created_at|session.*|ip.*|user_agent|answer_value|text|excerpt)$/;
-    if (Array.isArray(value)) return value.forEach(assertNoForbidden);
+    if (Array.isArray(value)) {
+      for (const child of value) assertNoForbidden(child, inApprovedExcerpt);
+      return;
+    }
     if (value && typeof value === 'object')
       for (const [key, child] of Object.entries(value)) {
-        expect(key).not.toMatch(forbidden);
-        assertNoForbidden(child);
+        const approvedExcerpt = key === 'excerpts';
+        if (!(inApprovedExcerpt && (key === 'id' || key === 'text')) && !approvedExcerpt)
+          expect(key).not.toMatch(forbidden);
+        assertNoForbidden(child, approvedExcerpt);
       }
   }
   function parse2xx(response: { statusCode: number; json: () => unknown }) {

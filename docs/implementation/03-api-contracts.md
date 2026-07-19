@@ -761,6 +761,8 @@ GET /surveys/:id
 GET /surveys/:id/form
 POST /surveys/:id/responses
 GET /surveys/:id/results
+POST /survey-responses/:id/evidence-excerpt-candidates
+POST /survey-responses/:id/approved-excerpts
 POST /survey-responses/:id/create-finding
 POST /survey-findings/:id/request-task
 POST /survey-findings/:id/link-task
@@ -795,9 +797,15 @@ The query schema is a strict empty object. Result filters are deferred because r
 
 For a non-holder, a response cohort below five suppresses every question using `{ question_id, visibility: "suppressed", response_count: null, suppression: { code: "anonymity_threshold" } }`; zero through four responses are indistinguishable. At five or more responses, a choice or rating question is also fully suppressed when any positive exposed option or collapsed rating-band count is one through four. Text is suppressed when its answer count is one through four. Zero-count buckets do not trigger low-bucket suppression.
 
-Visible choice results contain configured option `key`, `label`, and count plus the question answer count. Visible rating results contain only deterministic `low`, `mid`, and `high` counts derived from the configured rating domain; raw values and averages are not returned. Visible text results contain only `answer_count`, `distribution: null`, and `excerpts: []`. Question order follows the Survey configuration and `identity_protected` mirrors the Survey setting.
+Visible choice results contain configured option `key`, `label`, and count plus the question answer count. Visible rating results contain only deterministic `low`, `mid`, and `high` counts derived from the configured rating domain; raw values and averages are not returned. Visible text results contain only `answer_count`, `distribution: null`, and active approved `excerpts: [{ id, text }]`. These safe redacted excerpts require only `survey.read`; they never include response IDs, respondent identity, approval metadata, or raw text. Question order follows the Survey configuration and `identity_protected` mirrors the Survey setting.
 
-`next_actions` is always `[]` until #187 provides an executable result-to-Finding route. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
+#### Survey response evidence approval
+
+`POST /survey-responses/:id/evidence-excerpt-candidates` accepts `{ question_id }` and returns the one matching `{ question_id, question_label, raw_text }` candidate. `POST /survey-responses/:id/approved-excerpts` accepts `{ question_id, redacted_excerpt }` and creates an append-only approved excerpt, returning `{ approved_excerpt_id, question_id, redacted_excerpt }`. Both routes resolve the response through the Survey evidence definer, then require `survey.read` and explicit `survey.read_personal_responses`; missing response, cross-workspace response, denied source read, and denied personal read are all `404 not_found.record`. Admin never bypasses personal-response access. A fully authorized actor receives `409 conflict.survey_results_unavailable` for a draft Survey. Approval then requires `survey.manage`; only this post-readable failure is `403 permission.denied`.
+
+Candidate reads write `survey_response_personal_read` in the same transaction; approvals write `survey_response_excerpt_approved` in the same transaction as the approval row. Audit detail contains IDs only—never raw or redacted text. Duplicate approvals are intentional separate rows. Revoked approvals are omitted from results. These per-response commands do not make aggregate result `next_actions` executable, so that field remains `[]`.
+
+`next_actions` is always `[]` until #187 provides an executable result-to-Finding route: either aggregate `POST /surveys/:id/create-finding`, or an approved-excerpt/personal-response selector with opaque execution intent. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
 
 ### Core / Managed System / Analytics Area
 
