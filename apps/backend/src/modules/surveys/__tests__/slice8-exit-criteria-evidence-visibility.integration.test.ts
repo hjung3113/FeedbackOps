@@ -81,16 +81,21 @@ describe.skipIf(!runIntegration)(
       const responses = `select id from survey.survey_responses where survey_id in (${surveys})`;
       const findings = `select id from finding.findings where workspace_id=$1 and primary_managed_system_id in (${systems})`;
       const tasks = `select id from task.tasks where workspace_id=$1 and primary_managed_system_id in (${systems})`;
+      const taskRequests = `select id from task_request.task_requests where workspace_id=$1 and primary_managed_system_id in (${systems})`;
       await migrateHandle.pool.query(
-        `delete from core.audit_log where workspace_id=$1 and (subject_id in (${responses}) or subject_id in (${findings}) or actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2))`,
+        `delete from core.audit_log where workspace_id=$1 and (subject_id in (${responses}) or subject_id in (${findings}) or subject_id in (${tasks}) or subject_id in (${taskRequests}) or actor_id in (select id from core.actors where workspace_id=$1 and external_id like $2))`,
         [WORKSPACE_ID, `${SLUG}-%`],
       );
       await migrateHandle.pool.query(
-        `delete from core.entity_links where workspace_id=$1 and (source_id in (${responses}) or source_id in (${findings}) or target_id in (${findings}) or target_id in (${tasks}))`,
+        `delete from core.entity_links where workspace_id=$1 and (source_id in (${responses}) or source_id in (${findings}) or source_id in (${taskRequests}) or target_id in (${findings}) or target_id in (${tasks}) or target_id in (${taskRequests}))`,
         [WORKSPACE_ID, `${SLUG}%`],
       );
       await migrateHandle.pool.query(
         `delete from task.tasks where id in (${tasks})`,
+        [WORKSPACE_ID, `${SLUG}%`],
+      );
+      await migrateHandle.pool.query(
+        `delete from task_request.task_requests where id in (${taskRequests})`,
         [WORKSPACE_ID, `${SLUG}%`],
       );
       await migrateHandle.pool.query(

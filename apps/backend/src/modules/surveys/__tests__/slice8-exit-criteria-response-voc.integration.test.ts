@@ -392,7 +392,7 @@ describe.skipIf(!runIntegration)(
       expect(requested.statusCode).toBe(201);
       expect(await vocCount()).toBe(beforeTaskRequest);
       const audits = await migrateHandle.pool.query<{ event_type: string }>(
-        "select event_type from core.audit_log where subject_id=$1 or detail->>'source_survey_response_id'=$2 or detail->>'source_finding_id'=$1",
+        "select event_type from core.audit_log where subject_id=$1::uuid or detail->>'source_survey_response_id'=$2::text or detail->>'source_finding_id'=$1::text",
         [findingId, source.responseId],
       );
       expect(audits.rows.map((row) => row.event_type)).toEqual(
