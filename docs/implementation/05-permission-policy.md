@@ -219,6 +219,18 @@ POST /permissions/requests/:id/deny            { reason: string }
   `conflict.capability_already_granted` / `conflict.capability_already_denied`.
   `Idempotency-Key` replays the stored decision response without a second write.
 
+### Permission Request self-approval policy
+
+An Admin deciding their own Permission Request is a self-approval. The resolved
+workspace `permission_self_approval` setting defaults to `allowed`; in that
+mode the approve body must include strict
+`self_approval: { policy_citation: string, peer_reviewer_absence: string }`.
+The recorded `permission_approved` audit detail carries this envelope only for
+self-approval. The envelope is rejected for an approval decided by another
+Admin. If the workspace setting is `forbidden`, self-approval returns
+`permission.denied` without changing the pending request; another Admin may
+approve the same request normally.
+
 Audit events:
 
 ```text

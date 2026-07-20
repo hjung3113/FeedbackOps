@@ -59,11 +59,18 @@ export interface SurveysActor {
   workspace_id: string;
   role_level: 'admin' | 'developer' | 'user';
 }
+export interface ResolvedSurveyWorkspaceSettings {
+  survey_anonymity_threshold: number;
+}
 export interface SurveysServiceDeps {
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  resolveWorkspaceSettings: (
+    dbOrTx: Db | Tx,
+    workspaceId: string,
+  ) => Promise<ResolvedSurveyWorkspaceSettings>;
 }
 export type CreateSurveyInput = {
   type: 'discovery' | 'validation' | 'outcome';
@@ -838,6 +845,8 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     );
     if (survey.status === 'draft')
       throw new HttpError('conflict.survey_results_unavailable', 'survey results unavailable');
+    const workspaceSettings = await deps.resolveWorkspaceSettings(deps.db, actor.workspace_id);
+    const anonymityThreshold = workspaceSettings.survey_anonymity_threshold;
     const [questions, responseCount, aggregateRows, approvedExcerpts] = await Promise.all([
       listQuestions(deps.db, actor.workspace_id, survey.id),
       readSurveyResultResponseCount(deps.db, actor.workspace_id, survey.id),
@@ -868,11 +877,11 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       status: survey.status,
       identity_protected: survey.responses_identity_protected,
       questions: questions.map((question) => {
-        if (!holder && responseCount < 5) return suppressed(question.id);
+        if (!holder && responseCount < anonymityThreshold) return suppressed(question.id);
         const rows = rowsByQuestion.get(question.id) ?? [];
         const answerCount = rows.find((row) => row.bucket_key === null)?.bucket_count ?? 0;
         if (question.kind === 'text') {
-          return answerCount > 0 && answerCount < 5 && !holder
+          return answerCount > 0 && answerCount < anonymityThreshold && !holder
             ? suppressed(question.id)
             : {
                 question_id: question.id,
@@ -899,7 +908,10 @@ export function createSurveysService(deps: SurveysServiceDeps) {
             distribution[getRatingBandForValue(question.rating_min, question.rating_max, value)] +=
               row.bucket_count;
           }
-          if (!holder && Object.values(distribution).some((count) => count > 0 && count < 5))
+          if (
+            !holder &&
+            Object.values(distribution).some((count) => count > 0 && count < anonymityThreshold)
+          )
             return suppressed(question.id);
           return {
             question_id: question.id,
@@ -918,7 +930,10 @@ export function createSurveysService(deps: SurveysServiceDeps) {
           label: option.label,
           count: rowCounts.get(option.key) ?? 0,
         }));
-        if (!holder && option_buckets.some((bucket) => bucket.count > 0 && bucket.count < 5))
+        if (
+          !holder &&
+          option_buckets.some((bucket) => bucket.count > 0 && bucket.count < anonymityThreshold)
+        )
           return suppressed(question.id);
         return {
           question_id: question.id,

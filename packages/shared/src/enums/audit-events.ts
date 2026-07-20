@@ -153,6 +153,13 @@ export const permissionApprovedDetailSchema = z
     requester_actor_id: z.string().uuid(),
     reason: z.string().min(1).nullable(),
     grant_id: z.string().uuid(),
+    self_approval: z
+      .object({
+        policy_citation: z.string().min(1),
+        peer_reviewer_absence: z.string().min(1),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type PermissionApprovedDetail = z.infer<typeof permissionApprovedDetailSchema>;

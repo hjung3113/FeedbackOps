@@ -215,6 +215,17 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
   }
+  function patchWorkspaceSettings(payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'PATCH',
+      url: '/workspace/settings',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+      },
+      payload,
+    });
+  }
   function assertNoForbidden(value: unknown, inApprovedExcerpt = false) {
     const forbidden =
       /^(respondent.*|actor_id|email|external_id|response_id|submitted_at|created_at|session.*|ip.*|user_agent|answer_value|text|excerpt)$/;
@@ -323,6 +334,43 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       });
       expect(body.questions[3]).toMatchObject({ answer_count: count });
     }
+  });
+
+  it('uses the resolved workspace anonymity threshold and keeps the no-row default at five', async () => {
+    const configured = await patchWorkspaceSettings({
+      survey_anonymity_threshold: 7,
+    });
+    expect(configured.statusCode).toBe(200);
+    expect(configured.json()).toMatchObject({ survey_anonymity_threshold: 7 });
+
+    const six = parse2xx(await get((await seed(full(6))).id));
+    expect(six.questions).toEqual(
+      six.questions.map((question) => ({
+        question_id: question.question_id,
+        visibility: 'suppressed',
+        response_count: null,
+        suppression: { code: 'anonymity_threshold' },
+      })),
+    );
+
+    const seven = parse2xx(await get((await seed(full(7))).id));
+    expect(seven.questions.map((question) => question.visibility)).toEqual([
+      'visible',
+      'visible',
+      'visible',
+      'visible',
+    ]);
+
+    await migrateHandle.pool.query('delete from core.workspace_settings where workspace_id = $1', [
+      WORKSPACE_ID,
+    ]);
+    const noRowFive = parse2xx(await get((await seed(full(5))).id));
+    expect(noRowFive.questions.map((question) => question.visibility)).toEqual([
+      'visible',
+      'visible',
+      'visible',
+      'visible',
+    ]);
   });
 
   it('applies low bucket suppression, exact overlapping choice buckets, rating partition, and text masking', async () => {

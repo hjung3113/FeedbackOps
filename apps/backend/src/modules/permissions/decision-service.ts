@@ -14,6 +14,7 @@ import {
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
 import {
   permissionDenies,
   permissionGrants,
@@ -30,6 +31,10 @@ export interface DecisionServiceDeps {
   checkService: CheckService;
   auditService: AuditService;
   idempotencyService: IdempotencyService;
+  resolveWorkspaceSettings: (
+    dbOrTx: Db | Tx,
+    workspaceId: string,
+  ) => Promise<{ permission_self_approval: 'allowed' | 'forbidden' }>;
 }
 
 export interface DecisionOptions {
@@ -39,7 +44,15 @@ export interface DecisionOptions {
 export type DecisionService = ReturnType<typeof createDecisionService>;
 
 type DecisionAction = 'approve' | 'reject' | 'need_more_info' | 'deny';
-type DecisionBody = { reason?: string; note?: string };
+type SelfApprovalEnvelope = {
+  policy_citation: string;
+  peer_reviewer_absence: string;
+};
+type DecisionBody = {
+  reason?: string;
+  note?: string;
+  self_approval?: SelfApprovalEnvelope;
+};
 type DecidableStatus = 'pending' | 'needs_more_info';
 
 const DECIDABLE_STATUSES: readonly DecidableStatus[] = ['pending', 'needs_more_info'];
@@ -97,6 +110,31 @@ export function createDecisionService(deps: DecisionServiceDeps) {
         const capability: Capability = request.requestedCapability;
         const reason = body.reason?.trim();
         const note = body.note?.trim();
+        const isSelfApproval = action === 'approve' && request.requesterActorId === actor.actor_id;
+        if (action === 'approve') {
+          if (isSelfApproval) {
+            const workspaceSettings = await deps.resolveWorkspaceSettings(tx, actor.workspace_id);
+            if (workspaceSettings.permission_self_approval === 'forbidden') {
+              throw new HttpError(
+                'permission.denied',
+                'self-approval forbidden by workspace policy',
+              );
+            }
+            if (!body.self_approval) {
+              throw new HttpError('validation.failed', 'self-approval envelope is required', {
+                fields: [{ path: ['self_approval'], code: 'custom' }],
+              });
+            }
+          } else if (body.self_approval) {
+            throw new HttpError(
+              'validation.failed',
+              'self-approval envelope is only valid for self-approval',
+              {
+                fields: [{ path: ['self_approval'], code: 'custom' }],
+              },
+            );
+          }
+        }
         if (action === 'approve' && isSensitiveCapability(capability) && !reason) {
           throw new HttpError(
             'validation.sensitive_reason_required',
@@ -196,6 +234,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           ...(action === 'need_more_info' ? { note: note as string } : { reason: reason || null }),
           ...(grantId ? { grant_id: grantId } : {}),
           ...(denyId ? { deny_id: denyId } : {}),
+          ...(isSelfApproval ? { self_approval: body.self_approval as SelfApprovalEnvelope } : {}),
         };
         await deps.auditService.record(tx, {
           workspace_id: actor.workspace_id,
@@ -233,7 +272,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
     approveRequest: (
       actor: ActorContext,
       requestId: string,
-      body: { reason?: string },
+      body: { reason?: string; self_approval?: SelfApprovalEnvelope },
       options?: DecisionOptions,
     ) => decide(actor, requestId, 'approve', body, options),
     rejectRequest: (

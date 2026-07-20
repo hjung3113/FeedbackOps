@@ -7,7 +7,6 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import {
-  approvePermissionRequestSchema,
   denyPermissionRequestSchema,
   needMoreInfoPermissionRequestSchema,
   rejectPermissionRequestSchema,
@@ -22,6 +21,19 @@ import type { ActorContext, CheckService, Decision } from './check-service.js';
 import type { RequestService } from './request-service.js';
 import type { DecisionService } from './decision-service.js';
 import { type FrontendState, toFrontendState } from './state-mapper.js';
+
+const approvePermissionRequestSchema = z
+  .object({
+    reason: z.string().max(2000).optional(),
+    self_approval: z
+      .object({
+        policy_citation: z.string().min(1),
+        peer_reviewer_absence: z.string().min(1),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 
 export interface PermissionsRoutesOptions {
   sessionService: SessionService;
@@ -277,9 +289,20 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       suffix: 'approve',
       schema: approvePermissionRequestSchema,
       invoke: (actor, id, body, idempotencyKey) =>
-        decisionService.approveRequest(actor, id, body as { reason?: string }, {
-          idempotencyKey,
-        }),
+        decisionService.approveRequest(
+          actor,
+          id,
+          body as {
+            reason?: string;
+            self_approval?: {
+              policy_citation: string;
+              peer_reviewer_absence: string;
+            };
+          },
+          {
+            idempotencyKey,
+          },
+        ),
     },
     {
       suffix: 'reject',
