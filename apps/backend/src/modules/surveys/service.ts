@@ -81,11 +81,11 @@ export type QuestionInput = {
   options?: Array<{ key: string; label: string }>;
   rating_min?: number;
   rating_max?: number;
-  rating_low_label?: string;
-  rating_high_label?: string;
+  rating_low_label?: string | null;
+  rating_high_label?: string | null;
   sort_order?: number;
-  branch_parent_question_id?: string;
-  branch_trigger_option_key?: string;
+  branch_parent_question_id?: string | null;
+  branch_trigger_option_key?: string | null;
 };
 export type ResponseSubmissionInput = {
   answers: Array<{ question_id: string; value: string | string[] | number }>;
@@ -358,7 +358,21 @@ function normalized(input: QuestionInput, existing?: QuestionRow) {
   const kind = input.kind;
   const choice = kind === 'single_choice' || kind === 'multiple_choice';
   const branchParent =
-    input.branch_parent_question_id ?? existing?.branch_parent_question_id ?? null;
+    input.branch_parent_question_id === undefined
+      ? (existing?.branch_parent_question_id ?? null)
+      : input.branch_parent_question_id;
+  const branchTrigger =
+    input.branch_trigger_option_key === undefined
+      ? (existing?.branch_trigger_option_key ?? null)
+      : input.branch_trigger_option_key;
+  const ratingLowLabel =
+    input.rating_low_label === undefined
+      ? (existing?.rating_low_label ?? null)
+      : input.rating_low_label;
+  const ratingHighLabel =
+    input.rating_high_label === undefined
+      ? (existing?.rating_high_label ?? null)
+      : input.rating_high_label;
   return {
     kind,
     prompt: input.prompt,
@@ -366,17 +380,13 @@ function normalized(input: QuestionInput, existing?: QuestionRow) {
     options: choice ? (input.options ?? existing?.options ?? null) : null,
     ratingMin: kind === 'rating' ? (input.rating_min ?? existing?.rating_min ?? null) : null,
     ratingMax: kind === 'rating' ? (input.rating_max ?? existing?.rating_max ?? null) : null,
-    ratingLowLabel:
-      kind === 'rating' ? (input.rating_low_label ?? existing?.rating_low_label ?? null) : null,
-    ratingHighLabel:
-      kind === 'rating' ? (input.rating_high_label ?? existing?.rating_high_label ?? null) : null,
+    ratingLowLabel: kind === 'rating' ? ratingLowLabel : null,
+    ratingHighLabel: kind === 'rating' ? ratingHighLabel : null,
     sortOrder: input.sort_order ?? existing?.sort_order ?? 0,
     branchDepth: branchParent ? 1 : 0,
     branchParentQuestionId: branchParent,
     branchParentDepth: branchParent ? 0 : null,
-    branchTriggerOptionKey: branchParent
-      ? (input.branch_trigger_option_key ?? existing?.branch_trigger_option_key ?? null)
-      : null,
+    branchTriggerOptionKey: branchParent ? branchTrigger : null,
   };
 }
 
