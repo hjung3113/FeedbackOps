@@ -397,6 +397,7 @@ function LockedRow({
       <div className="flex items-center justify-end">
         <span
           className={`text-sm font-medium ${valueTone === 'red' ? 'text-accent-danger' : 'text-text-primary'}`}
+          data-testid={label === 'Survey Response → VOC' ? 'locked-value-survey-response-to-voc' : undefined}
         >
           {value}
         </span>

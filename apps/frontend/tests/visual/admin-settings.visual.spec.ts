@@ -36,11 +36,7 @@ test.describe('/admin/settings visual harness', () => {
       }
       if (scenario === 'locked') {
         await expect(target.getByText('Locked', { exact: true })).toHaveCount(5);
-        const surveyResponseToVocRow = target
-          .getByText('Survey Response → VOC', { exact: true })
-          .locator('..')
-          .locator('..');
-        await expect(surveyResponseToVocRow.getByText('Forbidden', { exact: true })).toBeVisible();
+        await expect(page.getByTestId('locked-value-survey-response-to-voc')).toHaveText('Forbidden');
       }
       await expectVisual(page, target, `admin-settings-${scenario}.png`);
     });
