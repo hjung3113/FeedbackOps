@@ -178,6 +178,47 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
     expect(row.rowCount).toBe(0);
   });
 
+  it('rejects unknown PATCH keys without changing resolved settings', async () => {
+    const response = await request('PATCH', adminCookie, {
+      survey_anonymity_threshold: 7,
+      bogus: 1,
+    });
+
+    expect(response.statusCode).toBeGreaterThanOrEqual(400);
+    expect(response.statusCode).toBeLessThan(500);
+    const getResponse = await request('GET', adminCookie);
+    expect(getResponse.json<SettingsBody>()).toEqual({
+      permission_self_approval: 'allowed',
+      survey_anonymity_threshold: 5,
+    });
+    const row = await appHandle.pool.query('select * from core.workspace_settings where workspace_id = $1', [
+      WORKSPACE_ID,
+    ]);
+    expect(row.rowCount).toBe(0);
+  });
+
+  it('does not audit a row-absent PATCH equal to the resolved defaults', async () => {
+    const initialRow = await appHandle.pool.query(
+      'select * from core.workspace_settings where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    expect(initialRow.rowCount).toBe(0);
+    const before = await auditCount();
+
+    const response = await request('PATCH', adminCookie, {
+      permission_self_approval: 'allowed',
+      survey_anonymity_threshold: 5,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(await auditCount()).toBe(before);
+    const getResponse = await request('GET', adminCookie);
+    expect(getResponse.json<SettingsBody>()).toEqual({
+      permission_self_approval: 'allowed',
+      survey_anonymity_threshold: 5,
+    });
+  });
+
   it('does not append an audit event for an effective no-op PATCH', async () => {
     const initial = await request('PATCH', adminCookie, { survey_anonymity_threshold: 7 });
     expect(initial.statusCode).toBe(200);
@@ -219,5 +260,23 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
         },
       },
     ]);
+  });
+
+  it('preserves a prior partial PATCH when updating the other field', async () => {
+    const thresholdResponse = await request('PATCH', adminCookie, {
+      survey_anonymity_threshold: 9,
+    });
+    expect(thresholdResponse.statusCode).toBe(200);
+
+    const approvalResponse = await request('PATCH', adminCookie, {
+      permission_self_approval: 'forbidden',
+    });
+    expect(approvalResponse.statusCode).toBe(200);
+
+    const getResponse = await request('GET', adminCookie);
+    expect(getResponse.json<SettingsBody>()).toEqual({
+      permission_self_approval: 'forbidden',
+      survey_anonymity_threshold: 9,
+    });
   });
 });

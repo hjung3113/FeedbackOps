@@ -70,8 +70,8 @@ export async function updateWorkspaceSettings(
 ): Promise<WorkspaceSettingsRow> {
   const result = await tx.execute<WorkspaceSettingsRow>(sql`
     UPDATE ${workspaceSettings}
-       SET permission_self_approval = COALESCE(${fields.permission_self_approval}, permission_self_approval),
-           survey_anonymity_threshold = COALESCE(${fields.survey_anonymity_threshold}, survey_anonymity_threshold),
+       SET permission_self_approval = COALESCE(${fields.permission_self_approval ?? null}, permission_self_approval),
+           survey_anonymity_threshold = COALESCE(${fields.survey_anonymity_threshold ?? null}, survey_anonymity_threshold),
            updated_at = now()
      WHERE workspace_id = ${workspaceId}
      RETURNING ${WORKSPACE_SETTINGS_SELECT}
