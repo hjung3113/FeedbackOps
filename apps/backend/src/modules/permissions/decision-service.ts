@@ -24,6 +24,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
 import type { ActorContext, CheckService } from './check-service.js';
 
 export interface DecisionServiceDeps {
@@ -113,7 +114,10 @@ export function createDecisionService(deps: DecisionServiceDeps) {
         const isSelfApproval = action === 'approve' && request.requesterActorId === actor.actor_id;
         if (action === 'approve') {
           if (isSelfApproval) {
-            const workspaceSettings = await deps.resolveWorkspaceSettings(tx, actor.workspace_id);
+            const workspaceSettings = await getResolvedWorkspaceSettingsForUpdate(
+              tx,
+              actor.workspace_id,
+            );
             if (workspaceSettings.permission_self_approval === 'forbidden') {
               throw new HttpError(
                 'permission.denied',

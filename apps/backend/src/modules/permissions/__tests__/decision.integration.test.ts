@@ -424,7 +424,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       `select detail from core.audit_log where subject_id = $1 and event_type = 'permission_approved'`,
       [request],
     );
-    expect(audit.rows).toEqual([expect.objectContaining({ self_approval: envelope })]);
+    expect(audit.rows).toEqual([
+      expect.objectContaining({ detail: expect.objectContaining({ self_approval: envelope }) }),
+    ]);
     await db.pool.query("update core.actors set role_level = 'developer' where id = $1", [self.id]);
     const developerCookie = await loginAs(app, self.externalId);
     expect(developerCookie).toBeTruthy();
