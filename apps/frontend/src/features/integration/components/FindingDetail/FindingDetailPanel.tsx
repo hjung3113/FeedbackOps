@@ -2,72 +2,72 @@
 // States: loading skeleton → not-found → permission-blocked → full detail.
 // Mirrors VocDetailPanel structure per domain-module-boundaries §Frontend Boundary Rules.
 
-import * as React from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { toast } from 'sonner';
+import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
+import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
+import {
+  type ApiError,
+  errorMapper,
+  getTask,
+  linkTaskToFinding,
+  listTasks,
+  useIdempotencyKey,
+} from '@/lib/api';
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { useMe } from '@/lib/auth/useMe';
+import {
+  type AddEvidenceHighlightRequest,
+  type CreateTaskRequestFromFindingRequest,
+  type EvidenceHighlightDto,
+  type EvidenceHighlightImportance,
+  type EvidenceHighlightSentiment,
+  type EvidenceHighlightSourceType,
+  type FindingDto,
+  type LinkEvidenceRequest,
+  addEvidenceHighlightRequestSchema,
+  createTaskRequestFromFindingRequestSchema,
+  linkEvidenceRequestSchema,
+} from '@fops/shared';
 import {
   Button,
   DetailPanelSectionNav,
-  EmptyState,
-  FieldRow,
-  PermissionBlockedPanel,
-  PanelSectionTitle,
-  Skeleton,
-  SeverityBadge,
-  OutlineBadge,
-  ManagedSystemPill,
-  UserChip,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  EmptyState,
   FieldLabel,
+  FieldRow,
   Input,
+  ManagedSystemPill,
+  OutlineBadge,
+  PanelSectionTitle,
+  PermissionBlockedPanel,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Textarea,
+  SeverityBadge,
   type SeverityEnum,
+  Skeleton,
+  Textarea,
+  UserChip,
 } from '@fops/ui';
-import {
-  addEvidenceHighlightRequestSchema,
-  createTaskRequestFromFindingRequestSchema,
-  linkEvidenceRequestSchema,
-  type AddEvidenceHighlightRequest,
-  type CreateTaskRequestFromFindingRequest,
-  type EvidenceHighlightDto,
-  type EvidenceHighlightSentiment,
-  type EvidenceHighlightImportance,
-  type EvidenceHighlightSourceType,
-  type FindingDto,
-  type LinkEvidenceRequest,
-} from '@fops/shared';
-import {
-  linkTaskToFinding,
-  listTasks,
-  getTask,
-  useIdempotencyKey,
-  errorMapper,
-  type ApiError,
-} from '@/lib/api';
-import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
-import { fetchManagedSystems } from '@/lib/api/managed-systems';
-import { useMe } from '@/lib/auth/useMe';
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
-import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
-import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
-import { useFindingDetail } from '../../hooks/useFindingDetail';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from '@tanstack/react-router';
+import * as React from 'react';
+import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import { useEvidenceHighlights } from '../../hooks/useEvidenceHighlights';
 import {
   useAddEvidenceHighlightMutation,
   useLinkEvidenceMutation,
 } from '../../hooks/useEvidenceMutations';
+import { useFindingDetail } from '../../hooks/useFindingDetail';
 import { useFindingStatusMutation } from '../../hooks/useFindingStatusMutation';
 import { useRequestTaskFromFinding } from '../../hooks/useRequestTaskFromFinding';
 
@@ -81,10 +81,7 @@ export interface FindingDetailPanelProps {
 
 function FindingDetailSkeleton(): React.ReactElement {
   return (
-    <div
-      className="flex flex-col gap-4 p-6"
-      aria-label="Finding 상세 불러오는 중"
-    >
+    <div className="flex flex-col gap-4 p-6" aria-label="Finding 상세 불러오는 중">
       <Skeleton className="h-7 w-1/2" />
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-3/4" />
@@ -107,11 +104,7 @@ function FindingNotFound(): React.ReactElement {
       title="Finding을 찾을 수 없습니다."
       body="해당 Finding은 삭제되었거나 접근 권한이 없습니다."
       action={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void navigate({ to: '/vocs' })}
-        >
+        <Button variant="outline" size="sm" onClick={() => void navigate({ to: '/vocs' })}>
           VOC 목록으로
         </Button>
       }
@@ -129,12 +122,11 @@ const SOURCE_TYPE_LABEL: Record<string, string> = {
   manual: 'Manual',
 };
 
-const EVIDENCE_SOURCE_TYPE_LABEL: Record<EvidenceHighlightSourceType, string> =
-  {
-    voc: 'VOC',
-    survey_response: 'Survey',
-    note: 'Note',
-  };
+const EVIDENCE_SOURCE_TYPE_LABEL: Record<EvidenceHighlightSourceType, string> = {
+  voc: 'VOC',
+  survey_response: 'Survey',
+  note: 'Note',
+};
 
 const FINDING_STATUS_LABEL: Record<FindingDto['status'], string> = {
   draft: '초안',
@@ -144,10 +136,7 @@ const FINDING_STATUS_LABEL: Record<FindingDto['status'], string> = {
   archived: '보관됨',
 };
 
-const CONFIDENCE_LABEL: Record<
-  NonNullable<FindingDto['confidence']>,
-  string
-> = {
+const CONFIDENCE_LABEL: Record<NonNullable<FindingDto['confidence']>, string> = {
   low: '낮음',
   medium: '중간',
   high: '높음',
@@ -252,7 +241,9 @@ function LinkTaskModal({ finding, open, onClose }: LinkTaskModalProps): React.Re
             <p className="text-sm text-feedback-error">Task 목록을 불러오지 못했습니다.</p>
           )}
           {!tasksQuery.isLoading && candidates.length === 0 && (
-            <p className="text-sm text-text-muted">연결 가능한 같은 Managed System Task가 없습니다.</p>
+            <p className="text-sm text-text-muted">
+              연결 가능한 같은 Managed System Task가 없습니다.
+            </p>
           )}
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
@@ -293,9 +284,7 @@ interface EvidenceHighlightRowProps {
   highlight: EvidenceHighlightDto;
 }
 
-function EvidenceHighlightRow({
-  highlight,
-}: EvidenceHighlightRowProps): React.ReactElement {
+function EvidenceHighlightRow({ highlight }: EvidenceHighlightRowProps): React.ReactElement {
   // quote_or_summary is OMITTED from the DTO when the source is unreadable (withheld rule).
   const isWithheld = highlight.quote_or_summary === undefined;
 
@@ -310,11 +299,8 @@ function EvidenceHighlightRow({
         <FitBadge data-testid="evidence-source-type">
           {EVIDENCE_SOURCE_TYPE_LABEL[highlight.source_type]}
         </FitBadge>
-        {highlight.source_id !== null && (
-          <span
-            className="text-xs text-text-muted font-mono"
-            data-testid="evidence-source-id"
-          >
+        {highlight.source_type !== 'survey_response' && highlight.source_id !== null && (
+          <span className="text-xs text-text-muted font-mono" data-testid="evidence-source-id">
             {highlight.source_id.slice(0, 8)}
           </span>
         )}
@@ -332,17 +318,11 @@ function EvidenceHighlightRow({
 
       {/* Quote or withheld state */}
       {isWithheld ? (
-        <p
-          className="text-sm text-text-muted italic"
-          data-testid="evidence-withheld"
-        >
+        <p className="text-sm text-text-muted italic" data-testid="evidence-withheld">
           [원문 접근 권한 없음 — 내용이 숨겨졌습니다.]
         </p>
       ) : (
-        <p
-          className="text-sm text-text-primary whitespace-pre-wrap"
-          data-testid="evidence-quote"
-        >
+        <p className="text-sm text-text-primary whitespace-pre-wrap" data-testid="evidence-quote">
           {highlight.quote_or_summary}
         </p>
       )}
@@ -359,13 +339,8 @@ interface EvidenceHighlightsSectionProps {
 
 function EvidenceHighlightsSection({
   findingId,
-  evidenceCount,
 }: EvidenceHighlightsSectionProps): React.ReactElement {
-  const {
-    data: highlights,
-    isLoading,
-    isError,
-  } = useEvidenceHighlights(findingId);
+  const { data: highlights, isLoading, isError } = useEvidenceHighlights(findingId);
 
   if (isLoading) {
     return (
@@ -377,11 +352,7 @@ function EvidenceHighlightsSection({
   }
 
   if (isError) {
-    return (
-      <p className="text-sm text-feedback-error">
-        Evidence 목록을 불러오지 못했습니다.
-      </p>
-    );
+    return <p className="text-sm text-feedback-error">Evidence 목록을 불러오지 못했습니다.</p>;
   }
 
   const items = highlights ?? [];
@@ -443,11 +414,7 @@ const IMPORTANCE_OPTIONS: {
   { value: 'high', label: 'High' },
 ];
 
-function AddEvidenceModal({
-  findingId,
-  open,
-  onClose,
-}: AddEvidenceModalProps): React.ReactElement {
+function AddEvidenceModal({ findingId, open, onClose }: AddEvidenceModalProps): React.ReactElement {
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const form = useForm<AddEvidenceHighlightRequest>({
@@ -516,19 +483,12 @@ function AddEvidenceModal({
             <Select
               defaultValue="note"
               onValueChange={(val) =>
-                form.setValue(
-                  'source_type',
-                  val as EvidenceHighlightSourceType,
-                  {
-                    shouldValidate: true,
-                  },
-                )
+                form.setValue('source_type', val as EvidenceHighlightSourceType, {
+                  shouldValidate: true,
+                })
               }
             >
-              <SelectTrigger
-                id="evidence-source-type"
-                data-testid="evidence-source-type-select"
-              >
+              <SelectTrigger id="evidence-source-type" data-testid="evidence-source-type-select">
                 <SelectValue placeholder="소스 유형 선택" />
               </SelectTrigger>
               <SelectContent>
@@ -592,10 +552,7 @@ function AddEvidenceModal({
                 })
               }
             >
-              <SelectTrigger
-                id="evidence-sentiment"
-                data-testid="evidence-sentiment-select"
-              >
+              <SelectTrigger id="evidence-sentiment" data-testid="evidence-sentiment-select">
                 <SelectValue placeholder="선택 안 함" />
               </SelectTrigger>
               <SelectContent>
@@ -613,19 +570,12 @@ function AddEvidenceModal({
             <FieldLabel htmlFor="evidence-importance">중요도 (선택)</FieldLabel>
             <Select
               onValueChange={(val) =>
-                form.setValue(
-                  'importance',
-                  val as EvidenceHighlightImportance,
-                  {
-                    shouldValidate: true,
-                  },
-                )
+                form.setValue('importance', val as EvidenceHighlightImportance, {
+                  shouldValidate: true,
+                })
               }
             >
-              <SelectTrigger
-                id="evidence-importance"
-                data-testid="evidence-importance-select"
-              >
+              <SelectTrigger id="evidence-importance" data-testid="evidence-importance-select">
                 <SelectValue placeholder="선택 안 함" />
               </SelectTrigger>
               <SelectContent>
@@ -640,12 +590,7 @@ function AddEvidenceModal({
         </form>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={closeAndReset}
-            disabled={isSubmitting}
-          >
+          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
             취소
           </Button>
           <Button
@@ -755,12 +700,7 @@ function LinkEvidenceModal({
         </form>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={closeAndReset}
-            disabled={isSubmitting}
-          >
+          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
             취소
           </Button>
           <Button
@@ -785,11 +725,7 @@ interface RequestTaskModalProps {
   onClose: () => void;
 }
 
-function RequestTaskModal({
-  finding,
-  open,
-  onClose,
-}: RequestTaskModalProps): React.ReactElement {
+function RequestTaskModal({ finding, open, onClose }: RequestTaskModalProps): React.ReactElement {
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const form = useForm<CreateTaskRequestFromFindingRequest>({
@@ -801,6 +737,7 @@ function RequestTaskModal({
     mode: 'onBlur',
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: finding.id resets the form when switching findings with equal summaries.
   React.useEffect(() => {
     if (open) {
       form.reset({
@@ -897,12 +834,7 @@ function RequestTaskModal({
         </form>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={closeAndReset}
-            disabled={isSubmitting}
-          >
+          <Button type="button" variant="ghost" onClick={closeAndReset} disabled={isSubmitting}>
             취소
           </Button>
           <Button
@@ -925,9 +857,7 @@ interface FullFindingDetailProps {
   finding: FindingDto;
 }
 
-function FullFindingDetail({
-  finding,
-}: FullFindingDetailProps): React.ReactElement {
+function FullFindingDetail({ finding }: FullFindingDetailProps): React.ReactElement {
   const [addEvidenceOpen, setAddEvidenceOpen] = React.useState(false);
   const [linkEvidenceOpen, setLinkEvidenceOpen] = React.useState(false);
   const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
@@ -961,9 +891,7 @@ function FullFindingDetail({
     () => new Map((analyticsAreasQuery.data?.items ?? []).map((area) => [area.id, area.name])),
     [analyticsAreasQuery.data?.items],
   );
-  const linkedVocQuery = useVocDetail(
-    finding.source_type === 'voc' ? finding.source_id : null,
-  );
+  const linkedVocQuery = useVocDetail(finding.source_type === 'voc' ? finding.source_id : null);
   const linkedTaskQuery = useQuery({
     queryKey: ['task', finding.linked_task_id] as const,
     queryFn: ({ signal }) => getTask(finding.linked_task_id as string, signal),
@@ -976,8 +904,7 @@ function FullFindingDetail({
     linkedVocQuery.data && 'display_id' in linkedVocQuery.data
       ? linkedVocQuery.data.display_id
       : null;
-  const { key: statusIdempotencyKey, markConsumed: markStatusKeyConsumed } =
-    useIdempotencyKey();
+  const { key: statusIdempotencyKey, markConsumed: markStatusKeyConsumed } = useIdempotencyKey();
   const { data: me } = useMe();
   const managePermissionQuery = usePermissionCheck({
     capability: 'finding.manage',
@@ -986,8 +913,7 @@ function FullFindingDetail({
 
   // finding.manage gates both CTAs (display hint only — backend is authoritative).
   const canManage =
-    me?.actor.role_level === 'admin' ||
-    managePermissionQuery.data?.state === 'approved';
+    me?.actor.role_level === 'admin' || managePermissionQuery.data?.state === 'approved';
   const statusMutation = useFindingStatusMutation({
     findingId: finding.id,
     idempotencyKey: statusIdempotencyKey,
@@ -1022,19 +948,12 @@ function FullFindingDetail({
         <div className="shrink-0 border-b border-border-subtle px-6 pt-6 pb-4">
           <div className="flex items-center gap-2 mb-1">
             <FitBadge>Finding</FitBadge>
-            <span className="text-xs text-text-muted">
-              {finding.display_id}
-            </span>
+            <span className="text-xs text-text-muted">{finding.display_id}</span>
           </div>
-          <h1 className="text-xl font-semibold text-text-primary">
-            {finding.title}
-          </h1>
+          <h1 className="text-xl font-semibold text-text-primary">{finding.title}</h1>
         </div>
 
-        <DetailPanelSectionNav
-          sections={DETAIL_SECTIONS}
-          scrollRef={scrollRef}
-        />
+        <DetailPanelSectionNav sections={DETAIL_SECTIONS} scrollRef={scrollRef} />
 
         <div
           ref={scrollRef}
@@ -1043,9 +962,7 @@ function FullFindingDetail({
           {/* Summary */}
           <div data-anchor="summary" className="flex flex-col gap-1">
             <PanelSectionTitle>요약</PanelSectionTitle>
-            <p className="text-sm text-text-primary whitespace-pre-wrap">
-              {finding.summary}
-            </p>
+            <p className="text-sm text-text-primary whitespace-pre-wrap">{finding.summary}</p>
           </div>
 
           <SectionDivider />
@@ -1054,9 +971,7 @@ function FullFindingDetail({
           <div data-anchor="metadata" className="flex flex-col gap-2">
             <PanelSectionTitle>소스 / 심각도 / 신뢰도</PanelSectionTitle>
             <FieldRow label="소스 유형" className="px-0">
-              <FitBadge>
-                {SOURCE_TYPE_LABEL[finding.source_type] ?? finding.source_type}
-              </FitBadge>
+              <FitBadge>{SOURCE_TYPE_LABEL[finding.source_type] ?? finding.source_type}</FitBadge>
             </FieldRow>
             <FieldRow label="심각도" className="px-0">
               <SeverityBadge severity={finding.severity as SeverityEnum} />
@@ -1083,9 +998,7 @@ function FullFindingDetail({
 
           {/* Evidence Highlights — per design/05 layout: after Summary/Source/Severity/Confidence */}
           <div data-anchor="evidence" className="flex flex-col gap-3">
-            <PanelSectionTitle>
-              Evidence Highlights ({finding.evidence_count})
-            </PanelSectionTitle>
+            <PanelSectionTitle>Evidence Highlights ({finding.evidence_count})</PanelSectionTitle>
             <EvidenceHighlightsSection
               findingId={finding.id}
               evidenceCount={finding.evidence_count}
@@ -1231,20 +1144,14 @@ function FullFindingDetail({
         open={requestTaskOpen}
         onClose={() => setRequestTaskOpen(false)}
       />
-      <LinkTaskModal
-        finding={finding}
-        open={linkTaskOpen}
-        onClose={() => setLinkTaskOpen(false)}
-      />
+      <LinkTaskModal finding={finding} open={linkTaskOpen} onClose={() => setLinkTaskOpen(false)} />
     </>
   );
 }
 
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 
-export function FindingDetailPanel({
-  findingId,
-}: FindingDetailPanelProps): React.ReactElement {
+export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): React.ReactElement {
   const { data, isLoading, isError, error } = useFindingDetail(findingId);
 
   // 1. Loading
@@ -1270,9 +1177,7 @@ export function FindingDetailPanel({
       return (
         <div className="flex flex-col h-full">
           <div className="h-12 border-b border-border-subtle flex items-center px-6">
-            <span className="text-sm font-medium text-text-primary">
-              Finding 상세
-            </span>
+            <span className="text-sm font-medium text-text-primary">Finding 상세</span>
           </div>
           <div className="flex-1 flex items-center justify-center p-6">
             <PermissionBlockedPanel
@@ -1286,9 +1191,7 @@ export function FindingDetailPanel({
     }
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-        <p className="text-sm text-feedback-error">
-          데이터를 불러오지 못했습니다.
-        </p>
+        <p className="text-sm text-feedback-error">데이터를 불러오지 못했습니다.</p>
       </div>
     );
   }

@@ -62,6 +62,11 @@ export const ERROR_CODES = [
   'reporter_facing_status.gate_blocked',
   // conflict.* → 409 (Slice 3 #17 — Reporter edit blocked by committed triage)
   'conflict.triage_already_committed',
+  // conflict.* → 409 (Slice 8 #185 — survey response submission)
+  'conflict.survey_not_open',
+  'conflict.survey_response_already_submitted',
+  // conflict.* → 409 (Slice 8 #186 — survey aggregate results unavailable for drafts)
+  'conflict.survey_results_unavailable',
   // storage.* → 502 (Slice 3 #22 / PLAN-22 C3a — object-store unavailable)
   'storage.unavailable',
   // attachment.* → 422 (PLAN-22 C3a — declared content type / size cap)

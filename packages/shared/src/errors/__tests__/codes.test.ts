@@ -15,9 +15,7 @@ describe('errorCodeSchema — Slice 3 #13 codes', () => {
   });
 
   it('rejects retired attachment.unsupported_pending_storage_slice (PLAN-22 C7b)', () => {
-    expect(() =>
-      errorCodeSchema.parse('attachment.unsupported_pending_storage_slice'),
-    ).toThrow();
+    expect(() => errorCodeSchema.parse('attachment.unsupported_pending_storage_slice')).toThrow();
   });
 });
 
@@ -42,4 +40,13 @@ describe('errorCodeSchema — Slice 3 #22 / PLAN-22 C3a codes', () => {
   ])('parses %s', (code) => {
     expect(errorCodeSchema.parse(code)).toBe(code);
   });
+});
+
+describe('errorCodeSchema — Slice 8 #185 survey response submission codes', () => {
+  it.each(['conflict.survey_not_open', 'conflict.survey_response_already_submitted'])(
+    'parses %s',
+    (code) => {
+      expect(errorCodeSchema.parse(code)).toBe(code);
+    },
+  );
 });

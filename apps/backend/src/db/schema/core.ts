@@ -240,6 +240,9 @@ export const managedSystems = coreSchema.table(
     externalKey: text('external_key'),
     defaultOwnerActorId: uuid('default_owner_actor_id').references(() => actors.id),
     defaultOwnerTeamId: uuid('default_owner_team_id').references(() => teams.id),
+    defaultSurveyOperatorActorId: uuid('default_survey_operator_actor_id').references(
+      () => actors.id,
+    ),
     archivedAt: timestamp('archived_at', { withTimezone: true }),
     archivedByActorId: uuid('archived_by_actor_id').references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -326,7 +329,7 @@ export const entityLinks = coreSchema.table(
   (t) => ({
     tupleCheck: check(
       'entity_links_tuple_check',
-      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'), ('voc','finding','evidence_of'), ('voc_cluster','finding','created_finding'), ('voc_cluster','finding','evidence_of'), ('finding','task_request','requested_task'), ('task_request','task','converted_to'), ('finding','task','requested_task'), ('voc','task','evidence_of'), ('voc','task_request','requested_task'), ('voc_cluster','task_request','requested_task'))`,
+      sql`(${t.sourceType}, ${t.targetType}, ${t.relationType}) in (('voc','voc','related_to'), ('voc','finding','created_finding'), ('voc','finding','evidence_of'), ('voc_cluster','finding','created_finding'), ('voc_cluster','finding','evidence_of'), ('finding','task_request','requested_task'), ('task_request','task','converted_to'), ('finding','task','requested_task'), ('voc','task','evidence_of'), ('voc','task_request','requested_task'), ('voc_cluster','task_request','requested_task'), ('survey_response','finding','generated_finding'), ('survey_response','finding','evidence_of'))`,
     ),
     visibilityCheck: check(
       'entity_links_visibility_check',

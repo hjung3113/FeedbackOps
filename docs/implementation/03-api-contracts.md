@@ -688,9 +688,8 @@ POST /findings/:id/link-task
 
 Finding is not independently created through `POST /findings` as of Slice 6.
 Creation happens only through source conversion routes:
-`POST /vocs/:id/create-finding` and `POST /voc-clusters/:id/create-finding`.
-`POST /survey-responses/:id/create-finding` is a planned Slice 8 route (미구현 —
-the `surveys` backend module has no implementation as of this writing).
+`POST /vocs/:id/create-finding`, `POST /voc-clusters/:id/create-finding`, and
+`POST /survey-responses/:id/create-finding`.
 
 Finding-to-Milestone linking is future cross-system behavior and is not an MVP
 Finding endpoint.
@@ -757,13 +756,62 @@ Slice 6. It is created only through source transition routes:
 POST /surveys
 GET /surveys
 GET /surveys/:id
+GET /surveys/:id/form
 POST /surveys/:id/responses
 GET /surveys/:id/results
+POST /survey-responses/:id/evidence-excerpt-candidates
+POST /survey-responses/:id/approved-excerpts
 POST /survey-responses/:id/create-finding
 POST /survey-findings/:id/request-task
 POST /survey-findings/:id/link-task
 # future: POST /survey-findings/:id/link-milestone
 ```
+
+`GET /surveys/:id/form` is the respondent form read surface. Any authenticated
+Actor in the same Workspace may read an open Survey without `survey.read`; a
+missing or cross-Workspace Survey returns `404 not_found.record`, and a
+non-open Survey returns `409 conflict.survey_not_open`. Its DTO is respondent
+safe: form fields, questions, choices, and rating bounds only—never operator or
+personal-response data.
+
+`POST /surveys/:id/responses` is implemented for an authenticated Actor in the
+same Workspace and requires `Idempotency-Key`. It returns `201` with only
+`{ id, survey_id, submitted_at, identity_protected }`; it never echoes answers.
+A missing or cross-Workspace Survey returns `404 not_found.record`; a non-open
+Survey returns `409 conflict.survey_not_open`; a second submission returns
+`409 conflict.survey_response_already_submitted`; and reusing a key with a
+different payload returns `409 conflict.idempotency_key_reuse`. The `422
+validation.failed` matrix covers malformed or duplicate question IDs, unknown
+or inactive-branch answers, missing required answers, answer-kind/value and
+choice mismatches, rating bounds, and trimmed text length.
+
+#### GET /surveys/:id/results — aggregate-only safe result summary
+
+This read-only endpoint requires a session and matching workspace context. It first looks up the Survey by `(workspace_id, survey_id)`, then checks `survey.read` on the Survey's primary Managed System. A missing, cross-workspace, or denied Survey returns `404 not_found.record`; an explicit deny also returns 404 so the route does not disclose existence. Admin role may satisfy `survey.read` under the normal Survey authorization rule, but does not bypass the anonymity policy.
+
+`survey.read_personal_responses` is a separate explicit capability. Its holder receives exact aggregate counts, never personal response records, identities, response IDs, timestamps, raw text, or excerpts. Admin role alone never grants this capability. Open and closed Surveys return results; a draft Survey returns `409 conflict.survey_results_unavailable`.
+
+The query schema is a strict empty object. Result filters are deferred because responses do not retain immutable cohort dimensions and overlapping filtered cohorts would permit subtraction attacks. Future filters require stored cohort snapshots plus an explicit privacy policy.
+
+For a non-holder, a response cohort below five suppresses every question using `{ question_id, visibility: "suppressed", response_count: null, suppression: { code: "anonymity_threshold" } }`; zero through four responses are indistinguishable. At five or more responses, a choice or rating question is also fully suppressed when any positive exposed option or collapsed rating-band count is one through four. Text is suppressed when its answer count is one through four. Zero-count buckets do not trigger low-bucket suppression.
+
+Visible choice results contain configured option `key`, `label`, and count plus the question answer count. Visible rating results contain only deterministic `low`, `mid`, and `high` counts derived from the configured rating domain; raw values and averages are not returned. Visible text results contain only `answer_count`, `distribution: null`, and active approved `excerpts: [{ id, text }]`. These safe redacted excerpts require only `survey.read`; they never include response IDs, respondent identity, approval metadata, or raw text. Question order follows the Survey configuration and `identity_protected` mirrors the Survey setting.
+
+#### Survey response evidence approval
+
+`POST /survey-responses/:id/evidence-excerpt-candidates` accepts `{ question_id }` and returns the one matching `{ question_id, question_label, raw_text }` candidate. `POST /survey-responses/:id/approved-excerpts` accepts `{ question_id, redacted_excerpt }` and creates an append-only approved excerpt, returning `{ approved_excerpt_id, question_id, redacted_excerpt }`. Both routes resolve the response through the Survey evidence definer, then require `survey.read` and explicit `survey.read_personal_responses`; missing response, cross-workspace response, denied source read, and denied personal read are all `404 not_found.record`. Admin never bypasses personal-response access. A fully authorized actor receives `409 conflict.survey_results_unavailable` for a draft Survey. Approval then requires `survey.manage`; only this post-readable failure is `403 permission.denied`.
+
+Candidate reads write `survey_response_personal_read` in the same transaction; approvals write `survey_response_excerpt_approved` in the same transaction as the approval row. Audit detail contains IDs only—never raw or redacted text. Duplicate approvals are intentional separate rows. Revoked approvals are omitted from results. These per-response commands do not make aggregate result `next_actions` executable, so that field remains `[]`.
+
+#### POST /survey-responses/:id/create-finding
+
+This source-shaped route accepts strict `{ severity, confidence?, analytics_area_id?, primary_managed_system_id?, approved_excerpt_ids: uuid[] }`, requires an `Idempotency-Key` UUIDv4, and delegates transaction, permission, Finding, link, audit, and idempotency ownership to the Finding command. It never accepts caller title, summary, or evidence text. The command resolves the response through the Survey evidence seam in this order: request validation; source plus `survey.read` and explicit `survey.read_personal_responses` (missing, foreign, denied-read, and denied-personal all return identical `404 not_found.record`); draft state (`409 conflict.survey_results_unavailable` only after complete source access); target Managed System; then `finding.manage` (`403 permission.denied` only after source access).
+
+The Finding has database provenance `source_type='survey_response'` and stores the response UUID only internally. Its DTO omits `source_id`; backend-generated title and summary use only survey type/display ID, approved question label, and approved redacted excerpt. Active approved excerpts must belong to this response; revoked, foreign, or mismatched IDs return `422 validation.failed`. Duplicate `approved_excerpt_ids` also return `422 validation.failed`. Each excerpt becomes an evidence-highlight snapshot plus internal-only `(survey_response, finding, evidence_of)` link; the command also writes internal-only `(survey_response, finding, generated_finding)`, `finding_created_from_survey_response`, and normal entity-link/evidence audits atomically. An empty excerpt array is valid.
+
+Same actor/key/body/source replays the original Finding with no duplicate side effects; changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic survey-response highlight attachment remains deferred.
+
+`next_actions` remains `[]`; it is an aggregate-read field and does not expose the approved-excerpt/personal-response Finding command. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
 
 ### Core / Managed System / Analytics Area
 
@@ -842,6 +890,15 @@ Generic PATCH treats that tuple exactly as an absent link, returning the same
 non-disclosing `404 not_found.record` envelope rather than a distinguishable
 `422` response.
 
+The `(survey_response, finding, generated_finding)` and `(survey_response,
+finding, evidence_of)` tuples are also command-only. Generic POST rejects them,
+generic endpoint and workspace lists omit their rows, and generic PATCH/detach
+returns the same non-disclosing `404 not_found.record` envelope as an absent
+link. Only Finding-domain commands may write these tuples; the forthcoming
+`POST /survey-responses/:id/create-finding` command writes
+`generated_finding`. `created_finding` is not a Survey Response lineage
+relation.
+
 ### VOC Similarity Projection
 
 `GET /vocs` returns a real `similar_count` for each list item. `GET /vocs/:id`
@@ -880,4 +937,4 @@ the same `404 not_found.record` as an absent VOC; a Reporter receives `403`.
 POST /survey-responses/:id/create-voc
 ```
 
-If compatibility handling is ever needed, return `404` or `410`. Never create a VOC or `generated_voc` link from a Survey Response.
+If compatibility handling is ever needed, return `404` or `410`. Never create a VOC or `generated_voc` link from a Survey Response. Issue #185 pins the unregistered route to Fastify's `404` behavior with an integration test.

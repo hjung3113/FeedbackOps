@@ -10,7 +10,7 @@ export interface InsertFindingInput {
   primaryManagedSystemId: string;
   title: string;
   summary: string;
-  sourceType: 'voc' | 'voc_cluster';
+  sourceType: 'voc' | 'voc_cluster' | 'survey_response';
   sourceId: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   confidence: 'low' | 'medium' | 'high' | null;
@@ -55,6 +55,7 @@ export interface EvidenceHighlightRow {
   primary_managed_system_id: string;
   source_type: 'voc' | 'survey_response' | 'note';
   source_id: string | null;
+  approved_excerpt_id: string | null;
   quote_or_summary: string;
   analytics_area_id: string | null;
   sentiment: 'negative' | 'neutral' | 'positive' | null;
@@ -81,6 +82,7 @@ export function mapEvidenceHighlightRow(row: Record<string, unknown>): EvidenceH
     primary_managed_system_id: row.primary_managed_system_id as string,
     source_type: row.source_type as EvidenceHighlightRow['source_type'],
     source_id: (row.source_id as string | null) ?? null,
+    approved_excerpt_id: (row.approved_excerpt_id as string | null) ?? null,
     quote_or_summary: row.quote_or_summary as string,
     analytics_area_id: (row.analytics_area_id as string | null) ?? null,
     sentiment: (row.sentiment as EvidenceHighlightRow['sentiment']) ?? null,
@@ -116,6 +118,7 @@ export async function insertEvidenceHighlight(
     primaryManagedSystemId: string;
     sourceType: 'voc' | 'survey_response' | 'note';
     sourceId: string | null;
+    approvedExcerptId: string | null;
     quoteOrSummary: string;
     analyticsAreaId: string | null;
     sentiment: 'negative' | 'neutral' | 'positive' | null;
@@ -126,16 +129,16 @@ export async function insertEvidenceHighlight(
   const result = await tx.execute<Record<string, unknown>>(sql`
     INSERT INTO finding.evidence_highlights (
       workspace_id, finding_id, primary_managed_system_id, source_type,
-      source_id, quote_or_summary, analytics_area_id, sentiment, importance, created_by
+      source_id, approved_excerpt_id, quote_or_summary, analytics_area_id, sentiment, importance, created_by
     )
     VALUES (
       ${input.workspaceId}, ${input.findingId}, ${input.primaryManagedSystemId},
-      ${input.sourceType}, ${input.sourceId}, ${input.quoteOrSummary}, ${input.analyticsAreaId},
+      ${input.sourceType}, ${input.sourceId}, ${input.approvedExcerptId}, ${input.quoteOrSummary}, ${input.analyticsAreaId},
       ${input.sentiment}, ${input.importance}, ${input.createdBy}
     )
     RETURNING
       id, workspace_id, finding_id, primary_managed_system_id, source_type,
-      source_id, quote_or_summary, analytics_area_id, sentiment, importance,
+      source_id, approved_excerpt_id, quote_or_summary, analytics_area_id, sentiment, importance,
       created_by, created_at
   `);
   const row = result.rows[0];
@@ -211,7 +214,7 @@ export async function listEvidenceHighlightsByFinding(
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
       id, workspace_id, finding_id, primary_managed_system_id, source_type,
-      source_id, quote_or_summary, analytics_area_id, sentiment, importance,
+      source_id, approved_excerpt_id, quote_or_summary, analytics_area_id, sentiment, importance,
       created_by, created_at
     FROM finding.evidence_highlights
     WHERE workspace_id = ${input.workspaceId}

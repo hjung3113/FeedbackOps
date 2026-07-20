@@ -56,6 +56,12 @@ export default defineConfig({
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
       },
+      // `/surveys` overlaps with the FE route of the same name, so bypass the
+      // proxy for browser HTML navigations and only forward JSON/XHR requests.
+      '/surveys': {
+        target: 'http://127.0.0.1:3011',
+        bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
+      },
       // Slice 3 #22: POST /attachments (multipart upload) + GET
       // /attachments/:id/download (streaming). No FE-route collision; forward
       // root path unconditionally.

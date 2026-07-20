@@ -26,6 +26,17 @@ import {
   createPermissionRequestsScenario,
   permissionDecisionResultTemplates,
 } from '../fixtures/permissions';
+import {
+  type SurveyResultsVisualScenario,
+  surveyResultVisualFixture,
+  surveyResultVisualListFixture,
+  surveyResultsFixtureFor,
+} from '../fixtures/survey-results';
+import {
+  type SurveyVisualScenario,
+  surveyVisualFixture,
+  surveyVisualFixtureSchema,
+} from '../fixtures/surveys';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
@@ -49,6 +60,8 @@ interface InstallOptions {
   vocReview?: boolean;
   /** Issue #179 reporter-safe linked Task summary surface. */
   vocReporterTaskSummary?: boolean;
+  surveyScenario?: SurveyVisualScenario;
+  surveyResultsScenario?: SurveyResultsVisualScenario;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -187,6 +200,46 @@ export async function installMockApi(
         state: role === 'admin' ? 'approved' : 'blocked_non_requestable',
         decision: { allow: role === 'admin' },
       });
+      return;
+    }
+
+    if (options.surveyScenario && isRequest(route, 'GET', '/surveys')) {
+      const scenario = options.surveyScenario;
+      await json(
+        route,
+        scenario === 'error' ? 500 : 200,
+        scenario === 'error'
+          ? errorEnvelope(500)
+          : scenario === 'empty'
+            ? []
+            : [surveyVisualFixtureSchema.parse(surveyVisualFixture)],
+      );
+      return;
+    }
+
+    if (options.surveyResultsScenario && isRequest(route, 'GET', '/surveys')) {
+      await json(route, 200, surveyResultVisualListFixture);
+      return;
+    }
+
+    if (
+      options.surveyResultsScenario &&
+      isRequest(route, 'GET', `/surveys/${surveyResultVisualFixture.id}`)
+    ) {
+      await json(route, 200, surveyResultVisualFixture);
+      return;
+    }
+
+    if (
+      options.surveyResultsScenario &&
+      isRequest(route, 'GET', `/surveys/${surveyResultVisualFixture.id}/results`)
+    ) {
+      await json(route, 200, surveyResultsFixtureFor(options.surveyResultsScenario));
+      return;
+    }
+
+    if (options.surveyScenario && isRequest(route, 'GET', `/surveys/${surveyVisualFixture.id}`)) {
+      await json(route, 200, surveyVisualFixtureSchema.parse(surveyVisualFixture));
       return;
     }
 

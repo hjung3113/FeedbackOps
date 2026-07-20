@@ -17,6 +17,17 @@ import { z } from 'zod';
 
 import { attachmentUploadedDetailSchema } from '../audit/attachments.js';
 import {
+  surveyClosedDetailSchema,
+  surveyCreatedDetailSchema,
+  surveyOpenedDetailSchema,
+  surveyQuestionCreatedDetailSchema,
+  surveyQuestionDeletedDetailSchema,
+  surveyQuestionUpdatedDetailSchema,
+  surveyResponseExcerptApprovedDetailSchema,
+  surveyResponsePersonalReadDetailSchema,
+  surveyResponseSubmittedDetailSchema,
+} from '../audit/survey.js';
+import {
   internalCommentCreatedDetailSchema,
   publicUpdateCreatedDetailSchema,
   reporterFacingStatusChangedDetailSchema,
@@ -100,6 +111,18 @@ export const AUDIT_EVENT_TYPES = [
   'task_status_changed',
   'public_update_review_candidate_created',
   'public_update_review_candidate_dismissed',
+  // Slice 8 #191: Survey lifecycle and question structure events.
+  'survey_created',
+  'survey_question_created',
+  'survey_question_updated',
+  'survey_question_deleted',
+  'survey_opened',
+  'survey_closed',
+  'survey_response_submitted',
+  // Slice 8 #187: audited personal candidate read and approval lifecycle.
+  'survey_response_personal_read',
+  'survey_response_excerpt_approved',
+  'finding_created_from_survey_response',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -234,6 +257,14 @@ const vocRefDetailSchema = z.object({
   id: z.string().uuid(),
 });
 
+// Entity-link audits are internal-only operational records.  Like the VOC
+// variants above they identify the source by UUID, but never carry response
+// content or respondent fields.
+const surveyResponseRefDetailSchema = z.object({
+  type: z.literal('survey_response'),
+  id: z.string().uuid(),
+});
+
 const vocClusterRefDetailSchema = z.object({
   type: z.literal('voc_cluster'),
   id: z.string().uuid(),
@@ -332,6 +363,24 @@ export const entityLinkCreatedDetailSchema = z.union([
     relation_type: z.literal('evidence_of'),
     visibility: z.literal('internal_only'),
   }),
+  z
+    .object({
+      link_id: z.string().uuid(),
+      source: surveyResponseRefDetailSchema,
+      target: findingRefDetailSchema,
+      relation_type: z.literal('generated_finding'),
+      visibility: z.literal('internal_only'),
+    })
+    .strict(),
+  z
+    .object({
+      link_id: z.string().uuid(),
+      source: surveyResponseRefDetailSchema,
+      target: findingRefDetailSchema,
+      relation_type: z.literal('evidence_of'),
+      visibility: z.literal('internal_only'),
+    })
+    .strict(),
 ]);
 export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
 
@@ -389,6 +438,20 @@ export const findingCreatedFromVocDetailSchema = z.object({
 });
 export type FindingCreatedFromVocDetail = z.infer<typeof findingCreatedFromVocDetailSchema>;
 
+export const findingCreatedFromSurveyResponseDetailSchema = z
+  .object({
+    finding_id: z.string().uuid(),
+    source_survey_response_id: z.string().uuid(),
+    source_survey_id: z.string().uuid(),
+    primary_managed_system_id: z.string().uuid(),
+    identity_protected: z.boolean(),
+    source_type: z.literal('survey_response'),
+  })
+  .strict();
+export type FindingCreatedFromSurveyResponseDetail = z.infer<
+  typeof findingCreatedFromSurveyResponseDetailSchema
+>;
+
 export const findingCreatedFromVocClusterDetailSchema = z.object({
   finding_id: z.string().uuid(),
   source_voc_cluster_id: z.string().uuid(),
@@ -405,9 +468,7 @@ export const findingLinkedToVocClusterDetailSchema = z.object({
   primary_managed_system_id: z.string().uuid(),
   relation_type: z.literal('evidence_of'),
 });
-export type FindingLinkedToVocClusterDetail = z.infer<
-  typeof findingLinkedToVocClusterDetailSchema
->;
+export type FindingLinkedToVocClusterDetail = z.infer<typeof findingLinkedToVocClusterDetailSchema>;
 
 export const findingUnlinkedFromVocClusterDetailSchema = z.object({
   link_id: z.string().uuid(),
@@ -684,4 +745,15 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_status_changed: taskStatusChangedDetailSchema,
   public_update_review_candidate_created: publicUpdateReviewCandidateCreatedDetailSchema,
   public_update_review_candidate_dismissed: publicUpdateReviewCandidateDismissedDetailSchema,
+  // Slice 8 #191: Survey lifecycle and question structure events.
+  survey_created: surveyCreatedDetailSchema,
+  survey_question_created: surveyQuestionCreatedDetailSchema,
+  survey_question_updated: surveyQuestionUpdatedDetailSchema,
+  survey_question_deleted: surveyQuestionDeletedDetailSchema,
+  survey_opened: surveyOpenedDetailSchema,
+  survey_closed: surveyClosedDetailSchema,
+  survey_response_submitted: surveyResponseSubmittedDetailSchema,
+  survey_response_personal_read: surveyResponsePersonalReadDetailSchema,
+  survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
+  finding_created_from_survey_response: findingCreatedFromSurveyResponseDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

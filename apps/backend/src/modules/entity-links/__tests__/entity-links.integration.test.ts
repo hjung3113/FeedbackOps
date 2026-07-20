@@ -3,11 +3,15 @@
 // Gate: DATABASE_URL + WORKSPACE_ID + DATABASE_URL_MIGRATE. The migrate role is
 // required because core.entity_links is append-only to fops_app.
 
-import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { type EntityLinkEntityType, registeredEntityLinkPairs } from '@fops/shared';
+import {
+  type EntityLinkEntityType,
+  type EntityLinkRelationType,
+  registeredEntityLinkPairs,
+} from '@fops/shared';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
@@ -144,26 +148,26 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     targetVoc: { id: string };
   }> {
     const msA = await insertMsDirectly(
-      dbHandle,
+      migrateHandle,
       WORKSPACE_ID,
       `${uid(SLUG_PREFIX)}-a`,
       'Links MS-A',
     );
     const msB = await insertMsDirectly(
-      dbHandle,
+      migrateHandle,
       WORKSPACE_ID,
       `${uid(SLUG_PREFIX)}-b`,
       'Links MS-B',
     );
     const sourceVoc = await insertVocDirectly(
-      dbHandle,
+      migrateHandle,
       WORKSPACE_ID,
       msA,
       reporterId,
       'Link Source VOC',
     );
     const targetVoc = await insertVocDirectly(
-      dbHandle,
+      migrateHandle,
       WORKSPACE_ID,
       msB,
       reporterId,
@@ -219,6 +223,39 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     });
   }
 
+  async function seedSurveyResponse(managedSystemId: string): Promise<{
+    surveyId: string;
+    responseId: string;
+  }> {
+    const survey = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.surveys
+         (workspace_id, display_id, type, status, title, primary_managed_system_id,
+          operator_actor_id, responses_identity_protected, created_by, opened_at)
+       values ($1, $2, 'validation', 'open', $3, $4, $5, true, $5, now())
+       returning id`,
+      [
+        WORKSPACE_ID,
+        `S-${randomUUID()}`,
+        `${SLUG_PREFIX}-command-only-survey-${randomUUID()}`,
+        managedSystemId,
+        adminActorId,
+      ],
+    );
+    const surveyId = survey.rows[0]?.id;
+    if (!surveyId) throw new Error('survey fixture seed failed');
+
+    const response = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_responses
+         (workspace_id, survey_id, respondent_actor_id, identity_protected, submitted_at)
+       values ($1, $2, $3, true, now())
+       returning id`,
+      [WORKSPACE_ID, surveyId, reporterId],
+    );
+    const responseId = response.rows[0]?.id;
+    if (!responseId) throw new Error('survey response fixture seed failed');
+    return { surveyId, responseId };
+  }
+
   async function seedRegisteredTupleEndpoints(): Promise<{
     msA: string;
     endpoints: Record<EntityLinkEntityType, { id: string }>;
@@ -255,6 +292,9 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       msA,
       endpoints: {
         voc: sourceVoc,
+        // Survey-response pairs are command-only, so generic routes reject this
+        // opaque fixture ID before attempting a source lookup.
+        survey_response: { id: sourceVoc.id },
         finding,
         voc_cluster: cluster,
         task_request: taskRequest,
@@ -399,15 +439,15 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         relation_type: tuple.relation_type,
       });
       if (
-        tuple.source_type === 'voc_cluster' &&
-        tuple.target_type === 'finding' &&
-        tuple.relation_type === 'evidence_of'
+        (tuple.source_type === 'voc_cluster' &&
+          tuple.target_type === 'finding' &&
+          tuple.relation_type === 'evidence_of') ||
+        tuple.source_type === 'survey_response'
       ) {
         expect(created.statusCode, JSON.stringify(tuple)).toBe(422);
         continue;
-      } else {
-        expect(created.statusCode, JSON.stringify(tuple)).toBeGreaterThanOrEqual(200);
       }
+      expect(created.statusCode, JSON.stringify(tuple)).toBeGreaterThanOrEqual(200);
       expect(created.statusCode, JSON.stringify(tuple)).toBeLessThanOrEqual(201);
       const createdBody = created.json<{
         id: string;
@@ -676,6 +716,130 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(commandOnly.body).toBe(absent.body);
     expect(privilegedCommandOnly.statusCode).toBe(404);
     expect(privilegedCommandOnly.body).toBe(absent.body);
+  });
+
+  it('generic surfaces reject and hide command-only Survey Response Finding links', async () => {
+    const { msA, sourceVoc } = await seedVocPair();
+    const finding = await seedFindingDirectly({
+      managedSystemId: msA,
+      sourceVocId: sourceVoc.id,
+      title: 'Survey command-only Finding',
+    });
+    const { surveyId, responseId } = await seedSurveyResponse(msA);
+    const surveyLinkId = await seedEntityLinkDirectly({
+      sourceType: 'survey_response',
+      sourceId: responseId,
+      targetType: 'finding',
+      targetId: finding.id,
+      relationType: 'generated_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+    const controlLinkId = await seedEntityLinkDirectly({
+      sourceType: 'voc',
+      sourceId: sourceVoc.id,
+      targetType: 'finding',
+      targetId: finding.id,
+      relationType: 'created_finding',
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
+
+    try {
+      const unsupportedTuple = {
+        code: 'validation.failed',
+        message: 'unsupported entity link tuple',
+        detail: { fields: [{ path: [], code: 'unsupported_tuple' }] },
+      };
+      const surveyToVocRelations: EntityLinkRelationType[] = [
+        'related_to',
+        'created_finding',
+        'generated_finding',
+        'evidence_of',
+        'requested_task',
+        'converted_to',
+      ];
+      const rejectedCreates = [
+        {
+          source: { type: 'survey_response', id: responseId },
+          target: { type: 'finding', id: finding.id },
+          relation_type: 'generated_finding',
+        },
+        {
+          source: { type: 'survey_response', id: responseId },
+          target: { type: 'finding', id: finding.id },
+          relation_type: 'evidence_of',
+        },
+        {
+          source: { type: 'survey_response', id: responseId },
+          target: { type: 'finding', id: finding.id },
+          relation_type: 'created_finding',
+        },
+        {
+          source: { type: 'finding', id: finding.id },
+          target: { type: 'survey_response', id: responseId },
+          relation_type: 'generated_finding',
+        },
+        ...surveyToVocRelations.map((relation_type) => ({
+          source: { type: 'survey_response', id: responseId },
+          target: { type: 'voc', id: sourceVoc.id },
+          relation_type,
+        })),
+      ];
+
+      for (const payload of rejectedCreates) {
+        const rejected = await postEntityLink(adminCookie, sourceVoc.id, sourceVoc.id, payload);
+        expect(rejected.statusCode).toBe(422);
+        expect(rejected.json()).toEqual(unsupportedTuple);
+        expect(rejected.body).not.toContain(responseId);
+      }
+
+      const listed = await getEntityLinks(
+        adminCookie,
+        `?target_type=finding&target_id=${finding.id}`,
+      );
+      expect(listed.statusCode).toBe(200);
+      const listedItems = listed.json<{ items: Array<{ id: string }> }>().items;
+      expect(listedItems.some((item) => item.id === controlLinkId)).toBe(true);
+      expect(listedItems.some((item) => item.id === surveyLinkId)).toBe(false);
+      expect(listed.body).not.toContain(responseId);
+
+      // Follow the module convention for multi-probe tests: rate-limit state
+      // is not part of this generic-surface assertion.
+      await migrateHandle.pool.query('delete from core.rate_limits');
+      const detached = await patchEntityLink(adminCookie, surveyLinkId, {
+        reason: 'Generic detach must not disclose survey lineage',
+      });
+      expect(detached.statusCode).toBe(404);
+      expect(detached.json()).toEqual({
+        code: 'not_found.record',
+        message: 'entity link not found',
+      });
+      expect(detached.body).not.toContain(responseId);
+    } finally {
+      const beforeCleanup = await migrateHandle.pool.query<{ n: number }>(
+        `select count(*)::int as n
+           from core.entity_links
+          where workspace_id = $1 and source_id = $2`,
+        [WORKSPACE_ID, responseId],
+      );
+      expect(beforeCleanup.rows[0]?.n ?? 0).toBeGreaterThan(0);
+      await migrateHandle.pool.query(
+        'delete from core.entity_links where workspace_id = $1 and source_id = $2',
+        [WORKSPACE_ID, responseId],
+      );
+      const afterCleanup = await migrateHandle.pool.query<{ n: number }>(
+        `select count(*)::int as n
+           from core.entity_links
+          where workspace_id = $1 and source_id = $2`,
+        [WORKSPACE_ID, responseId],
+      );
+      expect(afterCleanup.rows[0]?.n ?? 0).toBe(0);
+      await migrateHandle.pool.query('delete from survey.survey_responses where id = $1', [
+        responseId,
+      ]);
+      await migrateHandle.pool.query('delete from survey.surveys where id = $1', [surveyId]);
+    }
   });
 
   it('GET by VOC source accepts managed-system scoped voc.triage without voc.read', async () => {
@@ -1329,7 +1493,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     const persistedTaskStatuses = await migrateHandle.pool.query<{
       title: string;
       status: string;
-    }>(`select title, status from task.tasks where id = any($1::uuid[]) order by title`, [
+    }>('select title, status from task.tasks where id = any($1::uuid[]) order by title', [
       taskLinks.map((link) => link.task.id),
     ]);
     expect(persistedTaskStatuses.rows).toEqual(

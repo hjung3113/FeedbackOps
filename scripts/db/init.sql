@@ -1,14 +1,21 @@
 -- Postgres bootstrap for local dev / CI.
--- Provisions two Postgres roles per ADR-0008 role-separation requirement:
+-- Provisions the two runtime roles per ADR-0008 plus the two NOLOGIN owners
+-- for the aggregate-only result and response-evidence read interfaces:
 --   * fops_migrate — owns the schema, runs migrations, has ALL privileges.
 --   * fops_app     — runtime app role. Migrations grant INSERT+SELECT only on
 --                    core.audit_log, plus INSERT+SELECT+UPDATE+DELETE on every
 --                    other Slice 1 table.
+--   * fops_survey_aggregate_owner — owns only SECURITY DEFINER aggregate
+--                    functions and their minimum raw-column reads.
+--   * fops_survey_evidence_reader_owner — owns only SECURITY DEFINER
+--                    response-evidence readers and their minimum column reads.
 --
 -- This file runs once when the Postgres container initialises an empty
 -- data directory. Migration SQL (apps/backend/migrations/*.sql) does the
 -- per-table GRANT/REVOKE work; this file only creates the roles, the
 -- database, and ensures `fops_migrate` owns it.
+-- Existing databases must provision the matching role and one-way membership
+-- before applying migrations 0038 or 0039.
 --
 -- The superuser bootstrap user comes from POSTGRES_USER/POSTGRES_PASSWORD on
 -- the container; the Drizzle CLI and the app both connect as the two roles
@@ -22,8 +29,20 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fops_app') THEN
     CREATE ROLE fops_app WITH LOGIN NOINHERIT PASSWORD 'fops_app';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fops_survey_aggregate_owner') THEN
+    CREATE ROLE fops_survey_aggregate_owner WITH NOLOGIN NOINHERIT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fops_survey_evidence_reader_owner') THEN
+    CREATE ROLE fops_survey_evidence_reader_owner WITH NOLOGIN NOINHERIT;
+  END IF;
 END
 $$;
+
+-- Migrations create the functions as fops_migrate, then transfer ownership to
+-- this NOLOGIN role and SET ROLE to set their ACLs. Membership is intentionally
+-- one-way: neither definer owner inherits fops_migrate's broad privileges.
+GRANT fops_survey_aggregate_owner TO fops_migrate;
+GRANT fops_survey_evidence_reader_owner TO fops_migrate;
 
 -- CREATE DATABASE cannot run inside a DO block; the dollar-quoted shell entry
 -- script handles re-entrancy by checking existence before running this file.

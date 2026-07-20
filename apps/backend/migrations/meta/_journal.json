@@ -253,6 +253,41 @@
       "when": 1782400000000,
       "tag": "0035_voc_task_conversion_summary_visible",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1782500000000,
+      "tag": "0036_survey_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1782600000000,
+      "tag": "0037_survey_response_submission",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1782700000000,
+      "tag": "0038_survey_result_aggregate",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1782800000000,
+      "tag": "0039_survey_response_evidence_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1782900000000,
+      "tag": "0040_evidence_highlight_approval_identity",
+      "breakpoints": true
     }
   ]
 }

@@ -44,6 +44,7 @@ import {
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
+import { createSurveysService, surveysRoutes } from './modules/surveys/index.js';
 import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-requests/index.js';
 import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
@@ -466,6 +467,20 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
     },
+  });
+
+  const surveysService = createSurveysService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(surveysRoutes, {
+    sessionService,
+    surveysService,
+    findingsService,
+    workspaceId,
+    rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
   });
 
   // ── Task Requests module — Slice 6 issue #132 ─────────────────────────────

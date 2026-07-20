@@ -354,6 +354,17 @@ const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
     getInternalSummary: async () => null,
     listExpectedLinks: async () => [],
   },
+  survey_response: {
+    entityType: 'survey_response',
+    // Survey-response links are created and revoked only by C4 domain commands.
+    // Generic entity-link surfaces must not resolve or disclose response IDs.
+    assertExists: async () => null,
+    getPermissionSubject: async () => null,
+    canRead: async () => false,
+    getReporterSummary: unavailableReporterSummary,
+    getInternalSummary: async () => null,
+    listExpectedLinks: async () => [],
+  },
   finding: {
     entityType: 'finding',
     assertExists: async (db, workspaceId, id) => {
@@ -494,7 +505,10 @@ const genericEntityLinkPairs = registeredEntityLinkPairs.filter(
       pair.source_type === 'voc_cluster' &&
       pair.target_type === 'finding' &&
       pair.relation_type === 'evidence_of'
-    ),
+    ) &&
+    // Survey-response tuples are command-only until C4 owns their compound
+    // authorization, audit, and privacy obligations.
+    pair.source_type !== 'survey_response',
 );
 const creatableEntityLinkPairs = genericEntityLinkPairs;
 const listVisibleEntityLinkPairs = genericEntityLinkPairs;
