@@ -125,6 +125,25 @@ describe('/admin/settings route', () => {
     renderRoute();
 
     await screen.findByTestId('workspace-settings-screen');
+    expect(
+      screen.getByText('Self-approval of Permission Request', { exact: true }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Self-approval of Task Request', { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '다른 Managed System 의 entity 를 참조·연결할 수 있는지 결정합니다. 차단된 경우 PermissionBlockedPanel 로 표시됩니다.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '명시 거부(denied) 이후 재요청을 허용하는 기간입니다. 0 이면 정책 갱신 전까지 재요청 불가.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Admin 만 all 을 workspace-wide 로 해석합니다. 다른 역할은 effective scope union (교집합 = workspace ∩ grants) 으로 해석합니다.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getAllByText('Forbidden', { exact: true })).toHaveLength(2);
     expect(
       screen.getByText('Survey Response → VOC').closest('div[class*="grid"]'),
@@ -147,6 +166,28 @@ describe('/admin/settings route', () => {
       const row = screen.getByText(label, { exact: true }).closest('div[class*="grid"]');
       expect(row?.querySelector('button,input,select')).toBeNull();
     }
+  });
+
+  test('shows the self-approval retro warning only while that field is dirty', async () => {
+    installFetch({});
+    renderRoute();
+
+    await screen.findByTestId('workspace-settings-screen');
+    expect(screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다')).not.toBeInTheDocument();
+
+    const selfApprovalEditButton = screen.getAllByRole('button', { name: 'Edit' })[0];
+    if (!selfApprovalEditButton) throw new Error('Self-approval edit button is missing');
+    fireEvent.click(selfApprovalEditButton);
+    fireEvent.change(screen.getByLabelText('Self-approval'), {
+      target: { value: 'allowed' },
+    });
+
+    expect(screen.getByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다')).toBeInTheDocument();
+    expect(screen.getByText(/^active capability grant —/)).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ active capability grant$/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다')).not.toBeInTheDocument();
   });
 
   test('patches only the changed field, applies its response, and discards local edits', async () => {

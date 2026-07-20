@@ -22,12 +22,13 @@ interface LockedSetting {
 const lockedPermissionSettings: LockedSetting[] = [
   {
     label: 'Cross-Managed-System linking',
-    description: '다른 Managed System 의 entity 를 참조·연결할 수 있는지 결정합니다.',
+    description:
+      '다른 Managed System 의 entity 를 참조·연결할 수 있는지 결정합니다. 차단된 경우 PermissionBlockedPanel 로 표시됩니다.',
     value: 'Blocked (request only)',
   },
   {
     label: 'Permission request appeal window',
-    description: '명시 거부(denied) 이후 재요청을 허용하는 기간입니다.',
+    description: '명시 거부(denied) 이후 재요청을 허용하는 기간입니다. 0 이면 정책 갱신 전까지 재요청 불가.',
     value: '0 days',
   },
 ];
@@ -51,7 +52,7 @@ const lockedScopeSettings: LockedSetting[] = [
   {
     label: 'all = workspace-wide',
     description:
-      'Admin 만 all 을 workspace-wide 로 해석합니다. 다른 역할은 effective scope union 으로 해석합니다.',
+      'Admin 만 all 을 workspace-wide 로 해석합니다. 다른 역할은 effective scope union (교집합 = workspace ∩ grants) 으로 해석합니다.',
     value: 'Admin only',
   },
 ];
@@ -117,6 +118,21 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
   const dirtyKeys = Object.keys(patch) as EditableKey[];
   const thresholdValid = isThresholdValid(draft.survey_anonymity_threshold);
   const canSave = dirtyKeys.length > 0 && thresholdValid && !updateMutation.isPending;
+  const selfApprovalDirty = dirtyKeys.includes('permission_self_approval');
+  const selfApprovalWarningTitle =
+    draft.permission_self_approval === 'forbidden'
+      ? 'Retro 영향: 기존 데이터는 그대로 유지됩니다'
+      : 'Retro 영향: 백로그 일부가 자동 해제될 수 있습니다';
+  const selfApprovalWarningLines =
+    draft.permission_self_approval === 'forbidden'
+      ? [
+          '과거 self-approval 기록 — 감사 로그에 SELF_APPROVAL 라벨로 영구 보존 · 회수되지 않음',
+          'active self-approval capability — 만료일까지 유지 · 갱신 시 새 정책 기준으로 평가',
+          'pending self-approval request — 저장 시점부터 reviewer 배정 필요 · 요청자에게 알림 발송',
+        ]
+      : [
+          'active capability grant — 기존 grant 유지 · 새 self-approval 은 capability 없이도 허용 (감사 라벨은 동일)',
+        ];
 
   function updateDraft<K extends EditableKey>(key: K, value: WorkspaceSettings[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -146,9 +162,9 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
         <div className="overflow-hidden rounded-md border border-border-subtle bg-surface-card">
           <EditableOptionRow
             editing={editing === 'permission_self_approval'}
-            isDirty={dirtyKeys.includes('permission_self_approval')}
-            label="Self-approval"
-            description="요청자가 직접 자기 Task Request 를 승인하려면 scoped capability 가 필요합니다. 감사 로그에 SELF_APPROVAL 라벨로 표시됩니다."
+            isDirty={selfApprovalDirty}
+            label="Self-approval of Permission Request"
+            description="요청자가 직접 자기 Permission Request 를 승인하려면 scoped capability 가 필요합니다. 감사 로그에 SELF_APPROVAL 라벨로 표시됩니다."
             value={draft.permission_self_approval}
             savedValue={saved.permission_self_approval}
             onChange={(value) => updateDraft('permission_self_approval', value)}
@@ -163,14 +179,23 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
             />
           ))}
         </div>
-        <Callout
-          className="mt-3"
-          tone="amber"
-          icon={<AlertTriangle className="h-4 w-4" />}
-          title="정책 변경은 비소급입니다"
-        >
-          저장 시점부터 새 정책이 적용됩니다. 기존 연결과 과거 승인 기록은 변경되지 않습니다.
-        </Callout>
+        {selfApprovalDirty && (
+          <Callout
+            className="mt-3"
+            tone={draft.permission_self_approval === 'forbidden' ? 'amber' : 'info'}
+            icon={<AlertTriangle className="h-4 w-4" />}
+            title={selfApprovalWarningTitle}
+          >
+            <p>
+              정책 변경은 <strong>비소급</strong>입니다. 저장 시점부터 적용되며, 과거 데이터는 표시된 규칙에 따라 처리됩니다.
+            </p>
+            <div className="mt-2 space-y-1.5">
+              {selfApprovalWarningLines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </div>
+          </Callout>
+        )}
       </section>
 
       <section>
