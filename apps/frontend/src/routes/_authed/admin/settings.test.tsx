@@ -207,11 +207,11 @@ describe('/admin/settings route', () => {
     const selfApprovalEditButton = screen.getAllByRole('button', { name: 'Edit' })[0];
     if (!selfApprovalEditButton) throw new Error('Self-approval edit button is missing');
     fireEvent.click(selfApprovalEditButton);
-    fireEvent.change(screen.getByLabelText('Self-approval of Task Request'), {
+    fireEvent.change(screen.getByLabelText('Self-approval'), {
       target: { value: 'allowed' },
     });
     expect(saveBar).toHaveTextContent('2 unsaved changes');
-    expect(saveBar).toHaveTextContent('Self-approval of Task Request · Anonymity threshold');
+    expect(saveBar).toHaveTextContent('Self-approval · Anonymity threshold');
 
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(screen.queryByText('Unsaved')).not.toBeInTheDocument());

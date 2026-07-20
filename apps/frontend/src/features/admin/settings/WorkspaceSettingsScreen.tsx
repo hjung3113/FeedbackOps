@@ -60,7 +60,7 @@ const subtitle =
   '권한 정책 · 익명 임계값 · cross-MS 정책 같이 워크스페이스 전역 동작을 결정하는 설정입니다.';
 
 const settingLabels: Record<EditableKey, string> = {
-  permission_self_approval: 'Self-approval of Task Request',
+  permission_self_approval: 'Self-approval',
   survey_anonymity_threshold: 'Anonymity threshold',
 };
 
@@ -147,7 +147,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
           <EditableOptionRow
             editing={editing === 'permission_self_approval'}
             isDirty={dirtyKeys.includes('permission_self_approval')}
-            label="Self-approval of Task Request"
+            label="Self-approval"
             description="요청자가 직접 자기 Task Request 를 승인하려면 scoped capability 가 필요합니다. 감사 로그에 SELF_APPROVAL 라벨로 표시됩니다."
             value={draft.permission_self_approval}
             savedValue={saved.permission_self_approval}
@@ -306,7 +306,7 @@ function EditableOptionRow({
       <div className="flex items-center justify-end">
         {editing ? (
           <select
-            aria-label="Self-approval of Task Request"
+            aria-label="Self-approval"
             className="h-10 w-full rounded-md border border-border-subtle bg-surface-field px-3 text-sm text-text-primary"
             value={value}
             onChange={(event) => onChange(event.target.value as PermissionSelfApproval)}
