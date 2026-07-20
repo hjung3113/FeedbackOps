@@ -293,6 +293,136 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
     }
   });
 
+  it('clears a branch, retains omitted branch fields, and audits the cleared fields', async () => {
+    const surveyId = await createDraftSurvey();
+    const parent = await postQuestion(surveyId, choiceQuestion());
+    expect(parent.statusCode).toBe(201);
+    const parentId = parent.json<{ id: string }>().id;
+    const child = await postQuestion(
+      surveyId,
+      choiceQuestion({
+        prompt: 'Conditional child',
+        branch_parent_question_id: parentId,
+        branch_trigger_option_key: 'yes',
+      }),
+    );
+    expect(child.statusCode).toBe(201);
+    const childId = child.json<{ id: string }>().id;
+
+    const retained = await patchQuestion(
+      surveyId,
+      childId,
+      choiceQuestion({ prompt: 'Conditional child, still branched' }),
+    );
+    expect(retained.statusCode).toBe(200);
+    expect(
+      retained.json<{
+        branch_parent_question_id: string | null;
+        branch_trigger_option_key: string | null;
+        branch_depth: number;
+      }>(),
+    ).toMatchObject({
+      branch_parent_question_id: parentId,
+      branch_trigger_option_key: 'yes',
+      branch_depth: 1,
+    });
+
+    const cleared = await patchQuestion(
+      surveyId,
+      childId,
+      choiceQuestion({
+        prompt: 'Conditional child, now unconditional',
+        branch_parent_question_id: null,
+      }),
+    );
+    expect(cleared.statusCode).toBe(200);
+    expect(
+      cleared.json<{
+        branch_parent_question_id: string | null;
+        branch_trigger_option_key: string | null;
+        branch_depth: number;
+      }>(),
+    ).toMatchObject({
+      branch_parent_question_id: null,
+      branch_trigger_option_key: null,
+      branch_depth: 0,
+    });
+
+    const survey = await app.inject({
+      method: 'GET',
+      url: `/surveys/${surveyId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(survey.statusCode).toBe(200);
+    expect(
+      survey
+        .json<{
+          questions: Array<{
+            id: string;
+            branch_parent_question_id: string | null;
+            branch_trigger_option_key: string | null;
+            branch_depth: number;
+          }>;
+        }>()
+        .questions.find((question) => question.id === childId),
+    ).toMatchObject({
+      branch_parent_question_id: null,
+      branch_trigger_option_key: null,
+      branch_depth: 0,
+    });
+
+    const audit = await appHandle.pool.query<{ detail: { changed_fields: string[] } }>(
+      `select detail from core.audit_log where subject_id = $1 and event_type = 'survey_question_updated' order by created_at desc limit 1`,
+      [childId],
+    );
+    expect(audit.rows[0]?.detail.changed_fields).toEqual(
+      expect.arrayContaining(['branch_parent_question_id', 'branch_trigger_option_key']),
+    );
+  });
+
+  it('rejects clearing a branch trigger while retaining its branch parent', async () => {
+    const surveyId = await createDraftSurvey();
+    const parent = await postQuestion(surveyId, choiceQuestion());
+    const parentId = parent.json<{ id: string }>().id;
+    const child = await postQuestion(
+      surveyId,
+      choiceQuestion({
+        prompt: 'Conditional child',
+        branch_parent_question_id: parentId,
+        branch_trigger_option_key: 'yes',
+      }),
+    );
+    const rejected = await patchQuestion(
+      surveyId,
+      child.json<{ id: string }>().id,
+      choiceQuestion({ prompt: 'Conditional child', branch_trigger_option_key: null }),
+    );
+
+    expect(rejected.statusCode).toBe(422);
+    expect(rejected.json<{ code: string }>().code).toBe('validation.failed');
+  });
+
+  it('clears a rating label', async () => {
+    const surveyId = await createDraftSurvey();
+    const created = await postQuestion(surveyId, {
+      kind: 'rating',
+      prompt: 'Rate this',
+      rating_min: 1,
+      rating_max: 5,
+      rating_low_label: 'Poor',
+      rating_high_label: 'Excellent',
+    });
+    expect(created.statusCode).toBe(201);
+    const cleared = await patchQuestion(surveyId, created.json<{ id: string }>().id, {
+      kind: 'rating',
+      prompt: 'Rate this',
+      rating_low_label: null,
+    });
+
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json<{ rating_low_label: string | null }>().rating_low_label).toBeNull();
+  });
+
   it('audits only allowed changed fields and ordering_changed on update', async () => {
     const surveyId = await createDraftSurvey();
     const created = await postQuestion(surveyId, choiceQuestion({ sort_order: 0 }));

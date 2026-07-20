@@ -33,11 +33,11 @@ const question = z
     options: options.optional(),
     rating_min: z.number().int().optional(),
     rating_max: z.number().int().optional(),
-    rating_low_label: z.string().optional(),
-    rating_high_label: z.string().optional(),
+    rating_low_label: z.string().nullable().optional(),
+    rating_high_label: z.string().nullable().optional(),
     sort_order: z.number().int().nonnegative().optional(),
-    branch_parent_question_id: uuid.optional(),
-    branch_trigger_option_key: z.string().min(1).optional(),
+    branch_parent_question_id: uuid.nullable().optional(),
+    branch_trigger_option_key: z.string().min(1).nullable().optional(),
   })
   .strict();
 const responseSubmission = z
