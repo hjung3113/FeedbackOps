@@ -401,7 +401,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   });
 
   it('allows a self-approval with its envelope, audits it, and mints an effective grant by default', async () => {
-    await db.pool.query('delete from core.workspace_settings where workspace_id = $1', [WORKSPACE_ID]);
+    await migrateDb.pool.query('delete from core.workspace_settings where workspace_id = $1', [WORKSPACE_ID]);
     const settingsRow = await db.pool.query(
       'select 1 from core.workspace_settings where workspace_id = $1',
       [WORKSPACE_ID],
