@@ -1,6 +1,7 @@
 export {
   createWorkspaceSettingsService,
   getResolvedWorkspaceSettings,
+  getResolvedWorkspaceSettingsForUpdate,
   type ResolvedWorkspaceSettings,
   type UpdateWorkspaceSettingsBody,
   type WorkspaceSettingsService,

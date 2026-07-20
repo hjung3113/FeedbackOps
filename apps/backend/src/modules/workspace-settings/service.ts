@@ -44,6 +44,17 @@ export async function getResolvedWorkspaceSettings(
   };
 }
 
+export async function getResolvedWorkspaceSettingsForUpdate(
+  tx: Tx,
+  workspaceId: string,
+): Promise<ResolvedWorkspaceSettings> {
+  const row = await ensureAndLockWorkspaceSettings(tx, workspaceId);
+  return {
+    permission_self_approval: row.permission_self_approval,
+    survey_anonymity_threshold: row.survey_anonymity_threshold,
+  };
+}
+
 async function requireWorkspaceAdmin(
   checkService: CheckService,
   actor: ActorContext,

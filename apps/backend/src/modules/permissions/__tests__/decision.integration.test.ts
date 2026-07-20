@@ -78,6 +78,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       capability?: string;
       managedSystemId?: string | null;
       status?: string;
+      requesterActorId?: string;
     } = {},
   ): Promise<string> {
     const inserted = await db.pool.query<{ id: string }>(
@@ -86,7 +87,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
        values ($1, $2, $3, $4, $5, $6) returning id`,
       [
         WORKSPACE_ID,
-        requesterId,
+        input.requesterActorId ?? requesterId,
         input.capability ?? 'voc.read',
         input.managedSystemId ?? null,
         `${TEST_REASON}${randomUUID()}`,
@@ -121,6 +122,44 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       [id],
     );
     return result.rows[0]?.status ?? '';
+  }
+
+  async function isPendingInMine(id: string, cookie: string): Promise<boolean> {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/permission-requests/mine',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{
+      requests: Array<{ id: string; status: string }>;
+    }>();
+    return body.requests.some((request) => request.id === id && request.status === 'pending');
+  }
+
+  async function insertAdmin(
+    externalId: string,
+  ): Promise<{ id: string; externalId: string; cookie: string }> {
+    const result = await db.pool.query<{ id: string }>(
+      `insert into core.actors (workspace_id, external_id, email, display_name, role_level, actor_type)
+       values ($1, $2, $3, 'Self approval admin', 'admin', 'internal_member') returning id`,
+      [WORKSPACE_ID, externalId, `${externalId}@example.test`],
+    );
+    const id = result.rows[0]?.id ?? '';
+    if (!id) throw new Error('self approval admin seed failed');
+    return { id, externalId, cookie: await loginAs(app, externalId) };
+  }
+
+  async function patchWorkspaceSettings(payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'PATCH',
+      url: '/workspace/settings',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+      },
+      payload,
+    });
   }
 
   it('approve mints workspace and managed-system grants consumed by check-service', async () => {
@@ -245,12 +284,22 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     );
     const [msA, msB] = systems;
     if (!msA || !msB) throw new Error('managed systems missing');
-    const denied = await seedRequest({ capability: 'finding.read', managedSystemId: msA });
+    const denied = await seedRequest({
+      capability: 'finding.read',
+      managedSystemId: msA,
+    });
     expect((await decide(denied, 'deny', { reason: 'Denied for A.' })).statusCode).toBe(200);
-    const granted = await seedRequest({ capability: 'finding.read', managedSystemId: msB });
+    const granted = await seedRequest({
+      capability: 'finding.read',
+      managedSystemId: msB,
+    });
     expect((await decide(granted, 'approve', {})).statusCode).toBe(200);
     const check = createCheckService({ db: db.db });
-    const actor = { actor_id: requesterId, workspace_id: WORKSPACE_ID, role_level: 'developer' };
+    const actor = {
+      actor_id: requesterId,
+      workspace_id: WORKSPACE_ID,
+      role_level: 'developer',
+    };
     await expect(
       check.checkCapability(actor, 'finding.read', {
         workspace_id: WORKSPACE_ID,
@@ -312,7 +361,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     const first = await seedRequest();
     expect((await decide(first, 'deny', { reason: 'First deny.' })).statusCode).toBe(200);
     const duplicate = await seedRequest();
-    const response = await decide(duplicate, 'deny', { reason: 'Duplicate deny.' });
+    const response = await decide(duplicate, 'deny', {
+      reason: 'Duplicate deny.',
+    });
     expect(response.statusCode).toBe(409);
     expect(response.json().code).toBe('conflict.capability_already_denied');
   });
@@ -347,6 +398,104 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     expect(sensitiveResponse.json().code).toBe('validation.sensitive_reason_required');
     const nonSensitive = await seedRequest({ capability: 'workspace.read' });
     expect((await decide(nonSensitive, 'approve', {})).statusCode).toBe(200);
+  });
+
+  it('allows a self-approval with its envelope, audits it, and mints an effective grant by default', async () => {
+    await migrateDb.pool.query('delete from core.workspace_settings where workspace_id = $1', [WORKSPACE_ID]);
+    const settingsRow = await db.pool.query(
+      'select 1 from core.workspace_settings where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    expect(settingsRow.rowCount).toBe(0);
+    const self = await insertAdmin(`perm-self-allowed-${randomUUID()}`);
+    const request = await seedRequest({
+      requesterActorId: self.id,
+      capability: 'workspace.read',
+    });
+    const envelope = {
+      policy_citation: 'POL-196 section 1',
+      peer_reviewer_absence: 'No peer reviewer is available for this workspace.',
+    };
+
+    const response = await decide(request, 'approve', { self_approval: envelope }, self.cookie);
+    expect(response.statusCode).toBe(200);
+    expect(await requestStatus(request)).toBe('approved');
+    const audit = await db.pool.query<{ detail: unknown }>(
+      `select detail from core.audit_log where subject_id = $1 and event_type = 'permission_approved'`,
+      [request],
+    );
+    expect(audit.rows).toEqual([
+      expect.objectContaining({ detail: expect.objectContaining({ self_approval: envelope }) }),
+    ]);
+    await db.pool.query("update core.actors set role_level = 'developer' where id = $1", [self.id]);
+    const developerCookie = await loginAs(app, self.externalId);
+    expect(developerCookie).toBeTruthy();
+    expect(
+      await createCheckService({ db: db.db }).checkCapability(
+        {
+          actor_id: self.id,
+          workspace_id: WORKSPACE_ID,
+          role_level: 'developer',
+        },
+        'workspace.read',
+        { workspace_id: WORKSPACE_ID },
+      ),
+    ).toMatchObject({ allow: true, via: 'direct_grant' });
+  });
+
+  it('rejects a self-approval missing its envelope and leaves the request pending', async () => {
+    const self = await insertAdmin(`perm-self-missing-${randomUUID()}`);
+    const request = await seedRequest({ requesterActorId: self.id });
+    const response = await decide(request, 'approve', {}, self.cookie);
+    expect(response.statusCode).toBeGreaterThanOrEqual(400);
+    expect(response.statusCode).toBeLessThan(500);
+    expect(response.json()).toMatchObject({
+      code: 'validation.failed',
+      detail: { fields: [{ path: ['self_approval'] }] },
+    });
+    expect(await isPendingInMine(request, self.cookie)).toBe(true);
+  });
+
+  it('forbids self-approval by policy but lets a separate admin approve without an envelope', async () => {
+    expect(
+      (await patchWorkspaceSettings({ permission_self_approval: 'forbidden' })).statusCode,
+    ).toBe(200);
+    const self = await insertAdmin(`perm-self-forbidden-${randomUUID()}`);
+    const request = await seedRequest({
+      requesterActorId: self.id,
+      capability: 'workspace.read',
+    });
+    const denied = await decide(
+      request,
+      'approve',
+      {
+        self_approval: {
+          policy_citation: 'POL-196 section 2',
+          peer_reviewer_absence: 'No peer reviewer is available.',
+        },
+      },
+      self.cookie,
+    );
+    expect(denied.statusCode).toBeGreaterThanOrEqual(400);
+    expect(denied.statusCode).toBeLessThan(500);
+    expect(denied.json()).toMatchObject({ code: 'permission.denied' });
+    expect(await isPendingInMine(request, self.cookie)).toBe(true);
+    expect((await decide(request, 'approve', {}, adminCookie)).statusCode).toBe(200);
+  });
+
+  it('rejects a self-approval envelope from a non-self approver', async () => {
+    const request = await seedRequest();
+    const response = await decide(request, 'approve', {
+      self_approval: {
+        policy_citation: 'POL-196 section 3',
+        peer_reviewer_absence: 'Not applicable.',
+      },
+    });
+    expect(response.statusCode).toBeGreaterThanOrEqual(400);
+    expect(response.statusCode).toBeLessThan(500);
+    expect(response.json()).toMatchObject({ code: 'validation.failed' });
+    const requesterCookie = await loginAs(app, requesterExternalId);
+    expect(await isPendingInMine(request, requesterCookie)).toBe(true);
   });
 
   it('returns not-found for an unknown request', async () => {

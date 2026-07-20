@@ -50,6 +50,7 @@ import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
 import {
   createWorkspaceSettingsService,
+  getResolvedWorkspaceSettings,
   workspaceSettingsRoutes,
 } from './modules/workspace-settings/index.js';
 import {
@@ -395,6 +396,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     checkService,
     auditService,
     idempotencyService,
+    resolveWorkspaceSettings: getResolvedWorkspaceSettings,
   });
   await app.register(permissionsRoutes, {
     sessionService,
@@ -493,6 +495,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     idempotencyService,
+    resolveWorkspaceSettings: getResolvedWorkspaceSettings,
   });
   await app.register(surveysRoutes, {
     sessionService,
