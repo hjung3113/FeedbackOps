@@ -49,6 +49,10 @@ import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-re
 import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
 import {
+  createWorkspaceSettingsService,
+  workspaceSettingsRoutes,
+} from './modules/workspace-settings/index.js';
+import {
   createConversationService,
   createPublicUpdateReviewCandidateService,
   createVocReadService,
@@ -413,6 +417,21 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   await app.register(managedSystemsRoutes, {
     sessionService,
     managedSystemService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+    },
+  });
+
+  // ── Workspace Settings module — Slice 9 issue #195 ─────────────────────
+  const workspaceSettingsService = createWorkspaceSettingsService({
+    db: dbHandle.db,
+    checkService,
+    auditService,
+  });
+  await app.register(workspaceSettingsRoutes, {
+    sessionService,
+    workspaceSettingsService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,

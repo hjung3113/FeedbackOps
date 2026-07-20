@@ -220,3 +220,21 @@ Exit criteria:
 - Survey Response cannot create VOC
 - survey evidence preserves source and visibility
 ```
+
+## Slice 9: Admin Settings And Policy
+
+```text
+- /admin/settings
+- workspace policy storage
+- policy consumers
+- issues #195-#199
+- impact preview deferred
+```
+
+Exit criteria:
+
+```text
+- workspace administrators can read and update policy storage
+- policy consumers resolve workspace settings through the shared read seam
+- impact preview remains deferred until its dedicated follow-on work
+```

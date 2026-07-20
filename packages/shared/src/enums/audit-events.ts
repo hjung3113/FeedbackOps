@@ -123,6 +123,8 @@ export const AUDIT_EVENT_TYPES = [
   'survey_response_personal_read',
   'survey_response_excerpt_approved',
   'finding_created_from_survey_response',
+  // Slice 9 #195: workspace-level policy singleton mutation.
+  'workspace_settings_updated',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -679,6 +681,30 @@ export const publicUpdateReviewCandidateDismissedDetailSchema = z
   })
   .strict();
 
+export const workspaceSettingsUpdatedDetailSchema = z
+  .object({
+    changes: z
+      .object({
+        permission_self_approval: z
+          .object({
+            from: z.enum(['allowed', 'forbidden']),
+            to: z.enum(['allowed', 'forbidden']),
+          })
+          .strict()
+          .optional(),
+        survey_anonymity_threshold: z
+          .object({ from: z.number().int().min(5).max(50), to: z.number().int().min(5).max(50) })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .refine((changes) => Object.keys(changes).length > 0, {
+        message: 'changes must include at least one field',
+      }),
+  })
+  .strict();
+export type WorkspaceSettingsUpdatedDetail = z.infer<typeof workspaceSettingsUpdatedDetailSchema>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   permission_approved: permissionApprovedDetailSchema,
@@ -756,4 +782,5 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   survey_response_personal_read: surveyResponsePersonalReadDetailSchema,
   survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
   finding_created_from_survey_response: findingCreatedFromSurveyResponseDetailSchema,
+  workspace_settings_updated: workspaceSettingsUpdatedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;
