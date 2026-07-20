@@ -34,6 +34,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 function installFetch(options: {
   permission?: PermissionResponse;
   settingsStatus?: number;
+  patchStatus?: number;
   onPatch?: (body: unknown) => void;
 }) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -59,7 +60,12 @@ function installFetch(options: {
     if (url === '/workspace/settings' && init?.method === 'PATCH') {
       const body = JSON.parse(String(init.body));
       options.onPatch?.(body);
-      return jsonResponse({ ...resolvedSettings, ...body });
+      return jsonResponse(
+        options.patchStatus === undefined || options.patchStatus === 200
+          ? { ...resolvedSettings, ...body }
+          : { code: 'internal.unexpected', message: 'nope' },
+        options.patchStatus ?? 200,
+      );
     }
     return jsonResponse({ code: 'internal.unexpected', message: 'not mocked' }, 500);
   }) as typeof globalThis.fetch;
@@ -120,8 +126,17 @@ describe('/admin/settings route', () => {
 
     await screen.findByTestId('workspace-settings-screen');
     expect(screen.getAllByText('Forbidden', { exact: true })).toHaveLength(2);
+    expect(
+      screen.getByText('Survey Response → VOC').closest('div[class*="grid"]'),
+    ).toHaveTextContent('Forbidden');
+    expect(
+      screen
+        .getByText('Survey Response → VOC')
+        .closest('div[class*="grid"]')
+        ?.querySelector('.text-accent-danger'),
+    ).toHaveTextContent('Forbidden');
     expect(screen.getByText('9 responses', { exact: true })).toBeInTheDocument();
-    expect(screen.getAllByText('정책 강제 연결 후 편집 가능')).toHaveLength(5);
+    expect(screen.queryByText('정책 강제 연결 후 편집 가능')).not.toBeInTheDocument();
     for (const label of [
       'Cross-Managed-System linking',
       'Permission request appeal window',
@@ -156,6 +171,56 @@ describe('/admin/settings route', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(screen.queryByTestId('workspace-settings-save-bar')).not.toBeInTheDocument();
     expect(screen.getByText('12 responses', { exact: true })).toBeInTheDocument();
+  });
+
+  test('keeps the draft and save bar visible when patching fails', async () => {
+    installFetch({ patchStatus: 500 });
+    renderRoute();
+
+    await screen.findByTestId('workspace-settings-screen');
+    fireEvent.click(thresholdEditButton());
+    fireEvent.change(screen.getByLabelText('Anonymity threshold'), { target: { value: '12' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Workspace settings 저장에 실패했습니다.',
+    );
+    expect(screen.getByTestId('workspace-settings-save-bar')).toBeInTheDocument();
+    expect(screen.getByLabelText('Anonymity threshold')).toHaveValue(12);
+    expect(screen.getByText('Previously:')).toHaveTextContent('9 responses');
+  });
+
+  test('shows dirty row parity and changed field names, then clears them after save or discard', async () => {
+    installFetch({});
+    renderRoute();
+
+    await screen.findByTestId('workspace-settings-screen');
+    fireEvent.click(thresholdEditButton());
+    fireEvent.change(screen.getByLabelText('Anonymity threshold'), { target: { value: '12' } });
+
+    expect(screen.getByText('Unsaved')).toBeInTheDocument();
+    expect(screen.getByText('Previously:')).toHaveTextContent('9 responses');
+    const saveBar = screen.getByTestId('workspace-settings-save-bar');
+    expect(saveBar).toHaveTextContent('1 unsaved change');
+    expect(saveBar).toHaveTextContent('Anonymity threshold');
+
+    const selfApprovalEditButton = screen.getAllByRole('button', { name: 'Edit' })[0];
+    if (!selfApprovalEditButton) throw new Error('Self-approval edit button is missing');
+    fireEvent.click(selfApprovalEditButton);
+    fireEvent.change(screen.getByLabelText('Self-approval of Task Request'), {
+      target: { value: 'allowed' },
+    });
+    expect(saveBar).toHaveTextContent('2 unsaved changes');
+    expect(saveBar).toHaveTextContent('Self-approval of Task Request · Anonymity threshold');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(screen.queryByText('Unsaved')).not.toBeInTheDocument());
+
+    fireEvent.click(thresholdEditButton());
+    fireEvent.change(screen.getByLabelText('Anonymity threshold'), { target: { value: '15' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.queryByText('Unsaved')).not.toBeInTheDocument();
+    expect(screen.queryByText('Previously:')).not.toBeInTheDocument();
   });
 
   test.each(['4', '51'])('blocks save for an anonymity threshold of %s', async (invalid) => {

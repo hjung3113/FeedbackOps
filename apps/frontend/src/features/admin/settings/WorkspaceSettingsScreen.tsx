@@ -16,6 +16,7 @@ interface LockedSetting {
   label: string;
   description: string;
   value: string;
+  valueTone?: 'red';
 }
 
 const lockedPermissionSettings: LockedSetting[] = [
@@ -37,6 +38,7 @@ const lockedSurveySettings: LockedSetting[] = [
     description:
       '응답을 VOC 로 자동 변환하는 것은 정책으로 금지됩니다. Create Finding / Link Finding / Request Task / Add Evidence Highlight / 기존 VOC 에 근거 연결 만 허용됩니다.',
     value: 'Forbidden',
+    valueTone: 'red',
   },
 ];
 
@@ -56,6 +58,11 @@ const lockedScopeSettings: LockedSetting[] = [
 
 const subtitle =
   '권한 정책 · 익명 임계값 · cross-MS 정책 같이 워크스페이스 전역 동작을 결정하는 설정입니다.';
+
+const settingLabels: Record<EditableKey, string> = {
+  permission_self_approval: 'Self-approval of Task Request',
+  survey_anonymity_threshold: 'Anonymity threshold',
+};
 
 function changedFields(
   saved: WorkspaceSettings,
@@ -102,11 +109,9 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
   const [editing, setEditing] = useState<EditableKey | null>(null);
 
   useEffect(() => {
-    if (!updateMutation.isPending) {
-      setSaved(initialSettings);
-      setDraft(initialSettings);
-    }
-  }, [initialSettings, updateMutation.isPending]);
+    setSaved(initialSettings);
+    setDraft(initialSettings);
+  }, [initialSettings]);
 
   const patch = changedFields(saved, draft);
   const dirtyKeys = Object.keys(patch) as EditableKey[];
@@ -119,10 +124,14 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
 
   async function save() {
     if (!canSave) return;
-    const next = await updateMutation.mutateAsync(patch);
-    setSaved(next);
-    setDraft(next);
-    setEditing(null);
+    try {
+      const next = await updateMutation.mutateAsync(patch);
+      setSaved(next);
+      setDraft(next);
+      setEditing(null);
+    } catch {
+      // Keep the local draft intact so the Admin can retry or discard it.
+    }
   }
 
   function discard() {
@@ -141,6 +150,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
             label="Self-approval of Task Request"
             description="요청자가 직접 자기 Task Request 를 승인하려면 scoped capability 가 필요합니다. 감사 로그에 SELF_APPROVAL 라벨로 표시됩니다."
             value={draft.permission_self_approval}
+            savedValue={saved.permission_self_approval}
             onChange={(value) => updateDraft('permission_self_approval', value)}
             onEdit={() => setEditing('permission_self_approval')}
             onDone={() => setEditing(null)}
@@ -170,6 +180,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
             editing={editing === 'survey_anonymity_threshold'}
             isDirty={dirtyKeys.includes('survey_anonymity_threshold')}
             value={draft.survey_anonymity_threshold}
+            savedValue={saved.survey_anonymity_threshold}
             valid={thresholdValid}
             onChange={(value) => updateDraft('survey_anonymity_threshold', value)}
             onEdit={() => setEditing('survey_anonymity_threshold')}
@@ -200,7 +211,12 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
           data-testid="workspace-settings-save-bar"
         >
           <AlertTriangle className="h-4 w-4 text-accent-warning" aria-hidden="true" />
-          <span className="text-sm text-text-primary">{dirtyKeys.length} unsaved change</span>
+          <span className="text-sm text-text-primary">
+            {dirtyKeys.length} unsaved {dirtyKeys.length === 1 ? 'change' : 'changes'}
+          </span>
+          <span className="text-xs text-text-muted">
+            {dirtyKeys.map((key) => settingLabels[key]).join(' · ')}
+          </span>
           <Button variant="subtle" size="sm" onClick={discard}>
             Discard
           </Button>
@@ -225,20 +241,34 @@ function SettingRow({
   children,
   last = false,
   dirty = false,
+  previousValue,
 }: {
   label: string;
   description: string;
   children: ReactNode;
   last?: boolean;
   dirty?: boolean;
+  previousValue?: ReactNode;
 }) {
   return (
     <div
       className={`grid gap-4 px-4 py-3.5 md:grid-cols-[minmax(0,1fr)_220px_88px] ${last ? '' : 'border-b border-border-subtle'} ${dirty ? 'bg-surface-row-selected' : ''}`}
     >
       <div>
-        <p className="text-sm font-medium text-text-primary">{label}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium text-text-primary">{label}</p>
+          {dirty && (
+            <span className="rounded-sm bg-accent-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-accent-primary">
+              Unsaved
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-xs leading-relaxed text-text-muted">{description}</p>
+        {dirty && (
+          <p className="mt-1 text-xs text-accent-warning">
+            Previously: <strong>{previousValue}</strong>
+          </p>
+        )}
       </div>
       {children}
     </div>
@@ -251,6 +281,7 @@ function EditableOptionRow({
   label,
   description,
   value,
+  savedValue,
   onChange,
   onEdit,
   onDone,
@@ -260,12 +291,18 @@ function EditableOptionRow({
   label: string;
   description: string;
   value: PermissionSelfApproval;
+  savedValue: PermissionSelfApproval;
   onChange: (value: PermissionSelfApproval) => void;
   onEdit: () => void;
   onDone: () => void;
 }) {
   return (
-    <SettingRow label={label} description={description} dirty={isDirty}>
+    <SettingRow
+      label={label}
+      description={description}
+      dirty={isDirty}
+      previousValue={savedValue === 'allowed' ? 'Allowed' : 'Forbidden'}
+    >
       <div className="flex items-center justify-end">
         {editing ? (
           <select
@@ -296,6 +333,7 @@ function EditableThresholdRow({
   editing,
   isDirty,
   value,
+  savedValue,
   valid,
   onChange,
   onEdit,
@@ -304,6 +342,7 @@ function EditableThresholdRow({
   editing: boolean;
   isDirty: boolean;
   value: number;
+  savedValue: number;
   valid: boolean;
   onChange: (value: number) => void;
   onEdit: () => void;
@@ -314,6 +353,7 @@ function EditableThresholdRow({
       label="Anonymity threshold"
       description="결과 요약·필터에서 가시 응답이 이 값 미만으로 줄어들면 버킷이 자동으로 머지·가려집니다."
       dirty={isDirty}
+      previousValue={`${savedValue} responses`}
     >
       <div className="text-right">
         {editing ? (
@@ -345,17 +385,26 @@ function EditableThresholdRow({
   );
 }
 
-function LockedRow({ label, description, value, last }: LockedSetting & { last: boolean }) {
+function LockedRow({
+  label,
+  description,
+  value,
+  valueTone,
+  last,
+}: LockedSetting & { last: boolean }) {
   return (
     <SettingRow label={label} description={description} last={last}>
       <div className="flex items-center justify-end">
-        <span className="text-sm font-medium text-text-primary">{value}</span>
+        <span
+          className={`text-sm font-medium ${valueTone === 'red' ? 'text-accent-danger' : 'text-text-primary'}`}
+        >
+          {value}
+        </span>
       </div>
-      <div className="flex flex-col items-end gap-1 text-right">
+      <div className="flex items-end text-right">
         <span className="inline-flex items-center gap-1 rounded-sm bg-surface-row-hover px-2 py-1 text-xs text-text-muted">
           <LockKeyhole className="h-3 w-3" aria-hidden="true" /> Locked
         </span>
-        <span className="text-xs text-text-muted">정책 강제 연결 후 편집 가능</span>
       </div>
     </SettingRow>
   );
