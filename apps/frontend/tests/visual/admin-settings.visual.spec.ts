@@ -35,7 +35,12 @@ test.describe('/admin/settings visual harness', () => {
         await expect(page.getByTestId('workspace-settings-save-bar')).toBeVisible();
       }
       if (scenario === 'locked') {
-        await expect(target.getByText('정책 강제 연결 후 편집 가능')).toHaveCount(5);
+        await expect(target.getByText('Locked', { exact: true })).toHaveCount(5);
+        const surveyResponseToVocRow = target
+          .getByText('Survey Response → VOC', { exact: true })
+          .locator('..')
+          .locator('..');
+        await expect(surveyResponseToVocRow.getByText('Forbidden', { exact: true })).toBeVisible();
       }
       await expectVisual(page, target, `admin-settings-${scenario}.png`);
     });
