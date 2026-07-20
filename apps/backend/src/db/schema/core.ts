@@ -52,6 +52,34 @@ export const workspaces = coreSchema.table('workspaces', {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// core.workspace_settings — workspace-scoped policy singleton (Slice 9 #195).
+// Missing rows resolve to the schema defaults so rollout does not require a
+// backfill. The service owns the insert-and-lock upsert protocol.
+// ─────────────────────────────────────────────────────────────────────────
+export const workspaceSettings = coreSchema.table(
+  'workspace_settings',
+  {
+    workspaceId: uuid('workspace_id')
+      .primaryKey()
+      .references(() => workspaces.id),
+    permissionSelfApproval: text('permission_self_approval').notNull().default('allowed'),
+    surveyAnonymityThreshold: integer('survey_anonymity_threshold').notNull().default(5),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    permissionSelfApprovalCheck: check(
+      'workspace_settings_permission_self_approval_check',
+      sql`${t.permissionSelfApproval} in ('allowed','forbidden')`,
+    ),
+    surveyAnonymityThresholdCheck: check(
+      'workspace_settings_survey_anonymity_threshold_check',
+      sql`${t.surveyAnonymityThreshold} between 5 and 50`,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
 // core.actors — AD-authenticated internal person bound to a Workspace.
 // role_level + actor_type are application-level enums per
 // docs/implementation/04-database-and-migrations.md (text with CHECK).
