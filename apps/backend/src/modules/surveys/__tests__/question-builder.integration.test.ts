@@ -327,6 +327,29 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
       branch_depth: 1,
     });
 
+    const retainedSurvey = await app.inject({
+      method: 'GET',
+      url: `/surveys/${surveyId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(retainedSurvey.statusCode).toBe(200);
+    expect(
+      retainedSurvey
+        .json<{
+          questions: Array<{
+            id: string;
+            branch_parent_question_id: string | null;
+            branch_trigger_option_key: string | null;
+            branch_depth: number;
+          }>;
+        }>()
+        .questions.find((question) => question.id === childId),
+    ).toMatchObject({
+      branch_parent_question_id: parentId,
+      branch_trigger_option_key: 'yes',
+      branch_depth: 1,
+    });
+
     const cleared = await patchQuestion(
       surveyId,
       childId,
@@ -375,9 +398,11 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
       `select detail from core.audit_log where subject_id = $1 and event_type = 'survey_question_updated' order by created_at desc limit 1`,
       [childId],
     );
-    expect(audit.rows[0]?.detail.changed_fields).toEqual(
-      expect.arrayContaining(['branch_parent_question_id', 'branch_trigger_option_key']),
-    );
+    expect(audit.rows[0]?.detail.changed_fields).toEqual([
+      'prompt',
+      'branch_parent_question_id',
+      'branch_trigger_option_key',
+    ]);
   });
 
   it('rejects clearing a branch trigger while retaining its branch parent', async () => {
@@ -392,14 +417,38 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
         branch_trigger_option_key: 'yes',
       }),
     );
+    const childId = child.json<{ id: string }>().id;
     const rejected = await patchQuestion(
       surveyId,
-      child.json<{ id: string }>().id,
+      childId,
       choiceQuestion({ prompt: 'Conditional child', branch_trigger_option_key: null }),
     );
 
     expect(rejected.statusCode).toBe(422);
     expect(rejected.json<{ code: string }>().code).toBe('validation.failed');
+
+    const survey = await app.inject({
+      method: 'GET',
+      url: `/surveys/${surveyId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(survey.statusCode).toBe(200);
+    expect(
+      survey
+        .json<{
+          questions: Array<{
+            id: string;
+            branch_parent_question_id: string | null;
+            branch_trigger_option_key: string | null;
+            branch_depth: number;
+          }>;
+        }>()
+        .questions.find((question) => question.id === childId),
+    ).toMatchObject({
+      branch_parent_question_id: parentId,
+      branch_trigger_option_key: 'yes',
+      branch_depth: 1,
+    });
   });
 
   it('clears a rating label', async () => {
@@ -413,7 +462,8 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
       rating_high_label: 'Excellent',
     });
     expect(created.statusCode).toBe(201);
-    const cleared = await patchQuestion(surveyId, created.json<{ id: string }>().id, {
+    const questionId = created.json<{ id: string }>().id;
+    const cleared = await patchQuestion(surveyId, questionId, {
       kind: 'rating',
       prompt: 'Rate this',
       rating_low_label: null,
@@ -421,6 +471,20 @@ describe.skipIf(!runIntegration)('survey question routes (#184)', () => {
 
     expect(cleared.statusCode).toBe(200);
     expect(cleared.json<{ rating_low_label: string | null }>().rating_low_label).toBeNull();
+
+    const survey = await app.inject({
+      method: 'GET',
+      url: `/surveys/${surveyId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(survey.statusCode).toBe(200);
+    expect(
+      survey
+        .json<{
+          questions: Array<{ id: string; rating_low_label: string | null }>;
+        }>()
+        .questions.find((question) => question.id === questionId)?.rating_low_label,
+    ).toBeNull();
   });
 
   it('audits only allowed changed fields and ordering_changed on update', async () => {
