@@ -182,7 +182,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
         {selfApprovalDirty && (
           <Callout
             className="mt-3"
-            tone={draft.permission_self_approval === 'forbidden' ? 'amber' : 'info'}
+            tone="amber"
             icon={<AlertTriangle className="h-4 w-4" />}
             title={selfApprovalWarningTitle}
           >
