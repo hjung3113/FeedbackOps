@@ -18,6 +18,9 @@ export default defineConfig({
       // Slice 1 #3: auth endpoints + the /me identity probe live at root.
       '/auth': 'http://127.0.0.1:3011',
       '/me': 'http://127.0.0.1:3011',
+      // #197 workspace policy endpoints are backend-only root paths, so
+      // forward them unconditionally in development.
+      '/workspace': 'http://127.0.0.1:3011',
       // Slice 2 / Slice 3 data endpoints (root-level, no /api prefix).
       '/entity-links': 'http://127.0.0.1:3011',
       // `/vocs` overlaps with the FE route of the same name, so we bypass the

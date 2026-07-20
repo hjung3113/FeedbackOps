@@ -22,6 +22,12 @@ import {
 } from '../fixtures/voc-reporter-task-summary';
 
 import {
+  type AdminSettingsVisualScenario,
+  adminSettingsFixture,
+  adminSettingsFixtureSchema,
+  adminSettingsPatchSchema,
+} from '../fixtures/admin-settings';
+import {
   type PermissionScenarioName,
   createPermissionRequestsScenario,
   permissionDecisionResultTemplates,
@@ -62,6 +68,7 @@ interface InstallOptions {
   vocReporterTaskSummary?: boolean;
   surveyScenario?: SurveyVisualScenario;
   surveyResultsScenario?: SurveyResultsVisualScenario;
+  adminSettingsScenario?: AdminSettingsVisualScenario;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -200,6 +207,28 @@ export async function installMockApi(
         state: role === 'admin' ? 'approved' : 'blocked_non_requestable',
         decision: { allow: role === 'admin' },
       });
+      return;
+    }
+
+    if (options.adminSettingsScenario && isRequest(route, 'GET', '/workspace/settings')) {
+      await json(
+        route,
+        options.adminSettingsScenario === 'error' ? 500 : 200,
+        options.adminSettingsScenario === 'error' ? errorEnvelope(500) : adminSettingsFixture,
+      );
+      return;
+    }
+
+    if (options.adminSettingsScenario && isRequest(route, 'PATCH', '/workspace/settings')) {
+      const patch = adminSettingsPatchSchema.parse(request.postDataJSON());
+      const next = adminSettingsFixtureSchema.parse({ ...adminSettingsFixture, ...patch });
+      postedBodies.push(patch);
+      postedRequests.push({
+        body: patch,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      await json(route, 200, next);
       return;
     }
 
