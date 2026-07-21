@@ -3,7 +3,7 @@
 // The frontend never enforces backend permissions as truth (AGENTS.md:69) —
 // these types only describe what the server returned so the UI can pick a state.
 
-import type { PermissionDecisionResult } from '@fops/shared';
+import type { ApprovePermissionRequest, PermissionDecisionResult } from '@fops/shared';
 
 import { UnauthenticatedError } from './auth';
 import { apiClient } from './client';
@@ -162,8 +162,15 @@ export async function decidePermissionRequest(
   action: PermissionRequestDecisionAction,
   reason: string,
   idempotencyKey: string,
+  selfApproval?: ApprovePermissionRequest['self_approval'],
 ): Promise<PermissionDecisionResult> {
-  const body = action === 'need-more-info' ? { note: reason || undefined } : { reason: reason || undefined };
+  const body =
+    action === 'need-more-info'
+      ? { note: reason || undefined }
+      : {
+          reason: reason || undefined,
+          ...(action === 'approve' && selfApproval !== undefined ? { self_approval: selfApproval } : {}),
+        };
   const response = await apiClient<PermissionDecisionResult>(
     'POST',
     `/permissions/requests/${id}/${action}`,

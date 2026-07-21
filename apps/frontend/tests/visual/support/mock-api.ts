@@ -210,7 +210,7 @@ export async function installMockApi(
       return;
     }
 
-    if (options.adminSettingsScenario && isRequest(route, 'GET', '/workspace/settings')) {
+    if (isRequest(route, 'GET', '/workspace/settings')) {
       await json(
         route,
         options.adminSettingsScenario === 'error' ? 500 : 200,
