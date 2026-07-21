@@ -264,7 +264,6 @@ function PermissionRequestDetail({
     workspaceSettings.data?.permission_self_approval === "forbidden";
   const submitDisabled =
     !decidable ||
-    (needsReason && !reason.trim()) ||
     !selfApprovalReady ||
     selfApprovalForbidden;
 
@@ -276,7 +275,7 @@ function PermissionRequestDetail({
   }, [request.id]);
 
   function submit() {
-    if (submitDisabled) return;
+    if (submitDisabled || (needsReason && !reason.trim())) return;
     mutation.mutate(
       {
         id: request.id,
@@ -414,6 +413,13 @@ function PermissionRequestDetail({
                   <div className="flex flex-col gap-1 rounded bg-surface-detail p-3 text-xs text-text-secondary">
                     <span className="uppercase tracking-wide text-text-muted">감사 envelope 미리보기</span>
                     <span>label: SELF_APPROVAL</span>
+                    <span>
+                      actor: {me.data?.actor.id ?? "—"} · subject: {request.requester_actor_id}
+                    </span>
+                    <span>capability: {request.requested_capability}</span>
+                    <span>
+                      scope: {request.requested_managed_system_id ?? "워크스페이스 전체"}
+                    </span>
                     <span>policy_citation: {policyCitation || "— (필수)"}</span>
                     <span>
                       no_peer_reviewer: {peerReviewerAbsence ? `\"${peerReviewerAbsence.slice(0, 56)}${peerReviewerAbsence.length > 56 ? "…" : ""}\"` : "— (필수)"}
@@ -429,9 +435,6 @@ function PermissionRequestDetail({
                   </p>
                 </section>
               ) : null}
-              <p className="text-xs text-text-muted">
-                승인은 차단된 액션을 자동으로 실행하지 않습니다.
-              </p>
               <Button
                 type="button"
                 onClick={submit}
@@ -441,6 +444,9 @@ function PermissionRequestDetail({
               >
                 {showSelfApprovalCapture ? "Self-approve 확정 · 감사 캡처" : `${selectedAction.label} 처리`}
               </Button>
+              <p className="text-xs text-text-muted">
+                승인은 차단된 액션을 자동으로 실행하지 않습니다. 요청자는 다시 동일 액션을 명시적으로 실행해야 합니다.
+              </p>
             </section>
           ) : null}
         </div>

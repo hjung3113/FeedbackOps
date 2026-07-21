@@ -356,6 +356,14 @@ describe("/admin/permissions/requests", () => {
       target: { value: "  policy-8  " },
     });
     expect(submit).toBeEnabled();
+    fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+      target: { value: "  review  " },
+    });
+    expect(submit).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+      target: { value: "  reviewer absence  " },
+    });
+    expect(submit).toBeEnabled();
     fireEvent.click(submit);
 
     await waitFor(() => expect(decisionPosts()).toHaveLength(1));
