@@ -225,6 +225,7 @@ An Admin deciding their own Permission Request is a self-approval. The resolved
 workspace `permission_self_approval` setting defaults to `allowed`; in that
 mode the approve body must include strict
 `self_approval: { policy_citation: string, peer_reviewer_absence: string }`.
+The approve body schema lives in `packages/shared/src/permissions/decisions.ts`, and the backend route imports it rather than declaring its own.
 The recorded `permission_approved` audit detail carries this envelope only for
 self-approval. The envelope is rejected for an approval decided by another
 Admin. If the workspace setting is `forbidden`, self-approval returns
