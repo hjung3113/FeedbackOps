@@ -346,7 +346,7 @@ describe("/admin/permissions/requests", () => {
     const submit = screen.getByTestId("permission-decision-submit");
     expect(submit).toBeDisabled();
     fireEvent.change(screen.getByLabelText(/Policy citation/), {
-      target: { value: "  policy  " },
+      target: { value: "  policy7  " },
     });
     fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
       target: { value: "  reviewer absence  " },
