@@ -30,6 +30,7 @@ import {
 import {
   type PermissionScenarioName,
   createPermissionRequestsScenario,
+  permissionSettingsFixture,
   permissionDecisionResultTemplates,
 } from '../fixtures/permissions';
 import {
@@ -211,10 +212,13 @@ export async function installMockApi(
     }
 
     if (isRequest(route, 'GET', '/workspace/settings')) {
+      const settingsFixture = options.adminSettingsScenario
+        ? adminSettingsFixture
+        : permissionSettingsFixture;
       await json(
         route,
         options.adminSettingsScenario === 'error' ? 500 : 200,
-        options.adminSettingsScenario === 'error' ? errorEnvelope(500) : adminSettingsFixture,
+        options.adminSettingsScenario === 'error' ? errorEnvelope(500) : settingsFixture,
       );
       return;
     }
@@ -405,7 +409,7 @@ export async function installMockApi(
   return { postedBodies, postedRequests, scenario };
 }
 
-function parsePermissionDecisionBody(
+export function parsePermissionDecisionBody(
   action: keyof typeof permissionDecisionResultTemplates,
   body: unknown,
 ): unknown {

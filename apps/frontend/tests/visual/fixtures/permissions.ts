@@ -1,6 +1,14 @@
 import { permissionDecisionResultSchema } from '@fops/shared';
 
 import type { AdminPermissionRequestRow } from '../../../src/lib/api';
+import { adminSettingsFixtureSchema } from './admin-settings';
+
+// The permission-review visual scenario needs self-approval to remain decidable.
+// Admin-settings scenarios retain their explicit forbidden fixture instead.
+export const permissionSettingsFixture = adminSettingsFixtureSchema.parse({
+  permission_self_approval: 'allowed',
+  survey_anonymity_threshold: 9,
+});
 
 export const PERMISSION_IDS = {
   pendingSensitive: '11111111-1111-4111-8111-111111111111',

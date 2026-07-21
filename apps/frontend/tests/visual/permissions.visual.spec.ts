@@ -1,7 +1,7 @@
 import { expect, test } from './support/visual-test';
 
 import { PERMISSION_IDS } from './fixtures/permissions';
-import { installMockApi } from './support/mock-api';
+import { installMockApi, parsePermissionDecisionBody } from './support/mock-api';
 import { expectVisual } from './support/screenshot';
 
 test.describe('/admin/permissions/requests visual harness', () => {
@@ -49,7 +49,29 @@ test.describe('/admin/permissions/requests visual harness', () => {
     ]);
   });
 
-  test('opens a self-approval request with approve pending', async ({ page }) => {
+  test('AC-3 parses valid self-approval envelopes and rejects unknown approve keys through the mock API parser', () => {
+    expect(
+      parsePermissionDecisionBody('approve', {
+        self_approval: {
+          policy_citation: 'workspace policy §4.3',
+          peer_reviewer_absence: 'all peer reviewers are unavailable',
+        },
+      }),
+    ).toEqual({
+      self_approval: {
+        policy_citation: 'workspace policy §4.3',
+        peer_reviewer_absence: 'all peer reviewers are unavailable',
+      },
+    });
+    expect(() =>
+      parsePermissionDecisionBody('approve', {
+        reason: 'approved',
+        unexpected: true,
+      }),
+    ).toThrow();
+  });
+
+  test('AC-8 opens a self-approval request with approve pending', async ({ page }) => {
     const mock = await installMockApi(page);
 
     await page.goto('/admin/permissions/requests');

@@ -8,6 +8,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -122,7 +123,7 @@ function installFetch(
     onList?: () => void;
     requests?: readonly AdminPermissionRequestRow[];
     actorId?: string;
-    selfApprovalPolicy?: "allowed" | "forbidden" | "error";
+    selfApprovalPolicy?: "allowed" | "forbidden" | "error" | "pending";
   } = {},
 ) {
   const requests = options.requests ?? REQUESTS;
@@ -145,6 +146,7 @@ function installFetch(
       if (url === "/workspace/settings") {
         if (options.selfApprovalPolicy === "error")
           return response({ code: "internal.unexpected", message: "settings unavailable" }, 500);
+        if (options.selfApprovalPolicy === "pending") return new Promise<Response>(() => {});
         return response({
           permission_self_approval: options.selfApprovalPolicy ?? "allowed",
           survey_anonymity_threshold: 5,
@@ -316,7 +318,7 @@ describe("/admin/permissions/requests", () => {
     },
   );
 
-  test("shows audit capture only for this Admin's approve action, not another request or another action", async () => {
+  test("AC-4 shows audit capture only for this Admin's approve action, not another request or another action", async () => {
     installFetch({ actorId: "actor-pending" });
     renderRoute();
 
@@ -334,7 +336,7 @@ describe("/admin/permissions/requests", () => {
     );
   });
 
-  test("requires two trimmed eight-character audit fields and posts their exact envelope", async () => {
+  test("AC-5 requires two trimmed eight-character audit fields and posts their exact envelope", async () => {
     installFetch({ actorId: "actor-pending" });
     renderRoute();
     await waitFor(() =>
@@ -366,7 +368,7 @@ describe("/admin/permissions/requests", () => {
     });
   });
 
-  test("disables self-approval under forbidden workspace policy without posting", async () => {
+  test("AC-6 disables self-approval under forbidden workspace policy without posting", async () => {
     installFetch({ actorId: "actor-pending", selfApprovalPolicy: "forbidden" });
     renderRoute();
     await waitFor(() =>
@@ -378,13 +380,40 @@ describe("/admin/permissions/requests", () => {
     expect(decisionPosts()).toHaveLength(0);
   });
 
-  test("keeps self-approval enabled when workspace settings fail", async () => {
-    installFetch({ actorId: "actor-pending", selfApprovalPolicy: "error" });
-    renderRoute();
-    await waitFor(() =>
-      expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
-    );
-    expect(screen.getByRole("button", { name: "승인" })).toBeEnabled();
+  test("AC-7 keeps self-approval enabled and handles a backend denial while workspace settings fail or remain unresolved", async () => {
+    for (const selfApprovalPolicy of ["error", "pending"] as const) {
+      installFetch({
+        actorId: "actor-pending",
+        selfApprovalPolicy,
+        decision: {
+          status: 403,
+          body: { code: "permission.denied", message: "self-approval denied" },
+        },
+      });
+      renderRoute();
+      await waitFor(() =>
+        expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
+      );
+      expect(screen.getByRole("button", { name: "승인" })).toBeEnabled();
+      fireEvent.change(screen.getByLabelText(/Policy citation/), {
+        target: { value: "policy-8" },
+      });
+      fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+        target: { value: "reviewer absence" },
+      });
+      fireEvent.click(screen.getByTestId("permission-decision-submit"));
+
+      await waitFor(() => expect(decisionPosts()).toHaveLength(1));
+      const [, init] = decisionPosts()[0]!;
+      expect(JSON.parse(init.body as string)).toEqual({
+        self_approval: {
+          policy_citation: "policy-8",
+          peer_reviewer_absence: "reviewer absence",
+        },
+      });
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith("권한이 없습니다."));
+      cleanup();
+    }
   });
 
   test("re-mints the Idempotency-Key after a successful decision", async () => {

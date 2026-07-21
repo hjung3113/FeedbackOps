@@ -23,6 +23,10 @@ import type { RequestService } from './request-service.js';
 import type { DecisionService } from './decision-service.js';
 import { type FrontendState, toFrontendState } from './state-mapper.js';
 
+// Export the exact parser used by the approve route so its shared-contract
+// binding can be asserted without booting Fastify or opening a database.
+export const approvePermissionRequestBodySchema = approvePermissionRequestSchema;
+
 export interface PermissionsRoutesOptions {
   sessionService: SessionService;
   checkService: CheckService;
@@ -275,7 +279,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
   }> = [
     {
       suffix: 'approve',
-      schema: approvePermissionRequestSchema,
+      schema: approvePermissionRequestBodySchema,
       invoke: (actor, id, body, idempotencyKey) =>
         decisionService.approveRequest(
           actor,
