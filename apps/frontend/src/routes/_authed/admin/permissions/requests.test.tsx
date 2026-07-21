@@ -357,11 +357,11 @@ describe("/admin/permissions/requests", () => {
     });
     expect(submit).toBeEnabled();
     fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
-      target: { value: "  review  " },
+      target: { value: "  absence  " },
     });
     expect(submit).toBeDisabled();
     fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
-      target: { value: "  reviewer absence  " },
+      target: { value: "  reviewer  " },
     });
     expect(submit).toBeEnabled();
     fireEvent.click(submit);
@@ -371,7 +371,7 @@ describe("/admin/permissions/requests", () => {
     expect(JSON.parse(init.body as string)).toEqual({
       self_approval: {
         policy_citation: "policy-8",
-        peer_reviewer_absence: "reviewer absence",
+        peer_reviewer_absence: "reviewer",
       },
     });
   });
