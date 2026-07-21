@@ -1,4 +1,4 @@
-import type { PermissionDecisionResult } from "@fops/shared";
+import type { ApprovePermissionRequest, PermissionDecisionResult } from "@fops/shared";
 import {
   useMutation,
   useQueryClient,
@@ -23,6 +23,7 @@ export interface DecidePermissionRequestArgs {
   action: PermissionRequestDecisionAction;
   reason: string;
   idempotencyKey: string;
+  selfApproval?: ApprovePermissionRequest["self_approval"];
 }
 
 export function useDecidePermissionRequest(): UseMutationResult<
@@ -38,8 +39,9 @@ export function useDecidePermissionRequest(): UseMutationResult<
       action,
       reason,
       idempotencyKey,
+      selfApproval,
     }: DecidePermissionRequestArgs) =>
-      decidePermissionRequest(id, action, reason, idempotencyKey),
+      decidePermissionRequest(id, action, reason, idempotencyKey, selfApproval),
     onSuccess: async () => {
       toast.success("권한 요청이 처리되었습니다.");
       await queryClient.invalidateQueries({

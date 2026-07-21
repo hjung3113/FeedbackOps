@@ -1,7 +1,7 @@
 import { expect, test } from './support/visual-test';
 
 import { PERMISSION_IDS } from './fixtures/permissions';
-import { installMockApi } from './support/mock-api';
+import { installMockApi, parsePermissionDecisionBody } from './support/mock-api';
 import { expectVisual } from './support/screenshot';
 
 test.describe('/admin/permissions/requests visual harness', () => {
@@ -12,7 +12,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
 
     const list = page.getByTestId('permission-requests-list');
     const detail = page.getByTestId('permission-request-detail-panel');
-    await expect(page.getByRole('tab', { name: /대기 중 \(2\)/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: /대기 중 \(3\)/ })).toHaveAttribute('aria-selected', 'true');
     await expect(list.getByText('workspace.admin', { exact: true })).toBeVisible();
     await expect(list.getByText('workspace.read', { exact: true })).toBeVisible();
     await expect(detail).toContainText('workspace.admin');
@@ -44,6 +44,54 @@ test.describe('/admin/permissions/requests visual harness', () => {
       {
         pathname: `/permissions/requests/${PERMISSION_IDS.pendingRead}/approve`,
         body: {},
+        idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      },
+    ]);
+  });
+
+  test('AC-3 parses valid self-approval envelopes and rejects unknown approve keys through the mock API parser', () => {
+    expect(
+      parsePermissionDecisionBody('approve', {
+        self_approval: {
+          policy_citation: 'workspace policy §4.3',
+          peer_reviewer_absence: 'all peer reviewers are unavailable',
+        },
+      }),
+    ).toEqual({
+      self_approval: {
+        policy_citation: 'workspace policy §4.3',
+        peer_reviewer_absence: 'all peer reviewers are unavailable',
+      },
+    });
+    expect(() =>
+      parsePermissionDecisionBody('approve', {
+        reason: 'approved',
+        unexpected: true,
+      }),
+    ).toThrow();
+  });
+
+  test('AC-8 opens a self-approval request with approve pending', async ({ page }) => {
+    const mock = await installMockApi(page);
+
+    await page.goto('/admin/permissions/requests');
+    await page.getByTestId('permission-requests-list').getByText('task.self_approve_request', { exact: true }).click();
+
+    const detail = page.getByTestId('permission-request-detail-panel');
+    await expect(detail.getByRole('button', { name: '승인', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(detail.getByTestId('self-approval-audit-capture')).toBeVisible();
+    await detail.getByLabel(/Policy citation/).fill('workspace policy §4.3');
+    await detail.getByLabel(/Peer reviewer 부재 사유/).fill('다른 reviewer 모두 PTO입니다.');
+    await detail.getByTestId('permission-decision-submit').click();
+    await expect.poll(() => mock.postedRequests).toEqual([
+      {
+        pathname: `/permissions/requests/${PERMISSION_IDS.selfApproval}/approve`,
+        body: {
+          self_approval: {
+            policy_citation: 'workspace policy §4.3',
+            peer_reviewer_absence: '다른 reviewer 모두 PTO입니다.',
+          },
+        },
         idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
       },
     ]);

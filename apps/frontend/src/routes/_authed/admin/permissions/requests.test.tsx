@@ -8,6 +8,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -121,6 +122,8 @@ function installFetch(
     decision?: { status: number; body: unknown };
     onList?: () => void;
     requests?: readonly AdminPermissionRequestRow[];
+    actorId?: string;
+    selfApprovalPolicy?: "allowed" | "forbidden" | "error" | "pending";
   } = {},
 ) {
   const requests = options.requests ?? REQUESTS;
@@ -129,6 +132,26 @@ function installFetch(
       const url = String(input);
       if (url.startsWith("/me/permissions/check"))
         return response({ state: "approved", decision: { allow: true } });
+      if (url === "/me")
+        return response({
+          actor: {
+            id: options.actorId ?? "another-admin",
+            external_id: "admin",
+            email: "admin@example.test",
+            display_name: "Admin",
+            role_level: "admin",
+          },
+          workspace_id: "workspace-1",
+        });
+      if (url === "/workspace/settings") {
+        if (options.selfApprovalPolicy === "error")
+          return response({ code: "internal.unexpected", message: "settings unavailable" }, 500);
+        if (options.selfApprovalPolicy === "pending") return new Promise<Response>(() => {});
+        return response({
+          permission_self_approval: options.selfApprovalPolicy ?? "allowed",
+          survey_anonymity_threshold: 5,
+        });
+      }
       if (
         url === "/permissions/requests?status=all" &&
         (!init?.method || init.method === "GET")
@@ -156,6 +179,12 @@ function renderRoute() {
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
+  );
+}
+
+function decisionPosts() {
+  return (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+    ([, init]) => init?.method === "POST",
   );
 }
 
@@ -288,6 +317,112 @@ describe("/admin/permissions/requests", () => {
       expect(JSON.parse(init.body as string)).toEqual(expectedBody);
     },
   );
+
+  test("AC-4 shows audit capture only for this Admin's approve action, not another request or another action", async () => {
+    installFetch({ actorId: "actor-pending" });
+    renderRoute();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "거절" }));
+    expect(screen.queryByTestId("self-approval-audit-capture")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "승인" }));
+    expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /추가 정보 필요 \(1\)/ }));
+    await waitFor(() =>
+      expect(screen.queryByTestId("self-approval-audit-capture")).not.toBeInTheDocument(),
+    );
+  });
+
+  test("AC-5 requires two trimmed eight-character audit fields and posts their exact envelope", async () => {
+    installFetch({ actorId: "actor-pending" });
+    renderRoute();
+    await waitFor(() =>
+      expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
+    );
+
+    const submit = screen.getByTestId("permission-decision-submit");
+    expect(submit).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Policy citation/), {
+      target: { value: "  policy7  " },
+    });
+    fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+      target: { value: "  reviewer absence  " },
+    });
+    expect(submit).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Policy citation/), {
+      target: { value: "  policy-8  " },
+    });
+    expect(submit).toBeEnabled();
+    fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+      target: { value: "  absence  " },
+    });
+    expect(submit).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+      target: { value: "  reviewer  " },
+    });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(decisionPosts()).toHaveLength(1));
+    const [, init] = decisionPosts()[0]!;
+    expect(JSON.parse(init.body as string)).toEqual({
+      self_approval: {
+        policy_citation: "policy-8",
+        peer_reviewer_absence: "reviewer",
+      },
+    });
+  });
+
+  test("AC-6 disables self-approval under forbidden workspace policy without posting", async () => {
+    installFetch({ actorId: "actor-pending", selfApprovalPolicy: "forbidden" });
+    renderRoute();
+    await waitFor(() =>
+      expect(screen.getByText(/Workspace policy에서 self-approval을 금지합니다/)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "승인" })).toBeDisabled();
+    expect(screen.getByTestId("permission-decision-submit")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+    expect(decisionPosts()).toHaveLength(0);
+  });
+
+  test("AC-7 keeps self-approval enabled and handles a backend denial while workspace settings fail or remain unresolved", async () => {
+    for (const selfApprovalPolicy of ["error", "pending"] as const) {
+      installFetch({
+        actorId: "actor-pending",
+        selfApprovalPolicy,
+        decision: {
+          status: 403,
+          body: { code: "permission.denied", message: "self-approval denied" },
+        },
+      });
+      renderRoute();
+      await waitFor(() =>
+        expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
+      );
+      expect(screen.getByRole("button", { name: "승인" })).toBeEnabled();
+      fireEvent.change(screen.getByLabelText(/Policy citation/), {
+        target: { value: "policy-8" },
+      });
+      fireEvent.change(screen.getByLabelText(/Peer reviewer 부재 사유/), {
+        target: { value: "reviewer absence" },
+      });
+      fireEvent.click(screen.getByTestId("permission-decision-submit"));
+
+      await waitFor(() => expect(decisionPosts()).toHaveLength(1));
+      const [, init] = decisionPosts()[0]!;
+      expect(JSON.parse(init.body as string)).toEqual({
+        self_approval: {
+          policy_citation: "policy-8",
+          peer_reviewer_absence: "reviewer absence",
+        },
+      });
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith("권한이 없습니다."));
+      cleanup();
+    }
+  });
 
   test("re-mints the Idempotency-Key after a successful decision", async () => {
     installFetch();

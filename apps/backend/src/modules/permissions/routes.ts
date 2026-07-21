@@ -7,6 +7,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import {
+  approvePermissionRequestSchema,
   denyPermissionRequestSchema,
   needMoreInfoPermissionRequestSchema,
   rejectPermissionRequestSchema,
@@ -22,18 +23,9 @@ import type { RequestService } from './request-service.js';
 import type { DecisionService } from './decision-service.js';
 import { type FrontendState, toFrontendState } from './state-mapper.js';
 
-const approvePermissionRequestSchema = z
-  .object({
-    reason: z.string().max(2000).optional(),
-    self_approval: z
-      .object({
-        policy_citation: z.string().min(1),
-        peer_reviewer_absence: z.string().min(1),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
+// Export the exact parser used by the approve route so its shared-contract
+// binding can be asserted without booting Fastify or opening a database.
+export const approvePermissionRequestBodySchema = approvePermissionRequestSchema;
 
 export interface PermissionsRoutesOptions {
   sessionService: SessionService;
@@ -287,7 +279,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
   }> = [
     {
       suffix: 'approve',
-      schema: approvePermissionRequestSchema,
+      schema: approvePermissionRequestBodySchema,
       invoke: (actor, id, body, idempotencyKey) =>
         decisionService.approveRequest(
           actor,

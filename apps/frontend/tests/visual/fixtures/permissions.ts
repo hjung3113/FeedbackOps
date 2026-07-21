@@ -1,10 +1,19 @@
 import { permissionDecisionResultSchema } from '@fops/shared';
 
 import type { AdminPermissionRequestRow } from '../../../src/lib/api';
+import { adminSettingsFixtureSchema } from './admin-settings';
+
+// The permission-review visual scenario needs self-approval to remain decidable.
+// Admin-settings scenarios retain their explicit forbidden fixture instead.
+export const permissionSettingsFixture = adminSettingsFixtureSchema.parse({
+  permission_self_approval: 'allowed',
+  survey_anonymity_threshold: 9,
+});
 
 export const PERMISSION_IDS = {
   pendingSensitive: '11111111-1111-4111-8111-111111111111',
   pendingRead: '22222222-2222-4222-8222-222222222222',
+  selfApproval: '88888888-8888-4888-8888-888888888888',
   needsMoreInfo: '33333333-3333-4333-8333-333333333333',
   approved: '44444444-4444-4444-8444-444444444444',
   rejected: '55555555-5555-4555-8555-555555555555',
@@ -30,6 +39,15 @@ export const permissionRequests: AdminPermissionRequestRow[] = [
     reason: '운영 현황을 확인해야 합니다.',
     status: 'pending',
     created_at: '2026-07-05T09:00:00.000Z',
+  },
+  {
+    id: PERMISSION_IDS.selfApproval,
+    requester_actor_id: '22222222-2222-4222-8222-222222222222',
+    requested_capability: 'task.self_approve_request',
+    requested_managed_system_id: null,
+    reason: '정시 release를 위해 self-approval 감사 캡처가 필요합니다.',
+    status: 'pending',
+    created_at: '2026-07-05T08:00:00.000Z',
   },
   {
     id: PERMISSION_IDS.needsMoreInfo,
