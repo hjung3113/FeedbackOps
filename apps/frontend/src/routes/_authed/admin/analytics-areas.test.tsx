@@ -191,6 +191,9 @@ describe('/admin/analytics-areas route', () => {
       expect(requests).toContain('/analytics-areas?managed_system_id=ms-pbi');
       expect(screen.getByTestId('aa-row-sales')).toBeInTheDocument();
       expect(screen.queryByTestId('aa-row-permission-management')).not.toBeInTheDocument();
+      expect(screen.getByTestId('aa-group-ms-pbi')).toBeInTheDocument();
+      expect(screen.queryByTestId('aa-group-ms-tab')).not.toBeInTheDocument();
+      expect(screen.getByText('1 areas · 1 systems')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId('aa-filter-managed-system'));
@@ -198,12 +201,15 @@ describe('/admin/analytics-areas route', () => {
     await waitFor(() => {
       expect(requests.filter((url) => url === '/analytics-areas').length).toBeGreaterThanOrEqual(2);
       expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
+      expect(screen.getByTestId('aa-group-ms-tab')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId('aa-filter-include-archived'));
     await waitFor(() => {
       expect(requests).toContain('/analytics-areas?include_archived=true');
       expect(screen.getByTestId('aa-row-legacy-revenue')).toBeInTheDocument();
+      expect(screen.getByText('3 areas · 2 systems')).toBeInTheDocument();
+      expect(screen.getAllByTestId(/^aa-row-/)).toHaveLength(3);
     });
 
     fireEvent.click(screen.getByTestId('aa-filter-include-archived'));

@@ -183,12 +183,23 @@ export function AnalyticsAreasBody({
   });
 
   const systems = useMemo(() => msQuery.data?.items ?? [], [msQuery.data]);
+  const renderedSystems = useMemo(
+    () => (managedSystemId ? systems.filter((system) => system.id === managedSystemId) : systems),
+    [managedSystemId, systems],
+  );
   const areas = useMemo(() => aaQuery.data?.items ?? [], [aaQuery.data]);
   const areasByMs = useMemo(
     () => groupByMs(areas, includeArchived),
     [areas, includeArchived],
   );
-  const activeAreas = useMemo(() => areas.filter((a) => a.archived_at === null), [areas]);
+  const renderedAreaCount = useMemo(
+    () =>
+      renderedSystems.reduce(
+        (count, system) => count + (areasByMs.get(system.id)?.length ?? 0),
+        0,
+      ),
+    [areasByMs, renderedSystems],
+  );
   const msById = useMemo(
     () => new Map<string, ManagedSystemDto>(systems.map((m) => [m.id, m])),
     [systems],
@@ -225,7 +236,7 @@ export function AnalyticsAreasBody({
         <div className="mb-3.5 flex items-center justify-between">
           <PanelSectionTitle className="mb-0">Catalog</PanelSectionTitle>
           <span className="text-xs text-text-muted">
-            {activeAreas.length} areas · {systems.length} systems
+            {renderedAreaCount} areas · {renderedSystems.length} systems
           </span>
         </div>
 
@@ -244,7 +255,7 @@ export function AnalyticsAreasBody({
           </div>
         ) : (
           <div data-testid="aa-grouped-list" className="space-y-4">
-            {systems.map((m) => (
+            {renderedSystems.map((m) => (
               <GroupCard
                 key={m.id}
                 ms={m}

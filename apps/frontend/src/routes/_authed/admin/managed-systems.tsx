@@ -153,7 +153,14 @@ export function ManagedSystemsBody({
     () => groupAreasByMs(areas, includeArchived),
     [areas, includeArchived],
   );
-  const activeAreaCount = areas.filter((a) => a.archived_at === null).length;
+  const renderedAreaCount = useMemo(
+    () =>
+      systems.reduce(
+        (count, system) => count + (areasByMs.get(system.id)?.length ?? 0),
+        0,
+      ),
+    [areasByMs, systems],
+  );
 
   const ownerActorIds = useMemo(
     () => [
@@ -186,7 +193,7 @@ export function ManagedSystemsBody({
             Registry
           </h3>
           <span className="text-xs text-text-muted">
-            {systems.length} systems · {activeAreaCount} analytics areas
+            {systems.length} systems · {renderedAreaCount} analytics areas
           </span>
         </div>
 
