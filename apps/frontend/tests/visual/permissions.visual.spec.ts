@@ -82,6 +82,19 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await expect(detail.getByTestId('self-approval-audit-capture')).toBeVisible();
     await detail.getByLabel(/Policy citation/).fill('workspace policy §4.3');
     await detail.getByLabel(/Peer reviewer 부재 사유/).fill('다른 reviewer 모두 PTO입니다.');
+    // The detail panel is its own scroll container, so expectVisual's window.scrollTo(0, 0)
+    // cannot normalise it: filling the textarea scrolls it by a timing-dependent amount.
+    // Wait for fonts (they change content height) and then clamp the panel to its scroll
+    // end, which is the one offset that cannot drift — this frames the whole capture block.
+    // Note: the walk below treats "content taller than the box" as "scrollable", which holds
+    // because the panel's only overflowing ancestor is its overflow-y-auto container. If that
+    // markup is restructured, the write can become a silent no-op and the flake returns.
+    await page.evaluate(() => document.fonts.ready);
+    await detail.getByTestId('permission-decision-submit').evaluate((el) => {
+      let node: HTMLElement | null = el.parentElement;
+      while (node && node.scrollHeight <= node.clientHeight) node = node.parentElement;
+      if (node) node.scrollTop = node.scrollHeight;
+    });
     await expectVisual(page, detail, 'permission-request-self-approval-capture.png');
     await detail.getByTestId('permission-decision-submit').click();
     await expect.poll(() => mock.postedRequests).toEqual([
