@@ -20,10 +20,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Checkbox,
   Input,
   Label,
   OutlineBadge,
   PageShell,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -65,6 +69,7 @@ const SUBTITLE =
 
 export function ManagedSystemsAdminPage() {
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
   return (
     <PageShell
       header={{
@@ -72,10 +77,10 @@ export function ManagedSystemsAdminPage() {
         subtitle: SUBTITLE,
         actions: (
           <PermissionGate capability="workspace.admin" fallback={null} loading={null}>
-            <Button variant="subtle" size="sm" data-testid="ms-filter-button">
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
+            <ManagedSystemsFilter
+              includeArchived={includeArchived}
+              onIncludeArchivedChange={setIncludeArchived}
+            />
             <Button
               variant="primary"
               size="sm"
@@ -90,16 +95,23 @@ export function ManagedSystemsAdminPage() {
       }}
     >
       <PermissionGate capability="workspace.admin">
-        <ManagedSystemsBody registerOpen={registerOpen} setRegisterOpen={setRegisterOpen} />
+        <ManagedSystemsBody
+          includeArchived={includeArchived}
+          registerOpen={registerOpen}
+          setRegisterOpen={setRegisterOpen}
+        />
       </PermissionGate>
     </PageShell>
   );
 }
 
-function groupAreasByMs(items: AnalyticsAreaDto[]): Map<string, AnalyticsAreaDto[]> {
+function groupAreasByMs(
+  items: AnalyticsAreaDto[],
+  includeArchived: boolean,
+): Map<string, AnalyticsAreaDto[]> {
   const out = new Map<string, AnalyticsAreaDto[]>();
   for (const a of items) {
-    if (a.archived_at !== null) continue;
+    if (!includeArchived && a.archived_at !== null) continue;
     const arr = out.get(a.managed_system_id) ?? [];
     arr.push(a);
     out.set(a.managed_system_id, arr);
@@ -108,9 +120,11 @@ function groupAreasByMs(items: AnalyticsAreaDto[]): Map<string, AnalyticsAreaDto
 }
 
 export function ManagedSystemsBody({
+  includeArchived,
   registerOpen,
   setRegisterOpen,
 }: {
+  includeArchived: boolean;
   registerOpen: boolean;
   setRegisterOpen: (v: boolean) => void;
 }) {
@@ -118,13 +132,13 @@ export function ManagedSystemsBody({
   const [editTarget, setEditTarget] = useState<ManagedSystemDto | null>(null);
 
   const listQuery = useQuery({
-    queryKey: [...MANAGED_SYSTEMS_KEY, { includeArchived: false }] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: false, signal }),
+    queryKey: [...MANAGED_SYSTEMS_KEY, { includeArchived }] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived, signal }),
     retry: false,
   });
   const areasQuery = useQuery({
-    queryKey: ['analytics-areas', 'all'] as const,
-    queryFn: ({ signal }) => fetchAnalyticsAreas({ signal }),
+    queryKey: ['analytics-areas', { includeArchived }] as const,
+    queryFn: ({ signal }) => fetchAnalyticsAreas({ includeArchived, signal }),
     retry: false,
   });
   const requestsQuery = useQuery({
@@ -135,7 +149,10 @@ export function ManagedSystemsBody({
 
   const systems = useMemo(() => listQuery.data?.items ?? [], [listQuery.data]);
   const areas = useMemo(() => areasQuery.data?.items ?? [], [areasQuery.data]);
-  const areasByMs = useMemo(() => groupAreasByMs(areas), [areas]);
+  const areasByMs = useMemo(
+    () => groupAreasByMs(areas, includeArchived),
+    [areas, includeArchived],
+  );
   const activeAreaCount = areas.filter((a) => a.archived_at === null).length;
 
   const ownerActorIds = useMemo(
@@ -264,6 +281,36 @@ export function ManagedSystemsBody({
   );
 }
 
+function ManagedSystemsFilter({
+  includeArchived,
+  onIncludeArchivedChange,
+}: {
+  includeArchived: boolean;
+  onIncludeArchivedChange: (value: boolean) => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="subtle" size="sm" data-testid="ms-filter-button">
+          <Filter className="h-4 w-4" />
+          Filter
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end">
+        <label className="flex items-center gap-2 text-sm text-text-primary" htmlFor="ms-filter-include-archived">
+          <Checkbox
+            id="ms-filter-include-archived"
+            checked={includeArchived}
+            onCheckedChange={(checked) => onIncludeArchivedChange(checked === true)}
+            data-testid="ms-filter-include-archived"
+          />
+          Archived 포함
+        </label>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ownerUser(
   row: ManagedSystemDto,
   resolved: ResolveActorsResponse | undefined,
@@ -308,7 +355,10 @@ function RegistryRow({
         {mark.label}
       </div>
       <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-text-primary">{row.name}</div>
+        <div className="flex items-center gap-1.5">
+          <div className="truncate text-sm font-medium text-text-primary">{row.name}</div>
+          {row.archived_at !== null ? <OutlineBadge>Archived</OutlineBadge> : null}
+        </div>
         <div className="truncate font-mono text-xs text-text-muted">managed-system/{row.slug}</div>
       </div>
       <div className="flex flex-col gap-0.5">
@@ -317,7 +367,10 @@ function RegistryRow({
       </div>
       <div className="flex flex-wrap gap-1.5">
         {areas.map((a) => (
-          <OutlineBadge key={a.id}>{a.name}</OutlineBadge>
+          <OutlineBadge key={a.id}>
+            {a.name}
+            {a.archived_at !== null ? ' · Archived' : ''}
+          </OutlineBadge>
         ))}
       </div>
       <div className="text-right">
