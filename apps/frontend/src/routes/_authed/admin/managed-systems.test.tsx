@@ -53,11 +53,13 @@ interface FetchCase {
   resolve?: { actors: unknown[]; teams: unknown[] };
   requestsCount?: number;
   createResponse?: { status: number; body: unknown };
+  requests?: string[];
 }
 
 function installFetch(c: FetchCase) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
+    c.requests?.push(url);
     if (url.includes('/me/permissions/check')) {
       return jsonResponse({
         state: c.permissionState,
@@ -86,7 +88,10 @@ function installFetch(c: FetchCase) {
       return jsonResponse(r.body, r.status);
     }
     if (url.includes('/managed-systems')) {
-      return jsonResponse({ items: c.managedSystems, total: c.managedSystems.length });
+      const items = new URL(url, 'http://localhost').searchParams.get('include_archived') === 'true'
+        ? c.managedSystems
+        : c.managedSystems.filter((system) => system.archived_at === null);
+      return jsonResponse({ items, total: items.length });
     }
     return new Response('not mocked', { status: 500 });
   }) as typeof globalThis.fetch;
@@ -104,6 +109,13 @@ const TABLEAU = {
   archived_by_actor_id: null,
   created_at: '2026-05-17T00:00:00Z',
   updated_at: '2026-05-17T00:00:00Z',
+};
+const ARCHIVED_LOOKER = {
+  ...TABLEAU,
+  id: 'ms-archived',
+  slug: 'looker',
+  name: 'Looker',
+  archived_at: '2026-06-01T00:00:00Z',
 };
 
 describe('/admin/managed-systems route', () => {
@@ -158,6 +170,33 @@ describe('/admin/managed-systems route', () => {
       ),
     );
     expect(screen.getByTestId('ms-register-button')).toBeInTheDocument();
+  });
+
+  test('filters archived managed systems through the request and clears back to the active list', async () => {
+    const requests: string[] = [];
+    installFetch({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU, ARCHIVED_LOOKER],
+      requests,
+    });
+    renderRoute();
+
+    await waitFor(() => expect(screen.getByTestId('managed-system-row-tableau')).toBeInTheDocument());
+    expect(screen.queryByTestId('managed-system-row-looker')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('ms-filter-button'));
+    fireEvent.click(screen.getByTestId('ms-filter-include-archived'));
+
+    await waitFor(() => {
+      expect(requests).toContain('/managed-systems?include_archived=true');
+      expect(screen.getByTestId('managed-system-row-looker')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('ms-filter-include-archived'));
+    await waitFor(() => {
+      expect(requests.filter((url) => url === '/managed-systems').length).toBeGreaterThanOrEqual(2);
+      expect(screen.queryByTestId('managed-system-row-looker')).not.toBeInTheDocument();
+    });
   });
 
   test('non-admin sees the gate, no registry rendered', async () => {

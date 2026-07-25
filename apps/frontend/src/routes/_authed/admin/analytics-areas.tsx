@@ -20,6 +20,7 @@
 import {
   Button,
   Callout,
+  Checkbox,
   DetailPanelSectionNav,
   Dialog,
   DialogContent,
@@ -37,6 +38,14 @@ import {
   type PanelSection,
   PanelSectionTitle,
   PanelTitleBlock,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   type PickerOption,
   Sheet,
   SheetContent,
@@ -88,6 +97,8 @@ export function AnalyticsAreasAdminPage() {
     open: false,
     msId: null,
   });
+  const [managedSystemId, setManagedSystemId] = useState<string | undefined>();
+  const [includeArchived, setIncludeArchived] = useState(false);
   return (
     <PageShell
       header={{
@@ -95,10 +106,12 @@ export function AnalyticsAreasAdminPage() {
         subtitle: SUBTITLE,
         actions: (
           <PermissionGate capability="workspace.admin" fallback={null} loading={null}>
-            <Button variant="subtle" size="sm" data-testid="aa-filter-button">
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
+            <AnalyticsAreasFilter
+              includeArchived={includeArchived}
+              managedSystemId={managedSystemId}
+              onIncludeArchivedChange={setIncludeArchived}
+              onManagedSystemIdChange={setManagedSystemId}
+            />
             <Button
               variant="primary"
               size="sm"
@@ -113,16 +126,24 @@ export function AnalyticsAreasAdminPage() {
       }}
     >
       <PermissionGate capability="workspace.admin">
-        <AnalyticsAreasBody registerCtx={registerCtx} setRegisterCtx={setRegisterCtx} />
+        <AnalyticsAreasBody
+          includeArchived={includeArchived}
+          managedSystemId={managedSystemId}
+          registerCtx={registerCtx}
+          setRegisterCtx={setRegisterCtx}
+        />
       </PermissionGate>
     </PageShell>
   );
 }
 
-function groupByMs(items: AnalyticsAreaDto[]): Map<string, AnalyticsAreaDto[]> {
+function groupByMs(
+  items: AnalyticsAreaDto[],
+  includeArchived: boolean,
+): Map<string, AnalyticsAreaDto[]> {
   const out = new Map<string, AnalyticsAreaDto[]>();
   for (const a of items) {
-    if (a.archived_at !== null) continue;
+    if (!includeArchived && a.archived_at !== null) continue;
     const arr = out.get(a.managed_system_id) ?? [];
     arr.push(a);
     out.set(a.managed_system_id, arr);
@@ -131,9 +152,13 @@ function groupByMs(items: AnalyticsAreaDto[]): Map<string, AnalyticsAreaDto[]> {
 }
 
 export function AnalyticsAreasBody({
+  includeArchived,
+  managedSystemId,
   registerCtx,
   setRegisterCtx,
 }: {
+  includeArchived: boolean;
+  managedSystemId: string | undefined;
   registerCtx: { open: boolean; msId: string | null };
   setRegisterCtx: (v: { open: boolean; msId: string | null }) => void;
 }) {
@@ -142,20 +167,39 @@ export function AnalyticsAreasBody({
   const [editTarget, setEditTarget] = useState<AnalyticsAreaDto | null>(null);
 
   const msQuery = useQuery({
-    queryKey: ['managed-systems', { includeArchived: false }] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: false, signal }),
+    queryKey: ['managed-systems', { includeArchived }] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived, signal }),
     retry: false,
   });
   const aaQuery = useQuery({
-    queryKey: [...AA_KEY, 'all'] as const,
-    queryFn: ({ signal }) => fetchAnalyticsAreas({ signal }),
+    queryKey: [...AA_KEY, { managedSystemId, includeArchived }] as const,
+    queryFn: ({ signal }) =>
+      fetchAnalyticsAreas({
+        ...(managedSystemId ? { managedSystemId } : {}),
+        includeArchived,
+        signal,
+      }),
     retry: false,
   });
 
   const systems = useMemo(() => msQuery.data?.items ?? [], [msQuery.data]);
+  const renderedSystems = useMemo(
+    () => (managedSystemId ? systems.filter((system) => system.id === managedSystemId) : systems),
+    [managedSystemId, systems],
+  );
   const areas = useMemo(() => aaQuery.data?.items ?? [], [aaQuery.data]);
-  const areasByMs = useMemo(() => groupByMs(areas), [areas]);
-  const activeAreas = useMemo(() => areas.filter((a) => a.archived_at === null), [areas]);
+  const areasByMs = useMemo(
+    () => groupByMs(areas, includeArchived),
+    [areas, includeArchived],
+  );
+  const renderedAreaCount = useMemo(
+    () =>
+      renderedSystems.reduce(
+        (count, system) => count + (areasByMs.get(system.id)?.length ?? 0),
+        0,
+      ),
+    [areasByMs, renderedSystems],
+  );
   const msById = useMemo(
     () => new Map<string, ManagedSystemDto>(systems.map((m) => [m.id, m])),
     [systems],
@@ -173,7 +217,7 @@ export function AnalyticsAreasBody({
   });
 
   const msOptions: PickerOption[] = systems
-    .filter((m) => m.archived_at === null)
+    .filter((m) => includeArchived || m.archived_at === null)
     .map((m) => ({ id: m.id, label: m.name }));
 
   async function invalidate() {
@@ -192,7 +236,7 @@ export function AnalyticsAreasBody({
         <div className="mb-3.5 flex items-center justify-between">
           <PanelSectionTitle className="mb-0">Catalog</PanelSectionTitle>
           <span className="text-xs text-text-muted">
-            {activeAreas.length} areas · {systems.length} systems
+            {renderedAreaCount} areas · {renderedSystems.length} systems
           </span>
         </div>
 
@@ -211,7 +255,7 @@ export function AnalyticsAreasBody({
           </div>
         ) : (
           <div data-testid="aa-grouped-list" className="space-y-4">
-            {systems.map((m) => (
+            {renderedSystems.map((m) => (
               <GroupCard
                 key={m.id}
                 ms={m}
@@ -262,6 +306,66 @@ export function AnalyticsAreasBody({
   );
 }
 
+function AnalyticsAreasFilter({
+  includeArchived,
+  managedSystemId,
+  onIncludeArchivedChange,
+  onManagedSystemIdChange,
+}: {
+  includeArchived: boolean;
+  managedSystemId: string | undefined;
+  onIncludeArchivedChange: (value: boolean) => void;
+  onManagedSystemIdChange: (value: string | undefined) => void;
+}) {
+  const systemsQuery = useQuery({
+    queryKey: ['managed-systems', { includeArchived }] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived, signal }),
+    retry: false,
+  });
+  const systems = systemsQuery.data?.items ?? [];
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="subtle" size="sm" data-testid="aa-filter-button">
+          <Filter className="h-4 w-4" />
+          Filter
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="aa-filter-managed-system">Managed System</Label>
+          <Select
+            value={managedSystemId ?? 'all'}
+            onValueChange={(value) => onManagedSystemIdChange(value === 'all' ? undefined : value)}
+          >
+            <SelectTrigger id="aa-filter-managed-system" data-testid="aa-filter-managed-system">
+              <SelectValue placeholder="전체" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              {systems.map((system) => (
+                <SelectItem key={system.id} value={system.id}>
+                  {system.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-text-primary" htmlFor="aa-filter-include-archived">
+          <Checkbox
+            id="aa-filter-include-archived"
+            checked={includeArchived}
+            onCheckedChange={(checked) => onIncludeArchivedChange(checked === true)}
+            data-testid="aa-filter-include-archived"
+          />
+          Archived 포함
+        </label>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function teamName(
   area: AnalyticsAreaDto,
   resolved: ResolveActorsResponse | undefined,
@@ -299,6 +403,7 @@ function GroupCard({
           {mark.label}
         </div>
         <span className="text-sm font-semibold text-text-primary">{ms.name}</span>
+        {ms.archived_at !== null ? <OutlineBadge>Archived</OutlineBadge> : null}
         <span className="text-xs text-text-muted">
           · {areas.length} {areas.length === 1 ? 'area' : 'areas'}
         </span>
@@ -340,6 +445,7 @@ function GroupCard({
               <span className="flex min-w-0 items-center gap-2">
                 <Layers className="h-3 w-3 shrink-0 text-text-muted" />
                 <span className="truncate font-medium text-text-primary">{a.name}</span>
+                {a.archived_at !== null ? <OutlineBadge>Archived</OutlineBadge> : null}
               </span>
               <span className="truncate font-mono text-xs text-text-muted">
                 analytics-area/{a.slug}
