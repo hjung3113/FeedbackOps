@@ -82,6 +82,7 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await expect(detail.getByTestId('self-approval-audit-capture')).toBeVisible();
     await detail.getByLabel(/Policy citation/).fill('workspace policy §4.3');
     await detail.getByLabel(/Peer reviewer 부재 사유/).fill('다른 reviewer 모두 PTO입니다.');
+    await expectVisual(page, detail, 'permission-request-self-approval-capture.png');
     await detail.getByTestId('permission-decision-submit').click();
     await expect.poll(() => mock.postedRequests).toEqual([
       {
