@@ -380,7 +380,7 @@ function FullDetailView({
                   data-testid="public-update-review-button"
                 >
                   리뷰{' '}
-                  <span className="ml-1 rounded-full bg-surface-muted px-1.5 py-0.5 text-xs">
+                  <span className="ml-1 rounded-full bg-surface-row-hover px-1.5 py-0.5 text-xs">
                     {pendingReviewCount}
                   </span>
                 </Button>

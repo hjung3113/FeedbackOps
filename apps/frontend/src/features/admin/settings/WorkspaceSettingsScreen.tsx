@@ -235,7 +235,7 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
           className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-md border border-border-strong bg-surface-popover px-4 py-3 shadow-lg"
           data-testid="workspace-settings-save-bar"
         >
-          <AlertTriangle className="h-4 w-4 text-accent-warning" aria-hidden="true" />
+          <AlertTriangle className="h-4 w-4 text-text-warning" aria-hidden="true" />
           <span className="text-sm text-text-primary">
             {dirtyKeys.length} unsaved {dirtyKeys.length === 1 ? 'change' : 'changes'}
           </span>
@@ -290,7 +290,7 @@ function SettingRow({
         </div>
         <p className="mt-1 text-xs leading-relaxed text-text-muted">{description}</p>
         {dirty && (
-          <p className="mt-1 text-xs text-accent-warning">
+          <p className="mt-1 text-xs text-text-warning">
             Previously: <strong>{previousValue}</strong>
           </p>
         )}
