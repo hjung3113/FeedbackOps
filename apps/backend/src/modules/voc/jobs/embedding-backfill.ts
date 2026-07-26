@@ -1,16 +1,22 @@
 // #168 step 3 — cron backfill for VOC embeddings (ADR-0034 D6).
 //
 // Enqueue-on-write is best effort by design (see `embedding/enqueue.ts`); this
-// job is the durable guarantee. It is also the migration path for D2's model
-// swap: bumping EMBEDDING_VERSION makes every VOC "missing at the active
-// version", and this job walks the corpus in bounded batches.
+// job is what makes that acceptable. It recovers both halves of a dropped
+// enqueue — a VOC with no row at the active version (a lost *create*) and a
+// VOC whose row is older than the VOC itself (a lost *edit*) — so the
+// guarantee is not limited to creates. See `embedding/repo.ts` for why the
+// staleness signal is a timestamp and what it over-selects.
+//
+// It is also the migration path for D2's model swap: bumping EMBEDDING_VERSION
+// makes every VOC missing at the active version, and this job walks the corpus
+// in bounded batches.
 
 import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
 import {
-  countVocsMissingEmbedding,
-  selectVocsMissingEmbedding,
+  countVocsNeedingEmbedding,
+  selectVocsNeedingEmbedding,
 } from '../embedding/repo.js';
 import { VOC_EMBED_QUEUE, type VocEmbedPayload } from './embed-voc.js';
 
@@ -53,7 +59,9 @@ export interface VocEmbeddingBackfillDeps {
 }
 
 /**
- * Enqueue up to `batchSize` VOCs that have no embedding at the active version.
+ * Enqueue up to `batchSize` VOCs that are missing *or stale* at the active
+ * version. Both halves share the one bound, and `remaining` counts both, so it
+ * still answers "is this converging".
  *
  * Disabled provider: enqueues nothing and returns `skipped: true` (ADR-0034
  * D2 — "ingestion enqueues nothing"). Without this gate a disabled environment
@@ -75,10 +83,10 @@ export async function backfillVocEmbeddings(
   }
 
   const batchSize = deps.batchSize ?? VOC_EMBEDDING_BACKFILL_BATCH_SIZE;
-  const missingTotal = await countVocsMissingEmbedding(deps.db, {
+  const outstandingTotal = await countVocsNeedingEmbedding(deps.db, {
     embeddingVersion: deps.embeddingVersion,
   });
-  const batch = await selectVocsMissingEmbedding(deps.db, {
+  const batch = await selectVocsNeedingEmbedding(deps.db, {
     embeddingVersion: deps.embeddingVersion,
     limit: batchSize,
   });
@@ -102,7 +110,7 @@ export async function backfillVocEmbeddings(
     }
   }
 
-  const remaining = Math.max(missingTotal - enqueued, 0);
+  const remaining = Math.max(outstandingTotal - enqueued, 0);
   deps.log?.info('voc.embedding_backfill complete', {
     correlation_id: payload.correlation_id,
     embedding_version: deps.embeddingVersion,

@@ -169,6 +169,41 @@ describe.skipIf(!runIntegration)('voc.embed_voc handler (#168)', () => {
     expect(await rowsFor(vocId)).toHaveLength(1);
   });
 
+  it('marks the row as re-checked when the source_hash is unchanged', async () => {
+    const vocId = await seedVoc('Recheck me');
+    const counting = countingProvider(fake(ACTIVE_VERSION));
+    const deps = {
+      db: appHandle.db,
+      provider: counting.provider,
+      embeddingVersion: ACTIVE_VERSION,
+      embeddingEnabled: true,
+    };
+    const payload = { workspace_id: WORKSPACE_ID, voc_id: vocId, correlation_id: 'test' };
+
+    await embedVoc(deps, payload);
+    const before = (await rowsFor(vocId))[0];
+
+    // A write that leaves the embedded text alone still bumps vocs.updated_at
+    // (unconditional trigger), making this VOC a backfill candidate.
+    await appHandle.pool.query(`update voc.vocs set severity = 'high' where id = $1`, [vocId]);
+    expect(await embedVoc(deps, payload)).toBe('unchanged');
+
+    const after = (await rowsFor(vocId))[0];
+    expect(counting.calls()).toBe(1);
+    expect(after?.source_hash).toBe(before?.source_hash);
+    // updated_at moves even though no vector was rewritten — that is what
+    // clears the candidate so the backfill stops re-selecting it forever.
+    expect(after?.updated_at).not.toBe(before?.updated_at);
+    // And the row is genuinely no longer behind its VOC.
+    const behind = await appHandle.pool.query<{ behind: boolean }>(
+      `select e.updated_at < v.updated_at as behind
+         from voc.voc_embeddings e join voc.vocs v on v.id = e.voc_id
+        where e.voc_id = $1 and e.embedding_version = $2`,
+      [vocId, ACTIVE_VERSION],
+    );
+    expect(behind.rows[0]?.behind).toBe(false);
+  });
+
   it('two concurrent writes for the same (voc, version) converge on one row', async () => {
     const vocId = await seedVoc('Concurrent run');
     const provider = fake(ACTIVE_VERSION);

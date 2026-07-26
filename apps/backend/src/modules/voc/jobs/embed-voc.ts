@@ -13,6 +13,7 @@ import { EmbeddingUnavailableError } from '../embedding/disabled.js';
 import type { EmbeddingProvider } from '../embedding/port.js';
 import {
   selectVocEmbeddingSourceHash,
+  touchVocEmbeddingCheckedAt,
   upsertVocEmbedding,
 } from '../embedding/repo.js';
 import { deriveVocEmbeddingInput } from '../embedding/text.js';
@@ -117,6 +118,15 @@ export async function embedVoc(
     embeddingVersion: deps.embeddingVersion,
   });
   if (storedHash === sourceHash) {
+    // Record that the row was confirmed current. The backfill's staleness
+    // signal is `voc_embeddings.updated_at < vocs.updated_at`, and any update
+    // to a VOC bumps the latter — so without this touch, a VOC edited in a way
+    // that did not change its embedded text would be re-selected on every cron
+    // run forever. No provider call, no vector rewrite.
+    await touchVocEmbeddingCheckedAt(deps.db, {
+      vocId: voc.id,
+      embeddingVersion: deps.embeddingVersion,
+    });
     deps.log?.info('voc.embed_voc skipped: source_hash unchanged', {
       voc_id: voc.id,
       embedding_version: deps.embeddingVersion,

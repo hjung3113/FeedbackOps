@@ -9,7 +9,7 @@ import type { PgBoss } from 'pg-boss';
 
 import { type DbHandle, createDb } from '../../../../db/client.js';
 import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
-import { countVocsMissingEmbedding } from '../../embedding/repo.js';
+import { countVocsNeedingEmbedding } from '../../embedding/repo.js';
 import { insertMsDirectly, insertVocDirectly, uid } from '../../__tests__/_seed-helpers.js';
 import { embedVoc } from '../embed-voc.js';
 import {
@@ -146,6 +146,94 @@ describe.skipIf(!runIntegration)('voc.embedding_backfill (#168)', () => {
     expect(ours(sent, ids).map((job) => job.data.voc_id)).toEqual([ids[1]]);
   });
 
+  /** Embed one VOC at the active version through the real handler. */
+  async function embedNow(vocId: string): Promise<void> {
+    await embedVoc(
+      {
+        db: appHandle.db,
+        provider: createFakeEmbeddingProvider({ dimensions: 8, embeddingVersion: ACTIVE_VERSION }),
+        embeddingVersion: ACTIVE_VERSION,
+        embeddingEnabled: true,
+      },
+      { workspace_id: WORKSPACE_ID, voc_id: vocId, correlation_id: 'test' },
+    );
+  }
+
+  it('recovers a VOC whose content changed after it was embedded', async () => {
+    const ids = await seedVocs(2);
+    const stale = ids[0] as string;
+    const fresh = ids[1] as string;
+    await embedNow(stale);
+    await embedNow(fresh);
+
+    // Simulate the dropped enqueue: the content changes, nothing is queued.
+    // `vocs_touch_updated_at_trg` bumps vocs.updated_at past the embedding's.
+    await appHandle.pool.query(`update voc.vocs set title = $2 where id = $1`, [
+      stale,
+      'rewritten after embedding',
+    ]);
+
+    const { boss, sent } = recordingBoss();
+    await backfillVocEmbeddings(
+      { db: appHandle.db, boss, embeddingVersion: ACTIVE_VERSION, embeddingEnabled: true },
+      { correlation_id: 'test' },
+    );
+
+    // Exactly the stale one: recovering an edit must not mean re-embedding
+    // every VOC that already has a current row.
+    expect(ours(sent, ids).map((job) => job.data.voc_id)).toEqual([stale]);
+  });
+
+  it('leaves an up-to-date embedding alone', async () => {
+    const ids = await seedVocs(1);
+    const vocId = ids[0] as string;
+    await embedNow(vocId);
+
+    const { boss, sent } = recordingBoss();
+    await backfillVocEmbeddings(
+      { db: appHandle.db, boss, embeddingVersion: ACTIVE_VERSION, embeddingEnabled: true },
+      { correlation_id: 'test' },
+    );
+
+    // The assertion that stops the staleness signal from degenerating into
+    // "re-embed the whole workspace every 15 minutes".
+    expect(ours(sent, ids)).toEqual([]);
+  });
+
+  it('stops re-selecting a VOC whose edit did not change the embedded text', async () => {
+    const ids = await seedVocs(1);
+    const vocId = ids[0] as string;
+    await embedNow(vocId);
+
+    // A triage-shaped write: the unconditional trigger bumps vocs.updated_at
+    // even though the embedded text is untouched, so this VOC becomes a
+    // candidate once.
+    await appHandle.pool.query(`update voc.vocs set severity = 'high' where id = $1`, [vocId]);
+
+    const first = recordingBoss();
+    await backfillVocEmbeddings(
+      { db: appHandle.db, boss: first.boss, embeddingVersion: ACTIVE_VERSION, embeddingEnabled: true },
+      { correlation_id: 'test' },
+    );
+    expect(ours(first.sent, ids).map((job) => job.data.voc_id)).toEqual([vocId]);
+
+    // The handler finds source_hash unchanged and touches the row. Without
+    // that touch the VOC would be re-selected on every run forever.
+    await embedNow(vocId);
+
+    const second = recordingBoss();
+    await backfillVocEmbeddings(
+      {
+        db: appHandle.db,
+        boss: second.boss,
+        embeddingVersion: ACTIVE_VERSION,
+        embeddingEnabled: true,
+      },
+      { correlation_id: 'test' },
+    );
+    expect(ours(second.sent, ids)).toEqual([]);
+  });
+
   it('re-enqueues everything after an embedding-version bump (ADR-0034 D2)', async () => {
     const ids = await seedVocs(2);
     for (const id of ids) {
@@ -178,7 +266,7 @@ describe.skipIf(!runIntegration)('voc.embedding_backfill (#168)', () => {
 
     // The dev database is shared, so the absolute value of `remaining` is not
     // ours to predict — but its *relationship* to the outstanding total is.
-    const outstandingBefore = await countVocsMissingEmbedding(appHandle.db, {
+    const outstandingBefore = await countVocsNeedingEmbedding(appHandle.db, {
       embeddingVersion: ACTIVE_VERSION,
     });
     expect(outstandingBefore).toBeGreaterThanOrEqual(3);
@@ -203,8 +291,58 @@ describe.skipIf(!runIntegration)('voc.embedding_backfill (#168)', () => {
     expect(ours(sent, ids).length).toBeLessThanOrEqual(2);
   });
 
-  it('excludes archived VOCs', async () => {
-    const ids = await seedVocs(2);
+  it('counts missing and stale together when reporting remaining', async () => {
+    // The dev DB is shared, so pin the *delta* our own rows contribute rather
+    // than an absolute total. A count that ignored stale rows would move by 2
+    // here instead of 4, which asserting a floor would not catch.
+    const outstandingAtStart = await countVocsNeedingEmbedding(appHandle.db, {
+      embeddingVersion: ACTIVE_VERSION,
+    });
+
+    // Two stale (embedded, then rewritten) plus two never embedded — the
+    // outstanding set is mixed, and the bound applies across both halves.
+    const ids = await seedVocs(4);
+    for (const id of ids.slice(0, 2)) {
+      await embedNow(id);
+      await appHandle.pool.query(`update voc.vocs set title = $2 where id = $1`, [
+        id,
+        'rewritten after embedding',
+      ]);
+    }
+
+    const outstandingBefore = await countVocsNeedingEmbedding(appHandle.db, {
+      embeddingVersion: ACTIVE_VERSION,
+    });
+    expect(outstandingBefore - outstandingAtStart).toBe(4);
+
+    const { boss } = recordingBoss();
+    const result = await backfillVocEmbeddings(
+      {
+        db: appHandle.db,
+        boss,
+        embeddingVersion: ACTIVE_VERSION,
+        embeddingEnabled: true,
+        batchSize: 3,
+      },
+      { correlation_id: 'test' },
+    );
+
+    expect(result.enqueued).toBe(3);
+    // `remaining` must account for stale rows too, or it under-reports the
+    // work left and stops answering "is this converging".
+    expect(result.remaining).toBe(outstandingBefore - result.enqueued);
+  });
+
+  it('excludes archived VOCs, including stale ones', async () => {
+    const ids = await seedVocs(3);
+    // Archived and stale: embedded, then rewritten, then archived. Must stay
+    // excluded — the staleness signal must not smuggle archived VOCs back in.
+    const archivedStale = ids[2] as string;
+    await embedNow(archivedStale);
+    await appHandle.pool.query(
+      `update voc.vocs set title = 'rewritten', archived_at = now() where id = $1`,
+      [archivedStale],
+    );
     await appHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [ids[0]]);
 
     const { boss, sent } = recordingBoss();

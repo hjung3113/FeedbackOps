@@ -19,21 +19,19 @@
 // `START_AFTER_SECONDS` covers that window, and the handler's `voc_not_found`
 // branch plus the cron backfill cover the remainder.
 //
-// How far the backfill actually rescues a dropped enqueue — the limit is
-// asymmetric, and it is the thing to know before relying on this boundary:
+// How far the backfill rescues a dropped enqueue — both halves are covered,
+// which is what makes swallowing errors here defensible:
 //
-//  - **Create**: fully covered. The VOC has no row at the active version, so
-//    `selectVocsMissingEmbedding` finds it on the next cron run.
-//  - **Edit**: NOT covered. The VOC already has a row at the active version,
-//    so the backfill query skips it and the stored vector stays stale — until
-//    the next successful edit, or an EMBEDDING_VERSION bump. Nothing detects
-//    this, because the staleness signal is `source_hash`, which is derived in
-//    TypeScript and cannot be recomputed by the backfill's SQL.
+//  - **Create**: the VOC has no row at the active version, so
+//    `selectVocsNeedingEmbedding` finds it on the next cron run.
+//  - **Edit**: the VOC's row is older than the VOC itself
+//    (`voc_embeddings.updated_at < vocs.updated_at`), so the same query finds
+//    it. This half was originally uncovered and left a permanently stale
+//    vector; the timestamp signal in `embedding/repo.ts` closes it.
 //
-// That is an accepted consequence of choosing the VOC over its index, not an
-// oversight: a stale vector degrades recommendation ranking, while a
-// transactional enqueue would lose user-authored content. Closing it needs a
-// DB-visible staleness signal (#168 step 4+), not a change to this boundary.
+// So a dropped enqueue costs at most one cron interval of staleness, for
+// creates and edits alike. Enqueue-on-write is a latency optimisation on top
+// of the backfill, never the only thing standing between a VOC and its vector.
 
 import type { PgBoss } from 'pg-boss';
 

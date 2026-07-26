@@ -67,16 +67,27 @@ has a user to be honest with.
   visible before the VOC commits, covered by `VOC_EMBED_START_AFTER_SECONDS`.
 - **`voc.embedding_backfill`** (cron, `*/15 * * * *`, batch 200) is the safety
   net for a dropped enqueue, and the migration path for a version bump. It
-  selects non-archived VOCs with no row at the active version and logs
-  `remaining` — a bounded batch must report what it left, never silently
-  truncate. Archived VOCs are excluded and un-archiving does not re-enqueue.
-- **The safety net is asymmetric — know this before relying on it.** A dropped
-  enqueue on *create* is recovered (no row at the active version). A dropped
-  enqueue on an *edit* is **not**: the row already exists at that version, so
-  the backfill skips it and the vector stays stale indefinitely. The staleness
-  signal is `source_hash`, derived in TypeScript, so the backfill's SQL cannot
-  recompute it. Accepted for ingestion; closing it needs a DB-visible staleness
-  signal and belongs with the recommendation read model (#168 step 4+).
+  selects non-archived VOCs that are **missing or stale** at the active version
+  and logs `remaining` — a bounded batch must report what it left, never
+  silently truncate. Missing and stale share the one bound and both count
+  toward `remaining`, so it still answers "is this converging".
+- **Staleness signal.** `source_hash` is derived in TypeScript from flattened
+  rich content, so the backfill's SQL cannot recompute it. Stale therefore
+  means `voc_embeddings.updated_at < vocs.updated_at`. `vocs.updated_at` is
+  maintained by the unconditional `vocs_touch_updated_at_trg` BEFORE UPDATE
+  trigger, so the signal is **sound but not minimal**: it never misses a real
+  title/description change, but it also flags VOCs touched by writes that left
+  the embedded text alone (a severity change, an owner reassignment). Those
+  false candidates are cheap and self-clearing — the handler compares
+  `source_hash`, skips the provider call, and calls
+  `touchVocEmbeddingCheckedAt`, so each costs one no-op job and then stops
+  being selected. **The `unchanged` path must keep touching that timestamp**;
+  drop it and the backfill re-selects the same VOCs forever.
+- `voc_embeddings.updated_at` therefore means "last written **or** last
+  confirmed current against its VOC", not "last vector rewrite".
+- Archived VOCs are excluded. Un-archiving is an UPDATE, so a previously
+  embedded VOC becomes a stale candidate on the next run; only one that was
+  never embedded at all stays uncovered until its next edit or a version bump.
 - **Disabled provider enqueues nothing** — write path and cron both gate on
   `isEmbeddingEnabled(config)`, so a key-less environment accumulates no queue.
   Registration is unconditional: enabling a provider is a config change, not a

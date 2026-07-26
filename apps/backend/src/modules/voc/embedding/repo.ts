@@ -28,8 +28,9 @@ export interface UpsertVocEmbeddingArgs {
  * same VOC safe. A read-then-insert would let both reads miss and one insert
  * fail with a duplicate-key error, turning an ordinary race into a retried job.
  *
- * `updated_at` is bumped on every write so a re-embed under an unchanged
- * version is still observable in the data.
+ * `updated_at` means "when this row was last written or last confirmed current
+ * against its VOC" — see `touchVocEmbeddingCheckedAt`. That is what makes it
+ * comparable against `voc.vocs.updated_at` in `selectVocsNeedingEmbedding`.
  */
 export async function upsertVocEmbedding(tx: Tx, args: UpsertVocEmbeddingArgs): Promise<void> {
   // pgvector's text input format is `[a,b,c]`, which is exactly what
@@ -68,57 +69,99 @@ export async function selectVocEmbeddingSourceHash(
   return result.rows[0]?.source_hash ?? null;
 }
 
+/**
+ * Marks a row as still current without rewriting its vector.
+ *
+ * Called when the handler finds the stored `source_hash` already matches. It
+ * is what makes the timestamp staleness signal below *converge*: a VOC touched
+ * by a write that did not change its embedded text (a triage edit, say) shows
+ * up as a stale candidate exactly once, is checked cheaply, and then stops
+ * being a candidate. Without this it would be re-selected on every cron run
+ * forever, permanently occupying the batch.
+ */
+export async function touchVocEmbeddingCheckedAt(
+  tx: Tx,
+  args: { vocId: string; embeddingVersion: number },
+): Promise<void> {
+  await tx.execute(sql`
+    update voc.voc_embeddings
+    set updated_at = now()
+    where voc_id = ${args.vocId}
+      and embedding_version = ${args.embeddingVersion}
+  `);
+}
+
 export interface VocNeedingEmbedding {
   voc_id: string;
   workspace_id: string;
 }
 
-/**
- * VOCs with no row at the active version, oldest first.
- *
- * Archived VOCs are excluded: they are not recommendation candidates, and
- * embedding them would spend provider quota on rows no query will ever read.
- * Un-archiving does not re-enqueue — the next title/description edit or a
- * manual backfill covers it. Recorded here because it is the one case where
- * the backfill is not a complete safety net.
- *
- * Rows whose content changed but whose hash is stale are *not* returned: they
- * already have a row at the active version. Those are covered by
- * enqueue-on-write, which is the only path that knows the content changed.
- */
-export async function selectVocsMissingEmbedding(
+// ── The staleness signal ─────────────────────────────────────────────────────
+//
+// A VOC needs (re-)embedding at the active version when either:
+//
+//   * it has no row at that version — never embedded, or the version was
+//     bumped (ADR-0034 D2's model-swap path); or
+//   * its row is older than the VOC itself: `e.updated_at < v.updated_at`.
+//
+// Why a timestamp and not the content hash: `source_hash` is derived in
+// TypeScript from flattened rich content, so this SQL cannot recompute it.
+// `voc.vocs.updated_at` is maintained by the unconditional `vocs_touch_
+// updated_at_trg` BEFORE UPDATE trigger, so **every** update to a VOC row
+// bumps it.
+//
+// That makes the signal *sound but not minimal*: it never misses a real
+// title/description change (any such write is an UPDATE, so the trigger
+// fires), but it also flags VOCs touched by writes that left the embedded text
+// alone — a severity change, an owner reassignment. Those false candidates are
+// cheap and self-clearing: the handler compares `source_hash`, skips the
+// provider call entirely, and calls `touchVocEmbeddingCheckedAt`, so each one
+// costs a single no-op job and then stops being selected.
+//
+// The alternative — a `content_updated_at` column bumped only by title/
+// description writes — would be minimal, but needs a migration and a write-path
+// change to stay correct, and buys only the elimination of no-op jobs. Not
+// worth it until those jobs are measured to matter.
+//
+// Archived VOCs are excluded: they are not recommendation candidates, and
+// embedding them would spend provider quota on rows no query will ever read.
+// Un-archiving does not itself re-enqueue — but because un-archiving is an
+// UPDATE, the trigger bumps `updated_at`, so an un-archived VOC that already
+// had a row becomes a stale candidate on the next run. Only one that was never
+// embedded at all stays uncovered until its next edit or a version bump.
+
+/** VOCs missing or stale at the active version, longest-outstanding first. */
+export async function selectVocsNeedingEmbedding(
   tx: Tx,
   args: { embeddingVersion: number; limit: number },
 ): Promise<VocNeedingEmbedding[]> {
   const result = await tx.execute<{ voc_id: string; workspace_id: string }>(sql`
     select v.id as voc_id, v.workspace_id
     from voc.vocs v
+    left join voc.voc_embeddings e
+      on e.voc_id = v.id
+     and e.embedding_version = ${args.embeddingVersion}
     where v.archived_at is null
-      and not exists (
-        select 1 from voc.voc_embeddings e
-        where e.voc_id = v.id
-          and e.embedding_version = ${args.embeddingVersion}
-      )
-    order by v.created_at asc, v.id asc
+      and (e.voc_id is null or e.updated_at < v.updated_at)
+    order by v.updated_at asc, v.id asc
     limit ${args.limit}
   `);
   return [...result.rows];
 }
 
 /** Total outstanding count, so a bounded batch can report what it left behind. */
-export async function countVocsMissingEmbedding(
+export async function countVocsNeedingEmbedding(
   tx: Tx,
   args: { embeddingVersion: number },
 ): Promise<number> {
-  const result = await tx.execute<{ missing: string }>(sql`
-    select count(*)::text as missing
+  const result = await tx.execute<{ outstanding: string }>(sql`
+    select count(*)::text as outstanding
     from voc.vocs v
+    left join voc.voc_embeddings e
+      on e.voc_id = v.id
+     and e.embedding_version = ${args.embeddingVersion}
     where v.archived_at is null
-      and not exists (
-        select 1 from voc.voc_embeddings e
-        where e.voc_id = v.id
-          and e.embedding_version = ${args.embeddingVersion}
-      )
+      and (e.voc_id is null or e.updated_at < v.updated_at)
   `);
-  return Number(result.rows[0]?.missing ?? 0);
+  return Number(result.rows[0]?.outstanding ?? 0);
 }
