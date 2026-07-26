@@ -9,6 +9,7 @@ import type { PgBoss } from 'pg-boss';
 
 import { type DbHandle, createDb } from '../../../../db/client.js';
 import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
+import { countVocsMissingEmbedding } from '../../embedding/repo.js';
 import { insertMsDirectly, insertVocDirectly, uid } from '../../__tests__/_seed-helpers.js';
 import { embedVoc } from '../embed-voc.js';
 import {
@@ -175,6 +176,13 @@ describe.skipIf(!runIntegration)('voc.embedding_backfill (#168)', () => {
     const ids = await seedVocs(3);
     const { boss, sent } = recordingBoss();
 
+    // The dev database is shared, so the absolute value of `remaining` is not
+    // ours to predict — but its *relationship* to the outstanding total is.
+    const outstandingBefore = await countVocsMissingEmbedding(appHandle.db, {
+      embeddingVersion: ACTIVE_VERSION,
+    });
+    expect(outstandingBefore).toBeGreaterThanOrEqual(3);
+
     const result = await backfillVocEmbeddings(
       {
         db: appHandle.db,
@@ -187,10 +195,11 @@ describe.skipIf(!runIntegration)('voc.embedding_backfill (#168)', () => {
     );
 
     expect(result.enqueued).toBe(2);
-    // Bounded, not truncated: the surplus is reported, not dropped. `remaining`
-    // counts every outstanding VOC in the workspace, so assert the floor our
-    // own three seeded rows guarantee.
-    expect(result.remaining).toBeGreaterThanOrEqual(1);
+    // Bounded, not truncated: the surplus is *reported*, not dropped. Pinning
+    // the arithmetic (total − enqueued), not just "some work is left": a
+    // `remaining` that ignored `enqueued` would over-report forever and hide
+    // whether the backfill is converging.
+    expect(result.remaining).toBe(outstandingBefore - result.enqueued);
     expect(ours(sent, ids).length).toBeLessThanOrEqual(2);
   });
 

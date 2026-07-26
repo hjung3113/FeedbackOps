@@ -65,11 +65,18 @@ has a user to be honest with.
   unlike `modules/tasks/service.ts`) and swallows every error: a VOC write must
   never fail because the embedding queue failed. The cost is that the job is
   visible before the VOC commits, covered by `VOC_EMBED_START_AFTER_SECONDS`.
-- **`voc.embedding_backfill`** (cron, `*/15 * * * *`, batch 200) is therefore
-  the durable guarantee, and the migration path for a version bump. It selects
-  non-archived VOCs with no row at the active version and logs `remaining` —
-  a bounded batch must report what it left, never silently truncate. Archived
-  VOCs are excluded and un-archiving does not re-enqueue.
+- **`voc.embedding_backfill`** (cron, `*/15 * * * *`, batch 200) is the safety
+  net for a dropped enqueue, and the migration path for a version bump. It
+  selects non-archived VOCs with no row at the active version and logs
+  `remaining` — a bounded batch must report what it left, never silently
+  truncate. Archived VOCs are excluded and un-archiving does not re-enqueue.
+- **The safety net is asymmetric — know this before relying on it.** A dropped
+  enqueue on *create* is recovered (no row at the active version). A dropped
+  enqueue on an *edit* is **not**: the row already exists at that version, so
+  the backfill skips it and the vector stays stale indefinitely. The staleness
+  signal is `source_hash`, derived in TypeScript, so the backfill's SQL cannot
+  recompute it. Accepted for ingestion; closing it needs a DB-visible staleness
+  signal and belongs with the recommendation read model (#168 step 4+).
 - **Disabled provider enqueues nothing** — write path and cron both gate on
   `isEmbeddingEnabled(config)`, so a key-less environment accumulates no queue.
   Registration is unconditional: enabling a provider is a config change, not a
