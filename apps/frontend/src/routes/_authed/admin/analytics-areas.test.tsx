@@ -58,6 +58,11 @@ const TABLEAU = {
   updated_at: '2026-05-17T00:00:00Z',
 };
 const POWERBI = { ...TABLEAU, id: 'ms-pbi', slug: 'power-bi', name: 'Power BI' };
+const ARCHIVED_POWERBI = {
+  ...POWERBI,
+  archived_at: '2026-06-01T00:00:00Z',
+  archived_by_actor_id: 'actor-1',
+};
 
 const AA_TAB_PM = {
   id: 'aa-1',
@@ -114,7 +119,12 @@ function installFetch(c: FetchCase) {
       return jsonResponse(c.resolve ?? { actors: [], teams: [] });
     }
     if (url.includes('/managed-systems') && (!init?.method || init.method === 'GET')) {
-      return jsonResponse({ items: c.managedSystems, total: c.managedSystems.length });
+      const query = new URL(url, 'http://localhost').searchParams;
+      const items =
+        query.get('include_archived') === 'true'
+          ? c.managedSystems
+          : c.managedSystems.filter((system) => system.archived_at === null);
+      return jsonResponse({ items, total: items.length });
     }
     if (url.includes('/analytics-areas') && (!init?.method || init.method === 'GET')) {
       const query = new URL(url, 'http://localhost').searchParams;
@@ -181,6 +191,7 @@ describe('/admin/analytics-areas route', () => {
       requests,
     });
     await waitFor(() => expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument());
+    expect(screen.getByText('2 areas · 2 systems')).toBeInTheDocument();
     expect(screen.queryByTestId('aa-row-legacy-revenue')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('aa-filter-button'));
@@ -193,7 +204,7 @@ describe('/admin/analytics-areas route', () => {
       expect(screen.queryByTestId('aa-row-permission-management')).not.toBeInTheDocument();
       expect(screen.getByTestId('aa-group-ms-pbi')).toBeInTheDocument();
       expect(screen.queryByTestId('aa-group-ms-tab')).not.toBeInTheDocument();
-      expect(screen.getByText('1 areas · 1 systems')).toBeInTheDocument();
+      expect(screen.getByText('1 area · 1 system')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId('aa-filter-managed-system'));
@@ -217,6 +228,43 @@ describe('/admin/analytics-areas route', () => {
       expect(requests.filter((url) => url === '/analytics-areas').length).toBeGreaterThanOrEqual(3);
       expect(screen.queryByTestId('aa-row-legacy-revenue')).not.toBeInTheDocument();
     });
+  });
+
+  test('shows a distinct empty state when no Managed Systems are registered', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [],
+      analyticsAreas: [],
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('aa-empty-state')).toHaveTextContent('등록된 Managed System 이 없습니다.');
+    });
+    expect(screen.queryByText('필터에 해당하는 Managed System이 없습니다.')).not.toBeInTheDocument();
+  });
+
+  test('shows a filter-empty state when a selected archived Managed System is hidden', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU, ARCHIVED_POWERBI],
+      analyticsAreas: [AA_TAB_PM, { ...AA_PBI_SALES, managed_system_id: 'ms-pbi' }],
+    });
+    await waitFor(() => expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('aa-filter-button'));
+    fireEvent.click(screen.getByTestId('aa-filter-include-archived'));
+    await waitFor(() => expect(screen.getByTestId('aa-filter-managed-system')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('aa-filter-managed-system'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Power BI' }));
+    await waitFor(() => expect(screen.getByTestId('aa-group-ms-pbi')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('aa-filter-include-archived'));
+    await waitFor(() => {
+      expect(screen.getByText('필터에 해당하는 Managed System이 없습니다.')).toBeInTheDocument();
+      expect(screen.queryByTestId('aa-grouped-list')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('aa-clear-filters'));
+    await waitFor(() => expect(screen.getByTestId('aa-group-ms-tab')).toBeInTheDocument());
   });
 
   test('clicking a catalog row opens the slide-over with its sections', async () => {
