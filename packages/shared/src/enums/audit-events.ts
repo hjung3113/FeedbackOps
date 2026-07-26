@@ -125,6 +125,9 @@ export const AUDIT_EVENT_TYPES = [
   'finding_created_from_survey_response',
   // Slice 9 #195: workspace-level policy singleton mutation.
   'workspace_settings_updated',
+  // #168 step 4: embedding recommendation decisions (ADR-0034 D3).
+  'voc_recommendation_dismissed',
+  'voc_recommendation_confirmed',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -712,6 +715,40 @@ export const workspaceSettingsUpdatedDetailSchema = z
   .strict();
 export type WorkspaceSettingsUpdatedDetail = z.infer<typeof workspaceSettingsUpdatedDetailSchema>;
 
+// #168 step 4 — embedding recommendation decisions (ADR-0034 D3).
+//
+// `embedding_version` and `scope_key` are on the audit row, not just the
+// decision row: the whole point of D3's suppression rules is that a decision
+// is scoped, and an audit trail that omits the scope cannot answer "why did
+// this pair come back" after a version bump.
+export const vocRecommendationDismissedDetailSchema = z
+  .object({
+    source_voc_id: z.string().uuid(),
+    candidate_voc_id: z.string().uuid(),
+    embedding_version: z.number().int().positive(),
+    scope_key: z.string().min(1),
+  })
+  .strict();
+export type VocRecommendationDismissedDetail = z.infer<
+  typeof vocRecommendationDismissedDetailSchema
+>;
+
+export const vocRecommendationConfirmedDetailSchema = z
+  .object({
+    source_voc_id: z.string().uuid(),
+    candidate_voc_id: z.string().uuid(),
+    embedding_version: z.number().int().positive(),
+    scope_key: z.string().min(1),
+    voc_cluster_id: z.string().uuid(),
+    // Whether this confirmation created the cluster or joined an existing one.
+    cluster_created: z.boolean(),
+    primary_managed_system_id: z.string().uuid(),
+  })
+  .strict();
+export type VocRecommendationConfirmedDetail = z.infer<
+  typeof vocRecommendationConfirmedDetailSchema
+>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   permission_approved: permissionApprovedDetailSchema,
@@ -790,4 +827,7 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
   finding_created_from_survey_response: findingCreatedFromSurveyResponseDetailSchema,
   workspace_settings_updated: workspaceSettingsUpdatedDetailSchema,
+  // #168 step 4.
+  voc_recommendation_dismissed: vocRecommendationDismissedDetailSchema,
+  voc_recommendation_confirmed: vocRecommendationConfirmedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

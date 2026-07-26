@@ -158,6 +158,68 @@ export const vocEmbeddings = vocSchema.table(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
+// voc.voc_recommendation_decisions — the durable half of ADR-0034 D3.
+// Mirrors migration 0044. `suggested` has no row by design: D6 computes
+// recommendations on read, so only the two terminal states persist.
+// `cluster_id` deliberately carries no `.references()` here — the target lives
+// in the `voc_cluster` namespace, and voc-cluster.ts already imports this file
+// for its member FK, so a Drizzle-level reference would close an import cycle.
+// The foreign key itself is declared in the migration, which is what the
+// database enforces.
+// ─────────────────────────────────────────────────────────────────────────
+export const vocRecommendationDecisions = vocSchema.table(
+  'voc_recommendation_decisions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    sourceVocId: uuid('source_voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    candidateVocId: uuid('candidate_voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    embeddingVersion: integer('embedding_version').notNull(),
+    state: text('state').notNull(),
+    scopeKey: text('scope_key').notNull(),
+    clusterId: uuid('cluster_id'),
+    decidedBy: uuid('decided_by')
+      .notNull()
+      .references(() => actors.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pairScopeVersionUq: uniqueIndex('voc_recommendation_decisions_pair_scope_version_uq').on(
+      t.sourceVocId,
+      t.candidateVocId,
+      t.embeddingVersion,
+      t.scopeKey,
+    ),
+    sourceVersionIdx: index('voc_recommendation_decisions_source_version_idx').on(
+      t.sourceVocId,
+      t.embeddingVersion,
+    ),
+    stateEnum: check(
+      'voc_recommendation_decisions_state_check',
+      sql`${t.state} IN ('dismissed','confirmed')`,
+    ),
+    versionPositive: check(
+      'voc_recommendation_decisions_version_positive',
+      sql`${t.embeddingVersion} > 0`,
+    ),
+    distinctPair: check(
+      'voc_recommendation_decisions_distinct_pair',
+      sql`${t.sourceVocId} <> ${t.candidateVocId}`,
+    ),
+    clusterMatchesState: check(
+      'voc_recommendation_decisions_cluster_matches_state',
+      sql`(${t.state} = 'confirmed') = (${t.clusterId} IS NOT NULL)`,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
 // voc.voc_public_updates — append-only public status update records.
 // fops_app gets SELECT + INSERT only (no UPDATE/DELETE) per ADR-0019.
 // ─────────────────────────────────────────────────────────────────────────
