@@ -32,6 +32,13 @@ statuses and all ages are eligible. This is deliberately a weak heuristic, not
 > scaffolding and does NOT widen `voc_clusters.status` to `suggested`;
 > recommendations are modelled as a separate DTO/state machine whose
 > confirmation creates a `draft`/`confirmed` cluster (#127 decision D1).
+>
+> **Design decided 2026-07-26.** ADR-0034 records how #168 builds that
+> infrastructure (pgvector, an embedding provider port with a deterministic
+> offline fake, a versioned embedding store, and a recommendation resource with
+> dismissal state). The heuristic described below remains the shipped behavior
+> until that recommendation resource lands; this ADR is amended at that point,
+> not before.
 
 A peer is visible only when its Managed System is in the actor's `voc.read`
 scope or the actor reported that peer. A triage-only summary envelope exposes
