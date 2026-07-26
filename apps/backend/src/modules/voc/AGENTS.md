@@ -14,13 +14,23 @@ VOC Clusters are implemented as a separate top-level module directory (`../voc-c
 - Task Done or Released must not automatically mark a VOC as resolved.
 - Public updates are distinct from internal comments.
 - The ADR-0031 visibility rule ("Managed System in the actor's `voc.read` scope
-  OR the actor reported it") has exactly **one** implementation:
-  `similarVocVisibilityPredicate` in `repo-read.ts`, parameterized by row alias.
-  Both the similar-peer projections and the ADR-0034 recommendation read model
-  call it; no surface restates it, and no TypeScript twin of it exists — the
-  mutation paths filter in SQL through the same function. It is pinned by
-  `__tests__/voc-visibility-predicate.integration.test.ts`, which asserts a
-  verdict matrix and that both read models admit the same VOCs on one fixture.
+  OR the actor reported it") has exactly **one** implementation *within this
+  module*: `similarVocVisibilityPredicate` in `repo-read.ts`, parameterized by
+  row alias. Both the similar-peer projections and the ADR-0034 recommendation
+  read model call it; nothing here restates it, and it has no TypeScript twin —
+  the recommendation mutation paths filter in SQL through the same function. It
+  is pinned by `__tests__/voc-visibility-predicate.integration.test.ts`, which
+  asserts a verdict matrix and that both read models admit the same VOCs on one
+  fixture. **Do not add a second copy**: parameterize the alias instead.
+- One copy still lives outside this module and is knowingly excluded from the
+  above: `isAuthorizedMember` in `../voc-clusters/service.ts`, which wraps the
+  same scope-or-reporter disjunction in TypeScript together with cluster
+  membership conditions (same Managed System, not archived). It is not reached
+  by anything in this module, and unifying it means touching the shipped
+  cluster authorization path, so it was left alone rather than folded in
+  blind. Treat it as a known divergence risk: **a change to the scope semantics
+  here must be applied there in the same commit**, because nothing fails if the
+  two disagree.
 
 ## Cross-System Rules
 

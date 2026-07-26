@@ -726,6 +726,79 @@ describe.skipIf(!runIntegration)('voc recommendations (#168)', () => {
     expect(Number(decisions.rows[0]?.cnt)).toBe(0);
   });
 
+  it('gives unreadable, archived and nonexistent candidates one indistinguishable error', async () => {
+    // ADR-0034 D4 forbids letting a caller infer that an id names a real VOC.
+    // Since 2974dd4 both halves of that — the visibility predicate and the
+    // archived filter — live in `selectRecommendationVocs`'s SQL, and absence
+    // from its result is the only thing the service sees. The archived half had
+    // no coverage: deleting `AND v.archived_at IS NULL` left the suite green,
+    // so a mutation path could act on an archived VOC. Confirm would still be
+    // caught by `addMember`'s own archived check; dismiss has no second gate
+    // and would write a suppression row against an archived VOC.
+    //
+    // Comparing the serialized errors rather than just the code is the point:
+    // a `fields` array or a distinct message on one branch would leak the
+    // difference just as effectively as a different status.
+    const unreadable = await seedCandidate({
+      msId: msB,
+      reporterId: adminId,
+      title: 'Unreadable',
+      vector: IDENTICAL_VECTOR,
+    });
+    const archived = await seedCandidate({
+      msId: msA,
+      reporterId: adminId,
+      title: 'Archived',
+      vector: IDENTICAL_VECTOR,
+    });
+    await appHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [archived]);
+    const nonexistent = '00000000-0000-4000-8000-000000000000';
+
+    async function shapeOf(
+      op: 'dismiss' | 'confirm',
+      candidateVocId: string,
+    ): Promise<string> {
+      try {
+        if (op === 'dismiss') {
+          await service.dismissRecommendation({
+            actor: scopedDev(),
+            sourceVocId,
+            candidateVocId,
+          });
+        } else {
+          await service.confirmRecommendation({
+            actor: managerDev(),
+            sourceVocId,
+            candidateVocId,
+          });
+        }
+        return 'no error thrown';
+      } catch (err) {
+        const e = err as HttpError & { code?: string; detail?: unknown };
+        return JSON.stringify({ code: e.code, message: e.message, detail: e.detail ?? null });
+      }
+    }
+
+    for (const op of ['dismiss', 'confirm'] as const) {
+      const shapes = [
+        await shapeOf(op, unreadable),
+        await shapeOf(op, archived),
+        await shapeOf(op, nonexistent),
+      ];
+      expect(shapes[0]).toContain('not_found.record');
+      // One distinct shape across all three, so none of them is identifiable.
+      expect(new Set(shapes).size).toBe(1);
+    }
+
+    // An archived candidate must also leave no trace behind.
+    const decisions = await appHandle.pool.query<{ cnt: string }>(
+      `select count(*)::text as cnt from voc.voc_recommendation_decisions where source_voc_id = $1`,
+      [sourceVocId],
+    );
+    expect(Number(decisions.rows[0]?.cnt)).toBe(0);
+    expect(await clusterCountForFixtureSystems()).toBe(0);
+  });
+
   it('lets a scoped developer with finding.manage confirm', async () => {
     const candidate = await seedCandidate({
       msId: msA,
