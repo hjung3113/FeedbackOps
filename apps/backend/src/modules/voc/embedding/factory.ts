@@ -19,8 +19,16 @@ export function createEmbeddingProvider(
     });
   }
 
+  // loadConfig already rejects voyage-without-key, but this factory also takes
+  // hand-built AppConfig objects in tests and callers. A non-null assertion
+  // would turn that mistake into an `Authorization: Bearer undefined` request;
+  // fail where the cause is still visible.
+  if (!config.EMBEDDING_API_KEY) {
+    throw new Error('EMBEDDING_API_KEY is required when EMBEDDING_PROVIDER=voyage');
+  }
+
   return createVoyageEmbeddingProvider({
-    apiKey: config.EMBEDDING_API_KEY!,
+    apiKey: config.EMBEDDING_API_KEY,
     embeddingVersion: config.EMBEDDING_VERSION,
     fetch,
   });

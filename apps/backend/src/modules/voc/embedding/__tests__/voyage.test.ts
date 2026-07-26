@@ -61,7 +61,12 @@ describe('VoyageEmbeddingProvider', () => {
 
     const error = await provider.embed(['one', 'two']).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(Error);
+    // String() only covers name + message. A logger that serializes the error
+    // object, or a stack captured from a template literal holding the header,
+    // leaks just as effectively — so check every surface a log line can reach.
     expect(String(error)).not.toContain(API_KEY);
+    expect((error as Error).stack ?? '').not.toContain(API_KEY);
+    expect(JSON.stringify(error, Object.getOwnPropertyNames(error))).not.toContain(API_KEY);
   });
 
   it('preserves the HTTP status on a non-2xx provider error', async () => {
