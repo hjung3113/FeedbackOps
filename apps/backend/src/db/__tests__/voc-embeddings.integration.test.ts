@@ -67,11 +67,25 @@ describe('VOC embedding store migration 0042', () => {
   });
 
   afterAll(async () => {
-    if (workspaceCreated)
+    // Children first: actors and managed_systems both FK to the workspace with
+    // no ON DELETE CASCADE, so deleting the workspace first aborts teardown and
+    // leaks every row this suite wrote.
+    if (workspaceCreated) {
+      await migrateHandle?.pool.query('delete from voc.vocs where workspace_id = $1', [
+        workspaceId,
+      ]);
+      await migrateHandle?.pool.query(
+        'delete from core.managed_systems where workspace_id = $1',
+        [workspaceId],
+      );
+      await migrateHandle?.pool.query('delete from core.actors where workspace_id = $1', [
+        workspaceId,
+      ]);
       await migrateHandle?.pool.query(
         'delete from core.workspaces where id = $1',
         [workspaceId],
       );
+    }
     await appHandle?.close();
     await migrateHandle?.close();
   });
@@ -184,14 +198,24 @@ describe('VOC embedding store migration 0042', () => {
     const vocId = await insertVoc();
     await insertEmbedding(vocId, 1, '[1,0,0]');
 
+    // Self-distance alone proves nothing — `x <=> x` is 0 for every vector.
+    // Compare against a hand-computed identical, orthogonal, and opposite
+    // probe so a broken operator or a mangled round-trip cannot pass.
     const result = await migrateHandle.pool.query<{
       embedding: string;
-      distance: number;
+      same: number;
+      orthogonal: number;
+      opposite: number;
     }>(
-      `select embedding::text as embedding, embedding <=> embedding as distance
+      `select embedding::text as embedding,
+              embedding <=> '[1,0,0]'::vector  as same,
+              embedding <=> '[0,1,0]'::vector  as orthogonal,
+              embedding <=> '[-1,0,0]'::vector as opposite
        from voc.voc_embeddings where voc_id = $1 and embedding_version = 1`,
       [vocId],
     );
-    expect(result.rows).toEqual([{ embedding: '[1,0,0]', distance: 0 }]);
+    expect(result.rows).toEqual([
+      { embedding: '[1,0,0]', same: 0, orthogonal: 1, opposite: 2 },
+    ]);
   });
 });
