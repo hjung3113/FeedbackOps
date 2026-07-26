@@ -263,6 +263,12 @@ Acceptance Criteria:
 > The second criterion is already honoured: #127 does not auto-cluster —
 > recommendations stay a separate resource requiring authorized confirmation
 > (#127 decision D1).
+>
+> **Design decided 2026-07-26 (ADR-0034).** #168 satisfies this requirement
+> with pgvector, an embedding provider port (Voyage adapter in production, a
+> deterministic fake offline), a versioned embedding store, and a separate
+> recommendation resource carrying dismissal state. Status here stays NOT
+> satisfied until that resource ships.
 
 ### FR-VOC-005: Public Update
 
