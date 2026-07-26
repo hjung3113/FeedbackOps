@@ -31,6 +31,52 @@ VOC Clusters are implemented as a separate top-level module directory (`../voc-c
 - `disabled` signals unavailability with `EmbeddingUnavailableError`; callers
   must not convert it to an empty result.
 
+Note the one exception to that last rule, added by ingestion below: the
+`voc.embed_voc` handler *does* absorb `EmbeddingUnavailableError`, because a
+job has no caller to report to and pg-boss would otherwise retry a permanent
+configuration state. The rule still binds the read/recommendation side, which
+has a user to be honest with.
+
+## Embedding Ingestion (ADR-0034 D6)
+
+`embedding/text.ts` derives the embedded input; `embedding/repo.ts` owns
+`voc.voc_embeddings`; `jobs/` owns the two queues. Nothing else writes vectors.
+
+- **Input derivation.** The embedded text is `title` + blank line + the
+  ADR-0011 rich content flattened to its `text` leaves (attributes excluded —
+  they are identifiers, not prose). An empty or missing description yields the
+  title alone, so every VOC is embeddable and there is no "nothing to embed"
+  branch. Flattening is total: unparseable content becomes `''` rather than
+  throwing, because ingestion must not be where a legacy row is discovered.
+- **`source_hash`** is sha256 of that derived text. Equality is the entire
+  re-embed decision — a matching hash skips the provider call outright.
+- **`voc.embed_voc`** (queue, no cron) embeds one VOC at the active
+  `EMBEDDING_VERSION` and upserts on the `(voc_id, embedding_version)` primary
+  key. Never read-then-insert: the PK is what makes concurrent runs for the
+  same VOC safe. `provider` / `model` / `dimensions` are written from the
+  `EmbeddingResult`, never from config.
+- **Non-failure outcomes.** The handler returns rather than throws for
+  `disabled` (configuration, not a fault) and `voc_not_found` (a rolled-back
+  create). Provider HTTP and database errors still propagate so ADR-0009 retry
+  applies to what retrying can fix.
+- **Enqueue-on-write** (`embedding/enqueue.ts`) fires on VOC create and on
+  title/description edits only — an attachment-only edit leaves the derived
+  text identical. It runs on pg-boss's own pool (**not** `fromDrizzle(tx)`,
+  unlike `modules/tasks/service.ts`) and swallows every error: a VOC write must
+  never fail because the embedding queue failed. The cost is that the job is
+  visible before the VOC commits, covered by `VOC_EMBED_START_AFTER_SECONDS`.
+- **`voc.embedding_backfill`** (cron, `*/15 * * * *`, batch 200) is therefore
+  the durable guarantee, and the migration path for a version bump. It selects
+  non-archived VOCs with no row at the active version and logs `remaining` —
+  a bounded batch must report what it left, never silently truncate. Archived
+  VOCs are excluded and un-archiving does not re-enqueue.
+- **Disabled provider enqueues nothing** — write path and cron both gate on
+  `isEmbeddingEnabled(config)`, so a key-less environment accumulates no queue.
+  Registration is unconditional: enabling a provider is a config change, not a
+  queue-registration change.
+- Both queues are pre-created in migration `0043_voc_embedding_queues.sql`;
+  `fops_app` holds no DDL on `pgboss.*`, so `register*` only verifies existence.
+
 ## Verification
 
 - Test reporter-facing status transitions, public update behavior, VOC-to-Finding creation, cluster-to-Finding creation, and forbidden Survey Response-to-VOC paths when touched.

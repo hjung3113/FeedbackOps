@@ -5,7 +5,7 @@
 // API accepts a `Tx` so the controller's idempotency frame can own the
 // transaction.
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { and, eq, sql } from 'drizzle-orm';
 
@@ -15,6 +15,7 @@ import { vocs } from '../../db/schema/voc.js';
 import { HttpError } from '../../lib/errors.js';
 import { stableStringify } from '../../lib/json/stable-stringify.js';
 import { sanitizeTipTap, type RichContentError } from '../../lib/rich-content/sanitize.js';
+import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
 import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
 import { insertVoc, lockAnalyticsArea, lockManagedSystem, selectVocForUpdate, updateVocDescriptionFields } from './repo.js';
 import {
@@ -69,6 +70,13 @@ export interface VocServiceDeps {
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
+  /**
+   * #168 (ADR-0034 D6) — enqueue-on-write for VOC embeddings. Optional so
+   * callers booted without pg-boss stay wired; absent means no enqueue, and
+   * the cron backfill is the only ingestion path. Never allowed to fail a
+   * write: see `embedding/enqueue.ts`.
+   */
+  embeddingEnqueuer?: VocEmbeddingEnqueuer;
 }
 
 export function createVocService(deps: VocServiceDeps) {
@@ -178,6 +186,16 @@ export function createVocService(deps: VocServiceDeps) {
         source_context: row.sourceContext,
         attachment_ids: input.attachment_ids ?? [],
       },
+    });
+
+    // 6b. #168 (ADR-0034 D6) — enqueue the embedding job. Deliberately the
+    // last thing before composing the envelope, and deliberately incapable of
+    // failing this write: the enqueuer swallows and logs its own errors, and
+    // does not join `tx`. A dropped enqueue costs at most one backfill cycle.
+    await deps.embeddingEnqueuer?.enqueue({
+      workspaceId: actor.workspace_id,
+      vocId: row.id,
+      correlationId: randomUUID(),
     });
 
     // 7. Compose envelope. Fresh VOC: next_actions=[] (frontend Inbox
@@ -865,6 +883,17 @@ export function createVocService(deps: VocServiceDeps) {
         changes,
       },
     });
+
+    // #168 (ADR-0034 D6) — only title/description changes alter the embedding
+    // input. An attachment-only edit bumps updated_at but leaves the derived
+    // text identical, so enqueuing it would be a guaranteed `unchanged` job.
+    if (changes.title !== undefined || changes.description_rich_content !== undefined) {
+      await deps.embeddingEnqueuer?.enqueue({
+        workspaceId,
+        vocId,
+        correlationId: randomUUID(),
+      });
+    }
 
     const nextStates = await nextReporterStates(
       updatedRow.reporterFacingStatus as ReporterFacingStatus,
