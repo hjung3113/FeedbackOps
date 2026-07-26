@@ -26,6 +26,17 @@ const envSchema = z.object({
   // single ingress; 0 disables trust, identical to `false`). Defaults to
   // 0 outside production so dev/test/CI cannot spoof.
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+  EMBEDDING_PROVIDER: z.enum(['voyage', 'fake', 'disabled']).default('disabled'),
+  EMBEDDING_API_KEY: z.string().min(1).optional(),
+  EMBEDDING_VERSION: z.coerce.number().int().positive().default(1),
+}).superRefine((config, context) => {
+  if (config.EMBEDDING_PROVIDER === 'voyage' && !config.EMBEDDING_API_KEY) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['EMBEDDING_API_KEY'],
+      message: 'EMBEDDING_API_KEY is required when EMBEDDING_PROVIDER=voyage',
+    });
+  }
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

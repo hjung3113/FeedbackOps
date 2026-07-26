@@ -38,6 +38,8 @@ function config(): AppConfig {
     SEED_MODE: 'core',
     PUBLIC_ATTACHMENT_ORIGIN: "'self'",
     TRUSTED_PROXY_HOPS: 0,
+    EMBEDDING_PROVIDER: 'disabled',
+    EMBEDDING_VERSION: 1,
   };
 }
 
