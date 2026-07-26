@@ -121,6 +121,85 @@ has a user to be honest with.
 - Both queues are pre-created in migration `0043_voc_embedding_queues.sql`;
   `fops_app` holds no DDL on `pgboss.*`, so `register*` only verifies existence.
 
+## Recommendation Threshold Evaluation (ADR-0034 D5)
+
+`recommendations/constants.ts` pins `VOC_RECOMMENDATION_SIMILARITY_THRESHOLD =
+0.75` in code. ADR-0034 D5 requires a committed evaluation fixture beside it,
+and requires that changing the default updates the fixture in the same change.
+
+**Where it lives.**
+
+- `recommendations/eval/fixture.ts` — the labelled corpus: VOC texts, a vector
+  per item, and `(source, candidate, expected: related | unrelated)` pairs.
+- `recommendations/eval/harness.ts` — pure precision/recall/F1 at a given cut.
+  No database, no provider; it scores whatever vectors the fixture carries.
+- `recommendations/eval/__tests__/` — harness arithmetic, and the coupling to
+  the constant.
+- `recommendations/__tests__/threshold-eval.integration.test.ts` — the same
+  fixture driven through `selectVocRecommendations` against real Postgres and
+  pgvector, at private `embedding_version` 168050.
+
+**How to re-run.**
+
+```
+export DATABASE_URL=... DATABASE_URL_MIGRATE=... WORKSPACE_ID=...
+pnpm --filter backend exec vitest run src/modules/voc/recommendations
+```
+
+The pure half needs no environment; the integration half is `WORKSPACE_ID`-gated
+like every other integration suite here.
+
+**What the current pin is based on: nothing measured.** 0.75 was chosen as an
+initial value in step 4 and has never been evaluated against real embeddings.
+The fixture's vectors are hand-authored from Pythagorean triples so that every
+cosine is an exact rational; they carry no semantic content. The step-2 `fake`
+provider cannot substitute — it is SHA-256-derived, so two paraphrases of one
+complaint get unrelated vectors, and an eval over its output measures nothing
+about meaning. Producing real voyage-3 vectors needs an API key and network,
+neither of which the development environment has.
+
+So the fixture pins **plumbing, not quality**:
+
+- the harness computes precision/recall/F1 with the right denominators, and
+  reports `null` rather than 0 or 1 for a metric with an empty denominator;
+- `<=>` is cosine *distance* and the threshold is a *similarity*, so the read
+  model converts with `1 - (a <=> b)` and compares `score >= threshold`. Both
+  directions are asserted end-to-end; the integration suite asserts the score
+  of an exact-duplicate pair is 1.0 and of a 4/5 pair is 0.8, so an inverted
+  conversion (0.0 and 0.2) fails;
+- near-boundary pairs — 55/73 ≈ 0.7534 just above, 72/97 ≈ 0.7423 just below —
+  land on the side the fixture says, through the real query.
+
+The precision of 2/3 and recall of 4/5 the fixture reports at the pin are
+**properties of chosen vectors, not of the recommender**. Two pairs deliberately
+disagree with their human label so the false-positive and false-negative arms
+of the harness are exercised; quoting those figures as recommender quality
+would be wrong.
+
+**The coupling, and its limits.** `fixture-pins-threshold.test.ts` asserts
+`thresholdPin` equals the constant, *and* evaluates the harness at the live
+constant and compares the confusion matrix to a hand-counted `expectedAtPin`.
+Editing the constant alone fails both; editing both numbers in lockstep still
+fails the matrix, because near-boundary pairs sit within 0.01 of the pin (also
+asserted) and flip. What it cannot do is force a *justification* — someone can
+rerun, paste the new counts, and go green. What it buys is that the flipped
+pairs appear in the diff for a reviewer to see.
+
+**Re-tuning once real vectors exist.**
+
+1. Keep `items[].title` / `items[].body` and `pairs[].expected` — the labelled
+   corpus is the durable part and should grow with real VOC text, labelled by a
+   person, not by the model.
+2. Embed the corpus with the production provider and replace `items[].vector`,
+   `pairs[].expectedSimilarity`, and `vectorSource.provenance` / `.dimensions`.
+   The harness and the tests do not change; that is what the format is for.
+3. Sweep the cut with `evaluateFixture` and pick from the resulting
+   precision/recall curve. Re-band pairs: `near_boundary` must still straddle
+   the new pin, or the coupling stops biting.
+4. Update `expectedAtPin` and the constant in the same commit, and replace this
+   section's "nothing measured" paragraph with what was measured, on what
+   corpus, at what size.
+
 ## Verification
 
 - Test reporter-facing status transitions, public update behavior, VOC-to-Finding creation, cluster-to-Finding creation, and forbidden Survey Response-to-VOC paths when touched.
