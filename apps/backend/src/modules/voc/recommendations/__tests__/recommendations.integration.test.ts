@@ -494,9 +494,9 @@ describe.skipIf(!runIntegration)('voc recommendations (#168)', () => {
 
     // Suppressed for the actor who dismissed it — proves the read query derives
     // the same key the write path stored.
-    expect(ids(await service.listRecommendations({ actor: scopedDev(), sourceVocId }))).not.toContain(
-      candidate,
-    );
+    expect(
+      ids(await service.listRecommendations({ actor: scopedDev(), sourceVocId })),
+    ).not.toContain(candidate);
     // ...and for every other actor whose visibility comes from the same
     // Managed System: this arm is a shared triage judgement, not a personal one.
     expect(

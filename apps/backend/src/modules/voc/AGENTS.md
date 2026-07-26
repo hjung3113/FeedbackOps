@@ -13,6 +13,14 @@ VOC Clusters are implemented as a separate top-level module directory (`../voc-c
 - Reporter-facing VOC status is separate from Task status.
 - Task Done or Released must not automatically mark a VOC as resolved.
 - Public updates are distinct from internal comments.
+- The ADR-0031 visibility rule ("Managed System in the actor's `voc.read` scope
+  OR the actor reported it") has exactly **one** implementation:
+  `similarVocVisibilityPredicate` in `repo-read.ts`, parameterized by row alias.
+  Both the similar-peer projections and the ADR-0034 recommendation read model
+  call it; no surface restates it, and no TypeScript twin of it exists — the
+  mutation paths filter in SQL through the same function. It is pinned by
+  `__tests__/voc-visibility-predicate.integration.test.ts`, which asserts a
+  verdict matrix and that both read models admit the same VOCs on one fixture.
 
 ## Cross-System Rules
 

@@ -1,5 +1,9 @@
 // Unit coverage for the dismissal scope key (#168 step 4, ADR-0034 D3).
 //
+// The ADR-0031 visibility rule is deliberately NOT tested here: it has exactly
+// one implementation, it is SQL, and it is pinned against the real database by
+// `voc/__tests__/voc-visibility-predicate.integration.test.ts`.
+//
 // The SQL twin (`dismissalScopeKeySql`) is proved to agree with this one by
 // `recommendations.integration.test.ts`: a dismissal written with the key
 // produced here is only suppressed by the read query if the query derives the
@@ -8,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Scope } from '../../repo-read.js';
-import { dismissalScopeKey, isVocVisible } from '../scope.js';
+import { dismissalScopeKey } from '../scope.js';
 
 const MS_A = '11111111-2222-3333-4444-555555555555';
 const MS_B = '66666666-7777-8888-9999-000000000000';
@@ -45,25 +49,5 @@ describe('dismissalScopeKey (#168)', () => {
     expect(dismissalScopeKey(scope, ACTOR, MS_A)).not.toBe(
       dismissalScopeKey(scope, OTHER_ACTOR, MS_A),
     );
-  });
-});
-
-describe('isVocVisible (#168, ADR-0031 predicate)', () => {
-  const voc = { primary_managed_system_id: MS_B, reporter_id: OTHER_ACTOR };
-
-  it('admits everything for workspace-wide scope', () => {
-    expect(isVocVisible({ kind: 'all' }, ACTOR, voc)).toBe(true);
-  });
-
-  it('admits a VOC whose Managed System is in scope', () => {
-    expect(isVocVisible({ kind: 'scoped', managedSystemIds: [MS_B] }, ACTOR, voc)).toBe(true);
-  });
-
-  it('admits a VOC the actor reported, without scope', () => {
-    expect(isVocVisible({ kind: 'scoped', managedSystemIds: [MS_A] }, OTHER_ACTOR, voc)).toBe(true);
-  });
-
-  it('rejects a VOC that is neither in scope nor reported by the actor', () => {
-    expect(isVocVisible({ kind: 'scoped', managedSystemIds: [MS_A] }, ACTOR, voc)).toBe(false);
   });
 });

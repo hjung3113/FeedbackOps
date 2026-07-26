@@ -22,7 +22,7 @@ import {
   selectVocRecommendations,
   upsertRecommendationConfirmation,
 } from './repo.js';
-import { dismissalScopeKey, isVocVisible } from './scope.js';
+import { dismissalScopeKey } from './scope.js';
 
 export interface VocRecommendationsActor {
   actor_id: string;
@@ -87,10 +87,11 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
    * Resolves the source VOC and the actor's voc.read scope, or throws
    * `not_found.record`.
    *
-   * The source is checked against the same ADR-0031 predicate as candidates.
-   * A reporter can reach their own VOC without voc.read (that is the OR arm),
-   * which is exactly why candidate visibility has to be decided independently
-   * further down instead of being inherited from source access.
+   * `selectRecommendationVocs` applies the ADR-0031 predicate in SQL, so an
+   * unreadable or archived source is simply absent rather than returned for a
+   * second check here. A reporter can reach their own VOC without voc.read
+   * (that is the OR arm), which is exactly why candidate visibility is decided
+   * independently further down instead of being inherited from source access.
    */
   async function loadSource(
     db: Tx,
@@ -101,14 +102,11 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
     const vocs = await selectRecommendationVocs(db, {
       workspaceId: actor.workspace_id,
       vocIds: [sourceVocId],
+      actorId: actor.actor_id,
+      readScope,
     });
     const source = vocs.get(sourceVocId);
-    if (!source || source.archived_at !== null) {
-      throw new HttpError('not_found.record', 'voc not found');
-    }
-    if (!isVocVisible(readScope, actor.actor_id, source)) {
-      throw new HttpError('not_found.record', 'voc not found');
-    }
+    if (!source) throw new HttpError('not_found.record', 'voc not found');
     return { source, readScope };
   }
 
@@ -172,10 +170,11 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
   /**
    * Resolves and authorizes both ends of a pair for a mutation.
    *
-   * Both are checked against the ADR-0031 predicate and both failures are
-   * `not_found.record`: a `permission.denied` on the candidate would confirm
-   * that the id names a real VOC in this workspace, which is the exact
-   * inference ADR-0034 D4 forbids.
+   * Both ends pass through the ADR-0031 predicate in SQL, and both failures
+   * are `not_found.record`: a `permission.denied` on the candidate would
+   * confirm that the id names a real VOC in this workspace, which is the exact
+   * inference ADR-0034 D4 forbids. Absence covers unreadable and archived
+   * alike, so neither is distinguishable from a bad id.
    */
   async function loadPair(
     tx: Tx,
@@ -192,19 +191,13 @@ export function createVocRecommendationsService(deps: VocRecommendationsServiceD
     const vocs = await selectRecommendationVocs(tx, {
       workspaceId: actor.workspace_id,
       vocIds: [sourceVocId, candidateVocId],
+      actorId: actor.actor_id,
+      readScope,
     });
     const source = vocs.get(sourceVocId);
     const candidate = vocs.get(candidateVocId);
-    for (const voc of [source, candidate]) {
-      if (!voc || voc.archived_at !== null || !isVocVisible(readScope, actor.actor_id, voc)) {
-        throw new HttpError('not_found.record', 'voc not found');
-      }
-    }
-    return {
-      source: source as RecommendationVocRow,
-      candidate: candidate as RecommendationVocRow,
-      readScope,
-    };
+    if (!source || !candidate) throw new HttpError('not_found.record', 'voc not found');
+    return { source, candidate, readScope };
   }
 
   async function dismissRecommendation(args: {

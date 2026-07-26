@@ -8,9 +8,9 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../../db/client.js';
 import type { Tx } from '../../../db/tx.js';
-import type { Scope } from '../repo-read.js';
+import { type Scope, similarVocVisibilityPredicate } from '../repo-read.js';
 
-import { candidateVisibilityPredicate, dismissalScopeKeySql } from './scope.js';
+import { dismissalScopeKeySql } from './scope.js';
 
 export interface VocRecommendationRow {
   voc_id: string;
@@ -39,7 +39,6 @@ export interface RecommendationVocRow {
   primary_managed_system_id: string;
   reporter_id: string;
   title: string;
-  archived_at: Date | null;
 }
 
 /**
@@ -72,7 +71,7 @@ export async function selectVocRecommendations(
   },
 ): Promise<VocRecommendationPage> {
   const { workspaceId, sourceVocId, actorId, readScope, embeddingVersion, threshold, limit } = args;
-  const visible = candidateVisibilityPredicate(readScope, actorId, sql`c`);
+  const visible = similarVocVisibilityPredicate(readScope, actorId, sql`c`);
   const scopeKey = dismissalScopeKeySql(readScope, actorId, sql`c.primary_managed_system_id`);
 
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
@@ -151,19 +150,32 @@ export async function hasEmbeddingAtVersion(
   return result.rows[0]?.present === true;
 }
 
-/** Loads both ends of a pair in one round trip. Missing ids are simply absent. */
+/**
+ * Loads the ends of a recommendation pair that this actor may actually read.
+ *
+ * Archived and unauthorized rows are filtered here rather than returned for
+ * the service to reject, so the mutation paths carry no second, TypeScript
+ * copy of the ADR-0031 rule. There is exactly one implementation of that rule
+ * (`similarVocVisibilityPredicate`), it lives in SQL, and every caller reaches
+ * it through this query or through `selectVocRecommendations` above. An id the
+ * actor cannot read is simply absent from the map, which the service turns
+ * into `not_found.record`.
+ */
 export async function selectRecommendationVocs(
   db: Tx,
-  args: { workspaceId: string; vocIds: string[] },
+  args: { workspaceId: string; vocIds: string[]; actorId: string; readScope: Scope },
 ): Promise<Map<string, RecommendationVocRow>> {
   const out = new Map<string, RecommendationVocRow>();
   if (args.vocIds.length === 0) return out;
   const items = args.vocIds.map((id) => sql`${id}::uuid`);
+  const visible = similarVocVisibilityPredicate(args.readScope, args.actorId, sql`v`);
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
-    SELECT id, workspace_id, primary_managed_system_id, reporter_id, title, archived_at
-      FROM voc.vocs
-     WHERE workspace_id = ${args.workspaceId}
-       AND id = ANY(ARRAY[${sql.join(items, sql`, `)}]::uuid[])
+    SELECT v.id, v.workspace_id, v.primary_managed_system_id, v.reporter_id, v.title
+      FROM voc.vocs v
+     WHERE v.workspace_id = ${args.workspaceId}
+       AND v.id = ANY(ARRAY[${sql.join(items, sql`, `)}]::uuid[])
+       AND v.archived_at IS NULL
+       AND ${visible}
   `);
   for (const row of result.rows) {
     out.set(row.id as string, {
@@ -172,10 +184,6 @@ export async function selectRecommendationVocs(
       primary_managed_system_id: row.primary_managed_system_id as string,
       reporter_id: row.reporter_id as string,
       title: row.title as string,
-      archived_at:
-        row.archived_at === null || row.archived_at === undefined
-          ? null
-          : new Date(row.archived_at as string),
     });
   }
   return out;
