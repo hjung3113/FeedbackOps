@@ -96,9 +96,26 @@ triage-only summary envelope continues to expose neither counts nor items.
 Cosine similarity with a workspace-level threshold, default pinned in code (not
 in the database) so a fresh workspace behaves identically across environments.
 The threshold ships with a committed evaluation fixture: labelled VOC pairs and
-an assertion on precision/recall at the chosen cut, run under the deterministic
-fake provider. Changing the default requires updating that fixture in the same
-change.
+an assertion on precision/recall at the chosen cut, run offline and
+deterministically without a live provider. Changing the default requires
+updating that fixture in the same change.
+
+> **Amended 2026-07-27 (#168 step 5).** This clause originally said the fixture
+> runs "under the deterministic fake provider". That is not implementable as
+> written: the fake provider is hash-derived and preserves no meaning, so
+> precision and recall computed over its output are noise, and asserting on
+> noise produces a fixture that must be rewritten whenever the corpus text
+> changes for reasons unrelated to quality. The intent was offline determinism,
+> not that specific provider; the fixture therefore carries hand-authored
+> vectors with exact, checkable cosine relationships.
+>
+> This makes explicit what the fixture does and does not establish. It pins the
+> harness arithmetic, the distance-to-similarity conversion, the comparison
+> direction, and the shipped query's agreement with the harness. It does NOT
+> validate the pinned cut itself: that requires real embeddings from the
+> configured provider, which no offline environment can produce. The default
+> stays an unmeasured pin until a run against real vectors either confirms or
+> moves it.
 
 ### D6 — Refresh policy: enqueue on write, backfill by cron
 
