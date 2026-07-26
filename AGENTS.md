@@ -10,7 +10,7 @@
 - For multi-step work, define success criteria and verify them before claiming completion.
 - If domain rules conflict with generic framework habits, follow the domain rules.
 - Finish one issue fully (tests + typecheck + boundaries + commit + PR + merge + close) before starting the next.
-- Stop on locked-decision ambiguity. A grill-locked Q collision, or a contradiction the [Source Of Truth](#source-of-truth) tiebreaks do not cover → stop and report which doc must reopen. Never resolve unilaterally.
+- Stop on locked-decision ambiguity — see [Source Of Truth](#source-of-truth) → "Stop and report" for the exact condition. Never resolve unilaterally.
 
 ## Prototype Is The Spec
 
@@ -114,7 +114,9 @@ Test code is a liability. Fewer, sharper tests beat more tests.
 
 ## Workflow Operations
 
-Execution playbook (model tiers, task sizing, REV cycles, user confirms, HTML artifacts, plan/REV doc layout, prototype copy authority): see the `/agent-workflow` skill (external toolkit). The toolkit installs here via `install-into.sh --mode symlink` → `.agent-workflow/` + `.claude/skills/agent-workflow` (absolute machine-local links, gitignored — worktrees need their own install run).
+Execution playbook (roles, model tiers, task sizing, review/verify cycles, conductor conduct): see the `/agent-workflow` skill (external toolkit). The toolkit installs here via `install-into.sh <target>`, which **copies** four managed leaves as a self-contained snapshot: `.agent-workflow/{scripts,schemas,docs/agents}` + `.claude/skills/agent-workflow`. Existing installs upgrade with `--upgrade`; `--mode`/`--force` no longer exist and are rejected.
+
+The four leaves are gitignored here, and **git worktrees do not inherit ignored files** — a fresh worktree has no `.agent-workflow/`, so a relative `.agent-workflow/scripts/...` call from inside one fails with `No such file or directory`. Until toolkit issue #62 lands, call the scripts by absolute path from the main checkout, or install into the worktree.
 
 ### Target Profile (toolkit adapter answers for THIS repo)
 
