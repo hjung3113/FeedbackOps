@@ -17,7 +17,9 @@ import {
   bigint,
   boolean,
   check,
+  customType,
   index,
+  integer,
   jsonb,
   pgSchema,
   primaryKey,
@@ -31,6 +33,14 @@ import { actors, analyticsAreas, entityLinks, managedSystems, teams, workspaces 
 import { tasks } from './task.js';
 
 export const vocSchema = pgSchema('voc');
+
+// pgvector is not a built-in Drizzle Postgres column type. Keep its database
+// representation narrow here; provider adapters own vector construction later.
+const vector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'vector';
+  },
+});
 
 // ─────────────────────────────────────────────────────────────────────────
 // voc.vocs — canonical VOC record.
@@ -107,6 +117,43 @@ export const vocs = vocSchema.table(
       'vocs_owner_xor',
       sql`${t.ownerUserId} IS NULL OR ${t.ownerTeamId} IS NULL`,
     ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// voc.voc_embeddings — versioned pgvector rows (ADR-0034 D1/D2).
+// The vector is intentionally dimensionless: a model swap writes a new active
+// version, and storage must retain the prior model's dimensions during re-embed.
+// ─────────────────────────────────────────────────────────────────────────
+export const vocEmbeddings = vocSchema.table(
+  'voc_embeddings',
+  {
+    vocId: uuid('voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    embeddingVersion: integer('embedding_version').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    dimensions: integer('dimensions').notNull(),
+    embedding: vector('embedding').notNull(),
+    sourceHash: text('source_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    vocVersionPk: primaryKey({
+      name: 'voc_embeddings_voc_version_pk',
+      columns: [t.vocId, t.embeddingVersion],
+    }),
+    workspaceVersionIdx: index('voc_embeddings_workspace_version_idx').on(
+      t.workspaceId,
+      t.embeddingVersion,
+    ),
+    dimensionsPositive: check('voc_embeddings_dimensions_positive', sql`${t.dimensions} > 0`),
+    versionPositive: check('voc_embeddings_version_positive', sql`${t.embeddingVersion} > 0`),
   }),
 );
 

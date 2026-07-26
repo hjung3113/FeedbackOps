@@ -44,6 +44,7 @@ core
 
 voc
 - vocs
+- voc_embeddings (versioned pgvector rows; workspace scope is denormalized for active-version scans)
 - voc_public_updates
 - voc_reporter_replies
 - voc_internal_comments

@@ -295,6 +295,13 @@
       "when": 1783000000000,
       "tag": "0041_workspace_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1783100000000,
+      "tag": "0042_voc_embeddings",
+      "breakpoints": true
     }
   ]
 }
