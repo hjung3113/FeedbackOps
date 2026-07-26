@@ -915,11 +915,36 @@ export interface SimilarVocReadItem {
   severity: 'low' | 'medium' | 'high' | 'critical' | null;
 }
 
-function similarPeerVisibilityPredicate(readScope: Scope, actorId: string): ReturnType<typeof sql> {
+/**
+ * The ADR-0031 VOC visibility rule, and the only copy of it.
+ *
+ * A VOC other than the actor's own source is visible when its Managed System
+ * is in the actor's `voc.read` scope, or the actor reported it. Both the
+ * ADR-0031 similar-peer projections below and the ADR-0034 recommendation read
+ * model (`recommendations/repo.ts`) call this one function; ADR-0034 D4 says
+ * the recommendation surface *reuses* this rule rather than deriving one of
+ * its own, and reuse means calling it, not restating it.
+ *
+ * It was briefly restated in `recommendations/scope.ts` because that query
+ * aliases the VOC differently — which is why the alias is a parameter now. A
+ * second body is not worth an aliasing difference: a future change to the
+ * scope semantics (a team-based arm, a different resolution of `kind: 'all'`)
+ * would be made in one copy, the other would keep authorizing under the old
+ * rule, and the divergence would leak VOC existence with nothing failing.
+ *
+ * `vocAlias` is a table alias, not a value — callers supply e.g. sql`p`.
+ * `__tests__/voc-visibility-predicate.integration.test.ts` pins the verdict
+ * matrix and asserts both surfaces admit the same VOCs on one fixture.
+ */
+export function similarVocVisibilityPredicate(
+  readScope: Scope,
+  actorId: string,
+  vocAlias: ReturnType<typeof sql>,
+): ReturnType<typeof sql> {
   if (readScope.kind === 'all') return sql`true`;
   return sql`(
-    p.primary_managed_system_id = ANY(${sqlUuidArray(readScope.managedSystemIds)})
-    OR p.reporter_id = ${actorId}
+    ${vocAlias}.primary_managed_system_id = ANY(${sqlUuidArray(readScope.managedSystemIds)})
+    OR ${vocAlias}.reporter_id = ${actorId}
   )`;
 }
 
@@ -931,7 +956,7 @@ export async function selectSimilarVocCounts(
   const out = new Map<string, number>();
   const { workspaceId, sourceVocIds, actorId, readScope } = args;
   if (sourceVocIds.length === 0) return out;
-  const peerVisible = similarPeerVisibilityPredicate(readScope, actorId);
+  const peerVisible = similarVocVisibilityPredicate(readScope, actorId, sql`p`);
   const result = await (db as Db).execute<{ source_voc_id: string; cnt: string }>(sql`
     SELECT source.id AS source_voc_id, COUNT(p.id)::text AS cnt
       FROM ${vocs} source
@@ -961,7 +986,7 @@ export async function selectSimilarVocCount(
   },
 ): Promise<number> {
   const { workspaceId, sourceVocId, primaryManagedSystemId, actorId, readScope } = args;
-  const peerVisible = similarPeerVisibilityPredicate(readScope, actorId);
+  const peerVisible = similarVocVisibilityPredicate(readScope, actorId, sql`p`);
   const result = await (db as Db).execute<{ cnt: string }>(sql`
     SELECT COUNT(p.id)::text AS cnt
       FROM ${vocs} p
@@ -985,7 +1010,7 @@ export async function selectSimilarVocItems(
   },
 ): Promise<SimilarVocReadItem[]> {
   const { workspaceId, sourceVocId, primaryManagedSystemId, actorId, readScope } = args;
-  const peerVisible = similarPeerVisibilityPredicate(readScope, actorId);
+  const peerVisible = similarVocVisibilityPredicate(readScope, actorId, sql`p`);
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT p.id, p.display_id, p.title, p.reporter_facing_status, p.severity
       FROM ${vocs} p
