@@ -129,6 +129,10 @@ export function AnalyticsAreasAdminPage() {
         <AnalyticsAreasBody
           includeArchived={includeArchived}
           managedSystemId={managedSystemId}
+          onClearFilters={() => {
+            setManagedSystemId(undefined);
+            setIncludeArchived(false);
+          }}
           registerCtx={registerCtx}
           setRegisterCtx={setRegisterCtx}
         />
@@ -154,11 +158,13 @@ function groupByMs(
 export function AnalyticsAreasBody({
   includeArchived,
   managedSystemId,
+  onClearFilters,
   registerCtx,
   setRegisterCtx,
 }: {
   includeArchived: boolean;
   managedSystemId: string | undefined;
+  onClearFilters: () => void;
   registerCtx: { open: boolean; msId: string | null };
   setRegisterCtx: (v: { open: boolean; msId: string | null }) => void;
 }) {
@@ -236,7 +242,8 @@ export function AnalyticsAreasBody({
         <div className="mb-3.5 flex items-center justify-between">
           <PanelSectionTitle className="mb-0">Catalog</PanelSectionTitle>
           <span className="text-xs text-text-muted">
-            {renderedAreaCount} areas · {renderedSystems.length} systems
+            {renderedAreaCount} {renderedAreaCount === 1 ? 'area' : 'areas'} ·{' '}
+            {renderedSystems.length} {renderedSystems.length === 1 ? 'system' : 'systems'}
           </span>
         </div>
 
@@ -252,6 +259,22 @@ export function AnalyticsAreasBody({
             data-testid="aa-empty-state"
           >
             등록된 Managed System 이 없습니다.
+          </div>
+        ) : renderedSystems.length === 0 ? (
+          <div
+            className="rounded-md border border-border-subtle bg-surface-card p-8 text-center text-sm text-text-muted"
+            data-testid="aa-filter-empty-state"
+          >
+            <p>필터에 해당하는 Managed System이 없습니다.</p>
+            <Button
+              variant="subtle"
+              size="sm"
+              className="mt-3"
+              onClick={onClearFilters}
+              data-testid="aa-clear-filters"
+            >
+              필터 해제
+            </Button>
           </div>
         ) : (
           <div data-testid="aa-grouped-list" className="space-y-4">
