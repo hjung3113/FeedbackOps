@@ -32,6 +32,12 @@
 // So a dropped enqueue costs at most one cron interval of staleness, for
 // creates and edits alike. Enqueue-on-write is a latency optimisation on top
 // of the backfill, never the only thing standing between a VOC and its vector.
+//
+// That bound holds only because `voc_embeddings.updated_at` is stamped with
+// the VOC revision a vector was built from rather than with `now()` — see
+// `embedding/repo.ts`. With `now()`, a write racing an edit marks the row
+// current and the backfill stops seeing it, which would quietly turn "at most
+// one cron interval" back into "forever".
 
 import type { PgBoss } from 'pg-boss';
 

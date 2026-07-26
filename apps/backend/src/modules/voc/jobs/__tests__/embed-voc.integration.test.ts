@@ -12,7 +12,7 @@ import { type DbHandle, createDb } from '../../../../db/client.js';
 import { createDisabledEmbeddingProvider } from '../../embedding/disabled.js';
 import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
 import type { EmbeddingProvider } from '../../embedding/port.js';
-import { upsertVocEmbedding } from '../../embedding/repo.js';
+import { selectVocsNeedingEmbedding, upsertVocEmbedding } from '../../embedding/repo.js';
 import { deriveVocEmbeddingInput } from '../../embedding/text.js';
 import { insertMsDirectly, insertVocDirectly, uid } from '../../__tests__/_seed-helpers.js';
 import { embedVoc } from '../embed-voc.js';
@@ -204,6 +204,70 @@ describe.skipIf(!runIntegration)('voc.embed_voc handler (#168)', () => {
     expect(behind.rows[0]?.behind).toBe(false);
   });
 
+  it('does not mask an edit that lands while the provider call is in flight', async () => {
+    const vocId = await seedVoc('original title');
+    // Embed once so the racing write below takes the ON CONFLICT *update* arm.
+    // That is the shape the bug actually has in production: the backfill picks
+    // up an already-embedded VOC that went stale, and re-embeds it.
+    await embedVoc(
+      {
+        db: appHandle.db,
+        provider: fake(ACTIVE_VERSION),
+        embeddingVersion: ACTIVE_VERSION,
+        embeddingEnabled: true,
+      },
+      { workspace_id: WORKSPACE_ID, voc_id: vocId, correlation_id: 'test' },
+    );
+    await appHandle.pool.query(`update voc.vocs set title = $2 where id = $1`, [
+      vocId,
+      'first rewrite',
+    ]);
+
+    // Hold the provider open so the edit lands strictly between the handler's
+    // read of voc.vocs and its write of voc.voc_embeddings. That window is
+    // seconds wide in production (a real provider HTTP call), and a cron
+    // backfill job overlapping the edit's own job reaches it without anything
+    // going wrong — no dropped enqueue required.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const inner = fake(ACTIVE_VERSION);
+    const stalling: EmbeddingProvider = {
+      async embed(texts) {
+        await gate;
+        return inner.embed(texts);
+      },
+    };
+
+    const job = embedVoc(
+      {
+        db: appHandle.db,
+        provider: stalling,
+        embeddingVersion: ACTIVE_VERSION,
+        embeddingEnabled: true,
+      },
+      { workspace_id: WORKSPACE_ID, voc_id: vocId, correlation_id: 'test' },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await appHandle.pool.query(`update voc.vocs set title = $2 where id = $1`, [
+      vocId,
+      'edited mid flight',
+    ]);
+    release();
+    expect(await job).toBe('written');
+
+    // The vector we just stored is of the pre-edit text — unavoidable, we read
+    // before the edit existed. What must NOT happen is the row claiming to be
+    // current: stamping now() would put it ahead of vocs.updated_at and hide
+    // the staleness forever. The watermark keeps it a backfill candidate.
+    const rows = await selectVocsNeedingEmbedding(appHandle.db, {
+      embeddingVersion: ACTIVE_VERSION,
+      limit: 10_000,
+    });
+    expect(rows.map((r) => r.voc_id)).toContain(vocId);
+  });
+
   it('two concurrent writes for the same (voc, version) converge on one row', async () => {
     const vocId = await seedVoc('Concurrent run');
     const provider = fake(ACTIVE_VERSION);
@@ -220,6 +284,7 @@ describe.skipIf(!runIntegration)('voc.embed_voc handler (#168)', () => {
         dimensions: result.dimensions,
         embedding: result.vectors[0] as number[],
         sourceHash,
+        sourceUpdatedAt: new Date().toISOString(),
       });
 
     // Two workers that both decided to write. A read-then-insert would fail

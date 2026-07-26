@@ -92,8 +92,9 @@ export async function embedVoc(
     workspace_id: string;
     title: string;
     description_rich_content: unknown;
+    updated_at: string;
   }>(sql`
-    select id, workspace_id, title, description_rich_content
+    select id, workspace_id, title, description_rich_content, updated_at
     from voc.vocs
     where id = ${payload.voc_id}
       and workspace_id = ${payload.workspace_id}
@@ -123,9 +124,14 @@ export async function embedVoc(
     // to a VOC bumps the latter — so without this touch, a VOC edited in a way
     // that did not change its embedded text would be re-selected on every cron
     // run forever. No provider call, no vector rewrite.
+    //
+    // Stamped with the `vocs.updated_at` read at the top of this handler, not
+    // `now()`: if the VOC changed again while we were working, the watermark
+    // stays behind the VOC and the row correctly remains a candidate.
     await touchVocEmbeddingCheckedAt(deps.db, {
       vocId: voc.id,
       embeddingVersion: deps.embeddingVersion,
+      sourceUpdatedAt: voc.updated_at,
     });
     deps.log?.info('voc.embed_voc skipped: source_hash unchanged', {
       voc_id: voc.id,
@@ -167,6 +173,10 @@ export async function embedVoc(
     dimensions: result.dimensions,
     embedding: vector,
     sourceHash,
+    // The VOC revision this vector reflects — see `upsertVocEmbedding`. Taken
+    // from the row read before the provider call, so a concurrent edit is not
+    // masked by our own write.
+    sourceUpdatedAt: voc.updated_at,
   });
 
   deps.log?.info('voc.embed_voc wrote embedding', {

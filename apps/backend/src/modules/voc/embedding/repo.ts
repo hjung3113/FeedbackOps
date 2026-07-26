@@ -18,6 +18,12 @@ export interface UpsertVocEmbeddingArgs {
   /** Raw vector; length must equal `dimensions` (the provider port guarantees this). */
   embedding: number[];
   sourceHash: string;
+  /**
+   * The `voc.vocs.updated_at` the writer observed *before* deriving this
+   * vector. Stored verbatim as this row's `updated_at`. See the header comment
+   * on `updated_at` semantics below.
+   */
+  sourceUpdatedAt: string;
 }
 
 /**
@@ -28,9 +34,23 @@ export interface UpsertVocEmbeddingArgs {
  * same VOC safe. A read-then-insert would let both reads miss and one insert
  * fail with a duplicate-key error, turning an ordinary race into a retried job.
  *
- * `updated_at` means "when this row was last written or last confirmed current
- * against its VOC" — see `touchVocEmbeddingCheckedAt`. That is what makes it
- * comparable against `voc.vocs.updated_at` in `selectVocsNeedingEmbedding`.
+ * `updated_at` is a **watermark, not a write time**: it holds the
+ * `voc.vocs.updated_at` this row's vector reflects, copied from the row the
+ * writer read before calling the provider — never `now()`.
+ *
+ * That distinction is the whole reason the staleness comparison in
+ * `selectVocsNeedingEmbedding` is safe under concurrency. Embedding a VOC is
+ * read → provider call (slow, seconds) → write, and the VOC can be edited in
+ * between. Stamping `now()` would mark the row current as of *after* that
+ * edit, permanently hiding a vector built from text the reporter has already
+ * replaced — the exact failure the staleness signal exists to catch, reachable
+ * whenever a cron backfill job overlaps the edit's own job. Stamping the
+ * observed watermark instead leaves the row behind its VOC, so whichever
+ * writer loses the race self-heals on the next run.
+ *
+ * Cost of the choice: nothing records when a vector was physically computed.
+ * Nothing reads that today. If a later slice needs it, add an explicit column
+ * rather than reverting this one to `now()`.
  */
 export async function upsertVocEmbedding(tx: Tx, args: UpsertVocEmbeddingArgs): Promise<void> {
   // pgvector's text input format is `[a,b,c]`, which is exactly what
@@ -39,10 +59,12 @@ export async function upsertVocEmbedding(tx: Tx, args: UpsertVocEmbeddingArgs): 
   const literal = JSON.stringify(args.embedding);
   await tx.execute(sql`
     insert into voc.voc_embeddings (
-      voc_id, workspace_id, embedding_version, provider, model, dimensions, embedding, source_hash
+      voc_id, workspace_id, embedding_version, provider, model, dimensions, embedding,
+      source_hash, updated_at
     ) values (
       ${args.vocId}, ${args.workspaceId}, ${args.embeddingVersion}, ${args.provider},
-      ${args.model}, ${args.dimensions}, ${literal}::vector, ${args.sourceHash}
+      ${args.model}, ${args.dimensions}, ${literal}::vector, ${args.sourceHash},
+      ${args.sourceUpdatedAt}
     )
     on conflict on constraint voc_embeddings_voc_version_pk do update set
       workspace_id = excluded.workspace_id,
@@ -51,7 +73,7 @@ export async function upsertVocEmbedding(tx: Tx, args: UpsertVocEmbeddingArgs): 
       dimensions = excluded.dimensions,
       embedding = excluded.embedding,
       source_hash = excluded.source_hash,
-      updated_at = now()
+      updated_at = excluded.updated_at
   `);
 }
 
@@ -81,11 +103,11 @@ export async function selectVocEmbeddingSourceHash(
  */
 export async function touchVocEmbeddingCheckedAt(
   tx: Tx,
-  args: { vocId: string; embeddingVersion: number },
+  args: { vocId: string; embeddingVersion: number; sourceUpdatedAt: string },
 ): Promise<void> {
   await tx.execute(sql`
     update voc.voc_embeddings
-    set updated_at = now()
+    set updated_at = ${args.sourceUpdatedAt}
     where voc_id = ${args.vocId}
       and embedding_version = ${args.embeddingVersion}
   `);

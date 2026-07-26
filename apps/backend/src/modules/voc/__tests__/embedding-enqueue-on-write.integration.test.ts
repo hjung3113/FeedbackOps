@@ -94,6 +94,11 @@ describe.skipIf(!runIntegration)('VOC embedding enqueue-on-write (#168)', () => 
       `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
+    // Every test here registers a Managed System as the same seed admin, and
+    // that route is rate limited per actor. Without this the suite passes once
+    // and then fails for ~a minute on any rerun — see the same reset in
+    // analytics-areas and tasks. `fileParallelism: false` keeps it local.
+    await migrateHandle.pool.query(`delete from core.rate_limits`);
   }
 
   async function build(opts: {

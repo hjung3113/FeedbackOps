@@ -83,8 +83,16 @@ has a user to be honest with.
   `touchVocEmbeddingCheckedAt`, so each costs one no-op job and then stops
   being selected. **The `unchanged` path must keep touching that timestamp**;
   drop it and the backfill re-selects the same VOCs forever.
-- `voc_embeddings.updated_at` therefore means "last written **or** last
-  confirmed current against its VOC", not "last vector rewrite".
+- `voc_embeddings.updated_at` is a **watermark, not a write time**: both the
+  upsert and the touch stamp it with the `vocs.updated_at` the handler read
+  *before* calling the provider, never `now()`. Embedding is read → slow
+  provider call → write, and an edit can land in that window; `now()` would
+  mark the row current as of after the edit and hide the stale vector forever,
+  which a cron job overlapping the edit's own job reaches without anything
+  going wrong. The watermark leaves the loser of that race behind its VOC, so
+  it self-heals on the next run. Nothing records when a vector was physically
+  computed; if a slice needs that, add a column rather than reverting to
+  `now()`.
 - Archived VOCs are excluded. Un-archiving is an UPDATE, so a previously
   embedded VOC becomes a stale candidate on the next run; only one that was
   never embedded at all stays uncovered until its next edit or a version bump.
