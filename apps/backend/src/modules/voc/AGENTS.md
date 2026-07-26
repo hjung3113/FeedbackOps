@@ -180,8 +180,10 @@ would be wrong.
 `thresholdPin` equals the constant, *and* evaluates the harness at the live
 constant and compares the confusion matrix to a hand-counted `expectedAtPin`.
 Editing the constant alone fails both; editing both numbers in lockstep still
-fails the matrix, because near-boundary pairs sit within 0.01 of the pin (also
-asserted) and flip. What it cannot do is force a *justification* — someone can
+fails the matrix, because the nearest banded pair on each side of the pin sits
+within 0.01 of it (also asserted) and flips. That bound is on the nearest pair
+per side, not on every `near_boundary` pair — the guarantee needed is that
+*something* straddles the cut. What it cannot do is force a *justification* — someone can
 rerun, paste the new counts, and go green. What it buys is that the flipped
 pairs appear in the diff for a reviewer to see.
 

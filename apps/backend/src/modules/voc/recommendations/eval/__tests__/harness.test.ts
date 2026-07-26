@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { EvalFixture } from '../fixture.js';
+import { type EvalFixture, assertFixtureWellFormed } from '../fixture.js';
 import { cosineSimilarity, evaluateFixture, metricsFrom, predictLabel } from '../harness.js';
 
 describe('cosineSimilarity (#168)', () => {
@@ -200,5 +200,86 @@ describe('evaluateFixture (#168)', () => {
       expectedAtPin: { truePositives: 9, falsePositives: 0, trueNegatives: 0, falseNegatives: 0 },
     };
     expect(() => evaluateFixture(miscounted, 0.5)).toThrow(/but the fixture has/);
+  });
+
+  it('rejects every malformation the validator claims to catch, not just three', () => {
+    // `assertFixtureWellFormed` exists for the day a script regenerates this
+    // corpus from real embeddings, and its whole value is being fail-closed —
+    // a validator with a dead arm lets a shrunken or mis-keyed corpus through,
+    // and a shrunken corpus still reports a precision. Only the dangling
+    // candidate, wrong dimensionality and miscount arms were covered; deleting
+    // any of the six below left the suite green.
+    //
+    // Duplicate item keys are the nastiest of them: `fixtureVector` resolves
+    // keys with `.find()`, so a regenerated corpus carrying one key twice
+    // scores every pair against the FIRST vector and reports a confident,
+    // entirely wrong matrix.
+    const item = (key: string, vector: number[]) => ({ key, title: key, body: '', vector });
+    const pair = (source: string, candidate: string) => ({
+      source,
+      candidate,
+      expected: 'related' as const,
+      band: 'clear' as const,
+      expectedSimilarity: 0,
+      note: 'test-local',
+    });
+    const counts = (total: number) => ({
+      truePositives: total,
+      falsePositives: 0,
+      trueNegatives: 0,
+      falseNegatives: 0,
+    });
+
+    const cases: Array<{ name: string; fixture: EvalFixture; throws: RegExp }> = [
+      {
+        name: 'duplicate item key',
+        fixture: { ...tiny, items: [...tiny.items, item('hit', [1, 1, 0])] },
+        throws: /duplicate fixture item key/,
+      },
+      {
+        name: 'zero vector',
+        fixture: { ...tiny, items: [...tiny.items, item('zero', [0, 0, 0])] },
+        throws: /zero vector/,
+      },
+      {
+        name: 'empty title',
+        fixture: {
+          ...tiny,
+          items: [...tiny.items, { key: 'blank', title: '   ', body: '', vector: [1, 0, 0] }],
+        },
+        throws: /empty title/,
+      },
+      {
+        name: 'dangling source reference',
+        fixture: { ...tiny, pairs: [pair('nope', 'hit')], expectedAtPin: counts(1) },
+        throws: /unknown source/,
+      },
+      {
+        name: 'self-pair',
+        fixture: { ...tiny, pairs: [pair('hit', 'hit')], expectedAtPin: counts(1) },
+        throws: /its own candidate/,
+      },
+      {
+        name: 'duplicate labelled pair',
+        fixture: {
+          ...tiny,
+          pairs: [pair('s', 'hit'), pair('s', 'hit')],
+          expectedAtPin: counts(2),
+        },
+        throws: /duplicate labelled pair/,
+      },
+      {
+        name: 'no labelled pairs',
+        fixture: { ...tiny, pairs: [], expectedAtPin: counts(0) },
+        throws: /no labelled pairs/,
+      },
+    ];
+
+    for (const testCase of cases) {
+      expect(
+        () => assertFixtureWellFormed(testCase.fixture),
+        testCase.name,
+      ).toThrow(testCase.throws);
+    }
   });
 });

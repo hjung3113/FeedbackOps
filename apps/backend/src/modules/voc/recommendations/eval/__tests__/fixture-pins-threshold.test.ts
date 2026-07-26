@@ -13,10 +13,14 @@
 //      numbers in lockstep still fails: the confusion matrix at the new cut is
 //      different, and the editor has to look at which pairs moved and write
 //      down the new counts.
-//   3. Near-boundary pairs sit within 0.01 of the pin on both sides, and that
-//      is asserted, not hoped for. It is what makes (2) bite: without pairs
-//      near the cut, a cut change would leave every cell where it was and (2)
-//      would pass while measuring nothing.
+//   3. The *nearest* near-boundary pair on each side of the pin sits within
+//      0.01 of it, and that is asserted, not hoped for. It is what makes (2)
+//      bite: without pairs near the cut, a cut change would leave every cell
+//      where it was and (2) would pass while measuring nothing. Note the bound
+//      is on the nearest per side, not on every banded pair — one pair drifting
+//      away is harmless as long as another still straddles the cut, and
+//      `cand-invoice-pdf-broken` (≈0.0164 above) is banded `near_boundary` for
+//      its role as the deliberate false positive rather than for its distance.
 //
 // ─── WHAT IT DOES NOT ENFORCE ───────────────────────────────────────────────
 //
