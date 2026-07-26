@@ -56,10 +56,12 @@ import {
 import {
   createConversationService,
   createPublicUpdateReviewCandidateService,
+  createVocEmbeddingEnqueuer,
   createVocReadService,
   createVocService,
   vocRoutes,
 } from './modules/voc/index.js';
+import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -546,6 +548,13 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     db: dbHandle.db,
     auditService,
     checkService,
+    // #168 (ADR-0034 D6). Disabled provider → the enqueuer is a no-op, so a
+    // key-less environment creates no embedding jobs at all.
+    embeddingEnqueuer: createVocEmbeddingEnqueuer({
+      ...(boss ? { boss } : {}),
+      embeddingEnabled: isEmbeddingEnabled(config),
+      log: { error: (msg, meta) => app.log.error(meta ?? {}, msg) },
+    }),
   });
   const vocReadService = createVocReadService({
     db: dbHandle.db,

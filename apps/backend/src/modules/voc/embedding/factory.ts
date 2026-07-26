@@ -7,6 +7,18 @@ import { createVoyageEmbeddingProvider, type VoyageFetch } from './voyage.js';
 
 const DEFAULT_DIMENSIONS = 1024;
 
+/**
+ * Whether this environment can produce embeddings at all (ADR-0034 D2).
+ *
+ * The ingestion path checks this *before* enqueuing rather than discovering
+ * unavailability inside a worker: a disabled environment must enqueue nothing,
+ * so an operator who has not configured a provider does not accumulate a queue
+ * of jobs that can only ever fail.
+ */
+export function isEmbeddingEnabled(config: Pick<AppConfig, 'EMBEDDING_PROVIDER'>): boolean {
+  return config.EMBEDDING_PROVIDER !== 'disabled';
+}
+
 export function createEmbeddingProvider(
   config: AppConfig,
   fetch: VoyageFetch = globalThis.fetch as unknown as VoyageFetch,
