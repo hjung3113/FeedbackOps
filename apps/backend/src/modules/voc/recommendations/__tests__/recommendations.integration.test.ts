@@ -463,6 +463,50 @@ describe.skipIf(!runIntegration)('voc recommendations (#168)', () => {
     expect(asAdmin.total).toBe(1);
   });
 
+  it('shares a scoped actor’s in-scope dismissal with everyone scoped to that system', async () => {
+    // The one arm of `dismissalScopeKeySql` that no other test reaches: a
+    // `kind: 'scoped'` actor dismissing a candidate *inside* their scope, which
+    // takes the CASE/THEN branch rather than the admin short-circuit or the
+    // reporter ELSE. It is also the most common production shape — an ordinary
+    // triager with voc.read on the system — and if the SQL twin ever stops
+    // agreeing with `dismissalScopeKey` here, the dismissal is written as
+    // `ms:<msA>` and then never matched again: the pair returns on every
+    // recomputation, and no application path can delete the row.
+    const candidate = await seedCandidate({
+      msId: msA,
+      reporterId: adminId,
+      title: 'Dismissed by a scoped actor',
+      vector: IDENTICAL_VECTOR,
+    });
+
+    await service.dismissRecommendation({
+      actor: scopedDev(),
+      sourceVocId,
+      candidateVocId: candidate,
+    });
+
+    const row = await appHandle.pool.query<{ scope_key: string }>(
+      `select scope_key from voc.voc_recommendation_decisions
+        where source_voc_id = $1 and candidate_voc_id = $2`,
+      [sourceVocId, candidate],
+    );
+    expect(row.rows[0]?.scope_key).toBe(`ms:${msA}`);
+
+    // Suppressed for the actor who dismissed it — proves the read query derives
+    // the same key the write path stored.
+    expect(ids(await service.listRecommendations({ actor: scopedDev(), sourceVocId }))).not.toContain(
+      candidate,
+    );
+    // ...and for every other actor whose visibility comes from the same
+    // Managed System: this arm is a shared triage judgement, not a personal one.
+    expect(
+      ids(await service.listRecommendations({ actor: managerDev(), sourceVocId })),
+    ).not.toContain(candidate);
+    const asAdmin = await service.listRecommendations({ actor: admin(), sourceVocId });
+    expect(ids(asAdmin)).not.toContain(candidate);
+    expect(asAdmin.total).toBe(0);
+  });
+
   // ── (d) a new embedding version clears suppression ─────────────────────────
 
   it('resurfaces a dismissed pair after an embedding-version bump', async () => {

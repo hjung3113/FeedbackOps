@@ -28,6 +28,13 @@
 // `__tests__/recommendations.integration.test.ts` proves the SQL twin agrees —
 // a dismissal written under the TypeScript key only suppresses the pair if the
 // query derives the same key for the same candidate row.
+//
+// Agreement has to be proved once per arm, and an admin does not exercise the
+// same SQL as a scoped actor: `kind: 'all'` returns a bare concatenation while
+// `kind: 'scoped'` returns a CASE whose two branches are separately reachable.
+// A test written only against an admin leaves the CASE untested even though it
+// is the arm ordinary triagers actually run. All three arms now have a
+// suppression test; keep it that way when editing either twin.
 
 import { sql } from 'drizzle-orm';
 
@@ -79,10 +86,14 @@ export function dismissalScopeKeySql(
  * Deliberately identical in meaning to `similarPeerVisibilityPredicate` in
  * `repo-read.ts` — ADR-0034 D4 says the recommendation surface *reuses* that
  * rule rather than deriving one of its own. It is restated here only because
- * the recommendation query aliases the candidate VOC differently; if the rule
- * itself ever changes, both must change together, which is why
- * `__tests__/recommendations-authorization.integration.test.ts` asserts the two
- * surfaces agree on the same fixture.
+ * the recommendation query aliases the candidate VOC differently.
+ *
+ * If the rule itself ever changes, both must change together, and **nothing
+ * currently fails if they diverge**: `__tests__/recommendations.integration.
+ * test.ts` pins this copy's behaviour (scope arm, reporter arm, and the total),
+ * but no test puts the two surfaces on one fixture and asserts they agree.
+ * Closing that needs a fixture spanning both read models; until then this
+ * comment is the only thing holding the two in step.
  */
 export function candidateVisibilityPredicate(
   readScope: Scope,
