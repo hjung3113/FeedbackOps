@@ -127,6 +127,11 @@ justifies a cache.
 
 ## Consequences
 
+> **Amended 2026-07-27 (#168 step 6).** The recommendation HTTP surface has
+> landed: `GET /vocs/:id/recommendations`, `POST
+> /vocs/:id/recommendations/:candidate_id/dismiss`, and `POST
+> /vocs/:id/recommendations/:candidate_id/confirm`.
+
 - `docker-compose.dev.yml`, CI Postgres, and every deployed environment must
   use a pgvector-capable image before the migration lands. This is the single
   highest-risk step and is sequenced first.
