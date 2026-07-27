@@ -527,7 +527,7 @@ export function TriagePanel({
         </div>
 
         {/* Cluster section */}
-        <ClusterSectionReadOnly similarCount={voc.similar_count} />
+        <ClusterSectionReadOnly vocId={voc.id} similarCount={voc.similar_count} />
 
         {/* Triage 결과 미리보기 */}
         <div className="mb-0" data-anchor="summary">
