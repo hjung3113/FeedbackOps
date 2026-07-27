@@ -206,7 +206,7 @@ describe('Survey screens', () => {
     );
   });
 
-  it('recreates a persisted branched question when its branch is removed', async () => {
+  it('clears a persisted branch with one PATCH and keeps the question id', async () => {
     const parentQuestion = survey.questions?.[0] as SurveyQuestion;
     const child: SurveyQuestion = {
       ...parentQuestion,
@@ -227,46 +227,39 @@ describe('Survey screens', () => {
     fireEvent.click(screen.getByText('Q2'));
     fireEvent.change(screen.getByLabelText('분기 부모 질문'), { target: { value: '' } });
     await waitFor(() =>
-      expect(apiClient).toHaveBeenCalledWith('DELETE', '/surveys/survey-1/questions/question-2'),
-    );
-    await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
-        'POST',
-        '/surveys/survey-1/questions',
+        'PATCH',
+        '/surveys/survey-1/questions/question-2',
         expect.objectContaining({
-          body: expect.objectContaining({ prompt: '추가 질문', sort_order: 1 }),
+          body: expect.objectContaining({ branch_parent_question_id: null }),
         }),
       ),
     );
-    const deleteIndex = apiClient.mock.calls.findIndex(
-      (call) => call[0] === 'DELETE' && call[1] === '/surveys/survey-1/questions/question-2',
+    // The #188 workaround deleted and re-created the row, which minted a new
+    // id. A PATCH must not touch either endpoint (#194).
+    expect(apiClient).not.toHaveBeenCalledWith('DELETE', '/surveys/survey-1/questions/question-2');
+    expect(apiClient).not.toHaveBeenCalledWith(
+      'POST',
+      '/surveys/survey-1/questions',
+      expect.anything(),
     );
-    const recreateIndex = apiClient.mock.calls.findIndex(
-      (call) =>
-        call[0] === 'POST' &&
-        call[1] === '/surveys/survey-1/questions' &&
-        call[2].body.prompt === '추가 질문',
-    );
-    expect(deleteIndex).toBeLessThan(recreateIndex);
-    const recreateBody = apiClient.mock.calls.find(
-      (call) =>
-        call[0] === 'POST' &&
-        call[1] === '/surveys/survey-1/questions' &&
-        call[2].body.prompt === '추가 질문',
+    // The backend clears trigger and depth alongside the parent, so sending
+    // them would be redundant — and sending a stale trigger would fight it.
+    const body = apiClient.mock.calls.find(
+      (call) => call[0] === 'PATCH' && call[1] === '/surveys/survey-1/questions/question-2',
     )?.[2].body;
-    expect(recreateBody).not.toHaveProperty('branch_parent_question_id');
-    expect(recreateBody).not.toHaveProperty('branch_trigger_option_key');
+    expect(body).not.toHaveProperty('branch_trigger_option_key');
   });
 
-  it('disables a question editor while removing its branch', async () => {
-    let resolveDelete: (() => void) | undefined;
+  it('stays editable through an unbranch, since the id no longer changes', async () => {
+    let resolvePatch: (() => void) | undefined;
     apiClient.mockImplementation((method: string, path: string) => {
-      if (method === 'DELETE' && path.endsWith('/question-2')) {
+      if (method === 'PATCH' && path.endsWith('/question-2')) {
         return new Promise((resolve) => {
-          resolveDelete = () => resolve({ data: {} });
+          resolvePatch = () => resolve({ data: { id: 'question-2' } });
         });
       }
-      return Promise.resolve({ data: { id: 'question-recreated' } });
+      return Promise.resolve({ data: { id: 'question-2' } });
     });
     const parentQuestion = survey.questions?.[0] as SurveyQuestion;
     const child: SurveyQuestion = {
@@ -287,74 +280,23 @@ describe('Survey screens', () => {
     );
     fireEvent.click(screen.getByText('Q2'));
     fireEvent.change(screen.getByLabelText('분기 부모 질문'), { target: { value: '' } });
-    await waitFor(() => expect(resolveDelete).toBeDefined());
+    await waitFor(() => expect(resolvePatch).toBeDefined());
+    // The busyQuestionIds lock existed only because the in-flight recreate
+    // invalidated the id an edit would target. With a stable id, edits during
+    // the request are ordinary follow-up PATCHes to the same row (#194).
     const title = screen.getByDisplayValue('추가 질문');
-    expect(title).toBeDisabled();
-    fireEvent.change(title, { target: { value: '삭제 중 수정' } });
-    expect(apiClient).not.toHaveBeenCalledWith(
-      'PATCH',
-      '/surveys/survey-1/questions/question-2',
-      expect.anything(),
-    );
-    await act(async () => resolveDelete?.());
-    await waitFor(() => expect(screen.getByDisplayValue('추가 질문')).not.toBeDisabled());
-  });
-
-  it('keeps the second question editor disabled while overlapping unbranch work is pending', async () => {
-    const resolveDelete = new Map<string, () => void>();
-    apiClient.mockImplementation((method: string, path: string) => {
-      if (method === 'DELETE') {
-        return new Promise((resolve) => {
-          resolveDelete.set(path, () => resolve({ data: {} }));
-        });
-      }
-      return Promise.resolve({ data: { id: 'question-recreated' } });
-    });
-    const parentQuestion = survey.questions?.[0] as SurveyQuestion;
-    const secondQuestion: SurveyQuestion = {
-      ...parentQuestion,
-      id: 'question-2',
-      prompt: '두 번째 질문',
-      branch_depth: 1,
-      branch_parent_question_id: 'question-1',
-      branch_trigger_option_key: 'no',
-      sort_order: 1,
-    };
-    const thirdQuestion: SurveyQuestion = {
-      ...secondQuestion,
-      id: 'question-3',
-      prompt: '세 번째 질문',
-      sort_order: 2,
-    };
-    renderWithQuery(
-      <SurveyBuilder
-        survey={{
-          ...survey,
-          questions: [...(survey.questions ?? []), secondQuestion, thirdQuestion],
-        }}
-        canManage
-        onBack={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByText('Q2'));
-    fireEvent.change(screen.getByLabelText('분기 부모 질문'), {
-      target: { value: '' },
-    });
+    expect(title).not.toBeDisabled();
+    fireEvent.change(title, { target: { value: '언브랜치 중 수정' } });
     await waitFor(() =>
-      expect(resolveDelete.get('/surveys/survey-1/questions/question-2')).toBeDefined(),
+      expect(apiClient).toHaveBeenCalledWith(
+        'PATCH',
+        '/surveys/survey-1/questions/question-2',
+        expect.objectContaining({
+          body: expect.objectContaining({ prompt: '언브랜치 중 수정' }),
+        }),
+      ),
     );
-    fireEvent.click(screen.getByText('Q3'));
-    fireEvent.change(screen.getByLabelText('분기 부모 질문'), {
-      target: { value: '' },
-    });
-    await waitFor(() =>
-      expect(resolveDelete.get('/surveys/survey-1/questions/question-3')).toBeDefined(),
-    );
-
-    await act(async () => resolveDelete.get('/surveys/survey-1/questions/question-2')?.());
-
-    expect(screen.getByDisplayValue('세 번째 질문')).toBeDisabled();
+    await act(async () => resolvePatch?.());
   });
 
   it('uses the selected parent option to reveal a branched preview question', async () => {

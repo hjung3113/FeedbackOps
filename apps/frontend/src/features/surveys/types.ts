@@ -39,7 +39,12 @@ export interface Survey {
   questions?: SurveyQuestion[];
 }
 
-/** Strict question-route input: absent optional fields must be omitted, never null. */
+/**
+ * Strict question-route input: absent optional fields must be omitted, never
+ * null. `branch_parent_question_id` is the one exception — the route reads
+ * `undefined` as "leave as is" and an explicit `null` as "clear the branch"
+ * (#192), so clearing a branch is the only case that may send a null.
+ */
 export interface QuestionInput {
   kind: QuestionKind;
   prompt: string;
@@ -50,6 +55,6 @@ export interface QuestionInput {
   rating_low_label?: string;
   rating_high_label?: string;
   sort_order?: number;
-  branch_parent_question_id?: string;
+  branch_parent_question_id?: string | null;
   branch_trigger_option_key?: string;
 }

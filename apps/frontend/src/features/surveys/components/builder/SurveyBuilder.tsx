@@ -76,7 +76,6 @@ export function SurveyBuilder({
   const questionsRef = React.useRef(questions);
   const [selectedId, setSelectedId] = React.useState<string | null>(questions[0]?.id ?? null);
   const [preview, setPreview] = React.useState(false);
-  const [busyQuestionIds, setBusyQuestionIds] = React.useState<Set<string>>(() => new Set());
   const mutations = useSurveyQuestionMutations(survey.id);
   const editable = canManage && survey.status === 'draft' && !gateState;
   const selected = questions.find((question) => question.id === selectedId) ?? null;
@@ -91,35 +90,15 @@ export function SurveyBuilder({
   const patch = (next: SurveyQuestion) => {
     const current = questionsRef.current.find((question) => question.id === next.id);
     updateQuestions((all) => all.map((question) => (question.id === next.id ? next : question)));
-    if (
-      Boolean(current?.branch_parent_question_id) &&
-      !next.branch_parent_question_id &&
-      !next.id.startsWith('local-')
-    ) {
-      setBusyQuestionIds((current) => new Set(current).add(next.id));
-      void (async () => {
-        try {
-          await mutations.remove.mutateAsync(next.id);
-          const recreated = await mutations.create.mutateAsync(toInput(next));
-          updateQuestions((all) =>
-            all.map((question) =>
-              question.id === next.id ? { ...next, id: recreated.id } : question,
-            ),
-          );
-          setSelectedId((id) => (id === next.id ? recreated.id : id));
-        } finally {
-          setBusyQuestionIds((current) => {
-            const pending = new Set(current);
-            pending.delete(next.id);
-            return pending;
-          });
-        }
-      })();
-      return;
-    }
-    if (!next.id.startsWith('local-')) {
-      mutations.update.mutate({ id: next.id, body: toInput(next) });
-    }
+    if (next.id.startsWith('local-')) return;
+    const body = toInput(next);
+    // `toInput` omits falsy branch fields, which cannot express "clear it" —
+    // an omitted field means "leave as is" to the route. Unbranching is the
+    // one edit that must send an explicit null (#192/#194). The backend then
+    // clears trigger and depth in the same statement, so neither is sent here.
+    if (current?.branch_parent_question_id && !next.branch_parent_question_id)
+      body.branch_parent_question_id = null;
+    mutations.update.mutate({ id: next.id, body });
   };
 
   const add = () => {
@@ -187,7 +166,7 @@ export function SurveyBuilder({
             <QuestionEditor
               question={selected}
               questions={questions}
-              editable={editable && !busyQuestionIds.has(selected.id)}
+              editable={editable}
               onChange={patch}
             />
           ) : (
