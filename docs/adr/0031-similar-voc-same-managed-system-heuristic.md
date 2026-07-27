@@ -39,6 +39,12 @@ statuses and all ages are eligible. This is deliberately a weak heuristic, not
 > dismissal state). The heuristic described below remains the shipped behavior
 > until that recommendation resource lands; this ADR is amended at that point,
 > not before.
+>
+> **Amended 2026-07-27 (#168 step 6).** The ADR-0034 recommendation resource
+> now has its HTTP surface. This heuristic remains **Accepted** alongside it,
+> rather than being replaced: when recommendations report `available:false`
+> because the provider is disabled or the source has not yet been embedded, the
+> heuristic remains the only related-VOC signal.
 
 A peer is visible only when its Managed System is in the actor's `voc.read`
 scope or the actor reported that peer. A triage-only summary envelope exposes

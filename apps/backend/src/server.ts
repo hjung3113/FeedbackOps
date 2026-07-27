@@ -57,8 +57,10 @@ import {
   createConversationService,
   createPublicUpdateReviewCandidateService,
   createVocEmbeddingEnqueuer,
+  createVocRecommendationsService,
   createVocReadService,
   createVocService,
+  vocRecommendationsRoutes,
   vocRoutes,
 } from './modules/voc/index.js';
 import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
@@ -590,6 +592,26 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
     },
+  });
+
+  const vocRecommendationsService = createVocRecommendationsService({
+    db: dbHandle.db,
+    auditService,
+    embeddingVersion: config.EMBEDDING_VERSION,
+    embeddingEnabled: isEmbeddingEnabled(config),
+    createClustersService: (db) => createVocClustersService({
+      db,
+      auditService,
+      checkService,
+      idempotencyService,
+      postPublicUpdate: conversationService.postPublicUpdate,
+    }),
+  });
+  await app.register(vocRecommendationsRoutes, {
+    sessionService,
+    vocRecommendationsService,
+    workspaceId,
+    rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
   });
 
   // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────

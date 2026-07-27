@@ -123,6 +123,19 @@ has a user to be honest with.
 
 ## Recommendation Threshold Evaluation (ADR-0034 D5)
 
+## Recommendation Route Surface (ADR-0034 D3/D4)
+
+- The HTTP plugin in `recommendations/routes.ts` owns exactly `GET
+  /vocs/:id/recommendations`, `POST
+  /vocs/:id/recommendations/:candidate_id/dismiss`, and `POST
+  /vocs/:id/recommendations/:candidate_id/confirm`.
+- Routes validate UUID syntax, resolve the session actor, and forward to the
+  recommendation service. They perform **no authorization** of their own and
+  never reclassify service errors.
+- Unreadable, archived, and nonexistent source or candidate VOCs all use the
+  single `not_found.record` shape. Do not introduce a permission-denied branch
+  at the route boundary.
+
 `recommendations/constants.ts` pins `VOC_RECOMMENDATION_SIMILARITY_THRESHOLD =
 0.75` in code. ADR-0034 D5 requires a committed evaluation fixture beside it,
 and requires that changing the default updates the fixture in the same change.

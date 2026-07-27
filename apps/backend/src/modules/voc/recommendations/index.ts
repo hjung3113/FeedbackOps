@@ -10,3 +10,4 @@ export {
   type VocRecommendationsServiceDeps,
   createVocRecommendationsService,
 } from './service.js';
+export { vocRecommendationsRoutes, type VocRecommendationsRoutesOptions } from './routes.js';
