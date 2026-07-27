@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
 
-import type { DbHandle } from '../../../db/client.js';
+import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 
 // ── Cookie / login helpers ────────────────────────────────────────────────────
@@ -418,6 +418,19 @@ export async function cleanupReadTestTables(
     [workspaceId],
   );
 
+  // 1b. Access requests raised by those actors. `permission_requests
+  //     .requester_actor_id` is the second FK into core.actors (after
+  //     audit_log) that blocks the actor delete at the end of this helper;
+  //     fops_app does hold DELETE here, so the app pool is enough.
+  await dbHandle.pool.query(
+    `delete from permission.permission_requests
+      where workspace_id = $1
+        and requester_actor_id in (
+          select id from core.actors where external_id like 'mock-dev-read-%' and workspace_id = $1
+        )`,
+    [workspaceId],
+  );
+
   // 2. Clean permission decisions seed fixture (fops_app has DELETE).
   await dbHandle.pool.query(
     `delete from voc.voc_permission_decisions_seed_fixture
@@ -494,10 +507,42 @@ export async function cleanupReadTestTables(
        )`,
     [workspaceId],
   );
+  // 6. Audit rows written while the dev actors made requests. Every request
+  //    these actors issue writes core.audit_log, and audit_log.actor_id is a
+  //    plain FK to core.actors — so the delete below fails with
+  //    audit_log_actor_id_actors_id_fk unless the audit rows go first. That
+  //    failure aborts the whole afterAll hook, which is why every fixture
+  //    after it leaked into the next run (#205).
+  //
+  //    fops_app has no DELETE on core.audit_log by design (ADR-0008/0019), so
+  //    this one statement has to go through the migrate role. When
+  //    DATABASE_URL_MIGRATE is not exported the suites that call this helper
+  //    are gated off anyway, so skipping is safe.
+  await clearAuditLogForDevActors(workspaceId);
+
   await dbHandle.pool.query(
     `delete from core.actors where external_id like 'mock-dev-read-%' and workspace_id = $1`,
     [workspaceId],
   );
+}
+
+async function clearAuditLogForDevActors(workspaceId: string): Promise<void> {
+  const migrateUrl = process.env.DATABASE_URL_MIGRATE ?? '';
+  if (!migrateUrl) return;
+
+  const migrateHandle = createDb(migrateUrl);
+  try {
+    await migrateHandle.pool.query(
+      `delete from core.audit_log
+        where actor_id in (
+          select id from core.actors
+           where external_id like 'mock-dev-read-%' and workspace_id = $1
+        )`,
+      [workspaceId],
+    );
+  } finally {
+    await migrateHandle.close();
+  }
 }
 
 // ── Unique slug generator ─────────────────────────────────────────────────────

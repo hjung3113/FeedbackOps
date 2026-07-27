@@ -68,10 +68,66 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   });
 
   afterAll(async () => {
+    await cleanupFixtures();
     await app?.close();
     await db?.close();
     await migrateDb?.close();
   });
+
+  // This suite used to close its handles and leave everything it created in
+  // the database. The managed systems in particular ('perm-decision-%',
+  // 'deny-scope-%') outlived the run and made `db/__tests__/seed` fail its
+  // exact-match assertion on the seeded Slice 2 managed systems, because that
+  // suite happens to run later in the same process pool (#205).
+  //
+  // Deletion order follows the FK graph into core.actors: requests, grants and
+  // denies, then the per-actor session/idempotency/rate-limit rows, then the
+  // audit rows (migrate role — fops_app holds no DELETE on core.audit_log by
+  // design, ADR-0008/0019), and only then the actors themselves.
+  async function cleanupFixtures(): Promise<void> {
+    const actorPattern = `(external_id like 'mock-dev-read-perm-decision-%'
+                            or external_id like 'perm-self-%')`;
+    const actorIds = `select id from core.actors
+                       where workspace_id = $1 and ${actorPattern}`;
+
+    await db.pool.query(
+      `delete from permission.permission_requests
+        where workspace_id = $1 and requester_actor_id in (${actorIds})`,
+      [WORKSPACE_ID],
+    );
+    await db.pool.query(
+      `delete from permission.permission_denies
+        where workspace_id = $1 and actor_id in (${actorIds})`,
+      [WORKSPACE_ID],
+    );
+    await db.pool.query(
+      `delete from permission.permission_grants
+        where workspace_id = $1 and actor_id in (${actorIds})`,
+      [WORKSPACE_ID],
+    );
+    await db.pool.query(
+      `delete from core.idempotency_keys where actor_id in (${actorIds})`,
+      [WORKSPACE_ID],
+    );
+    await db.pool.query(
+      `delete from core.sessions where actor_id in (${actorIds})`,
+      [WORKSPACE_ID],
+    );
+    await migrateDb.pool.query(
+      `delete from core.audit_log where actor_id in (${actorIds})`,
+      [WORKSPACE_ID],
+    );
+    await db.pool.query(
+      `delete from core.actors where workspace_id = $1 and ${actorPattern}`,
+      [WORKSPACE_ID],
+    );
+    await db.pool.query(
+      `delete from core.managed_systems
+        where workspace_id = $1
+          and (slug like 'perm-decision-%' or slug like 'deny-scope-%')`,
+      [WORKSPACE_ID],
+    );
+  }
 
   async function seedRequest(
     input: {
