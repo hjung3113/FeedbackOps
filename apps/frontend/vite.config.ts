@@ -65,6 +65,12 @@ export default defineConfig({
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
       },
+      // #187: POST /survey-responses/:id/{create-finding,
+      // evidence-excerpt-candidates,approved-excerpts}. A backend-only root
+      // prefix — no FE route of this name — so forward it unconditionally.
+      // Missing until #206: the proxy check could not see the shorthand
+      // `app.post('/survey-responses/...')` form these routes use.
+      '/survey-responses': 'http://127.0.0.1:3011',
       // Slice 3 #22: POST /attachments (multipart upload) + GET
       // /attachments/:id/download (streaming). No FE-route collision; forward
       // root path unconditionally.

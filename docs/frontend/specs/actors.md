@@ -39,3 +39,10 @@ FE-only mapping inside `useWorkspaceActors`; today every BE row maps to
 
 - Forward drift (BE→proxy): `apps/frontend/src/__tests__/vite-proxy-completeness.test.ts`.
 - Reverse drift (FE→BE): `apps/backend/src/__tests__/fe-call-endpoints-exist.test.ts`.
+
+Both discover backend routes by reading source, and both must parse **either**
+fastify registration form — `app.route({ url: '/x' })` or the method shorthand
+`app.get('/x', …)`. A form neither can see disappears from the check: the
+reverse guard then reports a live route as missing (a false red the reader
+learns to ignore), and the forward guard stops demanding a proxy entry for it
+at all (a silent green). Both failure modes were live until #206.
