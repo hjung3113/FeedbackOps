@@ -45,7 +45,13 @@ type DmlPrivilege = (typeof DML_PRIVILEGES)[number];
 const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
 
 // Tables intentionally narrower than full-DML for fops_app, keyed by the
-// fully-qualified `schema.table` name. Grants come from migrations 0010, 0037, and 0039.
+// fully-qualified `schema.table` name. Grants come from migrations 0010, 0037,
+// 0039, and 0044.
+//
+// A table absent from this map is asserted as full-DML. That default is why a
+// new narrower table shows up here as a missing-DELETE failure rather than as
+// silence: the entry is the design record, and adding one is a decision, not
+// paperwork (#207).
 const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'survey.surveys': ['SELECT', 'INSERT', 'UPDATE'],
   'survey.survey_questions': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
@@ -62,6 +68,11 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // must remain without table-wide UPDATE.
   'voc.public_update_review_candidates': ['SELECT', 'INSERT'],
   'voc.reporter_facing_status_transitions': ['SELECT'],
+  // No DELETE by design (migration 0044): a dismissal the application can
+  // erase is not a dismissal that survives recomputation. UPDATE is granted
+  // for the one legal transition out of a terminal state — a dismissed pair
+  // promoted to `confirmed` in place (ADR-0034 D3).
+  'voc.voc_recommendation_decisions': ['SELECT', 'INSERT', 'UPDATE'],
 };
 
 describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice 3 #22)', () => {
@@ -112,7 +123,7 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
         }
         if (!expected.has(priv) && got.has(priv)) {
           failures.push(
-            `fops_app has unexpected GRANT ${priv} ON ${fq}; ${fq} is append-only by design (migration 0010 or 0037) — REVOKE it or update EXPECTED_GRANTS if the design changed`,
+            `fops_app has unexpected GRANT ${priv} ON ${fq}; ${fq} is narrower than full-DML by design (see the migration that created it) — REVOKE it or update EXPECTED_GRANTS if the design changed`,
           );
         }
       }

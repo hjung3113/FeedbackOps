@@ -136,6 +136,18 @@ has a user to be honest with.
   single `not_found.record` shape. Do not introduce a permission-denied branch
   at the route boundary.
 
+**`voc.voc_recommendation_decisions` is not full-DML for `fops_app`: `SELECT,
+INSERT, UPDATE` and no DELETE** (migration 0044). A dismissal the application
+can erase is not a dismissal that survives recomputation — ADR-0034 D6 recomputes
+recommendations on read, so the suppression row is the only thing standing
+between a human judgement and its own undoing. UPDATE exists for exactly one
+transition, `dismissed` → `confirmed` in place; that is why the table is not
+plain insert-only. Test teardown must delete these rows through
+`DATABASE_URL_MIGRATE`, like `core.audit_log` (#205). The grant set is asserted
+by `db/__tests__/role-grants-product-tables.integration.test.ts`, whose
+`EXPECTED_GRANTS` map defaults an unlisted table to full-DML — a new narrower
+table must be registered there in the same chunk (#207).
+
 `recommendations/constants.ts` pins `VOC_RECOMMENDATION_SIMILARITY_THRESHOLD =
 0.75` in code. ADR-0034 D5 requires a committed evaluation fixture beside it,
 and requires that changing the default updates the fixture in the same change.
