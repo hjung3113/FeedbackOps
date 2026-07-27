@@ -6,13 +6,18 @@ import { type DbHandle, createDb } from '../client.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
+const runIntegration = Boolean(APP_URL && MIGRATE_URL);
+
+if (!runIntegration) {
+  console.warn('[survey-foundation] skipping — set DATABASE_URL, DATABASE_URL_MIGRATE to run.');
+}
 
 function requiredId(row: { id: string } | undefined, label: string): string {
   if (!row?.id) throw new Error(`${label} insert returned no id`);
   return row.id;
 }
 
-describe('Survey foundation migration 0036', () => {
+describe.skipIf(!runIntegration)('Survey foundation migration 0036', () => {
   let appHandle: DbHandle;
   let migrateHandle: DbHandle;
   const workspaceId = randomUUID();
@@ -20,8 +25,6 @@ describe('Survey foundation migration 0036', () => {
   let managedSystemId: string;
 
   beforeAll(async () => {
-    if (!APP_URL || !MIGRATE_URL)
-      throw new Error('DATABASE_URL and DATABASE_URL_MIGRATE are required');
     appHandle = createDb(APP_URL);
     migrateHandle = createDb(MIGRATE_URL);
     await migrateHandle.pool.query('insert into core.workspaces (id, name) values ($1, $2)', [
