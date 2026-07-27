@@ -146,6 +146,69 @@ export interface ListVocsRepoArgs {
   limit: number;
 }
 
+type VocListPredicateArgs = Omit<ListVocsRepoArgs, 'sort' | 'cursor' | 'limit'>;
+
+/**
+ * The canonical list/count predicate.  Keep navigation counts on this path so
+ * a badge cannot silently drift from the corresponding VOC list.
+ */
+export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<typeof sql>[] | null {
+  const {
+    workspaceId,
+    scopeFilter,
+    view,
+    actorIdForMyFilter,
+    tab,
+    filterSeverity,
+    filterReporterFacingStatus,
+    filterOwner,
+  } = args;
+  if (scopeFilter.kind === 'scoped' && scopeFilter.managedSystemIds.length === 0) return null;
+  if (tab === 'similar') return null;
+
+  const wheres: ReturnType<typeof sql>[] = [
+    sql`workspace_id = ${workspaceId}`,
+    sql`archived_at IS NULL`,
+  ];
+  if (scopeFilter.kind === 'scoped') {
+    wheres.push(sql`primary_managed_system_id = ANY(${sqlUuidArray(scopeFilter.managedSystemIds)})`);
+  }
+  if (view === 'my') {
+    if (!actorIdForMyFilter) throw new Error('actorIdForMyFilter required for view=my');
+    wheres.push(sql`reporter_id = ${actorIdForMyFilter}`);
+  } else if (view === 'triage') {
+    wheres.push(sql`triage_state IN ('untriaged','needs_more_information')`);
+  }
+  if (tab === 'untriaged') wheres.push(sql`triage_state = 'untriaged'`);
+  else if (tab === 'high') wheres.push(sql`severity = 'high'`);
+  else if (tab === 'unassigned') wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
+  else if (tab === 'waiting') wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
+  else if (tab === 'no-link') {
+    wheres.push(sql`NOT EXISTS (
+      SELECT 1 FROM ${entityLinks} el
+      WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
+        AND ((el.source_type = 'voc' AND el.source_id = ${vocs.id})
+          OR (el.target_type = 'voc' AND el.target_id = ${vocs.id}))
+    )`);
+  }
+  if (filterSeverity && filterSeverity.length > 0) wheres.push(sql`severity = ANY(${sqlTextArray(filterSeverity)})`);
+  if (filterReporterFacingStatus && filterReporterFacingStatus.length > 0) {
+    wheres.push(sql`reporter_facing_status = ANY(${sqlTextArray(filterReporterFacingStatus)})`);
+  }
+  if (filterOwner === 'assigned') wheres.push(sql`(owner_user_id IS NOT NULL OR owner_team_id IS NOT NULL)`);
+  else if (filterOwner === 'unassigned') wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
+  return wheres;
+}
+
+export async function countVocsForRead(db: Db | Tx, args: VocListPredicateArgs): Promise<number> {
+  const wheres = buildVocListPredicate(args);
+  if (wheres === null) return 0;
+  const result = await (db as Db).execute<{ count: number | string }>(sql`
+    SELECT count(*)::int AS count FROM ${vocs} WHERE ${sql.join(wheres, sql` AND `)}
+  `);
+  return Number(result.rows[0]?.count ?? 0);
+}
+
 // Utility: normalise raw postgres row dates.
 function toDate(v: Date | string): Date {
   return v instanceof Date ? v : new Date(v);
@@ -199,72 +262,8 @@ export async function listVocsForRead(
 ): Promise<{ rows: VocReadRow[]; hasMore: boolean; nextCursor: { sv: string | number; id: string } | null }> {
   const { workspaceId, scopeFilter, view, actorIdForMyFilter, tab, filterSeverity, filterReporterFacingStatus, filterOwner, sort, cursor, limit } = args;
 
-  // Short-circuit: empty scoped list → no rows possible, skip DB query.
-  if (scopeFilter.kind === 'scoped' && scopeFilter.managedSystemIds.length === 0) {
-    return { rows: [], hasMore: false, nextCursor: null };
-  }
-
-  // tab='similar' → WHERE false (Slice 3; cluster service not available).
-  if (tab === 'similar') {
-    return { rows: [], hasMore: false, nextCursor: null };
-  }
-
-  // Build the WHERE clauses via raw SQL fragments.
-  // All values are bound via parameterised sql`` tags — never string-interpolated.
-  const wheres: ReturnType<typeof sql>[] = [
-    sql`workspace_id = ${workspaceId}`,
-    sql`archived_at IS NULL`,
-  ];
-
-  // Scope filter.
-  if (scopeFilter.kind === 'scoped') {
-    wheres.push(sql`primary_managed_system_id = ANY(${sqlUuidArray(scopeFilter.managedSystemIds)})`);
-  }
-
-  // View-specific filters.
-  if (view === 'my') {
-    if (!actorIdForMyFilter) throw new Error('actorIdForMyFilter required for view=my');
-    wheres.push(sql`reporter_id = ${actorIdForMyFilter}`);
-  } else if (view === 'triage') {
-    wheres.push(sql`triage_state IN ('untriaged','needs_more_information')`);
-  }
-
-  // Tab filters.
-  if (tab === 'untriaged') {
-    wheres.push(sql`triage_state = 'untriaged'`);
-  } else if (tab === 'high') {
-    wheres.push(sql`severity = 'high'`);
-  } else if (tab === 'unassigned') {
-    wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
-  } else if (tab === 'waiting') {
-    // Only valid for triage view; no extra clause beyond the triage_state filter
-    // since service layer validates view=triage for this tab.
-    wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
-  } else if (tab === 'no-link') {
-    wheres.push(sql`NOT EXISTS (
-      SELECT 1
-      FROM ${entityLinks} el
-      WHERE el.workspace_id = ${workspaceId}
-        AND el.status = 'active'
-        AND (
-          (el.source_type = 'voc' AND el.source_id = ${vocs.id})
-          OR (el.target_type = 'voc' AND el.target_id = ${vocs.id})
-        )
-    )`);
-  }
-
-  // Scalar column filters.
-  if (filterSeverity && filterSeverity.length > 0) {
-    wheres.push(sql`severity = ANY(${sqlTextArray(filterSeverity)})`);
-  }
-  if (filterReporterFacingStatus && filterReporterFacingStatus.length > 0) {
-    wheres.push(sql`reporter_facing_status = ANY(${sqlTextArray(filterReporterFacingStatus)})`);
-  }
-  if (filterOwner === 'assigned') {
-    wheres.push(sql`(owner_user_id IS NOT NULL OR owner_team_id IS NOT NULL)`);
-  } else if (filterOwner === 'unassigned') {
-    wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
-  }
+  const wheres = buildVocListPredicate(args);
+  if (wheres === null) return { rows: [], hasMore: false, nextCursor: null };
 
   // Determine sort order and cursor predicate.
   // triage_pinned uses a server-pinned composite sort; others use SORT_CONFIG.
