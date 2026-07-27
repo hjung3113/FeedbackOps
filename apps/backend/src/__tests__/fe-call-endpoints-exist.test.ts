@@ -13,9 +13,10 @@
  *       - `apiClient('METHOD', '/foo'...)` / template literal `\`/foo/...\``
  *       - `fetch('/foo', ...)` / `fetch(\`/foo/...\`)`
  *   - Reduce each match to its root prefix (`/foo`).
- *   - Assert each root prefix is registered by some `app.route({ url: '/foo...' })`
- *     in BE (`server.ts` + `modules/*\/routes.ts` + `modules/* /*-routes.ts`),
- *     or listed in KNOWN_FE_ONLY.
+ *   - Assert each root prefix is registered in BE (`server.ts` +
+ *     `modules/*\/routes.ts` + `modules/* /*-routes.ts`) in either fastify
+ *     form — `app.route({ url: '/foo' })` or `app.get('/foo', ...)` — or
+ *     listed in KNOWN_FE_ONLY.
  *
  * Pure file-read assertion. No DB, no server boot. Always runs.
  */
@@ -41,15 +42,30 @@ const FE_SRC = path.join(REPO_ROOT, 'apps/frontend/src');
 const BE_SRC = path.join(REPO_ROOT, 'apps/backend/src');
 
 // ─── BE-side route discovery ───────────────────────────────────────────────
-// Reuse the same `url:` extractor as vite-proxy-completeness; quote-aware,
-// single-line. Walk server.ts + every `routes.ts` AND every `*-routes.ts`
-// (the latter so file naming variants — e.g. `list-actors-routes.ts` —
-// are not silently missed).
+// Walk server.ts + every `routes.ts` AND every `*-routes.ts` (the latter so
+// file naming variants — e.g. `list-actors-routes.ts` — are not silently
+// missed).
+//
+// Fastify accepts two registration forms and this repo uses both: the object
+// form `app.route({ url: '/x' })` (71 declarations) and the method shorthand
+// `app.get('/x', opts, handler)` (10, all in `modules/surveys/routes.ts`).
+// Matching only the object form made every shorthand route invisible, so the
+// check reported `/surveys` as an unregistered endpoint for months while the
+// routes were live — a false positive that trained readers to ignore the one
+// red line in the gate (#206). Missing a form here fails loud in this
+// direction, but the twin proxy check reads the same source and a miss there
+// fails silent, so both forms must stay covered.
+const ROUTE_URL_PATTERNS: readonly RegExp[] = [
+  /url:\s*['"`](\/[A-Za-z0-9/_\-:]*)['"`]/g,
+  /\b(?:app|fastify)\.(?:get|post|put|patch|delete|head|options|all)\(\s*['"`](\/[A-Za-z0-9/_\-:]*)['"`]/g,
+];
+
 function extractRouteUrls(source: string): string[] {
-  const re = /url:\s*['"](\/[A-Za-z0-9/_\-:]*)['"]/g;
   const out: string[] = [];
-  for (const m of source.matchAll(re)) {
-    if (m[1]) out.push(m[1]);
+  for (const re of ROUTE_URL_PATTERNS) {
+    for (const m of source.matchAll(re)) {
+      if (m[1]) out.push(m[1]);
+    }
   }
   return out;
 }
@@ -128,6 +144,29 @@ function rootPrefix(url: string): string {
 }
 
 describe('FE→BE reverse drift (post-#21)', () => {
+  // The check is only as good as its route discovery: a form it cannot see
+  // reads as "the backend never registered this" (#206).
+  it('discovers both fastify registration forms', () => {
+    const urls = extractRouteUrls(
+      [
+        "app.route({ method: 'GET', url: '/object-form' });",
+        "app.get('/shorthand', { preHandler: pre }, handler);",
+        'app.post(`/shorthand/:id/nested`, handler);',
+        "cache.get('not-a-route');",
+        "map.get('/looks-like-a-path-but-is-not-fastify');",
+      ].join('\n'),
+    );
+    expect(new Set(urls)).toEqual(
+      new Set(['/object-form', '/shorthand', '/shorthand/:id/nested']),
+    );
+  });
+
+  it('discovers the shorthand-registered routes in the real backend source', () => {
+    // `modules/surveys/routes.ts` is the repo's only shorthand user today, and
+    // the prefix this check falsely reported as missing.
+    expect(collectBackendRoutes().has('/surveys')).toBe(true);
+  });
+
   it('every FE URL prefix has a matching BE route (or is in KNOWN_FE_ONLY)', () => {
     const beRoots = collectBackendRoutes();
     expect(beRoots.size, 'should discover at least one BE route').toBeGreaterThan(0);
