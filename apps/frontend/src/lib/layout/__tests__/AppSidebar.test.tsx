@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { Database, Inbox, Plus, Settings } from 'lucide-react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
+import { NAV_TREE } from '@/routes/_authed';
 
 const entries = [
   {
@@ -193,5 +194,63 @@ describe('AppSidebar', () => {
     expect(invite).toHaveAttribute('aria-label', 'Invite member');
     expect(invite.querySelector('svg')).not.toBeNull();
     expect(invite.textContent).toBe('');
+  });
+
+  it('distinguishes an absent count from an explicit zero count', () => {
+    const countEntries = [
+      { id: 'inbox', label: 'Inbox', href: '/vocs?view=inbox', countKey: 'voc.inbox' as const },
+      { id: 'triage', label: 'Triage', href: '/vocs?view=triage', countKey: 'voc.triage' as const },
+    ];
+    const { rerender } = render(<AppSidebar entries={countEntries} counts={{ 'voc.inbox': 0 }} />);
+
+    expect(screen.getByTestId('sidebar-count-inbox')).toHaveTextContent('0');
+    expect(screen.queryByTestId('sidebar-count-triage')).not.toBeInTheDocument();
+
+    rerender(<AppSidebar entries={countEntries} counts={{ 'voc.inbox': 0, 'voc.triage': 0 }} />);
+    expect(screen.getByTestId('sidebar-count-triage')).toHaveTextContent('0');
+  });
+
+  it('keeps an out-of-grant Managed System visible in the scope list', () => {
+    render(
+      <AppSidebar
+        entries={entries}
+        isAdmin={false}
+        managedSystems={[
+          { id: 'granted', name: 'Identity', granted: true },
+          { id: 'outside', name: 'Finance', granted: false },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('scope-selector'));
+    expect(screen.getByTestId('scope-option-outside')).toBeVisible();
+    expect(screen.getByLabelText('Outside your grants')).toBeVisible();
+  });
+
+  it('labels non-admin all scope as the union of granted Managed Systems only', () => {
+    const { rerender } = render(
+      <AppSidebar
+        entries={entries}
+        isAdmin={false}
+        managedSystems={[
+          { id: 'one', name: 'Identity', granted: true },
+          { id: 'two', name: 'Finance', granted: true },
+        ]}
+      />,
+    );
+    expect(screen.getByTestId('scope-union-badge')).toBeVisible();
+    expect(screen.getByTestId('scope-selector')).toHaveTextContent('Identity · Finance');
+
+    rerender(<AppSidebar entries={entries} isAdmin={true} managedSystems={[{ id: 'one', name: 'Identity', granted: true }]} />);
+    expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
+  });
+
+  it('replaces prior-rail items when the sidebar tree changes', () => {
+    const { rerender } = render(<AppSidebar entries={NAV_TREE.voc} />);
+    expect(screen.getByTestId('sidebar-nav-inbox')).toBeInTheDocument();
+
+    rerender(<AppSidebar entries={NAV_TREE.tasks} />);
+    expect(screen.queryByTestId('sidebar-nav-inbox')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sidebar-nav-tasks-board')).toBeInTheDocument();
   });
 });

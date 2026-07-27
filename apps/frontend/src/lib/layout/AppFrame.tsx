@@ -1,11 +1,18 @@
 import * as React from 'react';
 import { DetailPanelSlotContext, cn } from '@fops/ui';
-import { AppRail } from './AppRail';
+import { useQuery } from '@tanstack/react-query';
+import { fetchManagedSystems, fetchNavCounts, fetchPermissionCheck } from '@/lib/api';
+import { useMe } from '@/lib/auth/useMe';
+import { AppRail, type RailDomain } from './AppRail';
 import { AppSidebar, type SidebarNavEntry } from './AppSidebar';
 
 export interface AppFrameProps {
   sidebarEntries: SidebarNavEntry[];
-  workspaceName?: string;
+  activeDomain: RailDomain;
+  managedSystemId?: string;
+  /** VOC routes already encode this scope in their strict URL search schema. */
+  syncManagedSystemFromUrl?: boolean;
+  onManagedSystemChange?: (managedSystemId: string | undefined) => void;
   /** The shell-rendered route content. AppFrame is NOT itself a shell. */
   children: React.ReactNode;
   className?: string;
@@ -22,8 +29,70 @@ interface SlotEntry {
  * NOT a shell — does NOT live in packages/ui. The shell taxonomy is fixed at exactly three
  * (PageShell / ListShell / WorkbenchShell per ADR-0020). AppFrame composes one of those as its outlet.
  */
-export function AppFrame({ sidebarEntries, workspaceName, children, className }: AppFrameProps) {
+export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncManagedSystemFromUrl = false, onManagedSystemChange, children, className }: AppFrameProps) {
   const [slots, setSlots] = React.useState<SlotEntry[]>([]);
+  const [selectedManagedSystemId, setSelectedManagedSystemId] = React.useState<string | undefined>(managedSystemId);
+  React.useEffect(() => {
+    if (syncManagedSystemFromUrl) setSelectedManagedSystemId(managedSystemId);
+  }, [managedSystemId, syncManagedSystemFromUrl]);
+  const me = useMe();
+  const actor = me.data?.actor;
+  const actorId = typeof actor?.id === 'string' ? actor.id : undefined;
+  const roleLevel = actor?.role_level;
+  const isAdmin = typeof roleLevel === 'string' && roleLevel.toLowerCase() === 'admin';
+  const systemsQuery = useQuery({
+    queryKey: ['managed-systems', 'scope-selector'] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ signal }),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const systemIds = systemsQuery.data?.items.map((system) => system.id) ?? [];
+  const grantsQuery = useQuery({
+    queryKey: ['managed-system-scope', actorId, systemIds] as const,
+    enabled: actorId !== undefined && systemIds.length > 0 && !isAdmin,
+    queryFn: async ({ signal }) => {
+      const decisions = await Promise.all(systemIds.map(async (id) => [id, await fetchPermissionCheck('voc.read', { managedSystemId: id, signal })] as const));
+      return new Set(decisions.filter(([, response]) => response.decision.allow).map(([id]) => id));
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+  const countsQuery = useQuery({
+    queryKey: ['nav-counts', selectedManagedSystemId] as const,
+    queryFn: ({ signal }) => fetchNavCounts({
+      signal,
+      ...(selectedManagedSystemId !== undefined ? { managedSystemId: selectedManagedSystemId } : {}),
+    }),
+    retry: false,
+  });
+  const managedSystems = (systemsQuery.data?.items ?? []).map((system) => ({
+    id: system.id,
+    name: system.name,
+    granted: isAdmin || grantsQuery.data?.has(system.id) === true,
+  }));
+  const systemMeta: Record<RailDomain, { label: string; subtitle: string }> = {
+    voc: { label: 'VOC', subtitle: 'Voice of Customer' },
+    findings: { label: 'Findings', subtitle: 'Evidence → Execution' },
+    tasks: { label: 'Tasks', subtitle: 'Execution' },
+    integration: { label: 'Integration', subtitle: 'Coverage & Recovery' },
+    surveys: { label: 'Surveys', subtitle: 'Discovery · Validation · Outcome' },
+    admin: { label: 'Admin', subtitle: 'Workspace' },
+  };
+  const changeManagedSystem = React.useCallback((managedSystemId: string | undefined) => {
+    setSelectedManagedSystemId(managedSystemId);
+    onManagedSystemChange?.(managedSystemId);
+  }, [onManagedSystemChange]);
+  const counts = countsQuery.data?.counts;
+  const sidebarProps = {
+    entries: sidebarEntries,
+    systemLabel: systemMeta[activeDomain].label,
+    systemSubtitle: systemMeta[activeDomain].subtitle,
+    managedSystems,
+    isAdmin,
+    onManagedSystemChange: changeManagedSystem,
+    ...(counts !== undefined ? { counts } : {}),
+    ...(selectedManagedSystemId !== undefined ? { selectedManagedSystemId } : {}),
+  };
 
   const setContent = React.useCallback((key: string, node: React.ReactNode) => {
     setSlots((prev) => {
@@ -52,12 +121,8 @@ export function AppFrame({ sidebarEntries, workspaceName, children, className }:
   return (
     <DetailPanelSlotContext.Provider value={ctxValue}>
       <div className={cn('flex h-screen bg-surface-canvas text-text-primary', className)} data-app-frame>
-        <AppRail />
-        {workspaceName !== undefined ? (
-          <AppSidebar entries={sidebarEntries} workspaceName={workspaceName} />
-        ) : (
-          <AppSidebar entries={sidebarEntries} />
-        )}
+        <AppRail activeDomain={activeDomain} />
+        <AppSidebar {...sidebarProps} />
         <main className="flex-1 min-w-0 flex flex-col" data-testid="app-main">
           {children}
         </main>
