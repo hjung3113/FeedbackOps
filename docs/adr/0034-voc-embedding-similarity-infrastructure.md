@@ -131,6 +131,14 @@ justifies a cache.
 > landed: `GET /vocs/:id/recommendations`, `POST
 > /vocs/:id/recommendations/:candidate_id/dismiss`, and `POST
 > /vocs/:id/recommendations/:candidate_id/confirm`.
+>
+> The frontend surface landed in the same step: the triage panel's Cluster 추천
+> section reads that resource and renders each candidate with confirm and
+> dismiss actions. `available: false` is rendered as two distinct reasons —
+> `provider_disabled` and `source_not_embedded` — each with its own copy, never
+> collapsed into one another and never as an empty candidate list. D2 is
+> therefore honoured at the UI boundary, not only in the API response.
+> Confirmation remains an explicit user action; nothing auto-clusters.
 
 - `docker-compose.dev.yml`, CI Postgres, and every deployed environment must
   use a pgvector-capable image before the migration lands. This is the single

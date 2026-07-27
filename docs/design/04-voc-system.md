@@ -263,6 +263,11 @@ Acceptance Criteria:
 > System heuristic remains alongside this resource when recommendations are
 > unavailable.
 >
+> A user-facing surface now exists as well: the triage panel's Cluster 추천
+> section renders per-candidate recommendations with confirm and dismiss
+> actions, so all three acceptance criteria above are reachable by a user and
+> not only through the API.
+>
 > The 0.75 similarity threshold is still unvalidated against real embeddings.
 > The shipped fixture verifies query and threshold mechanics, not recommendation
 > quality, so this requirement's quality is not yet demonstrated.
