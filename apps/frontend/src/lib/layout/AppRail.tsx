@@ -1,55 +1,112 @@
 import * as React from 'react';
-import { Inbox, Settings, User } from 'lucide-react';
+import {
+  Bell,
+  Boxes,
+  ClipboardList,
+  FileBarChart,
+  Shield,
+  UserRound,
+  UsersRound,
+} from 'lucide-react';
 import { cn } from '@fops/ui';
 
+export type RailDomain = 'voc' | 'findings' | 'tasks' | 'integration' | 'surveys' | 'admin';
+
+export const RAIL_ITEMS: Array<{
+  key: RailDomain;
+  label: string;
+  href: string;
+  icon: React.ElementType<{ className?: string }>;
+}> = [
+  { key: 'voc', label: 'VOC', href: '/vocs?view=inbox', icon: UsersRound },
+  { key: 'findings', label: 'Findings', href: '/findings', icon: FileBarChart },
+  { key: 'tasks', label: 'Tasks', href: '/tasks?view=board', icon: ClipboardList },
+  { key: 'integration', label: 'Integration', href: '/integration', icon: Boxes },
+  { key: 'surveys', label: 'Surveys', href: '/surveys', icon: FileBarChart },
+  { key: 'admin', label: 'Admin', href: '/admin/managed-systems', icon: Shield },
+];
+
+export function railForPathname(pathname: string): RailDomain {
+  if (pathname.startsWith('/vocs') || pathname.startsWith('/voc-clusters')) return 'voc';
+  if (pathname.startsWith('/findings')) return 'findings';
+  if (pathname.startsWith('/tasks')) return 'tasks';
+  if (pathname.startsWith('/integration')) return 'integration';
+  if (pathname.startsWith('/surveys')) return 'surveys';
+  return 'admin';
+}
+
 export interface AppRailProps {
+  activeDomain?: RailDomain;
   className?: string;
 }
 
-/**
- * 52px vertical rail. Workspace switcher placeholder + global utility icons.
- * Per-feature entries land in their own issue (AGENTS.md two-consumer rule). #18 ships placeholders.
- */
-export function AppRail({ className }: AppRailProps) {
+/** 52px global domain selector. The sidebar owns the selected domain's tree. */
+export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
+  const head = RAIL_ITEMS.filter((item) => item.key !== 'admin');
+  const admin = RAIL_ITEMS.find((item) => item.key === 'admin');
+
   return (
     <nav
       className={cn(
-        'flex flex-col items-center gap-3 py-3 bg-surface-sidebar border-r border-border-subtle',
+        'flex flex-col items-center gap-2 py-3 bg-surface-sidebar border-r border-border-subtle',
         className,
       )}
       style={{ width: 'var(--rail-width)' }}
-      aria-label="Global rail"
+      aria-label="System selector"
       data-testid="app-rail"
     >
-      <button
-        type="button"
-        className="w-8 h-8 rounded-md bg-surface-card border border-border-subtle flex items-center justify-center text-text-muted hover:text-text-primary"
-        aria-label="Workspace switcher"
+      <div
+        className="mb-1 flex h-8 w-8 items-center justify-center rounded-md bg-accent-primary text-xs font-semibold text-white"
+        title="FeedbackOps"
+        aria-label="FeedbackOps"
       >
-        <span className="text-xs font-semibold">FO</span>
-      </button>
+        F
+      </div>
+      {head.map((item) => (
+        <RailButton key={item.key} item={item} active={activeDomain === item.key} />
+      ))}
+      {admin && <div className="my-1 w-6 border-t border-border-subtle" aria-hidden="true" />}
+      {admin && <RailButton item={admin} active={activeDomain === admin.key} />}
       <div className="flex-1" />
       <button
         type="button"
-        className="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-text-primary"
-        aria-label="Inbox"
+        className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary"
+        aria-label="Notifications"
       >
-        <Inbox className="h-4 w-4" />
+        <Bell className="h-4 w-4" />
       </button>
-      <button
-        type="button"
-        className="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-text-primary"
-        aria-label="Settings"
-      >
-        <Settings className="h-4 w-4" />
-      </button>
-      <button
-        type="button"
-        className="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-text-primary"
+      <div
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-primary/15 text-xs font-semibold text-accent-primary"
+        title="Profile"
         aria-label="Profile"
       >
-        <User className="h-4 w-4" />
-      </button>
+        <UserRound className="h-4 w-4" />
+      </div>
     </nav>
+  );
+}
+
+function RailButton({
+  item,
+  active,
+}: {
+  item: (typeof RAIL_ITEMS)[number];
+  active: boolean;
+}) {
+  const Icon = item.icon;
+  return (
+    <a
+      href={item.href}
+      className={cn(
+        'flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary',
+        active && 'bg-surface-row-selected text-accent-primary',
+      )}
+      aria-label={item.label}
+      aria-current={active ? 'page' : undefined}
+      data-testid={`rail-${item.key}`}
+      title={item.label}
+    >
+      <Icon className="h-4 w-4" />
+    </a>
   );
 }

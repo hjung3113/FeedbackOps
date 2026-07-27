@@ -45,6 +45,7 @@ import {
   surveyVisualFixtureSchema,
 } from '../fixtures/surveys';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
+import { railScopeManagedSystems } from '../fixtures/rail-scope';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
@@ -70,6 +71,8 @@ interface InstallOptions {
   surveyScenario?: SurveyVisualScenario;
   surveyResultsScenario?: SurveyResultsVisualScenario;
   adminSettingsScenario?: AdminSettingsVisualScenario;
+  /** Rail/scope fixture uses two systems to make scope selector snapshots meaningful. */
+  railScope?: boolean;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -135,6 +138,22 @@ export async function installMockApi(
           role_level: role,
         },
         workspace_id: IDS.workspace,
+      });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/nav/counts')) {
+      await json(route, 200, {
+        counts: {
+          'voc.inbox': 0,
+          'voc.triage': 6,
+          'voc.my': 2,
+          'voc.tab.high': 1,
+          'voc.tab.unassigned': 3,
+          'voc.clusters': 4,
+          'findings.all': 8,
+          'surveys.all': 5,
+        },
       });
       return;
     }
@@ -321,7 +340,7 @@ export async function installMockApi(
     }
 
     if (isRequest(route, 'GET', '/managed-systems')) {
-      await json(route, 200, managedSystems);
+      await json(route, 200, options.railScope ? railScopeManagedSystems : managedSystems);
       return;
     }
 
