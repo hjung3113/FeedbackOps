@@ -38,6 +38,7 @@ import {
   createManagedSystemService,
   managedSystemsRoutes,
 } from './modules/managed-systems/index.js';
+import { createNavCountsService, navRoutes, type NavCountsService } from './modules/nav/index.js';
 import {
   createCheckService,
   createDecisionService,
@@ -82,6 +83,8 @@ export interface BuildServerOptions {
    * production this is undefined and `getStorage()` builds the singleton.
    */
   storage?: StorageBackend;
+  /** Route-test seam; production constructs the navigation read model below. */
+  navCountsService?: NavCountsService;
 }
 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
@@ -592,6 +595,18 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
     },
+  });
+  const navCountsService = opts.navCountsService ?? createNavCountsService({
+    vocReadService,
+    findingsService,
+    surveysService,
+    vocClustersService,
+  });
+  await app.register(navRoutes, {
+    sessionService,
+    navCountsService,
+    workspaceId,
+    rateLimitConfig: { read: app.rateLimitConfig.read },
   });
 
   const vocRecommendationsService = createVocRecommendationsService({

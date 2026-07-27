@@ -18,6 +18,8 @@ export default defineConfig({
       // Slice 1 #3: auth endpoints + the /me identity probe live at root.
       '/auth': 'http://127.0.0.1:3011',
       '/me': 'http://127.0.0.1:3011',
+      // #143 navigation badge counts are a backend-only root path.
+      '/nav': 'http://127.0.0.1:3011',
       // #197 workspace policy endpoints are backend-only root paths, so
       // forward them unconditionally in development.
       '/workspace': 'http://127.0.0.1:3011',
