@@ -34,8 +34,12 @@ import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
+// This suite asserts on core.audit_log and has to clear it between tests, and
+// fops_app holds no DELETE there by design (ADR-0008/0019) — so the migrate
+// role is a hard requirement, not an optional extra.
+const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 // ── helpers ──────────────────────────────────────────────────────────────
 function extractSessionCookie(setCookie: string | string[] | undefined): string | null {
@@ -144,6 +148,7 @@ function createMockStorage(): MockStorage {
 // ── tests ────────────────────────────────────────────────────────────────
 describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path', () => {
   let dbHandle: DbHandle;
+  let migrateHandle: DbHandle;
   let app: FastifyInstance;
   let storage: MockStorage;
 
@@ -152,7 +157,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     await dbHandle.pool.query('delete from core.idempotency_keys');
     // attachment rows + audit rows from prior tests in this file.
     await dbHandle.pool.query(`delete from voc.voc_attachments`);
-    await dbHandle.pool.query(
+    await migrateHandle.pool.query(
       `delete from core.audit_log where event_type = 'attachment_uploaded'`,
     );
     await dbHandle.pool.query(
@@ -163,6 +168,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
+    migrateHandle = createDb(MIGRATE_URL);
     storage = createMockStorage();
     app = await buildServer({ config: loadConfig(), dbHandle, storage });
     await app.ready();
@@ -172,6 +178,7 @@ describe.skipIf(!runIntegration)('POST /attachments — PLAN-22 C3b happy path',
     await cleanupDb();
     await app?.close();
     await dbHandle?.close();
+    await migrateHandle?.close();
   });
 
   beforeEach(async () => {
