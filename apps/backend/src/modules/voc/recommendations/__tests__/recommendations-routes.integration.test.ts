@@ -22,6 +22,25 @@ const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 const PREFIX = 'it-voc-reco-routes';
 const VERSION = 1;
 
+type InjectedResponse = { statusCode: number; json: () => Record<string, unknown> };
+
+/**
+ * ADR-0034 D4: unreadable and nonexistent must be byte-identical on the wire.
+ *
+ * `toEqual` compares the whole envelope rather than a subset, and the explicit
+ * `not_found.record` assertion is what stops the comparison from being vacuous
+ * — two empty or two identically-wrong bodies would otherwise satisfy it.
+ */
+function expectIndistinguishableNotFound(
+  hidden: InjectedResponse,
+  missing: InjectedResponse,
+): void {
+  expect(hidden.statusCode).toBe(404);
+  expect(missing.statusCode).toBe(404);
+  expect(hidden.json()).toEqual(missing.json());
+  expect(hidden.json().code).toBe('not_found.record');
+}
+
 describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => {
   let appDb: DbHandle;
   let ops: DbHandle;
@@ -70,13 +89,13 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
     await insertEmbedding(candidateId);
   });
 
-  async function insertVoc(title: string): Promise<string> {
+  async function insertVoc(title: string, reporterId?: string): Promise<string> {
     const row = await appDb.pool.query<{ id: string }>(
       `insert into voc.vocs (workspace_id, primary_managed_system_id, reporter_id, display_id,
         title, description_rich_content, source_context, reporter_facing_status, triage_state)
        values ($1, $2, $3, voc.next_voc_display_id($1::uuid), $4,
         '{"type":"doc","content":[]}'::jsonb, 'direct_use', 'received', 'untriaged') returning id`,
-      [WORKSPACE_ID, managedSystemId, adminId, title],
+      [WORKSPACE_ID, managedSystemId, reporterId ?? adminId, title],
     );
     return row.rows[0]?.id ?? '';
   }
@@ -110,10 +129,16 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
 
   async function cleanup(): Promise<void> {
     if (!ops) return;
-    const vocs = `select id from voc.vocs where workspace_id = $1 and primary_managed_system_id in
+    const fixtureVocs = (idExpr: string) =>
+      `select ${idExpr} from voc.vocs where workspace_id = $1 and primary_managed_system_id in
       (select id from core.managed_systems where workspace_id = $1 and slug like $2)`;
+    const vocs = fixtureVocs('id');
+    // `detail->>'source_voc_id'` is text and `voc.vocs.id` is uuid, so the
+    // fixture ids have to be cast before the IN comparison — otherwise Postgres
+    // raises `operator does not exist: text = uuid`, and cleanup runs in both
+    // beforeEach and afterAll, so that takes every test in the file down.
     await ops.pool.query(
-      `delete from core.audit_log where workspace_id = $1 and detail->>'source_voc_id' in (${vocs})`,
+      `delete from core.audit_log where workspace_id = $1 and detail->>'source_voc_id' in (${fixtureVocs('id::text')})`,
       [WORKSPACE_ID, `${PREFIX}%`],
     );
     await ops.pool.query(`delete from voc.voc_recommendation_decisions where source_voc_id in (${vocs})`, [WORKSPACE_ID, `${PREFIX}%`]);
@@ -121,8 +146,21 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
     await ops.pool.query(`delete from voc_cluster.voc_clusters where workspace_id = $1 and primary_managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`, [WORKSPACE_ID, `${PREFIX}%`]);
     await ops.pool.query(`delete from voc.voc_embeddings where voc_id in (${vocs})`, [WORKSPACE_ID, `${PREFIX}%`]);
     await ops.pool.query(`delete from voc.vocs where id in (${vocs})`, [WORKSPACE_ID, `${PREFIX}%`]);
+    // Everything with a foreign key onto `core.managed_systems` has to go
+    // first, or Postgres raises `permission_grants_managed_system_id_..._fk`
+    // and — because cleanup runs in both beforeEach and afterAll — takes every
+    // test in the file down. Of the twelve referencing tables this fixture
+    // writes three: permission_grants, voc.vocs, voc_cluster.voc_clusters.
+    // The grant delete is scoped by the Managed System as well as by the
+    // actor, so a grant made by a non-fixture actor cannot pin the system.
+    await ops.pool.query(
+      `delete from permission.permission_grants
+       where workspace_id = $1
+         and (actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)
+              or managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2))`,
+      [WORKSPACE_ID, `${PREFIX}%`],
+    );
     await ops.pool.query(`delete from core.managed_systems where workspace_id = $1 and slug like $2`, [WORKSPACE_ID, `${PREFIX}%`]);
-    await ops.pool.query(`delete from permission.permission_grants where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`, [WORKSPACE_ID, `${PREFIX}%`]);
     await ops.pool.query(`delete from core.sessions where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`, [WORKSPACE_ID, `${PREFIX}%`]);
     await ops.pool.query(`delete from core.actors where workspace_id = $1 and external_id like $2`, [WORKSPACE_ID, `${PREFIX}%`]);
     await ops.pool.query('delete from core.rate_limits');
@@ -166,8 +204,23 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
   it('rejects malformed identifiers before the service and missing sessions in middleware', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');
     const malformed = await app.inject({ method: 'GET', url: '/vocs/not-a-uuid/recommendations', headers: headers(cookie) });
-    expect(malformed.statusCode).toBe(400);
+    expect(malformed.statusCode).toBe(422);
     expect(malformed.json()).toMatchObject({ code: 'validation.failed', detail: { fields: [{ path: ['id'], code: 'invalid' }] } });
+    // The candidate segment has its own guard on the POST routes; a valid :id
+    // with a malformed :candidate_id must be rejected on the candidate path,
+    // not blamed on `id` and not passed through to the service.
+    const malformedCandidate = await app.inject({
+      method: 'POST',
+      url: `/vocs/${sourceId}/recommendations/not-a-uuid/dismiss`,
+      headers: headers(cookie),
+    });
+    expect(malformedCandidate.statusCode).toBe(422);
+    const candidateFields = malformedCandidate.json().detail.fields as Array<{
+      path: string[];
+      code: string;
+    }>;
+    expect(malformedCandidate.json().code).toBe('validation.failed');
+    expect(candidateFields[0]).toEqual({ path: ['candidate_id'], code: 'invalid' });
     const unauthenticated = await app.inject({ method: 'GET', url: `/vocs/${sourceId}/recommendations` });
     expect(unauthenticated.statusCode).toBe(401);
   });
@@ -179,12 +232,7 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
     const nonexistent = '00000000-0000-4000-8000-000000000000';
     const sourceHidden = await app.inject({ method: 'GET', url: `/vocs/${sourceId}/recommendations`, headers: headers(cookie) });
     const sourceMissing = await app.inject({ method: 'GET', url: `/vocs/${nonexistent}/recommendations`, headers: headers(cookie) });
-    expect(sourceHidden.statusCode).toBe(404);
-    expect(sourceHidden.json()).toMatchObject({
-      code: sourceMissing.json().code,
-      message: sourceMissing.json().message,
-      detail: sourceMissing.json().detail,
-    });
+    expectIndistinguishableNotFound(sourceHidden, sourceMissing);
 
     await grantRead(actorId, managedSystemId);
     const otherSystem = await appDb.pool.query<{ id: string }>(
@@ -196,14 +244,14 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
        values ($1, $2, $3, voc.next_voc_display_id($1::uuid), 'Hidden candidate', '{"type":"doc","content":[]}'::jsonb, 'direct_use', 'received', 'untriaged') returning id`,
       [WORKSPACE_ID, otherSystem.rows[0]?.id, adminId],
     );
-    const candidateHidden = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${hiddenCandidate.rows[0]?.id}/dismiss`, headers: headers(cookie) });
-    const candidateMissing = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${nonexistent}/dismiss`, headers: headers(cookie) });
-    expect(candidateHidden.statusCode).toBe(404);
-    expect(candidateHidden.json()).toMatchObject({
-      code: candidateMissing.json().code,
-      message: candidateMissing.json().message,
-      detail: candidateMissing.json().detail,
-    });
+    const hiddenCandidateId = hiddenCandidate.rows[0]?.id;
+    // ADR-0034 D4 covers all three routes, so the confirm route is checked on
+    // the same fixture rather than assumed to inherit dismiss's behaviour.
+    for (const action of ['dismiss', 'confirm'] as const) {
+      const candidateHidden = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${hiddenCandidateId}/${action}`, headers: headers(cookie) });
+      const candidateMissing = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${nonexistent}/${action}`, headers: headers(cookie) });
+      expectIndistinguishableNotFound(candidateHidden, candidateMissing);
+    }
   });
 
   it('rejects a cross-managed-system confirmation without a cluster or decision row', async () => {
@@ -218,10 +266,45 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
     );
     const cookie = await loginAs(app, 'mock-admin-1');
     const response = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${row.rows[0]?.id}/confirm`, headers: headers(cookie) });
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(422);
     expect(response.json()).toMatchObject({ code: 'validation.failed', detail: { fields: [{ path: ['candidate_voc_id'], code: 'out_of_scope' }] } });
     const decisions = await ops.pool.query(`select 1 from voc.voc_recommendation_decisions where source_voc_id = $1`, [sourceId]);
     expect(decisions.rows).toHaveLength(0);
+    // The rejection happens before the cluster service is reached, so neither
+    // Managed System may end up with a cluster row: a decision-only assertion
+    // would still pass if confirmation created the cluster and then failed.
+    const clusters = await ops.pool.query(
+      `select 1 from voc_cluster.voc_clusters where workspace_id = $1 and primary_managed_system_id = any($2::uuid[])`,
+      [WORKSPACE_ID, [managedSystemId, otherSystem.rows[0]?.id]],
+    );
+    expect(clusters.rows).toHaveLength(0);
+  });
+
+  it('lets an actor with no voc.read grant reach recommendations for a VOC they reported', async () => {
+    // ADR-0031's rule is a disjunction: scope OR reporter. The other tests
+    // cover an actor with scope and an actor with neither; this is the arm
+    // where the actor holds no grant on the Managed System at all.
+    const externalId = `${PREFIX}-reporter-${randomUUID().slice(0, 8)}`;
+    const reporterId = await insertActor(externalId);
+    const reportedId = await insertVoc('Reported by the unscoped actor', reporterId);
+    await insertEmbedding(reportedId);
+    const cookie = await loginAs(app, externalId);
+
+    const grants = await ops.pool.query(
+      `select 1 from permission.permission_grants where actor_id = $1 and capability = 'voc.read'`,
+      [reporterId],
+    );
+    expect(grants.rows).toHaveLength(0);
+
+    const own = await app.inject({ method: 'GET', url: `/vocs/${reportedId}/recommendations`, headers: headers(cookie) });
+    expect(own.statusCode).toBe(200);
+    expect(vocRecommendationsResponseSchema.parse(own.json()).available).toBe(true);
+
+    // Control: the same actor still cannot reach a VOC of the same Managed
+    // System that someone else reported, so the 200 above is the reporter arm
+    // and not a missing check.
+    const notTheirs = await app.inject({ method: 'GET', url: `/vocs/${sourceId}/recommendations`, headers: headers(cookie) });
+    expect(notTheirs.statusCode).toBe(404);
   });
 
   it('boots an explicitly disabled provider and reports provider_disabled', async () => {
