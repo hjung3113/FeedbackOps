@@ -19,7 +19,7 @@ const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}
 const IDEMPOTENCY_KEY_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const listFindingsQuerySchema = z
+export const listFindingsQuerySchema = z
   .object({
     managed_system_id: z.string().uuid().optional(),
   })

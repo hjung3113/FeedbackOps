@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Database, Inbox, Plus, Settings } from 'lucide-react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
 import { NAV_TREE } from '@/routes/_authed';
 
@@ -155,6 +155,22 @@ describe('AppSidebar', () => {
 
     expect(screen.queryByTestId('sidebar-section-voc')).not.toBeInTheDocument();
     expect(screen.queryByText('VOC')).not.toBeInTheDocument();
+  });
+
+  it('renders, applies, saves, and deletes private saved views without badges', () => {
+    const apply = vi.fn();
+    const save = vi.fn();
+    const remove = vi.fn();
+    render(<AppSidebar entries={entries} savedViews={[{ id: 'view-1', name: 'High priority' }]} canSaveView onApplySavedView={apply} onSaveView={save} onDeleteSavedView={remove} />);
+    expect(screen.getByTestId('saved-views-section')).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-count-view-1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('saved-view-apply-view-1'));
+    expect(apply).toHaveBeenCalledWith('view-1');
+    fireEvent.change(screen.getByLabelText('Saved view name'), { target: { value: 'Mine' } });
+    fireEvent.click(screen.getByTestId('saved-view-save'));
+    expect(save).toHaveBeenCalledWith('Mine');
+    fireEvent.click(screen.getByTestId('saved-view-delete-view-1'));
+    expect(remove).toHaveBeenCalledWith('view-1');
   });
 
   it('renders footer items and keeps collapsed icons accessible', () => {

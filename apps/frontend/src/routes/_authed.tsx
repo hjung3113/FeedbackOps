@@ -5,6 +5,7 @@ import { UnauthenticatedError, fetchMe } from '../lib/api';
 import { AppFrame } from '../lib/layout/AppFrame';
 import { railForPathname, type RailDomain } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
+import type { SavedView } from '../lib/api';
 
 export const NAV_TREE: Record<RailDomain, SidebarNavEntry[]> = {
   voc: [
@@ -79,5 +80,38 @@ function AuthedLayout() {
       },
     });
   }, [location.pathname, navigate]);
-  return <AppFrame sidebarEntries={entries} activeDomain={activeDomain} {...(managedSystemId !== undefined ? { managedSystemId } : {})} syncManagedSystemFromUrl={activeDomain === 'voc'} onManagedSystemChange={changeManagedSystem}><Outlet /></AppFrame>;
+  const savedViewFilter = React.useMemo<Record<string, unknown> | undefined>(() => {
+    if (activeDomain !== 'voc' || location.pathname !== '/vocs') return undefined;
+    const current = new URLSearchParams(location.searchStr);
+    const view = current.get('view') ?? 'inbox';
+    const filter: Record<string, unknown> = { view };
+    const managedSystem = current.get('managedSystem');
+    if (managedSystem) filter.managed_system_id = managedSystem;
+    for (const key of ['tab', 'sort', 'filter.severity', 'filter.owner'] as const) {
+      const value = current.get(key);
+      if (value) filter[key] = value;
+    }
+    const reporterStatus = current.get('filter.reporterStatus');
+    if (reporterStatus) filter['filter.reporter_facing_status'] = reporterStatus;
+    return filter;
+  }, [activeDomain, location.pathname, location.searchStr]);
+  const applySavedView = React.useCallback((view: SavedView) => {
+    if (view.surface !== 'voc') return;
+    const filter = view.filter;
+    void navigate({
+      to: '/vocs',
+      // The persisted wire payload uses the backend's list schema. Translate
+      // only at the existing route-search boundary; no second filtering path.
+      search: {
+        view: filter.view as 'inbox' | 'my' | 'triage',
+        ...(typeof filter.managed_system_id === 'string' ? { managedSystem: filter.managed_system_id } : {}),
+        ...(typeof filter.tab === 'string' ? { tab: filter.tab as never } : {}),
+        ...(typeof filter.sort === 'string' ? { sort: filter.sort as never } : {}),
+        ...(typeof filter['filter.severity'] === 'string' ? { 'filter.severity': filter['filter.severity'] } : {}),
+        ...(typeof filter['filter.reporter_facing_status'] === 'string' ? { 'filter.reporterStatus': filter['filter.reporter_facing_status'] } : {}),
+        ...(typeof filter['filter.owner'] === 'string' ? { 'filter.owner': filter['filter.owner'] } : {}),
+      } as never,
+    });
+  }, [navigate]);
+  return <AppFrame sidebarEntries={entries} activeDomain={activeDomain} {...(managedSystemId !== undefined ? { managedSystemId } : {})} syncManagedSystemFromUrl={activeDomain === 'voc'} onManagedSystemChange={changeManagedSystem} {...(savedViewFilter !== undefined ? { savedViewFilter } : {})} onApplySavedView={applySavedView}><Outlet /></AppFrame>;
 }

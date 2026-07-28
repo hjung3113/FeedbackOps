@@ -73,6 +73,8 @@ interface InstallOptions {
   adminSettingsScenario?: AdminSettingsVisualScenario;
   /** Rail/scope fixture uses two systems to make scope selector snapshots meaningful. */
   railScope?: boolean;
+  /** Declares the saved-view sidebar visual state; its PNG is host-generated. */
+  savedViews?: boolean;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -114,6 +116,13 @@ export async function installMockApi(
   const postedBodies: unknown[] = [];
   const postedRequests: InstalledMockApi['postedRequests'] = [];
   const permissionRequests = createPermissionRequestsScenario(options.permissionScenario);
+  const savedViews: Array<{ id: string; surface: string; name: string; filter: Record<string, unknown>; created_at: string; updated_at: string }> = [];
+  if (options.savedViews) {
+    savedViews.push({
+      id: 'saved-view-1', surface: 'voc', name: 'High priority', filter: { view: 'inbox', 'filter.severity': 'high,critical' },
+      created_at: '2026-07-28T00:00:00.000Z', updated_at: '2026-07-28T00:00:00.000Z',
+    });
+  }
   const role = options.role ?? 'admin';
   const reporterActorId = options.vocReporterTaskSummary
     ? VOC_REPORTER_TASK_SUMMARY_IDS.reporter
@@ -155,6 +164,30 @@ export async function installMockApi(
           'surveys.all': 5,
         },
       });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/saved-views')) {
+      const surface = url.searchParams.get('surface');
+      await json(route, 200, { items: surface ? savedViews.filter((view) => view.surface === surface) : savedViews });
+      return;
+    }
+
+    if (isRequest(route, 'POST', '/saved-views')) {
+      const body = request.postDataJSON() as { surface: string; name: string; filter: Record<string, unknown> };
+      const now = '2026-07-28T00:00:00.000Z';
+      const view = { id: `saved-view-${savedViews.length + 1}`, ...body, created_at: now, updated_at: now };
+      savedViews.push(view);
+      await json(route, 201, view);
+      return;
+    }
+
+    if (request.method() === 'DELETE' && /^\/saved-views\/[^/]+$/.test(url.pathname)) {
+      const id = url.pathname.split('/').at(-1);
+      const index = savedViews.findIndex((view) => view.id === id);
+      if (index === -1) await json(route, 404, errorEnvelope(404));
+      else await route.fulfill({ status: 204 });
+      if (index !== -1) savedViews.splice(index, 1);
       return;
     }
 

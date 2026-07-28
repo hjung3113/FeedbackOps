@@ -11,3 +11,4 @@ export * from './attachments';
 export * from './task-requests';
 export * from './tasks';
 export * from './nav';
+export * from './saved-views';

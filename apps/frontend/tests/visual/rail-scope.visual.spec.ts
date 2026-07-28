@@ -18,4 +18,11 @@ test.describe('rail and Managed System scope visual harness', () => {
     await expect(page.getByText('Finance Analytics', { exact: true })).toBeVisible();
     await expectVisual(page, page.getByTestId('app-sidebar'), railScopeSnapshots[1]);
   });
+
+  test('renders actor-private saved views without count badges', async ({ page }) => {
+    await installMockApi(page, { railScope: true, savedViews: true });
+    await page.goto('/voc-clusters');
+    await expect(page.getByTestId('saved-views-section')).toBeVisible();
+    await expectVisual(page, page.getByTestId('app-sidebar'), railScopeSnapshots[2]);
+  });
 });
