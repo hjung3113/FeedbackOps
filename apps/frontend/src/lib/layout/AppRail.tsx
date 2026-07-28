@@ -4,13 +4,14 @@ import {
   Boxes,
   ClipboardList,
   FileBarChart,
+  House,
   Shield,
   UserRound,
   UsersRound,
 } from 'lucide-react';
 import { cn } from '@fops/ui';
 
-export type RailDomain = 'voc' | 'findings' | 'tasks' | 'integration' | 'surveys' | 'admin';
+export type RailDomain = 'home' | 'voc' | 'findings' | 'tasks' | 'integration' | 'surveys' | 'admin';
 
 export const RAIL_ITEMS: Array<{
   key: RailDomain;
@@ -18,6 +19,7 @@ export const RAIL_ITEMS: Array<{
   href: string;
   icon: React.ElementType<{ className?: string }>;
 }> = [
+  { key: 'home', label: 'Home', href: '/home', icon: House },
   { key: 'voc', label: 'VOC', href: '/vocs?view=inbox', icon: UsersRound },
   { key: 'findings', label: 'Findings', href: '/findings', icon: FileBarChart },
   { key: 'tasks', label: 'Tasks', href: '/tasks?view=board', icon: ClipboardList },
@@ -27,6 +29,7 @@ export const RAIL_ITEMS: Array<{
 ];
 
 export function railForPathname(pathname: string): RailDomain {
+  if (pathname === '/home') return 'home';
   if (pathname.startsWith('/vocs') || pathname.startsWith('/voc-clusters')) return 'voc';
   if (pathname.startsWith('/findings')) return 'findings';
   if (pathname.startsWith('/tasks')) return 'tasks';

@@ -7,6 +7,7 @@ import {
   permissionDecisionResultSchema,
   rejectPermissionRequestSchema,
   vocClusterDtoSchema,
+  dashboardSummarySchema,
 } from '@fops/shared';
 import type { Page, Route } from '@playwright/test';
 import {
@@ -46,6 +47,7 @@ import {
 } from '../fixtures/surveys';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
 import { railScopeManagedSystems } from '../fixtures/rail-scope';
+import { homeMyWorkRequestsFixture, homeMyWorkTasksFixture, homeSummaryFixture } from '../fixtures/home';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
@@ -75,6 +77,8 @@ interface InstallOptions {
   railScope?: boolean;
   /** Declares the saved-view sidebar visual state; its PNG is host-generated. */
   savedViews?: boolean;
+  /** Home action dashboard fixture state. */
+  home?: 'populated' | 'empty';
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -164,6 +168,21 @@ export async function installMockApi(
           'surveys.all': 5,
         },
       });
+      return;
+    }
+
+    if (options.home && isRequest(route, 'GET', '/dashboard/summary')) {
+      await json(route, 200, dashboardSummarySchema.parse(homeSummaryFixture));
+      return;
+    }
+
+    if (options.home && isRequest(route, 'GET', '/tasks')) {
+      await json(route, 200, { items: options.home === 'populated' ? homeMyWorkTasksFixture : [] });
+      return;
+    }
+
+    if (options.home && isRequest(route, 'GET', '/task-requests')) {
+      await json(route, 200, { items: options.home === 'populated' ? homeMyWorkRequestsFixture : [] });
       return;
     }
 
