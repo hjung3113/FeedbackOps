@@ -49,8 +49,16 @@ export interface ReadActorContext {
   role_level: 'admin' | 'developer' | 'user';
 }
 
-/** Count queries share list filters, but pagination is list-only. */
-export type CountVocsQuery = Omit<ListVocsQuery, 'limit'>;
+/** Count queries use the same predicates as the list, without list-only fields. */
+export type CountVocsQuery = Pick<
+  ListVocsQuery,
+  | 'view'
+  | 'managed_system_id'
+  | 'tab'
+  | 'filter.severity'
+  | 'filter.reporter_facing_status'
+  | 'filter.owner'
+>;
 
 // ── Inline conversation cursor (conversation-specific; separate from VOC list cursor) ──
 
@@ -278,6 +286,9 @@ export function createVocReadService(deps: VocReadServiceDeps) {
   async function countVocs(args: { actor: ReadActorContext; query: CountVocsQuery }): Promise<number> {
     const { actor, query } = args;
     const { view, tab } = query;
+    const filterSeverity = query['filter.severity'];
+    const filterReporterFacingStatus = query['filter.reporter_facing_status'];
+    const filterOwner = query['filter.owner'];
     if (tab === 'waiting' && view !== 'triage') {
       throw new HttpError('validation.failed', 'tab=waiting is only valid for view=triage', {
         fields: [{ path: ['tab'], code: 'invalid_for_view' }],
@@ -294,6 +305,9 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       view,
       ...(actorIdForMyFilter !== undefined ? { actorIdForMyFilter } : {}),
       ...(tab !== undefined ? { tab } : {}),
+      ...(filterSeverity !== undefined ? { filterSeverity } : {}),
+      ...(filterReporterFacingStatus !== undefined ? { filterReporterFacingStatus } : {}),
+      ...(filterOwner !== undefined ? { filterOwner } : {}),
     });
   }
 

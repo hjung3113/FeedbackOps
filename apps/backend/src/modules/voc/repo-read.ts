@@ -137,7 +137,7 @@ export interface ListVocsRepoArgs {
   scopeFilter: Scope;
   view: 'inbox' | 'my' | 'triage';
   actorIdForMyFilter?: string; // required when view='my'
-  tab?: 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link' | 'waiting';
+  tab?: 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link' | 'high-no-link' | 'waiting';
   filterSeverity?: ('low' | 'medium' | 'high' | 'critical')[];
   filterReporterFacingStatus?: string[];
   filterOwner?: 'assigned' | 'unassigned';
@@ -183,7 +183,8 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
   else if (tab === 'high') wheres.push(sql`severity = 'high'`);
   else if (tab === 'unassigned') wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
   else if (tab === 'waiting') wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
-  else if (tab === 'no-link') {
+  else if (tab === 'no-link' || tab === 'high-no-link') {
+    if (tab === 'high-no-link') wheres.push(sql`severity IN ('high', 'critical')`);
     wheres.push(sql`NOT EXISTS (
       SELECT 1 FROM ${entityLinks} el
       WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'

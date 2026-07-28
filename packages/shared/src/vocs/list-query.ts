@@ -35,7 +35,7 @@ export const listVocsQuerySchema = z.object({
     .union([z.string().uuid(), z.literal('all')])
     .optional(),
   tab: z
-    .enum(['untriaged', 'high', 'unassigned', 'similar', 'no-link', 'waiting'])
+    .enum(['untriaged', 'high', 'unassigned', 'similar', 'no-link', 'high-no-link', 'waiting'])
     .optional(),
   // Dot-key filter fields — Fastify query params are flat strings.
   'filter.severity': commaListOf(severityEnumSchema).optional(),
