@@ -1,13 +1,15 @@
 import { Outlet, createFileRoute, redirect, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Database, FileBarChart, Flag, Inbox, Layers, Link2, ListChecks, ListTodo, Plus, Settings, Shield, User } from 'lucide-react';
 import * as React from 'react';
-import { UnauthenticatedError, fetchMe } from '../lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { UnauthenticatedError, fetchDashboardSummary, fetchMe } from '../lib/api';
+import { homeSidebarEntries } from '../features/home/homeNavigation';
 import { AppFrame } from '../lib/layout/AppFrame';
 import { railForPathname, type RailDomain } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
 import type { SavedView } from '../lib/api';
 
-export const NAV_TREE: Record<RailDomain, SidebarNavEntry[]> = {
+export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = {
   voc: [
     { id: 'inbox', label: 'Inbox', href: '/vocs?view=inbox', section: 'VOC', icon: <Inbox className="h-4 w-4" />, countKey: 'voc.inbox' },
     { id: 'triage', label: 'Triage', href: '/vocs?view=triage', section: 'VOC', icon: <Flag className="h-4 w-4" />, countKey: 'voc.triage' },
@@ -61,17 +63,25 @@ function AuthedLayout() {
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate({ from: '/vocs' });
   const activeDomain = railForPathname(location.pathname);
-  const managedSystemId = activeDomain === 'voc'
+  const managedSystemId = activeDomain === 'voc' || activeDomain === 'home'
     ? new URLSearchParams(location.searchStr).get('managedSystem') ?? undefined
     : undefined;
-  const entries = React.useMemo(() => NAV_TREE[activeDomain].map((entry) => ({
+  const homeSummary = useQuery({
+    queryKey: ['dashboard-summary', managedSystemId] as const,
+    enabled: activeDomain === 'home',
+    queryFn: ({ signal }) => fetchDashboardSummary({ signal, ...(managedSystemId !== undefined ? { managedSystemId } : {}) }),
+    retry: false,
+  });
+  const entries = React.useMemo(() => (activeDomain === 'home'
+    ? homeSidebarEntries(homeSummary.data, location.pathname === '/home')
+    : NAV_TREE[activeDomain].map((entry) => ({
     ...entry,
     active: entry.href.split('?')[0] === location.pathname && (entry.href.includes('view=') ? new URLSearchParams(entry.href.split('?')[1]).get('view') === new URLSearchParams(location.searchStr).get('view') : true),
-  })), [activeDomain, location.pathname, location.searchStr]);
+  }))), [activeDomain, homeSummary.data, location.pathname, location.searchStr]);
   const changeManagedSystem = React.useCallback((managedSystemId: string | undefined) => {
-    if (location.pathname !== '/vocs') return;
+    if (location.pathname !== '/vocs' && location.pathname !== '/home') return;
     void navigate({
-      to: '/vocs',
+      to: location.pathname === '/home' ? '/home' : '/vocs',
       search: (previous) => {
         const { managedSystem: _managedSystem, ...remaining } = previous;
         return managedSystemId === undefined
@@ -113,5 +123,5 @@ function AuthedLayout() {
       } as never,
     });
   }, [navigate]);
-  return <AppFrame sidebarEntries={entries} activeDomain={activeDomain} {...(managedSystemId !== undefined ? { managedSystemId } : {})} syncManagedSystemFromUrl={activeDomain === 'voc'} onManagedSystemChange={changeManagedSystem} {...(savedViewFilter !== undefined ? { savedViewFilter } : {})} onApplySavedView={applySavedView}><Outlet /></AppFrame>;
+  return <AppFrame sidebarEntries={entries} activeDomain={activeDomain} {...(managedSystemId !== undefined ? { managedSystemId } : {})} syncManagedSystemFromUrl={activeDomain === 'voc' || activeDomain === 'home'} onManagedSystemChange={changeManagedSystem} {...(savedViewFilter !== undefined ? { savedViewFilter } : {})} onApplySavedView={applySavedView}><Outlet /></AppFrame>;
 }

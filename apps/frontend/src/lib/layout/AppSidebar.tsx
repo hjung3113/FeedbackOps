@@ -12,7 +12,13 @@ export type NavCountKey =
   | 'voc.tab.no-link'
   | 'voc.clusters'
   | 'findings.all'
-  | 'surveys.all';
+  | 'surveys.all'
+  | 'home.unassigned-voc'
+  | 'home.high-severity-unlinked'
+  | 'home.actionable-finding-no-execution'
+  | 'home.released-task-unresolved-voc'
+  | 'home.bad-outcome-no-followup'
+  | 'home.permission-requests-pending';
 
 export interface SidebarNavEntry {
   id: string;
@@ -22,7 +28,11 @@ export interface SidebarNavEntry {
   icon?: React.ReactNode;
   active?: boolean;
   countKey?: NavCountKey;
+  /** Explicit, route-owned count. Undefined is deliberately not rendered. */
+  count?: number;
   urgent?: boolean;
+  disabled?: boolean;
+  trailing?: React.ReactNode;
 }
 
 export interface SidebarFooterItem {
@@ -165,14 +175,23 @@ export function AppSidebar({
         <div className="flex flex-col gap-0.5">
           {entries.map((entry, index) => {
             const showSection = !collapsed && entry.section !== undefined && entry.section !== entries[index - 1]?.section;
-            const count = entry.countKey === undefined ? undefined : counts[entry.countKey];
+            const count = entry.count ?? (entry.countKey === undefined ? undefined : counts[entry.countKey]);
             return <React.Fragment key={entry.id}>
               {showSection && entry.section !== undefined && <div className={cn('mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled', index === 0 ? 'mt-1.5' : 'mt-3.5')} data-testid={`sidebar-section-${sectionTestId(entry.section)}`}>{entry.section}</div>}
-              <a href={scopedHref(entry.href, selectedManagedSystemId)} className={navItemClass(collapsed, entry.active)} data-testid={`sidebar-nav-${entry.id}`} aria-current={entry.active ? 'page' : undefined} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
-                {entry.icon && <span className="shrink-0">{entry.icon}</span>}
-                {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
-                {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} {...(entry.urgent === true ? { urgent: true } : {})} />}
-              </a>
+              {entry.disabled ? (
+                <button type="button" disabled className={cn(navItemClass(collapsed, entry.active), 'cursor-not-allowed opacity-60')} data-testid={`sidebar-nav-${entry.id}`} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
+                  {entry.icon && <span className="shrink-0">{entry.icon}</span>}
+                  {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                  {!collapsed && entry.trailing}
+                </button>
+              ) : (
+                <a href={scopedHref(entry.href, selectedManagedSystemId)} className={navItemClass(collapsed, entry.active)} data-testid={`sidebar-nav-${entry.id}`} aria-current={entry.active ? 'page' : undefined} title={collapsed ? entry.label : undefined} aria-label={collapsed ? entry.label : undefined}>
+                  {entry.icon && <span className="shrink-0">{entry.icon}</span>}
+                  {!collapsed && <span className="min-w-0 flex-1 truncate">{entry.label}</span>}
+                  {!collapsed && count !== undefined && <NavCountBadge entryId={entry.id} count={count} {...(entry.urgent === true ? { urgent: true } : {})} />}
+                  {!collapsed && entry.trailing}
+                </a>
+              )}
             </React.Fragment>;
           })}
           {!collapsed && (savedViews.length > 0 || canSaveView) && (

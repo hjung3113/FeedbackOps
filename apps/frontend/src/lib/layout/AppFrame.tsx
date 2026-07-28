@@ -85,6 +85,7 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     granted: isAdmin || grantsQuery.data?.has(system.id) === true,
   }));
   const systemMeta: Record<RailDomain, { label: string; subtitle: string }> = {
+    home: { label: 'Home', subtitle: '오늘의 운영 갭' },
     voc: { label: 'VOC', subtitle: 'Voice of Customer' },
     findings: { label: 'Findings', subtitle: 'Evidence → Execution' },
     tasks: { label: 'Tasks', subtitle: 'Execution' },
