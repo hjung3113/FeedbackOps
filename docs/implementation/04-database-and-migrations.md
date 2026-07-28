@@ -19,6 +19,10 @@ Applied migrations are the final database authority.
 - Migrations must be reversible when practical.
 - Sensitive decisions append audit log entries.
 - Inline images are stored as governed attachment records and referenced from rich content; never store base64 body images.
+- Survey response and answer tables remain outside `fops_app` read access. Any
+  dashboard or result projection over them must use a narrow `SECURITY DEFINER`
+  aggregate owned by `fops_survey_aggregate_owner`, returning only the contract's
+  aggregate value and never response identifiers or answer bodies.
 ```
 
 ### Database prerequisite: pgvector (ADR-0034 D1)

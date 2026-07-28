@@ -19,3 +19,4 @@ export * from './vocs/index.js';
 export * from './rich-content/index.js';
 export * from './auth/list-actors.js';
 export * from './surveys/results.js';
+export * from './dashboard.js';

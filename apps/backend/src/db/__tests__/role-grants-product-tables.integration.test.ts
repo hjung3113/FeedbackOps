@@ -43,6 +43,11 @@ const DML_PRIVILEGES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] as const;
 type DmlPrivilege = (typeof DML_PRIVILEGES)[number];
 
 const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
+const SURVEY_AGGREGATE_FUNCTIONS = [
+  'count_negative_outcome_without_followup',
+  'read_result_aggregates',
+  'read_result_response_count',
+] as const;
 
 // Tables intentionally narrower than full-DML for fops_app, keyed by the
 // fully-qualified `schema.table` name. Grants come from migrations 0010, 0037,
@@ -130,6 +135,30 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
     }
 
     expect(failures, failures.join('\n')).toEqual([]);
+  });
+
+  it('fops_app reaches survey response aggregates only through the registered definer functions', async () => {
+    const { rows } = await migrateHandle.pool.query<{
+      proname: string;
+      app_execute: boolean;
+      public_execute: boolean;
+    }>(
+      `select p.proname,
+              pg_catalog.has_function_privilege('fops_app', p.oid, 'EXECUTE') as app_execute,
+              pg_catalog.has_function_privilege('public', p.oid, 'EXECUTE') as public_execute
+         from pg_catalog.pg_proc p
+         join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+         join pg_catalog.pg_roles owner_role on owner_role.oid = p.proowner
+        where n.nspname = 'survey'
+          and owner_role.rolname = 'fops_survey_aggregate_owner'
+        order by p.proname`,
+    );
+    expect(rows.map((row) => row.proname)).toEqual(SURVEY_AGGREGATE_FUNCTIONS);
+    expect(rows).toEqual(SURVEY_AGGREGATE_FUNCTIONS.map((proname) => ({
+      proname,
+      app_execute: true,
+      public_execute: false,
+    })));
   });
 
   it('fops_app UPDATE on review candidates is limited to resolution columns', async () => {

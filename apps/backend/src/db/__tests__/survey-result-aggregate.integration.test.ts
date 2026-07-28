@@ -20,7 +20,7 @@ function requiredId(row: { id: string } | undefined, label: string): string {
   return row.id;
 }
 
-describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () => {
+describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046)', () => {
   let appHandle: DbHandle;
   let migrateHandle: DbHandle;
   const workspaceId = randomUUID();
@@ -230,6 +230,7 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
       rolinherit: boolean;
       schema_create: boolean;
       schema_usage: boolean;
+      core_schema_usage: boolean;
       execute_principals: string[];
     }>(
       `select p.proname, owner_role.rolname as owner, p.prosecdef, p.proconfig, p.provolatile,
@@ -238,6 +239,7 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
               aggregate_owner.rolcanlogin, aggregate_owner.rolinherit,
               pg_catalog.has_schema_privilege('fops_survey_aggregate_owner', 'survey', 'CREATE') as schema_create,
               pg_catalog.has_schema_privilege('fops_survey_aggregate_owner', 'survey', 'USAGE') as schema_usage,
+              pg_catalog.has_schema_privilege('fops_survey_aggregate_owner', 'core', 'USAGE') as core_schema_usage,
               coalesce((
                 select array_agg(privilege_principal order by privilege_principal)
                   from (
@@ -254,10 +256,14 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
          join pg_catalog.pg_roles owner_role on owner_role.oid = p.proowner
          join pg_catalog.pg_roles aggregate_owner on aggregate_owner.rolname = 'fops_survey_aggregate_owner'
         where n.nspname = 'survey'
-          and p.proname in ('read_result_aggregates', 'read_result_response_count')
+          and p.proname in (
+            'count_negative_outcome_without_followup',
+            'read_result_aggregates',
+            'read_result_response_count'
+          )
         order by p.proname`,
     );
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     for (const row of rows) {
       expect(row.owner).toBe('fops_survey_aggregate_owner');
       expect(row.prosecdef).toBe(true);
@@ -269,6 +275,7 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
       expect(row.rolinherit).toBe(false);
       expect(row.schema_create).toBe(false);
       expect(row.schema_usage).toBe(true);
+      expect(row.core_schema_usage).toBe(true);
       expect(row.execute_principals).toEqual(['fops_app', 'fops_survey_aggregate_owner']);
     }
 
@@ -282,6 +289,7 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
     expect(columnPrivileges.rows.map((row) => row.privilege)).toEqual([
       'survey_questions.id.SELECT',
       'survey_questions.kind.SELECT',
+      'survey_questions.rating_min.SELECT',
       'survey_questions.survey_id.SELECT',
       'survey_questions.workspace_id.SELECT',
       'survey_response_answers.answer_kind.SELECT',
@@ -294,7 +302,25 @@ describe.skipIf(!runIntegration)('Survey result aggregate migration 0038', () =>
       'survey_responses.survey_id.SELECT',
       'survey_responses.workspace_id.SELECT',
       'surveys.id.SELECT',
+      'surveys.primary_managed_system_id.SELECT',
+      'surveys.type.SELECT',
       'surveys.workspace_id.SELECT',
+    ]);
+
+    const linkColumnPrivileges = await migrateHandle.pool.query<{ privilege: string }>(
+      `select table_name || '.' || column_name || '.' || privilege_type as privilege
+         from information_schema.column_privileges
+        where grantee = 'fops_survey_aggregate_owner'
+          and table_schema = 'core'
+          and table_name = 'entity_links'
+        order by table_name, column_name, privilege_type`,
+    );
+    expect(linkColumnPrivileges.rows.map((row) => row.privilege)).toEqual([
+      'entity_links.source_id.SELECT',
+      'entity_links.source_type.SELECT',
+      'entity_links.status.SELECT',
+      'entity_links.target_type.SELECT',
+      'entity_links.workspace_id.SELECT',
     ]);
 
     const tablePrivileges = await migrateHandle.pool.query<{

@@ -15,7 +15,7 @@
 -- per-table GRANT/REVOKE work; this file only creates the roles, the
 -- database, and ensures `fops_migrate` owns it.
 -- Existing databases must provision the matching role and one-way membership
--- before applying migrations 0038 or 0039.
+-- before applying migrations 0038, 0039, or 0046.
 --
 -- The superuser bootstrap user comes from POSTGRES_USER/POSTGRES_PASSWORD on
 -- the container; the Drizzle CLI and the app both connect as the two roles

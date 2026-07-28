@@ -26,6 +26,7 @@ import {
 } from './modules/analytics-areas/index.js';
 import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
 import { createAttachmentsService } from './modules/attachments/service.js';
+import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
 import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
@@ -606,6 +607,18 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   await app.register(navRoutes, {
     sessionService,
     navCountsService,
+    workspaceId,
+    rateLimitConfig: { read: app.rateLimitConfig.read },
+  });
+  const dashboardService = createDashboardService({
+    db: dbHandle.db,
+    checkService,
+    requestService,
+    vocReadService,
+  });
+  await app.register(dashboardRoutes, {
+    sessionService,
+    dashboardService,
     workspaceId,
     rateLimitConfig: { read: app.rateLimitConfig.read },
   });
