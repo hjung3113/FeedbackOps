@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { DetailPanelSlotContext, cn } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
-import { fetchManagedSystems, fetchNavCounts, fetchPermissionCheck } from '@/lib/api';
+import { createSavedView, deleteSavedView, fetchManagedSystems, fetchNavCounts, fetchPermissionCheck, fetchSavedViews, type SavedView, type SavedViewSurface } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { AppRail, type RailDomain } from './AppRail';
 import { AppSidebar, type SidebarNavEntry } from './AppSidebar';
@@ -13,6 +13,8 @@ export interface AppFrameProps {
   /** VOC routes already encode this scope in their strict URL search schema. */
   syncManagedSystemFromUrl?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
+  savedViewFilter?: Record<string, unknown>;
+  onApplySavedView?: (view: SavedView) => void;
   /** The shell-rendered route content. AppFrame is NOT itself a shell. */
   children: React.ReactNode;
   className?: string;
@@ -29,7 +31,7 @@ interface SlotEntry {
  * NOT a shell — does NOT live in packages/ui. The shell taxonomy is fixed at exactly three
  * (PageShell / ListShell / WorkbenchShell per ADR-0020). AppFrame composes one of those as its outlet.
  */
-export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncManagedSystemFromUrl = false, onManagedSystemChange, children, className }: AppFrameProps) {
+export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncManagedSystemFromUrl = false, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
   const [slots, setSlots] = React.useState<SlotEntry[]>([]);
   const [selectedManagedSystemId, setSelectedManagedSystemId] = React.useState<string | undefined>(managedSystemId);
   React.useEffect(() => {
@@ -65,6 +67,18 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     }),
     retry: false,
   });
+  const savedViewSurface: SavedViewSurface | undefined = activeDomain === 'voc'
+    ? 'voc'
+    : activeDomain === 'tasks'
+      ? 'tasks'
+      : activeDomain === 'findings'
+        ? 'findings'
+        : undefined;
+  const savedViewsQuery = useQuery({
+    queryKey: ['saved-views', savedViewSurface] as const,
+    queryFn: ({ signal }) => fetchSavedViews(savedViewSurface, signal),
+    retry: false,
+  });
   const managedSystems = (systemsQuery.data?.items ?? []).map((system) => ({
     id: system.id,
     name: system.name,
@@ -83,6 +97,14 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     onManagedSystemChange?.(managedSystemId);
   }, [onManagedSystemChange]);
   const counts = countsQuery.data?.counts;
+  const savedViews = savedViewsQuery.data?.items ?? [];
+  const saveCurrentView = React.useCallback((name: string) => {
+    if (activeDomain !== 'voc' || savedViewFilter === undefined) return;
+    void createSavedView({ surface: 'voc', name, filter: savedViewFilter }).then(() => savedViewsQuery.refetch());
+  }, [activeDomain, savedViewFilter, savedViewsQuery]);
+  const deleteCurrentView = React.useCallback((id: string) => {
+    void deleteSavedView(id).then(() => savedViewsQuery.refetch());
+  }, [savedViewsQuery]);
   const sidebarProps = {
     entries: sidebarEntries,
     systemLabel: systemMeta[activeDomain].label,
@@ -92,6 +114,14 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     onManagedSystemChange: changeManagedSystem,
     ...(counts !== undefined ? { counts } : {}),
     ...(selectedManagedSystemId !== undefined ? { selectedManagedSystemId } : {}),
+    savedViews,
+    canSaveView: activeDomain === 'voc' && savedViewFilter !== undefined,
+    onSaveView: saveCurrentView,
+    onApplySavedView: (id: string) => {
+      const view = savedViews.find((candidate) => candidate.id === id);
+      if (view) onApplySavedView?.(view);
+    },
+    onDeleteSavedView: deleteCurrentView,
   };
 
   const setContent = React.useCallback((key: string, node: React.ReactNode) => {

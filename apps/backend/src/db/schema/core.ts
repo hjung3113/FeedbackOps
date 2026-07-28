@@ -120,6 +120,44 @@ export const actors = coreSchema.table(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
+// core.saved_views — actor-private, persisted list filters (#143).
+// The saved payload is deliberately JSON because each `surface` has its own
+// list-query schema. The saved-views module validates that payload against the
+// matching schema on both write and read; this schema only records ownership
+// and relational invariants.
+// ─────────────────────────────────────────────────────────────────────────
+export const savedViews = coreSchema.table(
+  'saved_views',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id),
+    actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    surface: text('surface').notNull(),
+    name: text('name').notNull(),
+    filterPayload: jsonb('filter_payload').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceActorSurfaceIdx: index('saved_views_workspace_actor_surface_idx').on(
+      t.workspaceId,
+      t.actorId,
+      t.surface,
+    ),
+    actorSurfaceNameUq: uniqueIndex('saved_views_actor_surface_name_uq').on(
+      t.actorId,
+      t.surface,
+      t.name,
+    ),
+    surfaceCheck: check(
+      'saved_views_surface_check',
+      sql`${t.surface} IN ('voc', 'tasks', 'task_requests', 'findings')`,
+    ),
+    nameNotBlank: check('saved_views_name_not_blank', sql`length(btrim(${t.name})) > 0`),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
 // core.sessions — ADR-0006: opaque text PK, server-side store.
 // Cookie name 'fops_session' carries this opaque id.
 // ─────────────────────────────────────────────────────────────────────────

@@ -18,4 +18,4 @@ export const railScopeManagedSystems = {
   total: 2,
 } as const;
 
-export const railScopeSnapshots = ['rail-scope-voc.png', 'rail-scope-options.png'] as const;
+export const railScopeSnapshots = ['rail-scope-voc.png', 'rail-scope-options.png', 'rail-scope-saved-views.png'] as const;

@@ -39,6 +39,7 @@ import {
   managedSystemsRoutes,
 } from './modules/managed-systems/index.js';
 import { createNavCountsService, navRoutes, type NavCountsService } from './modules/nav/index.js';
+import { createSavedViewsService, savedViewsRoutes } from './modules/saved-views/index.js';
 import {
   createCheckService,
   createDecisionService,
@@ -607,6 +608,17 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     navCountsService,
     workspaceId,
     rateLimitConfig: { read: app.rateLimitConfig.read },
+  });
+
+  // #143 actor-private persisted list filters. This is intentionally a root
+  // prefix (rather than /nav) because it is a CRUD resource, not navigation's
+  // read-only badge aggregation.
+  const savedViewsService = createSavedViewsService({ db: dbHandle.db });
+  await app.register(savedViewsRoutes, {
+    sessionService,
+    savedViewsService,
+    workspaceId,
+    rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
   });
 
   const vocRecommendationsService = createVocRecommendationsService({

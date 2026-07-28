@@ -51,6 +51,11 @@ export interface AppSidebarProps {
   selectedManagedSystemId?: string;
   isAdmin?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
+  savedViews?: Array<{ id: string; name: string }>;
+  canSaveView?: boolean;
+  onSaveView?: (name: string) => void;
+  onApplySavedView?: (id: string) => void;
+  onDeleteSavedView?: (id: string) => void;
 }
 
 const STORAGE_KEY = 'appSidebarCollapsed';
@@ -81,6 +86,11 @@ export function AppSidebar({
   selectedManagedSystemId,
   isAdmin = true,
   onManagedSystemChange,
+  savedViews = [],
+  canSaveView = false,
+  onSaveView,
+  onApplySavedView,
+  onDeleteSavedView,
 }: AppSidebarProps) {
   const [collapsed, setCollapsed] = React.useState(() => readInitialCollapsed(defaultCollapsed));
   const [scopeOpen, setScopeOpen] = React.useState(false);
@@ -165,10 +175,54 @@ export function AppSidebar({
               </a>
             </React.Fragment>;
           })}
+          {!collapsed && (savedViews.length > 0 || canSaveView) && (
+            <SavedViewsSection
+              views={savedViews}
+              canSave={canSaveView}
+              {...(onSaveView !== undefined ? { onSave: onSaveView } : {})}
+              {...(onApplySavedView !== undefined ? { onApply: onApplySavedView } : {})}
+              {...(onDeleteSavedView !== undefined ? { onDelete: onDeleteSavedView } : {})}
+            />
+          )}
         </div>
       </nav>
       <div className="border-t border-border-subtle p-2"><div className="flex flex-col gap-0.5">{footerItems.map((item) => <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />)}</div></div>
     </aside>
+  );
+}
+
+function SavedViewsSection({
+  views,
+  canSave,
+  onSave,
+  onApply,
+  onDelete,
+}: {
+  views: Array<{ id: string; name: string }>;
+  canSave: boolean;
+  onSave?: (name: string) => void;
+  onApply?: (id: string) => void;
+  onDelete?: (id: string) => void;
+}) {
+  const [name, setName] = React.useState('');
+  return (
+    <section className="mt-3.5" aria-label="Saved views" data-testid="saved-views-section">
+      <div className="mx-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-disabled">Saved views</div>
+      {views.map((view) => (
+        <div key={view.id} className="group flex items-center gap-1">
+          <button type="button" className="min-w-0 flex-1 rounded-md px-3 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-row-hover hover:text-text-primary" onClick={() => onApply?.(view.id)} data-testid={`saved-view-apply-${view.id}`}>
+            <span className="truncate">{view.name}</span>
+          </button>
+          <button type="button" className="mr-1 rounded p-1 text-text-muted opacity-0 hover:text-accent-danger group-hover:opacity-100 focus:opacity-100" aria-label={`Delete saved view ${view.name}`} onClick={() => onDelete?.(view.id)} data-testid={`saved-view-delete-${view.id}`}>×</button>
+        </div>
+      ))}
+      {canSave && (
+        <form className="mt-1 flex gap-1 px-2" onSubmit={(event) => { event.preventDefault(); const trimmed = name.trim(); if (trimmed) { onSave?.(trimmed); setName(''); } }}>
+          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} required aria-label="Saved view name" placeholder="Save current filter" className="min-w-0 flex-1 rounded border border-border-subtle bg-surface-canvas px-2 py-1 text-xs" />
+          <button type="submit" className="rounded px-2 py-1 text-xs text-accent-primary hover:bg-surface-row-hover" data-testid="saved-view-save">Save</button>
+        </form>
+      )}
+    </section>
   );
 }
 
