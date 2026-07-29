@@ -15,6 +15,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { checkFindingManage } from '../findings/authorization.js';
 import {
   actorSurveyReadScope,
   checkSurveyManage,
@@ -29,7 +30,9 @@ import {
   lockResponseEvidenceSubject,
   readApprovedResponseExcerpts,
   readApprovedResultExcerpts,
+  readApprovedResultExcerptsPersonal,
   readResponseTextCandidate,
+  readSurveyResultDerivedFindingIds,
   readSurveyQuestionLabel,
 } from './repo-evidence.js';
 import {
@@ -847,12 +850,20 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       throw new HttpError('conflict.survey_results_unavailable', 'survey results unavailable');
     const workspaceSettings = await deps.resolveWorkspaceSettings(deps.db, actor.workspace_id);
     const anonymityThreshold = workspaceSettings.survey_anonymity_threshold;
-    const [questions, responseCount, aggregateRows, approvedExcerpts] = await Promise.all([
-      listQuestions(deps.db, actor.workspace_id, survey.id),
-      readSurveyResultResponseCount(deps.db, actor.workspace_id, survey.id),
-      readSurveyResultAggregates(deps.db, actor.workspace_id, survey.id),
-      readApprovedResultExcerpts(deps.db, actor.workspace_id, survey.id),
-    ]);
+    const holder = personal.allow;
+    const [questions, responseCount, aggregateRows, approvedExcerpts, derivedFindingIds, findingManage] =
+      await Promise.all([
+        listQuestions(deps.db, actor.workspace_id, survey.id),
+        readSurveyResultResponseCount(deps.db, actor.workspace_id, survey.id),
+        readSurveyResultAggregates(deps.db, actor.workspace_id, survey.id),
+        holder
+          ? readApprovedResultExcerptsPersonal(deps.db, actor.workspace_id, survey.id)
+          : readApprovedResultExcerpts(deps.db, actor.workspace_id, survey.id),
+        readSurveyResultDerivedFindingIds(deps.db, actor.workspace_id, survey.id),
+        checkFindingManage(deps.checkService, actor, survey.primary_managed_system_id, {
+          requireElevatedRole: true,
+        }),
+      ]);
     const rowsByQuestion = new Map<string, typeof aggregateRows>();
     for (const row of aggregateRows) {
       const rows = rowsByQuestion.get(row.question_id) ?? [];
@@ -865,13 +876,27 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       response_count: null,
       suppression: { code: 'anonymity_threshold' as const },
     });
-    const holder = personal.allow;
-    const excerptsByQuestion = new Map<string, Array<{ id: string; text: string }>>();
+    const excerptsByQuestion = new Map<
+      string,
+      Array<{ id: string; text: string; response_id?: string }>
+    >();
     for (const excerpt of approvedExcerpts) {
       const excerpts = excerptsByQuestion.get(excerpt.question_id) ?? [];
-      excerpts.push({ id: excerpt.approved_excerpt_id, text: excerpt.redacted_excerpt });
+      excerpts.push({
+        id: excerpt.approved_excerpt_id,
+        text: excerpt.redacted_excerpt,
+        ...(holder ? { response_id: excerpt.response_id } : {}),
+      });
       excerptsByQuestion.set(excerpt.question_id, excerpts);
     }
+    const requestablePermission = {
+      permission: 'finding.manage' as const,
+      managed_system_id: survey.primary_managed_system_id,
+    };
+    const availability = findingManage.allow ? 'allowed' : 'blocked_requestable';
+    const actionPermission = findingManage.allow
+      ? {}
+      : { requestable_permission: requestablePermission };
     return surveyResultDtoSchema.parse({
       survey_id: survey.id,
       status: survey.status,
@@ -943,7 +968,21 @@ export function createSurveysService(deps: SurveysServiceDeps) {
           option_buckets,
         };
       }),
-      next_actions: [],
+      next_actions: [
+        {
+          id: 'create_finding' as const,
+          availability,
+          intent: 'open_finding_draft' as const,
+          ...actionPermission,
+        },
+        ...derivedFindingIds.map((source_finding_id) => ({
+          id: 'request_task' as const,
+          availability,
+          intent: 'open_task_request_draft' as const,
+          source_finding_id,
+          ...actionPermission,
+        })),
+      ],
     });
   }
   async function readEvidenceExcerptCandidate(

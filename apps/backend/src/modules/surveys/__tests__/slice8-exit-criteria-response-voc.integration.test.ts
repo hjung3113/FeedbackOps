@@ -236,7 +236,9 @@ describe.skipIf(!runIntegration)(
     }
     function assertNoCreateVoc(results: unknown): void {
       const body = surveyResultDtoSchema.parse(results);
-      expect(body.next_actions).toEqual([]);
+      expect(body.next_actions).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "create_finding" })]),
+      );
       expect(body.next_actions.map((action) => action.id)).not.toContain(
         "create_voc",
       );

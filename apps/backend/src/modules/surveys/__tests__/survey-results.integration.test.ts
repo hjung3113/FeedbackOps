@@ -29,6 +29,7 @@ type SeededSurvey = {
   id: string;
   msId: string;
   questions: Record<string, string>;
+  responseIds: string[];
 };
 
 describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
@@ -65,10 +66,28 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     if (!migrateHandle) return;
     const systems = 'select id from core.managed_systems where workspace_id=$1 and slug like $2';
     const surveys = `select id from survey.surveys where workspace_id=$1 and primary_managed_system_id in (${systems})`;
-    await migrateHandle.pool.query(`delete from core.audit_log where subject_id in (${surveys})`, [
+    const responses = `select id from survey.survey_responses where survey_id in (${surveys})`;
+    const findings = `select id from finding.findings where source_type='survey_response' and source_id in (${responses})`;
+    await migrateHandle.pool.query(
+      `delete from core.audit_log where subject_id in (${surveys}) or subject_id in (${findings}) or detail->>'source_survey_response_id' in (select id::text from survey.survey_responses where survey_id in (${surveys}))`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from core.entity_links where source_id in (${responses}) or target_id in (${findings})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
+    await migrateHandle.pool.query(`delete from finding.evidence_highlights where finding_id in (${findings})`, [
       WORKSPACE_ID,
       `${SLUG}%`,
     ]);
+    await migrateHandle.pool.query(`delete from finding.findings where id in (${findings})`, [
+      WORKSPACE_ID,
+      `${SLUG}%`,
+    ]);
+    await migrateHandle.pool.query(
+      `delete from survey.survey_response_excerpt_approvals where survey_id in (${surveys})`,
+      [WORKSPACE_ID, `${SLUG}%`],
+    );
     await migrateHandle.pool.query(
       `delete from survey.survey_response_answers where survey_id in (${surveys})`,
       [WORKSPACE_ID, `${SLUG}%`],
@@ -159,8 +178,10 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       if (!question) throw new Error(`missing ${kind} question`);
       return question;
     };
+    const responseIds: string[] = [];
     for (const answer of answers) {
       const responseId = randomUUID();
+      responseIds.push(responseId);
       const respondent = await migrateHandle.pool.query<{ id: string }>(
         `insert into core.actors (workspace_id,external_id,email,display_name,role_level,actor_type)
          values ($1,$2,$3,'Results respondent','user','internal_member') returning id`,
@@ -182,7 +203,7 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       if (answer.rating !== undefined) await add('rating', questionId('rating'), answer.rating);
       if (answer.text !== undefined) await add('text', questionId('text'), answer.text);
     }
-    return { id, msId, questions };
+    return { id, msId, questions, responseIds };
   }
 
   async function dev() {
@@ -236,7 +257,10 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     if (value && typeof value === 'object')
       for (const [key, child] of Object.entries(value)) {
         const approvedExcerpt = key === 'excerpts';
-        if (!(inApprovedExcerpt && (key === 'id' || key === 'text')) && !approvedExcerpt)
+        if (
+          !(inApprovedExcerpt && (key === 'id' || key === 'text' || key === 'response_id')) &&
+          !approvedExcerpt
+        )
           expect(key).not.toMatch(forbidden);
         assertNoForbidden(child, approvedExcerpt);
       }
@@ -244,9 +268,22 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
   function parse2xx(response: { statusCode: number; json: () => unknown }) {
     expect(response.statusCode).toBe(200);
     const body = surveyResultDtoSchema.parse(response.json());
-    expect(body.next_actions).toEqual([]);
+    expect(body.next_actions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'create_finding' })]),
+    );
     assertNoForbidden(body);
     return body;
+  }
+  async function approveExcerpt(survey: SeededSurvey, responseId: string) {
+    const approval = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_response_excerpt_approvals
+        (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
+       values ($1,$2,$3,$4,'approved result excerpt',$5) returning id`,
+      [WORKSPACE_ID, survey.id, responseId, survey.questions.text, adminId],
+    );
+    const id = approval.rows[0]?.id;
+    if (!id) throw new Error('excerpt approval seed failed');
+    return id;
   }
   const full = (count: number): Answer[] =>
     Array.from({ length: count }, () => ({
@@ -255,6 +292,117 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       rating: 3,
       text: 'private body',
     }));
+
+  it('AC-1 returns an allowed create_finding action and holder-only response_id', async () => {
+    const survey = await seed(full(5));
+    const responseId = survey.responseIds[0];
+    if (!responseId) throw new Error('response seed failed');
+    await approveExcerpt(survey, responseId);
+    await grant(adminId, 'survey.read_personal_responses', survey.msId);
+    const body = parse2xx(await get(survey.id));
+    expect(body.next_actions).toEqual([
+      { id: 'create_finding', availability: 'allowed', intent: 'open_finding_draft' },
+    ]);
+    const text = body.questions.find((question) => question.question_id === survey.questions.text);
+    expect(text).toMatchObject({ excerpts: [{ response_id: responseId }] });
+  });
+
+  it('AC-2 omits response_id for non-holders and parses the strict DTO', async () => {
+    const survey = await seed(full(5));
+    const responseId = survey.responseIds[0];
+    if (!responseId) throw new Error('response seed failed');
+    await approveExcerpt(survey, responseId);
+    const body = surveyResultDtoSchema.parse((await get(survey.id)).json());
+    const text = body.questions.find((question) => question.question_id === survey.questions.text);
+    if (!text || text.visibility !== 'visible' || text.kind !== 'text') throw new Error('text result missing');
+    expect('response_id' in text.excerpts[0]!).toBe(false);
+  });
+
+  it('AC-3 returns requestable finding permission for a personal holder without finding.manage', async () => {
+    const survey = await seed(full(5));
+    const actor = await dev();
+    await grant(actor.id, 'survey.read', survey.msId);
+    await grant(actor.id, 'survey.read_personal_responses', survey.msId);
+    const body = parse2xx(await get(survey.id, actor.cookie));
+    expect(body.next_actions).toEqual([
+      {
+        id: 'create_finding',
+        availability: 'blocked_requestable',
+        intent: 'open_finding_draft',
+        requestable_permission: {
+          permission: 'finding.manage',
+          managed_system_id: survey.msId,
+        },
+      },
+    ]);
+  });
+
+  it('AC-4 adds request_task only after POST creates a Finding from the response', async () => {
+    const survey = await seed(full(5));
+    const responseId = survey.responseIds[0];
+    if (!responseId) throw new Error('response seed failed');
+    const excerptId = await approveExcerpt(survey, responseId);
+    await grant(adminId, 'survey.read_personal_responses', survey.msId);
+    const before = parse2xx(await get(survey.id));
+    expect(before.next_actions.map((action) => action.id)).not.toContain('request_task');
+    const created = await app.inject({
+      method: 'POST',
+      url: `/survey-responses/${responseId}/create-finding`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+      },
+      payload: { severity: 'medium', approved_excerpt_ids: [excerptId] },
+    });
+    expect(created.statusCode).toBe(201);
+    const findingId = created.json<{ id: string }>().id;
+    const after = parse2xx(await get(survey.id));
+    expect(after.next_actions).toContainEqual(
+      expect.objectContaining({ id: 'request_task', source_finding_id: findingId }),
+    );
+  });
+
+  it('AC-5 exposes no VOC action and keeps create-voc as a route miss', async () => {
+    const survey = await seed(full(5));
+    const responseId = survey.responseIds[0];
+    if (!responseId) throw new Error('response seed failed');
+    const body = parse2xx(await get(survey.id));
+    expect(body.next_actions.map((action) => action.id)).not.toContain('create_voc');
+    expect(
+      (await app.inject({ method: 'POST', url: `/survey-responses/${responseId}/create-voc` })).statusCode,
+    ).toBe(404);
+  });
+
+  it('AC-6 preserves non-holder threshold suppression and the aggregate reader projection', async () => {
+    const survey = await seed(full(4));
+    const body = parse2xx(await get(survey.id));
+    expect(body.questions).toContainEqual({
+      question_id: survey.questions.text,
+      visibility: 'suppressed',
+      response_count: null,
+      suppression: { code: 'anonymity_threshold' },
+    });
+    const aggregateReader = await migrateHandle.pool.query<{ definition: string }>(
+      "select pg_get_functiondef('survey.read_approved_result_excerpts(uuid,uuid)'::regprocedure) as definition",
+    );
+    expect(aggregateReader.rows[0]?.definition).not.toContain('response_id');
+    const aggregateReaderGrant = await migrateHandle.pool.query<{ allowed: boolean }>(
+      "select has_function_privilege('fops_app', 'survey.read_approved_result_excerpts(uuid,uuid)', 'execute') as allowed",
+    );
+    expect(aggregateReaderGrant.rows[0]?.allowed).toBe(true);
+  });
+
+  it('AC-7 does not expose the personal excerpt reader output when its gate is denied', async () => {
+    const survey = await seed(full(5));
+    const responseId = survey.responseIds[0];
+    if (!responseId) throw new Error('response seed failed');
+    await approveExcerpt(survey, responseId);
+    const body = parse2xx(await get(survey.id));
+    const text = body.questions.find((question) => question.question_id === survey.questions.text);
+    if (!text || text.visibility !== 'visible' || text.kind !== 'text') throw new Error('text result missing');
+    expect(text.excerpts.every((excerpt) => 'response_id' in excerpt === false)).toBe(true);
+  });
 
   it('enforces the actor matrix and parses every successful result', async () => {
     const survey = await seed(full(4));
