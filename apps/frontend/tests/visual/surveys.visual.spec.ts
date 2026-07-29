@@ -1,30 +1,30 @@
-import { expect, test } from "./support/visual-test";
-import { surveyVisualFixture, surveyVisualScenarios } from "./fixtures/surveys";
-import { installMockApi } from "./support/mock-api";
-import { expectVisual } from "./support/screenshot";
+import { surveyVisualFixture, surveyVisualScenarios } from './fixtures/surveys';
+import { installMockApi } from './support/mock-api';
+import { expectVisual } from './support/screenshot';
+import { expect, test } from './support/visual-test';
 
-test.describe("/surveys visual harness", () => {
+test.describe('/surveys visual harness', () => {
   for (const scenario of surveyVisualScenarios) {
     test(`renders ${scenario}`, async ({ page }) => {
       await installMockApi(page, {
         surveyScenario: scenario,
-        role: scenario === "no-permission" ? "user" : "admin",
+        role: scenario === 'no-permission' ? 'user' : 'admin',
       });
       const url =
-        scenario === "detail"
+        scenario === 'detail'
           ? `/surveys/${surveyVisualFixture.id}`
-          : scenario === "builder"
+          : scenario === 'builder'
             ? `/surveys/${surveyVisualFixture.id}?builder=true`
-            : "/surveys";
+            : '/surveys';
       await page.goto(url);
       const target =
-        scenario === "builder"
-          ? page.getByTestId("survey-builder")
-          : scenario === "detail"
-            ? page.getByTestId("survey-detail")
-            : scenario === "error"
-              ? page.getByTestId("survey-list-error")
-              : page.getByTestId("survey-list");
+        scenario === 'builder'
+          ? page.getByTestId('survey-builder')
+          : scenario === 'detail'
+            ? page.getByTestId('survey-detail')
+            : scenario === 'error'
+              ? page.getByTestId('survey-list-error')
+              : page.getByTestId('survey-list');
       await expect(target).toBeVisible();
       await expectVisual(page, target, `surveys-${scenario}.png`);
     });

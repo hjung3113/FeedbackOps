@@ -180,7 +180,9 @@ Layout:
 - Question Summary
 - Response Distribution
 - Text Response Highlights
-- Filter by Managed System / Segment / Analytics Area
+- Filter by Managed System / Segment / Analytics Area: deferred until responses
+  retain immutable cohort dimensions and an explicit privacy policy prevents
+  subtraction attacks.
 - Add Evidence Highlight CTA
 - Create Finding CTA
 - Link Finding CTA
