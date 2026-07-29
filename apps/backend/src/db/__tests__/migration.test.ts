@@ -323,3 +323,45 @@ describe('migrations directory', () => {
     );
   });
 });
+
+describe('migration journal', () => {
+  it('keeps every migration file and journal entry in lockstep', () => {
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((file) => file.endsWith('.sql'))
+      .sort();
+    const journal = JSON.parse(
+      readFileSync(join(MIGRATIONS_DIR, 'meta', '_journal.json'), 'utf8'),
+    ) as { entries: Array<{ idx: number; tag: string }> };
+    const tags = journal.entries.map((entry) => entry.tag);
+    const tagSet = new Set(tags);
+    const fileTags = files.map((file) => file.slice(0, -'.sql'.length));
+    const fileTagSet = new Set(fileTags);
+    const missingJournalEntries = files.filter((file) => !tagSet.has(file.slice(0, -'.sql'.length)));
+    const missingMigrationFiles = tags.filter((tag) => !fileTagSet.has(tag));
+    const unexpectedIndexes = journal.entries
+      .filter((entry, expectedIdx) => entry.idx !== expectedIdx)
+      .map((entry) => `${entry.idx}:${entry.tag}`);
+    const mismatchedTags = journal.entries
+      .filter((entry) => !entry.tag.startsWith(`${String(entry.idx).padStart(4, '0')}_`))
+      .map((entry) => `${entry.idx}:${entry.tag}`);
+
+    expect(files.length).toBeGreaterThanOrEqual(40);
+    expect(journal.entries.length).toBe(files.length);
+    expect(
+      missingJournalEntries,
+      `Migration file(s) missing _journal.json entry: ${missingJournalEntries.join(', ')}`,
+    ).toEqual([]);
+    expect(
+      missingMigrationFiles,
+      `_journal.json tag(s) missing migration file: ${missingMigrationFiles.join(', ')}`,
+    ).toEqual([]);
+    expect(
+      unexpectedIndexes,
+      `_journal.json entry idx values must be contiguous and ordered: ${unexpectedIndexes.join(', ')}`,
+    ).toEqual([]);
+    expect(
+      mismatchedTags,
+      `_journal.json tag(s) must start with their zero-padded idx: ${mismatchedTags.join(', ')}`,
+    ).toEqual([]);
+  });
+});
