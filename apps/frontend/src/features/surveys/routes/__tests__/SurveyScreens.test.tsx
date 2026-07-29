@@ -1,10 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SurveyBuilder } from '../../components/builder/SurveyBuilder';
 import { SurveyDetail } from '../../components/detail/SurveyDetail';
 import { SurveyList } from '../../components/list/SurveyList';
+import { useSurveys } from '../../hooks/useSurveys';
 import type { Survey, SurveyQuestion } from '../../types';
 
 const { apiClient } = vi.hoisted(() => ({ apiClient: vi.fn() }));
@@ -55,6 +63,27 @@ function renderWithQuery(node: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
 }
 
+function renderDetailWithRouter(detailSurvey: Survey, canManage: boolean) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const root = createRootRoute();
+  const detail = createRoute({
+    getParentRoute: () => root,
+    path: '/',
+    component: () => <SurveyDetail survey={detailSurvey} canManage={canManage} />,
+  });
+  const router = createRouter({
+    routeTree: root.addChildren([detail]),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+}
+
 describe('Survey screens', () => {
   beforeEach(() => {
     apiClient.mockReset();
@@ -94,28 +123,214 @@ describe('Survey screens', () => {
     expect(screen.queryByRole('button', { name: '새 질문 추가' })).not.toBeInTheDocument();
   });
 
-  it('renders the actual closed status in builder and detail lock copy', () => {
+  it('renders the actual closed status in builder and detail lock copy', async () => {
     const closedSurvey = { ...survey, status: 'closed' as const };
-    const { rerender } = renderWithQuery(
-      <SurveyBuilder survey={closedSurvey} canManage onBack={vi.fn()} />,
-    );
+    renderWithQuery(<SurveyBuilder survey={closedSurvey} canManage onBack={vi.fn()} />);
     expect(screen.getByText('closed · discovery')).toBeInTheDocument();
     expect(screen.getByText('closed 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <SurveyDetail survey={closedSurvey} canManage />
-      </QueryClientProvider>,
-    );
-    expect(screen.getByText('closed 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
+    renderDetailWithRouter(closedSurvey, true);
+    expect(await screen.findByText('closed 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
   });
 
-  it('renders a survey detail title, type, status, and questions', () => {
-    render(<SurveyDetail survey={survey} canManage={false} />);
+  it('renders a survey detail title, type, status, and questions', async () => {
+    renderDetailWithRouter(survey, false);
 
-    expect(screen.getByText('Q3 사용성 진단')).toBeInTheDocument();
+    expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
     expect(screen.getByText('SRV-1 · discovery')).toBeInTheDocument();
     expect(screen.getByText('draft')).toBeInTheDocument();
     expect(screen.getByText('Q1. 도움이 되었나요?')).toBeInTheDocument();
+  });
+
+  it('launches a manageable draft survey and returns to detail after success', async () => {
+    const onBack = vi.fn();
+    apiClient.mockResolvedValue({ data: { ...survey, status: 'open' } });
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={onBack} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    expect(await screen.findByTestId('survey-open-confirmation')).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByTestId('survey-open-confirmation')).getByTestId('survey-status-confirm'),
+    );
+
+    await waitFor(() => expect(apiClient).toHaveBeenCalledWith('POST', '/surveys/survey-1/open'));
+    await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+  });
+
+  it('hides Launch when the builder survey is open', async () => {
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, status: 'open' }} canManage onBack={vi.fn()} />,
+    );
+
+    await screen.findByTestId('survey-builder');
+    expect(screen.queryByRole('button', { name: 'Launch' })).not.toBeInTheDocument();
+  });
+
+  it('hides Launch without survey.manage even for a draft survey', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage={false} onBack={vi.fn()} />);
+
+    await screen.findByTestId('survey-builder');
+    expect(screen.queryByRole('button', { name: 'Launch' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the Launch confirmation open when a survey has no questions', async () => {
+    const onBack = vi.fn();
+    apiClient.mockRejectedValue({
+      status: 422,
+      envelope: {
+        code: 'validation.failed',
+        message: 'survey requires a question',
+        detail: { fields: [{ path: ['questions'], code: 'required' }] },
+      },
+    });
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={onBack} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+
+    expect(
+      await screen.findByText('Launch하려면 질문을 하나 이상 추가해야 합니다.'),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('survey-open-confirmation')).toBeInTheDocument();
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it('shows a distinct Launch message for an invalid survey transition', async () => {
+    apiClient.mockRejectedValue({
+      status: 422,
+      envelope: {
+        code: 'validation.failed',
+        message: 'invalid survey transition',
+        detail: { fields: [{ path: ['status'], code: 'invalid_transition' }] },
+      },
+    });
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+
+    expect(
+      await screen.findByText('이 설문은 더 이상 Launch할 수 없는 상태입니다.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Launch하려면 질문을 하나 이상 추가해야 합니다.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('closes an open survey through its detail confirmation', async () => {
+    apiClient
+      .mockRejectedValueOnce({
+        status: 422,
+        envelope: {
+          code: 'validation.failed',
+          message: 'invalid survey transition',
+          detail: { fields: [{ path: ['status'], code: 'invalid_transition' }] },
+        },
+      })
+      .mockResolvedValueOnce({ data: { ...survey, status: 'closed' } });
+    renderDetailWithRouter({ ...survey, status: 'open' }, true);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Close survey' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-close-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+    expect(
+      await screen.findByText('이 설문은 더 이상 Close할 수 없는 상태입니다.'),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('survey-close-confirmation')).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByTestId('survey-close-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+
+    await waitFor(() => expect(apiClient).toHaveBeenCalledWith('POST', '/surveys/survey-1/close'));
+  });
+
+  it('hides Close survey for a manageable draft survey', async () => {
+    renderDetailWithRouter(survey, true);
+    await screen.findByTestId('survey-detail');
+    expect(screen.queryByRole('button', { name: 'Close survey' })).not.toBeInTheDocument();
+  });
+
+  it('hides Close survey for a manageable closed survey', async () => {
+    renderDetailWithRouter({ ...survey, status: 'closed' }, true);
+    await screen.findByTestId('survey-detail');
+    expect(screen.queryByRole('button', { name: 'Close survey' })).not.toBeInTheDocument();
+  });
+
+  it('hides Close survey for an open survey without management permission', async () => {
+    renderDetailWithRouter({ ...survey, status: 'open' }, false);
+    await screen.findByTestId('survey-detail');
+    expect(screen.queryByRole('button', { name: 'Close survey' })).not.toBeInTheDocument();
+  });
+
+  it('invalidates and refetches the survey list after Launch', async () => {
+    const listAfterLaunch = [{ ...survey, status: 'open' as const }];
+    apiClient.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/surveys') return { data: listAfterLaunch };
+      if (method === 'POST' && path === '/surveys/survey-1/open')
+        return { data: listAfterLaunch[0] };
+      return { data: survey };
+    });
+    function LaunchWithList() {
+      const list = useSurveys();
+      return (
+        <>
+          <SurveyList
+            surveys={list.data ?? []}
+            isLoading={list.isLoading}
+            error={list.error}
+            onSelect={vi.fn()}
+          />
+          <SurveyBuilder survey={survey} canManage onBack={vi.fn()} />
+        </>
+      );
+    }
+    renderWithQuery(<LaunchWithList />);
+
+    expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Launch' }));
+    fireEvent.click(
+      within(await screen.findByTestId('survey-open-confirmation')).getByTestId(
+        'survey-status-confirm',
+      ),
+    );
+
+    await waitFor(() =>
+      expect(
+        apiClient.mock.calls.filter((call) => call[0] === 'GET' && call[1] === '/surveys'),
+      ).toHaveLength(2),
+    );
+    expect(screen.getByTestId('survey-row-survey-1')).toHaveTextContent('Open');
+  });
+
+  it.each(['open', 'closed'] as const)(
+    'links %s surveys to their result summary',
+    async (status) => {
+      renderDetailWithRouter({ ...survey, status }, true);
+
+      const link = await screen.findByRole('link', { name: 'Open result summary' });
+      expect(link).toHaveAttribute('href', '/surveys/survey-1/results');
+    },
+  );
+
+  it('does not link a draft survey to unavailable results', async () => {
+    renderDetailWithRouter(survey, true);
+
+    await screen.findByTestId('survey-detail');
+    expect(screen.queryByRole('link', { name: 'Open result summary' })).not.toBeInTheDocument();
   });
 
   it.each(['single_choice', 'multiple_choice', 'rating', 'text'] as const)(

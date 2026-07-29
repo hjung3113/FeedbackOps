@@ -1,6 +1,10 @@
-import { EmptyState } from '@fops/ui';
+import { Button, EmptyState } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
+import { ArrowRight } from 'lucide-react';
+import * as React from 'react';
+import { useCloseSurvey } from '../../hooks/useSurveys';
 import type { Survey } from '../../types';
+import { SurveyStatusConfirmationDialog } from '../SurveyStatusConfirmationDialog';
 
 export function SurveyDetail({
   survey,
@@ -12,6 +16,8 @@ export function SurveyDetail({
   onClose?: () => void;
 }) {
   const questions = survey.questions ?? [];
+  const [closeOpen, setCloseOpen] = React.useState(false);
+  const closeSurvey = useCloseSurvey(survey.id);
   return (
     <aside
       className="flex h-full flex-col border-l border-border-subtle bg-surface-detail p-5"
@@ -24,9 +30,16 @@ export function SurveyDetail({
           </p>
           <h1 className="text-lg font-semibold text-text-primary">{survey.title}</h1>
           <p className="text-sm text-text-muted">{survey.description || '설명이 없습니다.'}</p>
-          <span className="inline-flex rounded-full bg-surface-canvas px-2 py-1 text-xs">
-            {survey.status}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex rounded-full bg-surface-canvas px-2 py-1 text-xs">
+              {survey.status}
+            </span>
+            {canManage && survey.status === 'open' && (
+              <Button variant="secondary" size="sm" onClick={() => setCloseOpen(true)}>
+                Close survey
+              </Button>
+            )}
+          </div>
         </div>
         {onClose && (
           <button type="button" aria-label="Close survey detail" onClick={onClose}>
@@ -54,7 +67,17 @@ export function SurveyDetail({
         )}
       </section>
       <section className="mt-6">
-        <h2 className="mb-2 text-sm font-medium">Result summary</h2>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-medium">Result summary</h2>
+          {(survey.status === 'open' || survey.status === 'closed') && (
+            <Button asChild variant="subtle" size="sm">
+              <Link to="/surveys/$surveyId/results" params={{ surveyId: survey.id }}>
+                <ArrowRight className="h-4 w-4" aria-hidden />
+                Open result summary
+              </Link>
+            </Button>
+          )}
+        </div>
         <p className="rounded bg-surface-canvas p-3 text-sm text-text-muted">
           응답이 수집되면 요약과 패턴이 여기에 표시됩니다.
         </p>
@@ -87,6 +110,18 @@ export function SurveyDetail({
           </p>
         </div>
       </section>
+      <SurveyStatusConfirmationDialog
+        open={closeOpen}
+        target="close"
+        isPending={closeSurvey.isPending}
+        error={closeSurvey.error}
+        onClose={() => setCloseOpen(false)}
+        onConfirm={() =>
+          closeSurvey.mutate(undefined, {
+            onSuccess: () => setCloseOpen(false),
+          })
+        }
+      />
     </aside>
   );
 }

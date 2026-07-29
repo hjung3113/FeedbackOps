@@ -42,6 +42,7 @@ import {
 } from '../fixtures/survey-results';
 import {
   type SurveyVisualScenario,
+  surveyDetailVisualFixture,
   surveyVisualFixture,
   surveyVisualFixtureSchema,
 } from '../fixtures/surveys';
@@ -319,6 +320,7 @@ export async function installMockApi(
 
     if (options.surveyScenario && isRequest(route, 'GET', '/surveys')) {
       const scenario = options.surveyScenario;
+      const fixture = scenario === 'detail' ? surveyDetailVisualFixture : surveyVisualFixture;
       await json(
         route,
         scenario === 'error' ? 500 : 200,
@@ -326,7 +328,7 @@ export async function installMockApi(
           ? errorEnvelope(500)
           : scenario === 'empty'
             ? []
-            : [surveyVisualFixtureSchema.parse(surveyVisualFixture)],
+            : [surveyVisualFixtureSchema.parse(fixture)],
       );
       return;
     }
@@ -353,7 +355,13 @@ export async function installMockApi(
     }
 
     if (options.surveyScenario && isRequest(route, 'GET', `/surveys/${surveyVisualFixture.id}`)) {
-      await json(route, 200, surveyVisualFixtureSchema.parse(surveyVisualFixture));
+      await json(
+        route,
+        200,
+        surveyVisualFixtureSchema.parse(
+          options.surveyScenario === 'detail' ? surveyDetailVisualFixture : surveyVisualFixture,
+        ),
+      );
       return;
     }
 

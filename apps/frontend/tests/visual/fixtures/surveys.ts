@@ -82,3 +82,9 @@ export const surveyVisualFixture = surveyVisualFixtureSchema.parse({
     },
   ],
 });
+
+export const surveyDetailVisualFixture = surveyVisualFixtureSchema.parse({
+  ...surveyVisualFixture,
+  status: 'open',
+  opened_at: '2026-07-21T00:00:00.000Z',
+});

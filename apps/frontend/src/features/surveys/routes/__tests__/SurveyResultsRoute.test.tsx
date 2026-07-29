@@ -4,16 +4,31 @@ import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/rea
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { useSurvey, useSurveyResults, useSurveyReadGate, useSurveyManageGate, useSurveys } =
-  vi.hoisted(() => ({
-    useSurvey: vi.fn(),
-    useSurveyResults: vi.fn(),
-    useSurveyReadGate: vi.fn(),
-    useSurveyManageGate: vi.fn(),
-    useSurveys: vi.fn(),
-  }));
+const {
+  useCloseSurvey,
+  useOpenSurvey,
+  useSurvey,
+  useSurveyResults,
+  useSurveyReadGate,
+  useSurveyManageGate,
+  useSurveys,
+} = vi.hoisted(() => ({
+  useCloseSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+  useOpenSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+  useSurvey: vi.fn(),
+  useSurveyResults: vi.fn(),
+  useSurveyReadGate: vi.fn(),
+  useSurveyManageGate: vi.fn(),
+  useSurveys: vi.fn(),
+}));
 
-vi.mock('@/features/surveys/hooks/useSurveys', () => ({ useSurvey, useSurveyResults, useSurveys }));
+vi.mock('@/features/surveys/hooks/useSurveys', () => ({
+  useCloseSurvey,
+  useOpenSurvey,
+  useSurvey,
+  useSurveyResults,
+  useSurveys,
+}));
 vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
   useSurveyManageGate,
   useSurveyReadGate,

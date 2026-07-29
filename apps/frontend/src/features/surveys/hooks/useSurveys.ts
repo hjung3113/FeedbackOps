@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/api';
+import { type ApiError, apiClient } from '@/lib/api';
 import { type SurveyResultDto, surveyResultDtoSchema } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QuestionInput, Survey } from '../types';
@@ -69,6 +69,21 @@ export const useUpdateSurveyQuestion = (surveyId: string, questionId: string) =>
   useQuestionMutation('PATCH', surveyId, questionId);
 export const useDeleteSurveyQuestion = (surveyId: string, questionId: string) =>
   useQuestionMutation('DELETE', surveyId, questionId);
+
+function useSurveyStatusMutation(surveyId: string, target: 'open' | 'close') {
+  const queryClient = useQueryClient();
+  return useMutation<Survey, ApiError, void>({
+    mutationFn: async () =>
+      (await apiClient<Survey>('POST', `/surveys/${surveyId}/${target}`)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: surveyKeys.detail(surveyId) });
+      void queryClient.invalidateQueries({ queryKey: surveyKeys.list });
+    },
+  });
+}
+
+export const useOpenSurvey = (surveyId: string) => useSurveyStatusMutation(surveyId, 'open');
+export const useCloseSurvey = (surveyId: string) => useSurveyStatusMutation(surveyId, 'close');
 
 export function useSurveyQuestionMutations(surveyId: string) {
   const queryClient = useQueryClient();
