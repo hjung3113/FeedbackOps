@@ -361,6 +361,36 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(response.statusCode).toBe(422);
     expect(response.json<{ code: string }>().code).toBe('validation.failed');
   });
+
+  it('counts each released Task once only when it has an active unresolved VOC link', async () => {
+    const seed = await createDashboardScope();
+    const before = (await get(adminCookie)).json<Summary>();
+    const archivedVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'archived released-task VOC');
+    await migrateHandle.pool.query('update voc.vocs set archived_at = now() where id = $1', [archivedVoc.id]);
+    const archivedTask = await insertTaskRow(migrateHandle, { workspaceId: WORKSPACE_ID, primaryManagedSystemId: seed.msA, status: 'released', createdBy: adminActorId });
+    await link('voc', archivedVoc.id, 'task', archivedTask.id, 'evidence_of', seed.msA);
+
+    const resolvedVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'resolved released-task VOC');
+    await migrateHandle.pool.query("update voc.vocs set reporter_facing_status = 'resolved' where id = $1", [resolvedVoc.id]);
+    const resolvedTask = await insertTaskRow(migrateHandle, { workspaceId: WORKSPACE_ID, primaryManagedSystemId: seed.msA, status: 'released', createdBy: adminActorId });
+    await link('voc', resolvedVoc.id, 'task', resolvedTask.id, 'evidence_of', seed.msA);
+
+    const closedVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'closed released-task VOC');
+    await migrateHandle.pool.query("update voc.vocs set reporter_facing_status = 'closed' where id = $1", [closedVoc.id]);
+    const mixedUnresolvedVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'unresolved mixed released-task VOC');
+    const mixedTask = await insertTaskRow(migrateHandle, { workspaceId: WORKSPACE_ID, primaryManagedSystemId: seed.msA, status: 'released', createdBy: adminActorId });
+    await link('voc', closedVoc.id, 'task', mixedTask.id, 'evidence_of', seed.msA);
+    await link('voc', mixedUnresolvedVoc.id, 'task', mixedTask.id, 'evidence_of', seed.msA);
+
+    const firstUnresolvedVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'first duplicated released-task VOC');
+    const secondUnresolvedVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'second duplicated released-task VOC');
+    const duplicatedTask = await insertTaskRow(migrateHandle, { workspaceId: WORKSPACE_ID, primaryManagedSystemId: seed.msA, status: 'released', createdBy: adminActorId });
+    await link('voc', firstUnresolvedVoc.id, 'task', duplicatedTask.id, 'evidence_of', seed.msA);
+    await link('voc', secondUnresolvedVoc.id, 'task', duplicatedTask.id, 'evidence_of', seed.msA);
+
+    const after = (await get(adminCookie)).json<Summary>();
+    expectQueueDelta(after, before, 'released-task-unresolved-voc', 2);
+  });
 });
 
 describe.skipIf(!runIntegration)('dashboard authorization absence', () => {
