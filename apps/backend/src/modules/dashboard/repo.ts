@@ -58,17 +58,34 @@ export async function countPendingTaskRequests(db: Db, workspaceId: string, scop
     AND tr.status = 'pending_review' AND ${scopePredicate('tr.primary_managed_system_id', scope, managedSystemId)}`);
 }
 
-export async function releasedTaskIds(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string): Promise<string[]> {
-  const result = await db.execute<{ id: string }>(sql`SELECT id FROM task.tasks t WHERE t.workspace_id = ${workspaceId}
-    AND t.status = 'released' AND ${scopePredicate('t.primary_managed_system_id', scope, managedSystemId)}`);
-  return result.rows.map((row) => row.id);
-}
-
-export async function unresolvedVocIds(db: Db, workspaceId: string, vocIds: readonly string[]): Promise<Set<string>> {
-  if (vocIds.length === 0) return new Set();
-  const result = await db.execute<{ id: string }>(sql`SELECT id FROM voc.vocs WHERE workspace_id = ${workspaceId}
-    AND id = ANY(${sqlUuidArray(vocIds)}) AND reporter_facing_status NOT IN ('resolved', 'closed')`);
-  return new Set(result.rows.map((row) => row.id));
+export async function countReleasedTasksWithUnresolvedVoc(
+  db: Db,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+) {
+  return count(db, sql`
+    SELECT count(*)::int AS count
+    FROM task.tasks t
+    WHERE t.workspace_id = ${workspaceId}
+      AND t.status = 'released'
+      AND ${scopePredicate('t.primary_managed_system_id', scope, managedSystemId)}
+      AND EXISTS (
+        SELECT 1
+        FROM core.entity_links link
+        JOIN voc.vocs voc
+          ON voc.id = link.source_id
+         AND voc.workspace_id = link.workspace_id
+         AND voc.archived_at IS NULL
+        WHERE link.workspace_id = t.workspace_id
+          AND link.source_type = 'voc'
+          AND link.target_type = 'task'
+          AND link.target_id = t.id
+          AND link.relation_type = 'evidence_of'
+          AND link.status = 'active'
+          AND voc.reporter_facing_status NOT IN ('resolved', 'closed')
+      )
+  `);
 }
 
 /**

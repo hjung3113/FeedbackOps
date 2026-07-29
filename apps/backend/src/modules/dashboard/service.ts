@@ -2,7 +2,6 @@ import type { DashboardSummary } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
-import { selectEligibleVocLinksForReleasedTask } from '../entity-links/repo.js';
 import { actorFindingReadScope } from '../findings/authorization.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { actorScopeForCapability, type Scope } from '../permissions/scope-service.js';
@@ -112,13 +111,12 @@ export function createDashboardService(deps: DashboardDeps) {
       kpis.tasks_in_flight = await repo.countTasksInFlight(deps.db, actor.workspace_id, taskScope, selectedManagedSystemId);
       const pendingTaskRequests = await repo.countPendingTaskRequests(deps.db, actor.workspace_id, taskScope, selectedManagedSystemId);
       kpis.pending_request = (kpis.pending_request ?? 0) + pendingTaskRequests;
-      const released = await repo.releasedTaskIds(deps.db, actor.workspace_id, taskScope, selectedManagedSystemId);
-      const unresolvedTasks = await Promise.all(released.map(async (taskId) => {
-        const links = await selectEligibleVocLinksForReleasedTask(deps.db, { workspaceId: actor.workspace_id, taskId });
-        const unresolved = await repo.unresolvedVocIds(deps.db, actor.workspace_id, links.map((link) => link.voc_id));
-        return unresolved.size > 0;
-      }));
-      const unresolved = unresolvedTasks.filter(Boolean).length;
+      const unresolved = await repo.countReleasedTasksWithUnresolvedVoc(
+        deps.db,
+        actor.workspace_id,
+        taskScope,
+        selectedManagedSystemId,
+      );
       queues.push({ id: 'released-task-unresolved-voc', severity: 'warn', count: unresolved,
         next_action: { label: 'Review released Tasks', route: '/tasks?status=released', intent: 'request_reporter_update' }, secondary_action: null });
       const releasedUpdate = await repo.countReleasedTasksWithPublicUpdate(
