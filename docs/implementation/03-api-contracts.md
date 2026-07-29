@@ -442,6 +442,9 @@ API-provided priority or `recommended_action_id`, not inferred by the frontend
 from score thresholds alone. Recommendation reasons must use domain-safe summary
 text and must not expose hidden response detail.
 
+This is a target contract, not current Survey behavior: the implementation does
+not yet produce Survey `next_actions` and currently returns an empty array.
+
 `attach_evidence_to_existing_voc` may be returned only when eligible target VOCs
 exist in the actor's effective Managed System scope, the actor may see
 summary-visible VOC context, Survey evidence attachment is policy-allowed, and
@@ -795,6 +798,11 @@ Slice 6. It is created only through source transition routes:
 POST /surveys
 GET /surveys
 GET /surveys/:id
+POST /surveys/:id/questions
+PATCH /surveys/:id/questions/:question_id
+DELETE /surveys/:id/questions/:question_id
+POST /surveys/:id/open
+POST /surveys/:id/close
 GET /surveys/:id/form
 POST /surveys/:id/responses
 GET /surveys/:id/results
@@ -805,6 +813,35 @@ POST /survey-findings/:id/request-task
 POST /survey-findings/:id/link-task
 # future: POST /survey-findings/:id/link-milestone
 ```
+
+`POST /surveys` requires `survey.manage`, an `Idempotency-Key`, and mutation
+rate limiting. Its strict request body is `{ type: 'discovery' | 'validation' |
+'outcome', title, description?, primary_managed_system_id, analytics_area_id?,
+operator_actor_id?, responses_identity_protected }`. It returns `201` with the
+Survey DTO: `{ id, workspace_id, display_id, type, status, title, description,
+primary_managed_system_id, analytics_area_id, operator_actor_id,
+responses_identity_protected, created_by, opened_at, closed_at, created_at,
+updated_at }`.
+
+`GET /surveys` accepts the optional query
+`managed_system_id=<uuid>|all` and returns a permission-filtered array of the
+same Survey DTO (without `questions`).
+
+The three question commands require `survey.manage`, an `Idempotency-Key`, and
+mutation rate limiting; they are draft-only. They create, update, or delete a
+question at the listed Survey/question IDs.
+
+`POST /surveys/:id/open` and `POST /surveys/:id/close` require
+`survey.manage`, an `Idempotency-Key`, and mutation rate limiting. Both return
+`200` with the Survey DTO. Opening an already open Survey is an idempotent no-op
+that returns its current DTO. Opening is otherwise valid only from `draft`, and
+closing only from `open`; an invalid transition returns `422 validation.failed`
+with `fields: [{ path: ['status'], code: 'invalid_transition' }]`. Opening with
+zero questions returns `422 validation.failed` with
+`fields: [{ path: ['questions'], code: 'required' }]`, then validates the
+questions. A successful open/close updates the status and records respectively
+`survey_opened` (with `survey_id`, `display_id`, `question_count`) or
+`survey_closed` (with `survey_id`, `display_id`).
 
 `GET /surveys/:id/form` is the respondent form read surface. Any authenticated
 Actor in the same Workspace may read an open Survey without `survey.read`; a

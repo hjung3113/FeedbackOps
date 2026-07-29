@@ -105,7 +105,7 @@ Survey:
 - 기본 Builder: MUST
 - Link 배포: MUST
 - 응답 저장: MUST
-- Response List: MUST
+- 개인 응답 목록: 노출 안 함 (승인된 발췌 경로만 존재)
 - 기본 결과 요약: MUST
 - Finding 생성: SHOULD
 - Task Request / Task 연결: SHOULD

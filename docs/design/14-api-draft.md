@@ -29,7 +29,6 @@ Expected behavior:
 ```text
 POST /survey-responses/:id/create-finding
 POST /survey-findings/:id/request-task
-POST /survey-findings/:id/create-task
 POST /survey-findings/:id/link-task
 # future: POST /survey-findings/:id/create-milestone
 # future: POST /survey-findings/:id/link-milestone

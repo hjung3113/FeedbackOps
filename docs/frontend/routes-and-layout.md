@@ -18,6 +18,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /voc-clusters?selected=:clusterId
 /surveys
 /surveys/:surveyId
+/surveys/:surveyId?builder=true
 /surveys/:surveyId/results
 /tasks?view=my&managedSystem=:managedSystemId|all&selected=:taskId
 /tasks?view=inbox&managedSystem=:managedSystemId|all
