@@ -282,6 +282,16 @@ export async function installMockApi(
       return;
     }
 
+    if (isRequest(route, 'GET', '/me/permissions/scope')) {
+      await json(route, 200, {
+        scope:
+          role === 'admin'
+            ? { kind: 'all' }
+            : { kind: 'scoped', managed_system_ids: [] },
+      });
+      return;
+    }
+
     if (isRequest(route, 'GET', '/workspace/settings')) {
       const settingsFixture = options.adminSettingsScenario
         ? adminSettingsFixture

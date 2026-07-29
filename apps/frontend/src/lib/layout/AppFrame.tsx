@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { DetailPanelSlotContext, cn } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
-import { createSavedView, deleteSavedView, fetchManagedSystems, fetchNavCounts, fetchPermissionCheck, fetchSavedViews, type SavedView, type SavedViewSurface } from '@/lib/api';
+import { createSavedView, deleteSavedView, fetchCapabilityScope, fetchManagedSystems, fetchNavCounts, fetchSavedViews, type SavedView, type SavedViewSurface } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { AppRail, type RailDomain } from './AppRail';
 import { AppSidebar, type SidebarNavEntry } from './AppSidebar';
@@ -48,14 +48,10 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     staleTime: 5 * 60_000,
     retry: false,
   });
-  const systemIds = systemsQuery.data?.items.map((system) => system.id) ?? [];
   const grantsQuery = useQuery({
-    queryKey: ['managed-system-scope', actorId, systemIds] as const,
-    enabled: actorId !== undefined && systemIds.length > 0 && !isAdmin,
-    queryFn: async ({ signal }) => {
-      const decisions = await Promise.all(systemIds.map(async (id) => [id, await fetchPermissionCheck('voc.read', { managedSystemId: id, signal })] as const));
-      return new Set(decisions.filter(([, response]) => response.decision.allow).map(([id]) => id));
-    },
+    queryKey: ['managed-system-scope', actorId, 'voc.read'] as const,
+    enabled: actorId !== undefined && !isAdmin,
+    queryFn: ({ signal }) => fetchCapabilityScope('voc.read', { signal }),
     staleTime: 60_000,
     retry: false,
   });
@@ -82,7 +78,11 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
   const managedSystems = (systemsQuery.data?.items ?? []).map((system) => ({
     id: system.id,
     name: system.name,
-    granted: isAdmin || grantsQuery.data?.has(system.id) === true,
+    granted:
+      isAdmin ||
+      grantsQuery.data?.scope.kind === 'all' ||
+      (grantsQuery.data?.scope.kind === 'scoped' &&
+        grantsQuery.data.scope.managed_system_ids.includes(system.id)),
   }));
   const systemMeta: Record<RailDomain, { label: string; subtitle: string }> = {
     home: { label: 'Home', subtitle: '오늘의 운영 갭' },
