@@ -346,7 +346,6 @@ describe('migration journal', () => {
       .map((entry) => `${entry.idx}:${entry.tag}`);
 
     expect(files.length).toBeGreaterThanOrEqual(40);
-    expect(journal.entries.length).toBe(files.length);
     expect(
       missingJournalEntries,
       `Migration file(s) missing _journal.json entry: ${missingJournalEntries.join(', ')}`,
@@ -355,6 +354,7 @@ describe('migration journal', () => {
       missingMigrationFiles,
       `_journal.json tag(s) missing migration file: ${missingMigrationFiles.join(', ')}`,
     ).toEqual([]);
+    expect(journal.entries.length).toBe(files.length);
     expect(
       unexpectedIndexes,
       `_journal.json entry idx values must be contiguous and ordered: ${unexpectedIndexes.join(', ')}`,
