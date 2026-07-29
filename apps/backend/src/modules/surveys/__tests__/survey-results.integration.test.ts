@@ -335,6 +335,20 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
         },
       },
     ]);
+    const externalId = `${SLUG}-user-${randomUUID()}`;
+    const user = await migrateHandle.pool.query<{ id: string }>(
+      "insert into core.actors (workspace_id,external_id,email,display_name,role_level,actor_type) values ($1,$2,$3,'Results user','user','internal_member') returning id",
+      [WORKSPACE_ID, externalId, `${externalId}@example.test`],
+    );
+    const userId = user.rows[0]?.id;
+    if (!userId) throw new Error('user seed failed');
+    await grant(userId, 'survey.read', survey.msId);
+    await grant(userId, 'survey.read_personal_responses', survey.msId);
+    await grant(userId, 'finding.manage', survey.msId);
+    const userBody = parse2xx(await get(survey.id, await loginAs(app, externalId)));
+    expect(userBody.next_actions).toEqual([
+      { id: 'create_finding', availability: 'allowed', intent: 'open_finding_draft' },
+    ]);
   });
 
   it('AC-4 adds request_task only after POST creates a Finding from the response', async () => {

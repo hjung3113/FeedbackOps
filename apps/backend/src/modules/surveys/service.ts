@@ -861,7 +861,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
           : readApprovedResultExcerpts(deps.db, actor.workspace_id, survey.id),
         readSurveyResultDerivedFindingIds(deps.db, actor.workspace_id, survey.id),
         checkFindingManage(deps.checkService, actor, survey.primary_managed_system_id, {
-          requireElevatedRole: true,
+          requireElevatedRole: false,
         }),
       ]);
     const rowsByQuestion = new Map<string, typeof aggregateRows>();

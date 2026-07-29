@@ -20,7 +20,11 @@ AS $$
 $$;
 --> statement-breakpoint
 
+GRANT CREATE ON SCHEMA "survey" TO fops_survey_evidence_reader_owner;
+--> statement-breakpoint
 ALTER FUNCTION "survey"."read_approved_result_excerpts_personal"(uuid, uuid) OWNER TO fops_survey_evidence_reader_owner;
+--> statement-breakpoint
+REVOKE CREATE ON SCHEMA "survey" FROM fops_survey_evidence_reader_owner;
 --> statement-breakpoint
 SET ROLE fops_survey_evidence_reader_owner;
 --> statement-breakpoint
