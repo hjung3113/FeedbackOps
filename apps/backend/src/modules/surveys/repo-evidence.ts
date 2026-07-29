@@ -108,19 +108,9 @@ export async function readSurveyResultDerivedFindingIds(
   workspaceId: string,
   surveyId: string,
 ): Promise<string[]> {
-  const result = await db.execute<{ finding_id: string }>(sql`
-    select distinct l.target_id as finding_id
-      from core.entity_links l
-      join survey.survey_responses r
-        on r.id = l.source_id
-       and r.workspace_id = l.workspace_id
-     where l.workspace_id = ${workspaceId}
-       and r.survey_id = ${surveyId}
-       and l.source_type = 'survey_response'
-       and l.target_type = 'finding'
-       and l.relation_type = 'generated_finding'
-       and l.status = 'active'
-  `);
+  const result = await db.execute<{ finding_id: string }>(
+    sql`select * from survey.read_survey_generated_finding_ids(${workspaceId}, ${surveyId})`,
+  );
   return result.rows.map((row) => row.finding_id);
 }
 
