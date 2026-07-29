@@ -129,6 +129,40 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
   // Slice 1 #5 — the first audited mutation. Idempotency-Key honored
   // (ADR-0015), audit row committed in the same transaction (ADR-0008).
   app.route({
+    method: 'GET',
+    url: '/me/permissions/scope',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    schema: { querystring: z.object({ capability: z.string().min(1) }) },
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess)
+        throw new HttpError(
+          'internal.unexpected',
+          'session missing after middleware',
+        );
+      const q = req.query as { capability: string };
+      if (!isCapability(q.capability)) {
+        return sendError(
+          reply,
+          'validation.unknown_capability',
+          'unknown capability',
+          { capability: q.capability },
+        );
+      }
+      const scope = await checkService.capabilityScope(
+        {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        q.capability,
+        { workspace_id: sess.workspace_id },
+      );
+      return { scope };
+    },
+  });
+
+  app.route({
     method: 'POST',
     url: '/permission-requests',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],

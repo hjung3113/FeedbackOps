@@ -33,6 +33,25 @@ export interface PermissionCheckResponse {
   decision: PermissionDecision;
 }
 
+export type CapabilityScope =
+  | { kind: 'all' }
+  | { kind: 'scoped'; managed_system_ids: string[] };
+
+export async function fetchCapabilityScope(
+  capability: string,
+  options?: { signal?: AbortSignal },
+): Promise<{ scope: CapabilityScope }> {
+  const init: RequestInit = { credentials: 'same-origin' };
+  if (options?.signal) init.signal = options.signal;
+  const res = await fetch(
+    `/me/permissions/scope?${new URLSearchParams({ capability }).toString()}`,
+    init,
+  );
+  if (res.status === 401) throw new UnauthenticatedError();
+  if (!res.ok) throw new Error(`/me/permissions/scope failed: ${res.status}`);
+  return (await res.json()) as { scope: CapabilityScope };
+}
+
 export interface CreatePermissionRequestBody {
   requested_capability: string;
   requested_managed_system_id?: string;

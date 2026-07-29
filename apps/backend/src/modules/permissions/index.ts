@@ -6,6 +6,7 @@ export {
   type CheckService,
   type CheckServiceDeps,
   type Decision,
+  type CapabilityScope,
   type DenyReason,
   type RequestableScope,
   type ActorContext,

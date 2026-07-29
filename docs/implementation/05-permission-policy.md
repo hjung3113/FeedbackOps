@@ -67,6 +67,15 @@ capability checks locally.
 
 Explicit Deny overrides general Allow.
 
+`GET /me/permissions/scope` resolves a capability over every Managed System
+using the same order as a point check: workspace mismatch denies; active
+workspace-wide or matching Managed-System denies deny before grants; active
+workspace-wide grants allow; role-derived capability allows; then active
+matching Managed-System grants allow. A workspace-wide grant or role match
+returns `kind: all` only when there are no active Managed-System-scoped denies.
+When such denies exist, the scope is the workspace Managed System list minus
+the denied ids so its membership remains identical to point checks.
+
 Managed System Permission Scope is the MVP authorization boundary for
 Developer access. Access to one Managed System does not grant access to sibling
 Managed Systems. Analytics Area is not an MVP permission boundary.
