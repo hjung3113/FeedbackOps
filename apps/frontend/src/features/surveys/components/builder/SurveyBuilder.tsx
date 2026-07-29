@@ -8,10 +8,11 @@ import {
   SelectValue,
   Textarea,
 } from '@fops/ui';
-import { Eye, Plus, Trash2 } from 'lucide-react';
+import { Eye, Megaphone, Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
-import { useSurveyQuestionMutations } from '../../hooks/useSurveys';
+import { useOpenSurvey, useSurveyQuestionMutations } from '../../hooks/useSurveys';
 import type { QuestionInput, QuestionKind, Survey, SurveyQuestion } from '../../types';
+import { SurveyStatusConfirmationDialog } from '../SurveyStatusConfirmationDialog';
 
 const kinds: Array<{ value: QuestionKind; label: string }> = [
   { value: 'single_choice', label: 'Single choice' },
@@ -76,7 +77,9 @@ export function SurveyBuilder({
   const questionsRef = React.useRef(questions);
   const [selectedId, setSelectedId] = React.useState<string | null>(questions[0]?.id ?? null);
   const [preview, setPreview] = React.useState(false);
+  const [launchOpen, setLaunchOpen] = React.useState(false);
   const mutations = useSurveyQuestionMutations(survey.id);
+  const openSurvey = useOpenSurvey(survey.id);
   const editable = canManage && survey.status === 'draft' && !gateState;
   const selected = questions.find((question) => question.id === selectedId) ?? null;
   const updateQuestions = (update: (current: SurveyQuestion[]) => SurveyQuestion[]) => {
@@ -144,6 +147,12 @@ export function SurveyBuilder({
           <Eye className="h-4 w-4" />
           Preview
         </Button>
+        {editable && (
+          <Button variant="default" size="sm" onClick={() => setLaunchOpen(true)}>
+            <Megaphone className="h-4 w-4" />
+            Launch
+          </Button>
+        )}
       </header>
       {!editable && (
         <div className="border-b border-border-subtle bg-surface-detail px-4 py-3 text-sm text-text-muted">
@@ -178,6 +187,21 @@ export function SurveyBuilder({
       {preview && (
         <PreviewPane survey={{ ...survey, questions }} onClose={() => setPreview(false)} />
       )}
+      <SurveyStatusConfirmationDialog
+        open={launchOpen}
+        target="open"
+        isPending={openSurvey.isPending}
+        error={openSurvey.error}
+        onClose={() => setLaunchOpen(false)}
+        onConfirm={() =>
+          openSurvey.mutate(undefined, {
+            onSuccess: () => {
+              setLaunchOpen(false);
+              onBack();
+            },
+          })
+        }
+      />
     </main>
   );
 }
