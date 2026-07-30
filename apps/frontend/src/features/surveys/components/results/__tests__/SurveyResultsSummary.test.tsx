@@ -280,7 +280,7 @@ describe('SurveyResultsSummary', () => {
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
     await user.click(screen.getByTestId('survey-finding-severity'));
-    await user.click(screen.getByRole('option', { name: 'High' }));
+    await user.click(await screen.findByRole('option', { name: 'High' }));
     await user.click(screen.getByTestId('survey-create-finding-submit'));
 
     await waitFor(() =>

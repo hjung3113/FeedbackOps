@@ -173,7 +173,7 @@ function CreateFindingDraftPanel({
         <RadioGroup
           aria-labelledby="survey-finding-response-label"
           onValueChange={selectResponse}
-          value={selection.responseId}
+          value={selection.responseId ?? ''}
         >
           {groups.map((group, index) => {
             const first = group[0];
