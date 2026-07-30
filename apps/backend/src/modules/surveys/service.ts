@@ -14,8 +14,12 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import {
+  actorFindingReadScope,
+  checkFindingManage,
+  isFindingInReadScope,
+} from '../findings/authorization.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { checkFindingManage } from '../findings/authorization.js';
 import {
   actorSurveyReadScope,
   checkSurveyManage,
@@ -27,9 +31,9 @@ import {
   type SurveyResponseEvidenceSubject,
   hasActiveApprovedResponseExcerpt,
   insertApprovedExcerpt,
+  listDerivedFindingsForResponses,
   lockResponseEvidenceSubject,
   readApprovedResponseExcerpts,
-  readApprovedResultExcerpts,
   readApprovedResultExcerptsPersonal,
   readResponseTextCandidate,
   readSurveyQuestionLabel,
@@ -52,9 +56,9 @@ import {
   lockQuestions,
   lockSurvey,
   setSurveyStatus,
-  updateSurvey,
   updateQuestion,
   updateQuestionSortOrders,
+  updateSurvey,
 } from './repo.js';
 
 export interface SurveysActor {
@@ -1014,9 +1018,13 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     return deps.db.transaction(async (tx) => {
       const workspaceSettings = await deps.resolveWorkspaceSettings(tx, actor.workspace_id);
       const anonymityThreshold = workspaceSettings.survey_anonymity_threshold;
-      const excerptRows: Promise<ResultExcerptRow[]> = holder
-        ? readApprovedResultExcerptsPersonal(tx, actor.workspace_id, survey.id)
-        : readApprovedResultExcerpts(tx, actor.workspace_id, survey.id);
+      // Response IDs stay payload-gated below; this internal projection only
+      // supplies the IDs needed to resolve already-derived Finding links.
+      const excerptRows: Promise<ResultExcerptRow[]> = readApprovedResultExcerptsPersonal(
+        tx,
+        actor.workspace_id,
+        survey.id,
+      );
       const [questions, responseCount, aggregateRows, approvedExcerpts, findingManage] =
         await Promise.all([
           listQuestions(tx, actor.workspace_id, survey.id),
@@ -1027,6 +1035,46 @@ export function createSurveysService(deps: SurveysServiceDeps) {
             requireElevatedRole: false,
           }),
         ]);
+      const derivedFindings = await listDerivedFindingsForResponses(
+        tx,
+        actor.workspace_id,
+        approvedExcerpts.flatMap((excerpt) => (excerpt.response_id ? [excerpt.response_id] : [])),
+      );
+      const findingReadScope = await actorFindingReadScope(tx, actor, {
+        requireElevatedRole: true,
+      });
+      // blocked_requestable is elevated + readable + not manageable; a user
+      // cannot receive this action because Finding read scope is elevated-only.
+      const requestTaskActions = await Promise.all(
+        derivedFindings
+          .filter((finding) =>
+            isFindingInReadScope(findingReadScope, finding.primary_managed_system_id),
+          )
+          .map(async (finding) => {
+            const decision = await checkFindingManage(
+              deps.checkService,
+              actor,
+              finding.primary_managed_system_id,
+              { requireElevatedRole: true },
+            );
+            return {
+              id: 'request_task' as const,
+              availability: decision.allow
+                ? ('allowed' as const)
+                : ('blocked_requestable' as const),
+              intent: 'open_task_request_draft' as const,
+              source_finding_id: finding.finding_id,
+              ...(!decision.allow && decision.requestable !== null
+                ? {
+                    requestable_permission: {
+                      permission: 'finding.manage' as const,
+                      managed_system_id: finding.primary_managed_system_id,
+                    },
+                  }
+                : {}),
+            };
+          }),
+      );
       const rowsByQuestion = new Map<string, typeof aggregateRows>();
       for (const row of aggregateRows) {
         const rows = rowsByQuestion.get(row.question_id) ?? [];
@@ -1141,6 +1189,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
             intent: 'open_finding_draft' as const,
             ...actionPermission,
           },
+          ...requestTaskActions,
         ],
       });
       if (holder) {

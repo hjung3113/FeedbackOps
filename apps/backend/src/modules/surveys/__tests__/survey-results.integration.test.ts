@@ -217,6 +217,17 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       cookie: await loginAs(app, externalId),
     };
   }
+  async function user() {
+    const externalId = `${SLUG}-user-${randomUUID()}`;
+    const row = await migrateHandle.pool.query<{ id: string }>(
+      "insert into core.actors (workspace_id,external_id,email,display_name,role_level,actor_type) values ($1,$2,$3,'Results user','user','internal_member') returning id",
+      [WORKSPACE_ID, externalId, `${externalId}@example.test`],
+    );
+    return {
+      id: row.rows[0]?.id ?? '',
+      cookie: await loginAs(app, externalId),
+    };
+  }
   async function grant(actorId: string, capability: string, msId: string) {
     await migrateHandle.pool.query(
       'insert into permission.permission_grants (workspace_id,actor_id,capability,managed_system_id,granted_by_actor_id) values ($1,$2,$3,$4,$5)',
@@ -482,12 +493,20 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     ]);
   });
 
-  it('AC-7 never returns request_task, including after a Finding is derived', async () => {
+  it('emits request_task only for elevated actors who can read the derived Finding', async () => {
     const survey = await seed(full(5));
     const responseId = survey.responseIds[0];
     if (!responseId) throw new Error('response seed failed');
     const excerptId = await approveExcerpt(survey, responseId);
     await grant(adminId, 'survey.read_personal_responses', survey.msId);
+    const beforeDerivation = parse2xx(await get(survey.id));
+    expect(beforeDerivation.next_actions.map((action) => action.id)).not.toContain('request_task');
+    const findingMsId = await insertMsDirectly(
+      appHandle,
+      WORKSPACE_ID,
+      uid(SLUG),
+      'Derived Finding MS',
+    );
     const created = await app.inject({
       method: 'POST',
       url: `/survey-responses/${responseId}/create-finding`,
@@ -496,12 +515,61 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
         'content-type': 'application/json',
         'idempotency-key': randomUUID(),
       },
-      payload: { severity: 'medium', approved_excerpt_ids: [excerptId] },
+      payload: {
+        severity: 'medium',
+        primary_managed_system_id: findingMsId,
+        approved_excerpt_ids: [excerptId],
+      },
     });
     expect(created.statusCode).toBe(201);
-    expect(parse2xx(await get(survey.id)).next_actions.map((action) => action.id)).not.toContain(
-      'request_task',
+    const findingId = created.json<{ id: string }>().id;
+
+    const elevatedManage = parse2xx(await get(survey.id));
+    expect(elevatedManage.next_actions).toContainEqual(
+      expect.objectContaining({
+        id: 'request_task',
+        availability: 'allowed',
+        intent: 'open_task_request_draft',
+        source_finding_id: findingId,
+      }),
     );
+
+    const nonElevatedManage = await user();
+    for (const capability of ['survey.read', 'survey.read_personal_responses', 'finding.manage'])
+      await grant(nonElevatedManage.id, capability, survey.msId);
+    await grant(nonElevatedManage.id, 'finding.manage', findingMsId);
+    // Deliberately grants Finding scope so this User actor exercises the elevated-role guard.
+    await grant(nonElevatedManage.id, 'finding.read', findingMsId);
+    const nonElevatedBody = parse2xx(await get(survey.id, nonElevatedManage.cookie));
+    expect(nonElevatedBody.next_actions).toContainEqual(
+      expect.objectContaining({ id: 'create_finding', availability: 'allowed' }),
+    );
+    expect(nonElevatedBody.next_actions.map((action) => action.id)).not.toContain('request_task');
+    expect(JSON.stringify(nonElevatedBody)).not.toContain(findingId);
+
+    const elevatedReadOnly = await dev();
+    for (const capability of ['survey.read', 'survey.read_personal_responses'])
+      await grant(elevatedReadOnly.id, capability, survey.msId);
+    await grant(elevatedReadOnly.id, 'finding.read', findingMsId);
+    const elevatedReadOnlyBody = parse2xx(await get(survey.id, elevatedReadOnly.cookie));
+    expect(elevatedReadOnlyBody.next_actions).toContainEqual(
+      expect.objectContaining({
+        id: 'request_task',
+        availability: 'blocked_requestable',
+        source_finding_id: findingId,
+        requestable_permission: {
+          permission: 'finding.manage',
+          managed_system_id: findingMsId,
+        },
+      }),
+    );
+
+    const outOfScope = await dev();
+    for (const capability of ['survey.read', 'survey.read_personal_responses'])
+      await grant(outOfScope.id, capability, survey.msId);
+    const outOfScopeBody = parse2xx(await get(survey.id, outOfScope.cookie));
+    expect(outOfScopeBody.next_actions.map((action) => action.id)).not.toContain('request_task');
+    expect(JSON.stringify(outOfScopeBody)).not.toContain(findingId);
   });
 
   it('enforces the actor matrix and parses every successful result', async () => {
