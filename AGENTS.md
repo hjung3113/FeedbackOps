@@ -119,6 +119,20 @@ Execution playbook (roles, model tiers, task sizing, review/verify cycles, condu
 
 The four leaves are gitignored here, and **git worktrees do not inherit ignored files** — a fresh worktree has no `.agent-workflow/`, so a relative `.agent-workflow/scripts/...` call from inside one fails with `No such file or directory`. Until toolkit issue #62 lands, call the scripts by absolute path from the main checkout, or install into the worktree.
 
+### Model Routing (temporary — pending toolkit issue #84)
+
+The toolkit installs its allocation policy but nothing surfaces it: `.agent-workflow/**` is gitignored and referenced by no tracked doc, and the `/agent-workflow` skill only loads when explicitly invoked. This block is a hand-maintained stand-in for the installer-managed pointer requested in toolkit issue #84 — delete it once `install-into.sh` writes its own marked block here.
+
+**Read before any dispatch** (do not work from recall):
+
+- `.agent-workflow/model-alloc.json` — the project-owned allocation contract.
+- `.agent-workflow/docs/agents/multi-agent-workflow.md` → Model Allocation.
+- `.agent-workflow/docs/agents/conductor-persona.md` §2 — the conductor is **READ-ONLY on product code**.
+
+Defaults: CONDUCTOR Opus · implementation terra (luna for trivial touch sets) · REVIEWER and contract gate Opus.
+
+**The split is artifact vs verdict.** Work that produces an artifact — implementation, fixes, documentation, planning, reconnaissance, broad file reads — is dispatched to codex. Work that produces a verdict — review, verification, audit, contract decisions — and the session's own orchestration stay with the conductor. Never let the writer grade its own output. A gate script, a fixture fix, or a doc edit is an artifact even when it looks small enough to type inline; scope it as a chunk instead.
+
 ### Target Profile (toolkit adapter answers for THIS repo)
 
 Answers to the toolkit's compatibility interview (`references/adoption.md`) — target-specific facts that must not migrate into the shared skill:
