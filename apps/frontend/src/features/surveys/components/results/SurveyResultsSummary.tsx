@@ -3,6 +3,7 @@ import type { FindingSeverity, SurveyResultDto } from '@fops/shared';
 import {
   Button,
   Checkbox,
+  FieldLabel,
   RadioGroup,
   RadioGroupItem,
   Select,
@@ -178,10 +179,12 @@ function CreateFindingDraftPanel({
             return (
               <label
                 className="flex items-center gap-2 text-sm text-text-secondary"
+                htmlFor={`survey-finding-response-${first.response_id}`}
                 key={first.response_id}
               >
                 <RadioGroupItem
                   data-testid={`survey-finding-response-${index}`}
+                  id={`survey-finding-response-${first.response_id}`}
                   value={first.response_id}
                 />
                 Response {index + 1}
@@ -194,10 +197,15 @@ function CreateFindingDraftPanel({
         <fieldset className="space-y-2">
           <legend className="text-sm text-text-secondary">Approved excerpts</legend>
           {selectedGroup.map((excerpt) => (
-            <label className="flex gap-2 text-sm text-text-secondary" key={excerpt.id}>
+            <label
+              className="flex gap-2 text-sm text-text-secondary"
+              htmlFor={`survey-finding-excerpt-${excerpt.id}`}
+              key={excerpt.id}
+            >
               <Checkbox
                 checked={selectedExcerptIds.includes(excerpt.id)}
                 data-testid={`survey-finding-excerpt-${excerpt.id}`}
+                id={`survey-finding-excerpt-${excerpt.id}`}
                 onCheckedChange={(checked) => setExcerptSelected(excerpt.id, checked === true)}
               />
               <span>{excerpt.text}</span>
@@ -205,24 +213,29 @@ function CreateFindingDraftPanel({
           ))}
         </fieldset>
       )}
-      <label className="block text-sm text-text-secondary" id="survey-finding-severity-label">
+      <FieldLabel
+        className="block text-sm text-text-secondary"
+        htmlFor="survey-finding-severity"
+        id="survey-finding-severity-label"
+      >
         Severity
-        <Select onValueChange={(value) => setSeverity(value as FindingSeverity)} value={severity}>
-          <SelectTrigger
-            aria-labelledby="survey-finding-severity-label"
-            className="mt-1"
-            data-testid="survey-finding-severity"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="low">Low</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="critical">Critical</SelectItem>
-          </SelectContent>
-        </Select>
-      </label>
+      </FieldLabel>
+      <Select onValueChange={(value) => setSeverity(value as FindingSeverity)} value={severity}>
+        <SelectTrigger
+          aria-labelledby="survey-finding-severity-label"
+          className="mt-1"
+          data-testid="survey-finding-severity"
+          id="survey-finding-severity"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="low">Low</SelectItem>
+          <SelectItem value="medium">Medium</SelectItem>
+          <SelectItem value="high">High</SelectItem>
+          <SelectItem value="critical">Critical</SelectItem>
+        </SelectContent>
+      </Select>
       {mutation.error && (
         <p className="text-sm text-text-danger" role="alert">
           {mutation.error.message}
