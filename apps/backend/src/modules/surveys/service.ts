@@ -232,17 +232,7 @@ function validateQuestions(rows: QuestionRow[]) {
     }
   }
 }
-async function requireReadable(
-  deps: SurveysServiceDeps,
-  tx: Tx,
-  actor: SurveysActor,
-  s: SurveyRow,
-) {
-  const r = await checkSurveyRead(deps.checkService, actor, s.primary_managed_system_id, { tx });
-  if (!r.allow) throw new HttpError('not_found.record', 'survey not found');
-}
 async function requireManage(deps: SurveysServiceDeps, tx: Tx, actor: SurveysActor, s: SurveyRow) {
-  await requireReadable(deps, tx, actor, s);
   const d = await checkSurveyManage(deps.checkService, actor, s.primary_managed_system_id, { tx });
   if (!d.allow) throw new HttpError('permission.denied', 'survey.manage capability required');
 }
