@@ -153,6 +153,30 @@ describe('SurveyResultsSummary', () => {
     expect(screen.getByText('Outcome follow-up is available')).toBeInTheDocument();
   });
 
+  it('renders approved excerpt text without rendering its personal response identifier', () => {
+    const responseId = '24242424-2424-4242-8242-242424242424';
+    const excerptText = '대시보드 필터를 저장할 수 있으면 좋겠습니다.';
+    const { container } = render(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          questions: results.questions.map((question) =>
+            question.kind === 'text'
+              ? {
+                  ...question,
+                  excerpts: [{ id: ids.finding, text: excerptText, response_id: responseId }],
+                }
+              : question,
+          ),
+        }}
+      />,
+    );
+
+    expect(screen.getByText(excerptText)).toBeInTheDocument();
+    expect(container.textContent).not.toContain(responseId);
+  });
+
   it('renders a suppressed row exactly without deriving a count', () => {
     render(<SurveyResultsSummary survey={survey} results={{ ...results, next_actions: [] }} />);
 
