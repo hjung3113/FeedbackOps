@@ -107,6 +107,12 @@ export type SurveyResponseEvidencePurpose =
 export type SurveyResponseEvidenceAccess = {
   subject: SurveyResponseEvidenceSubject;
 };
+type ResultExcerptRow = {
+  approved_excerpt_id: string;
+  question_id: string;
+  redacted_excerpt: string;
+  response_id?: string;
+};
 const dto = (s: SurveyRow, questions?: QuestionRow[]) => ({
   id: s.id,
   workspace_id: s.workspace_id,
@@ -851,14 +857,15 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     return deps.db.transaction(async (tx) => {
       const workspaceSettings = await deps.resolveWorkspaceSettings(tx, actor.workspace_id);
       const anonymityThreshold = workspaceSettings.survey_anonymity_threshold;
+      const excerptRows: Promise<ResultExcerptRow[]> = holder
+        ? readApprovedResultExcerptsPersonal(tx, actor.workspace_id, survey.id)
+        : readApprovedResultExcerpts(tx, actor.workspace_id, survey.id);
       const [questions, responseCount, aggregateRows, approvedExcerpts, findingManage] =
         await Promise.all([
           listQuestions(tx, actor.workspace_id, survey.id),
           readSurveyResultResponseCount(tx, actor.workspace_id, survey.id),
           readSurveyResultAggregates(tx, actor.workspace_id, survey.id),
-          holder
-            ? readApprovedResultExcerptsPersonal(tx, actor.workspace_id, survey.id)
-            : readApprovedResultExcerpts(tx, actor.workspace_id, survey.id),
+          excerptRows,
           checkFindingManage(deps.checkService, actor, survey.primary_managed_system_id, {
             requireElevatedRole: false,
           }),
