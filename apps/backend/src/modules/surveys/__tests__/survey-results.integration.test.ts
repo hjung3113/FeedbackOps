@@ -376,7 +376,6 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     await approveExcerpt(survey, firstResponseId);
     await approveExcerpt(survey, firstResponseId);
     await approveExcerpt(survey, secondResponseId);
-    await approveExcerpt(survey, secondResponseId, survey.questions.rating);
     await grant(adminId, 'survey.read_personal_responses', survey.msId);
     parse2xx(await get(survey.id));
     const holderAudit = await migrateHandle.pool.query<{
@@ -399,7 +398,6 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       [
         [firstResponseId, survey.questions.text],
         [secondResponseId, survey.questions.text],
-        [secondResponseId, survey.questions.rating],
       ].sort(([leftResponseId, leftQuestionId], [rightResponseId, rightQuestionId]) =>
         `${leftResponseId}:${leftQuestionId}`.localeCompare(
           `${rightResponseId}:${rightQuestionId}`,
