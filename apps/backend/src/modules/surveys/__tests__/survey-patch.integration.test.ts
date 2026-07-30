@@ -9,7 +9,6 @@ import { buildServer } from '../../../server.js';
 import {
   SESSION_COOKIE_NAME,
   grantCapability,
-  insertDevActor,
   insertMsDirectly,
   loginAs,
   uid,
@@ -27,8 +26,6 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
   let app: FastifyInstance;
   let adminActorId: string;
   let adminCookie: string;
-  let basicActorId: string;
-  let basicCookie: string;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -43,9 +40,6 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     );
     adminActorId = admin.rows[0]?.id ?? '';
     if (!adminActorId) throw new Error('mock admin actor not found');
-    const basic = await insertDevActor(appHandle, WORKSPACE_ID, uid(`${SLUG_PREFIX}-basic`));
-    basicActorId = basic.id;
-    basicCookie = await loginAs(app, basic.externalId);
   });
 
   beforeEach(async () => cleanupFixtures());
@@ -112,6 +106,39 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     };
   }
 
+  async function dev() {
+    const externalId = `${SLUG_PREFIX}-developer-${randomUUID()}`;
+    const actor = await migrateHandle.pool.query<{ id: string }>(
+      "insert into core.actors (workspace_id,external_id,email,display_name,role_level,actor_type) values ($1,$2,$3,'Survey patch developer','developer','internal_member') returning id",
+      [WORKSPACE_ID, externalId, `${externalId}@example.test`],
+    );
+    return {
+      id: actor.rows[0]?.id ?? '',
+      cookie: await loginAs(app, externalId),
+    };
+  }
+
+  async function manager(managedSystemId: string) {
+    const actor = await dev();
+    await grantCapability(
+      appHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'survey.read',
+      managedSystemId,
+      adminActorId,
+    );
+    await grantCapability(
+      appHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'survey.manage',
+      managedSystemId,
+      adminActorId,
+    );
+    return actor;
+  }
+
   async function createSurvey(): Promise<{ id: string; primary_managed_system_id: string }> {
     const managedSystemId = await insertMsDirectly(
       appHandle,
@@ -152,11 +179,11 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     return id;
   }
 
-  async function reorder(surveyId: string, question_ids: string[]) {
+  async function reorder(cookie: string, surveyId: string, question_ids: string[]) {
     return app.inject({
       method: 'PATCH',
       url: `/surveys/${surveyId}/questions/reorder`,
-      headers: headers(adminCookie),
+      headers: headers(cookie),
       payload: { question_ids },
     });
   }
@@ -171,7 +198,8 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
 
   it('AC-1 patches only supplied scalar fields', async () => {
     const survey = await createSurvey();
-    const response = await patch(adminCookie, survey.id, { title: 'After patch' });
+    const actor = await manager(survey.primary_managed_system_id);
+    const response = await patch(actor.cookie, survey.id, { title: 'After patch' });
 
     expect(response.statusCode).toBe(200);
     const updated = (await getSurvey(survey.id)).json<{
@@ -188,10 +216,11 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
 
   it('AC-2 rejects a scalar patch on an open survey without mutation', async () => {
     const survey = await createSurvey();
+    const actor = await manager(survey.primary_managed_system_id);
     const withoutQuestions = await app.inject({
       method: 'POST',
       url: `/surveys/${survey.id}/open`,
-      headers: bodylessHeaders(adminCookie),
+      headers: bodylessHeaders(actor.cookie),
     });
     expect(withoutQuestions.statusCode).toBe(422);
     expect(withoutQuestions.json<{ code: string }>().code).toBe('validation.failed');
@@ -199,10 +228,10 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     const opened = await app.inject({
       method: 'POST',
       url: `/surveys/${survey.id}/open`,
-      headers: bodylessHeaders(adminCookie),
+      headers: bodylessHeaders(actor.cookie),
     });
     expect(opened.statusCode).toBe(200);
-    const openPatch = await patch(adminCookie, survey.id, { title: 'Must not change' });
+    const openPatch = await patch(actor.cookie, survey.id, { title: 'Must not change' });
     expect(openPatch.statusCode).toBe(422);
     expect(
       openPatch.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail
@@ -214,15 +243,16 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
 
   it('AC-3 rejects an unauthorized scalar patch without mutation or audit', async () => {
     const draft = await createSurvey();
+    const actor = await dev();
     await grantCapability(
       appHandle,
       WORKSPACE_ID,
-      basicActorId,
+      actor.id,
       'survey.read',
       draft.primary_managed_system_id,
       adminActorId,
     );
-    const denied = await patch(basicCookie, draft.id, { title: 'Denied' });
+    const denied = await patch(actor.cookie, draft.id, { title: 'Denied' });
     expect(denied.statusCode).toBe(403);
     expect((await getSurvey(draft.id)).json<{ title: string }>().title).toBe('Before patch');
     const deniedAudits = await appHandle.pool.query(
@@ -234,29 +264,14 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
 
   it('AC-4 rejects a target-system scalar patch without target permission', async () => {
     const draft = await createSurvey();
-    await grantCapability(
-      appHandle,
-      WORKSPACE_ID,
-      basicActorId,
-      'survey.read',
-      draft.primary_managed_system_id,
-      adminActorId,
-    );
-    await grantCapability(
-      appHandle,
-      WORKSPACE_ID,
-      basicActorId,
-      'survey.manage',
-      draft.primary_managed_system_id,
-      adminActorId,
-    );
+    const actor = await manager(draft.primary_managed_system_id);
     const targetManagedSystemId = await insertMsDirectly(
       appHandle,
       WORKSPACE_ID,
       uid(SLUG_PREFIX),
       'Unauthorized target MS',
     );
-    const targetDenied = await patch(basicCookie, draft.id, {
+    const targetDenied = await patch(actor.cookie, draft.id, {
       primary_managed_system_id: targetManagedSystemId,
     });
     expect(targetDenied.statusCode).toBe(403);
@@ -268,7 +283,8 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
 
   it('AC-8 hides an unreadable survey from PATCH', async () => {
     const draft = await createSurvey();
-    const hidden = await patch(basicCookie, draft.id, { title: 'Denied' });
+    const actor = await dev();
+    const hidden = await patch(actor.cookie, draft.id, { title: 'Denied' });
 
     expect(hidden.statusCode).toBe(404);
     expect(hidden.json<{ code: string }>().code).toBe('not_found.record');
@@ -276,10 +292,11 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
 
   it('AC-5 normalizes a complete reorder', async () => {
     const survey = await createSurvey();
+    const actor = await manager(survey.primary_managed_system_id);
     const q1 = await addQuestion(survey.id, 'One');
     const q2 = await addQuestion(survey.id, 'Two');
     const q3 = await addQuestion(survey.id, 'Three');
-    const reordered = await reorder(survey.id, [q3, q1, q2]);
+    const reordered = await reorder(actor.cookie, survey.id, [q3, q1, q2]);
 
     expect(reordered.statusCode).toBe(200);
     const questions = (await getSurvey(survey.id)).json<{
@@ -293,10 +310,11 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
 
   it('AC-6 rejects incomplete, duplicate, and foreign question IDs atomically', async () => {
     const survey = await createSurvey();
+    const actor = await manager(survey.primary_managed_system_id);
     const q1 = await addQuestion(survey.id, 'One');
     const q2 = await addQuestion(survey.id, 'Two');
     const q3 = await addQuestion(survey.id, 'Three');
-    const reordered = await reorder(survey.id, [q3, q1, q2]);
+    const reordered = await reorder(actor.cookie, survey.id, [q3, q1, q2]);
     expect(reordered.statusCode).toBe(200);
     const foreign = await createSurvey();
     const foreignQuestion = await addQuestion(foreign.id, 'Foreign');
@@ -305,7 +323,7 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
       [q3, q1, q1],
       [q3, q1, foreignQuestion],
     ]) {
-      const failed = await reorder(survey.id, bad);
+      const failed = await reorder(actor.cookie, survey.id, bad);
       expect(failed.statusCode).toBe(422);
       const current = await getSurvey(survey.id);
       expect(
@@ -322,7 +340,8 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
 
   it('AC-7a writes exactly one IDs-only audit event for a successful scalar patch', async () => {
     const survey = await createSurvey();
-    expect((await patch(adminCookie, survey.id, { title: 'After patch' })).statusCode).toBe(200);
+    const actor = await manager(survey.primary_managed_system_id);
+    expect((await patch(actor.cookie, survey.id, { title: 'After patch' })).statusCode).toBe(200);
     const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail from core.audit_log where subject_id = $1 and event_type = 'survey_updated'`,
       [survey.id],
@@ -335,9 +354,10 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
 
   it('AC-7b writes exactly one IDs-only audit event for a successful reorder', async () => {
     const survey = await createSurvey();
+    const actor = await manager(survey.primary_managed_system_id);
     const q1 = await addQuestion(survey.id, 'One');
     const q2 = await addQuestion(survey.id, 'Two');
-    expect((await reorder(survey.id, [q2, q1])).statusCode).toBe(200);
+    expect((await reorder(actor.cookie, survey.id, [q2, q1])).statusCode).toBe(200);
     const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
       `select detail from core.audit_log where subject_id = $1 and event_type = 'survey_questions_reordered'`,
       [survey.id],
