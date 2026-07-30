@@ -25,16 +25,12 @@
       {
         "id": "typecheck",
         "required": true,
-        "commands": [
-          { "argv": ["node", "scripts/gates/fe-typecheck-gate.mjs"] }
-        ]
+        "commands": [{ "argv": ["node", "scripts/gates/fe-typecheck-gate.mjs"] }]
       },
       {
         "id": "biome",
         "required": true,
-        "commands": [
-          { "argv": ["node", "scripts/gates/fe-biome-gate.mjs"] }
-        ]
+        "commands": [{ "argv": ["node", "scripts/gates/fe-biome-gate.mjs"] }]
       }
     ]
   }
