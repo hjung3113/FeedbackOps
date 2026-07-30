@@ -2,10 +2,7 @@
   "schema_version": "1",
   "id": "feedbackops-frontend",
   "runtime": {
-    "executables": [
-      "node",
-      "pnpm"
-    ]
+    "executables": ["node", "pnpm"]
   },
   "setup": [],
   "verification": {
@@ -16,12 +13,7 @@
         "required": true,
         "commands": [
           {
-            "argv": [
-              "pnpm",
-              "exec",
-              "vitest",
-              "run"
-            ],
+            "argv": ["pnpm", "exec", "vitest", "run"],
             "cwd": "apps/frontend"
           }
         ],
@@ -34,24 +26,14 @@
         "id": "typecheck",
         "required": true,
         "commands": [
-          {
-            "argv": [
-              "node",
-              "scripts/gates/fe-typecheck-gate.mjs"
-            ]
-          }
+          { "argv": ["node", "scripts/gates/fe-typecheck-gate.mjs"] }
         ]
       },
       {
         "id": "biome",
         "required": true,
         "commands": [
-          {
-            "argv": [
-              "node",
-              "scripts/gates/fe-biome-gate.mjs"
-            ]
-          }
+          { "argv": ["node", "scripts/gates/fe-biome-gate.mjs"] }
         ]
       }
     ]

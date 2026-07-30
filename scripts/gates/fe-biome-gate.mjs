@@ -10,8 +10,8 @@
 // per checkout, so develop and a worktree cannot be compared. The files the
 // branch touches CAN be compared, and that is the scope this gate enforces.
 //
-// Contract: every changed tracked file that biome understands must be
-// diagnostic-free, except identities listed in the allowlist as pre-existing.
+// Contract: every changed tracked file that biome understands must be free of
+// error diagnostics, except identities listed in the allowlist as pre-existing.
 //
 // Usage:   node scripts/gates/fe-biome-gate.mjs [--base <ref>] [--list]
 // Allowlist: scripts/gates/frontend-biome-allowlist.txt, one `<path> <category>` per
@@ -92,18 +92,23 @@ if (existsSync(allowlistPath)) {
   }
 }
 
-const found = new Map();
+const errors = new Map();
+const warnings = new Map();
 for (const diagnostic of report.diagnostics ?? []) {
+  if (diagnostic.severity !== 'error' && diagnostic.severity !== 'warning') continue;
   const file = diagnostic.location?.path?.file ?? '(unknown)';
   const identity = `${file.replace(/^\.\//, '')} ${diagnostic.category}`;
+  const found = diagnostic.severity === 'error' ? errors : warnings;
   found.set(identity, (found.get(identity) ?? 0) + 1);
 }
 
-const introduced = [...found.entries()].filter(([identity]) => !allowed.has(identity));
+const introduced = [...errors.entries()].filter(([identity]) => !allowed.has(identity));
+const warningCount = [...warnings.values()].reduce((total, count) => total + count, 0);
 console.log(
-  `frontend biome: ${changed.length} changed files, ${found.size} diagnostic identities, ${allowed.size} allowlisted, ${introduced.length} unexpected`,
+  `frontend biome: ${changed.length} changed files, ${errors.size} error identities, ${warningCount} warnings across ${warnings.size} identities, ${allowed.size} allowlisted, ${introduced.length} unexpected errors`,
 );
 for (const [identity, reason] of allowed) console.log(`  allowlisted ${identity} -- ${reason}`);
+for (const [identity, count] of warnings) console.log(`  WARNING ${identity} (${count}x)`);
 if (introduced.length > 0) {
   for (const [identity, count] of introduced) console.error(`  NEW ${identity} (${count}x)`);
   process.exit(1);

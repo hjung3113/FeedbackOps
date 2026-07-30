@@ -2,7 +2,7 @@
 // Baseline-aware frontend typecheck gate for the generic target verifier.
 // Exits 0 when the only `error TS...` lines are already in the baseline.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
