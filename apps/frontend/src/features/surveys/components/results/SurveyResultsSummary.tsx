@@ -95,6 +95,7 @@ type ResponseExcerpt = { id: string; text: string; response_id: string };
 function excerptsByResponse(results: SurveyResultDto): ResponseExcerpt[][] {
   const grouped = new Map<string, ResponseExcerpt[]>();
   for (const question of results.questions) {
+    if (question.visibility !== 'visible') continue;
     if (question.kind !== 'text') continue;
     for (const excerpt of question.excerpts) {
       if (!excerpt.response_id) continue;
@@ -132,8 +133,10 @@ function CreateFindingDraftPanel({
 
   function submit() {
     if (!selectedGroup || excerptIds.length === 0) return;
+    const first = selectedGroup[0];
+    if (!first) return;
     mutation.mutate({
-      responseId: selectedGroup[0].response_id,
+      responseId: first.response_id,
       body: { severity, approved_excerpt_ids: excerptIds },
     });
   }
@@ -146,21 +149,25 @@ function CreateFindingDraftPanel({
       <p className="text-sm font-medium text-text-primary">Create Finding</p>
       <fieldset className="space-y-2">
         <legend className="text-sm text-text-secondary">Choose a response</legend>
-        {groups.map((group, index) => (
-          <label
-            className="flex items-center gap-2 text-sm text-text-secondary"
-            key={group[0].response_id}
-          >
-            <input
-              checked={responseIndex === index}
-              data-testid={`survey-finding-response-${index}`}
-              name="survey-finding-response"
-              onChange={() => selectResponse(index)}
-              type="radio"
-            />
-            Response {index + 1}
-          </label>
-        ))}
+        {groups.map((group, index) => {
+          const first = group[0];
+          if (!first) return null;
+          return (
+            <label
+              className="flex items-center gap-2 text-sm text-text-secondary"
+              key={first.response_id}
+            >
+              <input
+                checked={responseIndex === index}
+                data-testid={`survey-finding-response-${index}`}
+                name="survey-finding-response"
+                onChange={() => selectResponse(index)}
+                type="radio"
+              />
+              Response {index + 1}
+            </label>
+          );
+        })}
       </fieldset>
       {selectedGroup && (
         <fieldset className="space-y-2">
@@ -282,7 +289,7 @@ function NextActions({
               data-action-id={action.id}
               key={action.id}
               type="button"
-              variant={action.id === 'create_finding' ? 'primary' : 'secondary'}
+              variant="secondary"
             >
               {label}
             </Button>
