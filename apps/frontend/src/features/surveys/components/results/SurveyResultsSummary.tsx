@@ -1,8 +1,18 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import type { FindingSeverity, SurveyResultDto } from '@fops/shared';
-import { Button } from '@fops/ui';
+import {
+  Button,
+  Checkbox,
+  RadioGroup,
+  RadioGroupItem,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@fops/ui';
 import { FilePlus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCreateFindingFromSurveyResponse } from '../../hooks/useCreateFindingFromSurveyResponse';
 import type { Survey } from '../../types';
 
@@ -114,30 +124,39 @@ function CreateFindingDraftPanel({
   surveyId: string;
   groups: ResponseExcerpt[][];
 }) {
-  const [responseIndex, setResponseIndex] = useState<number>();
-  const [excerptIds, setExcerptIds] = useState<string[]>([]);
+  const [selection, setSelection] = useState<{ responseId?: string; excerptIds: string[] }>({
+    excerptIds: [],
+  });
   const [severity, setSeverity] = useState<FindingSeverity>('medium');
   const mutation = useCreateFindingFromSurveyResponse(surveyId);
-  const selectedGroup = responseIndex === undefined ? undefined : groups[responseIndex];
+  const selectedGroup = groups.find((group) => group[0]?.response_id === selection.responseId);
 
-  function selectResponse(index: number) {
-    setResponseIndex(index);
-    setExcerptIds([]);
+  useEffect(() => {
+    if (selection.responseId && !selectedGroup) {
+      setSelection({ excerptIds: [] });
+    }
+  }, [selectedGroup, selection.responseId]);
+
+  function selectResponse(nextResponseId: string) {
+    setSelection({ responseId: nextResponseId, excerptIds: [] });
   }
 
-  function toggleExcerpt(id: string) {
-    setExcerptIds((current) =>
-      current.includes(id) ? current.filter((excerptId) => excerptId !== id) : [...current, id],
-    );
+  function setExcerptSelected(id: string, checked: boolean) {
+    setSelection((current) => ({
+      ...current,
+      excerptIds: checked
+        ? [...current.excerptIds, id]
+        : current.excerptIds.filter((excerptId) => excerptId !== id),
+    }));
   }
 
   function submit() {
-    if (!selectedGroup || excerptIds.length === 0) return;
+    if (!selectedGroup || selection.excerptIds.length === 0) return;
     const first = selectedGroup[0];
     if (!first) return;
     mutation.mutate({
       responseId: first.response_id,
-      body: { severity, approved_excerpt_ids: excerptIds },
+      body: { severity, approved_excerpt_ids: selection.excerptIds },
     });
   }
 
@@ -148,62 +167,73 @@ function CreateFindingDraftPanel({
     >
       <p className="text-sm font-medium text-text-primary">Create or link Finding</p>
       <fieldset className="space-y-2">
-        <legend className="text-sm text-text-secondary">Choose a response</legend>
-        {groups.map((group, index) => {
-          const first = group[0];
-          if (!first) return null;
-          return (
-            <label
-              className="flex items-center gap-2 text-sm text-text-secondary"
-              key={first.response_id}
-            >
-              <input
-                checked={responseIndex === index}
-                data-testid={`survey-finding-response-${index}`}
-                name="survey-finding-response"
-                onChange={() => selectResponse(index)}
-                type="radio"
-              />
-              Response {index + 1}
-            </label>
-          );
-        })}
+        <legend className="text-sm text-text-secondary" id="survey-finding-response-label">
+          Choose a response
+        </legend>
+        <RadioGroup
+          aria-labelledby="survey-finding-response-label"
+          onValueChange={selectResponse}
+          value={selection.responseId}
+        >
+          {groups.map((group, index) => {
+            const first = group[0];
+            if (!first) return null;
+            return (
+              <label
+                className="flex items-center gap-2 text-sm text-text-secondary"
+                key={first.response_id}
+              >
+                <RadioGroupItem
+                  data-testid={`survey-finding-response-${index}`}
+                  value={first.response_id}
+                />
+                Response {index + 1}
+              </label>
+            );
+          })}
+        </RadioGroup>
       </fieldset>
       {selectedGroup && (
         <fieldset className="space-y-2">
           <legend className="text-sm text-text-secondary">Approved excerpts</legend>
           {selectedGroup.map((excerpt) => (
             <label className="flex gap-2 text-sm text-text-secondary" key={excerpt.id}>
-              <input
-                checked={excerptIds.includes(excerpt.id)}
+              <Checkbox
+                checked={selection.excerptIds.includes(excerpt.id)}
                 data-testid={`survey-finding-excerpt-${excerpt.id}`}
-                onChange={() => toggleExcerpt(excerpt.id)}
-                type="checkbox"
+                onCheckedChange={(checked) => setExcerptSelected(excerpt.id, checked === true)}
               />
               <span>{excerpt.text}</span>
             </label>
           ))}
         </fieldset>
       )}
-      <label className="block text-sm text-text-secondary" htmlFor="survey-finding-severity">
+      <label className="block text-sm text-text-secondary" id="survey-finding-severity-label">
         Severity
-        <select
-          className="mt-1 block w-full rounded-md border border-border-subtle bg-surface-raised px-3 py-2 text-text-primary"
-          data-testid="survey-finding-severity"
-          id="survey-finding-severity"
-          onChange={(event) => setSeverity(event.target.value as FindingSeverity)}
-          value={severity}
-        >
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-          <option value="critical">Critical</option>
-        </select>
+        <Select onValueChange={(value) => setSeverity(value as FindingSeverity)} value={severity}>
+          <SelectTrigger
+            aria-labelledby="survey-finding-severity-label"
+            className="mt-1"
+            data-testid="survey-finding-severity"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="low">Low</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="critical">Critical</SelectItem>
+          </SelectContent>
+        </Select>
       </label>
-      {mutation.error && <p className="text-sm text-text-danger">{mutation.error.message}</p>}
+      {mutation.error && (
+        <p className="text-sm text-text-danger" role="alert">
+          {mutation.error.message}
+        </p>
+      )}
       <Button
         data-testid="survey-create-finding-submit"
-        disabled={!selectedGroup || excerptIds.length === 0}
+        disabled={!selectedGroup || selection.excerptIds.length === 0}
         loading={mutation.isPending}
         onClick={submit}
         type="button"
@@ -263,7 +293,11 @@ function NextActions({
           if (action.id === 'create_finding') {
             const unavailable = groups.length === 0;
             return (
-              <div className="space-y-1" data-testid="survey-result-action-create-finding" key={action.id}>
+              <div
+                className="space-y-1"
+                data-testid="survey-result-action-create-finding"
+                key={action.id}
+              >
                 <Button
                   className="w-full justify-start text-left"
                   data-action-id={action.id}
@@ -285,12 +319,7 @@ function NextActions({
             );
           }
           return (
-            <Button
-              data-action-id={action.id}
-              key={action.id}
-              type="button"
-              variant="secondary"
-            >
+            <Button data-action-id={action.id} key={action.id} type="button" variant="secondary">
               {label}
             </Button>
           );

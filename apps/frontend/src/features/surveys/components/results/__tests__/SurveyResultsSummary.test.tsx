@@ -173,10 +173,11 @@ describe('SurveyResultsSummary', () => {
     expect(screen.getByText('Outcome follow-up is available')).toBeInTheDocument();
   });
 
-  it('renders approved excerpt text without rendering its personal response identifier', () => {
+  it('renders approved excerpt text without rendering its personal response identifier', async () => {
+    const user = userEvent.setup();
     const responseId = '24242424-2424-4242-8242-242424242424';
     const excerptText = '대시보드 필터를 저장할 수 있으면 좋겠습니다.';
-    const { container } = render(
+    const { container } = renderWithClient(
       <SurveyResultsSummary
         survey={survey}
         results={{
@@ -194,6 +195,8 @@ describe('SurveyResultsSummary', () => {
     );
 
     expect(screen.getByText(excerptText)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    expect(screen.getByTestId('survey-create-finding-draft')).toBeInTheDocument();
     expect(container.textContent).not.toContain(responseId);
   });
 
@@ -276,7 +279,8 @@ describe('SurveyResultsSummary', () => {
     expect(screen.getAllByRole('button', { name: 'Create Finding' })).toHaveLength(1);
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
-    await user.selectOptions(screen.getByTestId('survey-finding-severity'), 'high');
+    await user.click(screen.getByTestId('survey-finding-severity'));
+    await user.click(screen.getByRole('option', { name: 'High' }));
     await user.click(screen.getByTestId('survey-create-finding-submit'));
 
     await waitFor(() =>
@@ -333,6 +337,117 @@ describe('SurveyResultsSummary', () => {
         { body: { severity: 'medium', approved_excerpt_ids: [ids.excerptTwo] } },
       ),
     );
+  });
+
+  it('keeps a selected response paired with its excerpts when results reorder', async () => {
+    const user = userEvent.setup();
+    apiClient.mockResolvedValue({ data: { id: ids.finding } });
+    const holderResults = {
+      ...results,
+      questions: results.questions.map((question) =>
+        question.kind === 'text'
+          ? {
+              ...question,
+              excerpts: [
+                { id: ids.finding, text: '첫 번째 응답', response_id: ids.responseOne },
+                { id: ids.excerptTwo, text: '두 번째 응답', response_id: ids.responseTwo },
+              ],
+            }
+          : question,
+      ),
+    };
+    const { queryClient, rerender } = renderWithClient(
+      <SurveyResultsSummary survey={survey} results={holderResults} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByTestId('survey-finding-response-0'));
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <SurveyResultsSummary
+          survey={survey}
+          results={{
+            ...holderResults,
+            questions: holderResults.questions.map((question) =>
+              question.kind === 'text'
+                ? { ...question, excerpts: [...question.excerpts].reverse() }
+                : question,
+            ),
+          }}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`)).toBeChecked();
+    await user.click(screen.getByTestId('survey-create-finding-submit'));
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        `/survey-responses/${ids.responseOne}/create-finding`,
+        { body: { severity: 'medium', approved_excerpt_ids: [ids.finding] } },
+      ),
+    );
+  });
+
+  it('shows a loading affordance while creating a Finding', async () => {
+    const user = userEvent.setup();
+    apiClient.mockImplementation(() => new Promise(() => undefined));
+    renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          questions: results.questions.map((question) =>
+            question.kind === 'text'
+              ? {
+                  ...question,
+                  excerpts: [{ id: ids.finding, text: '응답', response_id: ids.responseOne }],
+                }
+              : question,
+          ),
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByTestId('survey-finding-response-0'));
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
+    await user.click(screen.getByTestId('survey-create-finding-submit'));
+
+    expect(screen.getByTestId('survey-create-finding-submit')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByTestId('survey-create-finding-submit')).toBeDisabled();
+  });
+
+  it('shows a create-finding failure without closing the draft', async () => {
+    const user = userEvent.setup();
+    apiClient.mockRejectedValue(new Error('Finding could not be created'));
+    renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          questions: results.questions.map((question) =>
+            question.kind === 'text'
+              ? {
+                  ...question,
+                  excerpts: [{ id: ids.finding, text: '응답', response_id: ids.responseOne }],
+                }
+              : question,
+          ),
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByTestId('survey-finding-response-0'));
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
+    await user.click(screen.getByTestId('survey-create-finding-submit'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be created');
+    expect(screen.getByTestId('survey-create-finding-draft')).toBeInTheDocument();
+    expect(screen.getByTestId('survey-create-finding-submit')).not.toBeDisabled();
   });
 
   it('disables Create Finding when no approved excerpt is tied to an accessible response', async () => {
