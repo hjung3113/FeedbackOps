@@ -1,5 +1,12 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const { apiClient } = vi.hoisted(() => ({ apiClient: vi.fn() }));
+
+vi.mock('@/lib/api', () => ({ apiClient }));
 
 vi.mock('@/features/admin/permissions/request-access-button', () => ({
   RequestAccessButton: ({
@@ -26,6 +33,9 @@ const ids = {
   text: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
   suppressed: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
   finding: '11111111-1111-4111-8111-111111111111',
+  responseOne: '22222222-2222-4222-8222-222222222222',
+  responseTwo: '33333333-3333-4333-8333-333333333333',
+  excerptTwo: '44444444-4444-4444-8444-444444444444',
 };
 
 const survey = {
@@ -143,6 +153,16 @@ const results = {
 };
 
 describe('SurveyResultsSummary', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  function renderWithClient(node: ReactNode) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return {
+      ...render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>),
+      queryClient,
+    };
+  }
+
   it('renders per-question choice, rating, text summaries and an identity-protected notice', () => {
     render(<SurveyResultsSummary survey={survey} results={results} />);
 
@@ -185,7 +205,8 @@ describe('SurveyResultsSummary', () => {
     expect(row).not.toHaveTextContent(/0 responses|12 responses|response count/i);
   });
 
-  it('renders only allowed backend action ids and request access for blocked actions', () => {
+  it('renders request access for blocked actions without issuing a create-finding request', async () => {
+    const user = userEvent.setup();
     render(
       <SurveyResultsSummary
         survey={survey}
@@ -216,9 +237,120 @@ describe('SurveyResultsSummary', () => {
       'data-managed-system-id',
       ids.system,
     );
-    expect(screen.queryByText('Create VOC')).not.toBeInTheDocument();
-    expect(screen.queryByText('Convert to VOC')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('request-access-finding.manage'));
+    expect(apiClient).not.toHaveBeenCalled();
+    for (const label of [
+      'Create VOC',
+      'Convert to VOC',
+      'Generate VOC from Response',
+      'Link Existing VOC',
+    ]) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
     expect(screen.queryByText('Request Task')).not.toBeInTheDocument();
+  });
+
+  it('posts selected excerpts to the selected response and invalidates results after creation', async () => {
+    const user = userEvent.setup();
+    apiClient.mockResolvedValue({ data: { id: ids.finding } });
+    const { queryClient } = renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          questions: results.questions.map((question) =>
+            question.kind === 'text'
+              ? {
+                  ...question,
+                  excerpts: [
+                    {
+                      id: ids.finding,
+                      text: '내보내기가 너무 느립니다.',
+                      response_id: ids.responseOne,
+                    },
+                  ],
+                }
+              : question,
+          ),
+        }}
+      />,
+    );
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByTestId('survey-finding-response-0'));
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
+    await user.selectOptions(screen.getByTestId('survey-finding-severity'), 'high');
+    await user.click(screen.getByTestId('survey-create-finding-submit'));
+
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        `/survey-responses/${ids.responseOne}/create-finding`,
+        { body: { severity: 'high', approved_excerpt_ids: [ids.finding] } },
+      ),
+    );
+    expect(apiClient).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['surveys', ids.survey, 'results'],
+      }),
+    );
+  });
+
+  it('clears selected excerpts when the chosen response changes', async () => {
+    const user = userEvent.setup();
+    apiClient.mockResolvedValue({ data: { id: ids.finding } });
+    renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          questions: results.questions.map((question) =>
+            question.kind === 'text'
+              ? {
+                  ...question,
+                  excerpts: [
+                    { id: ids.finding, text: '첫 번째 응답', response_id: ids.responseOne },
+                    { id: ids.excerptTwo, text: '두 번째 응답', response_id: ids.responseTwo },
+                  ],
+                }
+              : question,
+          ),
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByTestId('survey-finding-response-0'));
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
+    await user.click(screen.getByTestId('survey-finding-response-1'));
+
+    expect(screen.getByTestId('survey-create-finding-submit')).toBeDisabled();
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.excerptTwo}`));
+    await user.click(screen.getByTestId('survey-create-finding-submit'));
+
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        `/survey-responses/${ids.responseTwo}/create-finding`,
+        { body: { severity: 'medium', approved_excerpt_ids: [ids.excerptTwo] } },
+      ),
+    );
+  });
+
+  it('disables Create Finding when no approved excerpt is tied to an accessible response', async () => {
+    const user = userEvent.setup();
+    renderWithClient(<SurveyResultsSummary survey={survey} results={results} />);
+
+    const button = screen.getByRole('button', { name: 'Create Finding' });
+    expect(button).toBeDisabled();
+    expect(
+      screen.getByText('No approved excerpts are available for a response you can access.'),
+    ).toBeInTheDocument();
+    await user.click(button);
+    expect(screen.queryByTestId('survey-create-finding-draft')).not.toBeInTheDocument();
+    expect(apiClient).not.toHaveBeenCalled();
   });
 
   it('keeps a blocked requestable action visible when its permission details are absent', () => {
@@ -243,6 +375,7 @@ describe('SurveyResultsSummary', () => {
     expect(
       screen.getByText('Access details are unavailable, so this request cannot be submitted.'),
     ).toBeInTheDocument();
+    expect(apiClient).not.toHaveBeenCalled();
   });
 
   it('renders no follow-up CTA when next_actions is empty', () => {
