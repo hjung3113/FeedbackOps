@@ -103,33 +103,6 @@ export async function readApprovedResultExcerptsPersonal(
   return result.rows;
 }
 
-export async function readSurveyResultDerivedFindingIds(
-  db: Tx,
-  workspaceId: string,
-  surveyId: string,
-): Promise<string[]> {
-  const responseResult = await db.execute<{ response_id: string }>(
-    sql`select * from survey.read_survey_response_ids(${workspaceId}, ${surveyId})`,
-  );
-  const responseIds = responseResult.rows.map((row) => row.response_id);
-  if (responseIds.length === 0) return [];
-  const ids = sql`ARRAY[${sql.join(
-    responseIds.map((id) => sql`${id}`),
-    sql`, `,
-  )}]::uuid[]`;
-  const result = await db.execute<{ target_id: string }>(sql`
-    select distinct target_id
-      from core.entity_links
-     where workspace_id = ${workspaceId}
-       and source_id = any(${ids})
-       and source_type = 'survey_response'
-       and target_type = 'finding'
-       and relation_type = 'generated_finding'
-       and status = 'active'
-  `);
-  return result.rows.map((row) => row.target_id);
-}
-
 /** Safe approval projection for one response. It never reads response answers. */
 export async function readApprovedResponseExcerpts(
   tx: Tx,

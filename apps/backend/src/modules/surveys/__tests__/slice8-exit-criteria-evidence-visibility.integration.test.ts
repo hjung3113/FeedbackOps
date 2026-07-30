@@ -682,6 +682,7 @@ describe.skipIf(!runIntegration)(
       expect(before.next_actions).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: "create_finding" })]),
       );
+      expect(before.next_actions.map((action) => action.id)).not.toContain("request_task");
       const findingId = await approveAndCreate(source, creator);
       const after = surveyResultDtoSchema.parse(
         (
@@ -701,6 +702,7 @@ describe.skipIf(!runIntegration)(
       expect(after.next_actions).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: "create_finding" })]),
       );
+      expect(after.next_actions.map((action) => action.id)).not.toContain("request_task");
       const targetMs = await insertMsDirectly(
         migrateHandle,
         WORKSPACE_ID,

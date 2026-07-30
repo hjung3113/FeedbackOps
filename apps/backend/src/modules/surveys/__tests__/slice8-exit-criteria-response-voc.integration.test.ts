@@ -7,7 +7,6 @@ import { randomUUID } from "node:crypto";
 import {
   entityLinkRelationTypeSchema,
   registeredEntityLinkPairs,
-  type SurveyResultNextAction,
   surveyResultDtoSchema,
 } from "@fops/shared";
 import type { FastifyInstance } from "fastify";
@@ -17,7 +16,6 @@ import {
   beforeEach,
   describe,
   expect,
-  expectTypeOf,
   it,
 } from "vitest";
 
@@ -242,6 +240,9 @@ describe.skipIf(!runIntegration)(
       expect(body.next_actions.map((action) => action.id)).not.toContain(
         "create_voc",
       );
+      expect(body.next_actions.map((action) => action.id)).not.toContain(
+        "request_task",
+      );
     }
 
     it("returns the route-miss 404 for admin, operator, personal-cap, basic, and no-permission actors", async () => {
@@ -338,9 +339,6 @@ describe.skipIf(!runIntegration)(
     });
 
     it("keeps VOC count fixed through the permitted Finding -> Task Request path and excludes create_voc from every results payload", async () => {
-      expectTypeOf<SurveyResultNextAction["id"]>().toEqualTypeOf<
-        "create_finding" | "request_task"
-      >();
       const source = await seed();
       const creator = await actor("creator");
       const reader = await actor("reader");

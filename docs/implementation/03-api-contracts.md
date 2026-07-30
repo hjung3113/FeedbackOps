@@ -877,7 +877,7 @@ Visible choice results contain configured option `key`, `label`, and count plus 
 
 `POST /survey-responses/:id/evidence-excerpt-candidates` accepts `{ question_id }` and returns the one matching `{ question_id, question_label, raw_text }` candidate. `POST /survey-responses/:id/approved-excerpts` accepts `{ question_id, redacted_excerpt }` and creates an append-only approved excerpt, returning `{ approved_excerpt_id, question_id, redacted_excerpt }`. Both routes resolve the response through the Survey evidence definer, then require `survey.read` and explicit `survey.read_personal_responses`; missing response, cross-workspace response, denied source read, and denied personal read are all `404 not_found.record`. Admin never bypasses personal-response access. A fully authorized actor receives `409 conflict.survey_results_unavailable` for a draft Survey. Approval then requires `survey.manage`; only this post-readable failure is `403 permission.denied`.
 
-Candidate reads write `survey_response_personal_read` in the same transaction; approvals write `survey_response_excerpt_approved` in the same transaction as the approval row. Audit detail contains IDs only—never raw or redacted text. Duplicate approvals are intentional separate rows. Revoked approvals are omitted from results. Aggregate result `next_actions` exposes permission-filtered `create_finding` and, for derived Findings, `request_task`.
+Candidate reads write `survey_response_personal_read` in the same transaction; approvals write `survey_response_excerpt_approved` in the same transaction as the approval row. Audit detail contains IDs only—never raw or redacted text. Duplicate approvals are intentional separate rows. Revoked approvals are omitted from results. Aggregate result `next_actions` exposes permission-filtered `create_finding`.
 
 #### POST /survey-responses/:id/create-finding
 
@@ -887,7 +887,7 @@ The Finding has database provenance `source_type='survey_response'` and stores t
 
 Same actor/key/body/source replays the original Finding with no duplicate side effects; changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic survey-response highlight attachment remains deferred.
 
-Evidence-read projections never return response UUIDs, respondent identity, raw answer, or Survey title. Result-excerpt `response_id` is a distinct surface, returned only behind the `survey.read_personal_responses` gate. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
+Evidence-read projections never return response UUIDs, respondent identity, raw answer, or Survey title. Result-excerpt `response_id` is a distinct surface, returned only behind the `survey.read_personal_responses` gate. A holder result read whose payload includes `response_id` writes one `survey_response_personal_read` audit event per exposed response/question pair; a non-holder result read writes none. This GET route takes no `Idempotency-Key`. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
 
 ### Core / Managed System / Analytics Area
 
