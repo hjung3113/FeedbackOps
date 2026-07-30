@@ -52,6 +52,7 @@ import {
   lockQuestions,
   lockSurvey,
   setSurveyStatus,
+  updateSurvey,
   updateQuestion,
   updateQuestionSortOrders,
 } from './repo.js';
@@ -96,6 +97,15 @@ export type QuestionInput = {
   branch_parent_question_id?: string | null;
   branch_trigger_option_key?: string | null;
 };
+export type UpdateSurveyInput = Partial<{
+  type: CreateSurveyInput['type'];
+  title: string;
+  description: string;
+  primary_managed_system_id: string;
+  analytics_area_id: string;
+  operator_actor_id: string;
+  responses_identity_protected: boolean;
+}>;
 export type ResponseSubmissionInput = {
   answers: Array<{ question_id: string; value: string | string[] | number }>;
 };
@@ -754,6 +764,153 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       ),
     );
   }
+  async function updateSurveyFields(a: {
+    actor: SurveysActor;
+    surveyId: string;
+    input: UpdateSurveyInput;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return deps.db.transaction((tx) =>
+      deps.idempotencyService.runIdempotent(
+        tx,
+        a.actor.actor_id,
+        a.idempotencyKey,
+        a.requestHash,
+        async () => {
+          const s = await lockSurvey(tx, a.actor.workspace_id, a.surveyId);
+          if (!s) throw new HttpError('not_found.record', 'survey not found');
+          await requireManage(deps, tx, a.actor, s);
+          draft(s);
+          const primaryManagedSystemId = a.input.primary_managed_system_id ?? s.primary_managed_system_id;
+          const managedSystem = await tx.execute<{
+            id: string;
+            archived_at: Date | null;
+          }>(
+            sql`select id,archived_at from core.managed_systems where id=${primaryManagedSystemId} and workspace_id=${a.actor.workspace_id} for update`,
+          );
+          const m = managedSystem.rows[0];
+          if (!m) throw new HttpError('not_found.record', 'managed system not found');
+          if (m.archived_at)
+            throw new HttpError('conflict.parent_archived', 'managed system archived');
+          if (primaryManagedSystemId !== s.primary_managed_system_id) {
+            const targetManage = await checkSurveyManage(deps.checkService, a.actor, m.id, {
+              tx,
+            });
+            if (!targetManage.allow)
+              throw new HttpError('permission.denied', 'survey.manage capability required');
+          }
+          const analyticsAreaId = a.input.analytics_area_id ?? s.analytics_area_id;
+          if (analyticsAreaId) {
+            const analyticsArea = await tx.execute<{
+              managed_system_id: string;
+              archived_at: Date | null;
+            }>(
+              sql`select managed_system_id,archived_at from core.analytics_areas where id=${analyticsAreaId} and workspace_id=${a.actor.workspace_id} for update`,
+            );
+            const area = analyticsArea.rows[0];
+            if (!area) throw new HttpError('not_found.record', 'analytics area not found');
+            if (area.managed_system_id !== m.id || area.archived_at)
+              throw new HttpError(
+                'validation.failed',
+                'analytics area must be active and belong to managed system',
+                { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
+              );
+          }
+          const operatorActorId = a.input.operator_actor_id ?? s.operator_actor_id;
+          if (a.input.operator_actor_id) {
+            const operator = await tx.execute<{
+              id: string;
+              role_level: 'admin' | 'developer' | 'user';
+            }>(
+              sql`select id,role_level from core.actors where id=${operatorActorId} and workspace_id=${a.actor.workspace_id} for update`,
+            );
+            if (!operator.rows[0])
+              throw new HttpError('validation.failed', 'operator must be in workspace', {
+                fields: [{ path: ['operator_actor_id'], code: 'invalid' }],
+              });
+            const operatorManage = await checkSurveyManage(
+              deps.checkService,
+              { ...a.actor, actor_id: operatorActorId, role_level: operator.rows[0].role_level },
+              m.id,
+              { tx },
+            );
+            if (!operatorManage.allow)
+              throw new HttpError('validation.failed', 'operator requires survey.manage', {
+                fields: [{ path: ['operator_actor_id'], code: 'permission_denied' }],
+              });
+          }
+          const updated = await updateSurvey(tx, a.actor.workspace_id, s.id, {
+            type: a.input.type ?? s.type,
+            title: a.input.title ?? s.title,
+            description: a.input.description ?? s.description,
+            primaryManagedSystemId,
+            analyticsAreaId,
+            operatorActorId,
+            responsesIdentityProtected:
+              a.input.responses_identity_protected ?? s.responses_identity_protected,
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: a.actor.workspace_id,
+            actor_id: a.actor.actor_id,
+            event_type: 'survey_updated',
+            subject_type: 'survey',
+            subject_id: s.id,
+            summary: 'Survey updated',
+            detail: { survey_id: s.id },
+          });
+          return { status: 200, body: dto(updated) };
+        },
+      ),
+    );
+  }
+  async function reorderQuestions(a: {
+    actor: SurveysActor;
+    surveyId: string;
+    questionIds: string[];
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return deps.db.transaction((tx) =>
+      deps.idempotencyService.runIdempotent(
+        tx,
+        a.actor.actor_id,
+        a.idempotencyKey,
+        a.requestHash,
+        async () => {
+          const s = await lockSurvey(tx, a.actor.workspace_id, a.surveyId);
+          if (!s) throw new HttpError('not_found.record', 'survey not found');
+          await requireManage(deps, tx, a.actor, s);
+          draft(s);
+          const questions = await lockQuestions(tx, a.actor.workspace_id, s.id);
+          const questionIds = new Set(a.questionIds);
+          if (
+            questionIds.size !== a.questionIds.length ||
+            questionIds.size !== questions.length ||
+            questions.some((question) => !questionIds.has(question.id))
+          )
+            throw new HttpError('validation.failed', 'question_ids must list every survey question once', {
+              fields: [{ path: ['question_ids'], code: 'invalid' }],
+            });
+          await updateQuestionSortOrders(
+            tx,
+            a.actor.workspace_id,
+            a.questionIds.map((id, sortOrder) => ({ id, sortOrder })),
+          );
+          await deps.auditService.record(tx, {
+            workspace_id: a.actor.workspace_id,
+            actor_id: a.actor.actor_id,
+            event_type: 'survey_questions_reordered',
+            subject_type: 'survey',
+            subject_id: s.id,
+            summary: 'Survey questions reordered',
+            detail: { survey_id: s.id },
+          });
+          return { status: 200, body: dto(s, await listQuestions(tx, a.actor.workspace_id, s.id)) };
+        },
+      ),
+    );
+  }
   async function transition(a: {
     actor: SurveysActor;
     surveyId: string;
@@ -1191,6 +1348,8 @@ export function createSurveysService(deps: SurveysServiceDeps) {
   }
   return {
     createSurvey,
+    updateSurveyFields,
+    reorderQuestions,
     createQuestion: (a: Parameters<typeof mutateQuestion>[1]) => mutateQuestion('create', a),
     updateQuestion: (a: Parameters<typeof mutateQuestion>[1]) => mutateQuestion('update', a),
     deleteQuestion: (a: Parameters<typeof mutateQuestion>[1]) => mutateQuestion('delete', a),

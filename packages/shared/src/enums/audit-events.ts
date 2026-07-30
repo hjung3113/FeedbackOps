@@ -26,6 +26,8 @@ import {
   surveyResponseExcerptApprovedDetailSchema,
   surveyResponsePersonalReadDetailSchema,
   surveyResponseSubmittedDetailSchema,
+  surveyQuestionsReorderedDetailSchema,
+  surveyUpdatedDetailSchema,
 } from '../audit/survey.js';
 import {
   internalCommentCreatedDetailSchema,
@@ -113,6 +115,8 @@ export const AUDIT_EVENT_TYPES = [
   'public_update_review_candidate_dismissed',
   // Slice 8 #191: Survey lifecycle and question structure events.
   'survey_created',
+  'survey_updated',
+  'survey_questions_reordered',
   'survey_question_created',
   'survey_question_updated',
   'survey_question_deleted',
@@ -817,6 +821,8 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   public_update_review_candidate_dismissed: publicUpdateReviewCandidateDismissedDetailSchema,
   // Slice 8 #191: Survey lifecycle and question structure events.
   survey_created: surveyCreatedDetailSchema,
+  survey_updated: surveyUpdatedDetailSchema,
+  survey_questions_reordered: surveyQuestionsReorderedDetailSchema,
   survey_question_created: surveyQuestionCreatedDetailSchema,
   survey_question_updated: surveyQuestionUpdatedDetailSchema,
   survey_question_deleted: surveyQuestionDeletedDetailSchema,

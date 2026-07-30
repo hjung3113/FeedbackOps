@@ -45,6 +45,15 @@ export const surveyCreatedDetailSchema = z
   .strict();
 export type SurveyCreatedDetail = z.infer<typeof surveyCreatedDetailSchema>;
 
+// ── survey_updated / survey_questions_reordered ──────────────────────────
+// These payloads identify the affected Survey only; mutable copy stays out of
+// the immutable audit log.
+export const surveyUpdatedDetailSchema = z.object({ survey_id: uuid() }).strict();
+export type SurveyUpdatedDetail = z.infer<typeof surveyUpdatedDetailSchema>;
+
+export const surveyQuestionsReorderedDetailSchema = z.object({ survey_id: uuid() }).strict();
+export type SurveyQuestionsReorderedDetail = z.infer<typeof surveyQuestionsReorderedDetailSchema>;
+
 // ── survey_question_created ───────────────────────────────────────────────
 export const surveyQuestionCreatedDetailSchema = z
   .object({

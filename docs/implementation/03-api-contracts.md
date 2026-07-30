@@ -798,8 +798,10 @@ Slice 6. It is created only through source transition routes:
 POST /surveys
 GET /surveys
 GET /surveys/:id
+PATCH /surveys/:id
 POST /surveys/:id/questions
 PATCH /surveys/:id/questions/:question_id
+PATCH /surveys/:id/questions/reorder
 DELETE /surveys/:id/questions/:question_id
 POST /surveys/:id/open
 POST /surveys/:id/close
@@ -827,9 +829,38 @@ updated_at }`.
 `managed_system_id=<uuid>|all` and returns a permission-filtered array of the
 same Survey DTO (without `questions`).
 
+`PATCH /surveys/:id` requires `survey.manage`, an `Idempotency-Key`, and
+mutation rate limiting. Its strict, non-empty partial body permits only
+`type`, `title`, `description`, `primary_managed_system_id`,
+`analytics_area_id`, `operator_actor_id`, and
+`responses_identity_protected`; omitted fields retain their stored values.
+It is draft-only; an open or closed Survey returns `422 validation.failed` with
+`fields: [{ path: ['status'], code: 'not_draft' }]`. Missing or cross-workspace
+Surveys return `404 not_found.record`. Changing `primary_managed_system_id`
+checks `survey.manage` on both the current and target Managed System, so a
+caller cannot move a Survey into an unauthorized scope. A successful update
+returns `200` with the Survey DTO and writes `survey_updated` in the same
+transaction; audit detail is `{ survey_id }` only.
+Errors: `validation.failed`, `validation.malformed_idempotency_key`,
+`permission.denied`, `not_found.record`, `conflict.parent_archived`,
+`conflict.idempotency_key_reuse`, and `rate_limited.actor`.
+
 The three question commands require `survey.manage`, an `Idempotency-Key`, and
 mutation rate limiting; they are draft-only. They create, update, or delete a
 question at the listed Survey/question IDs.
+
+`PATCH /surveys/:id/questions/reorder` requires the same `survey.manage`,
+Idempotency-Key, mutation-rate-limit, and draft guard. Its strict body is
+`{ question_ids: uuid[] }`, containing every question ID for that Survey
+exactly once. Missing, duplicate, or foreign IDs return `422 validation.failed`
+without changing any order. The command locks the Survey and all of its
+questions, then atomically assigns dense `sort_order` values `0..n-1` in body
+order. It returns `200` with the Survey DTO including reordered questions and
+writes `survey_questions_reordered` in the same transaction with audit detail
+`{ survey_id }` only.
+Errors: `validation.failed`, `validation.malformed_idempotency_key`,
+`permission.denied`, `not_found.record`, `conflict.idempotency_key_reuse`, and
+`rate_limited.actor`.
 
 `POST /surveys/:id/open` and `POST /surveys/:id/close` require
 `survey.manage`, an `Idempotency-Key`, and mutation rate limiting. Both return
