@@ -881,10 +881,11 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       >();
       for (const excerpt of approvedExcerpts) {
         const excerpts = excerptsByQuestion.get(excerpt.question_id) ?? [];
+        const rid = holder ? excerpt.response_id : undefined;
         excerpts.push({
           id: excerpt.approved_excerpt_id,
           text: excerpt.redacted_excerpt,
-          ...(holder && 'response_id' in excerpt ? { response_id: excerpt.response_id } : {}),
+          ...(rid ? { response_id: rid } : {}),
         });
         excerptsByQuestion.set(excerpt.question_id, excerpts);
       }
@@ -982,11 +983,14 @@ export function createSurveysService(deps: SurveysServiceDeps) {
         for (const question of result.questions)
           if ('excerpts' in question)
             for (const excerpt of question.excerpts)
-              if ('response_id' in excerpt)
-                exposed.set(`${excerpt.response_id}:${question.question_id}`, {
-                  responseId: excerpt.response_id,
+              {
+                const rid = excerpt.response_id;
+                if (rid)
+                  exposed.set(`${rid}:${question.question_id}`, {
+                    responseId: rid,
                   questionId: question.question_id,
-                });
+                  });
+              }
         for (const { responseId, questionId } of exposed.values())
           await deps.auditService.record(tx, {
             workspace_id: actor.workspace_id,
