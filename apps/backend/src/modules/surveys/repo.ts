@@ -85,6 +85,26 @@ export async function setSurveyStatus(
   if (!x.rows[0]) throw new Error('survey status update failed');
   return mapSurvey(x.rows[0]);
 }
+export async function updateSurvey(
+  tx: Tx,
+  workspaceId: string,
+  id: string,
+  input: {
+    type: SurveyRow['type'];
+    title: string;
+    description: string | null;
+    primaryManagedSystemId: string;
+    analyticsAreaId: string | null;
+    operatorActorId: string;
+    responsesIdentityProtected: boolean;
+  },
+): Promise<SurveyRow> {
+  const x = await tx.execute<Record<string, unknown>>(
+    sql`update survey.surveys set type=${input.type},title=${input.title},description=${input.description},primary_managed_system_id=${input.primaryManagedSystemId},analytics_area_id=${input.analyticsAreaId},operator_actor_id=${input.operatorActorId},responses_identity_protected=${input.responsesIdentityProtected},updated_at=now() where workspace_id=${workspaceId} and id=${id} returning ${surveyCols}`,
+  );
+  if (!x.rows[0]) throw new Error('survey update failed');
+  return mapSurvey(x.rows[0]);
+}
 
 export async function insertResponse(
   tx: Tx,

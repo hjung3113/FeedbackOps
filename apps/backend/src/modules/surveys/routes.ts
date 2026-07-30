@@ -25,6 +25,19 @@ const create = z
     responses_identity_protected: z.boolean(),
   })
   .strict();
+const update = z
+  .object({
+    type: z.enum(['discovery', 'validation', 'outcome']).optional(),
+    title: z.string().min(1).optional(),
+    description: z.string().optional(),
+    primary_managed_system_id: uuid.optional(),
+    analytics_area_id: uuid.optional(),
+    operator_actor_id: uuid.optional(),
+    responses_identity_protected: z.boolean().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, { message: 'at least one field is required' });
+const reorder = z.object({ question_ids: z.array(uuid) }).strict();
 const question = z
   .object({
     kind: z.enum(['single_choice', 'multiple_choice', 'rating', 'text']),
@@ -212,6 +225,38 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     });
     return reply.code(r.status).send(r.body);
   });
+  app.patch('/surveys/:id', { preHandler: pre, ...rate('mutation') }, async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+    const b = parse(update, req.body, reply);
+    if (!b) return;
+    const r = await opts.surveysService.updateSurveyFields({
+      actor: actor(req),
+      surveyId: id,
+      input: b,
+      idempotencyKey: key(req.headers as Record<string, unknown>),
+      requestHash: hashRequestBody({ body: b, route: 'survey.update', surveyId: id }),
+    });
+    return reply.code(r.status).send(r.body);
+  });
+  app.patch(
+    '/surveys/:id/questions/reorder',
+    { preHandler: pre, ...rate('mutation') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const b = parse(reorder, req.body, reply);
+      if (!b) return;
+      const r = await opts.surveysService.reorderQuestions({
+        actor: actor(req),
+        surveyId: id,
+        questionIds: b.question_ids,
+        idempotencyKey: key(req.headers as Record<string, unknown>),
+        requestHash: hashRequestBody({ body: b, route: 'survey.questions.reorder', surveyId: id }),
+      });
+      return reply.code(r.status).send(r.body);
+    },
+  );
   const qcmd = (
     method: 'POST' | 'PATCH' | 'DELETE',
     url: string,

@@ -23,6 +23,8 @@ import {
   surveyResponseExcerptApprovedDetailSchema,
   surveyResponsePersonalReadDetailSchema,
   surveyResponseSubmittedDetailSchema,
+  surveyQuestionsReorderedDetailSchema,
+  surveyUpdatedDetailSchema,
 } from '../survey.js';
 
 const U = '01919b8c-0000-7000-8000-000000000001';
@@ -72,6 +74,8 @@ const surveyClosed = {
   survey_id: U,
   display_id: 'SRV-001',
 } as const;
+const surveyUpdated = { survey_id: U } as const;
+const surveyQuestionsReordered = { survey_id: U } as const;
 
 const surveyResponseSubmitted = {
   survey_id: U,
@@ -97,6 +101,8 @@ const findingCreatedFromSurveyResponse = {
 describe('Survey audit detail schemas', () => {
   it.each([
     ['survey_created', surveyCreatedDetailSchema, surveyCreated],
+    ['survey_updated', surveyUpdatedDetailSchema, surveyUpdated],
+    ['survey_questions_reordered', surveyQuestionsReorderedDetailSchema, surveyQuestionsReordered],
     ['survey_question_created', surveyQuestionCreatedDetailSchema, surveyQuestionCreated],
     ['survey_question_updated', surveyQuestionUpdatedDetailSchema, surveyQuestionUpdated],
     ['survey_question_deleted', surveyQuestionDeletedDetailSchema, surveyQuestionDeleted],
@@ -260,6 +266,8 @@ describe('Survey-response Finding audit privacy', () => {
 describe('Survey audit event registration', () => {
   const surveyEvents = [
     'survey_created',
+    'survey_updated',
+    'survey_questions_reordered',
     'survey_question_created',
     'survey_question_updated',
     'survey_question_deleted',
