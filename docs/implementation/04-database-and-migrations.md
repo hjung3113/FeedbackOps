@@ -22,7 +22,10 @@ Applied migrations are the final database authority.
 - Survey response and answer tables remain outside `fops_app` read access. Any
   dashboard or result projection over them must use a narrow `SECURITY DEFINER`
   aggregate owned by `fops_survey_aggregate_owner`, returning only the contract's
-  aggregate value and never response identifiers or answer bodies.
+  aggregate value and never response identifiers or answer bodies. The authorized
+  exception is `survey.read_approved_result_excerpts_personal`, a separate
+  `SECURITY DEFINER` owned by `fops_survey_evidence_reader_owner` that returns
+  `response_id` only behind `survey.read_personal_responses`.
 ```
 
 ### Database prerequisite: pgvector (ADR-0034 D1)

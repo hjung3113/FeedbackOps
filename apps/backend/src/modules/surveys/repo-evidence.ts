@@ -80,6 +80,29 @@ export async function readApprovedResultExcerpts(
   return result.rows;
 }
 
+export async function readApprovedResultExcerptsPersonal(
+  tx: Tx,
+  workspaceId: string,
+  surveyId: string,
+): Promise<
+  Array<{
+    approved_excerpt_id: string;
+    question_id: string;
+    redacted_excerpt: string;
+    response_id: string;
+  }>
+> {
+  const result = await tx.execute<{
+    approved_excerpt_id: string;
+    question_id: string;
+    redacted_excerpt: string;
+    response_id: string;
+  }>(
+    sql`select * from survey.read_approved_result_excerpts_personal(${workspaceId}, ${surveyId})`,
+  );
+  return result.rows;
+}
+
 /** Safe approval projection for one response. It never reads response answers. */
 export async function readApprovedResponseExcerpts(
   tx: Tx,
