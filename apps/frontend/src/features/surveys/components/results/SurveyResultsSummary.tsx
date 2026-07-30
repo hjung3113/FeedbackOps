@@ -146,7 +146,7 @@ function CreateFindingDraftPanel({
       className="mt-3 space-y-3 border-t border-border-subtle pt-3"
       data-testid="survey-create-finding-draft"
     >
-      <p className="text-sm font-medium text-text-primary">Create Finding</p>
+      <p className="text-sm font-medium text-text-primary">Create or link Finding</p>
       <fieldset className="space-y-2">
         <legend className="text-sm text-text-secondary">Choose a response</legend>
         {groups.map((group, index) => {
@@ -208,7 +208,7 @@ function CreateFindingDraftPanel({
         onClick={submit}
         type="button"
       >
-        Create Finding
+        Create selected Finding
       </Button>
     </section>
   );
@@ -229,7 +229,7 @@ function NextActions({
 
   return (
     <aside
-      className="rounded-md border border-border-subtle bg-surface-raised p-4"
+      className="sticky top-4 self-start rounded-md border border-border-subtle bg-surface-raised p-4"
       data-testid="survey-result-next-actions"
     >
       <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">

@@ -205,7 +205,7 @@ describe('SurveyResultsSummary', () => {
     expect(row).not.toHaveTextContent(/0 responses|12 responses|response count/i);
   });
 
-  it('renders request access for blocked actions without issuing a create-finding request', async () => {
+  it('renders request access for a blocked create-finding action without issuing a request', async () => {
     const user = userEvent.setup();
     render(
       <SurveyResultsSummary
@@ -213,12 +213,10 @@ describe('SurveyResultsSummary', () => {
         results={{
           ...results,
           next_actions: [
-            { id: 'create_finding', availability: 'allowed', intent: 'open_finding_draft' },
             {
-              id: 'request_task',
+              id: 'create_finding',
               availability: 'blocked_requestable',
-              intent: 'open_task_request_draft',
-              source_finding_id: ids.finding,
+              intent: 'open_finding_draft',
               requestable_permission: {
                 permission: 'finding.manage',
                 managed_system_id: ids.system,
@@ -229,10 +227,6 @@ describe('SurveyResultsSummary', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Create Finding' })).toHaveAttribute(
-      'data-action-id',
-      'create_finding',
-    );
     expect(screen.getByTestId('request-access-finding.manage')).toHaveAttribute(
       'data-managed-system-id',
       ids.system,
@@ -247,7 +241,7 @@ describe('SurveyResultsSummary', () => {
     ]) {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     }
-    expect(screen.queryByText('Request Task')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('survey-create-finding-draft')).not.toBeInTheDocument();
   });
 
   it('posts selected excerpts to the selected response and invalidates results after creation', async () => {
@@ -278,6 +272,8 @@ describe('SurveyResultsSummary', () => {
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
 
     await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    expect(screen.getByText('Create or link Finding')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Create Finding' })).toHaveLength(1);
     await user.click(screen.getByTestId('survey-finding-response-0'));
     await user.click(screen.getByTestId(`survey-finding-excerpt-${ids.finding}`));
     await user.selectOptions(screen.getByTestId('survey-finding-severity'), 'high');
