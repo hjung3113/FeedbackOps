@@ -14,7 +14,9 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
-    "check:boundaries": "node scripts/check-boundaries.mjs"
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "gate:fe-typecheck": "node scripts/gates/fe-typecheck-gate.mjs",
+    "gate:fe-lint": "node scripts/gates/fe-biome-gate.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
