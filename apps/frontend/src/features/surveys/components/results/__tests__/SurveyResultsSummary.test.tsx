@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const { apiClient } = vi.hoisted(() => ({ apiClient: vi.fn() }));
 
@@ -24,6 +24,10 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
 }));
 
 import { SurveyResultsSummary } from '../SurveyResultsSummary';
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 const ids = {
   survey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
