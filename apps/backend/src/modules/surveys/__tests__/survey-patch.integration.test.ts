@@ -105,6 +105,13 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     };
   }
 
+  function bodylessHeaders(cookie: string) {
+    return {
+      cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+      'idempotency-key': randomUUID(),
+    };
+  }
+
   async function createSurvey(): Promise<{ id: string; primary_managed_system_id: string }> {
     const managedSystemId = await insertMsDirectly(
       appHandle,
@@ -114,9 +121,9 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     );
     const survey = await migrateHandle.pool.query<{ id: string }>(
       `insert into survey.surveys (workspace_id,display_id,type,status,title,description,primary_managed_system_id,operator_actor_id,responses_identity_protected,created_by)
-       values ($1,$2,'discovery','draft','Before patch','Existing description',$3,$4,true,$4)
+       values ($1,core.next_display_id($1::uuid, 'survey'),'discovery','draft','Before patch','Existing description',$2,$3,true,$3)
        returning id`,
-      [WORKSPACE_ID, `S-${randomUUID()}`, managedSystemId, adminActorId],
+      [WORKSPACE_ID, managedSystemId, adminActorId],
     );
     const id = survey.rows[0]?.id;
     if (!id) throw new Error('survey seed failed');
@@ -184,7 +191,7 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     const withoutQuestions = await app.inject({
       method: 'POST',
       url: `/surveys/${survey.id}/open`,
-      headers: headers(adminCookie),
+      headers: bodylessHeaders(adminCookie),
     });
     expect(withoutQuestions.statusCode).toBe(422);
     expect(withoutQuestions.json<{ code: string }>().code).toBe('validation.failed');
@@ -192,7 +199,7 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     const opened = await app.inject({
       method: 'POST',
       url: `/surveys/${survey.id}/open`,
-      headers: headers(adminCookie),
+      headers: bodylessHeaders(adminCookie),
     });
     expect(opened.statusCode).toBe(200);
     const openPatch = await patch(adminCookie, survey.id, { title: 'Must not change' });
@@ -231,6 +238,14 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
       appHandle,
       WORKSPACE_ID,
       basicActorId,
+      'survey.read',
+      draft.primary_managed_system_id,
+      adminActorId,
+    );
+    await grantCapability(
+      appHandle,
+      WORKSPACE_ID,
+      basicActorId,
       'survey.manage',
       draft.primary_managed_system_id,
       adminActorId,
@@ -249,6 +264,14 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
       (await getSurvey(draft.id)).json<{ primary_managed_system_id: string }>()
         .primary_managed_system_id,
     ).toBe(draft.primary_managed_system_id);
+  });
+
+  it('AC-8 hides an unreadable survey from PATCH', async () => {
+    const draft = await createSurvey();
+    const hidden = await patch(basicCookie, draft.id, { title: 'Denied' });
+
+    expect(hidden.statusCode).toBe(404);
+    expect(hidden.json<{ code: string }>().code).toBe('not_found.record');
   });
 
   it('AC-5 normalizes a complete reorder', async () => {
