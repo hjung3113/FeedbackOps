@@ -274,12 +274,16 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     assertNoForbidden(body);
     return body;
   }
-  async function approveExcerpt(survey: SeededSurvey, responseId: string) {
+  async function approveExcerpt(
+    survey: SeededSurvey,
+    responseId: string,
+    questionId = survey.questions.text,
+  ) {
     const approval = await migrateHandle.pool.query<{ id: string }>(
       `insert into survey.survey_response_excerpt_approvals
         (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
        values ($1,$2,$3,$4,'approved result excerpt',$5) returning id`,
-      [WORKSPACE_ID, survey.id, responseId, survey.questions.text, adminId],
+      [WORKSPACE_ID, survey.id, responseId, questionId, adminId],
     );
     const id = approval.rows[0]?.id;
     if (!id) throw new Error('excerpt approval seed failed');
@@ -319,7 +323,7 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     expect('response_id' in text.excerpts[0]!).toBe(false);
   });
 
-  it('AC-3 returns requestable finding permission for a personal holder without finding.manage', async () => {
+  it('AC-3 returns requestable finding permission only when the decision permits a request', async () => {
     const survey = await seed(full(5));
     const actor = await dev();
     await grant(actor.id, 'survey.read', survey.msId);
@@ -334,6 +338,18 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
           permission: 'finding.manage',
           managed_system_id: survey.msId,
         },
+      },
+    ]);
+    const deniedActor = await dev();
+    await grant(deniedActor.id, 'survey.read', survey.msId);
+    await grant(deniedActor.id, 'survey.read_personal_responses', survey.msId);
+    await deny(deniedActor.id, 'finding.manage', survey.msId);
+    const deniedBody = parse2xx(await get(survey.id, deniedActor.cookie));
+    expect(deniedBody.next_actions).toEqual([
+      {
+        id: 'create_finding',
+        availability: 'blocked_requestable',
+        intent: 'open_finding_draft',
       },
     ]);
     const externalId = `${SLUG}-user-${randomUUID()}`;
@@ -352,11 +368,15 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
     ]);
   });
 
-  it('AC-4 audits each holder-exposed response/question pair and no non-holder read', async () => {
+  it('AC-4 audits each distinct holder-exposed response/question pair and no non-holder read', async () => {
     const survey = await seed(full(5));
-    const responseId = survey.responseIds[0];
-    if (!responseId) throw new Error('response seed failed');
-    await approveExcerpt(survey, responseId);
+    const firstResponseId = survey.responseIds[0];
+    const secondResponseId = survey.responseIds[1];
+    if (!firstResponseId || !secondResponseId) throw new Error('response seed failed');
+    await approveExcerpt(survey, firstResponseId);
+    await approveExcerpt(survey, firstResponseId);
+    await approveExcerpt(survey, secondResponseId);
+    await approveExcerpt(survey, secondResponseId, survey.questions.rating);
     await grant(adminId, 'survey.read_personal_responses', survey.msId);
     parse2xx(await get(survey.id));
     const holderAudit = await migrateHandle.pool.query<{
@@ -367,21 +387,35 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
       "select subject_type,subject_id,detail from core.audit_log where actor_id=$1 and event_type='survey_response_personal_read'",
       [adminId],
     );
-    expect(holderAudit.rows).toHaveLength(1);
-    expect(holderAudit.rows[0]).toEqual({
-      subject_type: 'survey_response',
-      subject_id: responseId,
-      detail: {
-        survey_id: survey.id,
-        survey_response_id: responseId,
-        question_id: survey.questions.text,
-      },
-    });
-    expect(Object.keys(holderAudit.rows[0]!.detail).sort()).toEqual([
-      'question_id',
-      'survey_id',
-      'survey_response_id',
-    ]);
+    expect(
+      holderAudit.rows
+        .map((row) => [row.subject_id, row.detail.question_id])
+        .sort(([leftResponseId, leftQuestionId], [rightResponseId, rightQuestionId]) =>
+          `${leftResponseId}:${leftQuestionId}`.localeCompare(
+            `${rightResponseId}:${rightQuestionId}`,
+          ),
+        ),
+    ).toEqual(
+      [
+        [firstResponseId, survey.questions.text],
+        [secondResponseId, survey.questions.text],
+        [secondResponseId, survey.questions.rating],
+      ].sort(([leftResponseId, leftQuestionId], [rightResponseId, rightQuestionId]) =>
+        `${leftResponseId}:${leftQuestionId}`.localeCompare(
+          `${rightResponseId}:${rightQuestionId}`,
+        ),
+      ),
+    );
+    for (const row of holderAudit.rows) {
+      expect(row.subject_type).toBe('survey_response');
+      expect(row.detail.survey_id).toBe(survey.id);
+      expect(row.detail.survey_response_id).toBe(row.subject_id);
+      expect(Object.keys(row.detail).sort()).toEqual([
+        'question_id',
+        'survey_id',
+        'survey_response_id',
+      ]);
+    }
     const reader = await dev();
     await grant(reader.id, 'survey.read', survey.msId);
     parse2xx(await get(survey.id, reader.cookie));

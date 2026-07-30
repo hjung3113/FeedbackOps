@@ -195,11 +195,11 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
          left join lateral pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) acl on true
          left join pg_catalog.pg_roles grantee on grantee.oid = acl.grantee
         where n.nspname = 'survey'
-          and p.proname in ('lock_response_evidence_subject', 'read_response_text_candidate', 'read_approved_result_excerpts')
+          and p.proname in ('lock_response_evidence_subject', 'read_response_text_candidate', 'read_approved_result_excerpts', 'read_approved_result_excerpts_personal')
         group by p.proname, owner_role.rolname, p.prosecdef, p.proconfig, p.provolatile
         order by p.proname`,
     );
-    expect(functions).toHaveLength(3);
+    expect(functions).toHaveLength(4);
     for (const fn of functions) {
       expect(fn.owner).toBe('fops_survey_evidence_reader_owner');
       expect(fn.prosecdef).toBe(true);
@@ -210,6 +210,7 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
     expect(functions.map((fn) => [fn.proname, fn.provolatile])).toEqual([
       ['lock_response_evidence_subject', 'v'],
       ['read_approved_result_excerpts', 's'],
+      ['read_approved_result_excerpts_personal', 's'],
       ['read_response_text_candidate', 's'],
     ]);
 

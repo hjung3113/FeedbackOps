@@ -443,7 +443,7 @@ from score thresholds alone. Recommendation reasons must use domain-safe summary
 text and must not expose hidden response detail.
 
 Survey Results returns permission-filtered `next_actions`: `create_finding` is
-always present, and `request_task` is present for each Finding derived from a Survey Response.
+always present. `request_task` for Findings derived from Survey Responses is deferred to issue #239.
 
 `attach_evidence_to_existing_voc` may be returned only when eligible target VOCs
 exist in the actor's effective Managed System scope, the actor may see

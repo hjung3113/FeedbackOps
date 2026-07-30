@@ -901,9 +901,10 @@ export function createSurveysService(deps: SurveysServiceDeps) {
         managed_system_id: survey.primary_managed_system_id,
       };
       const availability = findingManage.allow ? 'allowed' : 'blocked_requestable';
-      const actionPermission = findingManage.allow
-        ? {}
-        : { requestable_permission: requestablePermission };
+      const actionPermission =
+        !findingManage.allow && findingManage.requestable !== null
+          ? { requestable_permission: requestablePermission }
+          : {};
       const result = surveyResultDtoSchema.parse({
         survey_id: survey.id,
         status: survey.status,
