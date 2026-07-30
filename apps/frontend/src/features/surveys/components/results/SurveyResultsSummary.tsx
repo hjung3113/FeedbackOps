@@ -132,10 +132,15 @@ function CreateFindingDraftPanel({
   const selectedGroup = groups.find((group) => group[0]?.response_id === selection.responseId);
 
   useEffect(() => {
-    if (selection.responseId && !selectedGroup) {
-      setSelection({ excerptIds: [] });
-    }
-  }, [selectedGroup, selection.responseId]);
+    setSelection((current) => {
+      if (!current.responseId) return current;
+      if (!selectedGroup) return { excerptIds: [] };
+      const excerptIds = current.excerptIds.filter((id) =>
+        selectedGroup.some((excerpt) => excerpt.id === id),
+      );
+      return excerptIds.length === current.excerptIds.length ? current : { ...current, excerptIds };
+    });
+  }, [selectedGroup]);
 
   function selectResponse(nextResponseId: string) {
     setSelection({ responseId: nextResponseId, excerptIds: [] });

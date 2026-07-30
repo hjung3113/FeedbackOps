@@ -45,6 +45,14 @@ const ids = {
   excerptTwo: '44444444-4444-4444-8444-444444444444',
 };
 
+const refetchIds = {
+  responseA: '55555555-5555-4555-8555-555555555555',
+  responseB: '66666666-6666-4666-8666-666666666666',
+  movedExcerpt: '77777777-7777-4777-8777-777777777777',
+  retainedExcerpt: '88888888-8888-4888-8888-888888888888',
+  otherExcerpt: '99999999-9999-4999-8999-999999999999',
+};
+
 const survey = {
   id: ids.survey,
   display_id: 'SRV-21',
@@ -396,6 +404,232 @@ describe('SurveyResultsSummary', () => {
         { body: { severity: 'medium', approved_excerpt_ids: [ids.finding] } },
       ),
     );
+  });
+
+  it('removes a selected excerpt that moves from response A to response B after a refetch', async () => {
+    const user = userEvent.setup();
+    apiClient.mockResolvedValue({ data: { id: ids.finding } });
+    const holderResults = {
+      ...results,
+      questions: results.questions.map((question) =>
+        question.kind === 'text'
+          ? {
+              ...question,
+              excerpts: [
+                {
+                  id: refetchIds.movedExcerpt,
+                  text: '이동한 발췌',
+                  response_id: refetchIds.responseA,
+                },
+                {
+                  id: refetchIds.retainedExcerpt,
+                  text: '남은 발췌',
+                  response_id: refetchIds.responseA,
+                },
+                {
+                  id: refetchIds.otherExcerpt,
+                  text: '다른 응답 발췌',
+                  response_id: refetchIds.responseB,
+                },
+              ],
+            }
+          : question,
+      ),
+    };
+    const { queryClient, rerender } = renderWithClient(
+      <SurveyResultsSummary survey={survey} results={holderResults} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByTestId('survey-finding-response-0'));
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${refetchIds.movedExcerpt}`));
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${refetchIds.retainedExcerpt}`));
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <SurveyResultsSummary
+          survey={survey}
+          results={{
+            ...holderResults,
+            questions: holderResults.questions.map((question) =>
+              question.kind === 'text'
+                ? {
+                    ...question,
+                    excerpts: [
+                      {
+                        id: refetchIds.retainedExcerpt,
+                        text: '남은 발췌',
+                        response_id: refetchIds.responseA,
+                      },
+                      {
+                        id: refetchIds.otherExcerpt,
+                        text: '다른 응답 발췌',
+                        response_id: refetchIds.responseB,
+                      },
+                      {
+                        id: refetchIds.movedExcerpt,
+                        text: '이동한 발췌',
+                        response_id: refetchIds.responseB,
+                      },
+                    ],
+                  }
+                : question,
+            ),
+          }}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      screen.getByTestId(`survey-finding-excerpt-${refetchIds.retainedExcerpt}`),
+    ).toBeChecked();
+    await user.click(screen.getByTestId('survey-create-finding-submit'));
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        `/survey-responses/${refetchIds.responseA}/create-finding`,
+        {
+          body: { severity: 'medium', approved_excerpt_ids: [refetchIds.retainedExcerpt] },
+        },
+      ),
+    );
+  });
+
+  it('clears a selected excerpt that is absent from every response after a refetch', async () => {
+    const user = userEvent.setup();
+    const holderResults = {
+      ...results,
+      questions: results.questions.map((question) =>
+        question.kind === 'text'
+          ? {
+              ...question,
+              excerpts: [
+                {
+                  id: refetchIds.movedExcerpt,
+                  text: '사라질 발췌',
+                  response_id: refetchIds.responseA,
+                },
+                {
+                  id: refetchIds.retainedExcerpt,
+                  text: '선택하지 않은 발췌',
+                  response_id: refetchIds.responseA,
+                },
+                {
+                  id: refetchIds.otherExcerpt,
+                  text: '다른 응답 발췌',
+                  response_id: refetchIds.responseB,
+                },
+              ],
+            }
+          : question,
+      ),
+    };
+    const { queryClient, rerender } = renderWithClient(
+      <SurveyResultsSummary survey={survey} results={holderResults} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByTestId('survey-finding-response-0'));
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${refetchIds.movedExcerpt}`));
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <SurveyResultsSummary
+          survey={survey}
+          results={{
+            ...holderResults,
+            questions: holderResults.questions.map((question) =>
+              question.kind === 'text'
+                ? {
+                    ...question,
+                    excerpts: [
+                      {
+                        id: refetchIds.retainedExcerpt,
+                        text: '선택하지 않은 발췌',
+                        response_id: refetchIds.responseA,
+                      },
+                      {
+                        id: refetchIds.otherExcerpt,
+                        text: '다른 응답 발췌',
+                        response_id: refetchIds.responseB,
+                      },
+                    ],
+                  }
+                : question,
+            ),
+          }}
+        />
+      </QueryClientProvider>,
+    );
+
+    const submit = screen.getByTestId('survey-create-finding-submit');
+    expect(submit).toBeDisabled();
+    await user.click(submit);
+    expect(apiClient).not.toHaveBeenCalled();
+  });
+
+  it('keeps the pre-refetch request body when only response group order reverses', async () => {
+    const user = userEvent.setup();
+    apiClient.mockResolvedValue({ data: { id: ids.finding } });
+    const holderResults = {
+      ...results,
+      questions: results.questions.map((question) =>
+        question.kind === 'text'
+          ? {
+              ...question,
+              excerpts: [
+                {
+                  id: refetchIds.retainedExcerpt,
+                  text: '첫 번째 응답 발췌',
+                  response_id: refetchIds.responseA,
+                },
+                {
+                  id: refetchIds.otherExcerpt,
+                  text: '두 번째 응답 발췌',
+                  response_id: refetchIds.responseB,
+                },
+              ],
+            }
+          : question,
+      ),
+    };
+    const { queryClient, rerender } = renderWithClient(
+      <SurveyResultsSummary survey={survey} results={holderResults} />,
+    );
+    const request = [
+      'POST',
+      `/survey-responses/${refetchIds.responseA}/create-finding`,
+      { body: { severity: 'medium', approved_excerpt_ids: [refetchIds.retainedExcerpt] } },
+    ] as const;
+
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+    await user.click(screen.getByTestId('survey-finding-response-0'));
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${refetchIds.retainedExcerpt}`));
+    await user.click(screen.getByTestId('survey-create-finding-submit'));
+    await waitFor(() => expect(apiClient).toHaveBeenCalledWith(...request));
+    apiClient.mockClear();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <SurveyResultsSummary
+          survey={survey}
+          results={{
+            ...holderResults,
+            questions: holderResults.questions.map((question) =>
+              question.kind === 'text'
+                ? { ...question, excerpts: [...question.excerpts].reverse() }
+                : question,
+            ),
+          }}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      screen.getByTestId(`survey-finding-excerpt-${refetchIds.retainedExcerpt}`),
+    ).toBeChecked();
+    await user.click(screen.getByTestId('survey-create-finding-submit'));
+    await waitFor(() => expect(apiClient).toHaveBeenCalledWith(...request));
   });
 
   it('shows a loading affordance while creating a Finding', async () => {
