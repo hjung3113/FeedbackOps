@@ -256,9 +256,10 @@ function NextActions({
           if (action.id === 'create_finding') {
             const unavailable = groups.length === 0;
             return (
-              <div className="space-y-1" data-action-id={action.id} key={action.id}>
+              <div className="space-y-1" data-testid="survey-result-action-create-finding" key={action.id}>
                 <Button
                   className="w-full justify-start text-left"
+                  data-action-id={action.id}
                   disabled={unavailable}
                   onClick={() => setDraftOpen(true)}
                   type="button"
