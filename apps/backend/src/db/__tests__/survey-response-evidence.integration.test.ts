@@ -269,6 +269,7 @@ describe.skipIf(!runIntegration)('Survey response evidence access migrations 003
       'survey_response_excerpt_approvals.id.SELECT',
       'survey_response_excerpt_approvals.question_id.SELECT',
       'survey_response_excerpt_approvals.redacted_excerpt.SELECT',
+      'survey_response_excerpt_approvals.response_id.SELECT',
       'survey_response_excerpt_approvals.revoked_at.SELECT',
       'survey_response_excerpt_approvals.survey_id.SELECT',
       'survey_response_excerpt_approvals.workspace_id.SELECT',
