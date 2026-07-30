@@ -702,7 +702,19 @@ describe.skipIf(!runIntegration)(
       expect(after.next_actions).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: "create_finding" })]),
       );
-      expect(after.next_actions.map((action) => action.id)).not.toContain("request_task");
+      expect(after.next_actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "request_task",
+            availability: "blocked_requestable",
+            source_finding_id: findingId,
+            requestable_permission: {
+              permission: "finding.manage",
+              managed_system_id: source.msId,
+            },
+          }),
+        ]),
+      );
       const targetMs = await insertMsDirectly(
         migrateHandle,
         WORKSPACE_ID,
