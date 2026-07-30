@@ -16,6 +16,7 @@ const ids = {
   rating: '22222222-2222-4222-8222-222222222222',
   text: '33333333-3333-4333-8333-333333333333',
   excerpt: '44444444-4444-4444-8444-444444444444',
+  response: '66666666-6666-4666-8666-666666666666',
   finding: '55555555-5555-4555-8555-555555555555',
 };
 
@@ -27,6 +28,7 @@ export const surveyResultsVisualScenarios = z
       'no-permission',
       'poor-outcome',
       'empty-next-actions',
+      'finding-draft',
     ]),
   )
   .parse([
@@ -35,6 +37,7 @@ export const surveyResultsVisualScenarios = z
     'no-permission',
     'poor-outcome',
     'empty-next-actions',
+    'finding-draft',
   ]);
 export type SurveyResultsVisualScenario = (typeof surveyResultsVisualScenarios)[number];
 
@@ -61,7 +64,13 @@ export function surveyResultsFixtureFor(scenario: SurveyResultsVisualScenario) {
       kind: 'text' as const,
       answer_count: 1,
       distribution: null,
-      excerpts: [{ id: ids.excerpt, text: '내보내기가 너무 느립니다.' }],
+      excerpts: [
+        {
+          id: ids.excerpt,
+          text: '내보내기가 너무 느립니다.',
+          response_id: ids.response,
+        },
+      ],
     },
   ];
   if (scenario === 'threshold-suppressed') {

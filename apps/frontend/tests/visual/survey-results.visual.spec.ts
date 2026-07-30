@@ -24,6 +24,9 @@ test.describe('/surveys/:surveyId/results visual harness', () => {
         role: scenario === 'no-permission' ? 'user' : 'admin',
       });
       await page.goto(`/surveys/${surveyResultVisualFixture.id}/results`);
+      if (scenario === 'finding-draft') {
+        await page.getByRole('button', { name: 'Create Finding' }).click();
+      }
       const target =
         scenario === 'no-permission'
           ? page.getByText('Survey Result')
