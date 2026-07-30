@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '@fops/ui';
 import { FilePlus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useCreateFindingFromSurveyResponse } from '../../hooks/useCreateFindingFromSurveyResponse';
 import type { Survey } from '../../types';
 
@@ -130,17 +130,9 @@ function CreateFindingDraftPanel({
   const [severity, setSeverity] = useState<FindingSeverity>('medium');
   const mutation = useCreateFindingFromSurveyResponse(surveyId);
   const selectedGroup = groups.find((group) => group[0]?.response_id === selection.responseId);
-
-  useEffect(() => {
-    setSelection((current) => {
-      if (!current.responseId) return current;
-      if (!selectedGroup) return { excerptIds: [] };
-      const excerptIds = current.excerptIds.filter((id) =>
-        selectedGroup.some((excerpt) => excerpt.id === id),
-      );
-      return excerptIds.length === current.excerptIds.length ? current : { ...current, excerptIds };
-    });
-  }, [selectedGroup]);
+  const selectedExcerptIds = selection.excerptIds.filter((id) =>
+    selectedGroup?.some((excerpt) => excerpt.id === id),
+  );
 
   function selectResponse(nextResponseId: string) {
     setSelection({ responseId: nextResponseId, excerptIds: [] });
@@ -156,12 +148,12 @@ function CreateFindingDraftPanel({
   }
 
   function submit() {
-    if (!selectedGroup || selection.excerptIds.length === 0) return;
+    if (!selectedGroup || selectedExcerptIds.length === 0) return;
     const first = selectedGroup[0];
     if (!first) return;
     mutation.mutate({
       responseId: first.response_id,
-      body: { severity, approved_excerpt_ids: selection.excerptIds },
+      body: { severity, approved_excerpt_ids: selectedExcerptIds },
     });
   }
 
@@ -204,7 +196,7 @@ function CreateFindingDraftPanel({
           {selectedGroup.map((excerpt) => (
             <label className="flex gap-2 text-sm text-text-secondary" key={excerpt.id}>
               <Checkbox
-                checked={selection.excerptIds.includes(excerpt.id)}
+                checked={selectedExcerptIds.includes(excerpt.id)}
                 data-testid={`survey-finding-excerpt-${excerpt.id}`}
                 onCheckedChange={(checked) => setExcerptSelected(excerpt.id, checked === true)}
               />
@@ -238,7 +230,7 @@ function CreateFindingDraftPanel({
       )}
       <Button
         data-testid="survey-create-finding-submit"
-        disabled={!selectedGroup || selection.excerptIds.length === 0}
+        disabled={!selectedGroup || selectedExcerptIds.length === 0}
         loading={mutation.isPending}
         onClick={submit}
         type="button"

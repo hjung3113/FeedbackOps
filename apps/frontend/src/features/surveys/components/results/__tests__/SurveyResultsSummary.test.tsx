@@ -483,7 +483,9 @@ describe('SurveyResultsSummary', () => {
     expect(
       screen.getByTestId(`survey-finding-excerpt-${refetchIds.retainedExcerpt}`),
     ).toBeChecked();
-    await user.click(screen.getByTestId('survey-create-finding-submit'));
+    const submit = screen.getByTestId('survey-create-finding-submit');
+    expect(submit).not.toBeDisabled();
+    await user.click(submit);
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
         'POST',
