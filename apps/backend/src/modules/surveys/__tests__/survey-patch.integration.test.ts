@@ -320,21 +320,31 @@ describe.skipIf(!runIntegration)('survey scalar patch and question reorder (#233
     }
   });
 
-  it('AC-7 writes exactly one IDs-only audit event for each successful mutation', async () => {
+  it('AC-7a writes exactly one IDs-only audit event for a successful scalar patch', async () => {
+    const survey = await createSurvey();
+    expect((await patch(adminCookie, survey.id, { title: 'After patch' })).statusCode).toBe(200);
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
+      `select detail from core.audit_log where subject_id = $1 and event_type = 'survey_updated'`,
+      [survey.id],
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(Object.keys(audit.rows[0]?.detail ?? {}).sort()).toEqual(['survey_id']);
+    expect(audit.rows[0]?.detail).not.toHaveProperty('title');
+    expect(audit.rows[0]?.detail).not.toHaveProperty('description');
+  });
+
+  it('AC-7b writes exactly one IDs-only audit event for a successful reorder', async () => {
     const survey = await createSurvey();
     const q1 = await addQuestion(survey.id, 'One');
     const q2 = await addQuestion(survey.id, 'Two');
-    expect((await patch(adminCookie, survey.id, { title: 'After patch' })).statusCode).toBe(200);
     expect((await reorder(survey.id, [q2, q1])).statusCode).toBe(200);
-    for (const eventType of ['survey_updated', 'survey_questions_reordered']) {
-      const audit = await appHandle.pool.query<{ detail: Record<string, unknown> }>(
-        `select detail from core.audit_log where subject_id = $1 and event_type = $2`,
-        [survey.id, eventType],
-      );
-      expect(audit.rows).toHaveLength(1);
-      expect(Object.keys(audit.rows[0]?.detail ?? {}).sort()).toEqual(['survey_id']);
-      expect(audit.rows[0]?.detail).not.toHaveProperty('title');
-      expect(audit.rows[0]?.detail).not.toHaveProperty('description');
-    }
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, unknown> }>(
+      `select detail from core.audit_log where subject_id = $1 and event_type = 'survey_questions_reordered'`,
+      [survey.id],
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(Object.keys(audit.rows[0]?.detail ?? {}).sort()).toEqual(['survey_id']);
+    expect(audit.rows[0]?.detail).not.toHaveProperty('title');
+    expect(audit.rows[0]?.detail).not.toHaveProperty('description');
   });
 });
