@@ -67,6 +67,43 @@ export async function insertApprovedExcerpt(
   return row;
 }
 
+export async function revokeApprovedExcerpt(
+  tx: Tx,
+  input: { workspaceId: string; responseId: string; approvedExcerptId: string },
+): Promise<{
+  approved_excerpt_id: string;
+  question_id: string;
+  redacted_excerpt: string;
+  revoked_now: boolean;
+} | null> {
+  const result = await tx.execute<{
+    approved_excerpt_id: string;
+    question_id: string;
+    redacted_excerpt: string;
+    revoked_now: boolean;
+  }>(sql`
+    with revoked as (
+      update survey.survey_response_excerpt_approvals
+         set revoked_at = now()
+       where workspace_id = ${input.workspaceId}
+         and response_id = ${input.responseId}
+         and id = ${input.approvedExcerptId}
+         and revoked_at is null
+      returning id, question_id, redacted_excerpt
+    )
+    select id as approved_excerpt_id, question_id, redacted_excerpt, true as revoked_now
+      from revoked
+    union all
+    select a.id as approved_excerpt_id, a.question_id, a.redacted_excerpt, false as revoked_now
+      from survey.survey_response_excerpt_approvals a
+     where a.workspace_id = ${input.workspaceId}
+       and a.response_id = ${input.responseId}
+       and a.id = ${input.approvedExcerptId}
+       and not exists (select 1 from revoked)
+  `);
+  return result.rows[0] ?? null;
+}
+
 export async function readApprovedResultExcerpts(
   tx: Tx,
   workspaceId: string,

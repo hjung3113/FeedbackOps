@@ -170,6 +170,21 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       return reply.code(r.status).send(r.body);
     },
   );
+  app.delete(
+    '/survey-responses/:id/approved-excerpts/:approved_excerpt_id',
+    { preHandler: pre, ...rate('mutation') },
+    async (req, reply) => {
+      const { id, approved_excerpt_id } = req.params as {
+        id: string;
+        approved_excerpt_id: string;
+      };
+      if (!validId(id) || !validId(approved_excerpt_id))
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      return reply.send(
+        await opts.surveysService.revokeEvidenceExcerpt(actor(req), id, approved_excerpt_id),
+      );
+    },
+  );
   app.post(
     '/survey-responses/:id/evidence-excerpt-candidates',
     { preHandler: pre, ...rate('mutation') },
