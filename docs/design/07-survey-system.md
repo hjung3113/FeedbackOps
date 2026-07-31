@@ -147,7 +147,7 @@ Priority: SHOULD
 Acceptance Criteria:
 
 ```text
-- Result screen has Create Finding, Link Finding, and Request Task CTAs when the actor has permission and the workflow is enabled.
+- Result screen has Create Finding and Request Task CTAs when the actor has permission and the workflow is enabled; Link Finding is deferred out of MVP scope (ADR-0037).
 - Result and Response screens must not show Create VOC.
 - Survey Response can become Evidence Highlight or Finding evidence; it must not become a new VOC.
 - Attach to Existing VOC may be allowed only as evidence attachment to an already existing VOC, not as Survey Response to VOC conversion.
@@ -185,7 +185,7 @@ Layout:
   subtraction attacks.
 - Add Evidence Highlight CTA
 - Create Finding CTA
-- Link Finding CTA
+- Link Finding CTA — deferred out of MVP scope (ADR-0037).
 - Request Task CTA
 - Optional Attach to Existing VOC action when relation is useful and permission allows
 ```
