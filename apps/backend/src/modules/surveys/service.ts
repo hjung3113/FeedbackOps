@@ -37,6 +37,7 @@ import {
   readApprovedResultExcerptsPersonal,
   readResponseTextCandidate,
   readSurveyQuestionLabel,
+  revokeApprovedExcerpt,
 } from './repo-evidence.js';
 import {
   type QuestionKind,
@@ -1320,6 +1321,49 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       return approvedExcerptDtoSchema.parse(approved);
     });
   }
+  async function revokeEvidenceExcerpt(
+    actor: SurveysActor,
+    responseId: string,
+    approvedExcerptId: string,
+  ): Promise<ApprovedExcerptDto> {
+    return deps.db.transaction(async (tx) => {
+      const { subject } = await resolveSurveyResponseEvidenceAccess(
+        deps,
+        tx,
+        actor,
+        responseId,
+        'approve_excerpt',
+      );
+      const revoked = await revokeApprovedExcerpt(tx, {
+        workspaceId: actor.workspace_id,
+        responseId,
+        approvedExcerptId,
+      });
+      if (!revoked)
+        throw new HttpError(
+          'validation.failed',
+          'approved excerpt does not belong to survey response',
+        );
+      const { revoked_now, ...approvedExcerpt } = revoked;
+      if (revoked_now) {
+        await deps.auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: 'survey_response_excerpt_revoked',
+          subject_type: 'survey_response_excerpt_approval',
+          subject_id: approvedExcerptId,
+          summary: 'Survey response excerpt revoked',
+          detail: {
+            survey_id: subject.survey_id,
+            survey_response_id: responseId,
+            question_id: revoked.question_id,
+            approved_excerpt_id: approvedExcerptId,
+          },
+        });
+      }
+      return approvedExcerptDtoSchema.parse(approvedExcerpt);
+    });
+  }
   async function submitResponse(a: {
     actor: SurveysActor;
     surveyId: string;
@@ -1409,6 +1453,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     getSurveyResults,
     readEvidenceExcerptCandidate,
     approveEvidenceExcerpt,
+    revokeEvidenceExcerpt,
     listSurvey,
     submitResponse,
   };

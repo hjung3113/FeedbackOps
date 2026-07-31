@@ -149,3 +149,17 @@ export const surveyResponseExcerptApprovedDetailSchema = z
 export type SurveyResponseExcerptApprovedDetail = z.infer<
   typeof surveyResponseExcerptApprovedDetailSchema
 >;
+
+// ── survey_response_excerpt_revoked ──────────────────────────────────────
+// Revocation identifies the approval record but intentionally omits its text.
+export const surveyResponseExcerptRevokedDetailSchema = z
+  .object({
+    survey_id: uuid(),
+    survey_response_id: uuid(),
+    question_id: uuid(),
+    approved_excerpt_id: uuid(),
+  })
+  .strict();
+export type SurveyResponseExcerptRevokedDetail = z.infer<
+  typeof surveyResponseExcerptRevokedDetailSchema
+>;

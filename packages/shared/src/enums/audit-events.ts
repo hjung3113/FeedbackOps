@@ -24,6 +24,7 @@ import {
   surveyQuestionDeletedDetailSchema,
   surveyQuestionUpdatedDetailSchema,
   surveyResponseExcerptApprovedDetailSchema,
+  surveyResponseExcerptRevokedDetailSchema,
   surveyResponsePersonalReadDetailSchema,
   surveyResponseSubmittedDetailSchema,
   surveyQuestionsReorderedDetailSchema,
@@ -126,6 +127,7 @@ export const AUDIT_EVENT_TYPES = [
   // Slice 8 #187: audited personal candidate read and approval lifecycle.
   'survey_response_personal_read',
   'survey_response_excerpt_approved',
+  'survey_response_excerpt_revoked',
   'finding_created_from_survey_response',
   // Slice 9 #195: workspace-level policy singleton mutation.
   'workspace_settings_updated',
@@ -831,6 +833,7 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   survey_response_submitted: surveyResponseSubmittedDetailSchema,
   survey_response_personal_read: surveyResponsePersonalReadDetailSchema,
   survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
+  survey_response_excerpt_revoked: surveyResponseExcerptRevokedDetailSchema,
   finding_created_from_survey_response: findingCreatedFromSurveyResponseDetailSchema,
   workspace_settings_updated: workspaceSettingsUpdatedDetailSchema,
   // #168 step 4.
