@@ -22,7 +22,7 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 ## Rules
 
 - Keep builder and result views simple for MVP.
-- Result summaries should expose Create Finding, Link Finding, and Request Task where permitted.
+- Result summaries should expose Create Finding and Request Task where permitted; Link Finding is deferred out of MVP scope (ADR-0037).
 - Permission-limited responses must show approved summaries or request-access paths.
 - Preserve Survey context during linked object creation.
 

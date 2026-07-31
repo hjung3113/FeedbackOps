@@ -159,7 +159,7 @@ Acceptance Criteria:
 ```text
 - VOC Detail offers Create Finding / Request Task when appropriate.
 - Finding Detail offers Request Task / Link Existing Task; Create Milestone is future cross-system behavior when enabled.
-- Survey Result offers Create Finding / Link Finding / Request Task.
+- Survey Result offers Create Finding / Request Task; Link Finding is deferred out of MVP scope (ADR-0037).
 - Home and Integration queues deep-link to the next action.
 ```
 
