@@ -29,6 +29,15 @@ function isAuthorizationAbsence(error: unknown): error is HttpError {
 
 export function createNavCountsService(deps: NavCountsDeps) {
   async function getCounts(actor: NavActor, managedSystemId?: string): Promise<Record<string, number>> {
+    async function authorizationAbsent<T>(read: () => Promise<T>): Promise<T | undefined> {
+      try {
+        return await read();
+      } catch (error) {
+        if (isAuthorizationAbsence(error)) return undefined;
+        throw error;
+      }
+    }
+
     const query = (view: CountVocsQuery['view'], tab?: CountVocsQuery['tab']): CountVocsQuery => ({
       view,
       ...(managedSystemId !== undefined ? { managed_system_id: managedSystemId } : {}),
@@ -40,28 +49,24 @@ export function createNavCountsService(deps: NavCountsDeps) {
       ['voc.inbox', 'inbox'],
       ['voc.triage', 'triage'],
       ['voc.my', 'my'],
-      ['voc.tab.high', 'inbox', 'high'],
-      ['voc.tab.unassigned', 'inbox', 'unassigned'],
-      ['voc.tab.no-link', 'inbox', 'no-link'],
+      ['voc.tab.high', 'triage', 'high'],
+      ['voc.tab.unassigned', 'triage', 'unassigned'],
+      ['voc.tab.no-link', 'triage', 'no-link'],
     ] as const;
     const vocCounts = Object.fromEntries((await Promise.all(vocCountEntries.map(async ([key, view, tab]) => {
-      try {
-        return [key, await count(view, tab)] as const;
-      } catch (error) {
-        if (isAuthorizationAbsence(error)) return undefined;
-        throw error;
-      }
+      const value = await authorizationAbsent(() => count(view, tab));
+      return value === undefined ? undefined : [key, value] as const;
     }))).flatMap((entry) => entry === undefined ? [] : [entry]));
     const [findings, surveys, vocClusters] = await Promise.all([
-      deps.findingsService.listFindings({ actor, ...(managedSystemId ? { managedSystemId } : {}) }),
-      deps.surveysService.listSurvey(actor, managedSystemId),
-      deps.vocClustersService.listClusters({ actor, ...(managedSystemId ? { managedSystemId } : {}) }),
+      authorizationAbsent(() => deps.findingsService.listFindings({ actor, ...(managedSystemId ? { managedSystemId } : {}) })),
+      authorizationAbsent(() => deps.surveysService.listSurvey(actor, managedSystemId)),
+      authorizationAbsent(() => deps.vocClustersService.listClusters({ actor, ...(managedSystemId ? { managedSystemId } : {}) })),
     ]);
     return {
       ...vocCounts,
-      'findings.all': findings.items.length,
-      'surveys.all': surveys.length,
-      'voc.clusters': vocClusters.items.length,
+      ...(findings === undefined ? {} : { 'findings.all': findings.items.length }),
+      ...(surveys === undefined ? {} : { 'surveys.all': surveys.length }),
+      ...(vocClusters === undefined ? {} : { 'voc.clusters': vocClusters.items.length }),
     };
   }
   return { getCounts };

@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+export const DASHBOARD_UNASSIGNED_VOC_ROUTE = '/vocs?view=inbox&tab=unassigned';
+export const DASHBOARD_HIGH_SEVERITY_UNLINKED_ROUTE = '/vocs?view=inbox&tab=high-no-link';
+export const DASHBOARD_ACTIONABLE_FINDINGS_ROUTE = '/findings';
+export const DASHBOARD_RELEASED_TASKS_ROUTE = '/tasks?view=board';
+export const DASHBOARD_OUTCOME_SURVEYS_ROUTE = '/surveys';
+export const DASHBOARD_PERMISSION_REQUESTS_ROUTE = '/admin/permissions/requests';
+
 const dashboardActionSchema = z.object({
   label: z.string(),
   route: z.string(),

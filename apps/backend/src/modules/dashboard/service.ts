@@ -1,4 +1,12 @@
-import type { DashboardSummary } from '@fops/shared';
+import {
+  DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
+  DASHBOARD_HIGH_SEVERITY_UNLINKED_ROUTE,
+  DASHBOARD_OUTCOME_SURVEYS_ROUTE,
+  DASHBOARD_PERMISSION_REQUESTS_ROUTE,
+  DASHBOARD_RELEASED_TASKS_ROUTE,
+  DASHBOARD_UNASSIGNED_VOC_ROUTE,
+  type DashboardSummary,
+} from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
@@ -90,10 +98,10 @@ export function createDashboardService(deps: DashboardDeps) {
     const [openVoc, unassigned, highUnlinked] = await Promise.all([voc(), voc('unassigned'), voc('high-no-link')]);
     if (openVoc !== undefined) kpis.open_voc = openVoc;
     if (unassigned !== undefined) queues.push({ id: 'unassigned-voc', severity: 'urgent', count: unassigned,
-      next_action: { label: 'Review VOCs', route: '/vocs?view=inbox&tab=unassigned', intent: 'triage' },
-      secondary_action: { label: 'Bulk assign', route: '/vocs?view=inbox&tab=unassigned', intent: 'bulk_assign' } });
+      next_action: { label: 'Review VOCs', route: DASHBOARD_UNASSIGNED_VOC_ROUTE, intent: 'triage' },
+      secondary_action: { label: 'Bulk assign', route: DASHBOARD_UNASSIGNED_VOC_ROUTE, intent: 'bulk_assign' } });
     if (highUnlinked !== undefined) queues.push({ id: 'high-severity-unlinked', severity: 'urgent', count: highUnlinked,
-      next_action: { label: 'Review high severity VOCs', route: '/vocs?view=inbox&tab=high-no-link', intent: 'triage' }, secondary_action: null });
+      next_action: { label: 'Review high severity VOCs', route: DASHBOARD_HIGH_SEVERITY_UNLINKED_ROUTE, intent: 'triage' }, secondary_action: null });
 
     if (findingScope !== undefined && (findingScope.kind === 'all' || findingScope.managedSystemIds.length > 0)) {
       const [active, noExecution] = await Promise.all([
@@ -102,7 +110,7 @@ export function createDashboardService(deps: DashboardDeps) {
       ]);
       kpis.active_finding = active;
       queues.push({ id: 'actionable-finding-no-execution', severity: 'warn', count: noExecution,
-        next_action: { label: 'Review Findings', route: '/findings?status=active', intent: 'plan_execution' }, secondary_action: null });
+        next_action: { label: 'Review Findings', route: DASHBOARD_ACTIONABLE_FINDINGS_ROUTE, intent: 'plan_execution' }, secondary_action: null });
       const executed = await repo.countActiveFindingsWithExecution(deps.db, actor.workspace_id, findingScope, selectedManagedSystemId);
       coverage.push({ id: 'finding-execution', value: executed, total: active, percent: percent(executed, active), status: coverageStatus(percent(executed, active)) });
     }
@@ -118,7 +126,7 @@ export function createDashboardService(deps: DashboardDeps) {
         selectedManagedSystemId,
       );
       queues.push({ id: 'released-task-unresolved-voc', severity: 'warn', count: unresolved,
-        next_action: { label: 'Review released Tasks', route: '/tasks?status=released', intent: 'request_reporter_update' }, secondary_action: null });
+        next_action: { label: 'Review released Tasks', route: DASHBOARD_RELEASED_TASKS_ROUTE, intent: 'request_reporter_update' }, secondary_action: null });
       const releasedUpdate = await repo.countReleasedTasksWithPublicUpdate(
         deps.db,
         actor.workspace_id,
@@ -137,14 +145,14 @@ export function createDashboardService(deps: DashboardDeps) {
     if (surveyScopeForDashboard !== undefined && canSeeSurveyQueue) {
       const gaps = await repo.countSurveyGaps(deps.db, actor.workspace_id, surveyScopeForDashboard, selectedManagedSystemId);
       queues.push({ id: 'bad-outcome-no-followup', severity: 'urgent', count: gaps,
-        next_action: { label: 'Review outcome surveys', route: '/surveys?type=outcome', intent: 'create_followup' }, secondary_action: null });
+        next_action: { label: 'Review outcome surveys', route: DASHBOARD_OUTCOME_SURVEYS_ROUTE, intent: 'create_followup' }, secondary_action: null });
     }
 
     const permissionRequests = await authorizationAbsent(() => deps.requestService.listAllActive(actor));
     if (permissionRequests !== undefined) {
       kpis.pending_request = (kpis.pending_request ?? 0) + permissionRequests.count;
       queues.push({ id: 'permission-requests-pending', severity: 'info', count: permissionRequests.count,
-        next_action: { label: 'Open Requests', route: '/admin/permission-requests', intent: 'review_permissions' }, secondary_action: null });
+        next_action: { label: 'Open Requests', route: DASHBOARD_PERMISSION_REQUESTS_ROUTE, intent: 'review_permissions' }, secondary_action: null });
     }
 
     if (openVoc !== undefined) {

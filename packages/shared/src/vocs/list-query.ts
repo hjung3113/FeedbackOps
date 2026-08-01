@@ -26,6 +26,16 @@ function commaListOf<T extends z.ZodTypeAny>(itemSchema: T) {
     );
 }
 
+export const vocTabEnumSchema = z.enum([
+  'untriaged',
+  'high',
+  'unassigned',
+  'similar',
+  'no-link',
+  'high-no-link',
+  'waiting',
+]);
+
 export const listVocsQuerySchema = z.object({
   // view is required — the route determines which data set to return.
   view: z.enum(['inbox', 'my', 'triage']),
@@ -34,9 +44,7 @@ export const listVocsQuerySchema = z.object({
   managed_system_id: z
     .union([z.string().uuid(), z.literal('all')])
     .optional(),
-  tab: z
-    .enum(['untriaged', 'high', 'unassigned', 'similar', 'no-link', 'high-no-link', 'waiting'])
-    .optional(),
+  tab: vocTabEnumSchema.optional(),
   // Dot-key filter fields — Fastify query params are flat strings.
   'filter.severity': commaListOf(severityEnumSchema).optional(),
   'filter.reporter_facing_status': commaListOf(reporterFacingStatusEnumSchema).optional(),
