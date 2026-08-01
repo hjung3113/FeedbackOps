@@ -29,6 +29,7 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
   let migrateHandle: DbHandle;
   let app: FastifyInstance;
   let adminCookie: string;
+  let userCookie: string;
   let adminActorId: string;
   let reporterId: string;
 
@@ -45,6 +46,7 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
     adminCookie = await loginAs(app, 'mock-admin-1');
+    userCookie = await loginAs(app, 'mock-user-1');
     const actors = await dbHandle.pool.query<{ id: string }>(
       `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`, [WORKSPACE_ID],
     );
@@ -88,7 +90,7 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
     for (const [url, key] of [
       ['/vocs?view=inbox', 'voc.inbox'],
       ['/vocs?view=triage', 'voc.triage'],
-      ['/vocs?view=inbox&tab=high', 'voc.tab.high'],
+      ['/vocs?view=triage&tab=high', 'voc.tab.high'],
     ] as const) {
       const list = await app.inject({ method: 'GET', url, headers: headers(adminCookie) });
       expect(list.statusCode).toBe(200);
@@ -164,6 +166,17 @@ describe.skipIf(!runIntegration)('GET /nav/counts (#143)', () => {
     expect(result.body.counts['findings.all']).toBe(1);
     expect(result.body.counts['surveys.all']).toBe(1);
     expect(result.body.counts['voc.clusters']).toBe(1);
+  });
+
+  it('omits inaccessible domain counts while preserving the User VOC count', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${PREFIX}-user-counts`, 'User counts');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, ms, reporterId, 'visible to its reporter');
+
+    const result = await counts(userCookie);
+
+    expect(result.response.statusCode).toBe(200);
+    expect(result.body.counts['voc.my']).toBe(1);
+    expect(Object.hasOwn(result.body.counts, 'findings.all')).toBe(false);
   });
 
   it('surfaces an unexpected VOC count failure as an error response', async () => {

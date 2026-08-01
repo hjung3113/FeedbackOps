@@ -254,10 +254,10 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(body.kpis.coverage_percent).toBe(coverage(body, 'voc-task')?.percent);
     expect(queue(body, 'unassigned-voc')).toMatchObject({ severity: 'urgent', next_action: { route: '/vocs?view=inbox&tab=unassigned' } });
     expect(queue(body, 'high-severity-unlinked')).toMatchObject({ severity: 'urgent', next_action: { route: '/vocs?view=inbox&tab=high-no-link' } });
-    expect(queue(body, 'actionable-finding-no-execution')).toMatchObject({ severity: 'warn', next_action: { route: '/findings?status=active' } });
-    expect(queue(body, 'released-task-unresolved-voc')).toMatchObject({ severity: 'warn', next_action: { route: '/tasks?status=released' } });
-    expect(queue(body, 'bad-outcome-no-followup')).toMatchObject({ severity: 'urgent', next_action: { route: '/surveys?type=outcome' } });
-    expect(queue(body, 'permission-requests-pending')).toMatchObject({ severity: 'info', next_action: { route: '/admin/permission-requests' } });
+    expect(queue(body, 'actionable-finding-no-execution')).toMatchObject({ severity: 'warn', next_action: { route: '/findings' } });
+    expect(queue(body, 'released-task-unresolved-voc')).toMatchObject({ severity: 'warn', next_action: { route: '/tasks?view=board' } });
+    expect(queue(body, 'bad-outcome-no-followup')).toMatchObject({ severity: 'urgent', next_action: { route: '/surveys' } });
+    expect(queue(body, 'permission-requests-pending')).toMatchObject({ severity: 'info', next_action: { route: '/admin/permissions/requests' } });
     expectQueueDelta(body, before, 'unassigned-voc', 11);
     expectQueueDelta(body, before, 'high-severity-unlinked', 5);
     expectQueueDelta(body, before, 'actionable-finding-no-execution', 8);

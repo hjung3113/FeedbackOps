@@ -10,3 +10,23 @@ apps/frontend/src/routes/login.test.tsx format -- pre-existing on develop; long 
 apps/frontend/tests/visual/fixtures/home.ts format -- pre-existing on develop; long fixture literals predate biome formatting
 apps/frontend/tests/visual/support/mock-api.ts format -- pre-existing on develop; long route handler lines predate biome formatting
 apps/frontend/tests/visual/support/mock-api.ts organizeImports -- pre-existing on develop; import order predates biome
+# Added for the deep-link contract branch (#279 et al). Every identity below was
+# measured on develop with the gate's own invocation --
+#   pnpm exec biome check --reporter=json --max-diagnostics=500 <same file list>
+# -- and reproduced identically, counts included. Note that `biome check <file>`
+# in text mode under-reports (it omits the file-level `format` diagnostic), so
+# comparing with that command will wrongly look like the branch introduced them.
+apps/backend/src/modules/dashboard/service.ts format -- pre-existing on develop; the file predates biome formatting
+apps/backend/src/modules/dashboard/service.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/backend/src/modules/dashboard/__tests__/summary.integration.test.ts format -- pre-existing on develop; long single-line expectations predate biome formatting
+apps/backend/src/modules/dashboard/__tests__/summary.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (12x, unchanged); test helpers assert non-null after an explicit status check
+apps/backend/src/modules/dashboard/__tests__/summary.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (9x, unchanged)
+apps/backend/src/modules/nav/service.ts format -- pre-existing on develop; the file predates biome formatting
+apps/backend/src/modules/nav/__tests__/nav-counts.integration.test.ts format -- pre-existing on develop; long single-line expectations predate biome formatting
+apps/backend/src/modules/nav/__tests__/nav-counts.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (4x, unchanged)
+apps/backend/src/modules/nav/__tests__/nav-counts.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/nav/__tests__/nav-counts.integration.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/vocs.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/vocs.tsx organizeImports -- pre-existing on develop; import order predates biome
+packages/shared/src/dashboard.ts format -- pre-existing on develop; the file predates biome formatting
+packages/shared/src/vocs/list-query.ts format -- pre-existing on develop; the file predates biome formatting

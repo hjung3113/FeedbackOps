@@ -4,6 +4,7 @@
 // action=create → PageShell. Feature content (list rows, detail panel,
 // create form, triage queue) lands in #19 / #20 / #21.
 
+import { vocTabEnumSchema } from '@fops/shared';
 import { ListShell, PageShell, WorkbenchShell } from '@fops/ui';
 import { createFileRoute, Link, useSearch } from '@tanstack/react-router';
 import { ChevronLeft } from 'lucide-react';
@@ -18,10 +19,8 @@ const vocSearchSchema = z
     action: z.enum(['create']).optional(),
     selected: z.string().uuid().optional(),
     managedSystem: z.string().optional(),
-    // D-1.1: 'waiting' appended (Chunk 1 — S3-008 decision); existing values stay.
-    // All four triage tabs (unassigned/untriaged/high/waiting) share the same tab= param
-    // as inbox tabs per the #18 schema lock.
-    tab: z.enum(['untriaged', 'high', 'unassigned', 'similar', 'no-link', 'waiting']).optional(),
+    // D-1.1: shared VOC list-query schema owns every supported tab value.
+    tab: vocTabEnumSchema.optional(),
     sort: z.enum([
       'created_at:desc',
       'created_at:asc',
@@ -112,4 +111,3 @@ function InboxShell({ view }: { view: 'inbox' | 'my' }) {
     />
   );
 }
-
