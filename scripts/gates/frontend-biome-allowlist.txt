@@ -1,1 +1,3 @@
 # Intentionally empty. Add only documented, pre-existing diagnostic identities.
+apps/backend/src/config.ts format -- pre-existing on develop; the file predates biome formatting and this branch adds two lines to the env schema only
+apps/backend/src/seed/index.ts format -- pre-existing on develop; the file predates biome formatting and reformatting it would rewrite lines this branch never touched
