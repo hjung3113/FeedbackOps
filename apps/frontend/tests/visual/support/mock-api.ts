@@ -48,7 +48,7 @@ import {
 } from '../fixtures/surveys';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
 import { railScopeManagedSystems } from '../fixtures/rail-scope';
-import { homeMyWorkRequestsFixture, homeMyWorkTasksFixture, homeSummaryFixture } from '../fixtures/home';
+import { homeMyWorkRequestsFixture, homeMyWorkTasksFixture, homeOpenPermissionRequestsFixture, homeSummaryFixture } from '../fixtures/home';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
@@ -184,6 +184,11 @@ export async function installMockApi(
 
     if (options.home && isRequest(route, 'GET', '/task-requests')) {
       await json(route, 200, { items: options.home === 'populated' ? homeMyWorkRequestsFixture : [] });
+      return;
+    }
+
+    if (options.home && isRequest(route, 'GET', '/permission-requests/mine')) {
+      await json(route, 200, { requests: options.home === 'populated' ? homeOpenPermissionRequestsFixture : [] });
       return;
     }
 

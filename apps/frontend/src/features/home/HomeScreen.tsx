@@ -2,9 +2,10 @@ import type { DashboardSummary, TaskDto, TaskRequestDto } from '@fops/shared';
 import { Button, PageShell } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
-import * as React from 'react';
+import type * as React from 'react';
 
-import { fetchDashboardSummary, fetchTaskRequests, listTasks } from '@/lib/api';
+import { permissionRequestsMineKey } from '@/features/admin/permissions/use-permission-check';
+import { type MinePermissionRequestRow, fetchDashboardSummary, fetchPermissionRequestsMine, fetchTaskRequests, listTasks } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { HOME_COVERAGE_COPY, HOME_COPY, HOME_KPI_COPY, HOME_QUEUE_COPY, homeSeverityLabel } from '@/lib/copy/home';
 
@@ -25,6 +26,11 @@ export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): R
   const pendingRequests = useQuery({
     queryKey: ['home-pending-task-requests'] as const,
     queryFn: ({ signal }) => fetchTaskRequests({ status: 'pending_review', signal }),
+    retry: false,
+  });
+  const openPermissionRequests = useQuery({
+    queryKey: permissionRequestsMineKey,
+    queryFn: ({ signal }) => fetchPermissionRequestsMine(signal),
     retry: false,
   });
   const actorName = me.data?.actor.display_name ?? '지원';
@@ -48,9 +54,20 @@ export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): R
           <MyWorkPanel tasks={myTasks.data?.items ?? []} requests={pendingRequests.data?.items ?? []} />
           <CoveragePanel coverage={summary.data?.coverage ?? []} />
         </div>
+        <div className="mt-9">
+          <OpenRequestsPanel requests={openPermissionRequests.data?.requests ?? []} />
+        </div>
       </section>
     </PageShell>
   );
+}
+
+function OpenRequestsPanel({ requests }: { requests: MinePermissionRequestRow[] }): React.ReactElement {
+  return <section><PanelHeading title={HOME_COPY.openRequests} />
+    {requests.length === 0 ? <div className="rounded-md border border-border-subtle bg-surface-card"><p className="px-4 py-5 text-sm text-text-muted">{HOME_COPY.noOpenRequests}</p></div> : <ul className="overflow-hidden rounded-md border border-border-subtle bg-surface-card" data-testid="home-open-requests-list">
+      {requests.map((request) => <li key={request.id} className="border-b border-border-subtle px-4 py-3 last:border-b-0"><p className="text-sm font-medium text-text-primary">{request.requested_capability}</p><p className="text-xs text-text-muted">{request.status} · {new Date(request.created_at).toLocaleString()}</p><p className="text-xs text-text-muted">id: {request.id}</p></li>)}
+    </ul>}
+  </section>;
 }
 
 function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): React.ReactElement {
@@ -108,6 +125,6 @@ function CoveragePanel({ coverage }: { coverage: DashboardSummary['coverage'] })
   </section>;
 }
 
-function PanelHeading({ title, action, href, disabled = false }: { title: string; action: string; href?: string; disabled?: boolean }): React.ReactElement {
-  return <div className="mb-3 flex items-center justify-between"><h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">{title}</h2>{disabled ? <span className="text-xs text-text-secondary">{action} <ArrowRight className="inline h-3 w-3" /></span> : <a href={href} className="text-xs text-text-secondary hover:text-text-primary">{action} <ArrowRight className="inline h-3 w-3" /></a>}</div>;
+function PanelHeading({ title, action, href, disabled = false }: { title: string; action?: string; href?: string; disabled?: boolean }): React.ReactElement {
+  return <div className="mb-3 flex items-center justify-between"><h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">{title}</h2>{action !== undefined && (disabled ? <span className="text-xs text-text-secondary">{action} <ArrowRight className="inline h-3 w-3" /></span> : <a href={href} className="text-xs text-text-secondary hover:text-text-primary">{action} <ArrowRight className="inline h-3 w-3" /></a>)}</div>;
 }

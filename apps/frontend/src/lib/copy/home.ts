@@ -9,6 +9,7 @@ export const HOME_COPY = {
     return `오늘 워크스페이스에 ${count}개의 운영 갭이 있습니다. 우선순위가 높은 큐부터 확인하세요.`;
   },
   queueHeading: 'Recovery & follow-up queues', myWork: 'My work', coverage: 'Coverage signals',
+  openRequests: 'Open requests', noOpenRequests: 'No open requests.',
   refresh: 'Refresh queues', newVoc: 'New VOC', openMyWork: 'Open My Work', viewCoverage: 'View coverage',
 } as const;
 

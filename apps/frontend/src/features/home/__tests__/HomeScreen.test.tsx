@@ -26,6 +26,7 @@ function installFetch(): ReturnType<typeof vi.fn> {
     if (url.startsWith('/me')) return new Response(JSON.stringify({ actor: { id: '11111111-1111-4111-8111-111111111111', external_id: 'actor', email: 'actor@example.test', display_name: '지원', role_level: 'admin' }, workspace_id: '22222222-2222-4222-8222-222222222222' }), { status: 200 });
     if (url.startsWith('/dashboard/summary')) return new Response(JSON.stringify(response), { status: 200 });
     if (url.startsWith('/tasks') || url.startsWith('/task-requests')) return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    if (url.startsWith('/permission-requests/mine')) return new Response(JSON.stringify({ requests: [] }), { status: 200 });
     return new Response('not mocked', { status: 500 });
   });
   globalThis.fetch = fetchMock as typeof globalThis.fetch;
@@ -98,5 +99,30 @@ describe('HomeScreen route content', () => {
     fireEvent.click(screen.getByTestId('scope-selector'));
     fireEvent.click(screen.getByTestId('scope-option-33333333-3333-4333-8333-333333333333'));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/dashboard/summary?managed_system_id=33333333-3333-4333-8333-333333333333', expect.anything()));
+  });
+
+  it('renders each open permission request capability', async () => {
+    installFetch().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/me')) return new Response(JSON.stringify({ actor: { id: '11111111-1111-4111-8111-111111111111', external_id: 'actor', email: 'actor@example.test', display_name: '지원', role_level: 'admin' }, workspace_id: '22222222-2222-4222-8222-222222222222' }), { status: 200 });
+      if (url.startsWith('/dashboard/summary')) return new Response(JSON.stringify(response), { status: 200 });
+      if (url.startsWith('/tasks') || url.startsWith('/task-requests')) return new Response(JSON.stringify({ items: [] }), { status: 200 });
+      if (url.startsWith('/permission-requests/mine')) return new Response(JSON.stringify({ requests: [
+        { id: 'request-1', requested_capability: 'workspace.admin', requested_managed_system_id: null, reason: 'Need admin', requested_object_type: null, requested_object_id: null, source_object_type: null, source_object_id: null, source_action_id: null, status: 'pending', created_at: '2026-08-01T00:00:00.000Z' },
+        { id: 'request-2', requested_capability: 'finding.manage', requested_managed_system_id: null, reason: 'Need write', requested_object_type: null, requested_object_id: null, source_object_type: null, source_object_id: null, source_action_id: null, status: 'needs_more_info', created_at: '2026-08-01T00:00:00.000Z' },
+      ] }), { status: 200 });
+      return new Response('not mocked', { status: 500 });
+    });
+    renderHome();
+    await screen.findByTestId('home-open-requests-list');
+    expect(screen.getByText('workspace.admin')).toBeInTheDocument();
+    expect(screen.getByText('finding.manage')).toBeInTheDocument();
+  });
+
+  it('renders the empty state without the request list after the query resolves', async () => {
+    installFetch();
+    renderHome();
+    await screen.findByText('No open requests.');
+    expect(screen.queryByTestId('home-open-requests-list')).not.toBeInTheDocument();
   });
 });

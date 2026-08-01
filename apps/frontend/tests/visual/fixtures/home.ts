@@ -1,5 +1,7 @@
 import { dashboardSummarySchema, taskDtoSchema, taskRequestDtoSchema } from '@fops/shared';
 
+import type { MinePermissionRequestRow } from '@/lib/api/permissions';
+
 export const homeSummaryFixture = dashboardSummarySchema.parse({
   kpis: { open_voc: 47, active_finding: 14, pending_request: 8, tasks_in_flight: 23, coverage_percent: 67 },
   action_queues: [
@@ -64,3 +66,32 @@ export const homeMyWorkRequestsFixture = [
   taskRequestDtoSchema.parse({ ...taskRequestBase, id: homeFixtureIds.requestOne, display_id: 'REQ-42', source_type: 'finding', source_id: homeFixtureIds.finding, requested_outcome: '검토 결과 → Task 변환' }),
   taskRequestDtoSchema.parse({ ...taskRequestBase, id: homeFixtureIds.requestTwo, display_id: 'REQ-43', source_type: 'voc', source_id: homeFixtureIds.voc, requested_outcome: '공개 업데이트 검토' }),
 ];
+
+export const homeOpenPermissionRequestsFixture = [
+  {
+    id: 'permission-request-1',
+    requested_capability: 'workspace.admin',
+    requested_managed_system_id: null,
+    reason: 'Admin review is required.',
+    requested_object_type: null,
+    requested_object_id: null,
+    source_object_type: null,
+    source_object_id: null,
+    source_action_id: null,
+    status: 'pending' as const,
+    created_at: '2026-07-10T00:00:00.000Z',
+  },
+  {
+    id: 'permission-request-2',
+    requested_capability: 'finding.manage',
+    requested_managed_system_id: null,
+    reason: 'Finding updates are needed.',
+    requested_object_type: null,
+    requested_object_id: null,
+    source_object_type: null,
+    source_object_id: null,
+    source_action_id: null,
+    status: 'needs_more_info' as const,
+    created_at: '2026-07-11T00:00:00.000Z',
+  },
+] satisfies MinePermissionRequestRow[];
