@@ -1,1 +1,10 @@
 # Intentionally empty. Add only documented, pre-existing diagnostic identities.
+apps/frontend/src/features/home/HomeScreen.tsx format -- pre-existing on develop; dense single-line JSX predates biome formatting
+apps/frontend/src/features/home/HomeScreen.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/home/__tests__/HomeScreen.test.tsx format -- pre-existing on develop; long inline fetch mocks predate biome formatting
+apps/frontend/src/features/home/__tests__/HomeScreen.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/lib/copy/home.ts format -- pre-existing on develop; multi-key single lines predate biome formatting
+apps/frontend/src/routes/login.test.tsx format -- pre-existing on develop; long inline harness lines predate biome formatting
+apps/frontend/tests/visual/fixtures/home.ts format -- pre-existing on develop; long fixture literals predate biome formatting
+apps/frontend/tests/visual/support/mock-api.ts format -- pre-existing on develop; long route handler lines predate biome formatting
+apps/frontend/tests/visual/support/mock-api.ts organizeImports -- pre-existing on develop; import order predates biome
