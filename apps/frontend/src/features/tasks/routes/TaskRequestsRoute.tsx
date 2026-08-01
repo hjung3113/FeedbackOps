@@ -1,3 +1,4 @@
+import { useFindingDetail } from '@/features/integration/hooks/useFindingDetail';
 import {
   approveTaskRequest,
   convertTaskRequest,
@@ -12,8 +13,7 @@ import {
 } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
-import { useFindingDetail } from '@/features/integration/hooks/useFindingDetail';
-import type { ApiError } from '@/lib/api/types';
+import { ApiError } from '@/lib/api/types';
 import type { TaskDto, TaskPriority, TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import {
   Button,
@@ -31,6 +31,7 @@ import {
   type PanelSection,
   PanelSectionTitle,
   PanelTitleBlock,
+  PermissionBlockedPanel,
   UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -787,6 +788,16 @@ export function TaskRequestsRoute({ selectedParam }: { selectedParam?: string | 
     return <div className="p-4 text-sm text-text-muted">Loading Task Requests…</div>;
   }
 
+  if (isPermissionDenied(taskRequestsQuery.error)) {
+    return (
+      <PermissionBlockedPanel
+        state="denied"
+        category="Task Request queue"
+        reason={taskRequestsQuery.error.message}
+        className="m-4"
+      />
+    );
+  }
   if (taskRequestsQuery.error) {
     return <div className="p-4 text-sm text-accent-danger">Task Request queue unavailable.</div>;
   }
@@ -828,5 +839,13 @@ export function TaskRequestsRoute({ selectedParam }: { selectedParam?: string | 
         ) : null
       }
     />
+  );
+}
+
+function isPermissionDenied(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }

@@ -1,3 +1,5 @@
+import { fetchTaskRequests } from '@/lib/api';
+import { ApiError } from '@/lib/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
@@ -111,5 +113,29 @@ describe('TaskRequestsRoute display ids', () => {
     });
     expect(screen.getByText('FIN-179')).toBeInTheDocument();
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
+  });
+
+  it('renders permission denied instead of the queue unavailable copy for a 403', async () => {
+    vi.mocked(fetchTaskRequests).mockRejectedValueOnce(
+      new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.manage capability required',
+      }),
+    );
+    renderWithClient(<TaskRequestsRoute />);
+
+    const panel = await screen.findByText('Task Request queue');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.queryByText('Task Request queue unavailable.')).not.toBeInTheDocument();
+  });
+
+  it('keeps a non-permission queue failure unavailable', async () => {
+    vi.mocked(fetchTaskRequests).mockRejectedValueOnce(
+      new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+    );
+    renderWithClient(<TaskRequestsRoute />);
+
+    expect(await screen.findByText('Task Request queue unavailable.')).toBeInTheDocument();
+    expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
   });
 });

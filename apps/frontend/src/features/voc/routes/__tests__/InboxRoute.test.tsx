@@ -7,6 +7,7 @@
 //   - clicking a row calls navigate with `selected` URL param
 //   - VocDetailPanel is mounted when `selected` is set
 
+import { ApiError } from '@/lib/api/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,6 +34,20 @@ vi.mock('@tanstack/react-router', () => ({
     <a href={to} data-search={JSON.stringify(search)} className={className}>
       {children}
     </a>
+  ),
+}));
+
+vi.mock('@/features/admin/permissions/request-access-button', () => ({
+  RequestAccessButton: ({
+    capability,
+    managedSystemId,
+  }: {
+    capability: string;
+    managedSystemId?: string;
+  }) => (
+    <button type="button" data-managed-system-id={managedSystemId} data-testid="request-access">
+      {capability}
+    </button>
   ),
 }));
 
@@ -95,13 +110,10 @@ const MOCK_VOC_ITEMS = [
   },
 ];
 
+const useVocListMock = vi.hoisted(() => vi.fn());
+
 vi.mock('../../hooks/useVocList', () => ({
-  useVocList: () => ({
-    data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
+  useVocList: useVocListMock,
 }));
 
 // ── Stub VocDetailPanel ───────────────────────────────────────────────────────
@@ -149,6 +161,12 @@ describe('useInboxRoute', () => {
   beforeEach(() => {
     searchState = {};
     navigateMock.mockClear();
+    useVocListMock.mockReturnValue({
+      data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
   });
 
   it('renders 3 VocList rows for inbox view', async () => {
@@ -242,6 +260,57 @@ describe('useInboxRoute', () => {
     await waitFor(() => {
       expect(screen.getByText('My VOCs')).toBeInTheDocument();
     });
+  });
+
+  it('renders permission denied instead of VocList failed-load copy for a 403', async () => {
+    useVocListMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError(403, {
+        code: 'permission.denied',
+        message: 'no voc.read scope for actor',
+      }),
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    const panel = await screen.findByText('VOC Inbox');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.queryByText('불러오기 실패')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('request-access')).not.toBeInTheDocument();
+  });
+
+  it('adds a request-access CTA only when the Inbox error provides the permission', async () => {
+    useVocListMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError(403, {
+        code: 'permission.scope_required',
+        message: 'voc.read capability required',
+        requestable_permission: { permission: 'voc.read', managed_system_id: 'ms-1' },
+      }),
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    expect(await screen.findByTestId('request-access')).toHaveTextContent('voc.read');
+    expect(screen.getByTestId('request-access')).toHaveAttribute('data-managed-system-id', 'ms-1');
+  });
+
+  it('keeps a non-permission error on VocList failed-load copy', async () => {
+    useVocListMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    expect(await screen.findByText('불러오기 실패')).toBeInTheDocument();
+    expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
   });
 
   // ── Filter-key round-trip regression (#89) ──────────────────────────────────

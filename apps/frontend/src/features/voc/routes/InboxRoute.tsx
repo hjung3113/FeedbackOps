@@ -3,6 +3,8 @@
 // out_of_scope_summary peek banner, and VocDetailPanel forwarding into ListShell.
 // C9 of Slice 3 #20.
 
+import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { ApiError } from '@/lib/api/types';
 import {
   Button,
   type FilterCategory,
@@ -298,17 +300,39 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
         }
       />
       {outOfScopeBanner}
-      <VocList
-        items={vocList.data?.items ?? []}
-        loading={vocList.isLoading}
-        error={vocList.error ?? null}
-        selectedId={search.selected ?? null}
-        onSelect={handleRowSelect}
-        view={view}
-        onRetry={() => {
-          void vocList.refetch();
-        }}
-      />
+      {isPermissionDenied(vocList.error) ? (
+        <div className="m-4 space-y-3">
+          <PermissionBlockedPanel
+            state="denied"
+            category="VOC Inbox"
+            reason={vocList.error.message}
+          />
+          {vocList.error.envelope.requestable_permission ? (
+            <RequestAccessButton
+              capability={vocList.error.envelope.requestable_permission.permission}
+              {...(typeof vocList.error.envelope.requestable_permission.managed_system_id ===
+              'string'
+                ? {
+                    managedSystemId:
+                      vocList.error.envelope.requestable_permission.managed_system_id,
+                  }
+                : {})}
+            />
+          ) : null}
+        </div>
+      ) : (
+        <VocList
+          items={vocList.data?.items ?? []}
+          loading={vocList.isLoading}
+          error={vocList.error ?? null}
+          selectedId={search.selected ?? null}
+          onSelect={handleRowSelect}
+          view={view}
+          onRetry={() => {
+            void vocList.refetch();
+          }}
+        />
+      )}
     </>
   );
 
@@ -318,4 +342,12 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     ) : undefined;
 
   return { list, detailPanel };
+}
+
+function isPermissionDenied(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
+  );
 }
