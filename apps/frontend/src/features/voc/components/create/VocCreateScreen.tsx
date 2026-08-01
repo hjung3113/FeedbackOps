@@ -92,7 +92,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
       // useEffect-driven sync below would not have propagated by the time
       // useBlocker.shouldBlockFn runs against this navigation intent.
       onDirtyChange?.(false);
-      void navigate({ to: '/vocs', search: { view: 'inbox', selected: data.id } });
+      void navigate({ to: '/vocs', search: { view: 'my', selected: data.id } });
     },
     onError: (err: ApiError) => {
       // 1. validation.failed with detail.fields → form.setError per field

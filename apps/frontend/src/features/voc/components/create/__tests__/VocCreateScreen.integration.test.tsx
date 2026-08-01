@@ -143,6 +143,7 @@ function renderHarness(screenProps?: Partial<React.ComponentProps<typeof VocCrea
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return { router, qc };
 }
 
 // Helper: build a JSON Response
@@ -198,8 +199,7 @@ describe('VocCreateScreen integration', () => {
   });
 
   // ── 1. Happy path (201) ────────────────────────────────────────────────────
-  test('happy path: 201 navigates to /vocs?view=inbox&selected=<id>', async () => {
-    const navigateMock = vi.fn();
+  test('happy path: 201 navigates to /vocs?view=my&selected=<id>', async () => {
     installFetch({
       postVocsResponse: {
         status: 201,
@@ -207,7 +207,7 @@ describe('VocCreateScreen integration', () => {
       },
     });
 
-    renderHarness({ onCancel: vi.fn() });
+    const { router } = renderHarness({ onCancel: vi.fn() });
 
     // Wait for MS picker to appear
     await waitFor(() => {
@@ -234,14 +234,12 @@ describe('VocCreateScreen integration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'VOC 제출' }));
 
-    // After successful POST, navigate should be called with the right args.
-    // VocCreateScreen calls useNavigate() from TanStack Router internally.
-    // In the router harness the navigation triggers a route change — check
-    // that /vocs URL becomes the target and the fetch was called.
+    // The route must land on the reporter-readable My VOCs list with the
+    // submitted record still selected.
     await waitFor(() => {
-      const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
-      const postCall = calls.find(([, init]) => init?.method === 'POST');
-      expect(postCall).toBeTruthy();
+      expect(router.state.location.search).toEqual(
+        expect.objectContaining({ view: 'my', selected: VOC_ID }),
+      );
     });
   });
 

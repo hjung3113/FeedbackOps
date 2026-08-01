@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '@/lib/api/types';
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (config: unknown) => config,
@@ -64,6 +65,9 @@ vi.mock('@fops/ui', () => ({
   OutlineBadge: ({ children, ...props }: { children: React.ReactNode }) => (
     <span {...props}>{children}</span>
   ),
+  PermissionBlockedPanel: ({ state, category }: { state: string; category: string }) => (
+    <div data-testid="permission-blocked" data-state={state}>{category}</div>
+  ),
   Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
   UserAvatar: ({
     user,
@@ -123,12 +127,10 @@ const findings = [
   },
 ];
 
+const useFindingsListMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@/features/integration/hooks/useFindingsList', () => ({
-  useFindingsList: () => ({
-    data: { items: findings },
-    isPending: false,
-    isError: false,
-  }),
+  useFindingsList: useFindingsListMock,
 }));
 
 vi.mock('@/features/integration/components/FindingDetail', () => ({
@@ -150,6 +152,16 @@ vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
 }));
 
 describe('FindingsListPage', () => {
+  beforeEach(() => {
+    useFindingsListMock.mockReturnValue({
+      data: { items: findings },
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      error: null,
+    });
+  });
+
   it('renders finding rows from the list hook', async () => {
     const { FindingsListPage } = await import('../index');
 
@@ -187,5 +199,39 @@ describe('FindingsListPage', () => {
     const nullConfidenceRow = screen.getByTestId('finding-row-FND-102');
     expect(nullConfidenceRow.querySelector('[data-token="--severity-medium"]')).toBeInTheDocument();
     expect(screen.queryByTestId('finding-confidence-badge-FND-102')).not.toBeInTheDocument();
+  });
+
+  it('renders permission denied without the failed-load copy or an authoritative count', async () => {
+    useFindingsListMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(403, { code: 'permission.denied', message: 'finding.read capability required' }),
+    });
+    const { FindingsListPage } = await import('../index');
+
+    render(<FindingsListPage />);
+
+    expect(screen.getByTestId('permission-blocked')).toHaveAttribute('data-state', 'denied');
+    expect(screen.queryByTestId('finding-list-error')).not.toBeInTheDocument();
+    expect(screen.queryByText('0개')).not.toBeInTheDocument();
+  });
+
+  it('keeps a non-permission failure as the existing failed-load state', async () => {
+    useFindingsListMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      isSuccess: false,
+      error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+    });
+    const { FindingsListPage } = await import('../index');
+
+    render(<FindingsListPage />);
+
+    expect(screen.getByTestId('finding-list-error')).toHaveTextContent('데이터를 불러오지 못했습니다.');
+    expect(screen.queryByTestId('permission-blocked')).not.toBeInTheDocument();
+    expect(screen.queryByText('0개')).not.toBeInTheDocument();
   });
 });

@@ -90,6 +90,23 @@ describe('TaskBoardRoute', () => {
     expect(screen.getAllByText('비어있음').length).toBe(6);
   });
 
+  it('renders permission denied instead of the board unavailable copy for a 403', async () => {
+    api.listTasks.mockRejectedValue(new ApiError(403, { code: 'permission.denied', message: 'finding.manage capability required' }));
+    renderBoard();
+
+    const panel = await screen.findByText('Task board');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.queryByText('Task board unavailable.')).not.toBeInTheDocument();
+  });
+
+  it('keeps a non-permission board failure unavailable', async () => {
+    api.listTasks.mockRejectedValue(new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }));
+    renderBoard();
+
+    expect(await screen.findByText('Task board unavailable.')).toBeInTheDocument();
+    expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
+  });
+
   it('keeps a pointer click on a status-board card available for selection', async () => {
     api.listTasks.mockResolvedValue({ items: [task] });
     api.getTask.mockResolvedValue({ ...task, source: null });

@@ -2,6 +2,7 @@
 // Optional managed_system_id filter mirrors the backend query param.
 
 import { apiClient } from '@/lib/api';
+import { ApiError } from '@/lib/api/types';
 import type { ListFindingsResponse } from '@fops/shared';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 
@@ -16,6 +17,8 @@ export function useFindingsList(managedSystemId?: string): UseQueryResult<ListFi
       return res.data;
     },
     staleTime: 30_000,
-    retry: 1,
+    retry: (failureCount, error) =>
+      !(error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) &&
+      failureCount < 1,
   });
 }
