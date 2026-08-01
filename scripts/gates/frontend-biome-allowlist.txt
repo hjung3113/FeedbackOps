@@ -1,4 +1,6 @@
 # Intentionally empty. Add only documented, pre-existing diagnostic identities.
+apps/backend/src/config.ts format -- pre-existing on develop; the file predates biome formatting and this branch adds two lines to the env schema only
+apps/backend/src/seed/index.ts format -- pre-existing on develop; the file predates biome formatting and reformatting it would rewrite lines this branch never touched
 apps/frontend/src/features/home/HomeScreen.tsx format -- pre-existing on develop; dense single-line JSX predates biome formatting
 apps/frontend/src/features/home/HomeScreen.tsx organizeImports -- pre-existing on develop; import order predates biome
 apps/frontend/src/features/home/__tests__/HomeScreen.test.tsx format -- pre-existing on develop; long inline fetch mocks predate biome formatting

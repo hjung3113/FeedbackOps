@@ -23,6 +23,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { loadConfig } from '../config.js';
 import { type DbHandle, createDb } from '../db/client.js';
 import { actors, analyticsAreas, managedSystems, workspaces } from '../db/schema/core.js';
+import { permissionGrants } from '../db/schema/permission.js';
 import { ensureSeedTeam, seedSlice3Vocs } from './voc-fixtures.js';
 
 const SEED_ACTORS = [
@@ -69,6 +70,57 @@ const SEED_ANALYTICS_AREAS: ReadonlyArray<{
   { msSlug: 'power-bi', slug: 'usage-analytics', name: 'Usage Analytics' },
 ];
 
+// Optional black-box test layer. These strings are shared with the mock-login
+// picker; keep them stable so a selected actor resolves to this seed row.
+const PERSONA_ACTORS = [
+  {
+    externalId: 'mock-admin-2',
+    displayName: 'Mock Admin Two',
+    email: 'admin2@feedbackops.local',
+    roleLevel: 'admin',
+    actorType: 'internal_member',
+  },
+  {
+    externalId: 'mock-user-2',
+    displayName: 'Mock User Two',
+    email: 'user2@feedbackops.local',
+    roleLevel: 'user',
+    actorType: 'internal_member',
+  },
+  {
+    externalId: 'mock-developer-1',
+    displayName: 'Mock Developer One',
+    email: 'dev1@feedbackops.local',
+    roleLevel: 'developer',
+    actorType: 'internal_member',
+  },
+  {
+    externalId: 'mock-developer-2',
+    displayName: 'Mock Developer Two',
+    email: 'dev2@feedbackops.local',
+    roleLevel: 'developer',
+    actorType: 'internal_member',
+  },
+] as const;
+
+const PERSONA_GRANTS = [
+  // Admin roles have implicit decisions (apps/backend/src/modules/permissions/check-service.ts:281-292).
+  // Their list scope short-circuits to all systems (apps/backend/src/modules/permissions/scope-service.ts:52-54), so no Admin grant rows belong here.
+  { externalId: 'mock-developer-1', capability: 'workspace.read', msSlug: null },
+  { externalId: 'mock-developer-1', capability: 'voc.read', msSlug: 'tableau' },
+  { externalId: 'mock-developer-1', capability: 'voc.triage', msSlug: 'tableau' },
+  { externalId: 'mock-developer-1', capability: 'finding.read', msSlug: 'tableau' },
+  { externalId: 'mock-developer-1', capability: 'finding.manage', msSlug: 'tableau' },
+  { externalId: 'mock-developer-1', capability: 'survey.read', msSlug: 'tableau' },
+  { externalId: 'mock-developer-1', capability: 'task_request.self_approve', msSlug: 'tableau' },
+  { externalId: 'mock-developer-2', capability: 'workspace.read', msSlug: null },
+  { externalId: 'mock-developer-2', capability: 'voc.read', msSlug: 'power-bi' },
+  { externalId: 'mock-developer-2', capability: 'voc.triage', msSlug: 'power-bi' },
+  { externalId: 'mock-developer-2', capability: 'finding.read', msSlug: 'power-bi' },
+  { externalId: 'mock-developer-2', capability: 'survey.read', msSlug: 'power-bi' },
+  { externalId: 'mock-developer-2', capability: 'survey.manage', msSlug: 'power-bi' },
+] as const;
+
 export interface SeedResult {
   workspaceId: string;
   workspaceInserted: boolean;
@@ -78,13 +130,12 @@ export interface SeedResult {
   vocsInserted: number;
   conversationRowsInserted: number;
   permissionFixturesInserted: number;
+  personaActorsInserted: number;
+  personaGrantsInserted: number;
 }
 
 export async function runSeed(handle: DbHandle): Promise<SeedResult> {
   const config = loadConfig();
-  if (config.SEED_MODE !== 'core') {
-    throw new Error(`Unsupported SEED_MODE='${config.SEED_MODE}'. Slice 1 only ships 'core'.`);
-  }
   if (!config.WORKSPACE_ID) {
     throw new Error(
       'WORKSPACE_ID env var is required. Generate a UUID and reuse it across migrate/seed/app boots so every record binds to the same Workspace per ADR-0006.',
@@ -207,6 +258,71 @@ export async function runSeed(handle: DbHandle): Promise<SeedResult> {
   await ensureSeedTeam(workspaceId, config.DATABASE_URL_MIGRATE);
   const slice3 = await seedSlice3Vocs(handle, workspaceId);
 
+  let personaActorsInserted = 0;
+  let personaGrantsInserted = 0;
+  if (config.SEED_MODE === 'personas') {
+    const personaActorIdByExternalId = new Map<string, string>([['mock-admin-1', adminActorId]]);
+    for (const actor of PERSONA_ACTORS) {
+      const inserted = await db
+        .insert(actors)
+        .values({
+          workspaceId,
+          externalId: actor.externalId,
+          email: actor.email,
+          displayName: actor.displayName,
+          roleLevel: actor.roleLevel,
+          actorType: actor.actorType,
+        })
+        .onConflictDoNothing({ target: [actors.workspaceId, actors.externalId] })
+        .returning({ id: actors.id });
+      if (inserted.length > 0) personaActorsInserted += 1;
+
+      const resolved = inserted[0]?.id
+        ? inserted
+        : await db
+            .select({ id: actors.id })
+            .from(actors)
+            .where(
+              and(eq(actors.workspaceId, workspaceId), eq(actors.externalId, actor.externalId)),
+            );
+      const actorId = resolved[0]?.id;
+      if (!actorId) {
+        throw new Error(`Seed expected persona actor '${actor.externalId}' to exist after upsert.`);
+      }
+      personaActorIdByExternalId.set(actor.externalId, actorId);
+    }
+
+    for (const grant of PERSONA_GRANTS) {
+      const actorId = personaActorIdByExternalId.get(grant.externalId);
+      const managedSystemId = grant.msSlug === null ? null : msIdBySlug.get(grant.msSlug);
+      if (!actorId || (grant.msSlug !== null && !managedSystemId)) {
+        throw new Error(`Seed could not resolve persona grant '${grant.externalId}:${grant.capability}'.`);
+      }
+      // The active unique key omits managed_system_id, so pre-check its actual
+      // tuple rather than using onConflictDoNothing against a partial index.
+      const existing = await db
+        .select({ id: permissionGrants.id })
+        .from(permissionGrants)
+        .where(
+          and(
+            eq(permissionGrants.workspaceId, workspaceId),
+            eq(permissionGrants.actorId, actorId),
+            eq(permissionGrants.capability, grant.capability),
+            isNull(permissionGrants.revokedAt),
+          ),
+        );
+      if (existing.length > 0) continue;
+      await db.insert(permissionGrants).values({
+        workspaceId,
+        actorId,
+        capability: grant.capability,
+        managedSystemId,
+        grantedByActorId: adminActorId,
+      });
+      personaGrantsInserted += 1;
+    }
+  }
+
   return {
     workspaceId,
     workspaceInserted,
@@ -216,6 +332,8 @@ export async function runSeed(handle: DbHandle): Promise<SeedResult> {
     vocsInserted: slice3.vocsInserted,
     conversationRowsInserted: slice3.conversationRowsInserted,
     permissionFixturesInserted: slice3.permissionFixturesInserted,
+    personaActorsInserted,
+    personaGrantsInserted,
   };
 }
 

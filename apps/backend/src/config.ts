@@ -15,8 +15,8 @@ const envSchema = z.object({
   AUTH_PROVIDER: z.enum(['mock', 'oidc']).default('mock'),
   WORKSPACE_ID: z.string().uuid().optional(),
   WORKSPACE_NAME: z.string().default('FeedbackOps'),
-  // Slice 1 seed scope: 'core' inserts workspace + 3 baseline actors only.
-  SEED_MODE: z.enum(['core']).default('core'),
+  // `personas` layers black-box test actors and grants over the core seed.
+  SEED_MODE: z.enum(['core', 'personas']).default('core'),
   PUBLIC_ATTACHMENT_ORIGIN: z.string().default("'self'"),
   // Review HTTP-H-2: `trustProxy: true` is unconditional and lets clients
   // spoof `X-Forwarded-For` to reset anon rate-limit buckets and audit IPs
