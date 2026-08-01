@@ -1,9 +1,9 @@
+import { fetchTaskRequests } from '@/lib/api';
+import { ApiError } from '@/lib/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fetchTaskRequests } from '@/lib/api';
-import { ApiError } from '@/lib/api/types';
 import { TaskRequestsRoute } from './TaskRequestsRoute';
 
 vi.mock('@fops/ui', async () => {
@@ -117,7 +117,10 @@ describe('TaskRequestsRoute display ids', () => {
 
   it('renders permission denied instead of the queue unavailable copy for a 403', async () => {
     vi.mocked(fetchTaskRequests).mockRejectedValueOnce(
-      new ApiError(403, { code: 'permission.denied', message: 'finding.manage capability required' }),
+      new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.manage capability required',
+      }),
     );
     renderWithClient(<TaskRequestsRoute />);
 

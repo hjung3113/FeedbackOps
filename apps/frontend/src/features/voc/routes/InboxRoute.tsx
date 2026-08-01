@@ -3,6 +3,8 @@
 // out_of_scope_summary peek banner, and VocDetailPanel forwarding into ListShell.
 // C9 of Slice 3 #20.
 
+import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { ApiError } from '@/lib/api/types';
 import {
   Button,
   type FilterCategory,
@@ -20,8 +22,6 @@ import * as React from 'react';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
 import { VocList } from '../components/list/VocList';
 import { useVocList } from '../hooks/useVocList';
-import { ApiError } from '@/lib/api/types';
-import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -310,8 +310,12 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           {vocList.error.envelope.requestable_permission ? (
             <RequestAccessButton
               capability={vocList.error.envelope.requestable_permission.permission}
-              {...(typeof vocList.error.envelope.requestable_permission.managed_system_id === 'string'
-                ? { managedSystemId: vocList.error.envelope.requestable_permission.managed_system_id }
+              {...(typeof vocList.error.envelope.requestable_permission.managed_system_id ===
+              'string'
+                ? {
+                    managedSystemId:
+                      vocList.error.envelope.requestable_permission.managed_system_id,
+                  }
                 : {})}
             />
           ) : null}

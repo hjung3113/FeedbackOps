@@ -1,9 +1,9 @@
+import { getTask, listTasks } from '@/lib/api';
+import { ApiError } from '@/lib/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { getTask, listTasks } from '@/lib/api';
-import { ApiError } from '@/lib/api/types';
 import { TaskDetailPanel, TaskListRoute } from './TaskListRoute';
 
 vi.mock('@fops/ui', async () => {
@@ -100,7 +100,10 @@ describe('TaskListRoute display ids', () => {
 
   it('renders permission denied instead of the list unavailable copy for a 403', async () => {
     vi.mocked(listTasks).mockRejectedValueOnce(
-      new ApiError(403, { code: 'permission.denied', message: 'finding.manage capability required' }),
+      new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.manage capability required',
+      }),
     );
     renderWithClient(<TaskListRoute />);
 
@@ -121,7 +124,10 @@ describe('TaskListRoute display ids', () => {
 
   it('renders permission denied instead of task detail unavailable for a 403', async () => {
     vi.mocked(getTask).mockRejectedValueOnce(
-      new ApiError(403, { code: 'permission.denied', message: 'finding.manage capability required' }),
+      new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.manage capability required',
+      }),
     );
     renderWithClient(
       <TaskDetailPanel

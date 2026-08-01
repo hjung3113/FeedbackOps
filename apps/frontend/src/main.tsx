@@ -8,7 +8,12 @@ import { routeTree } from './routeTree.gen';
 
 const router = createRouter({ routeTree });
 export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
-  if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) {
+  if (
+    error instanceof ApiError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 429
+  ) {
     return false;
   }
   return failureCount < 3;

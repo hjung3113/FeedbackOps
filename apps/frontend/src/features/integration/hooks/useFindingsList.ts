@@ -18,7 +18,11 @@ export function useFindingsList(managedSystemId?: string): UseQueryResult<ListFi
     },
     staleTime: 30_000,
     retry: (failureCount, error) =>
-      !(error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) &&
-      failureCount < 1,
+      !(
+        error instanceof ApiError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        error.status !== 429
+      ) && failureCount < 1,
   });
 }

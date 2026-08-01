@@ -1,3 +1,4 @@
+import { useFindingDetail } from '@/features/integration/hooks/useFindingDetail';
 import {
   approveTaskRequest,
   convertTaskRequest,
@@ -12,7 +13,6 @@ import {
 } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
-import { useFindingDetail } from '@/features/integration/hooks/useFindingDetail';
 import { ApiError } from '@/lib/api/types';
 import type { TaskDto, TaskPriority, TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import {
@@ -22,7 +22,6 @@ import {
   DetailPanelSectionNav,
   FieldRow,
   ListShell,
-  PermissionBlockedPanel,
   ListToolbar,
   type ListToolbarTab,
   ManagedSystemPill,
@@ -32,6 +31,7 @@ import {
   type PanelSection,
   PanelSectionTitle,
   PanelTitleBlock,
+  PermissionBlockedPanel,
   UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -789,7 +789,14 @@ export function TaskRequestsRoute({ selectedParam }: { selectedParam?: string | 
   }
 
   if (isPermissionDenied(taskRequestsQuery.error)) {
-    return <PermissionBlockedPanel state="denied" category="Task Request queue" reason={taskRequestsQuery.error.message} className="m-4" />;
+    return (
+      <PermissionBlockedPanel
+        state="denied"
+        category="Task Request queue"
+        reason={taskRequestsQuery.error.message}
+        className="m-4"
+      />
+    );
   }
   if (taskRequestsQuery.error) {
     return <div className="p-4 text-sm text-accent-danger">Task Request queue unavailable.</div>;

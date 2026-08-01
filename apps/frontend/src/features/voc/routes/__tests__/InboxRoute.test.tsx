@@ -7,10 +7,10 @@
 //   - clicking a row calls navigate with `selected` URL param
 //   - VocDetailPanel is mounted when `selected` is set
 
+import { ApiError } from '@/lib/api/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '@/lib/api/types';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -44,7 +44,11 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
   }: {
     capability: string;
     managedSystemId?: string;
-  }) => <button data-managed-system-id={managedSystemId} data-testid="request-access">{capability}</button>,
+  }) => (
+    <button type="button" data-managed-system-id={managedSystemId} data-testid="request-access">
+      {capability}
+    </button>
+  ),
 }));
 
 // ── Stub useVocList ────────────────────────────────────────────────────────────
@@ -262,7 +266,10 @@ describe('useInboxRoute', () => {
     useVocListMock.mockReturnValue({
       data: undefined,
       isLoading: false,
-      error: new ApiError(403, { code: 'permission.denied', message: 'no voc.read scope for actor' }),
+      error: new ApiError(403, {
+        code: 'permission.denied',
+        message: 'no voc.read scope for actor',
+      }),
       refetch: vi.fn(),
     });
     searchState = { view: 'inbox' };

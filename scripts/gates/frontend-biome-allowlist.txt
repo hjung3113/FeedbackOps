@@ -30,3 +30,25 @@ apps/frontend/src/routes/_authed/vocs.tsx format -- pre-existing on develop; the
 apps/frontend/src/routes/_authed/vocs.tsx organizeImports -- pre-existing on develop; import order predates biome
 packages/shared/src/dashboard.ts format -- pre-existing on develop; the file predates biome formatting
 packages/shared/src/vocs/list-query.ts format -- pre-existing on develop; the file predates biome formatting
+# Added for the permission-state branch (#284 #283 #261). Each identity below was
+# measured on develop with the gate's own invocation over the same file list and
+# reproduced exactly. Every identity this branch actually introduced was fixed
+# rather than allowlisted.
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx lint/a11y/useSemanticElements -- pre-existing on develop (2x, unchanged); drag-and-drop board columns use role attributes
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx lint/style/noNonNullAssertion -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx lint/complexity/noUselessFragments -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.test.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.test.tsx lint/style/useImportType -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/tasks/routes/TaskListRoute.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/tasks/routes/TaskListRoute.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx lint/complexity/useLiteralKeys -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx lint/style/useImportType -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/routes/InboxRoute.tsx lint/suspicious/noExplicitAny -- pre-existing on develop (10x, unchanged); the file's local slot types predate stricter typing

@@ -1,7 +1,7 @@
+import { ApiError } from '@/lib/api/types';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '@/lib/api/types';
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (config: unknown) => config,
@@ -66,7 +66,9 @@ vi.mock('@fops/ui', () => ({
     <span {...props}>{children}</span>
   ),
   PermissionBlockedPanel: ({ state, category }: { state: string; category: string }) => (
-    <div data-testid="permission-blocked" data-state={state}>{category}</div>
+    <div data-testid="permission-blocked" data-state={state}>
+      {category}
+    </div>
   ),
   Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
   UserAvatar: ({
@@ -207,7 +209,10 @@ describe('FindingsListPage', () => {
       isPending: false,
       isError: true,
       isSuccess: false,
-      error: new ApiError(403, { code: 'permission.denied', message: 'finding.read capability required' }),
+      error: new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.read capability required',
+      }),
     });
     const { FindingsListPage } = await import('../index');
 
@@ -230,7 +235,9 @@ describe('FindingsListPage', () => {
 
     render(<FindingsListPage />);
 
-    expect(screen.getByTestId('finding-list-error')).toHaveTextContent('데이터를 불러오지 못했습니다.');
+    expect(screen.getByTestId('finding-list-error')).toHaveTextContent(
+      '데이터를 불러오지 못했습니다.',
+    );
     expect(screen.queryByTestId('permission-blocked')).not.toBeInTheDocument();
     expect(screen.queryByText('0개')).not.toBeInTheDocument();
   });
