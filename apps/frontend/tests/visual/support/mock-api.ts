@@ -299,13 +299,23 @@ export async function installMockApi(
       return;
     }
 
+    // The VOC detail panel asks for similarity recommendations on mount; the
+    // mock is fail-closed, so an unanswered route ends the test before any
+    // screenshot is taken. Empty is the right answer for these scenarios.
+    if (
+      options.triageAreaScenario &&
+      request.method() === 'GET' &&
+      /^\/vocs\/[^/]+\/recommendations$/.test(url.pathname)
+    ) {
+      await json(route, 200, { items: [], total: 0 });
+      return;
+    }
+
     if (options.triageAreaScenario && isRequest(route, 'GET', '/analytics-areas')) {
-      if (
-        url.searchParams.get('managed_system_id') !== TRIAGE_AREA_IDS.managedSystem ||
-        url.searchParams.get('include_archived') !== 'true'
-      ) {
-        throw new Error(`Unexpected Chunk B Analytics Area query: ${url.search}`);
-      }
+      // The triage panel scopes this call to the VOC's Managed System, but the
+      // surrounding list also resolves area names with an unscoped call. Both are
+      // legitimate here, so this serves the same fixture either way — the scoping
+      // contract itself is asserted by AC-B4b in the unit suite, not by pixels.
       await json(
         route,
         200,
