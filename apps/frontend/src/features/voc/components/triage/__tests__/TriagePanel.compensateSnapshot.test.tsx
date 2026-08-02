@@ -54,6 +54,7 @@ const PRIOR_VOC: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  attachment_count: 0,
 };
 
 function makeWrapper() {

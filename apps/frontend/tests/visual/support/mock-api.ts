@@ -100,7 +100,7 @@ interface InstallOptions {
   savedViews?: boolean;
   /** Home action dashboard fixture state. */
   home?: 'populated' | 'empty';
-  /** Chunk B Analytics Area wiring and Finding inheritance states. */
+  /** Triage Analytics Area wiring and Finding inheritance states. */
   triageAreaScenario?: TriageAreaVisualScenario;
 }
 
