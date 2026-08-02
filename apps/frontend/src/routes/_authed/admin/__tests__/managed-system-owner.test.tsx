@@ -217,7 +217,9 @@ describe('Managed System default owner', () => {
     fireEvent.click(screen.getByTestId('create-default-owner'));
 
     const listbox = await screen.findByRole('listbox');
-    expect(within(listbox).getByRole('option', { name: ACTOR_NAME })).toBeInTheDocument();
+    // The actor list arrives from an async query; the listbox mounts first with
+    // only the static "(미지정)" entry. Sync getByRole here raced that fetch.
+    expect(await within(listbox).findByRole('option', { name: ACTOR_NAME })).toBeInTheDocument();
     await act(async () => {
       await Promise.resolve();
     });
