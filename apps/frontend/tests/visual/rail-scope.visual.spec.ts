@@ -1,7 +1,7 @@
-import { expect, test } from './support/visual-test';
 import { railScopeSnapshots } from './fixtures/rail-scope';
 import { installMockApi } from './support/mock-api';
 import { expectVisual } from './support/screenshot';
+import { expect, test } from './support/visual-test';
 
 test.describe('rail and Managed System scope visual harness', () => {
   test('renders the VOC rail and all-systems scope', async ({ page }) => {
@@ -24,5 +24,15 @@ test.describe('rail and Managed System scope visual harness', () => {
     await page.goto('/voc-clusters');
     await expect(page.getByTestId('saved-views-section')).toBeVisible();
     await expectVisual(page, page.getByTestId('app-sidebar'), railScopeSnapshots[2]);
+  });
+  test('rail-scope-granted-partial renders zero granted systems with workspace-visible names', async ({
+    page,
+  }) => {
+    await installMockApi(page, { railScope: true, role: 'user' });
+    await page.goto('/voc-clusters');
+    await page.getByTestId('scope-selector').click();
+    await expect(page.getByTestId('scope-option-all')).toContainText('granted 0 / 3');
+    await expect(page.getByText('Sales Operations', { exact: true })).toBeVisible();
+    await expectVisual(page, page.getByTestId('app-sidebar'), railScopeSnapshots[3]);
   });
 });

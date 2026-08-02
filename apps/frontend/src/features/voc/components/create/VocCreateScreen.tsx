@@ -265,6 +265,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                   />
                 )}
               />
+              <p className="text-xs text-text-muted">타인 대신 보고는 다른 팀원이나 고객의 경험을 대신 등록하는 경우입니다.</p>
             </div>
 
             <FormDivider />
@@ -353,6 +354,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                   {form.formState.errors.analytics_area_id.message}
                 </p>
               )}
+              <p className="text-xs text-text-muted">Analytics Area는 VOC를 분석할 때 함께 볼 주제에 맞춰 선택하세요.</p>
             </div>
 
             <FormDivider />

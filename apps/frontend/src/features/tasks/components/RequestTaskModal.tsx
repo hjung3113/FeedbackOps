@@ -1,4 +1,8 @@
-import { type CreateTaskRequestRequest, createTaskRequestRequestSchema } from '@fops/shared';
+import {
+  type CreateTaskRequestRequest,
+  type TaskRequestSourceType,
+  createTaskRequestRequestSchema,
+} from '@fops/shared';
 import {
   Button,
   Dialog,
@@ -10,8 +14,11 @@ import {
   Textarea,
 } from '@fops/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
+
+import { fetchTaskRequests } from '@/lib/api';
 
 export interface RequestTaskModalProps {
   open: boolean;
@@ -19,6 +26,7 @@ export interface RequestTaskModalProps {
   isSubmitting: boolean;
   onClose: () => void;
   onSubmit: (values: CreateTaskRequestRequest) => void;
+  source?: { type: TaskRequestSourceType; id: string };
 }
 
 export function RequestTaskModal({
@@ -27,6 +35,7 @@ export function RequestTaskModal({
   isSubmitting,
   onClose,
   onSubmit,
+  source,
 }: RequestTaskModalProps): React.ReactElement {
   const form = useForm<CreateTaskRequestRequest>({
     resolver: zodResolver(createTaskRequestRequestSchema),
@@ -45,6 +54,15 @@ export function RequestTaskModal({
       });
     }
   }, [evidenceSummaryDefault, form, open]);
+
+  const pendingRequests = useQuery({
+    queryKey: ['task-requests', 'pending-source', source?.type, source?.id] as const,
+    queryFn: ({ signal }) => fetchTaskRequests({ status: 'pending_review', signal }),
+    enabled: open && source !== undefined,
+  });
+  const pendingRequest = pendingRequests.data?.items.find(
+    (request) => request.source_type === source?.type && request.source_id === source?.id,
+  );
 
   function closeAndReset(): void {
     form.reset({
@@ -65,6 +83,21 @@ export function RequestTaskModal({
         <DialogHeader>
           <DialogTitle>Task 요청</DialogTitle>
         </DialogHeader>
+
+        {pendingRequest && (
+          <p
+            className="rounded-md border border-border-subtle bg-surface-card px-3 py-2 text-sm text-text-primary"
+            data-testid="request-task-pending-notice"
+          >
+            이 소스에 Pending Task Request가 있습니다.{' '}
+            <a
+              href={`/tasks?view=requests&param=${pendingRequest.id}`}
+              className="text-accent-primary underline underline-offset-2"
+            >
+              {pendingRequest.display_id}
+            </a>
+          </p>
+        )}
 
         <form
           id="request-task-form"

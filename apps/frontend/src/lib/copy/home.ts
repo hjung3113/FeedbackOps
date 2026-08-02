@@ -8,9 +8,12 @@ export const HOME_COPY = {
     const count = queues.reduce((total, queue) => total + queue.count, 0);
     return `오늘 워크스페이스에 ${count}개의 운영 갭이 있습니다. 우선순위가 높은 큐부터 확인하세요.`;
   },
-  queueHeading: 'Recovery & follow-up queues', myWork: 'My work', coverage: 'Coverage signals',
+  // #280: the "My work" heading pointed at a My Work screen that is out of the
+  // MVP. The rows below it are live (assigned Tasks + pending Task Requests),
+  // so the panel stays and only the promise of a destination goes away.
+  queueHeading: 'Recovery & follow-up queues', assignedToYou: 'Assigned to you', coverage: 'Coverage signals',
   openRequests: 'Open requests', noOpenRequests: 'No open requests.',
-  refresh: 'Refresh queues', newVoc: 'New VOC', openMyWork: 'Open My Work', viewCoverage: 'View coverage',
+  refresh: 'Refresh queues', newVoc: 'New VOC', viewCoverage: 'View coverage',
 } as const;
 
 export const HOME_KPI_COPY = { open_voc: 'Open VOC', active_finding: 'Active Finding', pending_request: 'Pending Request', tasks_in_flight: 'Tasks In Flight', coverage_percent: 'Coverage' } as const;

@@ -21,6 +21,7 @@ export const homeSummaryFixture = dashboardSummarySchema.parse({
 
 export const homeVisualSnapshot = 'home-action-dashboard.png';
 export const homeEmptyVisualSnapshot = 'home-action-dashboard-empty.png';
+export const inboxHighNoLinkSelectedVisualSnapshot = 'inbox-high-no-link-selected.png';
 
 const homeFixtureIds = {
   taskOne: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',

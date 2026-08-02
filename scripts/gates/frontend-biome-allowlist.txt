@@ -52,3 +52,21 @@ apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integ
 apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx organizeImports -- pre-existing on develop; import order predates biome
 apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx lint/style/useImportType -- pre-existing on develop (1x, unchanged)
 apps/frontend/src/features/voc/routes/InboxRoute.tsx lint/suspicious/noExplicitAny -- pre-existing on develop (10x, unchanged); the file's local slot types predate stricter typing
+apps/frontend/src/lib/layout/AppSidebar.tsx format -- pre-existing on develop; dense single-line JSX predates biome formatting
+apps/frontend/src/lib/layout/AppSidebar.tsx lint/a11y/useFocusableInteractive -- pre-existing on develop (1x, unchanged); the scope popover is a listbox of buttons
+apps/frontend/src/lib/layout/AppSidebar.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x, unchanged); the scope popover cannot be a native <select>, its options carry icons and badges
+apps/frontend/src/lib/layout/__tests__/AppSidebar.test.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/lib/layout/__tests__/AppSidebar.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/voc-clusters/$clusterId.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/voc-clusters/$clusterId.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx lint/a11y/noLabelWithoutControl -- pre-existing on develop (2x, unchanged); test-local harness markup
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx lint/a11y/useButtonType -- pre-existing on develop (1x, unchanged); test-local harness markup
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx lint/performance/noDelete -- pre-existing on develop (6x, unchanged); fixture teardown deletes optional keys
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (40x, unchanged); fixture lookups assert presence
+docs/design-prototype/screen-voc.jsx format -- pre-existing on develop; the prototype is a design reference, not shipped code
+docs/design-prototype/screen-voc.jsx lint/a11y/useButtonType -- pre-existing on develop (10x, unchanged); prototype reference, not shipped code
+docs/design-prototype/screen-voc.jsx lint/a11y/useKeyWithClickEvents -- pre-existing on develop (2x, unchanged); prototype reference, not shipped code
+docs/design-prototype/screen-voc.jsx lint/correctness/noUnusedVariables -- pre-existing on develop (2x, unchanged); prototype reference, not shipped code
+docs/design-prototype/screen-voc.jsx lint/security/noDangerouslySetInnerHtml -- pre-existing on develop (3x, unchanged); prototype reference, not shipped code
+apps/frontend/src/features/home/homeNavigation.tsx format -- pre-existing on develop; dense single-line entries predate biome formatting
