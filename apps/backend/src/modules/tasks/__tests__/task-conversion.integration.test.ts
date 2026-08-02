@@ -159,11 +159,11 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
   }
 
-  async function seedFinding(msId: string): Promise<string> {
+  async function seedFinding(msId: string, title = 'Seed finding'): Promise<string> {
     const row = await insertFindingRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: msId,
-      title: 'Seed finding',
+      title,
       summary: 'Finding source summary',
       sourceId: randomUUID(),
       confidence: 'medium',
@@ -178,12 +178,13 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       msId?: string;
       status?: 'pending_review' | 'approved' | 'rejected' | 'needs_more_evidence' | 'converted';
       requesterActorId?: string;
+      findingTitle?: string;
     } = {},
   ): Promise<{ id: string; msId: string; findingId: string; findingLinkId: string }> {
     const msId =
       input.msId ??
       (await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Task Convert MS'));
-    const findingId = await seedFinding(msId);
+    const findingId = await seedFinding(msId, input.findingTitle);
     const request = await insertTaskRequestRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       sourceId: findingId,
@@ -266,6 +267,20 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     });
   }
 
+  function getFinding(cookie: string, findingId: string) {
+    return app.inject({
+      method: 'GET',
+      url: `/findings/${findingId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+  }
+
+  async function seedConversionActor(suffix: string) {
+    const actor = await insertDevActor(dbHandle, WORKSPACE_ID, uid(`mock-dev-read-c7-${suffix}`));
+    const cookie = await loginAs(app, actor.externalId);
+    return { ...actor, cookie };
+  }
+
   function getEntityLinks(cookie: string, query: string) {
     return app.inject({
       method: 'GET',
@@ -334,6 +349,233 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       source_task_request_id: request.id,
       primary_managed_system_id: request.msId,
     });
+  });
+
+  it('AC-C7a: conversion projects the exact new task id onto its Finding', async () => {
+    const request = await seedApprovedTaskRequest({ findingTitle: 'C7a projection finding' });
+    const actor = await seedConversionActor('a');
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.manage',
+      request.msId,
+      adminActorId,
+    );
+
+    const converted = await convert(actor.cookie, request.id, {
+      title: 'C7a projected conversion task',
+      priority: 'medium',
+    });
+
+    expect(converted.statusCode).toBe(201);
+    const taskId = converted.json<{ id: string }>().id;
+    const finding = await dbHandle.pool.query<{ linked_task_id: string | null }>(
+      'select linked_task_id from finding.findings where id = $1',
+      [request.findingId],
+    );
+    expect(finding.rows[0]?.linked_task_id).toBe(taskId);
+  });
+
+  it('AC-C7b: conversion creates exactly one complete Finding-to-Task history link', async () => {
+    const request = await seedApprovedTaskRequest({ findingTitle: 'C7b entity link finding' });
+    const actor = await seedConversionActor('b');
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.manage',
+      request.msId,
+      adminActorId,
+    );
+
+    const converted = await convert(actor.cookie, request.id, {
+      title: 'C7b entity link conversion task',
+      priority: 'high',
+    });
+    expect(converted.statusCode).toBe(201);
+    const taskId = converted.json<{ id: string }>().id;
+    const links = await dbHandle.pool.query<{
+      workspace_id: string;
+      source_type: string;
+      source_id: string;
+      target_type: string;
+      target_id: string;
+      relation_type: string;
+      visibility: string;
+      status: string;
+      managed_system_id: string;
+    }>(
+      `select workspace_id, source_type, source_id, target_type, target_id, relation_type,
+              visibility, status, managed_system_id
+         from core.entity_links
+        where workspace_id = $1 and source_type = 'finding' and source_id = $2
+          and target_type = 'task' and target_id = $3 and relation_type = 'requested_task'`,
+      [WORKSPACE_ID, request.findingId, taskId],
+    );
+    expect(links.rows).toEqual([
+      {
+        workspace_id: WORKSPACE_ID,
+        source_type: 'finding',
+        source_id: request.findingId,
+        target_type: 'task',
+        target_id: taskId,
+        relation_type: 'requested_task',
+        visibility: 'internal_only',
+        status: 'active',
+        managed_system_id: request.msId,
+      },
+    ]);
+  });
+
+  it('AC-C7c: VOC conversion succeeds before asserting it creates no Finding backlink', async () => {
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'C7c VOC conversion MS',
+    );
+    const actor = await seedConversionActor('c');
+    await grantCapability(dbHandle, WORKSPACE_ID, actor.id, 'finding.manage', msId, adminActorId);
+    const voc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msId,
+      actor.id,
+      'C7c direct VOC',
+    );
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'voc',
+      sourceId: voc.id,
+      primaryManagedSystemId: msId,
+      requestedOutcome: 'C7c VOC conversion outcome',
+      requesterActorId: actor.id,
+      status: 'approved',
+      reviewerActorId: adminActorId,
+      decisionReason: 'C7c approved',
+      decided: true,
+    });
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        ) values ($1, 'voc', $2, 'task_request', $3, 'requested_task',
+                  'internal_only', 'active', $4, $5)`,
+      [WORKSPACE_ID, voc.id, request.id, msId, adminActorId],
+    );
+
+    const converted = await convert(actor.cookie, request.id, {
+      title: 'C7c VOC conversion task',
+      priority: 'low',
+    });
+    expect(converted.statusCode).toBe(201);
+    expect(converted.json<{ id: string }>().id).toEqual(expect.any(String));
+
+    const findingLinks = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.entity_links
+        where workspace_id = $1 and target_type = 'task' and target_id = $2
+          and source_type = 'finding' and relation_type = 'requested_task'`,
+      [WORKSPACE_ID, converted.json<{ id: string }>().id],
+    );
+    expect(findingLinks.rows[0]?.n).toBe(0);
+  });
+
+  it('AC-C7d: GET Finding projects the task id written by conversion', async () => {
+    const request = await seedApprovedTaskRequest({ findingTitle: 'C7d GET Finding projection' });
+    const actor = await seedConversionActor('d');
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.manage',
+      request.msId,
+      adminActorId,
+    );
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.read',
+      request.msId,
+      adminActorId,
+    );
+    const converted = await convert(actor.cookie, request.id, {
+      title: 'C7d Finding DTO conversion task',
+      priority: 'urgent',
+    });
+    expect(converted.statusCode).toBe(201);
+
+    const finding = await getFinding(actor.cookie, request.findingId);
+    expect(finding.statusCode).toBe(200);
+    expect(finding.json()).toMatchObject({
+      id: request.findingId,
+      linked_task_id: converted.json<{ id: string }>().id,
+    });
+  });
+
+  it('AC-C7e: conversion preserves a pre-existing Finding projection while retaining history', async () => {
+    const request = await seedApprovedTaskRequest({
+      findingTitle: 'C7e conflicting projection finding',
+    });
+    const actor = await seedConversionActor('e');
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.manage',
+      request.msId,
+      adminActorId,
+    );
+    const existingTaskId = await seedTask(request.msId, 'C7e existing linked task');
+    await migrateHandle.pool.query(
+      'update finding.findings set linked_task_id = $1 where id = $2',
+      [existingTaskId, request.findingId],
+    );
+
+    const converted = await convert(actor.cookie, request.id, {
+      title: 'C7e conflicting conversion task',
+      priority: 'medium',
+    });
+    expect(converted.statusCode).toBe(201);
+    const taskId = converted.json<{ id: string }>().id;
+    const finding = await dbHandle.pool.query<{ linked_task_id: string | null }>(
+      'select linked_task_id from finding.findings where id = $1',
+      [request.findingId],
+    );
+    expect(finding.rows[0]?.linked_task_id).toBe(existingTaskId);
+    const history = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.entity_links
+        where workspace_id = $1 and source_type = 'finding' and source_id = $2
+          and target_type = 'task' and target_id = $3 and relation_type = 'requested_task'
+          and status = 'active'`,
+      [WORKSPACE_ID, request.findingId, taskId],
+    );
+    expect(history.rows[0]?.n).toBe(1);
+  });
+
+  it('AC-C7f: an actor who can read the existing Finding is denied conversion without finding.manage', async () => {
+    const request = await seedApprovedTaskRequest({
+      findingTitle: 'C7f unauthorized existing Finding',
+    });
+    const actor = await seedConversionActor('f');
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.read',
+      request.msId,
+      adminActorId,
+    );
+
+    const readable = await getFinding(actor.cookie, request.findingId);
+    expect(readable.statusCode).toBe(200);
+    const denied = await convert(actor.cookie, request.id, {
+      title: 'C7f denied conversion task',
+      priority: 'medium',
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json<{ code: string }>().code).toBe('permission.denied');
   });
 
   it.each(['pending_review', 'rejected'] as const)(

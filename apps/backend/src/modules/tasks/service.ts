@@ -22,6 +22,7 @@ import {
   selectEligibleVocLinksForReleasedTask,
 } from '../entity-links/repo.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
+import { lockFindingById, updateFindingLinkedTask } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
 import {
@@ -275,6 +276,20 @@ export function createTasksService(deps: TasksServiceDeps) {
             taskRequest,
             task,
           });
+
+          if (taskRequest.source_type === 'finding') {
+            const finding = await lockFindingById(tx, {
+              workspaceId: args.actor.workspace_id,
+              findingId: taskRequest.source_id,
+            });
+            if (finding?.linked_task_id === null) {
+              await updateFindingLinkedTask(tx, {
+                workspaceId: args.actor.workspace_id,
+                findingId: finding.id,
+                taskId: task.id,
+              });
+            }
+          }
 
           await markTaskRequestConverted(tx, {
             workspaceId: args.actor.workspace_id,

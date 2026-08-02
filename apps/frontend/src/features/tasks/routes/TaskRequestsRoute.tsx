@@ -14,7 +14,13 @@ import {
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';
-import type { TaskDto, TaskPriority, TaskRequestDto, TaskRequestStatus } from '@fops/shared';
+import {
+  convertTaskRequestRequestSchema,
+  type TaskDto,
+  type TaskPriority,
+  type TaskRequestDto,
+  type TaskRequestStatus,
+} from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
@@ -75,6 +81,20 @@ const STATUS_SEVERITY: Record<TaskRequestStatus, ObjectRowSeverity> = {
 
 const REVIEW_DECISION_STATUSES = ['pending_review', 'needs_more_evidence'] as const;
 const TASK_PRIORITIES: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
+const TASK_TITLE_TRUNCATION_MARKER = '…';
+const TASK_TITLE_MAX_LENGTH = convertTaskRequestRequestSchema.shape.title.maxLength;
+
+if (TASK_TITLE_MAX_LENGTH === null) {
+  throw new Error('Task conversion title requires a canonical maximum length.');
+}
+
+function defaultConvertTitle(requestedOutcome: string): string {
+  if (requestedOutcome.length <= TASK_TITLE_MAX_LENGTH) return requestedOutcome;
+  return `${requestedOutcome.slice(
+    0,
+    TASK_TITLE_MAX_LENGTH - TASK_TITLE_TRUNCATION_MARKER.length,
+  )}${TASK_TITLE_TRUNCATION_MARKER}`;
+}
 
 export function canApproveTaskRequest(status: TaskRequestStatus): boolean {
   return REVIEW_DECISION_STATUSES.some((allowed) => allowed === status);
@@ -208,7 +228,11 @@ function TaskRequestPanel({
   const isSelfApproval = currentActorId === item.requester_actor_id;
   const [convertOpen, setConvertOpen] = React.useState(false);
   const [linkOpen, setLinkOpen] = React.useState(false);
-  const [convertTitle, setConvertTitle] = React.useState(item.requested_outcome);
+  const [convertTitle, setConvertTitle] = React.useState(() =>
+    defaultConvertTitle(item.requested_outcome),
+  );
+  const [convertTitleError, setConvertTitleError] = React.useState<string | null>(null);
+  const convertTitleInputRef = React.useRef<HTMLInputElement>(null);
   const [convertPriority, setConvertPriority] = React.useState<TaskPriority>('medium');
   const [convertAssigneeId, setConvertAssigneeId] = React.useState('');
   const [convertDueDate, setConvertDueDate] = React.useState('');
@@ -216,7 +240,8 @@ function TaskRequestPanel({
   const [convertAnalyticsAreaId, setConvertAnalyticsAreaId] = React.useState('');
 
   React.useEffect(() => {
-    setConvertTitle(item.requested_outcome);
+    setConvertTitle(defaultConvertTitle(item.requested_outcome));
+    setConvertTitleError(null);
     setConvertPriority('medium');
     setConvertAssigneeId('');
     setConvertDueDate('');
@@ -301,9 +326,6 @@ function TaskRequestPanel({
   const convertMutation = useMutation<TaskDto, Error, void>({
     mutationFn: async () => {
       const title = convertTitle.trim();
-      if (title.length === 0) {
-        throw new Error('Title is required.');
-      }
       return convertTaskRequest(
         item.id,
         {
@@ -521,17 +543,54 @@ function TaskRequestPanel({
                 className="flex flex-col gap-2 rounded border border-border-subtle bg-surface-card p-3"
                 onSubmit={(event) => {
                   event.preventDefault();
+                  const titleResult = convertTaskRequestRequestSchema.shape.title.safeParse(
+                    convertTitle,
+                  );
+                  if (!titleResult.success) {
+                    setConvertTitleError(
+                      titleResult.error.issues[0]?.message ?? 'Title is invalid.',
+                    );
+                    convertTitleInputRef.current?.focus();
+                    return;
+                  }
+                  setConvertTitleError(null);
                   convertMutation.mutate();
                 }}
               >
                 <label className="flex flex-col gap-1 text-xs text-text-muted">
                   Title
                   <input
+                    ref={convertTitleInputRef}
                     className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
                     value={convertTitle}
-                    maxLength={200}
-                    onChange={(event) => setConvertTitle(event.target.value)}
+                    aria-invalid={convertTitleError !== null}
+                    aria-describedby={
+                      convertTitleError
+                        ? 'task-request-convert-title-count task-request-convert-title-error'
+                        : 'task-request-convert-title-count'
+                    }
+                    data-testid="task-request-convert-title-input"
+                    onChange={(event) => {
+                      setConvertTitle(event.target.value);
+                      setConvertTitleError(null);
+                    }}
                   />
+                  <span
+                    id="task-request-convert-title-count"
+                    data-testid="task-request-convert-title-count"
+                  >
+                    {convertTitle.length}/{TASK_TITLE_MAX_LENGTH}
+                  </span>
+                  {convertTitleError && (
+                    <span
+                      id="task-request-convert-title-error"
+                      role="alert"
+                      className="text-xs text-accent-danger"
+                      data-testid="task-request-convert-title-error"
+                    >
+                      {convertTitleError}
+                    </span>
+                  )}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="flex flex-col gap-1 text-xs text-text-muted">
@@ -601,6 +660,7 @@ function TaskRequestPanel({
                   size="sm"
                   loading={convertMutation.isPending}
                   disabled={!canConvert}
+                  data-testid="task-request-convert-submit"
                 >
                   Convert to Task
                 </Button>
