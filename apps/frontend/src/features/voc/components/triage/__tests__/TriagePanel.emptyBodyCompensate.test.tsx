@@ -11,10 +11,10 @@
 // `updated_at` from that envelope as the If-Match for the compensating PATCH.
 // Throwing on `undefined` (the old breakage) is not acceptable either.
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/api/analytics-areas', () => ({
   fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
@@ -36,8 +36,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { TriagePanel } from '../TriagePanel';
 import type { VocListItem } from '@fops/shared';
+import { TriagePanel } from '../TriagePanel';
 
 const ORIGINAL_UPDATED_AT = '2026-05-01T00:00:00.000Z';
 const REFETCHED_UPDATED_AT = '2026-05-02T12:00:00.000Z';
@@ -196,10 +196,9 @@ describe('TriagePanel — empty-body compensate (REV-3 Cluster Y)', () => {
     // After undo, compensate path must refetch the VOC detail (because the
     // first PATCH body was empty / lacked fresh updated_at) and fire a 2nd
     // PATCH using REFETCHED_UPDATED_AT as If-Match.
-    await waitFor(
-      () => expect(patchIfMatchHeaders.length).toBeGreaterThanOrEqual(2),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(patchIfMatchHeaders.length).toBeGreaterThanOrEqual(2), {
+      timeout: 3000,
+    });
     expect(vocDetailFetched).toBeGreaterThanOrEqual(1);
     expect(patchIfMatchHeaders[1]).toBe(REFETCHED_UPDATED_AT);
 

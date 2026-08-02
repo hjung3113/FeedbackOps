@@ -13,7 +13,7 @@ export const chunkBVisualScenarios = [
 ] as const;
 export type ChunkBVisualScenario = (typeof chunkBVisualScenarios)[number];
 
-export const CHUNK_B_IDS = {
+export const TRIAGE_AREA_IDS = {
   workspace: '30000000-0000-4000-8000-000000000001',
   actor: '30000000-0000-4000-8000-000000000002',
   managedSystem: '30000000-0000-4000-8000-000000000003',
@@ -47,9 +47,9 @@ export const chunkBAnalyticsAreasResponseSchema = z
 export const chunkBAnalyticsAreas = chunkBAnalyticsAreasResponseSchema.parse({
   items: [
     {
-      id: CHUNK_B_IDS.currentArea,
-      workspace_id: CHUNK_B_IDS.workspace,
-      managed_system_id: CHUNK_B_IDS.managedSystem,
+      id: TRIAGE_AREA_IDS.currentArea,
+      workspace_id: TRIAGE_AREA_IDS.workspace,
+      managed_system_id: TRIAGE_AREA_IDS.managedSystem,
       slug: 'marketing-attribution',
       name: 'Marketing Attribution',
       owner_team_id: null,
@@ -59,9 +59,9 @@ export const chunkBAnalyticsAreas = chunkBAnalyticsAreasResponseSchema.parse({
       updated_at: '2026-08-01T00:00:00.000Z',
     },
     {
-      id: CHUNK_B_IDS.alternativeArea,
-      workspace_id: CHUNK_B_IDS.workspace,
-      managed_system_id: CHUNK_B_IDS.managedSystem,
+      id: TRIAGE_AREA_IDS.alternativeArea,
+      workspace_id: TRIAGE_AREA_IDS.workspace,
+      managed_system_id: TRIAGE_AREA_IDS.managedSystem,
       slug: 'subscription-health',
       name: 'Subscription Health',
       owner_team_id: null,
@@ -75,12 +75,12 @@ export const chunkBAnalyticsAreas = chunkBAnalyticsAreasResponseSchema.parse({
 });
 
 const vocBase = {
-  id: CHUNK_B_IDS.voc,
+  id: TRIAGE_AREA_IDS.voc,
   display_id: 'VOC-2812',
   title: 'Looker 모델 변경 후 알림이 오지 않음',
-  primary_managed_system_id: CHUNK_B_IDS.managedSystem,
-  analytics_area_id: CHUNK_B_IDS.currentArea,
-  reporter_id: CHUNK_B_IDS.actor,
+  primary_managed_system_id: TRIAGE_AREA_IDS.managedSystem,
+  analytics_area_id: TRIAGE_AREA_IDS.currentArea,
+  reporter_id: TRIAGE_AREA_IDS.actor,
   owner_user_id: null,
   owner_team_id: null,
   severity: 'medium' as const,

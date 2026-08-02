@@ -1,7 +1,7 @@
-import { expect, test } from '../support/visual-test';
-import { expectVisual } from '../support/screenshot';
 import { installMockApi } from '../support/mock-api';
-import { CHUNK_B_IDS } from './chunk-b-triage-area';
+import { expectVisual } from '../support/screenshot';
+import { expect, test } from '../support/visual-test';
+import { TRIAGE_AREA_IDS } from './fixtures/triage-analytics-area';
 
 test.describe('Chunk B Analytics Area visual states', () => {
   test('triage-analytics-area-populated', async ({ page }) => {
@@ -19,7 +19,7 @@ test.describe('Chunk B Analytics Area visual states', () => {
 
   test('create-finding-area-inherited', async ({ page }) => {
     await installMockApi(page, { chunkBScenario: 'create-finding-area-inherited' });
-    await page.goto(`/vocs?view=inbox&selected=${CHUNK_B_IDS.voc}`);
+    await page.goto(`/vocs?view=inbox&selected=${TRIAGE_AREA_IDS.voc}`);
     await page.getByRole('button', { name: 'Finding 생성' }).click();
 
     const dialog = page.getByRole('dialog', { name: 'Finding 생성' });

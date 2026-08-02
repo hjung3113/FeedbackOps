@@ -9,10 +9,10 @@
 // an old toast after a newer mutation has started must NOT affect the newer
 // call.
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/api/analytics-areas', () => ({
   fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
@@ -39,8 +39,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { TriagePanel } from '../TriagePanel';
 import type { VocListItem } from '@fops/shared';
+import { TriagePanel } from '../TriagePanel';
 
 const MOCK_VOC: VocListItem = {
   id: 'voc-rev3-clusterX',

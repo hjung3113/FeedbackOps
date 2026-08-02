@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
@@ -69,8 +68,6 @@ vi.mock('@/features/voc/components/detail/SimilarVocSection', () => ({
 }));
 vi.mock('@/features/voc/components/detail/TriageBlock', () => ({ TriageBlock: () => null }));
 
-import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
-import { useMe } from '@/lib/auth/useMe';
 import { VocDetailPanel } from '@/features/voc/components/detail/VocDetailPanel';
 import {
   DETAIL_ENVELOPE,
@@ -78,6 +75,8 @@ import {
   makeDetailQuery,
   makeMeQuery,
 } from '@/features/voc/components/detail/__tests__/_fixtures';
+import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
+import { useMe } from '@/lib/auth/useMe';
 
 const AREA_ID = '20000000-0000-4000-8000-000000000001';
 

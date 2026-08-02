@@ -1,7 +1,6 @@
+import type { VocListItem } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { VocListItem } from '@fops/shared';
-import type * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
@@ -19,7 +18,7 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { fetchAnalyticsAreas, type AnalyticsAreaDto } from '@/lib/api/analytics-areas';
+import { type AnalyticsAreaDto, fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { TriagePanel } from '../TriagePanel';
 
 const IDS = {
@@ -77,7 +76,13 @@ function area(
 const AREAS = [
   area(IDS.targetCurrent, IDS.targetMs, '매출 운영 분석', 'revenue-ops'),
   area(IDS.targetOther, IDS.targetMs, '고객 여정 분석', 'customer-journey'),
-  area(IDS.targetArchived, IDS.targetMs, '레거시 재무 분석', 'legacy-finance', '2026-07-01T00:00:00.000Z'),
+  area(
+    IDS.targetArchived,
+    IDS.targetMs,
+    '레거시 재무 분석',
+    'legacy-finance',
+    '2026-07-01T00:00:00.000Z',
+  ),
   area(
     IDS.targetArchivedOther,
     IDS.targetMs,
@@ -150,7 +155,9 @@ describe('TriagePanel Analytics Area and optional owner', () => {
 
     const current = await screen.findByRole('radio', { name: '레거시 재무 분석 (보관됨)' });
     expect(current).toHaveAttribute('data-state', 'on');
-    expect(screen.queryByRole('radio', { name: '종료된 캠페인 분석 (보관됨)' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('radio', { name: '종료된 캠페인 분석 (보관됨)' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: '매출 운영 분석' })).toBeInTheDocument();
   });
 
@@ -165,11 +172,12 @@ describe('TriagePanel Analytics Area and optional owner', () => {
   });
 
   it('AC-B10a submits null owner ids while keeping the dirty confirm action enabled', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      new Response(JSON.stringify({ updated_at: '2026-08-02T01:00:00.000Z' }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ updated_at: '2026-08-02T01:00:00.000Z' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
     ) as typeof globalThis.fetch;
     renderPanel({ ...VOC, analytics_area_id: null });
     fireEvent.click(screen.getByRole('button', { name: /Low/i }));
@@ -179,7 +187,9 @@ describe('TriagePanel Analytics Area and optional owner', () => {
     fireEvent.click(confirm);
 
     await waitFor(() =>
-      expect(vi.mocked(globalThis.fetch).mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(true),
+      expect(
+        vi.mocked(globalThis.fetch).mock.calls.some(([, init]) => init?.method === 'PATCH'),
+      ).toBe(true),
     );
     const patchCall = vi
       .mocked(globalThis.fetch)

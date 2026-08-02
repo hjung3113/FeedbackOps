@@ -9,10 +9,10 @@
 // Fix: snapshot from voc.severity, voc.owner_user_id, voc.owner_team_id,
 // voc.analytics_area_id at the moment confirm fires.
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/api/analytics-areas', () => ({
   fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
@@ -34,8 +34,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { TriagePanel } from '../TriagePanel';
 import type { VocListItem } from '@fops/shared';
+import { TriagePanel } from '../TriagePanel';
 
 // VOC with PRIOR values already populated — the user is re-triaging.
 const PRIOR_VOC: VocListItem = {
@@ -43,7 +43,7 @@ const PRIOR_VOC: VocListItem = {
   display_id: 'VOC-R3',
   title: 'REV-1 P1-3',
   reporter_facing_status: 'received',
-  severity: 'low',                                   // prior severity
+  severity: 'low', // prior severity
   owner_user_id: '00000000-0000-0000-0000-000000000aaa', // prior owner
   owner_team_id: null,
   analytics_area_id: '00000000-0000-0000-0000-000000000bbb', // prior AA
@@ -166,7 +166,7 @@ describe('TriagePanel — compensating PATCH payload (REV-1 #3)', () => {
     const comp = requests[1];
     expect(comp).toBeTruthy();
     expect(comp?.body.triage_state).toBe('untriaged');
-    expect(comp?.body.severity).toBe('low');                                       // PRIOR, not 'high'
+    expect(comp?.body.severity).toBe('low'); // PRIOR, not 'high'
     expect(comp?.body.owner_user_id).toBe('00000000-0000-0000-0000-000000000aaa'); // PRIOR
     expect(comp?.body.owner_team_id).toBeNull();
     expect(comp?.body.analytics_area_id).toBe('00000000-0000-0000-0000-000000000bbb'); // PRIOR

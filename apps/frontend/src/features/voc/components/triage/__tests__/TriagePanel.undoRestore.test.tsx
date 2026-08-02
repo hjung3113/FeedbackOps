@@ -7,10 +7,10 @@
 //
 // Fix expectation: pending-abort path must invoke onOptimisticRestore(vocId).
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/api/analytics-areas', () => ({
   fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
@@ -33,8 +33,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { TriagePanel } from '../TriagePanel';
 import type { VocListItem } from '@fops/shared';
+import { TriagePanel } from '../TriagePanel';
 
 const MOCK_VOC: VocListItem = {
   id: 'voc-rev1-p1-1',
@@ -94,7 +94,10 @@ describe('TriagePanel — undo while in-flight (REV-1 #1)', () => {
   it('clicking 실행 취소 while PATCH is in-flight calls onOptimisticRestore with the VOC id', async () => {
     // Long-running fetch — never resolves before undo is clicked.
     globalThis.fetch = vi.fn(
-      () => new Promise<Response>(() => { /* never resolves */ }),
+      () =>
+        new Promise<Response>(() => {
+          /* never resolves */
+        }),
     ) as typeof globalThis.fetch;
 
     const onOptimisticRemove = vi.fn();

@@ -2,15 +2,16 @@
 // Fields: title, summary, severity. Mirrors EditDescriptionModal pattern.
 // On success: navigates to /findings/:newId.
 
-import * as React from 'react';
-import { Controller, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
-import { toast } from 'sonner';
+import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import {
-  Button,
+  type CreateFindingRequest,
+  type FindingSeverity,
+  createFindingRequestSchema,
+} from '@fops/shared';
+import {
   AnalyticsAreaPicker,
+  Button,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -25,9 +26,12 @@ import {
   SelectValue,
   Textarea,
 } from '@fops/ui';
-import { createFindingRequestSchema, type CreateFindingRequest, type FindingSeverity } from '@fops/shared';
-import { useIdempotencyKey, errorMapper, type ApiError } from '@/lib/api';
-import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import * as React from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import { useCreateFindingFromVocMutation } from '../../hooks/useCreateFindingFromVocMutation';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -185,7 +189,9 @@ export function CreateFindingModal({
             </FieldLabel>
             <Select
               defaultValue="medium"
-              onValueChange={(val) => form.setValue('severity', val as FindingSeverity, { shouldValidate: true })}
+              onValueChange={(val) =>
+                form.setValue('severity', val as FindingSeverity, { shouldValidate: true })
+              }
             >
               <SelectTrigger id="finding-severity">
                 <SelectValue placeholder="심각도 선택" />

@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigate = vi.fn();
@@ -11,7 +10,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 vi.mock('@/lib/api/analytics-areas', () => ({ fetchAnalyticsAreas: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
-import { fetchAnalyticsAreas, type AnalyticsAreaDto } from '@/lib/api/analytics-areas';
+import { type AnalyticsAreaDto, fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { CreateFindingModal } from '../CreateFindingModal';
 
 const IDS = {
@@ -81,11 +80,12 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
     navigate.mockReset();
     vi.mocked(fetchAnalyticsAreas).mockReset();
     vi.mocked(fetchAnalyticsAreas).mockResolvedValue({ items: AREAS, total: AREAS.length });
-    globalThis.fetch = vi.fn(async () =>
-      new Response(JSON.stringify({ id: '10000000-0000-4000-8000-000000000050' }), {
-        status: 201,
-        headers: { 'content-type': 'application/json' },
-      }),
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: '10000000-0000-4000-8000-000000000050' }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        }),
     ) as typeof globalThis.fetch;
   });
 
