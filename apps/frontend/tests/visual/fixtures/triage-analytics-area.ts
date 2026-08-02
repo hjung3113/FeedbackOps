@@ -7,11 +7,11 @@ import {
 } from '@fops/shared';
 import { z } from 'zod';
 
-export const chunkBVisualScenarios = [
+export const triageAreaVisualScenarios = [
   'triage-analytics-area-populated',
   'create-finding-area-inherited',
 ] as const;
-export type ChunkBVisualScenario = (typeof chunkBVisualScenarios)[number];
+export type TriageAreaVisualScenario = (typeof triageAreaVisualScenarios)[number];
 
 export const TRIAGE_AREA_IDS = {
   workspace: '30000000-0000-4000-8000-000000000001',
@@ -37,14 +37,14 @@ const analyticsAreaSchema = z
   })
   .strict();
 
-export const chunkBAnalyticsAreasResponseSchema = z
+export const triageAreaAnalyticsAreasResponseSchema = z
   .object({
     items: z.array(analyticsAreaSchema),
     total: z.number().int().nonnegative(),
   })
   .strict();
 
-export const chunkBAnalyticsAreas = chunkBAnalyticsAreasResponseSchema.parse({
+export const triageAreaAnalyticsAreas = triageAreaAnalyticsAreasResponseSchema.parse({
   items: [
     {
       id: TRIAGE_AREA_IDS.currentArea,
@@ -93,9 +93,9 @@ const vocBase = {
   attachment_count: 0,
 };
 
-export const chunkBTriageVoc = vocListItemSchema.parse(vocBase);
+export const triageAreaTriageVoc = vocListItemSchema.parse(vocBase);
 
-export const chunkBFindingSourceVoc = vocDetailEnvelopeSchema.parse({
+export const triageAreaFindingSourceVoc = vocDetailEnvelopeSchema.parse({
   ...vocBase,
   description_rich_content: {
     type: 'doc',
@@ -116,9 +116,9 @@ export const chunkBFindingSourceVoc = vocDetailEnvelopeSchema.parse({
   attachments: [],
 });
 
-export const chunkBActors = listActorsResponseSchema.parse({ actors: [] });
+export const triageAreaActors = listActorsResponseSchema.parse({ actors: [] });
 
-export const chunkBConversationPage = z
+export const triageAreaConversationPage = z
   .object({
     items: z.array(conversationEntrySchema),
     next_cursor: z.string().optional(),
@@ -126,6 +126,6 @@ export const chunkBConversationPage = z
   })
   .parse({ items: [], has_more: false });
 
-export const chunkBReviewCandidates = listPublicUpdateReviewCandidatesResponseSchema.parse({
+export const triageAreaReviewCandidates = listPublicUpdateReviewCandidatesResponseSchema.parse({
   items: [],
 });

@@ -56,15 +56,15 @@ import {
   surveyVisualFixtureSchema,
 } from '../fixtures/surveys';
 import {
-  type ChunkBVisualScenario,
+  type TriageAreaVisualScenario,
   TRIAGE_AREA_IDS,
-  chunkBActors,
-  chunkBAnalyticsAreas,
-  chunkBAnalyticsAreasResponseSchema,
-  chunkBConversationPage,
-  chunkBFindingSourceVoc,
-  chunkBReviewCandidates,
-  chunkBTriageVoc,
+  triageAreaActors,
+  triageAreaAnalyticsAreas,
+  triageAreaAnalyticsAreasResponseSchema,
+  triageAreaConversationPage,
+  triageAreaFindingSourceVoc,
+  triageAreaReviewCandidates,
+  triageAreaTriageVoc,
 } from '../fixtures/triage-analytics-area';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
@@ -101,7 +101,7 @@ interface InstallOptions {
   /** Home action dashboard fixture state. */
   home?: 'populated' | 'empty';
   /** Chunk B Analytics Area wiring and Finding inheritance states. */
-  chunkBScenario?: ChunkBVisualScenario;
+  triageAreaScenario?: TriageAreaVisualScenario;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -264,54 +264,54 @@ export async function installMockApi(
       return;
     }
 
-    if (options.chunkBScenario && isRequest(route, 'GET', '/vocs')) {
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/vocs')) {
       await json(route, 200, {
         items: [
-          options.chunkBScenario === 'triage-analytics-area-populated'
-            ? chunkBTriageVoc
-            : chunkBFindingSourceVoc,
+          options.triageAreaScenario === 'triage-analytics-area-populated'
+            ? triageAreaTriageVoc
+            : triageAreaFindingSourceVoc,
         ],
       });
       return;
     }
 
     if (
-      options.chunkBScenario === 'create-finding-area-inherited' &&
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
       isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}`)
     ) {
-      await json(route, 200, chunkBFindingSourceVoc);
+      await json(route, 200, triageAreaFindingSourceVoc);
       return;
     }
 
     if (
-      options.chunkBScenario === 'create-finding-area-inherited' &&
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
       isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}/conversation`)
     ) {
-      await json(route, 200, chunkBConversationPage);
+      await json(route, 200, triageAreaConversationPage);
       return;
     }
 
     if (
-      options.chunkBScenario === 'create-finding-area-inherited' &&
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
       isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}/public-update-candidates`)
     ) {
-      await json(route, 200, chunkBReviewCandidates);
+      await json(route, 200, triageAreaReviewCandidates);
       return;
     }
 
-    if (options.chunkBScenario && isRequest(route, 'GET', '/analytics-areas')) {
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/analytics-areas')) {
       if (
         url.searchParams.get('managed_system_id') !== TRIAGE_AREA_IDS.managedSystem ||
         url.searchParams.get('include_archived') !== 'true'
       ) {
         throw new Error(`Unexpected Chunk B Analytics Area query: ${url.search}`);
       }
-      await json(route, 200, chunkBAnalyticsAreasResponseSchema.parse(chunkBAnalyticsAreas));
+      await json(route, 200, triageAreaAnalyticsAreasResponseSchema.parse(triageAreaAnalyticsAreas));
       return;
     }
 
-    if (options.chunkBScenario && isRequest(route, 'GET', '/actors')) {
-      await json(route, 200, chunkBActors);
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, triageAreaActors);
       return;
     }
 

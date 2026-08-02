@@ -5,7 +5,7 @@ import { TRIAGE_AREA_IDS } from './fixtures/triage-analytics-area';
 
 test.describe('Chunk B Analytics Area visual states', () => {
   test('triage-analytics-area-populated', async ({ page }) => {
-    await installMockApi(page, { chunkBScenario: 'triage-analytics-area-populated' });
+    await installMockApi(page, { triageAreaScenario: 'triage-analytics-area-populated' });
     await page.goto('/vocs?view=triage');
 
     const currentArea = page.getByRole('radio', { name: 'Marketing Attribution' });
@@ -18,7 +18,7 @@ test.describe('Chunk B Analytics Area visual states', () => {
   });
 
   test('create-finding-area-inherited', async ({ page }) => {
-    await installMockApi(page, { chunkBScenario: 'create-finding-area-inherited' });
+    await installMockApi(page, { triageAreaScenario: 'create-finding-area-inherited' });
     await page.goto(`/vocs?view=inbox&selected=${TRIAGE_AREA_IDS.voc}`);
     await page.getByRole('button', { name: 'Finding 생성' }).click();
 
