@@ -17,11 +17,28 @@ export type AdminSettingsVisualScenario =
   | 'editing'
   | 'locked'
   | 'no-permission'
-  | 'error';
+  | 'error'
+  | 'settings-self-approval-scoped';
 
 export const adminSettingsVisualScenarios = z
-  .array(z.enum(['default', 'editing', 'locked', 'no-permission', 'error']))
-  .parse(['default', 'editing', 'locked', 'no-permission', 'error']);
+  .array(
+    z.enum([
+      'default',
+      'editing',
+      'locked',
+      'no-permission',
+      'error',
+      'settings-self-approval-scoped',
+    ]),
+  )
+  .parse([
+    'default',
+    'editing',
+    'locked',
+    'no-permission',
+    'error',
+    'settings-self-approval-scoped',
+  ]);
 
 export const adminSettingsFixture = adminSettingsFixtureSchema.parse({
   permission_self_approval: 'forbidden',

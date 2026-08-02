@@ -128,7 +128,9 @@ describe('/admin/settings route', () => {
     expect(
       screen.getByText('Self-approval of Permission Request', { exact: true }),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Self-approval of Task Request', { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Self-approval of Task Request', { exact: true }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText(
         '다른 Managed System 의 entity 를 참조·연결할 수 있는지 결정합니다. 차단된 경우 PermissionBlockedPanel 로 표시됩니다.',
@@ -173,7 +175,9 @@ describe('/admin/settings route', () => {
     renderRoute();
 
     await screen.findByTestId('workspace-settings-screen');
-    expect(screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
+    ).not.toBeInTheDocument();
 
     const selfApprovalEditButton = screen.getAllByRole('button', { name: 'Edit' })[0];
     if (!selfApprovalEditButton) throw new Error('Self-approval edit button is missing');
@@ -182,12 +186,16 @@ describe('/admin/settings route', () => {
       target: { value: 'allowed' },
     });
 
-    expect(screen.getByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다')).toBeInTheDocument();
+    expect(
+      screen.getByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
+    ).toBeInTheDocument();
     expect(screen.getByText(/^active capability grant —/)).toBeInTheDocument();
     expect(screen.queryByText(/^\d+ active capability grant$/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
-    expect(screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Retro 영향: 백로그 일부가 자동 해제될 수 있습니다'),
+    ).not.toBeInTheDocument();
   });
 
   test('patches only the changed field, applies its response, and discards local edits', async () => {
@@ -252,7 +260,7 @@ describe('/admin/settings route', () => {
       target: { value: 'allowed' },
     });
     expect(saveBar).toHaveTextContent('2 unsaved changes');
-    expect(saveBar).toHaveTextContent('Self-approval · Anonymity threshold');
+    expect(saveBar).toHaveTextContent('Self-approval of Permission Request · Anonymity threshold');
 
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(screen.queryByText('Unsaved')).not.toBeInTheDocument());
