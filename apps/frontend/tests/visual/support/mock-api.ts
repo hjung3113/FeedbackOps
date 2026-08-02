@@ -29,10 +29,20 @@ import {
   adminSettingsPatchSchema,
 } from '../fixtures/admin-settings';
 import {
+  managedSystemOwnerActors,
+  managedSystemOwnerList,
+  managedSystemVisualSchema,
+  registerManagedSystemVisualBodySchema,
+} from '../fixtures/managed-system-owner';
+import {
+  permissionRequestComposeBodySchema,
+  permissionRequestComposeSuccess,
+} from '../fixtures/permission-request-compose';
+import {
   type PermissionScenarioName,
   createPermissionRequestsScenario,
-  permissionSettingsFixture,
   permissionDecisionResultTemplates,
+  permissionSettingsFixture,
   workspaceActorsFixture,
 } from '../fixtures/permissions';
 import {
@@ -84,6 +94,10 @@ interface InstallOptions {
   savedViews?: boolean;
   /** Home action dashboard fixture state. */
   home?: 'populated' | 'empty';
+  /** Request-access confirmation dialog state; screenshot spec is host-owned. */
+  permissionRequestCompose?: boolean;
+  /** Managed System registration dialog with owner candidates; screenshot spec is host-owned. */
+  managedSystemOwner?: boolean;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -301,8 +315,12 @@ export async function installMockApi(
 
     if (isRequest(route, 'GET', '/me/permissions/check')) {
       await json(route, 200, {
-        state: role === 'admin' ? 'approved' : 'blocked_non_requestable',
-        decision: { allow: role === 'admin' },
+        state: options.permissionRequestCompose
+          ? 'request_access'
+          : role === 'admin'
+            ? 'approved'
+            : 'blocked_non_requestable',
+        decision: { allow: role === 'admin' && !options.permissionRequestCompose },
       });
       return;
     }
@@ -318,7 +336,51 @@ export async function installMockApi(
     }
 
     if (isRequest(route, 'GET', '/actors')) {
-      await json(route, 200, workspaceActorsFixture);
+      await json(
+        route,
+        200,
+        options.managedSystemOwner ? managedSystemOwnerActors : workspaceActorsFixture,
+      );
+      return;
+    }
+
+    if (options.permissionRequestCompose && isRequest(route, 'POST', '/permission-requests')) {
+      const body = permissionRequestComposeBodySchema.parse(request.postDataJSON());
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      await json(route, 201, permissionRequestComposeSuccess);
+      return;
+    }
+
+    if (options.managedSystemOwner && isRequest(route, 'POST', '/managed-systems')) {
+      const body = registerManagedSystemVisualBodySchema.parse(request.postDataJSON());
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      await json(
+        route,
+        201,
+        managedSystemVisualSchema.parse({
+          id: '22222222-2222-4222-8222-222222222274',
+          workspace_id: IDS.workspace,
+          slug: body.slug,
+          name: body.name,
+          external_key: body.external_key ?? null,
+          default_owner_actor_id: body.default_owner_actor_id ?? null,
+          default_owner_team_id: body.default_owner_team_id ?? null,
+          archived_at: null,
+          archived_by_actor_id: null,
+          created_at: '2026-08-03T09:30:00.000Z',
+          updated_at: '2026-08-03T09:30:00.000Z',
+        }),
+      );
       return;
     }
 
@@ -439,7 +501,15 @@ export async function installMockApi(
     }
 
     if (isRequest(route, 'GET', '/managed-systems')) {
-      await json(route, 200, options.railScope ? railScopeManagedSystems : managedSystems);
+      await json(
+        route,
+        200,
+        options.managedSystemOwner
+          ? managedSystemOwnerList
+          : options.railScope
+            ? railScopeManagedSystems
+            : managedSystems,
+      );
       return;
     }
 

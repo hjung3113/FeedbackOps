@@ -1,27 +1,60 @@
-// <RequestAccessButton> behavior (issue #5):
-//   - POSTs to /permission-requests with an Idempotency-Key UUIDv4 header.
-//   - On 201 invalidates permissionCheckQueryKey + permissionRequestsMineKey.
-//   - On 409 conflict.* (capability_already_granted | permission_request_duplicate)
-//     still invalidates; no inline error.
-//   - On other 4xx renders inline error message.
-
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { RequestAccessButton } from '../request-access-button.js';
 import { permissionCheckQueryKey, permissionRequestsMineKey } from '../use-permission-check.js';
 
-const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const CAPABILITY = 'finding.manage';
+const MANAGED_SYSTEM_ID = '11111111-1111-4111-8111-111111111111';
+const RETURN_ROUTE = '/findings?selected=FND-274';
+const REASON = 'Need scoped access to verify the distinct finding fixture.';
+const CREATED_AT = '2026-08-03T09:30:00.000Z';
 
-function wrap(node: React.ReactNode) {
+function success(id = 'PR-D8-001') {
+  return new Response(JSON.stringify({ id, status: 'pending', created_at: CREATED_AT }), {
+    status: 201,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
-  return {
-    qc,
-    invalidateSpy,
-    ...render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>),
-  };
+  render(
+    <QueryClientProvider client={qc}>
+      <RequestAccessButton
+        capability={CAPABILITY}
+        managedSystemId={MANAGED_SYSTEM_ID}
+        returnRouteIntent={RETURN_ROUTE}
+      />
+    </QueryClientProvider>,
+  );
+  return { invalidateSpy };
+}
+
+function openForm() {
+  fireEvent.click(screen.getByRole('button', { name: 'Request access' }));
+  expect(screen.getByTestId('permission-request-form')).toBeInTheDocument();
+  expect(screen.getByText(CAPABILITY)).toBeInTheDocument();
+  expect(screen.getByText(MANAGED_SYSTEM_ID)).toBeInTheDocument();
+}
+
+function fillReasonAndSubmit(reason = REASON) {
+  fireEvent.change(screen.getByTestId('permission-request-reason'), { target: { value: reason } });
+  fireEvent.submit(screen.getByTestId('permission-request-form'));
+}
+
+function requestBody(fetchMock: ReturnType<typeof vi.fn>, index = 0) {
+  const call = fetchMock.mock.calls[index];
+  if (!call) throw new Error(`missing fetch call ${index}`);
+  return JSON.parse((call[1] as RequestInit).body as string) as Record<string, unknown>;
+}
+
+function idempotencyKey(fetchMock: ReturnType<typeof vi.fn>, index: number) {
+  const call = fetchMock.mock.calls[index];
+  if (!call) throw new Error(`missing fetch call ${index}`);
+  return ((call[1] as RequestInit).headers as Record<string, string>)['Idempotency-Key'];
 }
 
 describe('<RequestAccessButton>', () => {
@@ -36,129 +69,127 @@ describe('<RequestAccessButton>', () => {
     vi.restoreAllMocks();
   });
 
-  test('on click → POST /permission-requests with Idempotency-Key UUID + body', async () => {
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({ id: 'req-1', status: 'pending', created_at: new Date().toISOString() }),
-          { status: 201, headers: { 'content-type': 'application/json' } },
-        ),
-    ) as unknown as typeof globalThis.fetch;
-    globalThis.fetch = fetchMock;
+  test('AC-D8a clicking Request access renders confirmation before exactly zero POSTs', async () => {
+    const fetchMock = vi.fn(async () => success());
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    wrap();
 
-    const { invalidateSpy } = wrap(<RequestAccessButton capability="workspace.admin" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Request access' }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+    openForm();
+    await act(async () => {
+      await Promise.resolve();
     });
-    const call = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    if (!call) throw new Error('fetch not called');
-    expect(call[0]).toBe('/permission-requests');
-    const init = call[1] as RequestInit;
-    expect(init.method).toBe('POST');
-    const headers = init.headers as Record<string, string>;
-    expect(headers['Idempotency-Key']).toMatch(UUID_REGEX);
-    expect(headers['content-type']).toBe('application/json');
-    const body = JSON.parse(init.body as string);
-    expect(body.requested_capability).toBe('workspace.admin');
-    expect(typeof body.reason).toBe('string');
-    expect(body.reason.length).toBeGreaterThan(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test('AC-D8b submitting sends exactly one matching non-hardcoded reason', async () => {
+    const fetchMock = vi.fn(async () => success());
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    wrap();
+    openForm();
+
+    fillReasonAndSubmit();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = requestBody(fetchMock);
+    expect(body.reason).toBe(REASON);
+    expect(body.reason).not.toBe('Requested via permission gate');
+  });
+
+  test('AC-D8c empty expiration sends capability and exactly no expiration key', async () => {
+    const fetchMock = vi.fn(async () => success());
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    wrap();
+    openForm();
+
+    fillReasonAndSubmit();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = requestBody(fetchMock);
+    expect(body.requested_capability).toBe(CAPABILITY);
+    expect(body).not.toHaveProperty('requested_expiration');
+  });
+
+  test('AC-D8d expiration sends its end-of-day ISO value exactly once', async () => {
+    const fetchMock = vi.fn(async () => success());
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    wrap();
+    openForm();
+    fireEvent.change(screen.getByTestId('permission-request-expiration'), {
+      target: { value: '2026-09-30' },
+    });
+
+    fillReasonAndSubmit();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(requestBody(fetchMock).requested_expiration).toBe('2026-09-30T23:59:59.000Z');
+  });
+
+  test('AC-D8f successful submit shows the request identifier and submitted content', async () => {
+    const fetchMock = vi.fn(async () => success('PR-D8-IDENTIFIABLE'));
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    wrap();
+    openForm();
+
+    fillReasonAndSubmit();
+
+    expect(await screen.findByText('Request submitted')).toBeInTheDocument();
+    expect(screen.getByTestId('permission-request-id')).toHaveTextContent('PR-D8-IDENTIFIABLE');
+    expect(screen.getByText(CAPABILITY)).toBeInTheDocument();
+    expect(screen.getByText(MANAGED_SYSTEM_ID)).toBeInTheDocument();
+    expect(screen.getByText(REASON)).toBeInTheDocument();
+    expect(screen.getByText('pending')).toBeInTheDocument();
+    expect(screen.getByText(CREATED_AT)).toBeInTheDocument();
+  });
+
+  test('AC-D8g capability-already-granted shows no error and invalidates queries', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          code: 'conflict.capability_already_granted',
+          message: 'already granted',
+        }),
+        { status: 409, headers: { 'content-type': 'application/json' } },
+      ),
+    ) as typeof globalThis.fetch;
+    const { invalidateSpy } = wrap();
+    openForm();
+
+    fillReasonAndSubmit();
 
     await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: permissionCheckQueryKey({ capability: 'workspace.admin' }),
+        queryKey: permissionCheckQueryKey({
+          capability: CAPABILITY,
+          managedSystemId: MANAGED_SYSTEM_ID,
+        }),
       });
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: permissionRequestsMineKey });
-    });
-  });
-
-  test('on 409 conflict.capability_already_granted → still invalidates, no error message', async () => {
-    globalThis.fetch = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            code: 'conflict.capability_already_granted',
-            message: 'already granted',
-          }),
-          { status: 409, headers: { 'content-type': 'application/json' } },
-        ),
-    ) as typeof globalThis.fetch;
-
-    const { invalidateSpy } = wrap(<RequestAccessButton capability="workspace.admin" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Request access' }));
-
-    await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: permissionRequestsMineKey });
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  // F-002: per ADR-0015:71-90 the Idempotency-Key represents the same
-  // *logical intent*. Two concurrent in-flight requests for the same
-  // capability/MS must carry the SAME header so the server can dedupe via
-  // (actor_id, key). Without memoization a fresh UUID would be generated
-  // per click, defeating the contract.
-  test('two concurrent clicks for the same capability send the same Idempotency-Key', async () => {
-    // Park the fetch in a deferred state so both clicks land while the
-    // first request is still in flight.
-    const calls: Array<{ headers: Record<string, string> }> = [];
-    let resolveAll: () => void = () => {};
-    const allResolved = new Promise<void>((r) => {
-      resolveAll = r;
-    });
-    globalThis.fetch = vi.fn(async (_url, init) => {
-      const headers = (init as RequestInit).headers as Record<string, string>;
-      calls.push({ headers });
-      await allResolved;
-      return new Response(
-        JSON.stringify({ id: 'req-1', status: 'pending', created_at: new Date().toISOString() }),
-        { status: 201, headers: { 'content-type': 'application/json' } },
-      );
-    }) as typeof globalThis.fetch;
+  test('AC-D8h failed retry reuses the key and a post-success new intent rotates it', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('failed', { status: 500 }))
+      .mockResolvedValueOnce(success('PR-D8-RETRY'))
+      .mockResolvedValueOnce(success('PR-D8-NEXT'));
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    wrap();
+    openForm();
 
-    wrap(<RequestAccessButton capability="workspace.admin" />);
-    const button = screen.getByRole('button', { name: 'Request access' });
-    fireEvent.click(button);
-    fireEvent.click(button);
+    fillReasonAndSubmit();
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('request failed'));
+    fireEvent.submit(screen.getByTestId('permission-request-form'));
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-request-id')).toHaveTextContent('PR-D8-RETRY'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Request another access' }));
+    fillReasonAndSubmit('A distinct second intent after the successful request.');
 
-    await waitFor(() => {
-      // The button is disabled while pending, so React may collapse the
-      // second click — but if at least 2 fetch calls land they MUST share
-      // the same key. If only one landed (because the button was
-      // disabled), assert the single-click invariant still holds.
-      expect(calls.length).toBeGreaterThanOrEqual(1);
-    });
-    resolveAll();
-
-    if (calls.length >= 2) {
-      const a = calls[0];
-      const b = calls[1];
-      if (!a || !b) throw new Error('missing call entries');
-      expect(a.headers['Idempotency-Key']).toBe(b.headers['Idempotency-Key']);
-    }
-    const first = calls[0];
-    if (!first) throw new Error('no fetch calls');
-    expect(first.headers['Idempotency-Key']).toMatch(UUID_REGEX);
-  });
-
-  test('on 422 validation.unknown_capability → renders inline error message', async () => {
-    globalThis.fetch = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            code: 'validation.unknown_capability',
-            message: 'unknown capability',
-          }),
-          { status: 422, headers: { 'content-type': 'application/json' } },
-        ),
-    ) as typeof globalThis.fetch;
-
-    wrap(<RequestAccessButton capability="not.real" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Request access' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(/unknown capability/i);
-    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(idempotencyKey(fetchMock, 0)).toBe(idempotencyKey(fetchMock, 1));
+    expect(idempotencyKey(fetchMock, 2)).not.toBe(idempotencyKey(fetchMock, 1));
   });
 });

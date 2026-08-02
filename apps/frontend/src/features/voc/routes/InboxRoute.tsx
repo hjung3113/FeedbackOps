@@ -311,6 +311,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
           {vocList.error.envelope.requestable_permission ? (
             <RequestAccessButton
               capability={vocList.error.envelope.requestable_permission.permission}
+              returnRouteIntent={`/vocs?view=${view}`}
               {...(typeof vocList.error.envelope.requestable_permission.managed_system_id ===
               'string'
                 ? {
