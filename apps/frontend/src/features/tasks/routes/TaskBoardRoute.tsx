@@ -152,7 +152,7 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
   function onDragEnd(event: DragEndEvent) { const task = event.active.data.current?.task as TaskDto | undefined; const target = event.over?.id; if (groupBy !== 'status') { toast.warning('Group by Status 일 때만 드래그로 상태를 변경할 수 있습니다.'); return; } if (!task || typeof target !== 'string') return; if (task.status !== target) mutation.mutate({ task, status: target as TaskStatus }); }
   function moveToNextStatus(taskId: string) {
     const task = items.find((item) => item.id === taskId);
-    const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = { todo: 'doing', doing: 'review', review: 'done', done: 'released', reopened: 'todo' };
+    const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = { backlog: 'todo', todo: 'doing', doing: 'review', review: 'done', done: 'released', reopened: 'todo' };
     const next = task && nextStatus[task.status];
     if (task && next) mutation.mutate({ task, status: next });
   }

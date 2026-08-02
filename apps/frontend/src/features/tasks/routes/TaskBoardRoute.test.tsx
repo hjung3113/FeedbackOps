@@ -216,6 +216,29 @@ describe('TaskBoardRoute', () => {
     expect(screen.getAllByText('Released').length).toBeGreaterThan(0);
   });
 
+  // #290: ADR-0030 allows every status to reach every other status, but the
+  // board excluded backlog from the next-status button, leaving drag as the
+  // only way out — and drag is closed to keyboard users. Two defects, not one:
+  // the render guard hid the button, and the nextStatus map had no backlog
+  // entry, so removing the guard alone would render a button that does nothing.
+  it('#290 moves a backlog task to todo through the next-status button', async () => {
+    const backlogTask = { ...task, status: 'backlog' as const };
+    const todoTask = { ...backlogTask, status: 'todo' as const };
+    api.listTasks.mockResolvedValue({ items: [backlogTask] });
+    api.getTask.mockResolvedValueOnce({ ...backlogTask, source: null }).mockResolvedValueOnce({ ...todoTask, source: null });
+    api.updateTaskStatus.mockResolvedValue(todoTask);
+
+    renderBoard(backlogTask.id);
+    const footerAction = await screen.findByRole('button', { name: 'Move to next status' });
+
+    fireEvent.click(footerAction);
+
+    await waitFor(() => expect(api.updateTaskStatus).toHaveBeenCalledTimes(1));
+    expect(api.updateTaskStatus.mock.calls[0]?.[0]).toBe(backlogTask.id);
+    expect(api.updateTaskStatus.mock.calls[0]?.[1]).toBe('todo');
+    await waitFor(() => expect(screen.getAllByText('Todo').length).toBeGreaterThan(0));
+  });
+
   it.each(['backlog', 'my', 'inbox'] as const)('keeps the %s view on TaskListRoute', (view) => {
     render(<TasksRouteView search={{ view }} />);
     expect(screen.getByText('task list unchanged')).toBeInTheDocument();

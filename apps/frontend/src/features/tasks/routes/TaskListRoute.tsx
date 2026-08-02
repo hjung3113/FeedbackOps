@@ -197,7 +197,7 @@ export function TaskDetailPanel({
           </div>
         </div>
       </div>
-      {view === 'board' && task.status !== 'backlog' && task.status !== 'released' && onMoveToNextStatus && (
+      {view === 'board' && task.status !== 'released' && onMoveToNextStatus && (
         <div className="border-t border-border-subtle p-3">
           <Button type="button" variant="primary" className="w-full" onClick={() => onMoveToNextStatus(task.id)}>
             <ArrowRight className="h-4 w-4" />Move to next status
