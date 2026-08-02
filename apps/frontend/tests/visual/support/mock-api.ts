@@ -344,6 +344,13 @@ export async function installMockApi(
       return;
     }
 
+    // The Managed Systems registry renders each system's areas alongside it, so
+    // the owner scenario has to answer this even though owners are the subject.
+    if (options.managedSystemOwner && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, { items: [], total: 0 });
+      return;
+    }
+
     if (isRequest(route, 'GET', '/me/permissions/check')) {
       await json(route, 200, {
         state: options.permissionRequestCompose
