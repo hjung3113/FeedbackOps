@@ -15,6 +15,7 @@ import {
   type ReporterReplyVars,
 } from '../useVocReporterReplyMutation';
 import { ApiError } from '@/lib/api';
+import { reporterReplyRequestSchema } from '@fops/shared';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ const REPLY_VARS: ReporterReplyVars = {
   ifMatch: UPDATED_AT,
   body: {
     body_rich_content: { type: 'doc', content: [{ type: 'paragraph' }] },
-    attachments: [],
+    attachment_ids: ['10000000-0000-4000-8000-000000000001'],
   },
 };
 
@@ -61,7 +62,7 @@ describe('useVocReporterReplyMutation', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends POST to /vocs/:id/reporter-replies with Idempotency-Key, If-Match, and correct body', async () => {
+  it('AC-A1d submitted reporter-reply body passes the canonical request schema', async () => {
     let capturedUrl = '';
     let capturedMethod = '';
     let capturedHeaders: Record<string, string> = {};
@@ -96,6 +97,8 @@ describe('useVocReporterReplyMutation', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
     // Correct endpoint
     expect(capturedUrl).toContain(`/vocs/${VOC_ID}/reporter-replies`);
     expect(capturedMethod.toUpperCase()).toBe('POST');
@@ -109,11 +112,8 @@ describe('useVocReporterReplyMutation', () => {
     const ifMatchValue = capturedHeaders['If-Match'] ?? capturedHeaders['if-match'];
     expect(ifMatchValue).toBe(UPDATED_AT);
 
-    // Body must include body_rich_content and attachments
-    expect(capturedBody).toMatchObject({
-      body_rich_content: { type: 'doc' },
-      attachments: [],
-    });
+    expect(capturedBody).toEqual(REPLY_VARS.body);
+    expect(reporterReplyRequestSchema.safeParse(capturedBody).success).toBe(true);
 
     expect(onSuccess).toHaveBeenCalledTimes(1);
   });

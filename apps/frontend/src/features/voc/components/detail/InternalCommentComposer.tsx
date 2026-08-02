@@ -116,6 +116,9 @@ export function InternalCommentComposer({
       setDraftDoc(null); // calls onDraftChange?.(null) when controlled
       toast.success('내부 코멘트가 추가되었습니다.');
     },
+    onError: (error) => {
+      toast.error(`${error.code}: ${error.message}`);
+    },
   });
 
   function handleSubmit() {

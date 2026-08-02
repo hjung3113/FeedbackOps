@@ -167,6 +167,11 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
       setNextStatus(voc.reporter_facing_status);
       toast.success('공개 업데이트가 게시되었습니다.');
     },
+    onError: (error) => {
+      if (getComposerErrorTone(error.code) == null) {
+        toast.error(`${error.code}: ${error.message}`);
+      }
+    },
   });
 
   function handleSubmit() {
@@ -175,10 +180,9 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
       vocId: voc.id,
       ifMatch: voc.updated_at,
       body: {
+        skip_public_update: false,
         body_rich_content: draftDoc,
         next_reporter_facing_status: nextStatus,
-        attachments: [],
-        // PLAN-22 C7a (D1): widened body field — schema reconciled in C7b.
         attachment_ids: attachmentIds,
       },
     });

@@ -47,7 +47,7 @@ import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpd
 import { PublicUpdateComposer } from '../PublicUpdateComposer';
 import * as attachmentsApi from '@/lib/api/attachments';
 import { ApiError } from '@/lib/api/types';
-import type { VocDetailEnvelope } from '@fops/shared';
+import { publicUpdateRequestSchema, type VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
 
 const REPORTER_ID = '00000000-0000-0000-0000-000000000001';
@@ -149,7 +149,7 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     vi.restoreAllMocks();
   });
 
-  it('upload → submit body includes attachment_ids[]', async () => {
+  it('AC-A1b AC-A1c submits the body-present discriminant without attachments and passes the schema', async () => {
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
     const mutateMock = vi.fn();
     vi.mocked(useVocPublicUpdateMutation).mockReturnValue(
@@ -175,12 +175,22 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     await user.click(screen.getByRole('button', { name: 'Publish update' }));
 
     await waitFor(() => {
-      expect(mutateMock).toHaveBeenCalled();
+      expect(mutateMock).toHaveBeenCalledTimes(1);
     });
     const calledVars = mutateMock.mock.calls[0]![0] as {
-      body: { attachment_ids: string[] };
+      body: Record<string, unknown>;
     };
-    expect(calledVars.body.attachment_ids).toEqual([ATTACHMENT.id]);
+    expect(calledVars.body).toEqual({
+      skip_public_update: false,
+      body_rich_content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }],
+      },
+      next_reporter_facing_status: 'received',
+      attachment_ids: [ATTACHMENT.id],
+    });
+    expect(calledVars.body).not.toHaveProperty('attachments');
+    expect(publicUpdateRequestSchema.safeParse(calledVars.body).success).toBe(true);
   });
 
   it('failed upload not included in POST body', async () => {

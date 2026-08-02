@@ -1,6 +1,6 @@
 /// <reference types="@testing-library/jest-dom" />
 // ComposerErrorMatrix.test.tsx — TDD RED
-// Error matrix sweep across PublicUpdateComposer and ReporterReplyComposer.
+// Error matrix sweep across all three composer surfaces.
 //
 // Tests:
 //   1. reporter_facing_status.invalid_transition → red Callout inline (PublicUpdateComposer)
@@ -17,6 +17,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
 
 // ── Shared RichEditor mock ─────────────────────────────────────────────────
 
@@ -45,6 +49,7 @@ vi.mock('@fops/ui', async (importActual) => {
 
 const publicMutate = vi.fn();
 const replyMutate = vi.fn();
+const internalMutate = vi.fn();
 
 vi.mock('@/features/voc/hooks/useVocPublicUpdateMutation', () => ({
   useVocPublicUpdateMutation: vi.fn(() => ({
@@ -64,8 +69,19 @@ vi.mock('@/features/voc/hooks/useVocReporterReplyMutation', () => ({
   })),
 }));
 
+vi.mock('@/features/voc/hooks/useVocInternalCommentMutation', () => ({
+  useVocInternalCommentMutation: vi.fn(() => ({
+    mutate: internalMutate,
+    isPending: false,
+    isError: false,
+    error: null,
+  })),
+}));
+
 import type { MeResponse } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';
+import { toast } from 'sonner';
+import { InternalCommentComposer } from '../InternalCommentComposer';
 import { PublicUpdateComposer } from '../PublicUpdateComposer';
 import { ReporterReplyComposer } from '../ReporterReplyComposer';
 
@@ -142,6 +158,14 @@ function makeIdempotencyReuseError(): ApiError {
   });
 }
 
+function makeValidationError(): ApiError {
+  return new ApiError(422, {
+    code: 'validation.failed',
+    message: 'Request body is invalid',
+    detail: {},
+  });
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('Composer error matrix (C5.5)', () => {
@@ -174,7 +198,7 @@ describe('Composer error matrix (C5.5)', () => {
     expect(callout).toHaveTextContent('해당 상태로 전환할 수 없습니다.');
   });
 
-  it('2. gate_blocked: shows amber Callout inline in ReporterReplyComposer after mutation error', async () => {
+  it('AC-A2b gate_blocked keeps the existing amber Callout', async () => {
     const { useVocReporterReplyMutation } = await import(
       '@/features/voc/hooks/useVocReporterReplyMutation'
     );
@@ -195,6 +219,81 @@ describe('Composer error matrix (C5.5)', () => {
     // tone should be amber for gate_blocked
     expect(callout.dataset.tone).toBe('amber');
     expect(callout).toHaveTextContent('Task가 검토 중입니다.');
+  });
+
+  it('AC-A2a PublicUpdateComposer surfaces validation.failed in an error toast', async () => {
+    const { useVocPublicUpdateMutation } = await import(
+      '@/features/voc/hooks/useVocPublicUpdateMutation'
+    );
+    const error = makeValidationError();
+    vi.mocked(useVocPublicUpdateMutation).mockImplementation((args = {}) => ({
+      mutate: publicMutate.mockImplementation((vars) => {
+        queueMicrotask(() => args.onError?.(error, vars));
+      }),
+      isPending: false,
+      isError: false,
+      error: null,
+    }) as unknown as ReturnType<typeof useVocPublicUpdateMutation>);
+
+    render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
+    fireEvent.click(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByRole('button', { name: /publish update/i }));
+
+    await waitFor(() => {
+      expect(publicMutate).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('validation.failed'));
+    });
+  });
+
+  it('AC-A2a ReporterReplyComposer surfaces validation.failed in an error toast', async () => {
+    const { useVocReporterReplyMutation } = await import(
+      '@/features/voc/hooks/useVocReporterReplyMutation'
+    );
+    const error = makeValidationError();
+    vi.mocked(useVocReporterReplyMutation).mockImplementation((args = {}) => ({
+      mutate: replyMutate.mockImplementation((vars) => {
+        queueMicrotask(() => args.onError?.(error, vars));
+      }),
+      isPending: false,
+      isError: false,
+      error: null,
+    }) as unknown as ReturnType<typeof useVocReporterReplyMutation>);
+
+    render(<ReporterReplyComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
+    fireEvent.click(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByRole('button', { name: /send reply/i }));
+
+    await waitFor(() => {
+      expect(replyMutate).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('validation.failed'));
+    });
+  });
+
+  it('AC-A2a InternalCommentComposer surfaces validation.failed in an error toast', async () => {
+    const { useVocInternalCommentMutation } = await import(
+      '@/features/voc/hooks/useVocInternalCommentMutation'
+    );
+    const error = makeValidationError();
+    vi.mocked(useVocInternalCommentMutation).mockImplementation((args = {}) => ({
+      mutate: internalMutate.mockImplementation((vars) => {
+        queueMicrotask(() => args.onError?.(error, vars));
+      }),
+      isPending: false,
+      isError: false,
+      error: null,
+    }) as unknown as ReturnType<typeof useVocInternalCommentMutation>);
+
+    render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
+    fireEvent.click(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByRole('button', { name: /add note/i }));
+
+    await waitFor(() => {
+      expect(internalMutate).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('validation.failed'));
+    });
   });
 
   it('3. idempotency_key_reuse: disables both Submit and Preview buttons after mutation error', async () => {

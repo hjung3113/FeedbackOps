@@ -128,6 +128,11 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
       setDraftDoc(null); // calls onDraftChange?.(null) when controlled
       toast.success('리포터에게 답장이 전송되었습니다.');
     },
+    onError: (error) => {
+      if (getComposerErrorTone(error.code) == null) {
+        toast.error(`${error.code}: ${error.message}`);
+      }
+    },
   });
 
   function handleSubmit() {
@@ -137,8 +142,6 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
       ifMatch: voc.updated_at,
       body: {
         body_rich_content: draftDoc,
-        attachments: [],
-        // PLAN-22 C7a (D1): widened body field — schema reconciled in C7b.
         attachment_ids: attachmentIds,
       },
     });

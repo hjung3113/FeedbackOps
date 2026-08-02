@@ -14,6 +14,7 @@ import {
   type InternalCommentVars,
 } from '../useVocInternalCommentMutation';
 import { ApiError } from '@/lib/api';
+import { internalCommentRequestSchema } from '@fops/shared';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -40,13 +41,18 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const VOC_ID = '00000000-0000-0000-0000-000000000099';
 const UPDATED_AT = '2026-05-01T00:00:00.000Z';
+const MENTION_IDS = [
+  '30000000-0000-4000-8000-000000000003',
+  '30000000-0000-4000-8000-000000000004',
+];
 
 const BASE_VARS: InternalCommentVars = {
   vocId: VOC_ID,
   ifMatch: UPDATED_AT,
   body: {
     body_rich_content: { type: 'doc', content: [{ type: 'paragraph' }] },
-    mentions: ['actor-1', 'actor-2'],
+    mentions: MENTION_IDS,
+    attachment_ids: ['30000000-0000-4000-8000-000000000005'],
   },
 };
 
@@ -60,7 +66,7 @@ describe('useVocInternalCommentMutation', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends POST with Idempotency-Key, If-Match headers and calls onSuccess', async () => {
+  it('AC-A1e submitted internal-comment body passes the canonical request schema', async () => {
     let capturedUrl = '';
     let capturedMethod = '';
     let capturedHeaders: Record<string, string> = {};
@@ -96,6 +102,7 @@ describe('useVocInternalCommentMutation', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(capturedUrl).toContain(`/vocs/${VOC_ID}/internal-comments`);
     expect(capturedMethod.toUpperCase()).toBe('POST');
 
@@ -107,10 +114,8 @@ describe('useVocInternalCommentMutation', () => {
     const ifMatchValue = capturedHeaders['If-Match'] ?? capturedHeaders['if-match'];
     expect(ifMatchValue).toBe(UPDATED_AT);
 
-    // Body shape.
-    expect(capturedBody).toMatchObject({
-      mentions: ['actor-1', 'actor-2'],
-    });
+    expect(capturedBody).toEqual(BASE_VARS.body);
+    expect(internalCommentRequestSchema.safeParse(capturedBody).success).toBe(true);
 
     expect(onSuccess).toHaveBeenCalledTimes(1);
   });

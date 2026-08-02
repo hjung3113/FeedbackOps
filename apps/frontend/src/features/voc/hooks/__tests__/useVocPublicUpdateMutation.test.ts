@@ -15,6 +15,7 @@ import {
   type PublicUpdateVars,
 } from '../useVocPublicUpdateMutation';
 import { ApiError } from '@/lib/api';
+import { publicUpdateRequestSchema } from '@fops/shared';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -46,9 +47,10 @@ const BODY_ONLY_VARS: PublicUpdateVars = {
   vocId: VOC_ID,
   ifMatch: UPDATED_AT,
   body: {
+    skip_public_update: false,
     body_rich_content: { type: 'doc', content: [{ type: 'paragraph' }] },
     next_reporter_facing_status: 'received',
-    attachments: [],
+    attachment_ids: ['20000000-0000-4000-8000-000000000002'],
   },
 };
 
@@ -62,7 +64,7 @@ describe('useVocPublicUpdateMutation', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends POST with Idempotency-Key and If-Match headers and calls onSuccess', async () => {
+  it('AC-A1c submitted public-update body passes the canonical request schema', async () => {
     let capturedUrl = '';
     let capturedMethod = '';
     let capturedHeaders: Record<string, string> = {};
@@ -100,6 +102,7 @@ describe('useVocPublicUpdateMutation', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(capturedUrl).toContain(`/vocs/${VOC_ID}/public-updates`);
     expect(capturedMethod.toUpperCase()).toBe('POST');
 
@@ -112,10 +115,8 @@ describe('useVocPublicUpdateMutation', () => {
     const ifMatchValue = capturedHeaders['If-Match'] ?? capturedHeaders['if-match'];
     expect(ifMatchValue).toBe(UPDATED_AT);
 
-    // Body must include next_reporter_facing_status
-    expect(capturedBody).toMatchObject({
-      next_reporter_facing_status: 'received',
-    });
+    expect(capturedBody).toEqual(BODY_ONLY_VARS.body);
+    expect(publicUpdateRequestSchema.safeParse(capturedBody).success).toBe(true);
 
     expect(onSuccess).toHaveBeenCalledTimes(1);
   });

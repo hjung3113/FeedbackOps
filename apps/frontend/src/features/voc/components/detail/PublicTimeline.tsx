@@ -31,11 +31,17 @@ export function PublicTimeline({
   actorNamesById,
 }: TimelineProps): React.ReactElement {
   const query = useVocConversation({ vocId });
-  // Pages from infinite query: these arrive only after the user clicks 더보기.
+  // The initial page loads on mount and can overlap the inline detail envelope.
   const paginatedEntries: ConversationEntry[] =
     query.data?.pages.flatMap((p) => p.items).filter(
       (e) => e.kind === 'public_update' || e.kind === 'reporter_reply',
     ) ?? [];
+  const seenIds = new Set<string>();
+  const entries = [...paginatedEntries, ...inline].filter((entry) => {
+    if (seenIds.has(entry.id)) return false;
+    seenIds.add(entry.id);
+    return true;
+  });
 
   const showLoadMore = hasMore || query.hasNextPage === true;
 
@@ -55,18 +61,10 @@ export function PublicTimeline({
         </div>
       )}
 
-      {paginatedEntries.map((entry) => (
-        <TimelineEntry
-          key={entry.id}
-          entry={entry}
-          actorDisplayName={actorNamesById?.get(entry.actor_id)}
-        />
-      ))}
-
-      {inline.length === 0 && paginatedEntries.length === 0 ? (
+      {entries.length === 0 ? (
         <EmptyState size="sm" title="아직 대화가 없습니다." />
       ) : (
-        inline.map((entry) => (
+        entries.map((entry) => (
           <TimelineEntry
             key={entry.id}
             entry={entry}

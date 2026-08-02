@@ -41,7 +41,7 @@ import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporter
 import { ReporterReplyComposer } from '../ReporterReplyComposer';
 import * as attachmentsApi from '@/lib/api/attachments';
 import { ApiError } from '@/lib/api/types';
-import type { VocDetailEnvelope } from '@fops/shared';
+import { reporterReplyRequestSchema, type VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
 
 const ADMIN_ID = '00000000-0000-0000-0000-000000000002';
@@ -142,7 +142,7 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
     vi.restoreAllMocks();
   });
 
-  it('upload → submit body includes attachment_ids[]', async () => {
+  it('AC-A1a AC-A1d submits only canonical reporter-reply fields and passes the schema', async () => {
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
     const mutateMock = vi.fn();
     vi.mocked(useVocReporterReplyMutation).mockReturnValue(
@@ -167,12 +167,20 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
     await user.click(screen.getByRole('button', { name: 'Send reply' }));
 
     await waitFor(() => {
-      expect(mutateMock).toHaveBeenCalled();
+      expect(mutateMock).toHaveBeenCalledTimes(1);
     });
     const calledVars = mutateMock.mock.calls[0]![0] as {
-      body: { attachment_ids: string[] };
+      body: Record<string, unknown>;
     };
-    expect(calledVars.body.attachment_ids).toEqual([ATTACHMENT.id]);
+    expect(calledVars.body).toEqual({
+      body_rich_content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'reply' }] }],
+      },
+      attachment_ids: [ATTACHMENT.id],
+    });
+    expect(calledVars.body).not.toHaveProperty('attachments');
+    expect(reporterReplyRequestSchema.safeParse(calledVars.body).success).toBe(true);
   });
 
   it('failed upload not included in POST body', async () => {
