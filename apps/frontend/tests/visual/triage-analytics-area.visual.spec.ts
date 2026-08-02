@@ -1,9 +1,9 @@
-import { installMockApi } from '../support/mock-api';
-import { expectVisual } from '../support/screenshot';
-import { expect, test } from '../support/visual-test';
 import { TRIAGE_AREA_IDS } from './fixtures/triage-analytics-area';
+import { installMockApi } from './support/mock-api';
+import { expectVisual } from './support/screenshot';
+import { expect, test } from './support/visual-test';
 
-test.describe('Chunk B Analytics Area visual states', () => {
+test.describe('Triage Analytics Area visual states', () => {
   test('triage-analytics-area-populated', async ({ page }) => {
     await installMockApi(page, { triageAreaScenario: 'triage-analytics-area-populated' });
     await page.goto('/vocs?view=triage');

@@ -56,8 +56,8 @@ import {
   surveyVisualFixtureSchema,
 } from '../fixtures/surveys';
 import {
-  type TriageAreaVisualScenario,
   TRIAGE_AREA_IDS,
+  type TriageAreaVisualScenario,
   triageAreaActors,
   triageAreaAnalyticsAreas,
   triageAreaAnalyticsAreasResponseSchema,
@@ -306,7 +306,11 @@ export async function installMockApi(
       ) {
         throw new Error(`Unexpected Chunk B Analytics Area query: ${url.search}`);
       }
-      await json(route, 200, triageAreaAnalyticsAreasResponseSchema.parse(triageAreaAnalyticsAreas));
+      await json(
+        route,
+        200,
+        triageAreaAnalyticsAreasResponseSchema.parse(triageAreaAnalyticsAreas),
+      );
       return;
     }
 

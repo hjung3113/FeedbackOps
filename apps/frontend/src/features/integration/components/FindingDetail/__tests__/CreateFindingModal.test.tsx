@@ -58,8 +58,8 @@ function renderModal(sourceAnalyticsAreaId: string | null) {
 }
 
 function submitValidForm(): void {
-  fireEvent.change(screen.getByLabelText('제목'), { target: { value: 'VOC 기반 Finding' } });
-  fireEvent.change(screen.getByLabelText('요약'), {
+  fireEvent.change(screen.getByLabelText(/제목/), { target: { value: 'VOC 기반 Finding' } });
+  fireEvent.change(screen.getByLabelText(/요약/), {
     target: { value: '소스 VOC의 분석 결과를 실행 가능한 판단으로 정리합니다.' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));

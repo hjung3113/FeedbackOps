@@ -149,7 +149,8 @@ async function fireMutationAndUndo(container: HTMLElement) {
   const undoBtn = await waitFor(() => {
     // Use the specific toast host element (not the full container) to avoid
     // matching stale buttons from prior tests.
-    const el = toastEl!.querySelector('button');
+    if (!toastEl) throw new Error('expected the toast host element to exist');
+    const el = toastEl.querySelector('button');
     expect(el).not.toBeNull();
     return el as HTMLElement;
   });
@@ -168,7 +169,7 @@ describe('TriagePanel — refetch-failure path (REV-4 Cluster Y)', () => {
     globalThis.fetch = originalFetch;
     capturedToastRenderer = null;
     // Remove the manually appended toast host to prevent DOM leakage between tests.
-    if (toastHostEl && toastHostEl.parentNode) {
+    if (toastHostEl?.parentNode) {
       toastHostEl.parentNode.removeChild(toastHostEl);
     }
     toastHostEl = null;
