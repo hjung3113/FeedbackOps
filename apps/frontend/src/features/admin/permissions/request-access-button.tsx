@@ -64,6 +64,10 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
   // clicks / TanStack Query retries within one intent share the same key.
   const [attempt, setAttempt] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the dep list is the
+  // intent key, not a value dependency — one Idempotency-Key per logical intent
+  // (ADR-0015:71-90). Widening it to every referenced value would rotate the key
+  // mid-intent and break server-side idempotency reconciliation.
   const idempotencyKey = useMemo(
     () => crypto.randomUUID(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
