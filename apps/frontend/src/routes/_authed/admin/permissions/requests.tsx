@@ -1,6 +1,5 @@
 import {
   Button,
-  DetailPanelHeader,
   FieldRow,
   Input,
   ListShell,
@@ -15,6 +14,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 
 import { PermissionGate } from "../../../../features/admin/permissions/permission-gate.js";
+import { useWorkspaceActors } from "../../../../features/admin/permissions/permission-state-view.js";
 import {
   permissionRequestsReviewKey,
   useDecidePermissionRequest,
@@ -75,6 +75,10 @@ function PermissionRequestsConsole() {
       fetchPermissionRequestsAll({ status: "all", signal }),
     retry: false,
   });
+  const actors = useWorkspaceActors();
+  const actorNames = Object.fromEntries(
+    (actors.data ?? []).map((actor) => [actor.id, actor.display_name]),
+  );
   const [activeTab, setActiveTab] = React.useState<ReviewTab>("pending");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const previousActiveTab = React.useRef<ReviewTab | null>(null);
@@ -177,6 +181,7 @@ function PermissionRequestsConsole() {
             <PermissionRequestRow
               key={request.id}
               request={request}
+              actorName={actorNames[request.requester_actor_id]}
               selected={selectedId === request.id}
               onSelect={() => setSelectedId(request.id)}
             />
@@ -187,6 +192,7 @@ function PermissionRequestsConsole() {
         selected ? (
           <PermissionRequestDetail
             request={selected}
+            actorName={actorNames[selected.requester_actor_id]}
             onClose={() => setSelectedId(null)}
           />
         ) : undefined
@@ -197,10 +203,12 @@ function PermissionRequestsConsole() {
 
 function PermissionRequestRow({
   request,
+  actorName,
   selected,
   onSelect,
 }: {
   request: AdminPermissionRequestRow;
+  actorName?: string | undefined;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -221,8 +229,9 @@ function PermissionRequestRow({
         </>
       }
       trailing={
-        <span className="font-mono text-xs text-text-muted">
-          {request.requester_actor_id.slice(0, 8)}
+        <span className="text-right text-xs text-text-muted">
+          <span className="block text-text-primary">{actorName ?? "Unknown requester"}</span>
+          <span className="font-mono">{request.requester_actor_id.slice(0, 8)}</span>
         </span>
       }
     />
@@ -231,9 +240,11 @@ function PermissionRequestRow({
 
 function PermissionRequestDetail({
   request,
+  actorName,
   onClose,
 }: {
   request: AdminPermissionRequestRow;
+  actorName?: string | undefined;
   onClose: () => void;
 }) {
   const [action, setAction] =
@@ -300,19 +311,32 @@ function PermissionRequestDetail({
       className="flex h-full min-h-0 flex-col bg-surface-detail"
       data-testid="permission-request-detail-panel"
     >
-      <DetailPanelHeader
-        kind="task"
-        id={request.id.slice(0, 8)}
-        onClose={onClose}
-        extras={<OutlineBadge>{STATUS_LABEL[request.status]}</OutlineBadge>}
-      />
+      <header className="flex h-[50px] items-center gap-3 border-b border-border-subtle px-6">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-text-muted">Permission Request</p>
+          <p className="font-mono text-sm text-text-primary">{request.id.slice(0, 8)}</p>
+        </div>
+        <OutlineBadge>{STATUS_LABEL[request.status]}</OutlineBadge>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          aria-label="패널 닫기"
+        >
+          닫기
+        </Button>
+      </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="flex flex-col gap-5">
           <section className="flex flex-col gap-2">
             <PanelSectionTitle>요청 정보</PanelSectionTitle>
             <FieldRow label="요청자" className="px-0">
-              <span className="font-mono text-xs">
-                {request.requester_actor_id}
+              <span className="flex flex-col gap-0.5">
+                <span>{actorName ?? "Unknown requester"}</span>
+                <span className="font-mono text-xs text-text-muted">
+                  {request.requester_actor_id}
+                </span>
               </span>
             </FieldRow>
             <FieldRow label="요청 권한" className="px-0">

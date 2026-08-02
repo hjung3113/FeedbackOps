@@ -725,6 +725,12 @@ function RegisterForm({
   const [slug, setSlug] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<'managedSystem' | 'slug' | 'name', string>>
+  >({});
+  const managedSystemRef = useRef<HTMLFieldSetElement>(null);
+  const slugRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const mutation = useMutation({
     mutationFn: async (body: RegisterAnalyticsAreaBody) => registerAnalyticsArea(body),
@@ -746,48 +752,108 @@ function RegisterForm({
       <form
         data-testid="create-analytics-area-form"
         className="space-y-3"
+        noValidate
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
-          if (!msId) {
-            setError('validation.failed: managed_system_id required');
+          const nextErrors: Partial<
+            Record<'managedSystem' | 'slug' | 'name', string>
+          > = {};
+          if (!msId) nextErrors.managedSystem = 'Managed System is required.';
+          if (!slug.trim()) nextErrors.slug = 'Slug is required.';
+          if (!name.trim()) nextErrors.name = 'Name is required.';
+          if (Object.keys(nextErrors).length > 0) {
+            setFieldErrors(nextErrors);
+            if (nextErrors.managedSystem) {
+              managedSystemRef.current
+                ?.querySelector<HTMLButtonElement>('button')
+                ?.focus();
+            }
+            else if (nextErrors.slug) slugRef.current?.focus();
+            else nameRef.current?.focus();
             return;
           }
+          setFieldErrors({});
+          // Unreachable: the block above returns whenever msId is unset. Kept
+          // so the narrowing is local instead of relying on nextErrors.
+          if (!msId) return;
           mutation.mutate({ managed_system_id: msId, slug, name });
         }}
       >
-        <div className="space-y-1">
-          <Label className="text-text-secondary">Managed System</Label>
+        {/* fieldset, not a div with role="group" — biome's useSemanticElements
+            rejects the ARIA-only form and the native element carries the same
+            grouping for assistive tech. */}
+        <fieldset
+          className="space-y-1"
+          ref={managedSystemRef}
+          aria-labelledby="aa-create-managed-system-label"
+          aria-describedby={
+            fieldErrors.managedSystem
+              ? 'aa-create-managed-system-error'
+              : undefined
+          }
+          aria-required="true"
+        >
+          <Label
+            id="aa-create-managed-system-label"
+            className="text-text-secondary"
+          >
+            Managed System <span className="text-accent-danger">· 필수</span>
+          </Label>
           <ManagedSystemPicker
             options={msOptions}
             value={msId}
             onChange={setMsId}
             testId="create-ms-picker"
           />
-        </div>
+          {fieldErrors.managedSystem && (
+            <p
+              id="aa-create-managed-system-error"
+              className="text-sm text-accent-danger"
+            >
+              {fieldErrors.managedSystem}
+            </p>
+          )}
+        </fieldset>
         <div className="space-y-1">
           <Label htmlFor="aa-create-slug" className="text-text-secondary">
-            Slug
+            Slug <span className="text-accent-danger">· 필수</span>
           </Label>
           <Input
             id="aa-create-slug"
+            ref={slugRef}
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            required
+            aria-describedby={fieldErrors.slug ? 'aa-create-slug-error' : undefined}
+            aria-invalid={Boolean(fieldErrors.slug)}
+            aria-required="true"
             data-testid="create-aa-slug"
           />
+          {fieldErrors.slug && (
+            <p id="aa-create-slug-error" className="text-sm text-accent-danger">
+              {fieldErrors.slug}
+            </p>
+          )}
         </div>
         <div className="space-y-1">
           <Label htmlFor="aa-create-name" className="text-text-secondary">
-            Name
+            Name <span className="text-accent-danger">· 필수</span>
           </Label>
           <Input
             id="aa-create-name"
+            ref={nameRef}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            required
+            aria-describedby={fieldErrors.name ? 'aa-create-name-error' : undefined}
+            aria-invalid={Boolean(fieldErrors.name)}
+            aria-required="true"
             data-testid="create-aa-name"
           />
+          {fieldErrors.name && (
+            <p id="aa-create-name-error" className="text-sm text-accent-danger">
+              {fieldErrors.name}
+            </p>
+          )}
         </div>
         {error && (
           <p data-testid="create-aa-error" className="text-sm text-accent-danger">
@@ -888,15 +954,19 @@ function EditForm({
           </p>
         )}
         <DialogFooter className="justify-between">
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => archiveMutation.mutate()}
-            disabled={archiveMutation.isPending}
-            data-testid={`aa-archive-${target.slug}`}
-          >
-            Archive
-          </Button>
+          {target.archived_at === null ? (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => archiveMutation.mutate()}
+              disabled={archiveMutation.isPending}
+              data-testid={`aa-archive-${target.slug}`}
+            >
+              Archive
+            </Button>
+          ) : (
+            <span className="text-sm text-text-muted">이미 보관됨</span>
+          )}
           <Button
             type="submit"
             disabled={updateMutation.isPending}

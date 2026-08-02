@@ -8,7 +8,7 @@ test.describe('/admin/settings visual harness', () => {
   for (const scenario of adminSettingsVisualScenarios) {
     test(`renders ${scenario}`, async ({ page }) => {
       await installMockApi(page, {
-        adminSettingsScenario: scenario,
+        adminSettingsScenario: scenario === 'settings-self-approval-scoped' ? 'default' : scenario,
         role: scenario === 'no-permission' ? 'user' : 'admin',
       });
       await page.goto('/admin/settings');
@@ -39,6 +39,18 @@ test.describe('/admin/settings visual harness', () => {
         await expect(page.getByTestId('locked-value-survey-response-to-voc')).toHaveText(
           'Forbidden',
         );
+      }
+      if (scenario === 'settings-self-approval-scoped') {
+        await expect(
+          target.getByText('Self-approval of Permission Request', { exact: true }),
+        ).toBeVisible();
+        await expect(
+          target.getByText('Task Request 자가승인은 ADR-0026 규칙을 따르며 이 설정과 무관합니다.', {
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expectVisual(page, target, 'settings-self-approval-scoped.png');
+        return;
       }
       await expectVisual(page, target, `admin-settings-${scenario}.png`);
     });

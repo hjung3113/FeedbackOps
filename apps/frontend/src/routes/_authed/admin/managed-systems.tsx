@@ -33,7 +33,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { ArrowRight, Filter, Plus, Shield } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { scopeMark } from '../../../features/admin/lib/scopeMark.js';
 import { PermissionGate } from '../../../features/admin/permissions/permission-gate.js';
@@ -407,6 +407,9 @@ function RegisterDialog({
   const [name, setName] = useState('');
   const [externalKey, setExternalKey] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'slug' | 'name', string>>>({});
+  const slugRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const mutation = useMutation({
     mutationFn: async (body: RegisterManagedSystemBody) => registerManagedSystem(body),
@@ -430,9 +433,19 @@ function RegisterDialog({
         <form
           data-testid="create-managed-system-form"
           className="space-y-3"
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
             setError(null);
+            const nextErrors: Partial<Record<'slug' | 'name', string>> = {};
+            if (!slug.trim()) nextErrors.slug = 'Slug is required.';
+            if (!name.trim()) nextErrors.name = 'Name is required.';
+            if (Object.keys(nextErrors).length > 0) {
+              setFieldErrors(nextErrors);
+              (nextErrors.slug ? slugRef : nameRef).current?.focus();
+              return;
+            }
+            setFieldErrors({});
             const body: RegisterManagedSystemBody = { slug, name };
             if (externalKey.length > 0) body.external_key = externalKey;
             mutation.mutate(body);
@@ -440,27 +453,43 @@ function RegisterDialog({
         >
           <div className="space-y-1">
             <Label htmlFor="ms-create-slug" className="text-text-secondary">
-              Slug
+              Slug <span className="text-accent-danger">· 필수</span>
             </Label>
             <Input
               id="ms-create-slug"
+              ref={slugRef}
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              required
+              aria-describedby={fieldErrors.slug ? 'ms-create-slug-error' : undefined}
+              aria-invalid={Boolean(fieldErrors.slug)}
+              aria-required="true"
               data-testid="create-slug"
             />
+            {fieldErrors.slug && (
+              <p id="ms-create-slug-error" className="text-sm text-accent-danger">
+                {fieldErrors.slug}
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label htmlFor="ms-create-name" className="text-text-secondary">
-              Name
+              Name <span className="text-accent-danger">· 필수</span>
             </Label>
             <Input
               id="ms-create-name"
+              ref={nameRef}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              required
+              aria-describedby={fieldErrors.name ? 'ms-create-name-error' : undefined}
+              aria-invalid={Boolean(fieldErrors.name)}
+              aria-required="true"
               data-testid="create-name"
             />
+            {fieldErrors.name && (
+              <p id="ms-create-name-error" className="text-sm text-accent-danger">
+                {fieldErrors.name}
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label htmlFor="ms-create-external-key" className="text-text-secondary">
@@ -595,15 +624,19 @@ function EditForm({
           </p>
         )}
         <DialogFooter className="justify-between">
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => archiveMutation.mutate()}
-            disabled={archiveMutation.isPending}
-            data-testid={`archive-${target.slug}`}
-          >
-            Archive
-          </Button>
+          {target.archived_at === null ? (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => archiveMutation.mutate()}
+              disabled={archiveMutation.isPending}
+              data-testid={`archive-${target.slug}`}
+            >
+              Archive
+            </Button>
+          ) : (
+            <span className="text-sm text-text-muted">이미 보관됨</span>
+          )}
           <Button
             type="submit"
             disabled={updateMutation.isPending}

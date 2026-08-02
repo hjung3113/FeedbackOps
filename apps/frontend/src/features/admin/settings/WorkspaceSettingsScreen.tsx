@@ -61,7 +61,7 @@ const subtitle =
   '권한 정책 · 익명 임계값 · cross-MS 정책 같이 워크스페이스 전역 동작을 결정하는 설정입니다.';
 
 const settingLabels: Record<EditableKey, string> = {
-  permission_self_approval: 'Self-approval',
+  permission_self_approval: 'Self-approval of Permission Request',
   survey_anonymity_threshold: 'Anonymity threshold',
 };
 
@@ -179,6 +179,9 @@ export function WorkspaceSettingsForm({ initialSettings }: { initialSettings: Wo
             />
           ))}
         </div>
+        <p className="mt-2 text-xs text-text-muted">
+          Task Request 자가승인은 ADR-0026 규칙을 따르며 이 설정과 무관합니다.
+        </p>
         {selfApprovalDirty && (
           <Callout
             className="mt-3"

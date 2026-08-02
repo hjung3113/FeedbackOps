@@ -1,4 +1,5 @@
-import { permissionDecisionResultSchema } from '@fops/shared';
+import { listActorsResponseSchema, permissionDecisionResultSchema } from '@fops/shared';
+import { z } from 'zod';
 
 import type { AdminPermissionRequestRow } from '../../../src/lib/api';
 import { adminSettingsFixtureSchema } from './admin-settings';
@@ -20,6 +21,29 @@ export const PERMISSION_IDS = {
   grant: '66666666-6666-4666-8666-666666666666',
   deny: '77777777-7777-4777-8777-777777777777',
 } as const;
+
+export const workspaceActorsFixture = listActorsResponseSchema.parse({
+  actors: [
+    {
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      display_name: 'Named Requester',
+      email: 'named.requester@example.test',
+      role_level: 'developer',
+    },
+    {
+      id: '11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      display_name: 'Admin One',
+      email: 'admin.one@example.test',
+      role_level: 'admin',
+    },
+    {
+      id: '22222222-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      display_name: 'Admin Two',
+      email: 'admin.two@example.test',
+      role_level: 'admin',
+    },
+  ],
+});
 
 export const permissionRequests: AdminPermissionRequestRow[] = [
   {
@@ -102,7 +126,15 @@ export const permissionDecisionResultTemplates = {
   }),
 };
 
-export type PermissionScenarioName = 'populated' | 'empty';
+export type PermissionScenarioName =
+  | 'populated'
+  | 'empty'
+  | 'permission-request-detail-named'
+  | 'blocked-contact-admin';
+
+export const permissionVisualScenarios = z
+  .array(z.enum(['permission-request-detail-named', 'blocked-contact-admin']))
+  .parse(['permission-request-detail-named', 'blocked-contact-admin']);
 
 export function createPermissionRequestsScenario(
   name: PermissionScenarioName = 'populated',

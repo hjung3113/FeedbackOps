@@ -70,3 +70,15 @@ docs/design-prototype/screen-voc.jsx lint/a11y/useKeyWithClickEvents -- pre-exis
 docs/design-prototype/screen-voc.jsx lint/correctness/noUnusedVariables -- pre-existing on develop (2x, unchanged); prototype reference, not shipped code
 docs/design-prototype/screen-voc.jsx lint/security/noDangerouslySetInnerHtml -- pre-existing on develop (3x, unchanged); prototype reference, not shipped code
 apps/frontend/src/features/home/homeNavigation.tsx format -- pre-existing on develop; dense single-line entries predate biome formatting
+apps/frontend/src/routes/_authed/admin/analytics-areas.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/admin/analytics-areas.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/admin/analytics-areas.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x, unchanged); the catalog row is a div with role=button and a nested affordance
+apps/frontend/src/routes/_authed/admin/analytics-areas.tsx suppressions/unused -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx lint/correctness/useExhaustiveDependencies -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/admin/settings/WorkspaceSettingsScreen.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/admin/managed-systems.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/admin/managed-systems.tsx organizeImports -- pre-existing on develop; import order predates biome

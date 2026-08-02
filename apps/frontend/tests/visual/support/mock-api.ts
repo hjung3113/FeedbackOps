@@ -33,6 +33,7 @@ import {
   createPermissionRequestsScenario,
   permissionSettingsFixture,
   permissionDecisionResultTemplates,
+  workspaceActorsFixture,
 } from '../fixtures/permissions';
 import {
   type SurveyResultsVisualScenario,
@@ -313,6 +314,11 @@ export async function installMockApi(
             ? { kind: 'all' }
             : { kind: 'scoped', managed_system_ids: [] },
       });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, workspaceActorsFixture);
       return;
     }
 
