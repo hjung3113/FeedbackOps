@@ -11,6 +11,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/lib/api/analytics-areas', () => ({
+  fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
+}));
+
 vi.mock('sonner', () => ({
   toast: {
     custom: vi.fn(() => 'toast-kicker-test'),

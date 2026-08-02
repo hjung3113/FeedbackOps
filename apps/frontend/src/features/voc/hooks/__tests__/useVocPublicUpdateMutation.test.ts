@@ -5,16 +5,14 @@
 //
 // C5.2 of slice3 #21.
 
-import { describe, expect, it, vi, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  useVocPublicUpdateMutation,
-  type PublicUpdateVars,
-} from '../useVocPublicUpdateMutation';
 import { ApiError } from '@/lib/api';
+import { publicUpdateRequestSchema } from '@fops/shared';
+import { type PublicUpdateVars, useVocPublicUpdateMutation } from '../useVocPublicUpdateMutation';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -46,9 +44,10 @@ const BODY_ONLY_VARS: PublicUpdateVars = {
   vocId: VOC_ID,
   ifMatch: UPDATED_AT,
   body: {
+    skip_public_update: false,
     body_rich_content: { type: 'doc', content: [{ type: 'paragraph' }] },
     next_reporter_facing_status: 'received',
-    attachments: [],
+    attachment_ids: ['20000000-0000-4000-8000-000000000002'],
   },
 };
 
@@ -62,7 +61,7 @@ describe('useVocPublicUpdateMutation', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends POST with Idempotency-Key and If-Match headers and calls onSuccess', async () => {
+  it('AC-A1c submitted public-update body passes the canonical request schema', async () => {
     let capturedUrl = '';
     let capturedMethod = '';
     let capturedHeaders: Record<string, string> = {};
@@ -88,11 +87,9 @@ describe('useVocPublicUpdateMutation', () => {
     const onSuccess = vi.fn();
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
-      () =>
-        useVocPublicUpdateMutation({ onSuccess }),
-      { wrapper: Wrapper },
-    );
+    const { result } = renderHook(() => useVocPublicUpdateMutation({ onSuccess }), {
+      wrapper: Wrapper,
+    });
 
     await act(async () => {
       result.current.mutate(BODY_ONLY_VARS);
@@ -100,22 +97,20 @@ describe('useVocPublicUpdateMutation', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(capturedUrl).toContain(`/vocs/${VOC_ID}/public-updates`);
     expect(capturedMethod.toUpperCase()).toBe('POST');
 
     // Idempotency-Key must be present
-    const idkValue =
-      capturedHeaders['idempotency-key'] ?? capturedHeaders['Idempotency-Key'];
+    const idkValue = capturedHeaders['idempotency-key'] ?? capturedHeaders['Idempotency-Key'];
     expect(idkValue).toBeTruthy();
 
     // If-Match must carry voc.updated_at
     const ifMatchValue = capturedHeaders['If-Match'] ?? capturedHeaders['if-match'];
     expect(ifMatchValue).toBe(UPDATED_AT);
 
-    // Body must include next_reporter_facing_status
-    expect(capturedBody).toMatchObject({
-      next_reporter_facing_status: 'received',
-    });
+    expect(capturedBody).toEqual(BODY_ONLY_VARS.body);
+    expect(publicUpdateRequestSchema.safeParse(capturedBody).success).toBe(true);
 
     expect(onSuccess).toHaveBeenCalledTimes(1);
   });

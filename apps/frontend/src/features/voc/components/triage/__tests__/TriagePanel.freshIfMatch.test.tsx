@@ -8,10 +8,14 @@
 // THAT as the If-Match for the compensating PATCH. The fresh Idempotency-Key
 // requirement from §5.3 stays.
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/api/analytics-areas', () => ({
+  fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
+}));
 
 let capturedToastRenderer: ((id: string | number) => React.ReactNode) | null = null;
 
@@ -29,8 +33,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { TriagePanel } from '../TriagePanel';
 import type { VocListItem } from '@fops/shared';
+import { TriagePanel } from '../TriagePanel';
 
 const ORIGINAL_UPDATED_AT = '2026-05-01T00:00:00.000Z';
 const FRESH_UPDATED_AT = '2026-05-02T11:22:33.000Z';
@@ -51,6 +55,7 @@ const MOCK_VOC: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: ORIGINAL_UPDATED_AT,
   similar_count: 0,
+  attachment_count: 0,
 };
 
 function makeWrapper() {
@@ -160,10 +165,9 @@ describe('TriagePanel — compensating PATCH If-Match (REV-1 #4)', () => {
       fireEvent.click(undoBtn);
     });
 
-    await waitFor(
-      () => expect(patchIfMatchHeaders.length).toBeGreaterThanOrEqual(2),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(patchIfMatchHeaders.length).toBeGreaterThanOrEqual(2), {
+      timeout: 3000,
+    });
 
     // The compensating PATCH must use the FRESH updated_at from the first
     // PATCH response — not the stale original baseline.

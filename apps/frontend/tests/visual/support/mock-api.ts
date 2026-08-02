@@ -65,6 +65,17 @@ import {
   surveyVisualFixture,
   surveyVisualFixtureSchema,
 } from '../fixtures/surveys';
+import {
+  TRIAGE_AREA_IDS,
+  type TriageAreaVisualScenario,
+  triageAreaActors,
+  triageAreaAnalyticsAreas,
+  triageAreaAnalyticsAreasResponseSchema,
+  triageAreaConversationPage,
+  triageAreaFindingSourceVoc,
+  triageAreaReviewCandidates,
+  triageAreaTriageVoc,
+} from '../fixtures/triage-analytics-area';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
@@ -103,6 +114,8 @@ interface InstallOptions {
   permissionRequestCompose?: boolean;
   /** Managed System registration dialog with owner candidates; screenshot spec is host-owned. */
   managedSystemOwner?: boolean;
+  /** Triage Analytics Area wiring and Finding inheritance states. */
+  triageAreaScenario?: TriageAreaVisualScenario;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -262,6 +275,71 @@ export async function installMockApi(
       if (index === -1) await json(route, 404, errorEnvelope(404));
       else await route.fulfill({ status: 204 });
       if (index !== -1) savedViews.splice(index, 1);
+      return;
+    }
+
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/vocs')) {
+      await json(route, 200, {
+        items: [
+          options.triageAreaScenario === 'triage-analytics-area-populated'
+            ? triageAreaTriageVoc
+            : triageAreaFindingSourceVoc,
+        ],
+      });
+      return;
+    }
+
+    if (
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}`)
+    ) {
+      await json(route, 200, triageAreaFindingSourceVoc);
+      return;
+    }
+
+    if (
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}/conversation`)
+    ) {
+      await json(route, 200, triageAreaConversationPage);
+      return;
+    }
+
+    if (
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}/public-update-candidates`)
+    ) {
+      await json(route, 200, triageAreaReviewCandidates);
+      return;
+    }
+
+    // The VOC detail panel asks for similarity recommendations on mount; the
+    // mock is fail-closed, so an unanswered route ends the test before any
+    // screenshot is taken. Empty is the right answer for these scenarios.
+    if (
+      options.triageAreaScenario &&
+      request.method() === 'GET' &&
+      /^\/vocs\/[^/]+\/recommendations$/.test(url.pathname)
+    ) {
+      await json(route, 200, { items: [], total: 0 });
+      return;
+    }
+
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/analytics-areas')) {
+      // The triage panel scopes this call to the VOC's Managed System, but the
+      // surrounding list also resolves area names with an unscoped call. Both are
+      // legitimate here, so this serves the same fixture either way — the scoping
+      // contract itself is asserted by AC-B4b in the unit suite, not by pixels.
+      await json(
+        route,
+        200,
+        triageAreaAnalyticsAreasResponseSchema.parse(triageAreaAnalyticsAreas),
+      );
+      return;
+    }
+
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, triageAreaActors);
       return;
     }
 

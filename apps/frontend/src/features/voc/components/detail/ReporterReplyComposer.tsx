@@ -39,6 +39,7 @@
 
 import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporterReplyMutation';
 import type { ApiError } from '@/lib/api';
+import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';
 import { Callout, PreviewModal, RichEditor } from '@fops/ui';
@@ -50,7 +51,6 @@ import { toast } from 'sonner';
 import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { ComposerReplyPreview } from './ComposerReplyPreview';
-import { uploadAttachment } from '@/lib/api/attachments';
 import { ReporterReplyToolbar } from './rich-toolbars/ReporterReplyToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -88,7 +88,12 @@ function getComposerErrorTone(code: string): 'amber' | null {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, onDraftChange }: ReporterReplyComposerProps): ReactElement {
+export function ReporterReplyComposer({
+  voc,
+  me,
+  draftDoc: controlledDraftDoc,
+  onDraftChange,
+}: ReporterReplyComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
   // REV-1 #7: controlled draft support.
@@ -128,6 +133,11 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
       setDraftDoc(null); // calls onDraftChange?.(null) when controlled
       toast.success('리포터에게 답장이 전송되었습니다.');
     },
+    onError: (error) => {
+      if (getComposerErrorTone(error.code) == null) {
+        toast.error(`${error.code}: ${error.message}`);
+      }
+    },
   });
 
   function handleSubmit() {
@@ -137,8 +147,6 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
       ifMatch: voc.updated_at,
       body: {
         body_rich_content: draftDoc,
-        attachments: [],
-        // PLAN-22 C7a (D1): widened body field — schema reconciled in C7b.
         attachment_ids: attachmentIds,
       },
     });

@@ -12,10 +12,14 @@
 // happens before the error rollback runs — that is the exact path the bug
 // lives on.
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/api/analytics-areas', () => ({
+  fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
+}));
 
 vi.mock('sonner', () => ({
   toast: {
@@ -28,8 +32,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { VocTriageScreen } from '../VocTriageScreen';
 import type { VocListItem } from '@fops/shared';
+import { VocTriageScreen } from '../VocTriageScreen';
 
 const VOC_A_ID = 'voc-rev1-p1-5-a';
 const VOC_B_ID = 'voc-rev1-p1-5-b';
@@ -50,6 +54,7 @@ const VOC_A: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  attachment_count: 0,
 };
 
 const VOC_B: VocListItem = {
@@ -68,6 +73,7 @@ const VOC_B: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  attachment_count: 0,
 };
 
 function makeWrapper() {
@@ -105,7 +111,9 @@ describe('VocTriageScreen — error rollback after auto-advance (REV-1 #5)', () 
   //   3. THEN release the error → exercise the auto-advance race.
   function makeDeferredErrorFetch(status: number, code: string) {
     let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const fetchFn = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const method = (init?.method ?? 'GET').toUpperCase();
       if (method === 'GET') return jsonResponse({ actors: [] });
@@ -159,7 +167,9 @@ describe('VocTriageScreen — error rollback after auto-advance (REV-1 #5)', () 
     await act(async () => {
       release();
       // Yield so the error propagates through React Query.
-      await new Promise<void>((r) => { setTimeout(r, 0); });
+      await new Promise<void>((r) => {
+        setTimeout(r, 0);
+      });
     });
 
     // VOC_A (the failing input.vocId) must be restored — NOT VOC_B.
@@ -205,7 +215,9 @@ describe('VocTriageScreen — error rollback after auto-advance (REV-1 #5)', () 
 
     await act(async () => {
       release();
-      await new Promise<void>((r) => { setTimeout(r, 0); });
+      await new Promise<void>((r) => {
+        setTimeout(r, 0);
+      });
     });
 
     await waitFor(() => {

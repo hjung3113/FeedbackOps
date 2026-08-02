@@ -28,6 +28,7 @@
 
 import { useVocInternalCommentMutation } from '@/features/voc/hooks/useVocInternalCommentMutation';
 import { extractMentions } from '@/features/voc/lib/extractMentions';
+import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';
 import type { TipTapDoc, TipTapEditor } from '@fops/ui';
@@ -35,7 +36,6 @@ import { RichEditor } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 import { toast } from 'sonner';
-import { uploadAttachment } from '@/lib/api/attachments';
 import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { MentionPickerButton } from './MentionPickerButton';
@@ -115,6 +115,9 @@ export function InternalCommentComposer({
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
       setDraftDoc(null); // calls onDraftChange?.(null) when controlled
       toast.success('내부 코멘트가 추가되었습니다.');
+    },
+    onError: (error) => {
+      toast.error(`${error.code}: ${error.message}`);
     },
   });
 

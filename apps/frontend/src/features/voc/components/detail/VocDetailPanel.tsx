@@ -418,6 +418,8 @@ function FullDetailView({
       />
       <CreateFindingModal
         vocId={vocId}
+        managedSystemId={voc.primary_managed_system_id}
+        sourceAnalyticsAreaId={voc.analytics_area_id}
         open={createFindingOpen}
         onClose={() => setCreateFindingOpen(false)}
       />

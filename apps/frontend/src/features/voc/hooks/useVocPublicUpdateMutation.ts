@@ -25,14 +25,12 @@ import { type UseMutationResult, useMutation } from '@tanstack/react-query';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface PublicUpdateBody {
+  skip_public_update: false;
   body_rich_content: TipTapDoc;
   /** Always sent; backend tolerates no-op when equal to current status. */
   next_reporter_facing_status: ReporterFacingStatusEnum;
-  attachments: unknown[];
   /**
-   * PLAN-22 C7a (D1): widened body field — FE-side list of successfully-uploaded
-   * attachment ids from <ComposerAttachmentDropzone>. Backend schema reconciled
-   * in C7b (legacy `attachments: AttachmentRef[]` deprecated then).
+   * PLAN-22 C7b: uploaded attachment ids accepted by the canonical request schema.
    */
   attachment_ids?: string[];
 }
