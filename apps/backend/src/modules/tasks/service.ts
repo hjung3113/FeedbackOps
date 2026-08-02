@@ -208,7 +208,9 @@ export function createTasksService(deps: TasksServiceDeps) {
     if (!row) throw new HttpError('not_found.record', 'task not found');
 
     const canManage = (
-      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
+      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+        requireElevatedRole: true,
+      })
     ).allow;
     if (!canManage) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
@@ -519,7 +521,9 @@ export function createTasksService(deps: TasksServiceDeps) {
     const items: TaskDto[] = [];
     for (const row of rows) {
       const canManage = (
-        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
+        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+          requireElevatedRole: true,
+        })
       ).allow;
       if (!canManage) continue;
       items.push(taskToDto(row));

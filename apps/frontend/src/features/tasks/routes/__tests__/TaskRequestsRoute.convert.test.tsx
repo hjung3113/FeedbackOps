@@ -106,18 +106,15 @@ describe('TaskRequestsRoute conversion title', () => {
     ).toHaveLength(taskTitleMaxLength);
   });
 
-  it(
-    'AC-C6b shows a truncation marker and character count for a 225-character requested outcome',
-    async () => {
-      const input = await openConvertForm();
-      expect(input).toHaveValue(
-        `${requestedOutcome225.slice(0, taskTitleMaxLength - truncationMarker.length)}${truncationMarker}`,
-      );
-      expect(screen.getByTestId('task-request-convert-title-count')).toHaveTextContent(
-        `${taskTitleMaxLength}/${taskTitleMaxLength}`,
-      );
-    },
-  );
+  it('AC-C6b shows a truncation marker and character count for a 225-character requested outcome', async () => {
+    const input = await openConvertForm();
+    expect(input).toHaveValue(
+      `${requestedOutcome225.slice(0, taskTitleMaxLength - truncationMarker.length)}${truncationMarker}`,
+    );
+    expect(screen.getByTestId('task-request-convert-title-count')).toHaveTextContent(
+      `${taskTitleMaxLength}/${taskTitleMaxLength}`,
+    );
+  });
 
   it('AC-C6c leaves a 69-character requested outcome unchanged', async () => {
     renderRoute(requestedOutcome69);
@@ -128,19 +125,16 @@ describe('TaskRequestsRoute conversion title', () => {
     );
   });
 
-  it(
-    'AC-C6d shows an inline error, focuses the title, and makes no API mutation for an over-limit submit',
-    async () => {
-      const input = await openConvertForm();
-      fireEvent.change(input, { target: { value: overLimitTitle } });
-      fireEvent.click(screen.getByTestId('task-request-convert-submit'));
-      expect(await screen.findByTestId('task-request-convert-title-error')).toBeInTheDocument();
-      expect(input).toHaveFocus();
-      await Promise.resolve();
-      expect(api.convertTaskRequest).toHaveBeenCalledTimes(0);
-      expect(api.apiClient).toHaveBeenCalledTimes(0);
-    },
-  );
+  it('AC-C6d shows an inline error, focuses the title, and makes no API mutation for an over-limit submit', async () => {
+    const input = await openConvertForm();
+    fireEvent.change(input, { target: { value: overLimitTitle } });
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    expect(await screen.findByTestId('task-request-convert-title-error')).toBeInTheDocument();
+    expect(input).toHaveFocus();
+    await Promise.resolve();
+    expect(api.convertTaskRequest).toHaveBeenCalledTimes(0);
+    expect(api.apiClient).toHaveBeenCalledTimes(0);
+  });
 
   it('AC-C6e keeps submit enabled for an over-limit title', async () => {
     const input = await openConvertForm();
