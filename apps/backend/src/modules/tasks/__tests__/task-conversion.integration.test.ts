@@ -12,6 +12,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
+import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
 import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
@@ -22,8 +24,6 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
-import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
-import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -685,7 +685,14 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
 
     const inScopeDev = await insertDevActor(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX));
     await grantCapability(dbHandle, WORKSPACE_ID, inScopeDev.id, 'voc.read', msId, adminActorId);
-    await grantCapability(dbHandle, WORKSPACE_ID, inScopeDev.id, 'finding.read', msId, adminActorId);
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      inScopeDev.id,
+      'finding.read',
+      msId,
+      adminActorId,
+    );
     const inScope = await getEntityLinks(
       await loginAs(app, inScopeDev.externalId),
       `?source_type=voc&source_id=${voc.id}`,
@@ -736,28 +743,55 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   });
 
   it('0035 backfill flips only audit-provenance conversion evidence links', async () => {
-    const msId = await insertMsDirectly(migrateHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Backfill conversion MS');
-    const traceableVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, msId, userActorId, 'Traceable conversion VOC');
+    const msId = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Backfill conversion MS',
+    );
+    const traceableVoc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msId,
+      userActorId,
+      'Traceable conversion VOC',
+    );
     const request = await insertTaskRequestRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
-      sourceType: 'voc', sourceId: traceableVoc.id, primaryManagedSystemId: msId,
-      requesterActorId: userActorId, status: 'converted', reviewerActorId: adminActorId,
-      decisionReason: 'Converted before visibility backfill', decided: true,
+      sourceType: 'voc',
+      sourceId: traceableVoc.id,
+      primaryManagedSystemId: msId,
+      requesterActorId: userActorId,
+      status: 'converted',
+      reviewerActorId: adminActorId,
+      decisionReason: 'Converted before visibility backfill',
+      decided: true,
     });
     const traceableTask = await insertTaskRow(migrateHandle, {
-      workspaceId: WORKSPACE_ID, primaryManagedSystemId: msId,
-      title: 'Traceable conversion task', sourceTaskRequestId: request.id, createdBy: adminActorId,
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      title: 'Traceable conversion task',
+      sourceTaskRequestId: request.id,
+      createdBy: adminActorId,
     });
     // Matches the old source-shape predicate, but its evidence link is manual.
     const manualLinkRequest = await insertTaskRequestRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
-      sourceType: 'voc', sourceId: traceableVoc.id, primaryManagedSystemId: msId,
-      requesterActorId: userActorId, status: 'converted', reviewerActorId: adminActorId,
-      decisionReason: 'Converted before visibility backfill', decided: true,
+      sourceType: 'voc',
+      sourceId: traceableVoc.id,
+      primaryManagedSystemId: msId,
+      requesterActorId: userActorId,
+      status: 'converted',
+      reviewerActorId: adminActorId,
+      decisionReason: 'Converted before visibility backfill',
+      decided: true,
     });
     const manualLinkTask = await insertTaskRow(migrateHandle, {
-      workspaceId: WORKSPACE_ID, primaryManagedSystemId: msId,
-      title: 'Task with manually created VOC evidence', sourceTaskRequestId: manualLinkRequest.id, createdBy: adminActorId,
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      title: 'Task with manually created VOC evidence',
+      sourceTaskRequestId: manualLinkRequest.id,
+      createdBy: adminActorId,
     });
     const finding = await insertFindingRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
@@ -768,18 +802,34 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     });
     const findingRequest = await insertTaskRequestRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
-      sourceType: 'finding', sourceId: finding.id, primaryManagedSystemId: msId,
-      requesterActorId: userActorId, status: 'converted', reviewerActorId: adminActorId,
-      decisionReason: 'Converted from Finding before visibility backfill', decided: true,
+      sourceType: 'finding',
+      sourceId: finding.id,
+      primaryManagedSystemId: msId,
+      requesterActorId: userActorId,
+      status: 'converted',
+      reviewerActorId: adminActorId,
+      decisionReason: 'Converted from Finding before visibility backfill',
+      decided: true,
     });
     const findingTask = await insertTaskRow(migrateHandle, {
-      workspaceId: WORKSPACE_ID, primaryManagedSystemId: msId,
-      title: 'Finding-propagated conversion task', sourceTaskRequestId: findingRequest.id, createdBy: adminActorId,
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      title: 'Finding-propagated conversion task',
+      sourceTaskRequestId: findingRequest.id,
+      createdBy: adminActorId,
     });
-    const untraceableVoc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, msId, userActorId, 'Untraceable evidence VOC');
+    const untraceableVoc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msId,
+      userActorId,
+      'Untraceable evidence VOC',
+    );
     const untraceableTask = await insertTaskRow(migrateHandle, {
-      workspaceId: WORKSPACE_ID, primaryManagedSystemId: msId,
-      title: 'Untraceable evidence task', createdBy: adminActorId,
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      title: 'Untraceable evidence task',
+      createdBy: adminActorId,
     });
     const seeded = await migrateHandle.pool.query<{ id: string }>(
       `insert into core.entity_links (
@@ -816,21 +866,42 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
            jsonb_build_object('preserved_links', jsonb_build_array($4::text))),
           ($1, $2, 'task_created_from_request', 'task', $5, 'Task created from approved Task Request',
            jsonb_build_object('preserved_links', jsonb_build_array($6::text)))`,
-      [WORKSPACE_ID, adminActorId, traceableTask.id, directLink.id, findingTask.id, findingPropagatedLink.id],
+      [
+        WORKSPACE_ID,
+        adminActorId,
+        traceableTask.id,
+        directLink.id,
+        findingTask.id,
+        findingPropagatedLink.id,
+      ],
     );
 
     const client = await migrateHandle.pool.connect();
     try {
       await client.query('begin');
-      await client.query(readFileSync(new URL('../../../../migrations/0035_voc_task_conversion_summary_visible.sql', import.meta.url), 'utf8'));
+      await client.query(
+        readFileSync(
+          new URL(
+            '../../../../migrations/0035_voc_task_conversion_summary_visible.sql',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      );
       const rows = await client.query<{ id: string; visibility: string }>(
         `select id, visibility from core.entity_links
           where id = any($1::uuid[])`,
         [seeded.rows.map((row) => row.id)],
       );
       expect(rows.rows).toContainEqual({ id: directLink.id, visibility: 'summary_visible' });
-      expect(rows.rows).toContainEqual({ id: findingPropagatedLink.id, visibility: 'summary_visible' });
-      expect(rows.rows).toContainEqual({ id: manualSameVocTaskLink.id, visibility: 'internal_only' });
+      expect(rows.rows).toContainEqual({
+        id: findingPropagatedLink.id,
+        visibility: 'summary_visible',
+      });
+      expect(rows.rows).toContainEqual({
+        id: manualSameVocTaskLink.id,
+        visibility: 'internal_only',
+      });
       expect(rows.rows).toContainEqual({ id: untraceableLink.id, visibility: 'internal_only' });
     } finally {
       await client.query('rollback');
