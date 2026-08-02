@@ -30,25 +30,28 @@ export const registerManagedSystemVisualBodySchema = z
     'default owner actor and team are mutually exclusive',
   );
 
-export const managedSystemVisualSchema = z.object({
-  id: z.string().uuid(),
-  workspace_id: z.string().uuid(),
-  slug: z.string(),
-  name: z.string(),
-  external_key: z.string().nullable(),
-  default_owner_actor_id: z.string().uuid().nullable(),
-  default_owner_team_id: z.string().uuid().nullable(),
-  archived_at: z.string().datetime().nullable(),
-  archived_by_actor_id: z.string().uuid().nullable(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
-}).strict();
+export const managedSystemVisualSchema = z
+  .object({
+    id: z.string().uuid(),
+    workspace_id: z.string().uuid(),
+    slug: z.string(),
+    name: z.string(),
+    external_key: z.string().nullable(),
+    default_owner_actor_id: z.string().uuid().nullable(),
+    default_owner_team_id: z.string().uuid().nullable(),
+    archived_at: z.string().datetime().nullable(),
+    archived_by_actor_id: z.string().uuid().nullable(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+  })
+  .strict();
 
 export const managedSystemOwnerList = z
   .object({
     items: z.array(managedSystemVisualSchema),
     total: z.number().int().nonnegative(),
-  }).strict()
+  })
+  .strict()
   .parse({
     items: [],
     total: 0,
