@@ -296,6 +296,7 @@ function NextActions({
                 <RequestAccessButton
                   capability={action.requestable_permission.permission}
                   managedSystemId={action.requestable_permission.managed_system_id}
+                  returnRouteIntent={`/surveys/${surveyId}/results`}
                 />
               </div>
             );

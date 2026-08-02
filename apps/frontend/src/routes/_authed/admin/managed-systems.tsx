@@ -12,15 +12,16 @@
 //   2. Default owner — resolved via GET /actors/resolve (#87 new endpoint);
 //      the prototype hard-codes a single user.
 
+import type { ListActorsResponse } from '@fops/shared';
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Checkbox,
   Input,
   Label,
   OutlineBadge,
@@ -28,6 +29,11 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -44,6 +50,7 @@ import {
   type RegisterManagedSystemBody,
   type ResolveActorsResponse,
   type UpdateManagedSystemBody,
+  apiClient,
   archiveManagedSystem,
   fetchAnalyticsAreas,
   fetchManagedSystems,
@@ -66,6 +73,88 @@ function envelopeMessage(err: unknown): string {
 const MANAGED_SYSTEMS_KEY = ['managed-systems'] as const;
 const SUBTITLE =
   'Managed System 은 MVP 의 권한·집계 단위입니다. Project 가 아닙니다. 각 시스템의 default owner, AA 매핑, 활성 상태를 관리합니다.';
+
+type OwnerSelection =
+  | { kind: 'none' }
+  | { kind: 'actor'; id: string }
+  | { kind: 'team'; id: string };
+
+function ownerSelection(row?: ManagedSystemDto): OwnerSelection {
+  if (row?.default_owner_actor_id) return { kind: 'actor', id: row.default_owner_actor_id };
+  if (row?.default_owner_team_id) return { kind: 'team', id: row.default_owner_team_id };
+  return { kind: 'none' };
+}
+
+function ownerSelectionValue(owner: OwnerSelection): string {
+  return owner.kind === 'none' ? 'none' : `${owner.kind}:${owner.id}`;
+}
+
+function parseOwnerSelection(value: string): OwnerSelection {
+  if (value === 'none') return { kind: 'none' };
+  const separator = value.indexOf(':');
+  const kind = value.slice(0, separator);
+  const id = value.slice(separator + 1);
+  return kind === 'team' ? { kind: 'team', id } : { kind: 'actor', id };
+}
+
+function OwnerSelect({
+  value,
+  onChange,
+  knownTeamId,
+  testId,
+}: {
+  value: OwnerSelection;
+  onChange: (value: OwnerSelection) => void;
+  // `exactOptionalPropertyTypes` is on — callers pass `?? undefined` for systems
+  // with no team owner, so the property must accept an explicit undefined.
+  knownTeamId?: string | undefined;
+  testId: string;
+}) {
+  const actorsQuery = useQuery({
+    queryKey: ['actors', 'workspace', 'current'] as const,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const response = await apiClient<ListActorsResponse>('GET', '/actors?workspace=current', {
+        signal,
+      });
+      return response.data.actors.map(({ id, display_name }) => ({ id, display_name }));
+    },
+  });
+  const teamQuery = useQuery({
+    queryKey: ['actors-resolve', [], knownTeamId ? [knownTeamId] : []] as const,
+    enabled: knownTeamId !== undefined,
+    retry: false,
+    queryFn: ({ signal }) => resolveActors({ teamIds: knownTeamId ? [knownTeamId] : [] }, signal),
+  });
+  const knownTeam = teamQuery.data?.teams[0];
+
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={testId} className="text-text-secondary">
+        Default owner (optional)
+      </Label>
+      <Select
+        value={ownerSelectionValue(value)}
+        onValueChange={(next) => onChange(parseOwnerSelection(next))}
+      >
+        <SelectTrigger id={testId} data-testid={testId}>
+          <SelectValue placeholder="(미지정)" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">(미지정)</SelectItem>
+          {knownTeam ? (
+            <SelectItem value={`team:${knownTeam.id}`}>{knownTeam.name}</SelectItem>
+          ) : null}
+          {(actorsQuery.data ?? []).map((actor) => (
+            <SelectItem key={actor.id} value={`actor:${actor.id}`}>
+              {actor.display_name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 export function ManagedSystemsAdminPage() {
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -149,16 +238,9 @@ export function ManagedSystemsBody({
 
   const systems = useMemo(() => listQuery.data?.items ?? [], [listQuery.data]);
   const areas = useMemo(() => areasQuery.data?.items ?? [], [areasQuery.data]);
-  const areasByMs = useMemo(
-    () => groupAreasByMs(areas, includeArchived),
-    [areas, includeArchived],
-  );
+  const areasByMs = useMemo(() => groupAreasByMs(areas, includeArchived), [areas, includeArchived]);
   const renderedAreaCount = useMemo(
-    () =>
-      systems.reduce(
-        (count, system) => count + (areasByMs.get(system.id)?.length ?? 0),
-        0,
-      ),
+    () => systems.reduce((count, system) => count + (areasByMs.get(system.id)?.length ?? 0), 0),
     [areasByMs, systems],
   );
 
@@ -304,7 +386,10 @@ function ManagedSystemsFilter({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end">
-        <label className="flex items-center gap-2 text-sm text-text-primary" htmlFor="ms-filter-include-archived">
+        <label
+          className="flex items-center gap-2 text-sm text-text-primary"
+          htmlFor="ms-filter-include-archived"
+        >
           <Checkbox
             id="ms-filter-include-archived"
             checked={includeArchived}
@@ -370,7 +455,11 @@ function RegistryRow({
       </div>
       <div className="flex flex-col gap-0.5">
         <span className="text-xs text-text-muted">Default owner</span>
-        <UserChip user={owner} size="sm" />
+        {row.default_owner_actor_id === null && row.default_owner_team_id === null ? (
+          <span className="text-xs text-text-muted">(미지정)</span>
+        ) : (
+          <UserChip user={owner} size="sm" />
+        )}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {areas.map((a) => (
@@ -406,6 +495,7 @@ function RegisterDialog({
   const [slug, setSlug] = useState('');
   const [name, setName] = useState('');
   const [externalKey, setExternalKey] = useState('');
+  const [owner, setOwner] = useState<OwnerSelection>({ kind: 'none' });
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<'slug' | 'name', string>>>({});
   const slugRef = useRef<HTMLInputElement>(null);
@@ -417,6 +507,7 @@ function RegisterDialog({
       setSlug('');
       setName('');
       setExternalKey('');
+      setOwner({ kind: 'none' });
       setError(null);
       await onSaved();
     },
@@ -448,6 +539,8 @@ function RegisterDialog({
             setFieldErrors({});
             const body: RegisterManagedSystemBody = { slug, name };
             if (externalKey.length > 0) body.external_key = externalKey;
+            if (owner.kind === 'actor') body.default_owner_actor_id = owner.id;
+            if (owner.kind === 'team') body.default_owner_team_id = owner.id;
             mutation.mutate(body);
           }}
         >
@@ -502,6 +595,7 @@ function RegisterDialog({
               data-testid="create-external-key"
             />
           </div>
+          <OwnerSelect value={owner} onChange={setOwner} testId="create-default-owner" />
           {error && (
             <p data-testid="create-error" className="text-sm text-accent-danger">
               {error}
@@ -553,6 +647,7 @@ function EditForm({
 }) {
   const [name, setName] = useState(target.name);
   const [externalKey, setExternalKey] = useState(target.external_key ?? '');
+  const [owner, setOwner] = useState<OwnerSelection>(() => ownerSelection(target));
   const [error, setError] = useState<string | null>(null);
 
   const updateMutation = useMutation({
@@ -561,6 +656,10 @@ function EditForm({
       if (name !== target.name) body.name = name;
       const nextKey = externalKey.length > 0 ? externalKey : null;
       if (nextKey !== target.external_key) body.external_key = nextKey;
+      if (ownerSelectionValue(owner) !== ownerSelectionValue(ownerSelection(target))) {
+        body.default_owner_actor_id = owner.kind === 'actor' ? owner.id : null;
+        body.default_owner_team_id = owner.kind === 'team' ? owner.id : null;
+      }
       return updateManagedSystem(target.id, body);
     },
     onSuccess: async () => {
@@ -607,6 +706,12 @@ function EditForm({
             data-testid={`name-input-${target.slug}`}
           />
         </div>
+        <OwnerSelect
+          value={owner}
+          onChange={setOwner}
+          knownTeamId={target.default_owner_team_id ?? undefined}
+          testId={`edit-default-owner-${target.slug}`}
+        />
         <div className="space-y-1">
           <Label htmlFor={`ms-edit-key-${target.slug}`} className="text-text-secondary">
             External key

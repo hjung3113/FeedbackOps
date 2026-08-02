@@ -147,6 +147,7 @@ export function PermissionStateView(props: PermissionStateViewProps) {
       {showRequestButton && (
         <RequestAccessButton
           capability={props.capability}
+          returnRouteIntent={`${window.location.pathname}${window.location.search}`}
           {...(props.managedSystemId !== undefined
             ? { managedSystemId: props.managedSystemId }
             : {})}
