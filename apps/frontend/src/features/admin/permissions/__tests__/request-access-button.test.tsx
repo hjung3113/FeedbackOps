@@ -143,14 +143,15 @@ describe('<RequestAccessButton>', () => {
   });
 
   test('AC-D8g capability-already-granted shows no error and invalidates queries', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          code: 'conflict.capability_already_granted',
-          message: 'already granted',
-        }),
-        { status: 409, headers: { 'content-type': 'application/json' } },
-      ),
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: 'conflict.capability_already_granted',
+            message: 'already granted',
+          }),
+          { status: 409, headers: { 'content-type': 'application/json' } },
+        ),
     ) as typeof globalThis.fetch;
     const { invalidateSpy } = wrap();
     openForm();

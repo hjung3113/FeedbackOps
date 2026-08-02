@@ -1,13 +1,13 @@
 import {
   addVocClusterMemberRequestSchema,
   approvePermissionRequestSchema,
+  dashboardSummarySchema,
   denyPermissionRequestSchema,
   linkExistingFindingToVocClusterRequestSchema,
   needMoreInfoPermissionRequestSchema,
   permissionDecisionResultSchema,
   rejectPermissionRequestSchema,
   vocClusterDtoSchema,
-  dashboardSummarySchema,
 } from '@fops/shared';
 import type { Page, Route } from '@playwright/test';
 import {
@@ -29,6 +29,12 @@ import {
   adminSettingsPatchSchema,
 } from '../fixtures/admin-settings';
 import {
+  homeMyWorkRequestsFixture,
+  homeMyWorkTasksFixture,
+  homeOpenPermissionRequestsFixture,
+  homeSummaryFixture,
+} from '../fixtures/home';
+import {
   managedSystemOwnerActors,
   managedSystemOwnerList,
   managedSystemVisualSchema,
@@ -45,6 +51,7 @@ import {
   permissionSettingsFixture,
   workspaceActorsFixture,
 } from '../fixtures/permissions';
+import { railScopeManagedSystems } from '../fixtures/rail-scope';
 import {
   type SurveyResultsVisualScenario,
   surveyResultVisualFixture,
@@ -59,8 +66,6 @@ import {
   surveyVisualFixtureSchema,
 } from '../fixtures/surveys';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
-import { railScopeManagedSystems } from '../fixtures/rail-scope';
-import { homeMyWorkRequestsFixture, homeMyWorkTasksFixture, homeOpenPermissionRequestsFixture, homeSummaryFixture } from '../fixtures/home';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
@@ -139,11 +144,22 @@ export async function installMockApi(
   const postedBodies: unknown[] = [];
   const postedRequests: InstalledMockApi['postedRequests'] = [];
   const permissionRequests = createPermissionRequestsScenario(options.permissionScenario);
-  const savedViews: Array<{ id: string; surface: string; name: string; filter: Record<string, unknown>; created_at: string; updated_at: string }> = [];
+  const savedViews: Array<{
+    id: string;
+    surface: string;
+    name: string;
+    filter: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+  }> = [];
   if (options.savedViews) {
     savedViews.push({
-      id: 'saved-view-1', surface: 'voc', name: 'High priority', filter: { view: 'inbox', 'filter.severity': 'high,critical' },
-      created_at: '2026-07-28T00:00:00.000Z', updated_at: '2026-07-28T00:00:00.000Z',
+      id: 'saved-view-1',
+      surface: 'voc',
+      name: 'High priority',
+      filter: { view: 'inbox', 'filter.severity': 'high,critical' },
+      created_at: '2026-07-28T00:00:00.000Z',
+      updated_at: '2026-07-28T00:00:00.000Z',
     });
   }
   const role = options.role ?? 'admin';
@@ -201,25 +217,40 @@ export async function installMockApi(
     }
 
     if (options.home && isRequest(route, 'GET', '/task-requests')) {
-      await json(route, 200, { items: options.home === 'populated' ? homeMyWorkRequestsFixture : [] });
+      await json(route, 200, {
+        items: options.home === 'populated' ? homeMyWorkRequestsFixture : [],
+      });
       return;
     }
 
     if (options.home && isRequest(route, 'GET', '/permission-requests/mine')) {
-      await json(route, 200, { requests: options.home === 'populated' ? homeOpenPermissionRequestsFixture : [] });
+      await json(route, 200, {
+        requests: options.home === 'populated' ? homeOpenPermissionRequestsFixture : [],
+      });
       return;
     }
 
     if (isRequest(route, 'GET', '/saved-views')) {
       const surface = url.searchParams.get('surface');
-      await json(route, 200, { items: surface ? savedViews.filter((view) => view.surface === surface) : savedViews });
+      await json(route, 200, {
+        items: surface ? savedViews.filter((view) => view.surface === surface) : savedViews,
+      });
       return;
     }
 
     if (isRequest(route, 'POST', '/saved-views')) {
-      const body = request.postDataJSON() as { surface: string; name: string; filter: Record<string, unknown> };
+      const body = request.postDataJSON() as {
+        surface: string;
+        name: string;
+        filter: Record<string, unknown>;
+      };
       const now = '2026-07-28T00:00:00.000Z';
-      const view = { id: `saved-view-${savedViews.length + 1}`, ...body, created_at: now, updated_at: now };
+      const view = {
+        id: `saved-view-${savedViews.length + 1}`,
+        ...body,
+        created_at: now,
+        updated_at: now,
+      };
       savedViews.push(view);
       await json(route, 201, view);
       return;
@@ -327,10 +358,7 @@ export async function installMockApi(
 
     if (isRequest(route, 'GET', '/me/permissions/scope')) {
       await json(route, 200, {
-        scope:
-          role === 'admin'
-            ? { kind: 'all' }
-            : { kind: 'scoped', managed_system_ids: [] },
+        scope: role === 'admin' ? { kind: 'all' } : { kind: 'scoped', managed_system_ids: [] },
       });
       return;
     }

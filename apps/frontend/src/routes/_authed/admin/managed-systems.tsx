@@ -15,13 +15,13 @@
 import type { ListActorsResponse } from '@fops/shared';
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Checkbox,
   Input,
   Label,
   OutlineBadge,
@@ -238,16 +238,9 @@ export function ManagedSystemsBody({
 
   const systems = useMemo(() => listQuery.data?.items ?? [], [listQuery.data]);
   const areas = useMemo(() => areasQuery.data?.items ?? [], [areasQuery.data]);
-  const areasByMs = useMemo(
-    () => groupAreasByMs(areas, includeArchived),
-    [areas, includeArchived],
-  );
+  const areasByMs = useMemo(() => groupAreasByMs(areas, includeArchived), [areas, includeArchived]);
   const renderedAreaCount = useMemo(
-    () =>
-      systems.reduce(
-        (count, system) => count + (areasByMs.get(system.id)?.length ?? 0),
-        0,
-      ),
+    () => systems.reduce((count, system) => count + (areasByMs.get(system.id)?.length ?? 0), 0),
     [areasByMs, systems],
   );
 
@@ -393,7 +386,10 @@ function ManagedSystemsFilter({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end">
-        <label className="flex items-center gap-2 text-sm text-text-primary" htmlFor="ms-filter-include-archived">
+        <label
+          className="flex items-center gap-2 text-sm text-text-primary"
+          htmlFor="ms-filter-include-archived"
+        >
           <Checkbox
             id="ms-filter-include-archived"
             checked={includeArchived}

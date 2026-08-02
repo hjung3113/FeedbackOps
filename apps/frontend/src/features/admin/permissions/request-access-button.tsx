@@ -83,9 +83,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
             ? { requested_managed_system_id: props.managedSystemId }
             : {}),
           reason: reason.trim(),
-          ...(expiration
-            ? { requested_expiration: `${expiration}T23:59:59.000Z` }
-            : {}),
+          ...(expiration ? { requested_expiration: `${expiration}T23:59:59.000Z` } : {}),
           return_route_intent: props.returnRouteIntent,
         },
         { idempotencyKey },
@@ -144,11 +142,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
 
   return (
     <div>
-      <Button
-        variant="primary"
-        size="md"
-        onClick={() => setOpen(true)}
-      >
+      <Button variant="primary" size="md" onClick={() => setOpen(true)}>
         Request access
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -224,9 +218,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                   mutation.mutate();
                 }}
               >
-                <dl
-                  className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 rounded-md border border-border-subtle bg-surface-card p-3 text-sm"
-                >
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 rounded-md border border-border-subtle bg-surface-card p-3 text-sm">
                   <dt className="text-text-muted">Capability</dt>
                   <dd className="font-mono text-text-primary">{props.capability}</dd>
                   <dt className="text-text-muted">Managed System</dt>
