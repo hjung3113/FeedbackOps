@@ -158,7 +158,7 @@ export function AppSidebar({
             <div className="absolute left-2 right-2 top-full z-50 mt-1 rounded-md border border-border-subtle bg-surface-popover p-1 shadow-lg" role="listbox" aria-label="Managed System scope">
               <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-row-hover" onClick={() => selectScope(undefined)} data-testid="scope-option-all">
                 <span className="flex h-5 w-5 items-center justify-center rounded bg-accent-primary/15 text-xs text-accent-primary">∗</span>
-                <span className="min-w-0 flex-1"><span className="block font-medium">All Managed Systems</span><span className="block text-[10px] text-text-muted">{isAdmin ? 'workspace-wide' : `union · ${grantedSystems.length} system${grantedSystems.length === 1 ? '' : 's'}`}</span></span>
+                <span className="min-w-0 flex-1"><span className="block font-medium">All Managed Systems</span><span className="block text-[10px] text-text-muted">{isAdmin ? 'workspace-wide' : `granted ${grantedSystems.length} / ${managedSystems.length}`}</span></span>
               </button>
               {managedSystems.map((system) => (
                 <button key={system.id} type="button" className={cn('flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-row-hover', !system.granted && 'opacity-55')} onClick={() => selectScope(system.id)} data-testid={`scope-option-${system.id}`}>
@@ -167,6 +167,9 @@ export function AppSidebar({
                   {!system.granted && <Shield className="h-3 w-3 text-text-muted" aria-label="Outside your grants" />}
                 </button>
               ))}
+              {/* #282: sits outside the option buttons on purpose — inside one,
+                  the sentence would become part of that option's accessible name. */}
+              {!isAdmin && <p className="px-2 py-1.5 text-[10px] text-text-muted" data-testid="scope-name-visibility-note">이름은 워크스페이스 전체에 공개되며, 접근하려면 권한을 요청하세요.</p>}
             </div>
           )}
         </div>

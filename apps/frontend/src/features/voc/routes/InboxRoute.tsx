@@ -31,7 +31,7 @@ export interface InboxRouteProps {
 
 // ── URL state shape (subset of VocSearch) ────────────────────────────────────
 
-type InboxTab = 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link';
+type InboxTab = 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link' | 'high-no-link';
 type InboxSort =
   | 'created_at:desc'
   | 'created_at:asc'
@@ -65,6 +65,7 @@ const INBOX_TABS: ListToolbarTab[] = [
   { value: 'unassigned', label: 'Unassigned', urgent: true },
   { value: 'similar', label: 'Similar' },
   { value: 'no-link', label: 'No link' },
+  { value: 'high-no-link', label: 'High · no link' },
 ];
 
 const FILTER_CATEGORIES: FilterCategory[] = [

@@ -226,7 +226,7 @@ describe('AppSidebar', () => {
     expect(screen.getByTestId('sidebar-count-triage')).toHaveTextContent('0');
   });
 
-  it('keeps an out-of-grant Managed System visible in the scope list', () => {
+  it('AC-E5b keeps every out-of-grant Managed System name visible in the scope list', () => {
     render(
       <AppSidebar
         entries={entries}
@@ -241,6 +241,34 @@ describe('AppSidebar', () => {
     fireEvent.click(screen.getByTestId('scope-selector'));
     expect(screen.getByTestId('scope-option-outside')).toBeVisible();
     expect(screen.getByLabelText('Outside your grants')).toBeVisible();
+  });
+
+  it('AC-E5a shows granted and total counts without claiming zero systems', () => {
+    render(
+      <AppSidebar
+        entries={entries}
+        isAdmin={false}
+        managedSystems={[
+          { id: 'identity', name: 'Identity Platform', granted: false },
+          { id: 'finance', name: 'Finance Analytics', granted: false },
+          { id: 'sales', name: 'Sales Workspace', granted: false },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('scope-selector'));
+    const allScope = screen.getByTestId('scope-option-all');
+    expect(allScope).toHaveTextContent('granted 0 / 3');
+    expect(allScope).not.toHaveTextContent('0 systems');
+    // The note lives outside the option buttons so it never becomes part of an
+    // option's accessible name.
+    expect(screen.getByTestId('scope-name-visibility-note')).toHaveTextContent(
+      '이름은 워크스페이스 전체에 공개되며, 접근하려면 권한을 요청하세요.',
+    );
+    expect(allScope).not.toHaveTextContent('이름은 워크스페이스 전체에 공개되며');
+    expect(screen.getByTestId('scope-option-identity')).toHaveTextContent('Identity Platform');
+    expect(screen.getByTestId('scope-option-finance')).toHaveTextContent('Finance Analytics');
+    expect(screen.getByTestId('scope-option-sales')).toHaveTextContent('Sales Workspace');
   });
 
   it('labels non-admin all scope as the union of granted Managed Systems only', () => {

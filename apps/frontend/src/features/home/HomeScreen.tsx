@@ -111,7 +111,7 @@ function MyWorkPanel({ tasks, requests }: { tasks: TaskDto[]; requests: TaskRequ
     ...tasks.map((task) => ({ id: task.id, label: `${task.display_id} — ${task.title}`, meta: task.status, href: `/tasks?view=board&param=${task.id}` })),
     ...requests.map((request) => ({ id: request.id, label: `${request.display_id} — ${request.requested_outcome}`, meta: request.status, href: `/tasks?view=requests&param=${request.id}` })),
   ].slice(0, 4);
-  return <section><PanelHeading title={HOME_COPY.myWork} action={HOME_COPY.openMyWork} disabled />
+  return <section><PanelHeading title={HOME_COPY.assignedToYou} />
     <div className="overflow-hidden rounded-md border border-border-subtle bg-surface-card" data-testid="home-my-work">
       {rows.map((row) => <a key={row.id} href={row.href} className="flex min-h-row-default items-center gap-3 border-b border-border-subtle px-4 last:border-b-0 hover:bg-surface-row-hover"><span className="h-4 w-[3px] rounded-pill bg-accent-warn" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{row.label}</span><span className="block truncate text-xs text-text-muted">{row.meta}</span></span><ChevronRight className="h-4 w-4 text-text-muted" /></a>)}
       {rows.length === 0 && <p className="px-4 py-5 text-sm text-text-muted">No work is currently assigned to you.</p>}

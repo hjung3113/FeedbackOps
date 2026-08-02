@@ -70,6 +70,8 @@ interface InstallOptions {
   scenario?: ScenarioName;
   /** Issue #180 VOC detail surface; schemas validate its fixture at import. */
   vocReview?: boolean;
+  /** Supplies a schema-validated VOC list for the High · no link inbox state. */
+  inboxHighNoLink?: boolean;
   /** Issue #179 reporter-safe linked Task summary surface. */
   vocReporterTaskSummary?: boolean;
   surveyScenario?: SurveyVisualScenario;
@@ -217,6 +219,11 @@ export async function installMockApi(
       return;
     }
 
+    if (options.inboxHighNoLink && isRequest(route, 'GET', '/vocs')) {
+      await json(route, 200, { items: [populatedReviewVoc] });
+      return;
+    }
+
     if (options.vocReview && isRequest(route, 'GET', '/vocs')) {
       await json(route, 200, { items: [populatedReviewVoc] });
       return;
@@ -261,6 +268,11 @@ export async function installMockApi(
       return;
     }
 
+    if (options.inboxHighNoLink && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, { actors: [] });
+      return;
+    }
+
     if (options.vocReview && isRequest(route, 'GET', '/actors')) {
       await json(route, 200, { actors: [] });
       return;
@@ -268,6 +280,11 @@ export async function installMockApi(
 
     if (options.vocReporterTaskSummary && isRequest(route, 'GET', '/actors')) {
       await json(route, 200, { actors: [] });
+      return;
+    }
+
+    if (options.inboxHighNoLink && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, { items: [], total: 0 });
       return;
     }
 

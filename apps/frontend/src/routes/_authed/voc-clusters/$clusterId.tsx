@@ -814,6 +814,7 @@ export function VocClusterDetailPanel({
         <AddVocModal
           open={addVocOpen}
           clusterId={clusterId}
+          members={members}
           onClose={() => setAddVocOpen(false)}
         />
       )}
@@ -838,6 +839,7 @@ export function VocClusterDetailPanel({
           open={requestTaskOpen}
           evidenceSummaryDefault={data.summary ?? data.title}
           isSubmitting={requestTaskMutation.isPending}
+          source={{ type: "voc_cluster", id: clusterId }}
           onClose={closeRequestTaskModal}
           onSubmit={(values) => {
             requestTaskMutation.mutate(values, {
@@ -1027,16 +1029,34 @@ function LinkExistingFindingModal({
 function AddVocModal({
   open,
   clusterId,
+  members,
   onClose,
 }: {
   open: boolean;
   clusterId: string;
+  members: VocClusterMemberPresentation[];
   onClose: () => void;
 }): React.ReactElement {
   const [vocId, setVocId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mutation = useAddClusterMember();
   const candidatePeers = useCandidatePeers(clusterId);
+  const candidates = [
+    ...members.map((member) => ({
+      voc_id: member.voc_id,
+      display_id: member.display_id ?? shortId(member.voc_id),
+      title: member.title ?? "VOC",
+      severity: member.severity,
+      reporter_facing_status: member.reporter_facing_status,
+      included: true,
+    })),
+    ...(candidatePeers.data?.candidates ?? [])
+      .filter(
+        (candidate) =>
+          !members.some((member) => member.voc_id === candidate.voc_id),
+      )
+      .map((candidate) => ({ ...candidate, included: false })),
+  ];
 
   function closeAndReset() {
     setVocId("");
@@ -1082,7 +1102,7 @@ function AddVocModal({
           onSubmit={handleSubmit}
         >
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="add-voc-candidate" className="text-text-secondary">
+            <Label className="text-text-secondary">
               추가할 VOC <span aria-hidden>*</span>
             </Label>
             {candidatePeers.isLoading ? (
@@ -1098,23 +1118,31 @@ function AddVocModal({
                 추가 가능한 VOC를 불러오지 못했습니다.
               </p>
             ) : (
-              <select
-                id="add-voc-candidate"
-                required
-                value={vocId}
-                onChange={(e) => setVocId(e.target.value)}
-                data-testid="add-voc-candidate-picker"
-                className="h-9 w-full rounded-md border border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">추가할 VOC를 선택하세요.</option>
-                {(candidatePeers.data?.candidates ?? []).map((candidate) => (
-                  <option key={candidate.voc_id} value={candidate.voc_id}>
+              <div className="flex flex-col gap-1" data-testid="add-voc-candidates">
+                {candidates.map((candidate) => (
+                  <Button
+                    key={candidate.voc_id}
+                    type="button"
+                    variant={vocId === candidate.voc_id ? "secondary" : "outline"}
+                    size="sm"
+                    disabled={candidate.included}
+                    onClick={() => setVocId(candidate.voc_id)}
+                    data-testid={`add-voc-candidate-${candidate.voc_id}`}
+                    className="justify-start"
+                  >
                     {candidate.display_id} · {candidate.title} ·{" "}
                     {candidate.severity ?? "미지정"} ·{" "}
                     {candidate.reporter_facing_status}
-                  </option>
+                    {candidate.included && (
+                      <OutlineBadge
+                        data-testid={`add-voc-included-${candidate.voc_id}`}
+                      >
+                        이미 포함됨
+                      </OutlineBadge>
+                    )}
+                  </Button>
                 ))}
-              </select>
+              </div>
             )}
           </div>
           {error && (

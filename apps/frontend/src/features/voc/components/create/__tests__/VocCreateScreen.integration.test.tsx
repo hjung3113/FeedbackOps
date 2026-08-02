@@ -163,6 +163,7 @@ function installFetch(
   },
 ) {
   const { msItems = [MS_ITEM], aaItems = [AA_ITEM], postVocsResponse } = options;
+  const postBodies: unknown[] = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.includes('/managed-systems') && (!init?.method || init.method === 'GET')) {
@@ -172,11 +173,13 @@ function installFetch(
       return jsonResponse({ items: aaItems, total: aaItems.length });
     }
     if (url.includes('/vocs') && init?.method === 'POST') {
+      postBodies.push(JSON.parse(String(init.body)));
       if (!postVocsResponse) return jsonResponse({}, 500);
       return jsonResponse(postVocsResponse.body, postVocsResponse.status, postVocsResponse.headers ?? {});
     }
     return new Response('not mocked', { status: 500 });
   }) as typeof globalThis.fetch;
+  return { postBodies };
 }
 
 // ── Test suite ────────────────────────────────────────────────────────────────
@@ -241,6 +244,42 @@ describe('VocCreateScreen integration', () => {
         expect.objectContaining({ view: 'my', selected: VOC_ID }),
       );
     });
+  });
+
+  test('AC-E14 renders help and submits independent source and Analytics Area values without a warning dialog', async () => {
+    const { postBodies } = installFetch({
+      postVocsResponse: {
+        status: 201,
+        body: { id: VOC_ID, display_id: 'V-1', created_at: '2026-05-20T00:00:00Z' },
+      },
+    });
+
+    renderHarness({ onCancel: vi.fn() });
+
+    await waitFor(() => expect(screen.getByTestId('ms-picker')).toBeInTheDocument());
+    expect(screen.getByText('타인 대신 보고는 다른 팀원이나 고객의 경험을 대신 등록하는 경우입니다.')).toBeInTheDocument();
+    expect(screen.getByText('Analytics Area는 VOC를 분석할 때 함께 볼 주제에 맞춰 선택하세요.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: MS_ITEM.name }));
+    // Radix TabsTrigger activates on mousedown, not click.
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '타인 대신 보고' }));
+    await waitFor(() => expect(screen.getByTestId('aa-picker')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('radio', { name: AA_ITEM.name }));
+    fireEvent.change(screen.getByRole('textbox', { name: /제목/i }), { target: { value: '분류와 출처가 독립적인 VOC' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: /제목/i }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'VOC 제출' }));
+
+    await waitFor(() => expect(postBodies).toHaveLength(1));
+    expect(postBodies[0]).toEqual(expect.objectContaining({
+      primary_managed_system_id: MS_ID,
+      analytics_area_id: AA_ID,
+      source_context: 'proxy_report',
+      title: '분류와 출처가 독립적인 VOC',
+      attachment_ids: [],
+    }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   // ── 2. 422 validation.failed with detail.fields ───────────────────────────

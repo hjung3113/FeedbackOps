@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Outlet, RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dashboardSummarySchema } from '@fops/shared';
@@ -69,7 +69,6 @@ describe('HomeScreen route content', () => {
     expect(screen.getByText('오늘 워크스페이스에 3개의 운영 갭이 있습니다. 우선순위가 높은 큐부터 확인하세요.')).toBeInTheDocument();
     expect(screen.queryByTestId('home-queue-high-severity-unlinked')).toBeNull();
   });
-
   it('renders a present zero queue in the sidebar', () => {
     render(<AppSidebar entries={homeSidebarEntries(dashboardSummarySchema.parse(response), true)} />);
     expect(screen.getByTestId('sidebar-count-queue-unassigned-voc')).toHaveTextContent('0');
@@ -124,5 +123,55 @@ describe('HomeScreen route content', () => {
     renderHome();
     await screen.findByText('No open requests.');
     expect(screen.queryByTestId('home-open-requests-list')).not.toBeInTheDocument();
+  });
+
+  // #280 removed the *promise* of a My Work screen, not the live rows beneath
+  // it. The panel queries assigned Tasks and pending Task Requests and both
+  // render — only the dead sidebar entry and the disabled "Open My Work" link
+  // are gone. Asserting the panel is still populated is what keeps a future
+  // cleanup from deleting working data again.
+  it('AC-E3a drops the dead My Work entry point but keeps the live panel', async () => {
+    installFetch();
+    renderHome();
+
+    const panel = await screen.findByTestId('home-my-work');
+    expect(panel).toBeInTheDocument();
+    expect(screen.getByText('Assigned to you')).toBeInTheDocument();
+    expect(screen.queryByText('Open My Work')).not.toBeInTheDocument();
+    expect(screen.queryByText('My work')).not.toBeInTheDocument();
+
+    render(<AppSidebar entries={homeSidebarEntries(undefined, true)} />);
+    expect(screen.getByTestId('sidebar-nav-home')).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-nav-my-work')).not.toBeInTheDocument();
+  });
+
+  it('AC-E3b keeps the assigned Task and pending Request rows linking to real routes', async () => {
+    // The shared installFetch() returns empty lists, which would render the
+    // "nothing assigned" copy and leave this assertion nothing to beat. Seed
+    // one of each so the rows actually exist.
+    const base = installFetch();
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('/tasks'))
+        return new Response(
+          JSON.stringify({ items: [{ id: 'task-a1', display_id: 'TSK-701', title: '쿼리 플랜 개선', status: 'doing' }] }),
+          { status: 200 },
+        );
+      if (url.startsWith('/task-requests'))
+        return new Response(
+          JSON.stringify({ items: [{ id: 'req-b2', display_id: 'REQ-902', requested_outcome: '재인증 흐름 개선', status: 'pending_review' }] }),
+          { status: 200 },
+        );
+      return base(input, init);
+    }) as typeof globalThis.fetch;
+    renderHome();
+
+    const panel = await screen.findByTestId('home-my-work');
+    await within(panel).findByText('TSK-701 — 쿼리 플랜 개선');
+    expect(within(panel).getByText('REQ-902 — 재인증 흐름 개선')).toBeInTheDocument();
+    const links = within(panel).getAllByRole('link');
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveAttribute('href', '/tasks?view=board&param=task-a1');
+    expect(links[1]).toHaveAttribute('href', '/tasks?view=requests&param=req-b2');
   });
 });

@@ -2,9 +2,9 @@
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
+import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
-import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
@@ -25,7 +25,6 @@ import { toast } from 'sonner';
 import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
 import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
 import { ComposerSection } from './ComposerSection';
-import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
 import { ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
 import { DetailHeader } from './DetailHeader';
@@ -34,6 +33,7 @@ import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
 import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { NextActionFooter } from './NextActionFooter';
+import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
 import { SimilarVocSection, hasSimilarVocSection } from './SimilarVocSection';
 import { TriageBlock } from './TriageBlock';
 
@@ -425,6 +425,7 @@ function FullDetailView({
         open={requestTaskOpen}
         evidenceSummaryDefault={`VOC ${voc.display_id}: ${voc.title}`}
         isSubmitting={requestTaskMutation.isPending}
+        source={{ type: 'voc', id: vocId }}
         onClose={closeRequestTaskModal}
         onSubmit={(values) => {
           requestTaskMutation.mutate(values, {

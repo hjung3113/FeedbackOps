@@ -7,7 +7,10 @@ const VOC_TABS = [
 { key: 'high', label: 'High', icon: 'alert', count: 7, tip: 'High / Critical severity' },
 { key: 'unassigned', label: 'Unassigned', icon: 'user', count: 12, urgent: true, tip: '담당자 미지정' },
 { key: 'similar', label: 'Similar', icon: 'layers', count: 4, tip: '유사 VOC 추천 있음' },
-{ key: 'no-followup', label: 'No link', icon: 'link', count: 5, tip: 'Finding / Task 연결 없음' }];
+{ key: 'no-followup', label: 'No link', icon: 'link', count: 5, tip: 'Finding / Task 연결 없음' },
+// ADR-0040 (#306): the canonical GET /vocs tab enum carries `high-no-link` and
+// the Home CTA links straight to it, so the toolbar needs a chip for it.
+{ key: 'high-no-link', label: 'High · no link', icon: 'alert', tip: 'High 이상인데 Finding / Task 연결 없음' }];
 
 
 function VocRow({ voc, selected, onSelect, checked, onToggleCheck }) {

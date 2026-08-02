@@ -28,7 +28,6 @@ export function homeSidebarEntries(
   })) ?? [];
   return [
     { id: 'home', label: 'Home', href: '/home', section: 'FEEDBACKOPS', icon: <Home className="h-4 w-4" />, active },
-    { id: 'my-work', label: 'My Work', href: '/home', icon: <Inbox className="h-4 w-4" />, disabled: true },
     { id: 'command', label: 'Command', href: '/home', icon: <Command className="h-4 w-4" />, disabled: true, trailing: <kbd className="rounded border border-border-subtle px-1 text-[10px] text-text-muted">⌘K</kbd> },
     ...queues,
     { id: 'recent-finding', label: 'FIN-181 SSO 재인증', href: '/findings', section: 'RECENT', icon: <FileBarChart className="h-4 w-4" /> },
