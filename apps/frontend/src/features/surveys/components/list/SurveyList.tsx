@@ -103,12 +103,7 @@ export function SurveyList({
           </button>
         </div>
         {canCreate && onCreate && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onCreate}
-            data-testid="survey-create-button"
-          >
+          <Button variant="primary" size="sm" onClick={onCreate} data-testid="survey-create-button">
             <Plus className="h-4 w-4" />
             New survey
           </Button>

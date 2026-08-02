@@ -172,7 +172,7 @@ export function CreateSurveyDialog({
               required
             />
           </label>
-          <label className="block text-sm">
+          <div className="block text-sm">
             Survey type
             <Select value={type} onValueChange={(value) => setType(value as SurveyType)}>
               <SelectTrigger aria-label="Survey type">
@@ -184,8 +184,8 @@ export function CreateSurveyDialog({
                 <SelectItem value="outcome">outcome</SelectItem>
               </SelectContent>
             </Select>
-          </label>
-          <label className="block text-sm">
+          </div>
+          <div className="block text-sm">
             Managed System
             <Select
               value={system}
@@ -205,7 +205,7 @@ export function CreateSurveyDialog({
                 ))}
               </SelectContent>
             </Select>
-          </label>
+          </div>
           <label className="block text-sm" htmlFor="survey-description">
             설명 (선택)
             <Textarea
@@ -214,7 +214,7 @@ export function CreateSurveyDialog({
               onChange={(event) => setDescription(event.target.value)}
             />
           </label>
-          <label className="block text-sm">
+          <div className="block text-sm">
             Analytics Area (선택)
             <Select value={analyticsArea} onValueChange={setAnalyticsArea} disabled={!system}>
               <SelectTrigger aria-label="Analytics Area">
@@ -228,8 +228,8 @@ export function CreateSurveyDialog({
                 ))}
               </SelectContent>
             </Select>
-          </label>
-          <label className="block text-sm">
+          </div>
+          <div className="block text-sm">
             응답 익명 보호
             <Select
               value={identityProtected}
@@ -243,7 +243,7 @@ export function CreateSurveyDialog({
                 <SelectItem value="false">보호하지 않음</SelectItem>
               </SelectContent>
             </Select>
-          </label>
+          </div>
           {create.isError && <p className="text-sm text-text-danger">설문을 만들지 못했습니다.</p>}
           <DialogFooter>
             <Button
@@ -257,11 +257,7 @@ export function CreateSurveyDialog({
             <Button
               type="submit"
               disabled={
-                create.isPending ||
-                !title.trim() ||
-                !type ||
-                !system ||
-                identityProtected === ''
+                create.isPending || !title.trim() || !type || !system || identityProtected === ''
               }
               data-testid="survey-create-submit"
             >

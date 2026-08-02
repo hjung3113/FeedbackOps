@@ -1,3 +1,4 @@
+import { CreateSurveyDialog } from '@/routes/_authed/surveys/index';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   RouterProvider,
@@ -14,7 +15,6 @@ import { SurveyDetail } from '../../components/detail/SurveyDetail';
 import { SurveyList } from '../../components/list/SurveyList';
 import { useSurveys } from '../../hooks/useSurveys';
 import type { Survey, SurveyQuestion } from '../../types';
-import { CreateSurveyDialog } from '@/routes/_authed/surveys/index';
 
 const { apiClient, fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } = vi.hoisted(
   () => ({
@@ -298,9 +298,7 @@ describe('Survey screens', () => {
     ).toBeInTheDocument();
     expect(screen.getByTestId('survey-close-confirmation')).toBeInTheDocument();
     fireEvent.click(
-      within(screen.getByTestId('survey-close-confirmation')).getByTestId(
-        'survey-status-confirm',
-      ),
+      within(screen.getByTestId('survey-close-confirmation')).getByTestId('survey-status-confirm'),
     );
 
     await waitFor(() => expect(apiClient).toHaveBeenCalledWith('POST', '/surveys/survey-1/close'));
@@ -432,9 +430,7 @@ describe('Survey screens', () => {
       question('question-2', '둘째 질문', 1),
       question('question-3', '셋째 질문', 2),
     ];
-    renderWithQuery(
-      <SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />,
-    );
+    renderWithQuery(<SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />);
     const dataTransfer = {
       dropEffect: 'none',
       effectAllowed: 'none',
@@ -457,10 +453,11 @@ describe('Survey screens', () => {
   });
 
   it('AC-5 saves a keyboard-only one-step move', async () => {
-    const questions = [question('question-1', '첫 질문', 0), question('question-2', '둘째 질문', 1)];
-    renderWithQuery(
-      <SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />,
-    );
+    const questions = [
+      question('question-1', '첫 질문', 0),
+      question('question-2', '둘째 질문', 1),
+    ];
+    renderWithQuery(<SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Q1 아래로 이동' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));

@@ -190,7 +190,9 @@ export function SurveyBuilder({
           await mutations.remove.mutateAsync(question.id);
       }
 
-      for (const local of questionsRef.current.filter((question) => question.id.startsWith('local-'))) {
+      for (const local of questionsRef.current.filter((question) =>
+        question.id.startsWith('local-'),
+      )) {
         const current = questionsRef.current.find((question) => question.id === local.id);
         if (!current) continue;
         let sentSignature = questionSignature(current);
@@ -205,9 +207,7 @@ export function SurveyBuilder({
       }
 
       for (const persistedQuestion of persisted) {
-        let current = questionsRef.current.find(
-          (question) => question.id === persistedQuestion.id,
-        );
+        let current = questionsRef.current.find((question) => question.id === persistedQuestion.id);
         if (!current || questionSignature(current) === questionSignature(persistedQuestion))
           continue;
         let sentSignature = questionSignature(current);
@@ -448,11 +448,7 @@ function QuestionList({
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onRemove(question.id)}
-                  aria-label="질문 삭제"
-                >
+                <button type="button" onClick={() => onRemove(question.id)} aria-label="질문 삭제">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </span>
