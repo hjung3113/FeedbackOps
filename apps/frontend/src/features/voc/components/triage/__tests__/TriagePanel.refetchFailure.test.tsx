@@ -13,10 +13,14 @@
 //   2. Refetch succeeds but compensating PATCH 409s → toast surfaced, no unhandled rejection.
 //   3. Refetch succeeds, compensating PATCH succeeds → happy path (onOptimisticRestore called).
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/api/analytics-areas', () => ({
+  fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
+}));
 
 // ── sonner mock ──────────────────────────────────────────────────────────────
 // Track the last toast.custom renderer so the test can render the undo toast.
@@ -40,9 +44,9 @@ vi.mock('sonner', () => ({
   },
 }));
 
+import type { VocListItem } from '@fops/shared';
 import { toast } from 'sonner';
 import { TriagePanel } from '../TriagePanel';
-import type { VocListItem } from '@fops/shared';
 
 // ── shared fixtures ──────────────────────────────────────────────────────────
 
@@ -65,6 +69,7 @@ const MOCK_VOC: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: ORIGINAL_UPDATED_AT,
   similar_count: 0,
+  attachment_count: 0,
 };
 
 function makeWrapper() {
@@ -145,7 +150,8 @@ async function fireMutationAndUndo(container: HTMLElement) {
   const undoBtn = await waitFor(() => {
     // Use the specific toast host element (not the full container) to avoid
     // matching stale buttons from prior tests.
-    const el = toastEl!.querySelector('button');
+    if (!toastEl) throw new Error('expected the toast host element to exist');
+    const el = toastEl.querySelector('button');
     expect(el).not.toBeNull();
     return el as HTMLElement;
   });
@@ -164,7 +170,7 @@ describe('TriagePanel — refetch-failure path (REV-4 Cluster Y)', () => {
     globalThis.fetch = originalFetch;
     capturedToastRenderer = null;
     // Remove the manually appended toast host to prevent DOM leakage between tests.
-    if (toastHostEl && toastHostEl.parentNode) {
+    if (toastHostEl?.parentNode) {
       toastHostEl.parentNode.removeChild(toastHostEl);
     }
     toastHostEl = null;
@@ -218,10 +224,13 @@ describe('TriagePanel — refetch-failure path (REV-4 Cluster Y)', () => {
 
     // Allow async operations to settle
     await new Promise((r) => setTimeout(r, 100));
-    await waitFor(() => {
-      // An error toast must have been shown to the user
-      expect(toast.error as ReturnType<typeof vi.fn>).toHaveBeenCalled();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        // An error toast must have been shown to the user
+        expect(toast.error as ReturnType<typeof vi.fn>).toHaveBeenCalled();
+      },
+      { timeout: 3000 },
+    );
 
     // Compensating PATCH must NOT have been attempted (only 1 PATCH = the original)
     expect(patchIfMatchHeaders).toHaveLength(1);
@@ -258,10 +267,7 @@ describe('TriagePanel — refetch-failure path (REV-4 Cluster Y)', () => {
           return emptyResponse();
         }
         // Compensating PATCH: 409 stale_write
-        return jsonResponse(
-          { code: 'conflict.stale_write', message: 'stale' },
-          409,
-        );
+        return jsonResponse({ code: 'conflict.stale_write', message: 'stale' }, 409);
       }
 
       return jsonResponse({});
@@ -283,17 +289,23 @@ describe('TriagePanel — refetch-failure path (REV-4 Cluster Y)', () => {
     await fireMutationAndUndo(container);
 
     // Allow async compensate to run
-    await waitFor(() => {
-      expect(patchIfMatchHeaders.length).toBeGreaterThanOrEqual(2);
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(patchIfMatchHeaders.length).toBeGreaterThanOrEqual(2);
+      },
+      { timeout: 3000 },
+    );
 
     // The compensating PATCH used the fresh refetched updated_at
     expect(patchIfMatchHeaders[1]).toBe(REFETCHED_UPDATED_AT);
 
     // An error toast must have been surfaced after the 409
-    await waitFor(() => {
-      expect(toast.error as ReturnType<typeof vi.fn>).toHaveBeenCalled();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(toast.error as ReturnType<typeof vi.fn>).toHaveBeenCalled();
+      },
+      { timeout: 3000 },
+    );
 
     // No unhandled rejection: test passes if we reach here without throwing
   });
@@ -352,9 +364,12 @@ describe('TriagePanel — refetch-failure path (REV-4 Cluster Y)', () => {
     await fireMutationAndUndo(container);
 
     // Happy path: onOptimisticRestore must be called
-    await waitFor(() => {
-      expect(onOptimisticRestore).toHaveBeenCalledWith(MOCK_VOC.id);
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(onOptimisticRestore).toHaveBeenCalledWith(MOCK_VOC.id);
+      },
+      { timeout: 3000 },
+    );
 
     // No error toast on the success path
     expect(toast.error as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();

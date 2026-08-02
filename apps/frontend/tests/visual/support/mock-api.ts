@@ -1,13 +1,13 @@
 import {
   addVocClusterMemberRequestSchema,
   approvePermissionRequestSchema,
+  dashboardSummarySchema,
   denyPermissionRequestSchema,
   linkExistingFindingToVocClusterRequestSchema,
   needMoreInfoPermissionRequestSchema,
   permissionDecisionResultSchema,
   rejectPermissionRequestSchema,
   vocClusterDtoSchema,
-  dashboardSummarySchema,
 } from '@fops/shared';
 import type { Page, Route } from '@playwright/test';
 import {
@@ -29,12 +29,19 @@ import {
   adminSettingsPatchSchema,
 } from '../fixtures/admin-settings';
 import {
+  homeMyWorkRequestsFixture,
+  homeMyWorkTasksFixture,
+  homeOpenPermissionRequestsFixture,
+  homeSummaryFixture,
+} from '../fixtures/home';
+import {
   type PermissionScenarioName,
   createPermissionRequestsScenario,
-  permissionSettingsFixture,
   permissionDecisionResultTemplates,
+  permissionSettingsFixture,
   workspaceActorsFixture,
 } from '../fixtures/permissions';
+import { railScopeManagedSystems } from '../fixtures/rail-scope';
 import {
   type SurveyResultsVisualScenario,
   surveyResultVisualFixture,
@@ -48,9 +55,18 @@ import {
   surveyVisualFixture,
   surveyVisualFixtureSchema,
 } from '../fixtures/surveys';
+import {
+  TRIAGE_AREA_IDS,
+  type TriageAreaVisualScenario,
+  triageAreaActors,
+  triageAreaAnalyticsAreas,
+  triageAreaAnalyticsAreasResponseSchema,
+  triageAreaConversationPage,
+  triageAreaFindingSourceVoc,
+  triageAreaReviewCandidates,
+  triageAreaTriageVoc,
+} from '../fixtures/triage-analytics-area';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
-import { railScopeManagedSystems } from '../fixtures/rail-scope';
-import { homeMyWorkRequestsFixture, homeMyWorkTasksFixture, homeOpenPermissionRequestsFixture, homeSummaryFixture } from '../fixtures/home';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
@@ -84,6 +100,8 @@ interface InstallOptions {
   savedViews?: boolean;
   /** Home action dashboard fixture state. */
   home?: 'populated' | 'empty';
+  /** Triage Analytics Area wiring and Finding inheritance states. */
+  triageAreaScenario?: TriageAreaVisualScenario;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -125,11 +143,22 @@ export async function installMockApi(
   const postedBodies: unknown[] = [];
   const postedRequests: InstalledMockApi['postedRequests'] = [];
   const permissionRequests = createPermissionRequestsScenario(options.permissionScenario);
-  const savedViews: Array<{ id: string; surface: string; name: string; filter: Record<string, unknown>; created_at: string; updated_at: string }> = [];
+  const savedViews: Array<{
+    id: string;
+    surface: string;
+    name: string;
+    filter: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+  }> = [];
   if (options.savedViews) {
     savedViews.push({
-      id: 'saved-view-1', surface: 'voc', name: 'High priority', filter: { view: 'inbox', 'filter.severity': 'high,critical' },
-      created_at: '2026-07-28T00:00:00.000Z', updated_at: '2026-07-28T00:00:00.000Z',
+      id: 'saved-view-1',
+      surface: 'voc',
+      name: 'High priority',
+      filter: { view: 'inbox', 'filter.severity': 'high,critical' },
+      created_at: '2026-07-28T00:00:00.000Z',
+      updated_at: '2026-07-28T00:00:00.000Z',
     });
   }
   const role = options.role ?? 'admin';
@@ -187,25 +216,40 @@ export async function installMockApi(
     }
 
     if (options.home && isRequest(route, 'GET', '/task-requests')) {
-      await json(route, 200, { items: options.home === 'populated' ? homeMyWorkRequestsFixture : [] });
+      await json(route, 200, {
+        items: options.home === 'populated' ? homeMyWorkRequestsFixture : [],
+      });
       return;
     }
 
     if (options.home && isRequest(route, 'GET', '/permission-requests/mine')) {
-      await json(route, 200, { requests: options.home === 'populated' ? homeOpenPermissionRequestsFixture : [] });
+      await json(route, 200, {
+        requests: options.home === 'populated' ? homeOpenPermissionRequestsFixture : [],
+      });
       return;
     }
 
     if (isRequest(route, 'GET', '/saved-views')) {
       const surface = url.searchParams.get('surface');
-      await json(route, 200, { items: surface ? savedViews.filter((view) => view.surface === surface) : savedViews });
+      await json(route, 200, {
+        items: surface ? savedViews.filter((view) => view.surface === surface) : savedViews,
+      });
       return;
     }
 
     if (isRequest(route, 'POST', '/saved-views')) {
-      const body = request.postDataJSON() as { surface: string; name: string; filter: Record<string, unknown> };
+      const body = request.postDataJSON() as {
+        surface: string;
+        name: string;
+        filter: Record<string, unknown>;
+      };
       const now = '2026-07-28T00:00:00.000Z';
-      const view = { id: `saved-view-${savedViews.length + 1}`, ...body, created_at: now, updated_at: now };
+      const view = {
+        id: `saved-view-${savedViews.length + 1}`,
+        ...body,
+        created_at: now,
+        updated_at: now,
+      };
       savedViews.push(view);
       await json(route, 201, view);
       return;
@@ -217,6 +261,71 @@ export async function installMockApi(
       if (index === -1) await json(route, 404, errorEnvelope(404));
       else await route.fulfill({ status: 204 });
       if (index !== -1) savedViews.splice(index, 1);
+      return;
+    }
+
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/vocs')) {
+      await json(route, 200, {
+        items: [
+          options.triageAreaScenario === 'triage-analytics-area-populated'
+            ? triageAreaTriageVoc
+            : triageAreaFindingSourceVoc,
+        ],
+      });
+      return;
+    }
+
+    if (
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}`)
+    ) {
+      await json(route, 200, triageAreaFindingSourceVoc);
+      return;
+    }
+
+    if (
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}/conversation`)
+    ) {
+      await json(route, 200, triageAreaConversationPage);
+      return;
+    }
+
+    if (
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}/public-update-candidates`)
+    ) {
+      await json(route, 200, triageAreaReviewCandidates);
+      return;
+    }
+
+    // The VOC detail panel asks for similarity recommendations on mount; the
+    // mock is fail-closed, so an unanswered route ends the test before any
+    // screenshot is taken. Empty is the right answer for these scenarios.
+    if (
+      options.triageAreaScenario &&
+      request.method() === 'GET' &&
+      /^\/vocs\/[^/]+\/recommendations$/.test(url.pathname)
+    ) {
+      await json(route, 200, { items: [], total: 0 });
+      return;
+    }
+
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/analytics-areas')) {
+      // The triage panel scopes this call to the VOC's Managed System, but the
+      // surrounding list also resolves area names with an unscoped call. Both are
+      // legitimate here, so this serves the same fixture either way — the scoping
+      // contract itself is asserted by AC-B4b in the unit suite, not by pixels.
+      await json(
+        route,
+        200,
+        triageAreaAnalyticsAreasResponseSchema.parse(triageAreaAnalyticsAreas),
+      );
+      return;
+    }
+
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, triageAreaActors);
       return;
     }
 
@@ -309,10 +418,7 @@ export async function installMockApi(
 
     if (isRequest(route, 'GET', '/me/permissions/scope')) {
       await json(route, 200, {
-        scope:
-          role === 'admin'
-            ? { kind: 'all' }
-            : { kind: 'scoped', managed_system_ids: [] },
+        scope: role === 'admin' ? { kind: 'all' } : { kind: 'scoped', managed_system_ids: [] },
       });
       return;
     }

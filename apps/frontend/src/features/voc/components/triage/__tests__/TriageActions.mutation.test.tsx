@@ -13,10 +13,14 @@
 // Pattern: mock sonner so toast.custom is captured without needing a live Toaster.
 // The compensating PATCH test triggers undo via the captured onAction callback.
 
-import * as React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/api/analytics-areas', () => ({
+  fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
+}));
 
 // ── sonner mock — capture toast.custom so we can trigger undo programmatically ──
 
@@ -37,8 +41,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { TriagePanel } from '../TriagePanel';
 import type { VocListItem } from '@fops/shared';
+import { TriagePanel } from '../TriagePanel';
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -58,14 +62,15 @@ const MOCK_VOC: VocListItem = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  attachment_count: 0,
 };
 
 function makeWrapper() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={qc}>
-      {children}
-    </QueryClientProvider>
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
 }
 
@@ -93,7 +98,9 @@ function renderCapturedToast(container: HTMLElement): HTMLElement | null {
   // Use ReactDOM.createRoot to render the toast node
   const { createRoot } = require('react-dom/client') as typeof import('react-dom/client');
   const root = createRoot(toastEl);
-  act(() => { root.render(node as React.ReactElement); });
+  act(() => {
+    root.render(node as React.ReactElement);
+  });
   return toastEl;
 }
 
@@ -114,7 +121,10 @@ describe('TriageActions mutation wire-up', () => {
   it('calls onOptimisticRemove synchronously when Triage 확정 is clicked', async () => {
     // Long-running fetch so the mutation stays in-flight
     globalThis.fetch = vi.fn(
-      () => new Promise<Response>(() => { /* never resolves */ })
+      () =>
+        new Promise<Response>(() => {
+          /* never resolves */
+        }),
     ) as typeof globalThis.fetch;
 
     const onOptimisticRemove = vi.fn();
@@ -122,12 +132,8 @@ describe('TriageActions mutation wire-up', () => {
 
     render(
       <Wrapper>
-        <TriagePanel
-          voc={MOCK_VOC}
-          onAct={vi.fn()}
-          onOptimisticRemove={onOptimisticRemove}
-        />
-      </Wrapper>
+        <TriagePanel voc={MOCK_VOC} onAct={vi.fn()} onOptimisticRemove={onOptimisticRemove} />
+      </Wrapper>,
     );
 
     // Make panel dirty
@@ -160,7 +166,11 @@ describe('TriageActions mutation wire-up', () => {
         idk = rawHeaders.get('Idempotency-Key') ?? rawHeaders.get('idempotency-key') ?? undefined;
       }
       if (idk) seenKeys.push(idk);
-      return jsonResponse({ id: MOCK_VOC.id, triage_state: 'triaged', updated_at: '2026-05-01T12:01:00.000Z' });
+      return jsonResponse({
+        id: MOCK_VOC.id,
+        triage_state: 'triaged',
+        updated_at: '2026-05-01T12:01:00.000Z',
+      });
     }) as typeof globalThis.fetch;
 
     const onOptimisticRestore = vi.fn();
@@ -173,7 +183,7 @@ describe('TriageActions mutation wire-up', () => {
           onOptimisticRemove={vi.fn()}
           onOptimisticRestore={onOptimisticRestore}
         />
-      </Wrapper>
+      </Wrapper>,
     );
 
     // Make panel dirty
@@ -221,7 +231,10 @@ describe('TriageActions mutation wire-up', () => {
 
   it('stale_write (409) calls onOptimisticRestore to re-insert VOC into queue', async () => {
     globalThis.fetch = vi.fn(async () =>
-      jsonResponse({ code: 'conflict.stale_write', message: '다른 사용자가 먼저 수정했습니다.' }, 409)
+      jsonResponse(
+        { code: 'conflict.stale_write', message: '다른 사용자가 먼저 수정했습니다.' },
+        409,
+      ),
     ) as typeof globalThis.fetch;
 
     const onOptimisticRestore = vi.fn();
@@ -236,7 +249,7 @@ describe('TriageActions mutation wire-up', () => {
           onOptimisticRemove={vi.fn()}
           onOptimisticRestore={onOptimisticRestore}
         />
-      </Wrapper>
+      </Wrapper>,
     );
 
     // Make dirty
@@ -251,29 +264,27 @@ describe('TriageActions mutation wire-up', () => {
     });
 
     // Backend returns 409 stale_write → VOC must be re-inserted
-    await waitFor(
-      () => expect(onOptimisticRestore).toHaveBeenCalledWith(MOCK_VOC.id),
-      { timeout: 3000 },
-    );
+    await waitFor(() => expect(onOptimisticRestore).toHaveBeenCalledWith(MOCK_VOC.id), {
+      timeout: 3000,
+    });
   });
 
   // 4. idempotency_key_reuse → panel locked ──────────────────────────────────
 
   it('idempotency_key_reuse (409) disables the Triage 확정 button (panel locked)', async () => {
     globalThis.fetch = vi.fn(async () =>
-      jsonResponse({ code: 'conflict.idempotency_key_reuse', message: '이미 처리된 요청입니다.' }, 409)
+      jsonResponse(
+        { code: 'conflict.idempotency_key_reuse', message: '이미 처리된 요청입니다.' },
+        409,
+      ),
     ) as typeof globalThis.fetch;
 
     const Wrapper = makeWrapper();
 
     render(
       <Wrapper>
-        <TriagePanel
-          voc={MOCK_VOC}
-          onAct={vi.fn()}
-          onOptimisticRemove={vi.fn()}
-        />
-      </Wrapper>
+        <TriagePanel voc={MOCK_VOC} onAct={vi.fn()} onOptimisticRemove={vi.fn()} />
+      </Wrapper>,
     );
 
     // Make dirty
