@@ -109,11 +109,11 @@ function renderTimeline(
 ) {
   vi.mocked(useVocConversation).mockReturnValue(
     makeConversationQuery({
+      // useVocConversation narrows its result to `{ pages: ConversationPage[] }`,
+      // so `pageParams` is an excess property here even though the real
+      // infinite-query data carries it.
       data: pages
-        ? {
-            pages: pages.map((items) => ({ items, has_more: false })),
-            pageParams: pages.map((_, index) => String(index)),
-          }
+        ? { pages: pages.map((items) => ({ items, has_more: false })) }
         : undefined,
       isPending: pages === undefined,
     }),
