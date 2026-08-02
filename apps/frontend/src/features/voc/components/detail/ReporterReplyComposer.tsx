@@ -39,6 +39,7 @@
 
 import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporterReplyMutation';
 import type { ApiError } from '@/lib/api';
+import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';
 import { Callout, PreviewModal, RichEditor } from '@fops/ui';
@@ -50,7 +51,6 @@ import { toast } from 'sonner';
 import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { ComposerReplyPreview } from './ComposerReplyPreview';
-import { uploadAttachment } from '@/lib/api/attachments';
 import { ReporterReplyToolbar } from './rich-toolbars/ReporterReplyToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -88,7 +88,12 @@ function getComposerErrorTone(code: string): 'amber' | null {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, onDraftChange }: ReporterReplyComposerProps): ReactElement {
+export function ReporterReplyComposer({
+  voc,
+  me,
+  draftDoc: controlledDraftDoc,
+  onDraftChange,
+}: ReporterReplyComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
   // REV-1 #7: controlled draft support.

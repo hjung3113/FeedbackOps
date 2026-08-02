@@ -63,6 +63,7 @@
 
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import type { ApiError } from '@/lib/api';
+import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
@@ -76,7 +77,6 @@ import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { ComposerPublicPreview } from './ComposerPublicPreview';
 import { ReporterStatusChangeBlock } from './ReporterStatusChangeBlock';
-import { uploadAttachment } from '@/lib/api/attachments';
 import { PublicUpdateToolbar } from './rich-toolbars/PublicUpdateToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -117,7 +117,12 @@ function getComposerErrorTone(code: string): 'red' | 'amber' | null {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, onDraftChange }: PublicUpdateComposerProps): ReactElement {
+export function PublicUpdateComposer({
+  voc,
+  me,
+  draftDoc: controlledDraftDoc,
+  onDraftChange,
+}: PublicUpdateComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
   // REV-1 #7: if parent provides controlled draft, use it; otherwise keep local state

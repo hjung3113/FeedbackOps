@@ -7,10 +7,10 @@
 // C5.4 of slice3 #21.
 // Prototype ref: docs/design-prototype/screen-voc.jsx:415-468 (internal variant)
 
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -45,9 +45,9 @@ vi.mock('@fops/ui', async (importActual) => {
   };
 });
 
-import { InternalCommentComposer } from '../InternalCommentComposer';
-import { internalCommentRequestSchema, type VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
+import { type VocDetailEnvelope, internalCommentRequestSchema } from '@fops/shared';
+import { InternalCommentComposer } from '../InternalCommentComposer';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
