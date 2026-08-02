@@ -47,6 +47,56 @@ const PERSONA_ACTORS = [
 
 const PERSONA_GRANT_EXTERNAL_IDS = PERSONA_ACTORS.map((actor) => actor.external_id);
 
+// The two human actors the *core* seed owns. Asserted by name so a core-seed
+// regression still fails loudly.
+const CORE_SEED_ACTORS = [
+  {
+    external_id: 'mock-admin-1',
+    display_name: 'Mock Admin',
+    role_level: 'admin',
+    actor_type: 'internal_member',
+    email: 'admin@feedbackops.local',
+  },
+  {
+    external_id: 'mock-user-1',
+    display_name: 'Mock User',
+    role_level: 'user',
+    actor_type: 'internal_member',
+    email: 'user@feedbackops.local',
+  },
+] as const;
+
+const SEED_OWNED_EXTERNAL_IDS: readonly string[] = [
+  ...CORE_SEED_ACTORS.map((actor) => actor.external_id),
+  ...PERSONA_GRANT_EXTERNAL_IDS,
+];
+
+type HumanActorRow = {
+  external_id: string;
+  display_name: string;
+  role_level: string;
+  actor_type: string;
+  email: string;
+};
+
+// Every non-system actor in the workspace, ordered by external_id.
+//
+// This table is SHARED: other integration files insert their own actors and
+// (by design — see the rate-limit case in post-reporter-reply) do not remove
+// them. So this suite must never assert an exact set over the whole table; it
+// asserts over the set *difference* it causes. See #304.
+async function readHumanActors(handle: DbHandle): Promise<HumanActorRow[]> {
+  const { rows } = await handle.pool.query<HumanActorRow>(
+    `select external_id, display_name, role_level, actor_type, email
+       from core.actors
+      where workspace_id = $1
+        and actor_type <> 'system'
+      order by external_id`,
+    [WORKSPACE_ID],
+  );
+  return rows;
+}
+
 async function runWithSeedMode<T>(mode: 'core' | 'personas', action: () => Promise<T>): Promise<T> {
   const previous = process.env.SEED_MODE;
   process.env.SEED_MODE = mode;
@@ -86,17 +136,19 @@ describe.skipIf(!runIntegration)('persona seed layer', () => {
     await handle?.close();
   });
 
-  it('keeps core seed persona-free, then adds exactly the six human actors', async () => {
+  it('keeps core seed persona-free, then adds exactly the four persona actors', async () => {
     await runWithSeedMode('core', () => runSeed(handle));
 
-    const before = await handle.pool.query<{ count: string }>(
-      `select count(*)::text as count
-         from core.actors
-        where workspace_id = $1
-          and external_id = any($2::text[])`,
-      [WORKSPACE_ID, PERSONA_ACTORS.map((actor) => actor.external_id)],
-    );
-    expect(before.rows[0]?.count).toBe('0');
+    const beforeActors = await readHumanActors(handle);
+
+    // Core seed owns exactly these two, and no persona.
+    expect(
+      beforeActors.filter((actor) => SEED_OWNED_EXTERNAL_IDS.includes(actor.external_id)),
+      `seed-owned actors after the core seed: ${beforeActors
+        .filter((actor) => SEED_OWNED_EXTERNAL_IDS.includes(actor.external_id))
+        .map((actor) => actor.external_id)
+        .join(', ')}`,
+    ).toEqual([...CORE_SEED_ACTORS]);
 
     const beforeGrants = await handle.pool.query<{ count: string }>(
       `select count(*)::text as count
@@ -109,43 +161,27 @@ describe.skipIf(!runIntegration)('persona seed layer', () => {
     expect(beforeGrants.rows[0]?.count).toBe('0');
 
     const result = await runWithSeedMode('personas', () => runSeed(handle));
+
+    const afterActors = await readHumanActors(handle);
+    const beforeExternalIds = new Set(beforeActors.map((actor) => actor.external_id));
+
+    // What the persona seed added — set difference, not an exact set over a
+    // table other suites also write to.
+    const added = afterActors.filter((actor) => !beforeExternalIds.has(actor.external_id));
+    expect(
+      added,
+      `persona seed added: ${added.map((actor) => actor.external_id).join(', ') || '(nothing)'}`,
+    ).toEqual([PERSONA_ACTORS[0], PERSONA_ACTORS[2], PERSONA_ACTORS[3], PERSONA_ACTORS[1]]);
+
+    // ...and it changed or removed nothing that was already there.
+    expect(afterActors.filter((actor) => beforeExternalIds.has(actor.external_id))).toEqual(
+      beforeActors,
+    );
+
+    // Counts last: the set assertions above name the offending actor, these
+    // only report an arity.
     expect(result.personaActorsInserted).toBe(4);
     expect(result.personaGrantsInserted).toBe(13);
-
-    const { rows } = await handle.pool.query<{
-      external_id: string;
-      display_name: string;
-      role_level: string;
-      actor_type: string;
-      email: string;
-    }>(
-      `select external_id, display_name, role_level, actor_type, email
-         from core.actors
-        where workspace_id = $1
-          and actor_type <> 'system'
-        order by external_id`,
-      [WORKSPACE_ID],
-    );
-    expect(rows).toEqual([
-      {
-        external_id: 'mock-admin-1',
-        display_name: 'Mock Admin',
-        role_level: 'admin',
-        actor_type: 'internal_member',
-        email: 'admin@feedbackops.local',
-      },
-      PERSONA_ACTORS[0],
-      PERSONA_ACTORS[2],
-      PERSONA_ACTORS[3],
-      {
-        external_id: 'mock-user-1',
-        display_name: 'Mock User',
-        role_level: 'user',
-        actor_type: 'internal_member',
-        email: 'user@feedbackops.local',
-      },
-      PERSONA_ACTORS[1],
-    ]);
   });
 
   it('is idempotent and keeps developer Managed System scopes disjoint', async () => {
