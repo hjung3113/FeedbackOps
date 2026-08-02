@@ -18,6 +18,10 @@ import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-libra
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+vi.mock('@/lib/api/analytics-areas', () => ({
+  fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
+}));
+
 // ── sonner mock ──────────────────────────────────────────────────────────────
 // Track the last toast.custom renderer so the test can render the undo toast.
 // NOTE: capturedToastRenderer must be reset in afterEach.

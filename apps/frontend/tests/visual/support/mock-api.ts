@@ -51,6 +51,17 @@ import {
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
 import { railScopeManagedSystems } from '../fixtures/rail-scope';
 import { homeMyWorkRequestsFixture, homeMyWorkTasksFixture, homeOpenPermissionRequestsFixture, homeSummaryFixture } from '../fixtures/home';
+import {
+  CHUNK_B_IDS,
+  type ChunkBVisualScenario,
+  chunkBActors,
+  chunkBAnalyticsAreas,
+  chunkBAnalyticsAreasResponseSchema,
+  chunkBConversationPage,
+  chunkBFindingSourceVoc,
+  chunkBReviewCandidates,
+  chunkBTriageVoc,
+} from '../fixtures/chunk-b-triage-area';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
@@ -84,6 +95,8 @@ interface InstallOptions {
   savedViews?: boolean;
   /** Home action dashboard fixture state. */
   home?: 'populated' | 'empty';
+  /** Chunk B Analytics Area wiring and Finding inheritance states. */
+  chunkBScenario?: ChunkBVisualScenario;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -217,6 +230,57 @@ export async function installMockApi(
       if (index === -1) await json(route, 404, errorEnvelope(404));
       else await route.fulfill({ status: 204 });
       if (index !== -1) savedViews.splice(index, 1);
+      return;
+    }
+
+    if (options.chunkBScenario && isRequest(route, 'GET', '/vocs')) {
+      await json(route, 200, {
+        items: [
+          options.chunkBScenario === 'triage-analytics-area-populated'
+            ? chunkBTriageVoc
+            : chunkBFindingSourceVoc,
+        ],
+      });
+      return;
+    }
+
+    if (
+      options.chunkBScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${CHUNK_B_IDS.voc}`)
+    ) {
+      await json(route, 200, chunkBFindingSourceVoc);
+      return;
+    }
+
+    if (
+      options.chunkBScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${CHUNK_B_IDS.voc}/conversation`)
+    ) {
+      await json(route, 200, chunkBConversationPage);
+      return;
+    }
+
+    if (
+      options.chunkBScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${CHUNK_B_IDS.voc}/public-update-candidates`)
+    ) {
+      await json(route, 200, chunkBReviewCandidates);
+      return;
+    }
+
+    if (options.chunkBScenario && isRequest(route, 'GET', '/analytics-areas')) {
+      if (
+        url.searchParams.get('managed_system_id') !== CHUNK_B_IDS.managedSystem ||
+        url.searchParams.get('include_archived') !== 'true'
+      ) {
+        throw new Error(`Unexpected Chunk B Analytics Area query: ${url.search}`);
+      }
+      await json(route, 200, chunkBAnalyticsAreasResponseSchema.parse(chunkBAnalyticsAreas));
+      return;
+    }
+
+    if (options.chunkBScenario && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, chunkBActors);
       return;
     }
 

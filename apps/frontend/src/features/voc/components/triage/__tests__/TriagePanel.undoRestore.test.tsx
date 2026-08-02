@@ -12,6 +12,10 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+vi.mock('@/lib/api/analytics-areas', () => ({
+  fetchAnalyticsAreas: vi.fn(async () => ({ items: [], total: 0 })),
+}));
+
 // sonner mock — capture toast.custom renderer
 let capturedToastRenderer: ((id: string | number) => React.ReactNode) | null = null;
 
