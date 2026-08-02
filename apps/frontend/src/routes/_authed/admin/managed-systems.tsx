@@ -105,7 +105,9 @@ function OwnerSelect({
 }: {
   value: OwnerSelection;
   onChange: (value: OwnerSelection) => void;
-  knownTeamId?: string;
+  // `exactOptionalPropertyTypes` is on — callers pass `?? undefined` for systems
+  // with no team owner, so the property must accept an explicit undefined.
+  knownTeamId?: string | undefined;
   testId: string;
 }) {
   const actorsQuery = useQuery({
