@@ -156,3 +156,14 @@ When reviewing a PR, prioritize product invariant violations, ownership boundary
 - **Domain docs.** Root `CONTEXT.md` owns the domain glossary and stable invariants; `docs/adr/` owns architectural decisions; per-directory `AGENTS.md` owns technical-layer rules. See `docs/agents/domain.md`.
 - **Workflow.** Model tiers, REV cycles, dispatch patterns: the `/agent-workflow` skill (external toolkit).
 - **Vendored skills.** `.agents/skills/` holds the vendored `mattpocock/skills`, symlinked into `.claude/skills/`. `caveman` and `zoom-out` are local-only additions. Upstream `code-review` is deliberately not vendored, so `/code-review` resolves to the Claude Code built-in.
+
+<!-- agent-workflow:begin (managed by install-into.sh — do not edit) -->
+### Model routing (installed by the agent-workflow toolkit)
+
+Read before any dispatch:
+- .agent-workflow/model-alloc.json — project-owned allocation contract
+- .agent-workflow/docs/agents/multi-agent-workflow.md — Model Allocation
+- .agent-workflow/docs/agents/conductor-persona.md — section 2: CONDUCTOR is read-only on product code
+
+The allocation file is authoritative. CONDUCTOR dispatches artifact-producing work; workers produce code, docs, plans, and recon.
+<!-- agent-workflow:end -->
