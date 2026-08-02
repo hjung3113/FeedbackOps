@@ -8,7 +8,6 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type React from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { ManagedSystemsAdminPage } from '../managed-systems.js';
