@@ -82,11 +82,16 @@ const STATUS_SEVERITY: Record<TaskRequestStatus, ObjectRowSeverity> = {
 const REVIEW_DECISION_STATUSES = ['pending_review', 'needs_more_evidence'] as const;
 const TASK_PRIORITIES: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
 const TASK_TITLE_TRUNCATION_MARKER = '…';
-const TASK_TITLE_MAX_LENGTH = convertTaskRequestRequestSchema.shape.title.maxLength;
+// The module-level null check narrows the statement that follows it, but not the
+// function bodies below — they could run after any later reassignment as far as
+// TS is concerned. Re-binding to a `number` const carries the narrowing into them.
+const canonicalTitleMaxLength = convertTaskRequestRequestSchema.shape.title.maxLength;
 
-if (TASK_TITLE_MAX_LENGTH === null) {
+if (canonicalTitleMaxLength === null) {
   throw new Error('Task conversion title requires a canonical maximum length.');
 }
+
+const TASK_TITLE_MAX_LENGTH: number = canonicalTitleMaxLength;
 
 function defaultConvertTitle(requestedOutcome: string): string {
   if (requestedOutcome.length <= TASK_TITLE_MAX_LENGTH) return requestedOutcome;
@@ -146,8 +151,10 @@ interface NameMaps {
   managedSystemsById: Record<string, { name: string }>;
 }
 
+// `exactOptionalPropertyTypes` is on: an optional property must spell `| undefined`
+// explicitly for a value that may actually be undefined to be assignable.
 type TaskRequestListItem = TaskRequestDto & {
-  source?: TaskRequestDto['source'] & { display_id?: string | null };
+  source?: (NonNullable<TaskRequestDto['source']> & { display_id?: string | null }) | undefined;
 };
 
 interface TaskRequestRowProps {
