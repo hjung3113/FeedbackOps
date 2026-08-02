@@ -226,14 +226,17 @@ describe('Composer error matrix (C5.5)', () => {
       '@/features/voc/hooks/useVocPublicUpdateMutation'
     );
     const error = makeValidationError();
-    vi.mocked(useVocPublicUpdateMutation).mockImplementation((args = {}) => ({
-      mutate: publicMutate.mockImplementation((vars) => {
-        queueMicrotask(() => args.onError?.(error, vars));
-      }),
-      isPending: false,
-      isError: false,
-      error: null,
-    }) as unknown as ReturnType<typeof useVocPublicUpdateMutation>);
+    vi.mocked(useVocPublicUpdateMutation).mockImplementation(
+      (args = {}) =>
+        ({
+          mutate: publicMutate.mockImplementation((vars) => {
+            queueMicrotask(() => args.onError?.(error, vars));
+          }),
+          isPending: false,
+          isError: false,
+          error: null,
+        }) as unknown as ReturnType<typeof useVocPublicUpdateMutation>,
+    );
 
     render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
     fireEvent.click(screen.getByRole('textbox'));
@@ -251,14 +254,17 @@ describe('Composer error matrix (C5.5)', () => {
       '@/features/voc/hooks/useVocReporterReplyMutation'
     );
     const error = makeValidationError();
-    vi.mocked(useVocReporterReplyMutation).mockImplementation((args = {}) => ({
-      mutate: replyMutate.mockImplementation((vars) => {
-        queueMicrotask(() => args.onError?.(error, vars));
-      }),
-      isPending: false,
-      isError: false,
-      error: null,
-    }) as unknown as ReturnType<typeof useVocReporterReplyMutation>);
+    vi.mocked(useVocReporterReplyMutation).mockImplementation(
+      (args = {}) =>
+        ({
+          mutate: replyMutate.mockImplementation((vars) => {
+            queueMicrotask(() => args.onError?.(error, vars));
+          }),
+          isPending: false,
+          isError: false,
+          error: null,
+        }) as unknown as ReturnType<typeof useVocReporterReplyMutation>,
+    );
 
     render(<ReporterReplyComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
     fireEvent.click(screen.getByRole('textbox'));
@@ -276,14 +282,17 @@ describe('Composer error matrix (C5.5)', () => {
       '@/features/voc/hooks/useVocInternalCommentMutation'
     );
     const error = makeValidationError();
-    vi.mocked(useVocInternalCommentMutation).mockImplementation((args = {}) => ({
-      mutate: internalMutate.mockImplementation((vars) => {
-        queueMicrotask(() => args.onError?.(error, vars));
-      }),
-      isPending: false,
-      isError: false,
-      error: null,
-    }) as unknown as ReturnType<typeof useVocInternalCommentMutation>);
+    vi.mocked(useVocInternalCommentMutation).mockImplementation(
+      (args = {}) =>
+        ({
+          mutate: internalMutate.mockImplementation((vars) => {
+            queueMicrotask(() => args.onError?.(error, vars));
+          }),
+          isPending: false,
+          isError: false,
+          error: null,
+        }) as unknown as ReturnType<typeof useVocInternalCommentMutation>,
+    );
 
     render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
     fireEvent.click(screen.getByRole('textbox'));

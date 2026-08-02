@@ -5,17 +5,14 @@
 //
 // C5.2 of slice3 #21.
 
-import { describe, expect, it, vi, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  useVocPublicUpdateMutation,
-  type PublicUpdateVars,
-} from '../useVocPublicUpdateMutation';
 import { ApiError } from '@/lib/api';
 import { publicUpdateRequestSchema } from '@fops/shared';
+import { type PublicUpdateVars, useVocPublicUpdateMutation } from '../useVocPublicUpdateMutation';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -90,11 +87,9 @@ describe('useVocPublicUpdateMutation', () => {
     const onSuccess = vi.fn();
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
-      () =>
-        useVocPublicUpdateMutation({ onSuccess }),
-      { wrapper: Wrapper },
-    );
+    const { result } = renderHook(() => useVocPublicUpdateMutation({ onSuccess }), {
+      wrapper: Wrapper,
+    });
 
     await act(async () => {
       result.current.mutate(BODY_ONLY_VARS);
@@ -107,8 +102,7 @@ describe('useVocPublicUpdateMutation', () => {
     expect(capturedMethod.toUpperCase()).toBe('POST');
 
     // Idempotency-Key must be present
-    const idkValue =
-      capturedHeaders['idempotency-key'] ?? capturedHeaders['Idempotency-Key'];
+    const idkValue = capturedHeaders['idempotency-key'] ?? capturedHeaders['Idempotency-Key'];
     expect(idkValue).toBeTruthy();
 
     // If-Match must carry voc.updated_at

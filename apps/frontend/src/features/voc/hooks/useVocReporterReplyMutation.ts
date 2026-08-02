@@ -61,15 +61,11 @@ export function useVocReporterReplyMutation(
 
   return useMutation<ReporterReplySuccess, ApiError, ReporterReplyVars>({
     mutationFn: async ({ vocId, ifMatch, body }) => {
-      const res = await apiClient<ReporterReplySuccess>(
-        'POST',
-        `/vocs/${vocId}/reporter-replies`,
-        {
-          body,
-          ifMatch,
-          // Idempotency-Key is auto-minted by apiClient for POST/PATCH/DELETE
-        },
-      );
+      const res = await apiClient<ReporterReplySuccess>('POST', `/vocs/${vocId}/reporter-replies`, {
+        body,
+        ifMatch,
+        // Idempotency-Key is auto-minted by apiClient for POST/PATCH/DELETE
+      });
       return res.data;
     },
     ...(onSuccess ? { onSuccess } : {}),

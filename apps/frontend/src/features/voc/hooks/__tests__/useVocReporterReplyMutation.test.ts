@@ -5,17 +5,17 @@
 //
 // C5.3 of slice3 #21.
 
-import { describe, expect, it, vi, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  useVocReporterReplyMutation,
-  type ReporterReplyVars,
-} from '../useVocReporterReplyMutation';
 import { ApiError } from '@/lib/api';
 import { reporterReplyRequestSchema } from '@fops/shared';
+import {
+  type ReporterReplyVars,
+  useVocReporterReplyMutation,
+} from '../useVocReporterReplyMutation';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -75,7 +75,9 @@ describe('useVocReporterReplyMutation', () => {
       if (rawHeaders && typeof rawHeaders === 'object' && !(rawHeaders instanceof Headers)) {
         capturedHeaders = rawHeaders as Record<string, string>;
       } else if (rawHeaders instanceof Headers) {
-        rawHeaders.forEach((v, k) => { capturedHeaders[k] = v; });
+        rawHeaders.forEach((v, k) => {
+          capturedHeaders[k] = v;
+        });
       }
       if (init?.body) {
         capturedBody = JSON.parse(init.body as string);
@@ -86,10 +88,9 @@ describe('useVocReporterReplyMutation', () => {
     const onSuccess = vi.fn();
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
-      () => useVocReporterReplyMutation({ onSuccess }),
-      { wrapper: Wrapper },
-    );
+    const { result } = renderHook(() => useVocReporterReplyMutation({ onSuccess }), {
+      wrapper: Wrapper,
+    });
 
     await act(async () => {
       result.current.mutate(REPLY_VARS);
@@ -104,8 +105,7 @@ describe('useVocReporterReplyMutation', () => {
     expect(capturedMethod.toUpperCase()).toBe('POST');
 
     // Idempotency-Key must be present (auto-minted by apiClient)
-    const idkValue =
-      capturedHeaders['idempotency-key'] ?? capturedHeaders['Idempotency-Key'];
+    const idkValue = capturedHeaders['idempotency-key'] ?? capturedHeaders['Idempotency-Key'];
     expect(idkValue).toBeTruthy();
 
     // If-Match must carry voc.updated_at

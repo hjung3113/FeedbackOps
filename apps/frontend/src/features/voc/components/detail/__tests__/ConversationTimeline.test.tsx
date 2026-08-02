@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import * as React from 'react';
+import { render, screen } from '@testing-library/react';
+import type * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/features/voc/hooks/useVocConversation', () => ({
   useVocConversation: vi.fn(),
@@ -31,11 +31,11 @@ vi.mock('../TimelineEntry', () => ({
 
 import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
 import { useMe } from '@/lib/auth/useMe';
+import type { ConversationEntry } from '@fops/shared';
 import { ConversationTimeline } from '../ConversationTimeline';
 import { InternalTimeline } from '../InternalTimeline';
 import { PublicTimeline } from '../PublicTimeline';
 import { DETAIL_ENVELOPE, ME_RESPONSE, makeConversationQuery } from './_fixtures';
-import type { ConversationEntry } from '@fops/shared';
 
 const PUBLIC_ENTRY: ConversationEntry = {
   id: 'entry-public-1',
@@ -107,16 +107,16 @@ function renderTimeline(
   inline: ConversationEntry[],
   pages: ConversationEntry[][] | undefined,
 ) {
+  // `Partial<UseInfiniteQueryResult<…>>` distributes over the discriminated
+  // result variants, and the pending variant declares `data?: undefined`. Passing
+  // `data` together with a *computed* `isPending` matches no single variant, so
+  // the two states are built as separate literals instead.
   vi.mocked(useVocConversation).mockReturnValue(
-    makeConversationQuery({
-      // useVocConversation narrows its result to `{ pages: ConversationPage[] }`,
-      // so `pageParams` is an excess property here even though the real
-      // infinite-query data carries it.
-      data: pages
-        ? { pages: pages.map((items) => ({ items, has_more: false })) }
-        : undefined,
-      isPending: pages === undefined,
-    }),
+    pages
+      ? makeConversationQuery({
+          data: { pages: pages.map((items) => ({ items, has_more: false })) },
+        })
+      : makeConversationQuery({ data: undefined, isPending: true }),
   );
   return render(<Component vocId="voc-timeline" inline={inline} hasMore={false} />, {
     wrapper: makeWrapper(),
@@ -175,13 +175,16 @@ describe('deduplicated timeline rendering', () => {
   it.each([
     ['Public', PublicTimeline, publicInline],
     ['Internal', InternalTimeline, internalInline],
-  ] as const)('AC-A3a %s timeline renders identical inline and page ids exactly once', (_, Component, inline) => {
-    const { container } = renderTimeline(Component, inline, [inline]);
-    const ids = renderedIds(container);
+  ] as const)(
+    'AC-A3a %s timeline renders identical inline and page ids exactly once',
+    (_, Component, inline) => {
+      const { container } = renderTimeline(Component, inline, [inline]);
+      const ids = renderedIds(container);
 
-    expect(new Set(ids)).toEqual(new Set(inline.map((entry) => entry.id)));
-    expect(ids).toHaveLength(3);
-  });
+      expect(new Set(ids)).toEqual(new Set(inline.map((entry) => entry.id)));
+      expect(ids).toHaveLength(3);
+    },
+  );
 
   it.each([
     [
@@ -217,11 +220,14 @@ describe('deduplicated timeline rendering', () => {
   it.each([
     ['Public', PublicTimeline, publicInline],
     ['Internal', InternalTimeline, internalInline],
-  ] as const)('AC-A3c %s timeline renders inline entries while the query is pending', (_, Component, inline) => {
-    const { container } = renderTimeline(Component, inline, undefined);
-    const ids = renderedIds(container);
+  ] as const)(
+    'AC-A3c %s timeline renders inline entries while the query is pending',
+    (_, Component, inline) => {
+      const { container } = renderTimeline(Component, inline, undefined);
+      const ids = renderedIds(container);
 
-    expect(ids).toEqual(inline.map((entry) => entry.id));
-    expect(ids).toHaveLength(3);
-  });
+      expect(ids).toEqual(inline.map((entry) => entry.id));
+      expect(ids).toHaveLength(3);
+    },
+  );
 });
