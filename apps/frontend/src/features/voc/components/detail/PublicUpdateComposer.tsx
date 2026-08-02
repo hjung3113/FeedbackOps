@@ -63,6 +63,7 @@
 
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import type { ApiError } from '@/lib/api';
+import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
@@ -76,7 +77,6 @@ import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { ComposerPublicPreview } from './ComposerPublicPreview';
 import { ReporterStatusChangeBlock } from './ReporterStatusChangeBlock';
-import { uploadAttachment } from '@/lib/api/attachments';
 import { PublicUpdateToolbar } from './rich-toolbars/PublicUpdateToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -117,7 +117,12 @@ function getComposerErrorTone(code: string): 'red' | 'amber' | null {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, onDraftChange }: PublicUpdateComposerProps): ReactElement {
+export function PublicUpdateComposer({
+  voc,
+  me,
+  draftDoc: controlledDraftDoc,
+  onDraftChange,
+}: PublicUpdateComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
   // REV-1 #7: if parent provides controlled draft, use it; otherwise keep local state
@@ -167,6 +172,11 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
       setNextStatus(voc.reporter_facing_status);
       toast.success('공개 업데이트가 게시되었습니다.');
     },
+    onError: (error) => {
+      if (getComposerErrorTone(error.code) == null) {
+        toast.error(`${error.code}: ${error.message}`);
+      }
+    },
   });
 
   function handleSubmit() {
@@ -175,10 +185,9 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
       vocId: voc.id,
       ifMatch: voc.updated_at,
       body: {
+        skip_public_update: false,
         body_rich_content: draftDoc,
         next_reporter_facing_status: nextStatus,
-        attachments: [],
-        // PLAN-22 C7a (D1): widened body field — schema reconciled in C7b.
         attachment_ids: attachmentIds,
       },
     });

@@ -5,10 +5,10 @@
 //   - failed upload not included
 //   - Send disabled while uploading
 
-import * as React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // RichEditor stub so the composer mounts headlessly.
@@ -44,11 +44,11 @@ vi.mock('@/features/voc/hooks/useVocPublicUpdateMutation', () => ({
 }));
 
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
-import { PublicUpdateComposer } from '../PublicUpdateComposer';
 import * as attachmentsApi from '@/lib/api/attachments';
 import { ApiError } from '@/lib/api/types';
-import type { VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
+import { type VocDetailEnvelope, publicUpdateRequestSchema } from '@fops/shared';
+import { PublicUpdateComposer } from '../PublicUpdateComposer';
 
 const REPORTER_ID = '00000000-0000-0000-0000-000000000001';
 const ADMIN_ID = '00000000-0000-0000-0000-000000000002';
@@ -149,14 +149,13 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     vi.restoreAllMocks();
   });
 
-  it('upload → submit body includes attachment_ids[]', async () => {
+  it('AC-A1b AC-A1c submits the body-present discriminant without attachments and passes the schema', async () => {
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
     const mutateMock = vi.fn();
-    vi.mocked(useVocPublicUpdateMutation).mockReturnValue(
-      { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<
-        typeof useVocPublicUpdateMutation
-      >,
-    );
+    vi.mocked(useVocPublicUpdateMutation).mockReturnValue({
+      ...DEFAULT_MUTATION,
+      mutate: mutateMock,
+    } as unknown as ReturnType<typeof useVocPublicUpdateMutation>);
 
     render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
 
@@ -175,12 +174,24 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     await user.click(screen.getByRole('button', { name: 'Publish update' }));
 
     await waitFor(() => {
-      expect(mutateMock).toHaveBeenCalled();
+      expect(mutateMock).toHaveBeenCalledTimes(1);
     });
-    const calledVars = mutateMock.mock.calls[0]![0] as {
-      body: { attachment_ids: string[] };
+    const firstCall = mutateMock.mock.calls[0];
+    if (!firstCall) throw new Error('expected the public-update mutation to have been called');
+    const calledVars = firstCall[0] as {
+      body: Record<string, unknown>;
     };
-    expect(calledVars.body.attachment_ids).toEqual([ATTACHMENT.id]);
+    expect(calledVars.body).toEqual({
+      skip_public_update: false,
+      body_rich_content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }],
+      },
+      next_reporter_facing_status: 'received',
+      attachment_ids: [ATTACHMENT.id],
+    });
+    expect(calledVars.body).not.toHaveProperty('attachments');
+    expect(publicUpdateRequestSchema.safeParse(calledVars.body).success).toBe(true);
   });
 
   it('failed upload not included in POST body', async () => {
@@ -188,11 +199,10 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
       new ApiError(422, { code: 'attachment.unsupported_type', message: 'nope' }),
     );
     const mutateMock = vi.fn();
-    vi.mocked(useVocPublicUpdateMutation).mockReturnValue(
-      { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<
-        typeof useVocPublicUpdateMutation
-      >,
-    );
+    vi.mocked(useVocPublicUpdateMutation).mockReturnValue({
+      ...DEFAULT_MUTATION,
+      mutate: mutateMock,
+    } as unknown as ReturnType<typeof useVocPublicUpdateMutation>);
 
     render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
 
@@ -212,7 +222,9 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalled();
     });
-    const calledVars = mutateMock.mock.calls[0]![0] as {
+    const firstCall = mutateMock.mock.calls[0];
+    if (!firstCall) throw new Error('expected the public-update mutation to have been called');
+    const calledVars = firstCall[0] as {
       body: { attachment_ids: string[] };
     };
     expect(calledVars.body.attachment_ids).toEqual([]);

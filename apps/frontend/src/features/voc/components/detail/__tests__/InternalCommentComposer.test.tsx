@@ -7,10 +7,10 @@
 // C5.4 of slice3 #21.
 // Prototype ref: docs/design-prototype/screen-voc.jsx:415-468 (internal variant)
 
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -45,9 +45,9 @@ vi.mock('@fops/ui', async (importActual) => {
   };
 });
 
-import { InternalCommentComposer } from '../InternalCommentComposer';
-import type { VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
+import { type VocDetailEnvelope, internalCommentRequestSchema } from '@fops/shared';
+import { InternalCommentComposer } from '../InternalCommentComposer';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -106,7 +106,7 @@ describe('<InternalCommentComposer>', () => {
     capturedOnChange = undefined;
   });
 
-  it('submits body_rich_content and extracted mentions[] on Add click', () => {
+  it('AC-A1e submits a body that passes the canonical internal-comment schema', async () => {
     render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: makeWrapper() });
 
     // Simulate typing content with a mention node.
@@ -117,7 +117,7 @@ describe('<InternalCommentComposer>', () => {
           type: 'paragraph',
           content: [
             { type: 'text', text: 'Hello ' },
-            { type: 'mention', attrs: { actor_id: 'actor-uuid-1' } },
+            { type: 'mention', attrs: { actor_id: REPORTER_ID } },
           ],
         },
       ],
@@ -129,13 +129,17 @@ describe('<InternalCommentComposer>', () => {
     const addBtn = screen.getByRole('button', { name: /add note/i });
     fireEvent.click(addBtn);
 
-    expect(mockMutate).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(1));
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const callArg = (mockMutate.mock.calls[0] as unknown[])[0] as {
-      body: { body_rich_content: unknown; mentions: string[] };
+      body: Record<string, unknown>;
     };
-    expect(callArg.body.body_rich_content).toBeDefined();
-    expect(callArg.body.mentions).toContain('actor-uuid-1');
+    expect(callArg.body).toEqual({
+      body_rich_content: docWithMention,
+      mentions: [REPORTER_ID],
+      attachment_ids: [],
+    });
+    expect(internalCommentRequestSchema.safeParse(callArg.body).success).toBe(true);
   });
 
   it('deduplicates duplicate mention nodes in the submitted mentions array', () => {
