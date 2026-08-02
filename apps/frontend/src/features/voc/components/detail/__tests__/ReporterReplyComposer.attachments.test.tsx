@@ -1,9 +1,9 @@
 // ReporterReplyComposer — attachment dropzone wiring tests (PLAN-22 C7a).
 
-import * as React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@fops/ui', async (importOriginal) => {
@@ -38,11 +38,11 @@ vi.mock('@/features/voc/hooks/useVocReporterReplyMutation', () => ({
 }));
 
 import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporterReplyMutation';
-import { ReporterReplyComposer } from '../ReporterReplyComposer';
 import * as attachmentsApi from '@/lib/api/attachments';
 import { ApiError } from '@/lib/api/types';
-import { reporterReplyRequestSchema, type VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
+import { type VocDetailEnvelope, reporterReplyRequestSchema } from '@fops/shared';
+import { ReporterReplyComposer } from '../ReporterReplyComposer';
 
 const ADMIN_ID = '00000000-0000-0000-0000-000000000002';
 
@@ -145,11 +145,10 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
   it('AC-A1a AC-A1d submits only canonical reporter-reply fields and passes the schema', async () => {
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
     const mutateMock = vi.fn();
-    vi.mocked(useVocReporterReplyMutation).mockReturnValue(
-      { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<
-        typeof useVocReporterReplyMutation
-      >,
-    );
+    vi.mocked(useVocReporterReplyMutation).mockReturnValue({
+      ...DEFAULT_MUTATION,
+      mutate: mutateMock,
+    } as unknown as ReturnType<typeof useVocReporterReplyMutation>);
 
     render(<ReporterReplyComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
 
@@ -169,7 +168,9 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalledTimes(1);
     });
-    const calledVars = mutateMock.mock.calls[0]![0] as {
+    const firstCall = mutateMock.mock.calls[0];
+    if (!firstCall) throw new Error('expected the reporter-reply mutation to have been called');
+    const calledVars = firstCall[0] as {
       body: Record<string, unknown>;
     };
     expect(calledVars.body).toEqual({
@@ -188,11 +189,10 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
       new ApiError(422, { code: 'attachment.unsupported_type', message: 'nope' }),
     );
     const mutateMock = vi.fn();
-    vi.mocked(useVocReporterReplyMutation).mockReturnValue(
-      { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<
-        typeof useVocReporterReplyMutation
-      >,
-    );
+    vi.mocked(useVocReporterReplyMutation).mockReturnValue({
+      ...DEFAULT_MUTATION,
+      mutate: mutateMock,
+    } as unknown as ReturnType<typeof useVocReporterReplyMutation>);
 
     render(<ReporterReplyComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
 
@@ -212,7 +212,9 @@ describe('<ReporterReplyComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalled();
     });
-    const calledVars = mutateMock.mock.calls[0]![0] as {
+    const firstCall = mutateMock.mock.calls[0];
+    if (!firstCall) throw new Error('expected the reporter-reply mutation to have been called');
+    const calledVars = firstCall[0] as {
       body: { attachment_ids: string[] };
     };
     expect(calledVars.body.attachment_ids).toEqual([]);

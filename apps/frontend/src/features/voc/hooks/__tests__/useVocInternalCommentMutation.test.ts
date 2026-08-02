@@ -4,17 +4,16 @@
 //
 // C5.4 of slice3 #21.
 
-import { describe, expect, it, vi, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  useVocInternalCommentMutation,
-  type InternalCommentVars,
-} from '../useVocInternalCommentMutation';
-import { ApiError } from '@/lib/api';
 import { internalCommentRequestSchema } from '@fops/shared';
+import {
+  type InternalCommentVars,
+  useVocInternalCommentMutation,
+} from '../useVocInternalCommentMutation';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
