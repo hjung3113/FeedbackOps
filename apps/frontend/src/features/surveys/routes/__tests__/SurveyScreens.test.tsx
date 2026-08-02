@@ -379,11 +379,17 @@ describe('Survey screens', () => {
     expect(screen.queryByRole('link', { name: 'Open result summary' })).not.toBeInTheDocument();
   });
 
-  it('AC-1 keeps a prompt edit local until Save draft', () => {
+  it('AC-1 keeps a prompt edit local until Save draft', async () => {
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
 
     fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
       target: { value: '저장 전 로컬 프롬프트' },
+    });
+    // react-query's mutate() reaches apiClient on a later microtask. Asserting
+    // synchronously would pass even if the edit did fire a request, so drain
+    // the queue first — otherwise this oracle has nothing to catch.
+    await act(async () => {
+      await Promise.resolve();
     });
 
     expect(apiClient).not.toHaveBeenCalled();
