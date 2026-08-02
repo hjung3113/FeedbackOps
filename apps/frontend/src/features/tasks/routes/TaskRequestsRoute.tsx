@@ -15,11 +15,11 @@ import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';
 import {
-  convertTaskRequestRequestSchema,
   type TaskDto,
   type TaskPriority,
   type TaskRequestDto,
   type TaskRequestStatus,
+  convertTaskRequestRequestSchema,
 } from '@fops/shared';
 import {
   Button,
@@ -550,9 +550,8 @@ function TaskRequestPanel({
                 className="flex flex-col gap-2 rounded border border-border-subtle bg-surface-card p-3"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  const titleResult = convertTaskRequestRequestSchema.shape.title.safeParse(
-                    convertTitle,
-                  );
+                  const titleResult =
+                    convertTaskRequestRequestSchema.shape.title.safeParse(convertTitle);
                   if (!titleResult.success) {
                     setConvertTitleError(
                       titleResult.error.issues[0]?.message ?? 'Title is invalid.',
