@@ -1,5 +1,5 @@
-import { EmptyState, Input, Skeleton } from '@fops/ui';
-import { Grid2X2, List } from 'lucide-react';
+import { Button, EmptyState, Input, Skeleton } from '@fops/ui';
+import { Grid2X2, List, Plus } from 'lucide-react';
 import * as React from 'react';
 import type { Survey, SurveyStatus } from '../../types';
 
@@ -21,12 +21,16 @@ export function SurveyList({
   error,
   selectedId,
   onSelect,
+  canCreate = false,
+  onCreate,
 }: {
   surveys: Survey[];
   isLoading: boolean;
   error: Error | null;
   selectedId?: string | null;
   onSelect: (id: string) => void;
+  canCreate?: boolean;
+  onCreate?: () => void;
 }) {
   const [status, setStatus] = React.useState<SurveyStatus | 'all'>('all');
   const [search, setSearch] = React.useState('');
@@ -98,9 +102,36 @@ export function SurveyList({
             <Grid2X2 className="h-3.5 w-3.5" />
           </button>
         </div>
+        {canCreate && onCreate && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onCreate}
+            data-testid="survey-create-button"
+          >
+            <Plus className="h-4 w-4" />
+            New survey
+          </Button>
+        )}
       </div>
       {visible.length === 0 ? (
-        <EmptyState title="생성된 설문이 없습니다." body="설문을 만들어 응답을 수집하세요." />
+        <EmptyState
+          title="생성된 설문이 없습니다."
+          body="설문을 만들어 응답을 수집하세요."
+          action={
+            canCreate && onCreate ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={onCreate}
+                data-testid="survey-empty-create-button"
+              >
+                <Plus className="h-4 w-4" />
+                New survey
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div
           className={

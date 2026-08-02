@@ -42,6 +42,7 @@ import {
 } from '../fixtures/survey-results';
 import {
   type SurveyVisualScenario,
+  surveyBuilderDragOverVisualFixture,
   surveyDetailVisualFixture,
   surveyVisualFixture,
   surveyVisualFixtureSchema,
@@ -360,13 +361,13 @@ export async function installMockApi(
     }
 
     if (options.surveyScenario && isRequest(route, 'GET', `/surveys/${surveyVisualFixture.id}`)) {
-      await json(
-        route,
-        200,
-        surveyVisualFixtureSchema.parse(
-          options.surveyScenario === 'detail' ? surveyDetailVisualFixture : surveyVisualFixture,
-        ),
-      );
+      const fixture =
+        options.surveyScenario === 'detail'
+          ? surveyDetailVisualFixture
+          : options.surveyScenario === 'builder-drag-over'
+            ? surveyBuilderDragOverVisualFixture
+            : surveyVisualFixture;
+      await json(route, 200, surveyVisualFixtureSchema.parse(fixture));
       return;
     }
 

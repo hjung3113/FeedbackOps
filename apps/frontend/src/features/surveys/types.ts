@@ -39,6 +39,18 @@ export interface Survey {
   questions?: SurveyQuestion[];
 }
 
+export interface CreateSurveyInput {
+  type: SurveyType;
+  title: string;
+  description?: string;
+  primary_managed_system_id: string;
+  analytics_area_id?: string;
+  operator_actor_id?: string;
+  responses_identity_protected: boolean;
+}
+
+export type SurveyPatchInput = Partial<CreateSurveyInput>;
+
 /**
  * Strict question-route input: absent optional fields must be omitted, never
  * null. `branch_parent_question_id` is the one exception — the route reads
