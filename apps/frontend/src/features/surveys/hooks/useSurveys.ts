@@ -1,7 +1,7 @@
 import { type ApiError, apiClient } from '@/lib/api';
 import { type SurveyResultDto, surveyResultDtoSchema } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { QuestionInput, Survey } from '../types';
+import type { CreateSurveyInput, QuestionInput, Survey, SurveyPatchInput } from '../types';
 
 export const surveyKeys = {
   list: ['surveys'] as const,
@@ -39,36 +39,15 @@ export function useSurvey(id: string) {
   });
 }
 
-function useQuestionMutation(
-  method: 'POST' | 'PATCH' | 'DELETE',
-  surveyId: string,
-  questionId?: string,
-) {
+export function useCreateSurvey() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (body?: QuestionInput) => {
-      const suffix = questionId ? `/questions/${questionId}` : '/questions';
-      return (
-        await apiClient<SurveyQuestionResponse>(
-          method,
-          `/surveys/${surveyId}${suffix}`,
-          body ? { body } : {},
-        )
-      ).data;
-    },
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: surveyKeys.detail(surveyId),
-      }),
+  return useMutation<Survey, ApiError, CreateSurveyInput>({
+    mutationFn: async (body) => (await apiClient<Survey>('POST', '/surveys', { body })).data,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: surveyKeys.list }),
   });
 }
 
 type SurveyQuestionResponse = { id: string };
-export const useCreateSurveyQuestion = (surveyId: string) => useQuestionMutation('POST', surveyId);
-export const useUpdateSurveyQuestion = (surveyId: string, questionId: string) =>
-  useQuestionMutation('PATCH', surveyId, questionId);
-export const useDeleteSurveyQuestion = (surveyId: string, questionId: string) =>
-  useQuestionMutation('DELETE', surveyId, questionId);
 
 function useSurveyStatusMutation(surveyId: string, target: 'open' | 'close') {
   const queryClient = useQueryClient();
@@ -112,5 +91,19 @@ export function useSurveyQuestionMutations(surveyId: string) {
         .data,
     onSuccess: invalidate,
   });
-  return { create, update, remove };
+  const updateSurvey = useMutation({
+    mutationFn: async (body: SurveyPatchInput) =>
+      (await apiClient<Survey>('PATCH', `/surveys/${surveyId}`, { body })).data,
+    onSuccess: invalidate,
+  });
+  const reorder = useMutation({
+    mutationFn: async (questionIds: string[]) =>
+      (
+        await apiClient<Survey>('PATCH', `/surveys/${surveyId}/questions/reorder`, {
+          body: { question_ids: questionIds },
+        })
+      ).data,
+    onSuccess: invalidate,
+  });
+  return { create, update, remove, updateSurvey, reorder };
 }

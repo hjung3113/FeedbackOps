@@ -38,12 +38,37 @@ export type SurveyVisualScenario =
   | 'list'
   | 'detail'
   | 'builder'
+  | 'builder-dirty'
+  | 'builder-drag-over'
+  | 'create-dialog'
   | 'empty'
   | 'error'
   | 'no-permission';
 export const surveyVisualScenarios = z
-  .array(z.enum(['list', 'detail', 'builder', 'empty', 'error', 'no-permission']))
-  .parse(['list', 'detail', 'builder', 'empty', 'error', 'no-permission']);
+  .array(
+    z.enum([
+      'list',
+      'detail',
+      'builder',
+      'builder-dirty',
+      'builder-drag-over',
+      'create-dialog',
+      'empty',
+      'error',
+      'no-permission',
+    ]),
+  )
+  .parse([
+    'list',
+    'detail',
+    'builder',
+    'builder-dirty',
+    'builder-drag-over',
+    'create-dialog',
+    'empty',
+    'error',
+    'no-permission',
+  ]);
 export const surveyVisualFixture = surveyVisualFixtureSchema.parse({
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   display_id: 'SRV-21',
@@ -87,4 +112,17 @@ export const surveyDetailVisualFixture = surveyVisualFixtureSchema.parse({
   ...surveyVisualFixture,
   status: 'open',
   opened_at: '2026-07-21T00:00:00.000Z',
+});
+
+export const surveyBuilderDragOverVisualFixture = surveyVisualFixtureSchema.parse({
+  ...surveyVisualFixture,
+  questions: [
+    ...surveyVisualFixture.questions,
+    {
+      ...surveyVisualFixture.questions[0],
+      id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+      prompt: '리포트에서 가장 불편한 점은 무엇인가요?',
+      sort_order: 1,
+    },
+  ],
 });

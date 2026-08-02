@@ -1,3 +1,4 @@
+import { CreateSurveyDialog } from '@/routes/_authed/surveys/index';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   RouterProvider,
@@ -7,7 +8,7 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type * as React from 'react';
+import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SurveyBuilder } from '../../components/builder/SurveyBuilder';
 import { SurveyDetail } from '../../components/detail/SurveyDetail';
@@ -15,8 +16,35 @@ import { SurveyList } from '../../components/list/SurveyList';
 import { useSurveys } from '../../hooks/useSurveys';
 import type { Survey, SurveyQuestion } from '../../types';
 
-const { apiClient } = vi.hoisted(() => ({ apiClient: vi.fn() }));
-vi.mock('@/lib/api', () => ({ apiClient }));
+const { apiClient, fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } = vi.hoisted(
+  () => ({
+    apiClient: vi.fn(),
+    fetchAnalyticsAreas: vi.fn(),
+    fetchCapabilityScope: vi.fn(),
+    fetchManagedSystems: vi.fn(),
+  }),
+);
+vi.mock('@/lib/api', () => ({
+  apiClient,
+  fetchAnalyticsAreas,
+  fetchCapabilityScope,
+  fetchManagedSystems,
+}));
+
+const MANAGED_SYSTEM_ID = '11111111-1111-4111-8111-111111111111';
+
+function question(id: string, prompt: string, sortOrder: number): SurveyQuestion {
+  return {
+    ...(survey.questions?.[0] as SurveyQuestion),
+    id,
+    prompt,
+    sort_order: sortOrder,
+  };
+}
+
+function calls(method: string, path: string) {
+  return apiClient.mock.calls.filter((call) => call[0] === method && call[1] === path);
+}
 
 const survey: Survey = {
   id: 'survey-1',
@@ -87,9 +115,18 @@ function renderDetailWithRouter(detailSurvey: Survey, canManage: boolean) {
 describe('Survey screens', () => {
   beforeEach(() => {
     apiClient.mockReset();
+    fetchAnalyticsAreas.mockReset();
+    fetchCapabilityScope.mockReset();
+    fetchManagedSystems.mockReset();
     apiClient.mockImplementation(async (_method: string, path: string) => ({
       data: path.endsWith('/questions') ? { id: 'question-created' } : { id: 'question-1' },
     }));
+    fetchManagedSystems.mockResolvedValue({
+      items: [{ id: MANAGED_SYSTEM_ID, name: 'Tableau', archived_at: null }],
+      total: 1,
+    });
+    fetchCapabilityScope.mockResolvedValue({ scope: { kind: 'all' } });
+    fetchAnalyticsAreas.mockResolvedValue({ items: [], total: 0 });
   });
   it('renders list rows, empty, loading, and error states without a Create VOC affordance', () => {
     const select = vi.fn();
@@ -115,13 +152,24 @@ describe('Survey screens', () => {
     expect(screen.getByTestId('survey-list-error')).toBeInTheDocument();
   });
 
-  it('keeps a non-draft builder read-only', () => {
-    renderWithQuery(
-      <SurveyBuilder survey={{ ...survey, status: 'open' }} canManage onBack={vi.fn()} />,
-    );
-    expect(screen.getByText('open 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '새 질문 추가' })).not.toBeInTheDocument();
-  });
+  it.each(['open', 'closed'] as const)(
+    'AC-8 keeps a %s builder read-only without save, title edit, or drag affordances',
+    (status) => {
+      renderWithQuery(<SurveyBuilder survey={{ ...survey, status }} canManage onBack={vi.fn()} />);
+      // The prompt renders twice — once in the question list row, once in the
+      // editor pane. Both must be present before any absence assertion, or the
+      // negative assertions below have nothing to beat.
+      expect(screen.getByTestId('survey-builder')).toBeInTheDocument();
+      expect(screen.getAllByText('도움이 되었나요?')).toHaveLength(2);
+      expect(screen.getByText(`${status} 상태 — 질문 변경은 잠겨 있습니다.`)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '새 질문 추가' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Survey title')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('질문 드래그 핸들')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Q1 위로 이동' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Q1 아래로 이동' })).not.toBeInTheDocument();
+    },
+  );
 
   it('renders the actual closed status in builder and detail lock copy', async () => {
     const closedSurvey = { ...survey, status: 'closed' as const };
@@ -250,9 +298,7 @@ describe('Survey screens', () => {
     ).toBeInTheDocument();
     expect(screen.getByTestId('survey-close-confirmation')).toBeInTheDocument();
     fireEvent.click(
-      within(screen.getByTestId('survey-close-confirmation')).getByTestId(
-        'survey-status-confirm',
-      ),
+      within(screen.getByTestId('survey-close-confirmation')).getByTestId('survey-status-confirm'),
     );
 
     await waitFor(() => expect(apiClient).toHaveBeenCalledWith('POST', '/surveys/survey-1/close'));
@@ -333,6 +379,188 @@ describe('Survey screens', () => {
     expect(screen.queryByRole('link', { name: 'Open result summary' })).not.toBeInTheDocument();
   });
 
+  it('AC-1 keeps a prompt edit local until Save draft', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
+      target: { value: '저장 전 로컬 프롬프트' },
+    });
+    // react-query's mutate() reaches apiClient on a later microtask. Asserting
+    // synchronously would pass even if the edit did fire a request, so drain
+    // the queue first — otherwise this oracle has nothing to catch.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(apiClient).not.toHaveBeenCalled();
+    expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+  });
+
+  it('AC-2 saves one changed question once and marks the draft saved', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+    fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
+      target: { value: '저장된 질문 프롬프트' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
+    );
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body).toMatchObject({
+      prompt: '저장된 질문 프롬프트',
+    });
+    await waitFor(() => expect(screen.getByText(/^Saved at /)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  });
+
+  it('AC-3 saves the distinct survey title with one scalar PATCH', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey title' }), {
+      target: { value: '제목 전용 픽스처' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(1));
+    expect(calls('PATCH', '/surveys/survey-1')[0]?.[2].body).toEqual({
+      title: '제목 전용 픽스처',
+    });
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(0);
+  });
+
+  it('AC-4 saves a dragged [3,1,2] question order exactly once', async () => {
+    const questions = [
+      question('question-1', '첫 질문', 0),
+      question('question-2', '둘째 질문', 1),
+      question('question-3', '셋째 질문', 2),
+    ];
+    renderWithQuery(<SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />);
+    const dataTransfer = {
+      dropEffect: 'none',
+      effectAllowed: 'none',
+      getData: vi.fn(),
+      setData: vi.fn(),
+    };
+
+    fireEvent.dragStart(screen.getByTestId('survey-question-row-question-3'), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId('survey-question-row-question-1'), { dataTransfer });
+    fireEvent.drop(screen.getByTestId('survey-question-row-question-1'), { dataTransfer });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/reorder')).toHaveLength(1),
+    );
+    expect(calls('PATCH', '/surveys/survey-1/questions/reorder')[0]?.[2].body).toEqual({
+      question_ids: ['question-3', 'question-1', 'question-2'],
+    });
+    expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', '2');
+  });
+
+  it('AC-5 saves a keyboard-only one-step move', async () => {
+    const questions = [
+      question('question-1', '첫 질문', 0),
+      question('question-2', '둘째 질문', 1),
+    ];
+    renderWithQuery(<SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Q1 아래로 이동' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/reorder')).toHaveLength(1),
+    );
+    expect(calls('PATCH', '/surveys/survey-1/questions/reorder')[0]?.[2].body).toEqual({
+      question_ids: ['question-2', 'question-1'],
+    });
+  });
+
+  it('AC-7 preserves dirty local state and retries the same body after save failure', async () => {
+    apiClient
+      .mockRejectedValueOnce(new Error('save failed'))
+      .mockResolvedValue({ data: { id: 'question-1' } });
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+    fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
+      target: { value: '재시도 보존 프롬프트' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(screen.getByText('저장하지 못했습니다.')).toBeInTheDocument());
+    expect(screen.getByDisplayValue('재시도 보존 프롬프트')).toBeInTheDocument();
+    expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+    const firstBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() =>
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(2),
+    );
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-1')[1]?.[2].body).toEqual(
+      firstBody,
+    );
+  });
+
+  it('AC-9 creates from the empty state with four required fields and returns the server id', async () => {
+    const created = { ...survey, id: 'server-survey-id' };
+    apiClient.mockResolvedValue({ data: created });
+    const onCreated = vi.fn();
+    function EmptyCreateFlow() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <SurveyList
+            surveys={[]}
+            isLoading={false}
+            error={null}
+            onSelect={vi.fn()}
+            canCreate
+            onCreate={() => setOpen(true)}
+          />
+          <CreateSurveyDialog open={open} onClose={() => setOpen(false)} onCreated={onCreated} />
+        </>
+      );
+    }
+    renderWithQuery(<EmptyCreateFlow />);
+
+    fireEvent.click(screen.getByTestId('survey-empty-create-button'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('제목'), { target: { value: '신규 설문 제목' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Survey type' }));
+    fireEvent.click(screen.getByRole('option', { name: 'validation' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Managed System' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Tableau' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '응답 익명 보호' }));
+    fireEvent.click(screen.getByRole('option', { name: '보호함' }));
+    fireEvent.click(screen.getByTestId('survey-create-submit'));
+
+    await waitFor(() => expect(calls('POST', '/surveys')).toHaveLength(1));
+    expect(calls('POST', '/surveys')[0]?.[2].body).toEqual({
+      type: 'validation',
+      title: '신규 설문 제목',
+      primary_managed_system_id: MANAGED_SYSTEM_ID,
+      responses_identity_protected: true,
+    });
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith('server-survey-id'));
+  });
+
+  it('AC-10 hides creation actions when SurveyPermissionGate denies management', async () => {
+    render(
+      <SurveyList
+        surveys={[survey]}
+        isLoading={false}
+        error={null}
+        onSelect={vi.fn()}
+        canCreate={false}
+        onCreate={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
+    expect(screen.queryByTestId('survey-create-button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('survey-empty-create-button')).not.toBeInTheDocument();
+  });
+
   it.each(['single_choice', 'multiple_choice', 'rating', 'text'] as const)(
     'sends a strict PATCH payload when changing to %s',
     async (kind) => {
@@ -344,6 +572,7 @@ describe('Survey screens', () => {
           target: { value: '수정된 단일 선택' },
         });
       }
+      fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
       await waitFor(() =>
         expect(apiClient).toHaveBeenCalledWith(
           'PATCH',
@@ -362,34 +591,28 @@ describe('Survey screens', () => {
   it('creates, edits, and deletes a question through the survey question endpoints', async () => {
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+    fireEvent.change(screen.getByDisplayValue('새 질문'), {
+      target: { value: '수정된 질문' },
+    });
+    expect(apiClient).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
         'POST',
         '/surveys/survey-1/questions',
-        expect.objectContaining({ body: expect.any(Object) }),
+        expect.objectContaining({
+          body: expect.objectContaining({ kind: 'single_choice', prompt: '수정된 질문' }),
+        }),
       ),
     );
-    const createBody = apiClient.mock.calls.find((call) => call[0] === 'POST')?.[2].body;
-    expect(createBody).toMatchObject({
-      kind: 'single_choice',
-      prompt: '새 질문',
-    });
+    const createBody = calls('POST', '/surveys/survey-1/questions')[0]?.[2].body;
     expect(createBody).not.toHaveProperty('rating_min');
     expect(createBody).not.toHaveProperty('branch_parent_question_id');
-    fireEvent.change(screen.getByDisplayValue('새 질문'), {
-      target: { value: '수정된 질문' },
-    });
-    await waitFor(() =>
-      expect(apiClient).toHaveBeenCalledWith(
-        'PATCH',
-        '/surveys/survey-1/questions/question-created',
-        expect.any(Object),
-      ),
-    );
     const deleteButtons = screen.getAllByLabelText('질문 삭제');
     const lastDeleteButton = deleteButtons.at(-1);
     if (!lastDeleteButton) throw new Error('Expected a question delete button');
     fireEvent.click(lastDeleteButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
         'DELETE',
@@ -409,6 +632,7 @@ describe('Survey screens', () => {
     });
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(resolveCreate).toBeDefined());
     fireEvent.change(screen.getByDisplayValue('새 질문'), { target: { value: 'POST 중 수정' } });
     await act(async () => resolveCreate?.({ data: { id: 'question-created' } }));
@@ -421,7 +645,7 @@ describe('Survey screens', () => {
     );
   });
 
-  it('clears a persisted branch with one PATCH and keeps the question id', async () => {
+  it('AC-6 clears a persisted branch with one PATCH and keeps the question id', async () => {
     const parentQuestion = survey.questions?.[0] as SurveyQuestion;
     const child: SurveyQuestion = {
       ...parentQuestion,
@@ -441,15 +665,13 @@ describe('Survey screens', () => {
     );
     fireEvent.click(screen.getByText('Q2'));
     fireEvent.change(screen.getByLabelText('분기 부모 질문'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() =>
-      expect(apiClient).toHaveBeenCalledWith(
-        'PATCH',
-        '/surveys/survey-1/questions/question-2',
-        expect.objectContaining({
-          body: expect.objectContaining({ branch_parent_question_id: null }),
-        }),
-      ),
+      expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(1),
     );
+    expect(calls('PATCH', '/surveys/survey-1/questions/question-2')[0]?.[2].body).toMatchObject({
+      branch_parent_question_id: null,
+    });
     // The #188 workaround deleted and re-created the row, which minted a new
     // id. A PATCH must not touch either endpoint (#194).
     expect(apiClient).not.toHaveBeenCalledWith('DELETE', '/surveys/survey-1/questions/question-2');
@@ -495,6 +717,7 @@ describe('Survey screens', () => {
     );
     fireEvent.click(screen.getByText('Q2'));
     fireEvent.change(screen.getByLabelText('분기 부모 질문'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(resolvePatch).toBeDefined());
     // The busyQuestionIds lock existed only because the in-flight recreate
     // invalidated the id an edit would target. With a stable id, edits during
@@ -502,6 +725,7 @@ describe('Survey screens', () => {
     const title = screen.getByDisplayValue('추가 질문');
     expect(title).not.toBeDisabled();
     fireEvent.change(title, { target: { value: '언브랜치 중 수정' } });
+    await act(async () => resolvePatch?.());
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
         'PATCH',
@@ -511,7 +735,6 @@ describe('Survey screens', () => {
         }),
       ),
     );
-    await act(async () => resolvePatch?.());
   });
 
   it('uses the selected parent option to reveal a branched preview question', async () => {
@@ -536,15 +759,6 @@ describe('Survey screens', () => {
     fireEvent.change(screen.getByLabelText('분기 조건 옵션'), {
       target: { value: 'yes' },
     });
-    await waitFor(() =>
-      expect(apiClient).toHaveBeenCalledWith(
-        'PATCH',
-        '/surveys/survey-1/questions/question-2',
-        expect.objectContaining({
-          body: expect.objectContaining({ branch_trigger_option_key: 'yes' }),
-        }),
-      ),
-    );
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     const preview = screen.getByRole('dialog');
     expect(within(preview).queryByText(/Q2\. 추가 질문/)).not.toBeInTheDocument();

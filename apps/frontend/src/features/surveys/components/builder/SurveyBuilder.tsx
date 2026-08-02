@@ -8,7 +8,16 @@ import {
   SelectValue,
   Textarea,
 } from '@fops/ui';
-import { Eye, Megaphone, Plus, Trash2 } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  GripVertical,
+  Megaphone,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import * as React from 'react';
 import { useOpenSurvey, useSurveyQuestionMutations } from '../../hooks/useSurveys';
 import type { QuestionInput, QuestionKind, Survey, SurveyQuestion } from '../../types';
@@ -62,6 +71,27 @@ function toInput(question: SurveyQuestion): QuestionInput {
   return input;
 }
 
+function toUpdateInput(question: SurveyQuestion, persisted: SurveyQuestion): QuestionInput {
+  const input = toInput(question);
+  // Omission means "leave as is". Clearing a persisted branch is the only
+  // falsy transition that must cross the wire explicitly (#192/#194).
+  if (persisted.branch_parent_question_id && !question.branch_parent_question_id)
+    input.branch_parent_question_id = null;
+  return input;
+}
+
+function questionSignature(question: SurveyQuestion): string {
+  return JSON.stringify({
+    ...toInput(question),
+    branch_parent_question_id: question.branch_parent_question_id,
+    branch_trigger_option_key: question.branch_trigger_option_key,
+  });
+}
+
+function denseQuestions(questions: SurveyQuestion[]): SurveyQuestion[] {
+  return questions.map((question, sortOrder) => ({ ...question, sort_order: sortOrder }));
+}
+
 export function SurveyBuilder({
   survey,
   canManage,
@@ -75,7 +105,15 @@ export function SurveyBuilder({
 }) {
   const [questions, setQuestions] = React.useState<SurveyQuestion[]>(survey.questions ?? []);
   const questionsRef = React.useRef(questions);
+  const [title, setTitle] = React.useState(survey.title);
+  const titleRef = React.useRef(title);
+  const savedTitleRef = React.useRef(survey.title);
+  const savedQuestionsRef = React.useRef<SurveyQuestion[]>(survey.questions ?? []);
   const [selectedId, setSelectedId] = React.useState<string | null>(questions[0]?.id ?? null);
+  const [dirty, setDirty] = React.useState(survey.status === 'draft' && questions.length === 0);
+  const [savedAt, setSavedAt] = React.useState<Date | null>(null);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [saveFailed, setSaveFailed] = React.useState(false);
   const [preview, setPreview] = React.useState(false);
   const [launchOpen, setLaunchOpen] = React.useState(false);
   const mutations = useSurveyQuestionMutations(survey.id);
@@ -83,52 +121,129 @@ export function SurveyBuilder({
   const editable = canManage && survey.status === 'draft' && !gateState;
   const selected = questions.find((question) => question.id === selectedId) ?? null;
   const updateQuestions = (update: (current: SurveyQuestion[]) => SurveyQuestion[]) => {
-    setQuestions((current) => {
-      const next = update(current);
-      questionsRef.current = next;
-      return next;
-    });
+    const next = update(questionsRef.current);
+    questionsRef.current = next;
+    setQuestions(next);
   };
 
   const patch = (next: SurveyQuestion) => {
-    const current = questionsRef.current.find((question) => question.id === next.id);
     updateQuestions((all) => all.map((question) => (question.id === next.id ? next : question)));
-    if (next.id.startsWith('local-')) return;
-    const body = toInput(next);
-    // `toInput` omits falsy branch fields, which cannot express "clear it" —
-    // an omitted field means "leave as is" to the route. Unbranching is the
-    // one edit that must send an explicit null (#192/#194). The backend then
-    // clears trigger and depth in the same statement, so neither is sent here.
-    if (current?.branch_parent_question_id && !next.branch_parent_question_id)
-      body.branch_parent_question_id = null;
-    mutations.update.mutate({ id: next.id, body });
+    setDirty(true);
+    setSaveFailed(false);
   };
 
   const add = () => {
     const localQuestion = newQuestion(survey.id, questions.length);
-    const snapshot = toInput(localQuestion);
     updateQuestions((all) => [...all, localQuestion]);
     setSelectedId(localQuestion.id);
-    void mutations.create.mutateAsync(snapshot).then((created) => {
-      const current = questionsRef.current.find((question) => question.id === localQuestion.id);
-      if (!current) return;
-      const currentInput = toInput(current);
-      updateQuestions((all) =>
-        all.map((question) =>
-          question.id === localQuestion.id ? { ...current, id: created.id } : question,
-        ),
-      );
-      setSelectedId((current) => (current === localQuestion.id ? created.id : current));
-      if (JSON.stringify(snapshot) !== JSON.stringify(currentInput))
-        mutations.update.mutate({ id: created.id, body: currentInput });
-    });
+    setDirty(true);
+    setSaveFailed(false);
   };
 
   const remove = (id: string) => {
-    updateQuestions((all) => all.filter((question) => question.id !== id));
-    if (selectedId === id)
-      setSelectedId(questions.find((question) => question.id !== id)?.id ?? null);
-    if (!id.startsWith('local-')) mutations.remove.mutate(id);
+    updateQuestions((all) => {
+      const next = all.filter((question) => question.id !== id);
+      if (selectedId === id) setSelectedId(next[0]?.id ?? null);
+      return denseQuestions(next);
+    });
+    setDirty(true);
+    setSaveFailed(false);
+  };
+
+  const reorder = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    updateQuestions((all) => {
+      const next = [...all];
+      const [moved] = next.splice(fromIndex, 1);
+      if (!moved) return all;
+      next.splice(toIndex, 0, moved);
+      return denseQuestions(next);
+    });
+    setDirty(true);
+    setSaveFailed(false);
+  };
+
+  const replaceLocalId = (localId: string, serverId: string) => {
+    updateQuestions((all) =>
+      all.map((question) => ({
+        ...question,
+        id: question.id === localId ? serverId : question.id,
+        branch_parent_question_id:
+          question.branch_parent_question_id === localId
+            ? serverId
+            : question.branch_parent_question_id,
+      })),
+    );
+    setSelectedId((current) => (current === localId ? serverId : current));
+  };
+
+  const save = async () => {
+    setIsSaving(true);
+    setSaveFailed(false);
+    try {
+      if (titleRef.current !== savedTitleRef.current)
+        await mutations.updateSurvey.mutateAsync({ title: titleRef.current });
+
+      const persisted = savedQuestionsRef.current;
+      for (const question of persisted) {
+        if (!questionsRef.current.some((candidate) => candidate.id === question.id))
+          await mutations.remove.mutateAsync(question.id);
+      }
+
+      for (const local of questionsRef.current.filter((question) =>
+        question.id.startsWith('local-'),
+      )) {
+        const current = questionsRef.current.find((question) => question.id === local.id);
+        if (!current) continue;
+        let sentSignature = questionSignature(current);
+        const created = await mutations.create.mutateAsync(toInput(current));
+        replaceLocalId(local.id, created.id);
+        let latest = questionsRef.current.find((question) => question.id === created.id);
+        while (latest && questionSignature(latest) !== sentSignature) {
+          sentSignature = questionSignature(latest);
+          await mutations.update.mutateAsync({ id: created.id, body: toInput(latest) });
+          latest = questionsRef.current.find((question) => question.id === created.id);
+        }
+      }
+
+      for (const persistedQuestion of persisted) {
+        let current = questionsRef.current.find((question) => question.id === persistedQuestion.id);
+        if (!current || questionSignature(current) === questionSignature(persistedQuestion))
+          continue;
+        let sentSignature = questionSignature(current);
+        await mutations.update.mutateAsync({
+          id: current.id,
+          body: toUpdateInput(current, persistedQuestion),
+        });
+        current = questionsRef.current.find((question) => question.id === persistedQuestion.id);
+        while (current && questionSignature(current) !== sentSignature) {
+          sentSignature = questionSignature(current);
+          await mutations.update.mutateAsync({
+            id: current.id,
+            body: toUpdateInput(current, persistedQuestion),
+          });
+          current = questionsRef.current.find((question) => question.id === persistedQuestion.id);
+        }
+      }
+
+      const nextQuestions = denseQuestions(questionsRef.current);
+      const previousIds = persisted.map((question) => question.id);
+      const nextIds = nextQuestions.map((question) => question.id);
+      const orderChanged =
+        previousIds.length !== nextIds.length ||
+        previousIds.some((id, index) => id !== nextIds[index]);
+      if (orderChanged) await mutations.reorder.mutateAsync(nextIds);
+      updateQuestions(() => nextQuestions);
+      savedQuestionsRef.current = nextQuestions;
+      savedTitleRef.current = titleRef.current;
+      setSavedAt(new Date());
+      setDirty(false);
+    } catch {
+      setDirty(true);
+      setSaveFailed(true);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -138,11 +253,45 @@ export function SurveyBuilder({
           Back
         </Button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-semibold">{survey.title}</h1>
+          {editable ? (
+            <Input
+              aria-label="Survey title"
+              className="w-80 max-w-full border-transparent bg-transparent font-semibold"
+              value={title}
+              onChange={(event) => {
+                titleRef.current = event.target.value;
+                setTitle(event.target.value);
+                setDirty(true);
+                setSaveFailed(false);
+              }}
+            />
+          ) : (
+            <h1 className="truncate font-semibold">{title}</h1>
+          )}
           <span className="text-xs text-text-muted">
             {survey.status} · {survey.type}
           </span>
         </div>
+        {editable && (
+          <>
+            <span className="text-xs text-text-muted">
+              {dirty
+                ? '저장되지 않은 변경 사항'
+                : savedAt
+                  ? `Saved at ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Synced'}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!dirty || isSaving}
+              onClick={() => void save()}
+            >
+              <Check className="h-4 w-4" />
+              Save draft
+            </Button>
+          </>
+        )}
         <Button variant="subtle" size="sm" onClick={() => setPreview(true)}>
           <Eye className="h-4 w-4" />
           Preview
@@ -161,6 +310,11 @@ export function SurveyBuilder({
             : '설문 관리 권한이 없습니다.'}
         </div>
       )}
+      {saveFailed && (
+        <div className="border-b border-border-subtle px-4 py-2 text-sm text-text-danger">
+          저장하지 못했습니다.
+        </div>
+      )}
       <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_300px]">
         <QuestionList
           questions={questions}
@@ -169,6 +323,7 @@ export function SurveyBuilder({
           onSelect={setSelectedId}
           onRemove={remove}
           onAdd={add}
+          onReorder={reorder}
         />
         <section className="min-w-0 overflow-auto p-5">
           {selected ? (
@@ -213,6 +368,7 @@ function QuestionList({
   onSelect,
   onRemove,
   onAdd,
+  onReorder,
 }: {
   questions: SurveyQuestion[];
   editable: boolean;
@@ -220,7 +376,10 @@ function QuestionList({
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
   onAdd: () => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
 }) {
+  const [dragIndex, setDragIndex] = React.useState<number | null>(null);
+  const [overIndex, setOverIndex] = React.useState<number | null>(null);
   return (
     <section className="border-r border-border-subtle p-3">
       <div className="mb-3 flex items-center justify-between">
@@ -235,25 +394,64 @@ function QuestionList({
         {questions.map((question, index) => (
           <div
             key={question.id}
-            className={`relative w-full rounded text-left text-sm hover:bg-surface-card ${selectedId === question.id ? 'bg-surface-card' : ''}`}
+            draggable={editable}
+            data-testid={`survey-question-row-${question.id}`}
+            data-drag-over={overIndex === index ? 'true' : undefined}
+            onDragStart={(event) => {
+              if (!editable) return;
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', String(index));
+              setDragIndex(index);
+            }}
+            onDragOver={(event) => {
+              if (!editable) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'move';
+              setOverIndex(index);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (dragIndex !== null) onReorder(dragIndex, index);
+              setDragIndex(null);
+              setOverIndex(null);
+            }}
+            onDragEnd={() => {
+              setDragIndex(null);
+              setOverIndex(null);
+            }}
+            className={`relative w-full rounded text-left text-sm hover:bg-surface-card ${selectedId === question.id ? 'bg-surface-card' : ''} ${overIndex === index ? 'ring-2 ring-focus-ring' : ''}`}
           >
             <button
               type="button"
               onClick={() => onSelect(question.id)}
-              className="flex w-full items-center gap-2 px-2 py-2 pr-8 text-left"
+              className="flex w-full items-center gap-2 px-2 py-2 pr-28 text-left"
             >
+              {editable && <GripVertical className="h-3.5 w-3.5" aria-label="질문 드래그 핸들" />}
               <span>Q{index + 1}</span>
               <span className="min-w-0 flex-1 truncate">{question.prompt || '제목 없음'}</span>
             </button>
             {editable && (
-              <button
-                type="button"
-                onClick={() => onRemove(question.id)}
-                aria-label="질문 삭제"
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => onReorder(index, index - 1)}
+                  aria-label={`Q${index + 1} 위로 이동`}
+                  disabled={index === 0}
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReorder(index, index + 1)}
+                  aria-label={`Q${index + 1} 아래로 이동`}
+                  disabled={index === questions.length - 1}
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={() => onRemove(question.id)} aria-label="질문 삭제">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </span>
             )}
           </div>
         ))}
