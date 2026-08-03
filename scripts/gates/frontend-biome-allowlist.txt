@@ -82,3 +82,13 @@ apps/frontend/src/routes/_authed/admin/permissions/requests.tsx lint/style/noNon
 apps/frontend/src/features/admin/settings/WorkspaceSettingsScreen.tsx format -- pre-existing on develop; the file predates biome formatting
 apps/frontend/src/routes/_authed/admin/managed-systems.tsx format -- pre-existing on develop; the file predates biome formatting
 apps/frontend/src/routes/_authed/admin/managed-systems.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/hooks/__tests__/useReporterStatusTransitions.test.ts format -- pre-existing on develop; the file predates biome formatting and this branch only adds three fixture fields
+apps/frontend/src/features/voc/hooks/__tests__/useReporterStatusTransitions.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/hooks/__tests__/useTriagePanelState.test.ts format -- pre-existing on develop; the file predates biome formatting and this branch only adds one fixture field
+apps/frontend/src/features/voc/hooks/__tests__/useTriagePanelState.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/triage/__tests__/TriageQueue.test.tsx format -- pre-existing on develop; the file predates biome formatting and this branch only adds two fixture fields
+apps/frontend/src/features/voc/components/triage/__tests__/TriageQueue.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/triage/__tests__/TriageQueue.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (1x, unchanged); genuine cleanup, tracked as a follow-up rather than widening this fixture-only diff
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterStatusChangeBlock.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterStatusChangeBlock.test.tsx lint/correctness/noUnusedImports -- pre-existing on develop (2x, unchanged); genuine cleanup, tracked as a follow-up rather than widening this fixture-only diff
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterStatusChangeBlock.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (5x, unchanged); test helpers assert non-null after an explicit lookup

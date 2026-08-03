@@ -25,6 +25,7 @@ const VOCS: VocListItem[] = [
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     similar_count: 0,
+    attachment_count: 0,
   },
   {
     id: '00000000-0000-0000-0000-000000000002',
@@ -42,6 +43,7 @@ const VOCS: VocListItem[] = [
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     similar_count: 0,
+    attachment_count: 0,
   },
 ];
 
