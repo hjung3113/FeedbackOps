@@ -112,6 +112,9 @@ const VOC_ADMIN_VIEW: VocDetailEnvelope = {
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
   similar_count: 0,
+  similar: { items: [] },
+  attachments: [],
+  attachment_count: 0,
   description_rich_content: {
     type: 'doc',
     content: [{ type: 'paragraph', content: [{ type: 'text', text: 'VOC 상세 내용' }] }],

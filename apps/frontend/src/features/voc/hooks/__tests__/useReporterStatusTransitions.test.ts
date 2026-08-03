@@ -24,6 +24,9 @@ const BASE_VOC: VocDetailEnvelope = {
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   similar_count: 0,
+  similar: { items: [] },
+  attachments: [],
+  attachment_count: 0,
   description_rich_content: { type: 'doc', content: [] },
   next_actions: [],
   next_reporter_states: {
