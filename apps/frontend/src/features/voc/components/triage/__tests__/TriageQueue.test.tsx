@@ -2,7 +2,6 @@
 // Covers: renders rows, empty state, OutOfScopeSummary.
 // TDD RED: these tests are written before the implementation file exists.
 
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TriageQueue } from '../TriageQueue';

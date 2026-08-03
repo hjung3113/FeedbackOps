@@ -4,8 +4,7 @@
 //
 // Prototype ref: docs/design-prototype/screen-voc.jsx:537-655
 
-import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ReporterStatusChangeBlock } from '../ReporterStatusChangeBlock';
 import type { VocDetailEnvelope } from '@fops/shared';
