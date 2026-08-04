@@ -122,3 +122,11 @@ apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx l
 packages/shared/src/vocs/create-request.ts format -- pre-existing on develop (1x, unchanged)
 packages/shared/src/vocs/__tests__/create-request.test.ts format -- pre-existing on develop (1x, unchanged)
 packages/shared/src/vocs/__tests__/create-request.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/backend/src/modules/voc/read-service.ts format -- pre-existing on develop (1x, unchanged; measured against `git show develop:` of the same file)
+apps/backend/src/modules/voc/read-service.ts lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/voc/read-service.ts lint/correctness/noUnusedVariables -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts format -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (4x, unchanged)
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts lint/complexity/useLiteralKeys -- pre-existing on develop (5x, unchanged)
+apps/frontend/src/features/voc/components/detail/IdentitySection.tsx format -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/voc/components/detail/__tests__/VocDetailPanel.test.tsx organizeImports -- pre-existing on develop; import order predates biome
