@@ -64,7 +64,11 @@
 import * as React from 'react';
 import { Megaphone, User, Check, ShieldCheck } from 'lucide-react';
 import { Callout, ReporterStatusBadge, RichContentRenderer, UserAvatar, type TipTapDoc } from '@fops/ui';
-import type { VocDetailEnvelope, ReporterFacingStatusEnum } from '@fops/shared';
+import {
+  isTipTapDocStructurallyEmpty,
+  type VocDetailEnvelope,
+  type ReporterFacingStatusEnum,
+} from '@fops/shared';
 import { REPORTER_FACING_STATUS_ALL, REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import { useReporterStatusTransitions } from '@/features/voc/hooks/useReporterStatusTransitions';
 
@@ -89,20 +93,6 @@ export interface ReporterStatusChangeBlockProps {
   draftDoc: TipTapDoc | null;
   /** Owner actor for the preview attribution line. */
   owner: OwnerPreview;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isDocEmpty(doc: TipTapDoc | null): boolean {
-  if (doc == null) return true;
-  const content = doc.content;
-  if (!Array.isArray(content) || content.length === 0) return true;
-  return content.every((node) => {
-    if (node == null || typeof node !== 'object') return true;
-    const n = node as { type?: string; content?: unknown[] };
-    if (n.type !== 'paragraph') return false;
-    return !Array.isArray(n.content) || n.content.length === 0;
-  });
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -135,7 +125,7 @@ export function ReporterStatusChangeBlock({
   const isGateBlocked =
     gate !== null && gate.blocking_for.includes(nextStatus);
 
-  const showBody = !isDocEmpty(draftDoc);
+  const showBody = !isTipTapDocStructurallyEmpty(draftDoc);
 
   return (
     <div

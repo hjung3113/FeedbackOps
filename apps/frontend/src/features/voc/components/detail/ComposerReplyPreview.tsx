@@ -48,7 +48,7 @@
 //   - bg-accent-primary/10 replaces rgba(94,106,210,0.12) (deep-violet @ 12% was the dark-pack
 //     aether-blue; in Pack 17 use bg-accent-primary/10 per PROTOTYPE-TO-PACK17 §1 notes)
 
-import type { VocDetailEnvelope } from '@fops/shared';
+import { isTipTapDocStructurallyEmpty, type VocDetailEnvelope } from '@fops/shared';
 import { RichContentRenderer } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
 import type { ReactElement } from 'react';
@@ -68,20 +68,6 @@ export interface ComposerReplyPreviewProps {
   draftDoc: TipTapDoc | null;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isDocEmpty(doc: TipTapDoc | null): boolean {
-  if (doc == null) return true;
-  const content = doc.content;
-  if (!Array.isArray(content) || content.length === 0) return true;
-  return content.every((node) => {
-    if (node == null || typeof node !== 'object') return true;
-    const n = node as { type?: string; content?: unknown[] };
-    if (n.type !== 'paragraph') return false;
-    return !Array.isArray(n.content) || n.content.length === 0;
-  });
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ComposerReplyPreview({
@@ -90,7 +76,7 @@ export function ComposerReplyPreview({
   reporter,
   draftDoc,
 }: ComposerReplyPreviewProps): ReactElement {
-  const empty = isDocEmpty(draftDoc);
+  const empty = isTipTapDocStructurallyEmpty(draftDoc);
 
   // Derive a short text excerpt from the description for the reporter bubble.
   // Prototype: voc.description.slice(0, 140) + '…' — we use voc.title as fallback

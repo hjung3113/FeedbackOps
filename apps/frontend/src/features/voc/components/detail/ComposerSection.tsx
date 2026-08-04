@@ -22,31 +22,14 @@
 import { type ComposerSurface, useComposerDraft } from '@/features/voc/hooks/useComposerDraft';
 import { useComposerVisibility } from '@/features/voc/hooks/useComposerVisibility';
 import type { MeResponse } from '@/lib/auth/useMe';
-import type { VocDetailEnvelope } from '@fops/shared';
-import { DirtyConfirmation, type TipTapDoc } from '@fops/ui';
+import { isTipTapDocStructurallyEmpty, type VocDetailEnvelope } from '@fops/shared';
+import { DirtyConfirmation } from '@fops/ui';
 import { X } from 'lucide-react';
 import * as React from 'react';
 import { ComposerTabs } from './ComposerTabs';
 import { InternalCommentComposer } from './InternalCommentComposer';
 import { PublicUpdateComposer } from './PublicUpdateComposer';
 import { ReporterReplyComposer } from './ReporterReplyComposer';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// Returns true when a TipTapDoc has no meaningful content (null, empty, or
-// only an empty paragraph). Mirrors the same logic the individual composers
-// use to gate their submit buttons.
-function isDocEmpty(doc: TipTapDoc | null): boolean {
-  if (doc == null) return true;
-  const content = doc.content;
-  if (!Array.isArray(content) || content.length === 0) return true;
-  return content.every((node) => {
-    if (node == null || typeof node !== 'object') return true;
-    const n = node as { type?: string; content?: unknown[] };
-    if (n.type !== 'paragraph') return false;
-    return !Array.isArray(n.content) || n.content.length === 0;
-  });
-}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -95,9 +78,9 @@ export function ComposerSection({
   // useComposerDraft → this derivation, so close always sees the correct
   // dirty state regardless of pointer interaction.
   const isDirty =
-    !isDocEmpty(draft.state.public) ||
-    !isDocEmpty(draft.state.reply) ||
-    !isDocEmpty(draft.state.internal);
+    !isTipTapDocStructurallyEmpty(draft.state.public) ||
+    !isTipTapDocStructurallyEmpty(draft.state.reply) ||
+    !isTipTapDocStructurallyEmpty(draft.state.internal);
 
   // Reset tab when VOC changes (drafts auto-clear via useComposerDraft).
   const prevVocIdRef = React.useRef(voc.id);

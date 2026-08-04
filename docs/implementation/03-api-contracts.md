@@ -147,6 +147,10 @@ source_context optional enum: direct_use | proxy_report | operational_discovery 
 attachments optional attachment references
 ```
 
+`title` must contain at least one character after trimming; the trimmed value is
+stored. `description_rich_content` must contain non-whitespace content. Either
+required-value violation returns `422 validation.failed`.
+
 `POST /vocs` must not accept:
 
 ```text

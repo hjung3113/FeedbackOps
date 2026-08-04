@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { createVocRequestSchema, FORBIDDEN_CREATE_FIELDS } from '../create-request.js';
 
+// The body used to be `content: []`, which encoded a weaker contract than the
+// product has: the create form marks 상세 설명 required and the prototype gates
+// submit on `body.trim()`. #327 shipped that rule to the wire, so the shared
+// fixture has to carry a real body. The detail screen's `설명 없음` state stays
+// — it renders rows created before the rule, not new ones.
 const VALID = {
   primary_managed_system_id: '00000000-0000-4000-8000-000000000001',
   title: 'something broke',
-  description_rich_content: { type: 'doc', content: [] },
+  description_rich_content: {
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: '재현 절차' }] }],
+  },
 };
 
 describe('createVocRequestSchema', () => {
@@ -54,6 +62,39 @@ describe('createVocRequestSchema', () => {
 
   it('rejects title length 0', () => {
     expect(() => createVocRequestSchema.parse({ ...VALID, title: '' })).toThrow();
+  });
+
+  // #327 at the schema boundary. The integration test covers the route; these
+  // pin the contract where both the API and the create form's resolver read it.
+  it('rejects a whitespace-only title', () => {
+    expect(() => createVocRequestSchema.parse({ ...VALID, title: '   ' })).toThrow();
+  });
+
+  it('trims the stored title', () => {
+    expect(createVocRequestSchema.parse({ ...VALID, title: '  실제 제목  ' }).title).toBe(
+      '실제 제목',
+    );
+  });
+
+  it('rejects a whitespace-only description', () => {
+    expect(() =>
+      createVocRequestSchema.parse({
+        ...VALID,
+        description_rich_content: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: '   ' }] }],
+        },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a structurally empty description', () => {
+    expect(() =>
+      createVocRequestSchema.parse({
+        ...VALID,
+        description_rich_content: { type: 'doc', content: [] },
+      }),
+    ).toThrow();
   });
 
   it('rejects unknown source_context', () => {

@@ -33,6 +33,31 @@ vi.mock('@/lib/auth/useMe', () => ({
   useMe: vi.fn(),
 }));
 
+// RichEditor — ProseMirror mounts in jsdom but refuses text: measured here,
+// both userEvent.type and userEvent.paste leave the doc at an empty paragraph.
+// Since #327 made a non-blank description a submit precondition, these tests
+// need some way to supply one, and their subject is submit/routing/error
+// handling, not the editor. The editor's own behaviour is covered by its tests.
+vi.mock('@fops/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@fops/ui')>()),
+  RichEditor: ({ onChange }: { onChange: (doc: unknown) => void }) => (
+    <textarea
+      data-testid="mock-rich-editor"
+      aria-label="상세 설명"
+      onChange={(e) =>
+        onChange(
+          e.target.value
+            ? {
+                type: 'doc',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: e.target.value }] }],
+              }
+            : { type: 'doc', content: [] },
+        )
+      }
+    />
+  ),
+}));
+
 import { toast } from 'sonner';
 import { useMe } from '@/lib/auth/useMe';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -225,6 +250,12 @@ describe('VocCreateScreen integration', () => {
     fireEvent.change(titleInput, { target: { value: '테스트 제목입니다' } });
     fireEvent.blur(titleInput);
 
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
+
     // The description_rich_content has a default emptyTipTapDoc() — zod allows
     // it (type: 'doc', content: []). The form's isValid gate depends on the
     // zodResolver; with a valid MS ID and title the form should become valid.
@@ -267,6 +298,11 @@ describe('VocCreateScreen integration', () => {
     fireEvent.click(screen.getByRole('radio', { name: AA_ITEM.name }));
     fireEvent.change(screen.getByRole('textbox', { name: /제목/i }), { target: { value: '분류와 출처가 독립적인 VOC' } });
     fireEvent.blur(screen.getByRole('textbox', { name: /제목/i }));
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: 'VOC 제출' }));
@@ -314,6 +350,12 @@ describe('VocCreateScreen integration', () => {
     const titleInput = screen.getByRole('textbox', { name: /제목/i });
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
+
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
@@ -365,6 +407,12 @@ describe('VocCreateScreen integration', () => {
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
 
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
+
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
     });
@@ -399,6 +447,12 @@ describe('VocCreateScreen integration', () => {
     const titleInput = screen.getByRole('textbox', { name: /제목/i });
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
+
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
@@ -437,6 +491,12 @@ describe('VocCreateScreen integration', () => {
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
 
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
+
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
     });
@@ -470,6 +530,12 @@ describe('VocCreateScreen integration', () => {
     const titleInput = screen.getByRole('textbox', { name: /제목/i });
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
+
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
