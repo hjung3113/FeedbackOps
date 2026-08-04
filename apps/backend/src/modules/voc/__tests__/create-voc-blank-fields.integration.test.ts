@@ -36,14 +36,19 @@ async function loginAs(app: FastifyInstance, externalId: string): Promise<string
   return cookie;
 }
 
-async function createManagedSystem(app: FastifyInstance, cookie: string, slug: string): Promise<string> {
+async function createManagedSystem(
+  app: FastifyInstance,
+  cookie: string,
+  slug: string,
+): Promise<string> {
   const res = await app.inject({
     method: 'POST',
     url: '/managed-systems',
     headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}`, 'content-type': 'application/json' },
     payload: { slug, name: slug },
   });
-  if (res.statusCode !== 201) throw new Error(`createManagedSystem failed: ${res.statusCode} ${res.body}`);
+  if (res.statusCode !== 201)
+    throw new Error(`createManagedSystem failed: ${res.statusCode} ${res.body}`);
   return res.json().id;
 }
 
@@ -80,7 +85,9 @@ describe.skipIf(!runIntegration)('POST /vocs blank required fields (#327)', () =
         select id from core.managed_systems where slug = 'it-voc-blank-fields'
       )`,
     );
-    await dbHandle.pool.query(`delete from core.managed_systems where slug = 'it-voc-blank-fields'`);
+    await dbHandle.pool.query(
+      `delete from core.managed_systems where slug = 'it-voc-blank-fields'`,
+    );
     await dbHandle.pool.query('delete from core.idempotency_keys');
     await dbHandle.pool.query('delete from core.rate_limits');
   }
@@ -196,9 +203,10 @@ describe.skipIf(!runIntegration)('POST /vocs blank required fields (#327)', () =
     });
 
     expect(res.statusCode).toBe(201);
-    const stored = await dbHandle.pool.query<{ title: string }>('select title from voc.vocs where id = $1', [
-      res.json().id,
-    ]);
+    const stored = await dbHandle.pool.query<{ title: string }>(
+      'select title from voc.vocs where id = $1',
+      [res.json().id],
+    );
     expect(stored.rows[0]?.title).toBe('실제 제목');
   });
 

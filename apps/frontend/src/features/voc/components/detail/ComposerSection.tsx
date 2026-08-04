@@ -22,7 +22,7 @@
 import { type ComposerSurface, useComposerDraft } from '@/features/voc/hooks/useComposerDraft';
 import { useComposerVisibility } from '@/features/voc/hooks/useComposerVisibility';
 import type { MeResponse } from '@/lib/auth/useMe';
-import { isTipTapDocStructurallyEmpty, type VocDetailEnvelope } from '@fops/shared';
+import { type VocDetailEnvelope, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import { DirtyConfirmation } from '@fops/ui';
 import { X } from 'lucide-react';
 import * as React from 'react';

@@ -15,17 +15,44 @@ describe('TipTap rich-content emptiness', () => {
     ],
     [
       'multiple whitespace text nodes',
-      { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }, { type: 'text', text: '\n\t' }] }] },
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: ' ' },
+              { type: 'text', text: '\n\t' },
+            ],
+          },
+        ],
+      },
       true,
     ],
     [
       'text content',
-      { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'actual text' }] }] },
+      {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'actual text' }] }],
+      },
       false,
     ],
     [
       'nested text content',
-      { type: 'doc', content: [{ type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'nested' }] }] }] }] },
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'bulletList',
+            content: [
+              {
+                type: 'listItem',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'nested' }] }],
+              },
+            ],
+          },
+        ],
+      },
       false,
     ],
     ['textless image node', { type: 'doc', content: [{ type: 'image' }] }, false],
@@ -34,15 +61,31 @@ describe('TipTap rich-content emptiness', () => {
     // the surface allowlist keeps ownership of "is this node permitted" and can
     // answer rich_content.disallowed_node. Treating unknowns as nothing made a
     // mention-only document report as blank and swallowed that contract.
-    ['textless mention node', { type: 'doc', content: [{ type: 'mention', attrs: { id: 'u-1' } }] }, false],
+    [
+      'textless mention node',
+      { type: 'doc', content: [{ type: 'mention', attrs: { id: 'u-1' } }] },
+      false,
+    ],
     ['entirely unknown node type', { type: 'doc', content: [{ type: 'somethingNew' }] }, false],
     // Structural scaffolding with nothing in it is still blank.
     [
       'empty list scaffolding',
-      { type: 'doc', content: [{ type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [] }] }] }] },
+      {
+        type: 'doc',
+        content: [
+          {
+            type: 'bulletList',
+            content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [] }] }],
+          },
+        ],
+      },
       true,
     ],
-    ['whitespace-only code block', { type: 'doc', content: [{ type: 'codeBlock', content: [{ type: 'text', text: '  ' }] }] }, true],
+    [
+      'whitespace-only code block',
+      { type: 'doc', content: [{ type: 'codeBlock', content: [{ type: 'text', text: '  ' }] }] },
+      true,
+    ],
   ])('blank: %s', (_name, doc, expected) => {
     expect(isTipTapDocBlank(doc)).toBe(expected);
   });

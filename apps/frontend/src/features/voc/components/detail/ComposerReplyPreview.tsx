@@ -48,7 +48,7 @@
 //   - bg-accent-primary/10 replaces rgba(94,106,210,0.12) (deep-violet @ 12% was the dark-pack
 //     aether-blue; in Pack 17 use bg-accent-primary/10 per PROTOTYPE-TO-PACK17 §1 notes)
 
-import { isTipTapDocStructurallyEmpty, type VocDetailEnvelope } from '@fops/shared';
+import { type VocDetailEnvelope, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import { RichContentRenderer } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
 import type { ReactElement } from 'react';

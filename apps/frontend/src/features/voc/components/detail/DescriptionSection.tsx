@@ -4,7 +4,7 @@
 // C6.2 of slice3 #21 retains the EditDescriptionModal hook on the reporter
 // affordance below the card.
 
-import { isTipTapDocStructurallyEmpty, type VocDetailEnvelope } from '@fops/shared';
+import { type VocDetailEnvelope, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import { RichContentRenderer, type TipTapDoc } from '@fops/ui';
 import * as React from 'react';
 import { AttachmentChipList } from './AttachmentChip';
@@ -25,9 +25,7 @@ export function DescriptionSection({
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">
-        BODY
-      </p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">BODY</p>
       <div
         data-testid="description-body-card"
         className="rounded-md bg-surface-card-elevated p-4 text-sm text-text-secondary leading-relaxed"

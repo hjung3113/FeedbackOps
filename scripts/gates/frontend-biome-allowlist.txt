@@ -114,3 +114,11 @@ docs/design-prototype/affordances.jsx lint/a11y/useKeyWithClickEvents -- pre-exi
 docs/design-prototype/affordances.jsx lint/a11y/useButtonType -- pre-existing on develop (4x, unchanged)
 docs/design-prototype/affordances.jsx lint/complexity/useOptionalChain -- pre-existing on develop (2x, unchanged)
 docs/design-prototype/affordances.jsx lint/correctness/noUnusedVariables -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/voc/components/detail/DescriptionSection.tsx format -- pre-existing on develop (1x, unchanged; measured against `git show develop:` of the same file)
+apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx format -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx lint/complexity/useOptionalChain -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx lint/style/useImportType -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/create-request.ts format -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/__tests__/create-request.test.ts format -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/__tests__/create-request.test.ts organizeImports -- pre-existing on develop; import order predates biome
