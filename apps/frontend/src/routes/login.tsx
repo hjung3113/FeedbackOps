@@ -17,7 +17,7 @@
 
 import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
 import { Button } from '@fops/ui';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Navigate, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { mockLogin } from '../lib/api';
 
@@ -78,9 +78,12 @@ export function LoginPage() {
 
 function MockLoginPicker() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: mockLogin,
     onSuccess: () => {
+      // An actor boundary must drop all prior actor-scoped data before navigation.
+      queryClient.clear();
       navigate({ to: '/' });
     },
   });

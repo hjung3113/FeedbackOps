@@ -9,7 +9,19 @@ import {
   UserRound,
   UsersRound,
 } from 'lucide-react';
-import { cn } from '@fops/ui';
+import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
+import {
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@fops/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { logout } from '@/lib/api/auth';
+import { useMe } from '@/lib/auth/useMe';
 
 export type RailDomain = 'home' | 'voc' | 'findings' | 'tasks' | 'integration' | 'surveys' | 'admin';
 
@@ -47,6 +59,23 @@ export interface AppRailProps {
 export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
   const head = RAIL_ITEMS.filter((item) => item.key !== 'admin');
   const admin = RAIL_ITEMS.find((item) => item.key === 'admin');
+  const { data: me } = useMe();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+
+  async function handleLogout() {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      // Navigation still ends the local session when the revoke request cannot finish.
+    } finally {
+      queryClient.clear();
+      navigate({ to: '/login' });
+    }
+  }
 
   return (
     <nav
@@ -78,13 +107,32 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
       >
         <Bell className="h-4 w-4" />
       </button>
-      <div
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-primary/15 text-xs font-semibold text-accent-primary"
-        title="Profile"
-        aria-label="Profile"
-      >
-        <UserRound className="h-4 w-4" />
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-primary/15 text-xs font-semibold text-accent-primary"
+            title="Profile"
+            aria-label="Profile"
+          >
+            <UserRound className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="center">
+          {/* `/me` can answer without an `actor` — guarding only on `me` here
+              crashed the whole frame through the error boundary, which is
+              strictly worse than showing no label. The rail must survive any
+              /me shape; logout below stays reachable either way. */}
+          {me?.actor && (
+            <DropdownMenuLabel>
+              {me.actor.display_name} · {ROLE_LEVEL_LABELS[me.actor.role_level as RoleLevel]}
+            </DropdownMenuLabel>
+          )}
+          <DropdownMenuItem disabled={isLoggingOut} onSelect={handleLogout}>
+            로그아웃
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </nav>
   );
 }

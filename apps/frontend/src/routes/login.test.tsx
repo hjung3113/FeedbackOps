@@ -79,6 +79,28 @@ describe('/login dev (mock auth)', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/auth/mock-login', expect.objectContaining({ body: JSON.stringify({ external_id: 'mock-admin-1' }) })));
     expect(fetchMock).toHaveBeenCalledWith('/auth/mock-login', expect.objectContaining({ body: JSON.stringify({ external_id: 'mock-developer-1' }) }));
   });
+
+  test('clears cached data before routing after mock login succeeds', async () => {
+    const calls: string[] = [];
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ actor: { id: 'actor', external_id: 'mock-user-1', email: 'user@example.test', display_name: 'Mock User', role_level: 'user' }, workspace_id: 'workspace' }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof globalThis.fetch;
+    const { router, qc } = buildHarness({ initialPath: '/login' });
+    vi.spyOn(qc, 'clear').mockImplementation(() => { calls.push('clear'); });
+    const originalNavigate = router.navigate.bind(router);
+    vi.spyOn(router, 'navigate').mockImplementation((options) => {
+      calls.push('navigate');
+      return originalNavigate(options);
+    });
+    const invalidateQueries = vi.spyOn(qc, 'invalidateQueries');
+
+    render(<QueryClientProvider client={qc}><RouterProvider router={router} /></QueryClientProvider>);
+    await screen.findByRole('button', { name: 'Mock User (User)' });
+    fireEvent.click(screen.getByRole('button', { name: 'Mock User (User)' }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    expect(qc.clear).toHaveBeenCalledOnce();
+    expect(calls).toEqual(['clear', 'navigate']);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
 });
 
 describe('/login prod guard (F-015)', () => {
