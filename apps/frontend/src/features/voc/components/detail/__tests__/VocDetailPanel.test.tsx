@@ -1,6 +1,6 @@
+import type { TaskDetailDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { TaskDetailDto } from '@fops/shared';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -265,6 +265,90 @@ describe('<VocDetailPanel>', () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getByText('테스트 VOC 제목')).toBeInTheDocument();
+  });
+
+  it('closes a mounted detail when the Managed System scope changes outside its envelope', async () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    const onClose = vi.fn();
+    const { rerender } = renderWithClient(
+      <VocDetailPanel
+        vocId={DETAIL_ENVELOPE.id}
+        managedSystemId={DETAIL_ENVELOPE.primary_managed_system_id}
+        onClose={onClose}
+      />,
+    );
+
+    await screen.findByText('테스트 VOC 제목');
+    rerender(
+      <QueryClientProvider client={createQueryClient()}>
+        <VocDetailPanel
+          vocId={DETAIL_ENVELOPE.id}
+          managedSystemId="another-managed-system"
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(screen.queryByText('테스트 VOC 제목')).not.toBeInTheDocument();
+    expect(screen.queryByText('VOC를 찾을 수 없습니다.')).not.toBeInTheDocument();
+  });
+
+  it('keeps a selected detail open for all Managed Systems', async () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    const onClose = vi.fn();
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={onClose} />);
+
+    await screen.findByText('테스트 VOC 제목');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close while detail data is loading', async () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({
+        isLoading: true,
+        isPending: true,
+        isSuccess: false,
+        status: 'pending',
+      }),
+    );
+    const onClose = vi.fn();
+    renderWithClient(
+      <VocDetailPanel
+        vocId={DETAIL_ENVELOPE.id}
+        managedSystemId="another-managed-system"
+        onClose={onClose}
+      />,
+    );
+
+    await screen.findByLabelText('VOC 상세 불러오는 중');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('keeps a selected detail open when its Managed System scope remains the same', async () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    const onClose = vi.fn();
+    const { rerender } = renderWithClient(
+      <VocDetailPanel
+        vocId={DETAIL_ENVELOPE.id}
+        managedSystemId={DETAIL_ENVELOPE.primary_managed_system_id}
+        onClose={onClose}
+      />,
+    );
+
+    await screen.findByText('테스트 VOC 제목');
+    rerender(
+      <QueryClientProvider client={createQueryClient()}>
+        <VocDetailPanel
+          vocId={DETAIL_ENVELOPE.id}
+          managedSystemId={DETAIL_ENVELOPE.primary_managed_system_id}
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('테스트 VOC 제목')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('loading state: renders skeletons instead of content', () => {

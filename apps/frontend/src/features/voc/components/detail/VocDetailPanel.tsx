@@ -41,6 +41,8 @@ import { TriageBlock } from './TriageBlock';
 
 export interface VocDetailPanelProps {
   vocId: string;
+  /** Current Managed System URL scope; an out-of-scope cached selection closes. */
+  managedSystemId?: string;
   /** Called when user closes the panel via X button or 404 selection clear. */
   onClose: () => void;
   /** Optional fullscreen toggle handler from useFullscreenPanel (#18). */
@@ -86,11 +88,24 @@ function DetailPanelSkeleton(): React.ReactElement {
 
 export function VocDetailPanel({
   vocId,
+  managedSystemId,
   onClose,
   onExpandToggle,
-}: VocDetailPanelProps): React.ReactElement {
+  // `null` while the scope-exit effect clears `selected`: rendering the old
+  // record for that tick is the bug this panel is closing over.
+}: VocDetailPanelProps): React.ReactElement | null {
   const { data, isLoading, isError, error } = useVocDetail(vocId);
   const { data: me } = useMe();
+  const selectedScopeExcludesVoc =
+    managedSystemId !== undefined &&
+    !isLoading &&
+    !isError &&
+    data !== undefined &&
+    data.primary_managed_system_id !== managedSystemId;
+
+  React.useEffect(() => {
+    if (selectedScopeExcludesVoc) onClose();
+  }, [onClose, selectedScopeExcludesVoc]);
 
   // 1. Loading
   if (isLoading) {
@@ -119,6 +134,10 @@ export function VocDetailPanel({
 
   if (!data) {
     return <DetailPanelNotFound onClearSelection={onClose} />;
+  }
+
+  if (selectedScopeExcludesVoc) {
+    return null;
   }
 
   // 3. Summary envelope — permission blocked
