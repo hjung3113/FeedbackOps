@@ -11,10 +11,25 @@ import { useEntityLinkInventory } from '../hooks/useEntityLinkInventory';
 
 type StatusFilter = EntityLinkStatus;
 
+/**
+ * The route's own search contract, not the entity-link domain's. The route
+ * schema admits exactly one relation type (`z.enum(['related_to'])`) and is
+ * `.strict()`, so widening `type` to the full `EntityLinkRelationType` union
+ * here would let a navigate() push a value that `validateSearch` then throws
+ * on. Keep this narrower than the domain type on purpose.
+ */
 interface LinksSearch {
   status?: StatusFilter;
-  type?: EntityLinkRelationType;
+  type?: SearchableRelationType;
   managedSystem?: string;
+}
+
+/** The relation types this route can carry in its URL. */
+const SEARCHABLE_RELATION_TYPES = ['related_to'] as const satisfies readonly EntityLinkRelationType[];
+type SearchableRelationType = (typeof SEARCHABLE_RELATION_TYPES)[number];
+
+function toSearchableRelationType(value: string | undefined): SearchableRelationType | undefined {
+  return SEARCHABLE_RELATION_TYPES.find((t) => t === value);
 }
 
 const STATUS_TABS: ListToolbarTab[] = [
@@ -37,7 +52,12 @@ const FILTER_CATEGORIES = [
 
 export function LinksRoute() {
   const search = useSearch({ strict: false }) as LinksSearch;
-  const navigate = useNavigate();
+  // `from` is what types the search reducer. Without it useNavigate() hands the
+  // reducer the router-wide search union (12 keys), which is not assignable to
+  // this route's 3-key reducer signature — that mismatch was the long-standing
+  // TS2322 baseline entry. Both navigate() calls below target this same route
+  // by absolute path, so pinning `from` changes no runtime behaviour.
+  const navigate = useNavigate({ from: '/integration/links' });
 
   const activeTab = search.status ?? 'all';
   const currentFilters = React.useMemo(
@@ -117,25 +137,39 @@ export function LinksRoute() {
     void navigate({
       to: '/integration/links',
       search: (prev) => {
+        const { type, managedSystem } = prev;
         if (next === 'all') {
-          const { status: _status, ...rest } = prev;
-          return rest;
+          return {
+            ...(type !== undefined ? { type } : {}),
+            ...(managedSystem !== undefined ? { managedSystem } : {}),
+          };
         }
-        return { ...prev, status: next as StatusFilter };
+        return {
+          status: next as StatusFilter,
+          ...(type !== undefined ? { type } : {}),
+          ...(managedSystem !== undefined ? { managedSystem } : {}),
+        };
       },
     });
   }
 
   function handleFiltersChange(next: Record<string, string[]>): void {
-    const type = next.type?.[0] as EntityLinkRelationType | undefined;
+    const type = toSearchableRelationType(next.type?.[0]);
     void navigate({
       to: '/integration/links',
-      search: (prev) => {
+      search: (prev): LinksSearch => {
+        const { status, managedSystem } = prev;
         if (type === undefined) {
-          const { type: _type, ...rest } = prev;
-          return rest;
+          return {
+            ...(status !== undefined ? { status } : {}),
+            ...(managedSystem !== undefined ? { managedSystem } : {}),
+          };
         }
-        return { ...prev, type };
+        return {
+          ...(status !== undefined ? { status } : {}),
+          type,
+          ...(managedSystem !== undefined ? { managedSystem } : {}),
+        };
       },
     });
   }
