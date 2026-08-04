@@ -105,3 +105,12 @@ apps/frontend/src/features/voc/components/create/__tests__/AttachmentDropzone.te
 apps/frontend/src/lib/layout/AppRail.tsx organizeImports -- pre-existing on develop; import order predates biome
 apps/frontend/src/lib/layout/AppRail.tsx format -- pre-existing on develop (1x, unchanged; measured against `git show develop:` of the same file)
 apps/frontend/src/routes/login.test.tsx format -- pre-existing on develop (1x, unchanged); the file's long harness lines predate biome. AppRail.test.tsx was format-clean on develop, so the violation this branch introduced there was formatted rather than allowlisted
+docs/design-prototype/shell.jsx format -- pre-existing on develop (1x, unchanged; measured against `git show develop:` of the same file)
+docs/design-prototype/shell.jsx lint/a11y/useButtonType -- pre-existing on develop (11x, unchanged); the avatar trigger this branch adds does carry type="button"
+docs/design-prototype/shell.jsx lint/complexity/useOptionalChain -- pre-existing on develop (1x, unchanged)
+docs/design-prototype/shell.jsx lint/suspicious/noArrayIndexKey -- pre-existing on develop (1x, unchanged)
+docs/design-prototype/affordances.jsx format -- pre-existing on develop (1x, unchanged)
+docs/design-prototype/affordances.jsx lint/a11y/useKeyWithClickEvents -- pre-existing on develop (8x, unchanged); the filter/sort popovers' div items predate this branch
+docs/design-prototype/affordances.jsx lint/a11y/useButtonType -- pre-existing on develop (4x, unchanged)
+docs/design-prototype/affordances.jsx lint/complexity/useOptionalChain -- pre-existing on develop (2x, unchanged)
+docs/design-prototype/affordances.jsx lint/correctness/noUnusedVariables -- pre-existing on develop (2x, unchanged)

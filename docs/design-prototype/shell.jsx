@@ -263,14 +263,16 @@ function GlobalRail({ activeRoute, onNavigate, role = 'admin' }) {
             Tweaks panel, not a product surface. So this records the copy and
             placement of the control; production wires it to POST /auth/logout
             and returns to the login picker (ADR-0006). */}
-        <div
+        <button
+          type="button"
+          role="menuitem"
           className="popover-item"
           onClick={() => {
             setAccountOpen(false);
             window.__toast({ message: '로그아웃 (mock)', tone: 'default' });
           }}>
           로그아웃
-        </div>
+        </button>
       </Popover>
     </aside>
   );
