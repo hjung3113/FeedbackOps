@@ -41,7 +41,7 @@ import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporter
 import type { ApiError } from '@/lib/api';
 import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
-import type { VocDetailEnvelope } from '@fops/shared';
+import { type VocDetailEnvelope, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import { Callout, PreviewModal, RichEditor } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
@@ -62,20 +62,6 @@ export interface ReporterReplyComposerProps {
   draftDoc?: TipTapDoc | null;
   /** REV-1 #7: called when the editor content changes. */
   onDraftChange?: (doc: TipTapDoc | null) => void;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isDocEmpty(doc: TipTapDoc | null): boolean {
-  if (doc == null) return true;
-  const content = doc.content;
-  if (!Array.isArray(content) || content.length === 0) return true;
-  return content.every((node) => {
-    if (node == null || typeof node !== 'object') return true;
-    const n = node as { type?: string; content?: unknown[] };
-    if (n.type !== 'paragraph') return false;
-    return !Array.isArray(n.content) || n.content.length === 0;
-  });
 }
 
 // Maps ApiError code to Callout tone for the inline error surface.
@@ -125,7 +111,7 @@ export function ReporterReplyComposer({
     setPreviewOpen(false);
   }
 
-  const isEmpty = isDocEmpty(draftDoc);
+  const isEmpty = isTipTapDocStructurallyEmpty(draftDoc);
 
   const mutation = useVocReporterReplyMutation({
     onSuccess: () => {
