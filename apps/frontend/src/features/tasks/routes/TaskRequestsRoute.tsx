@@ -26,7 +26,14 @@ import {
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   FieldRow,
+  Label,
   ListShell,
   ListToolbar,
   type ListToolbarTab,
@@ -38,6 +45,7 @@ import {
   PanelSectionTitle,
   PanelTitleBlock,
   PermissionBlockedPanel,
+  Textarea,
   UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -46,6 +54,13 @@ import * as React from 'react';
 import { toast } from 'sonner';
 
 type TaskRequestTab = TaskRequestStatus | 'all';
+type DecisionAction = 'approve' | 'request-more-evidence' | 'reject';
+
+interface DecisionDialogState {
+  action: DecisionAction;
+  value: string;
+  error: string | null;
+}
 
 const TAB_ORDER: Array<{ value: TaskRequestTab; label: string }> = [
   { value: 'pending_review', label: 'Pending' },
@@ -135,6 +150,94 @@ function TaskRequestBadge({ status }: { status: TaskRequestStatus }) {
     <span className={`rounded-sm border px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[status]}`}>
       {STATUS_LABELS[status]}
     </span>
+  );
+}
+
+function TaskRequestDecisionDialog({
+  dialog,
+  isSelfApproval,
+  isSubmitting,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  dialog: DecisionDialogState | null;
+  isSelfApproval: boolean;
+  isSubmitting: boolean;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  if (!dialog) return null;
+
+  const details =
+    dialog.action === 'approve'
+      ? {
+          title: 'Approve Task Request',
+          description: 'Record the rationale for accepting this execution candidate.',
+          label: isSelfApproval ? 'Self-approval reason' : 'Approval reason',
+          submitLabel: 'Approve Task Request',
+          required: isSelfApproval,
+        }
+      : dialog.action === 'request-more-evidence'
+        ? {
+            title: 'Request more evidence',
+            description: 'Record the evidence needed before this request can be reviewed.',
+            label: 'Evidence note',
+            submitLabel: 'Request evidence',
+            required: true,
+          }
+        : {
+            title: 'Reject Task Request',
+            description: 'Record why this execution candidate cannot be accepted.',
+            label: 'Reject reason',
+            submitLabel: 'Reject Task Request',
+            required: true,
+          };
+  const inputId = `task-request-${dialog.action}-reason`;
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && !isSubmitting && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{details.title}</DialogTitle>
+          <DialogDescription>{details.description}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={inputId}>{details.label}</Label>
+            <Textarea
+              id={inputId}
+              rows={3}
+              value={dialog.value}
+              onChange={(event) => onChange(event.target.value)}
+              disabled={isSubmitting}
+              aria-invalid={dialog.error !== null}
+            />
+            {details.required && <span className="text-xs text-text-muted">Required.</span>}
+          </div>
+          {dialog.error && (
+            <p className="text-sm text-accent-danger" role="alert">
+              {dialog.error}
+            </p>
+          )}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={isSubmitting}
+              onClick={onClose}
+              data-testid="task-request-decision-cancel"
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={isSubmitting} disabled={isSubmitting}>
+              {details.submitLabel}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -245,6 +348,9 @@ function TaskRequestPanel({
   const [convertDueDate, setConvertDueDate] = React.useState('');
   const [convertMilestoneId, setConvertMilestoneId] = React.useState('');
   const [convertAnalyticsAreaId, setConvertAnalyticsAreaId] = React.useState('');
+  const [decisionDialog, setDecisionDialog] = React.useState<DecisionDialogState | null>(null);
+  const [isDecisionSubmitting, setIsDecisionSubmitting] = React.useState(false);
+  const decisionSubmittingRef = React.useRef(false);
 
   React.useEffect(() => {
     setConvertTitle(defaultConvertTitle(item.requested_outcome));
@@ -256,6 +362,9 @@ function TaskRequestPanel({
     setConvertAnalyticsAreaId('');
     setConvertOpen(false);
     setLinkOpen(false);
+    setDecisionDialog(null);
+    setIsDecisionSubmitting(false);
+    decisionSubmittingRef.current = false;
   }, [item]);
 
   const selfApprovalCheck = useQuery({
@@ -322,11 +431,20 @@ function TaskRequestPanel({
       return requestMoreEvidenceForTaskRequest(item.id, { note: vars.note ?? '' }, key);
     },
     onSuccess: () => {
+      decisionSubmittingRef.current = false;
+      setIsDecisionSubmitting(false);
+      setDecisionDialog(null);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       toast('Task Request updated.');
     },
     onError: (err) => {
-      toast.error(err.envelope.message);
+      decisionSubmittingRef.current = false;
+      setIsDecisionSubmitting(false);
+      setDecisionDialog((current) => {
+        if (current) return { ...current, error: err.envelope.message };
+        toast.error(err.envelope.message);
+        return current;
+      });
     },
   });
 
@@ -373,40 +491,48 @@ function TaskRequestPanel({
   });
 
   function approve(): void {
-    const reason = window.prompt(isSelfApproval ? 'Self-approval reason' : 'Approval reason');
-    if (reason === null) return;
-    if (isSelfApproval && reason.trim().length === 0) {
-      toast.error('Self-approval requires a reason.');
-      return;
-    }
     if (isSelfApproval && !canSelfApprove) {
       toast.error('Self-approval requires scoped capability.');
       return;
     }
-    const trimmed = reason.trim();
-    decisionMutation.mutate(
-      trimmed.length > 0 ? { action: 'approve', reason: trimmed } : { action: 'approve' },
-    );
+    setDecisionDialog({ action: 'approve', value: '', error: null });
   }
 
   function requestEvidence(): void {
-    const note = window.prompt('Evidence note');
-    if (note === null) return;
-    if (note.trim().length === 0) {
-      toast.error('Note is required.');
-      return;
-    }
-    decisionMutation.mutate({ action: 'request-more-evidence', note: note.trim() });
+    setDecisionDialog({ action: 'request-more-evidence', value: '', error: null });
   }
 
   function reject(): void {
-    const reason = window.prompt('Reject reason');
-    if (reason === null) return;
-    if (reason.trim().length === 0) {
-      toast.error('Reason is required.');
+    setDecisionDialog({ action: 'reject', value: '', error: null });
+  }
+
+  function submitDecision(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (!decisionDialog || decisionSubmittingRef.current) return;
+    const value = decisionDialog.value.trim();
+    const error =
+      decisionDialog.action === 'approve' && isSelfApproval && value.length === 0
+        ? 'Self-approval requires a reason.'
+        : decisionDialog.action === 'request-more-evidence' && value.length === 0
+          ? 'Note is required.'
+          : decisionDialog.action === 'reject' && value.length === 0
+            ? 'Reason is required.'
+            : null;
+    if (error) {
+      setDecisionDialog((current) => (current ? { ...current, error } : current));
       return;
     }
-    decisionMutation.mutate({ action: 'reject', reason: reason.trim() });
+    decisionSubmittingRef.current = true;
+    setIsDecisionSubmitting(true);
+    if (decisionDialog.action === 'approve') {
+      decisionMutation.mutate(value ? { action: 'approve', reason: value } : { action: 'approve' });
+      return;
+    }
+    decisionMutation.mutate(
+      decisionDialog.action === 'reject'
+        ? { action: 'reject', reason: value }
+        : { action: 'request-more-evidence', note: value },
+    );
   }
 
   const sections: PanelSection[] = [
@@ -765,6 +891,18 @@ function TaskRequestPanel({
           </div>
         </section>
       </div>
+      <TaskRequestDecisionDialog
+        dialog={decisionDialog}
+        isSelfApproval={isSelfApproval}
+        isSubmitting={isDecisionSubmitting}
+        onChange={(value) =>
+          setDecisionDialog((current) => (current ? { ...current, value, error: null } : current))
+        }
+        onClose={() => {
+          if (!decisionSubmittingRef.current) setDecisionDialog(null);
+        }}
+        onSubmit={submitDecision}
+      />
     </aside>
   );
 }
