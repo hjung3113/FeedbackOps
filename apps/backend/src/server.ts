@@ -67,6 +67,10 @@ import {
   vocRoutes,
 } from './modules/voc/index.js';
 import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
+import {
+  createPreSubmitVocPeersService,
+  preSubmitVocPeersRoutes,
+} from './modules/voc/pre-submit-peers/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -652,6 +656,13 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     vocRecommendationsService,
     workspaceId,
     rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
+  });
+  const preSubmitVocPeersService = createPreSubmitVocPeersService({ db: dbHandle.db });
+  await app.register(preSubmitVocPeersRoutes, {
+    sessionService,
+    preSubmitVocPeersService,
+    workspaceId,
+    rateLimitConfig: { read: app.rateLimitConfig.read },
   });
 
   // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────

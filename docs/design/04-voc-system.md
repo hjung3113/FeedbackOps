@@ -271,6 +271,11 @@ Acceptance Criteria:
 > The 0.75 similarity threshold is still unvalidated against real embeddings.
 > The shipped fixture verifies query and threshold mechanics, not recommendation
 > quality, so this requirement's quality is not yet demonstrated.
+>
+> **Implementation status (2026-08-04).** The VOC create screen's pre-submit
+> panel is a separate ADR-0031 same-Managed-System heuristic peer read. It is
+> distinct from the saved-VOC embedding recommendation resource and has no
+> embedding availability, score, dismiss, or confirm state.
 
 ### FR-VOC-005: Public Update
 
