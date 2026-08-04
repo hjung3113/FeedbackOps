@@ -388,6 +388,70 @@ describe('<VocDetailPanel>', () => {
     expect(container.querySelector('[data-anchor="similar"]')).not.toBeNull();
   });
 
+  it('#337: reporter-arm envelope omits Triage, Similar, and their navigation entries', async () => {
+    const {
+      analytics_area_id: _analyticsAreaId,
+      owner_user_id: _ownerUserId,
+      owner_team_id: _ownerTeamId,
+      similar_count: _similarCount,
+      similar: _similar,
+      ...reporterArmEnvelope
+    } = DETAIL_ENVELOPE;
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery({ data: reporterArmEnvelope }));
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+
+    await screen.findByText('테스트 VOC 제목');
+    expect(screen.queryByText('트리아지 (Read only)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('유사 VOC')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Similar' })).not.toBeInTheDocument();
+  });
+
+  it('#337: treats a half-redacted envelope as the reporter arm', async () => {
+    // The backend drops the peer fields together, so a partial envelope means a
+    // contract has drifted. Fail closed rather than rendering internal triage
+    // because one of the two keys happened to survive.
+    const { similar_count: _similarCount, ...halfRedacted } = DETAIL_ENVELOPE;
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery({ data: halfRedacted }));
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+
+    await screen.findByText('테스트 VOC 제목');
+    expect(screen.queryByText('트리아지 (Read only)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Triage' })).not.toBeInTheDocument();
+  });
+
+  it('#337: scoped envelope renders Triage and Similar with their navigation entries', async () => {
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({
+        data: {
+          ...DETAIL_ENVELOPE,
+          similar_count: 1,
+          similar: {
+            items: [
+              {
+                id: '00000000-0000-0000-0000-000000000002',
+                display_id: 'VOC-0002',
+                title: '유사 VOC 제목',
+                reporter_facing_status: 'reviewing',
+                severity: 'medium',
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+
+    await screen.findByText('테스트 VOC 제목');
+    expect(screen.getByText('트리아지 (Read only)')).toBeInTheDocument();
+    expect(screen.getByLabelText('유사 VOC')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Triage' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Similar' })).toBeInTheDocument();
+  });
+
   it('renders me.display_name when me matches reporter', () => {
     vi.mocked(useVocDetail).mockReturnValue(
       makeDetailQuery({ data: { ...DETAIL_ENVELOPE, reporter_id: ME_RESPONSE.actor.id } }),

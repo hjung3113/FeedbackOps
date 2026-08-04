@@ -8,15 +8,27 @@ import { reporterFacingStatusEnumSchema, vocListItemSchema } from './list-item.j
 export const vocDetailEnvelopeSchema = vocListItemSchema.extend({
   // The capped peer preview uses the same authorized peer set as similar_count.
   // similar_count remains the sole total; this array is intentionally not paginated.
-  similar: z.object({
-    items: z.array(z.object({
-      id: z.string().uuid(),
-      display_id: z.string(),
-      title: z.string(),
-      reporter_facing_status: reporterFacingStatusEnumSchema,
-      severity: z.enum(['low', 'medium', 'high', 'critical']).nullable(),
-    })).max(3),
-  }),
+  similar: z
+    .object({
+      items: z
+        .array(
+          z.object({
+            id: z.string().uuid(),
+            display_id: z.string(),
+            title: z.string(),
+            reporter_facing_status: reporterFacingStatusEnumSchema,
+            severity: z.enum(['low', 'medium', 'high', 'critical']).nullable(),
+          }),
+        )
+        .max(3),
+    })
+    .optional(),
+  // Reporter-arm envelopes omit peer-derived and internal-triage fields rather
+  // than claiming zero peers or an unassigned owner.
+  analytics_area_id: z.string().uuid().nullable().optional(),
+  owner_user_id: z.string().uuid().nullable().optional(),
+  owner_team_id: z.string().uuid().nullable().optional(),
+  similar_count: z.number().int().min(0).optional(),
   // TipTap doc — opaque jsonb; backend validates structure.
   description_rich_content: z.unknown(),
   // No action items in Slice 3; kept as opaque array for future shape.

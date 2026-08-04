@@ -5,16 +5,21 @@ import type * as React from 'react';
 
 export interface SimilarVocSectionProps {
   similar: VocDetailEnvelope['similar'] | undefined;
-  similarCount: number;
+  similarCount: number | undefined;
   onSelect: (vocId: string) => void;
 }
 
 /** Keep the section, its anchor, and its navigation entry in lockstep. */
 export function hasSimilarVocSection(
   similar: VocDetailEnvelope['similar'] | undefined,
-  similarCount: number,
-): similar is VocDetailEnvelope['similar'] {
-  return similar !== undefined && similarCount > 0 && similar.items.length > 0;
+  similarCount: number | undefined,
+): similar is NonNullable<VocDetailEnvelope['similar']> {
+  return (
+    similar !== undefined &&
+    similarCount !== undefined &&
+    similarCount > 0 &&
+    similar.items.length > 0
+  );
 }
 
 /**
@@ -26,7 +31,9 @@ export function SimilarVocSection({
   similarCount,
   onSelect,
 }: SimilarVocSectionProps): React.ReactElement | null {
-  if (!hasSimilarVocSection(similar, similarCount)) {
+  // The count is checked here as well as inside the guard: a type predicate can
+  // narrow only one parameter, and the badge below prints the count itself.
+  if (similarCount === undefined || !hasSimilarVocSection(similar, similarCount)) {
     return null;
   }
 

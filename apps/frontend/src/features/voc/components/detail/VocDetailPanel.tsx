@@ -243,13 +243,16 @@ function FullDetailView({
   const pendingReviewCount = reviewCandidates.data?.items.length ?? 0;
   const canRequestTask = canCreateFinding;
   const showsSimilarVocSection = hasSimilarVocSection(voc.similar, voc.similar_count);
-  const detailSections = showsSimilarVocSection
-    ? [
-        ...STATIC_DETAIL_SECTIONS.slice(0, 4),
-        { id: 'similar', label: 'Similar' },
-        ...STATIC_DETAIL_SECTIONS.slice(4),
-      ]
-    : STATIC_DETAIL_SECTIONS;
+  const isReporterArm = voc.similar === undefined || voc.similar_count === undefined;
+  const detailSections = isReporterArm
+    ? STATIC_DETAIL_SECTIONS.filter((section) => section.id !== 'triage')
+    : showsSimilarVocSection
+      ? [
+          ...STATIC_DETAIL_SECTIONS.slice(0, 4),
+          { id: 'similar', label: 'Similar' },
+          ...STATIC_DETAIL_SECTIONS.slice(4),
+        ]
+      : STATIC_DETAIL_SECTIONS;
 
   const requestTaskMutation = useRequestTaskFromVoc({
     vocId,
@@ -313,19 +316,21 @@ function FullDetailView({
               reporterDisplayName={actorNamesById.get(voc.reporter_id) ?? me?.actor.display_name}
             />
           </div>
-          <div data-anchor="triage">
-            <TriageBlock
-              voc={voc}
-              ownerDisplayName={
-                voc.owner_user_id !== null ? (actorNamesById.get(voc.owner_user_id) ?? null) : null
-              }
-              analyticsAreaName={
-                voc.analytics_area_id !== null
-                  ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
-                  : null
-              }
-            />
-          </div>
+          {!isReporterArm && (
+            <div data-anchor="triage">
+              <TriageBlock
+                voc={voc}
+                ownerDisplayName={
+                  voc.owner_user_id != null ? (actorNamesById.get(voc.owner_user_id) ?? null) : null
+                }
+                analyticsAreaName={
+                  voc.analytics_area_id != null
+                    ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
+                    : null
+                }
+              />
+            </div>
+          )}
           <div data-anchor="description">
             <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
             {/* Relocated metadata strip — severity/managed-system/AA/source-context
@@ -333,7 +338,7 @@ function FullDetailView({
             <IdentityMetadataStrip
               voc={voc}
               analyticsAreaName={
-                voc.analytics_area_id !== null
+                voc.analytics_area_id != null
                   ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
                   : null
               }
@@ -419,7 +424,7 @@ function FullDetailView({
       <CreateFindingModal
         vocId={vocId}
         managedSystemId={voc.primary_managed_system_id}
-        sourceAnalyticsAreaId={voc.analytics_area_id}
+        sourceAnalyticsAreaId={voc.analytics_area_id ?? null}
         open={createFindingOpen}
         onClose={() => setCreateFindingOpen(false)}
       />
