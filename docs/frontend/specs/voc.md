@@ -116,6 +116,8 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 
 ### 3.4 Create form
 
+- **Pre-submit Similar VOC panel** — once a Managed System is selected, the right column reads `GET /vocs/pre-submit-peers?managed_system_id=:managedSystemId` and shows up to three authorized peers as title plus `display_id · relative time`. Activating a peer navigates to that existing VOC (`/vocs?view=inbox&selected=:vocId`); it creates neither a new VOC nor a relationship. An empty result is normal and renders `0건`. There is no dismiss or confirm action.
+
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
 | `<PageShell>` | `<PageShell>` in `packages/ui/src/layout/` | none | `title`, `subtitle?`, `eyebrow?`, `actions?`, `back?`, `fluid?` | default |

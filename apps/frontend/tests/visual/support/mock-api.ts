@@ -77,6 +77,11 @@ import {
   triageAreaTriageVoc,
 } from '../fixtures/triage-analytics-area';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
+import {
+  vocCreateAnalyticsAreas,
+  vocCreateManagedSystems,
+  vocCreatePeersByManagedSystem,
+} from '../fixtures/voc-create';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
@@ -116,6 +121,8 @@ interface InstallOptions {
   managedSystemOwner?: boolean;
   /** Triage Analytics Area wiring and Finding inheritance states. */
   triageAreaScenario?: TriageAreaVisualScenario;
+  /** VOC creation with a selected Managed System and pre-submit peers. */
+  vocCreate?: boolean;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -355,6 +362,17 @@ export async function installMockApi(
 
     if (options.vocReporterTaskSummary && isRequest(route, 'GET', '/vocs')) {
       await json(route, 200, { items: [reporterTaskSummaryVoc] });
+      return;
+    }
+
+    if (options.vocCreate && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, vocCreateAnalyticsAreas);
+      return;
+    }
+
+    if (options.vocCreate && isRequest(route, 'GET', '/vocs/pre-submit-peers')) {
+      const managedSystemId = url.searchParams.get('managed_system_id');
+      await json(route, 200, { items: vocCreatePeersByManagedSystem.get(managedSystemId ?? '')?.items ?? [] });
       return;
     }
 
@@ -617,7 +635,9 @@ export async function installMockApi(
       await json(
         route,
         200,
-        options.managedSystemOwner
+        options.vocCreate
+          ? vocCreateManagedSystems
+          : options.managedSystemOwner
           ? managedSystemOwnerList
           : options.railScope
             ? railScopeManagedSystems

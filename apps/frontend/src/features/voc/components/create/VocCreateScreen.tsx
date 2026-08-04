@@ -32,6 +32,7 @@ import { useVocCreateMutation } from '../../hooks/useVocCreateMutation';
 import { SourceContextSegmented } from './SourceContextSegmented';
 import { AttachmentDropzone } from './AttachmentDropzone';
 import { ReporterCard } from './ReporterCard';
+import { SimilarVocPanel } from './SimilarVocPanel';
 import { SeverityDisclaimerCard } from './SeverityDisclaimerCard';
 import { vocDescriptionToolbar } from './VocDescriptionToolbar';
 import { uploadAttachment } from '@/lib/api/attachments';
@@ -371,6 +372,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
           {/* Right column */}
           <div className="flex flex-col gap-3 lg:col-span-3">
             <ReporterCard />
+            <SimilarVocPanel managedSystemId={selectedMs} />
             <SeverityDisclaimerCard />
           </div>
         </div>
