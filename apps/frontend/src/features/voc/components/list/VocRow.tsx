@@ -33,7 +33,7 @@ import {
   UserAvatar,
 } from '@fops/ui';
 import { cn } from '@fops/ui';
-import { Layers } from 'lucide-react';
+import { Layers, Paperclip } from 'lucide-react';
 import type * as React from 'react';
 
 // ---------------------------------------------------------------------------
@@ -211,6 +211,15 @@ export function VocRow({
                 >
                   <Layers className="h-2.5 w-2.5" aria-hidden="true" />
                   {voc.similar_count} similar
+                </span>
+              )}
+              {voc.attachment_count > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-text-muted/10 px-1.5 py-0.5 text-xs font-medium text-text-muted shrink-0"
+                  aria-label={`${voc.attachment_count} attachments`}
+                >
+                  <Paperclip className="h-2.5 w-2.5" aria-hidden="true" />
+                  {voc.attachment_count}
                 </span>
               )}
             </div>

@@ -59,8 +59,27 @@ export const reporterTaskSummaryVoc: VocDetailEnvelope =
     conversation_timeline: [],
     conversation_page: { has_more: false },
     permission_decisions: {},
-    attachments: [],
-    attachment_count: 0,
+    attachments: [
+      {
+        id: "55555555-5555-4555-8555-555555555179",
+        name: "refresh-error.png",
+        size_bytes: 1024,
+        mime_type: "image/png",
+        uploaded_by_actor_id: VOC_REPORTER_TASK_SUMMARY_IDS.reporter,
+        created_at: "2026-07-18T09:00:00.000Z",
+        linked_at: "2026-07-18T09:00:00.000Z",
+      },
+      {
+        id: "66666666-6666-4666-8666-666666666179",
+        name: "refresh-details.txt",
+        size_bytes: 2048,
+        mime_type: "text/plain",
+        uploaded_by_actor_id: VOC_REPORTER_TASK_SUMMARY_IDS.reporter,
+        created_at: "2026-07-18T09:00:00.000Z",
+        linked_at: "2026-07-18T09:00:00.000Z",
+      },
+    ],
+    attachment_count: 2,
   });
 
 const conversationPageSchema = z.object({

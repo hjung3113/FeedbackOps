@@ -90,3 +90,5 @@ apps/frontend/src/features/voc/components/triage/__tests__/TriageQueue.test.tsx 
 apps/frontend/src/features/voc/components/triage/__tests__/TriageQueue.test.tsx organizeImports -- pre-existing on develop; import order predates biome
 apps/frontend/src/features/voc/components/detail/__tests__/ReporterStatusChangeBlock.test.tsx organizeImports -- pre-existing on develop; import order predates biome
 apps/frontend/src/features/voc/components/detail/__tests__/ReporterStatusChangeBlock.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (5x, unchanged); test helpers assert non-null after an explicit lookup
+apps/frontend/src/features/voc/components/list/VocRow.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x at VocRow.tsx:141, unchanged); the row is a clickable div with role="row" predating this branch; fixing it is a keyboard/semantics change out of scope for the attachment chip
+apps/frontend/tests/visual/fixtures/voc-reporter-task-summary.ts format -- pre-existing on develop; the whole file uses double quotes and predates biome formatting, and this branch only adds two attachment fixture entries in the same style
