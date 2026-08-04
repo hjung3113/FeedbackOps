@@ -9,6 +9,7 @@
 
 import { ApiError } from '@/lib/api/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -121,17 +122,29 @@ vi.mock('../../hooks/useVocList', () => ({
 vi.mock('../../components/detail/VocDetailPanel', () => ({
   VocDetailPanel: ({
     vocId,
+    managedSystemId,
     onClose,
   }: {
     vocId: string;
+    managedSystemId?: string;
     onClose: () => void;
-  }) => (
-    <div data-testid="voc-detail-panel-stub" data-voc-id={vocId}>
-      <button type="button" onClick={onClose}>
-        닫기
-      </button>
-    </div>
-  ),
+  }) => {
+    useEffect(() => {
+      if (managedSystemId !== undefined && managedSystemId !== 'ms-1') onClose();
+    }, [managedSystemId, onClose]);
+
+    return (
+      <div
+        data-testid="voc-detail-panel-stub"
+        data-managed-system-id={managedSystemId}
+        data-voc-id={vocId}
+      >
+        <button type="button" onClick={onClose}>
+          닫기
+        </button>
+      </div>
+    );
+  },
 }));
 
 // ── Stub VocList to use real component but mock managed-systems query ─────────
@@ -231,6 +244,41 @@ describe('useInboxRoute', () => {
     });
     expect(screen.getByTestId('voc-detail-panel-stub').getAttribute('data-voc-id')).toBe(
       '00000000-0000-0000-0000-000000000001',
+    );
+  });
+
+  it('clears selected after the URL Managed System changes outside the open VOC scope', async () => {
+    const selected = '00000000-0000-0000-0000-000000000001';
+    searchState = { view: 'inbox', managedSystem: 'ms-1', selected };
+    const { rerender } = render(<InboxTestHarness view="inbox" />);
+
+    await screen.findByTestId('voc-detail-panel-stub');
+
+    searchState = { view: 'inbox', managedSystem: 'ms-2', selected };
+    rerender(<InboxTestHarness view="inbox" />);
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    const navigation = navigateMock.mock.calls.at(-1)?.[0] as {
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navigation.search(searchState)).toEqual({ view: 'inbox', managedSystem: 'ms-2' });
+
+    searchState = navigation.search(searchState);
+    rerender(<InboxTestHarness view="inbox" />);
+    expect(screen.queryByTestId('voc-detail-panel-stub')).not.toBeInTheDocument();
+  });
+
+  it('passes the selected Managed System to the open detail panel', async () => {
+    searchState = {
+      view: 'my',
+      managedSystem: 'ms-1',
+      selected: '00000000-0000-0000-0000-000000000001',
+    };
+    render(<InboxTestHarness view="my" />);
+
+    expect(await screen.findByTestId('voc-detail-panel-stub')).toHaveAttribute(
+      'data-managed-system-id',
+      'ms-1',
     );
   });
 

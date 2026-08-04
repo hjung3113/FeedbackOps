@@ -154,7 +154,7 @@ export interface InboxRouteSlots {
 
 export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const search = useSearch({ strict: false }) as InboxSearch;
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: '/vocs' });
 
   // ── Derived URL state ─────────────────────────────────────────────────────
 
@@ -185,53 +185,51 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  // Navigate helpers use `as` casts on individual changed values to avoid
-  // fighting exactOptionalPropertyTypes against TanStack Router's internal
-  // ParamsReducerFn signature (where `prev` is optional-keyed but our return
-  // must be schema-exact). The router validates the output through the route's
-  // validateSearch at runtime, so the casts are safe.
-
   function handleTabChange(next: string): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     void navigate({
       to: '/vocs',
-      search: (prev: any) => ({ ...prev, tab: next as InboxTab }) as any,
+      search: (prev) => ({ ...prev, tab: next as InboxTab }),
     });
   }
 
   function handleFiltersChange(next: Record<string, string[]>): void {
     void navigate({
       to: '/vocs',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      search: (prev: any) =>
-        ({
-          ...prev,
-          'filter.severity': serialiseCommaList(next['filter.severity'] ?? []),
-          'filter.reporterStatus': serialiseCommaList(next['filter.reporterStatus'] ?? []),
-          'filter.owner': serialiseCommaList(next['filter.owner'] ?? []),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        }) as any,
+      search: (prev) => {
+        const {
+          'filter.severity': _severity,
+          'filter.reporterStatus': _reporterStatus,
+          'filter.owner': _owner,
+          ...rest
+        } = prev;
+        const severity = serialiseCommaList(next['filter.severity'] ?? []);
+        const reporterStatus = serialiseCommaList(next['filter.reporterStatus'] ?? []);
+        const owner = serialiseCommaList(next['filter.owner'] ?? []);
+        return {
+          ...rest,
+          ...(severity !== undefined ? { 'filter.severity': severity } : {}),
+          ...(reporterStatus !== undefined ? { 'filter.reporterStatus': reporterStatus } : {}),
+          ...(owner !== undefined ? { 'filter.owner': owner } : {}),
+        };
+      },
     });
   }
 
   function handleSortChange(next: string): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     void navigate({
       to: '/vocs',
-      search: (prev: any) => ({ ...prev, sort: next as InboxSort }) as any,
+      search: (prev) => ({ ...prev, sort: next as InboxSort }),
     });
   }
 
   function handleRowSelect(id: string): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void navigate({ to: '/vocs', search: (prev: any) => ({ ...prev, selected: id }) as any });
+    void navigate({ to: '/vocs', search: (prev) => ({ ...prev, selected: id }) });
   }
 
   function handlePanelClose(): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     void navigate({
       to: '/vocs',
-      search: (prev: any) => ({ ...prev, selected: undefined }) as any,
+      search: ({ selected: _selected, ...rest }) => rest,
     });
   }
 
@@ -340,7 +338,11 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   const detailPanel =
     search.selected !== undefined ? (
-      <VocDetailPanel vocId={search.selected} onClose={handlePanelClose} />
+      <VocDetailPanel
+        vocId={search.selected}
+        {...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {})}
+        onClose={handlePanelClose}
+      />
     ) : undefined;
 
   return { list, detailPanel };

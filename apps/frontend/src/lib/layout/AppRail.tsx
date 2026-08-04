@@ -73,7 +73,16 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
       // Navigation still ends the local session when the revoke request cannot finish.
     } finally {
       queryClient.clear();
-      navigate({ to: '/login' });
+      // `replace` so Back cannot return to the previous actor's app shell. The
+      // revoked session would not serve it data, but a stale render of another
+      // actor's screen is exactly the boundary a logout is meant to draw.
+      // Wrapped rather than chained directly: navigate's return value is not
+      // part of the contract we rely on here.
+      void Promise.resolve(navigate({ to: '/login', replace: true })).catch(() => {
+        // Only on failure: the success path unmounts this rail. Without this the
+        // menu item stays disabled forever and the user cannot retry.
+        setIsLoggingOut(false);
+      });
     }
   }
 

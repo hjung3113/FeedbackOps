@@ -104,7 +104,7 @@ describe('AppRail account menu', () => {
     openAccountMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: '로그아웃' }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login', replace: true }));
     expect(logout).toHaveBeenCalledOnce();
     expect(queryClient.clear).toHaveBeenCalledOnce();
     expect(calls).toEqual(['logout', 'clear', 'navigate']);
@@ -118,8 +118,28 @@ describe('AppRail account menu', () => {
     openAccountMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: '로그아웃' }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login', replace: true }));
     expect(clear).toHaveBeenCalledOnce();
+  });
+
+  it('re-enables logout when the route change itself fails', async () => {
+    // Without this the item stays disabled for the rest of the session and the
+    // user is stranded on a screen whose session has already been revoked.
+    logout.mockResolvedValue(undefined);
+    navigate.mockRejectedValue(new Error('route failed'));
+    renderRail();
+
+    openAccountMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: '로그아웃' }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledOnce());
+    openAccountMenu();
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: '로그아웃' })).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      ),
+    );
   });
 
   it('shows the Actor display name and Role Level in the account menu', () => {
