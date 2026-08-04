@@ -25,7 +25,9 @@ interface LinksSearch {
 }
 
 /** The relation types this route can carry in its URL. */
-const SEARCHABLE_RELATION_TYPES = ['related_to'] as const satisfies readonly EntityLinkRelationType[];
+const SEARCHABLE_RELATION_TYPES = [
+  'related_to',
+] as const satisfies readonly EntityLinkRelationType[];
 type SearchableRelationType = (typeof SEARCHABLE_RELATION_TYPES)[number];
 
 function toSearchableRelationType(value: string | undefined): SearchableRelationType | undefined {
