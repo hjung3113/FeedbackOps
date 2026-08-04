@@ -2311,6 +2311,11 @@ a {
   flex-direction: column;
   gap: 2px;
   transition: background 120ms;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
 .similar-mini:hover { background: var(--surface-row-hover); }
 .similar-mini-title {

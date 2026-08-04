@@ -218,10 +218,15 @@ function CreateVocScreen({ onNavigate, scope }) {
               </div>
               <div className="vstack" style={{ gap: 4 }}>
                 {similar.slice(0, 3).map(v => (
-                  <div key={v.id} className="similar-mini">
+                  <button
+                    key={v.id}
+                    type="button"
+                    className="similar-mini"
+                    onClick={() => onNavigate('voc', null, v.id)}
+                  >
                     <span className="similar-mini-title">{v.title}</span>
                     <span className="similar-mini-meta">{v.id} · {v.createdAt}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
