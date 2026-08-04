@@ -84,7 +84,9 @@ export function IdentityMetadataStrip({
   const sourceContextLabel = SOURCE_CONTEXT_LABELS[voc.source_context] ?? voc.source_context;
 
   const hasSeverity = voc.severity !== null;
-  const hasAnalyticsArea = voc.analytics_area_id !== null;
+  // `undefined` means the reporter arm redacted the field (#337), not "no area".
+  // `!== null` alone would let a redacted envelope render an empty chip.
+  const hasAnalyticsArea = voc.analytics_area_id != null;
   const hasManagedSystem = managedSystem !== null;
   const severity = voc.severity;
   const analyticsAreaId = voc.analytics_area_id;

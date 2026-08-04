@@ -484,6 +484,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     const msInReadScope = msInScope(readScope, primaryMs);
     const msInEffectiveScope = msInScope(effectiveScope, primaryMs);
     const canTriage = msInScope(triageScope, primaryMs);
+    const isReporterArm = isReporter && !msInReadScope && !canTriage;
 
     // ── 4. Access matrix ─────────────────────────────────────────────────────
     const etag = `W/"${row.updatedAt.toISOString()}"`;
@@ -602,18 +603,22 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       display_id: row.displayId,
       title: row.title,
       primary_managed_system_id: primaryMs,
-      analytics_area_id: row.analyticsAreaId,
       reporter_id: row.reporterId,
-      owner_user_id: row.ownerUserId,
-      owner_team_id: row.ownerTeamId,
       severity: row.severity,
       reporter_facing_status: row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],
       source_context: row.sourceContext as VocDetailEnvelope['source_context'],
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
-      similar_count: similarCount,
-      similar: mapSimilarItems(similarItems),
+      ...(!isReporterArm
+        ? {
+            analytics_area_id: row.analyticsAreaId,
+            owner_user_id: row.ownerUserId,
+            owner_team_id: row.ownerTeamId,
+            similar_count: similarCount,
+            similar: mapSimilarItems(similarItems),
+          }
+        : {}),
       // PLAN-22 §Bug-1: detail row also carries attachment_count (matches the
       // shared schema which extends vocListItemSchema).
       attachment_count: vocAttRows.length,
@@ -751,6 +756,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       repoRead.actorReadScope(tx, actor),
     ]);
     const canTriage = msInScope(triageScope, primaryMs);
+    const isReporterArm = isReporter && !msInScope(readScope, primaryMs) && !canTriage;
 
     // Inline conversation (first 50 entries).
     const convResult = await repoRead.selectConversationPage(tx, {
@@ -816,18 +822,22 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       display_id: row.displayId,
       title: row.title,
       primary_managed_system_id: primaryMs,
-      analytics_area_id: row.analyticsAreaId,
       reporter_id: row.reporterId,
-      owner_user_id: row.ownerUserId,
-      owner_team_id: row.ownerTeamId,
       severity: row.severity,
       reporter_facing_status: row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],
       source_context: row.sourceContext as VocDetailEnvelope['source_context'],
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
-      similar_count: similarCount,
-      similar: mapSimilarItems(similarItems),
+      ...(!isReporterArm
+        ? {
+            analytics_area_id: row.analyticsAreaId,
+            owner_user_id: row.ownerUserId,
+            owner_team_id: row.ownerTeamId,
+            similar_count: similarCount,
+            similar: mapSimilarItems(similarItems),
+          }
+        : {}),
       attachment_count: vocAttRows.length,
       description_rich_content: row.descriptionRichContent,
       next_actions: [],

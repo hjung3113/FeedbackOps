@@ -155,7 +155,7 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     expect(body.similar.items.map((item) => item.id)).toEqual([peer4.id, peer3.id, peer2.id]);
   });
 
-  it('does not leak unscoped peers from a reporter-owned source VOC', async () => {
+  it('omits peer fields from an unscoped reporter-owned source VOC', async () => {
     const msAId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-scope-a`, 'Scope A');
     const msBId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-scope-b`, 'Scope B');
     const { id: actorId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('similar-scope'));
@@ -169,9 +169,9 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ similar_count: number; similar: { items: unknown[] } }>();
-    expect(body.similar_count).toBe(0);
-    expect(body.similar.items).toEqual([]);
+    const body = res.json<Record<string, unknown>>();
+    expect(Object.keys(body)).not.toContain('similar_count');
+    expect(Object.keys(body)).not.toContain('similar');
   });
 
   // ── AC2: next_reporter_states derived from transitions ───────────────────
@@ -388,6 +388,93 @@ describe.skipIf(!runIntegration)('GET /vocs/:id (#15 C4)', () => {
     const replies = body.conversation_timeline.filter((e) => e.kind === 'reporter_reply');
     for (const reply of replies) {
       expect(reply.actor_id).toBe(reporterId);
+    }
+  });
+
+  it('#337: reporter without voc.read or voc.triage receives no internal triage or peer fields', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-337-reporter`, 'Reporter Arm MS');
+    const { id: reporterActorId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('337-reporter'));
+    const cookie = await loginAs(app, externalId);
+    const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterActorId, 'Reporter arm VOC');
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterActorId, 'Reporter arm peer');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Record<string, unknown>>();
+    for (const field of [
+      'similar_count',
+      'similar',
+      'analytics_area_id',
+      'owner_user_id',
+      'owner_team_id',
+    ]) {
+      expect(Object.keys(body)).not.toContain(field);
+    }
+    for (const field of [
+      'triage_state',
+      'severity',
+      'reporter_facing_status',
+      'display_id',
+      'conversation_timeline',
+    ]) {
+      expect(Object.keys(body)).toContain(field);
+    }
+  });
+
+  it('#337: voc.read actor retains every internal triage and peer field', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-337-read`, 'Read Scope MS');
+    const { id: readerId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('337-reader'));
+    await grantCapability(dbHandle, WORKSPACE_ID, readerId, 'voc.read', msId, adminActorId);
+    const cookie = await loginAs(app, externalId);
+    const voc = await insertVoc(msId, 'Read scope VOC');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Record<string, unknown>>();
+    for (const field of [
+      'similar_count',
+      'similar',
+      'analytics_area_id',
+      'owner_user_id',
+      'owner_team_id',
+    ]) {
+      expect(Object.keys(body)).toContain(field);
+    }
+  });
+
+  it('#337: reporter with voc.read retains the full envelope', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-337-reporter-read`, 'Reporter Read MS');
+    const { id: reporterActorId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('337-reporter-read'));
+    await grantCapability(dbHandle, WORKSPACE_ID, reporterActorId, 'voc.read', msId, adminActorId);
+    const cookie = await loginAs(app, externalId);
+    const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterActorId, 'Reporter read VOC');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs/${voc.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Record<string, unknown>>();
+    for (const field of [
+      'similar_count',
+      'similar',
+      'analytics_area_id',
+      'owner_user_id',
+      'owner_team_id',
+    ]) {
+      expect(Object.keys(body)).toContain(field);
     }
   });
 
