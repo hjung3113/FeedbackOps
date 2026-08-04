@@ -378,6 +378,13 @@ a {
   font-size: var(--text-sm);
   color: var(--text-primary);
   user-select: none;
+  /* Reset so a real <button> can carry this class and stay keyboard-reachable
+     without changing how the existing div-based items look. */
+  border: 0;
+  width: 100%;
+  text-align: left;
+  background: none;
+  font-family: inherit;
 }
 .popover-item:hover { background: var(--surface-row-hover); }
 .popover-item .check-box {
@@ -496,6 +503,10 @@ a {
   place-items: center;
   font-weight: 600;
   font-size: 12px;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 /* --- Sidebar --- */
