@@ -75,3 +75,5 @@ already populated.
   detail envelope placement.
 - Consumers must treat the detail endpoint as non-conditional while this
   projection is peer-derived.
+- The VOC create surface consumes this heuristic through its pre-submit peers
+  panel, before a source VOC exists.

@@ -608,6 +608,7 @@ but execution has not started until the Task moves to Todo or Doing.
 ```text
 POST /vocs
 GET /vocs
+GET /vocs/pre-submit-peers?managed_system_id=<uuid>
 GET /vocs/:id
 GET /vocs/:id/conversation
 PATCH /vocs/:id
@@ -1045,6 +1046,15 @@ link. Only Finding-domain commands may write these tuples; the forthcoming
 relation.
 
 ### VOC Similarity Projection
+
+`GET /vocs/pre-submit-peers?managed_system_id=<uuid>` is an authenticated,
+read-only pre-submit peer query. It returns `200 { items: [{ id, display_id,
+title, created_at }] }`: at most three active, authorized VOCs in the session
+workspace and requested primary Managed System, ordered `created_at DESC, id
+DESC`. `managed_system_id` is required and must be a UUID (`422
+validation.failed`); a nonexistent or unreadable Managed System and no peers
+are normal `200 { items: [] }` results. It uses the per-actor read rate-limit
+tier and must not expose embedding availability, scores, totals, or counts.
 
 `GET /vocs` returns a real `similar_count` for each list item. `GET /vocs/:id`
 returns that same sole total plus `similar: { items }`; items are capped at

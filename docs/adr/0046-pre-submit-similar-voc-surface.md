@@ -4,7 +4,9 @@ Date: 2026-08-03
 
 ## Status
 
-Proposed
+Accepted (2026-08-04). The three §Open questions were answered by the user on
+2026-08-04; the answers are recorded in §Resolved open questions and are now
+part of this decision.
 
 ## Context
 
@@ -51,6 +53,17 @@ unavailable-state action in that panel. Adding “join an existing report” or
 “continue as a new report” would therefore be a prototype deviation and needs
 explicit user approval plus a prototype update. This ADR does not invent it.
 
+**Amendment 2026-08-04.** The panel's item was never non-interactive: the
+stylesheet already gave `.similar-mini` `cursor: pointer` and a
+`--surface-row-hover` hover background (`docs/design-prototype/styles.css`,
+“Similar VOC mini cards”). The prototype declared the affordance and omitted
+only the handler. Under the approved contract in §Resolved open questions the
+prototype was amended to wire that existing affordance to
+`onNavigate('voc', null, v.id)` — the same three-argument navigation other
+prototype screens already use to open a record (`screen-voc.jsx:284,293`) — and
+the item element became a `<button type="button">` with the class unchanged.
+No copy, field, count, ordering, or new control was added.
+
 The decision below matches the prototype's same-Managed-System, first-three
 shape and displayed fields. Production must still substitute the ADR-0031
 authorization predicate for the prototype's unrestricted `window.Vocs` filter;
@@ -78,6 +91,15 @@ VocCreateScreen.tsx:131-147,371-375`).
 
 No similarity score or total beyond the returned items is exposed. A zero-item
 result is a legitimate authorized-peer result, not an embedding failure.
+
+**Field correction 2026-08-04.** Each item is
+`{ id, display_id, title, created_at }`, not the `{ id, title, created_at }`
+first written in §Implementation chunks. The prototype's rendered
+`{v.id} · {v.createdAt}` is the human record label (`VOC-1000` in
+`docs/design-prototype/data.js`), which in production is `display_id`; the UUID
+`id` is separately required as the navigation target approved in §Resolved open
+questions. Returning only one of the two would make either the rendered text or
+the navigation impossible. No other field is added.
 
 ### D2 — Do not reuse saved-recommendation unavailable states for this panel
 
@@ -146,6 +168,23 @@ cluster operation; they are not equivalent. It must also define what
 “continue” records, if anything. Until then the existing VOC submit action
 remains unchanged.
 
+**Resolved 2026-08-04 — “join” is navigation only.** The user selected option
+(a): activating a candidate navigates to that existing VOC and creates no new
+record and no persisted relationship. Consequently:
+
+- There is no new table, column, audit event, idempotency key, or cluster
+  side effect in this issue. The panel stays read-only end to end.
+- “Continue as a new report” records nothing and needs no control: it is the
+  unchanged existing submit action. Not adding a second button is part of the
+  decision, not an omission.
+- Navigating away from a create form abandons an unsaved draft. The draft is
+  already client-only — this ADR does not add draft persistence, and the panel
+  must therefore not navigate without the reporter's explicit activation.
+- The destination is the existing VOC detail surface with its normal
+  authorization. A candidate is only listed when the ADR-0031 predicate already
+  admits it, so navigation cannot widen what the actor can read; the detail
+  route re-authorizes independently regardless.
+
 ## Consequences
 
 - The first #293 implementation can be fully offline and provider-independent.
@@ -211,10 +250,12 @@ No local authority justifies that additional surface in this design-only issue.
   authorization behavior.
 - `docs/adr/0031-similar-voc-same-managed-system-heuristic.md` — **Decision /
   Consequences**: record the new create-surface consumer, if shipped.
-- `docs/design-prototype/screen-voc-create.jsx:212-227` and
-  `docs/design-prototype/data.js` — only if the user approves any new action,
-  unavailable state, or different displayed data; otherwise do not change the
-  prototype.
+- `docs/design-prototype/screen-voc-create.jsx` and
+  `docs/design-prototype/styles.css` — **already done in the ADR-amendment
+  commit** (2026-08-04): the candidate item is a `<button type="button">` wired
+  to `onNavigate('voc', null, v.id)`, and `.similar-mini` carries the button
+  reset needed to keep its rendered appearance identical. `data.js` was not
+  changed and must not be — no new displayed field was approved.
 
 ## Implementation chunks
 
@@ -232,21 +273,42 @@ No local authority justifies that additional surface in this design-only issue.
    displayed strings and a changed Managed System to assert stale candidates
    disappear; a zero response must assert the `0건` state. No mutation hook,
    submit interception, or provider mock belongs in this chunk.
-3. **Only after the open product decision is resolved — action design.** If
-   approved, first amend the prototype and this ADR, then implement the chosen
-   join/continue contract with authorization, audit, idempotency, and an
-   end-to-end test whose oracle is the resulting persisted relationship (or the
-   absence of a new VOC), not merely a button click.
+3. **Navigation action — unblocked 2026-08-04, and it folds into chunk 2.**
+   The prototype and this ADR were amended first, as required. Because the
+   approved contract is navigation-only, there is no authorization, audit, or
+   idempotency surface to build and nothing is persisted; the whole action is
+   the candidate element being an activatable control that routes to the
+   existing VOC detail. It therefore must not be a separate chunk from chunk 2
+   — the same component file owns both, and splitting them would put two chunks
+   on one file.
 
-## Open questions
+   Its oracle is *not* "a button was clicked": assert the router received the
+   selected candidate's UUID (not its `display_id`, and not the first
+   candidate's id when a later one is activated), and assert that activating a
+   candidate issues **no** create request. A test that only asserts a click
+   handler fired does not distinguish this contract from the rejected
+   create-a-linked-VOC contract.
 
-1. The prototype is silent on the issue's required actions. Which approved
-   product contract is intended: (a) navigate to the existing VOC and create no
-   new record, (b) create a new VOC with a defined relationship to the selected
-   one, or (c) another explicitly specified contract? What is the explicit
-   “continue as new” acknowledgement and persistence rule?
-2. Does the user approve adding those controls as a prototype deviation? If so,
-   which exact copy, placement, and post-action destination should the prototype
-   specify?
-3. Is semantic draft preview a separately funded/product-approved follow-up?
-   If yes, what per-actor and per-workspace paid-call budgets are acceptable?
+## Resolved open questions
+
+Answered by the user on 2026-08-04. Nothing here remains open; these answers
+are binding on implementation.
+
+1. **Which “join” contract?** → **(a) navigate to the existing VOC, create no
+   new record.** No relationship is persisted. See §D5 *Resolved*.
+2. **Approve the prototype deviation?** → **Approved, and the prototype was
+   amended first** (`screen-voc-create.jsx`, `styles.css`). The deviation is
+   narrower than anticipated: the stylesheet already declared the item
+   interactive, so only the handler and the element type changed. Copy,
+   placement, fields, and count are unchanged from the original prototype. See
+   §Prototype fidelity *Amendment*.
+3. **Buy the draft embedding preview (candidate A)?** → **No.** It is split out
+   of #293 into its own issue and is not funded here. No per-actor or
+   per-workspace paid-call budget was set, so the quota design §D4 requires
+   does not exist and candidate A must not be started until it does. §D4 stands
+   unchanged as the rejection rationale for #293.
+
+Consequence for issue closure: #293 is now unblocked for chunks 1–3, but the
+§Consequences *Conductor judgment* warning still holds — candidate B shows only
+the latest three peers per Managed System and does not guarantee the reported
+duplicate is among them.
