@@ -67,7 +67,7 @@ import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
-import { Callout, PreviewModal, RichEditor } from '@fops/ui';
+import { Button, Callout, PreviewModal, RichEditor } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Megaphone } from 'lucide-react';
@@ -143,6 +143,7 @@ export function PublicUpdateComposer({
     voc.reporter_facing_status,
   );
   const [previewOpen, setPreviewOpen] = useState(false);
+  const submitInFlightRef = useRef(false);
 
   // PLAN-22 C7a: composer-level attachment dropzone state.
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
@@ -166,6 +167,7 @@ export function PublicUpdateComposer({
 
   const mutation = useVocPublicUpdateMutation({
     onSuccess: () => {
+      submitInFlightRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
       // clear draft (calls onDraftChange?.(null) when controlled)
       setDraftDoc(null);
@@ -173,14 +175,22 @@ export function PublicUpdateComposer({
       toast.success('공개 업데이트가 게시되었습니다.');
     },
     onError: (error) => {
+      submitInFlightRef.current = false;
       if (getComposerErrorTone(error.code) == null) {
         toast.error(`${error.code}: ${error.message}`);
       }
     },
   });
 
+  const mutationError = mutation.error as ApiError | null;
+  const isIdempotencyLocked =
+    mutationError != null && mutationError.code === 'conflict.idempotency_key_reuse';
+  const isSubmitBlocked =
+    isEmpty || mutation.isPending || isGateBlocked || isIdempotencyLocked || attachmentsUploading;
+
   function handleSubmit() {
-    if (!draftDoc) return;
+    if (!draftDoc || isSubmitBlocked || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     mutation.mutate({
       vocId: voc.id,
       ifMatch: voc.updated_at,
@@ -191,6 +201,12 @@ export function PublicUpdateComposer({
         attachment_ids: attachmentIds,
       },
     });
+  }
+
+  function handlePreviewPublish() {
+    if (isSubmitBlocked) return;
+    setPreviewOpen(false);
+    handleSubmit();
   }
 
   // Owner for the ReporterStatusChangeBlock preview card + ComposerPublicPreview.
@@ -219,10 +235,6 @@ export function PublicUpdateComposer({
   // ── Error matrix ─────────────────────────────────────────────────────────────
   // Inline Callout copy comes from backend detail.reason per D-5.6 in PLAN-21.
   // conflict.idempotency_key_reuse → lock both Submit + Preview until VOC switch.
-
-  const mutationError = mutation.error as ApiError | null;
-  const isIdempotencyLocked =
-    mutationError != null && mutationError.code === 'conflict.idempotency_key_reuse';
 
   const inlineCalloutTone = mutationError != null ? getComposerErrorTone(mutationError.code) : null;
   const inlineCalloutReason =
@@ -300,7 +312,7 @@ export function PublicUpdateComposer({
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
         isSubmitting={mutation.isPending}
-        isSubmitDisabled={isGateBlocked || isIdempotencyLocked || attachmentsUploading}
+        isSubmitDisabled={isSubmitBlocked}
         isPreviewDisabled={isIdempotencyLocked}
         statusHint={statusHint}
       />
@@ -317,6 +329,20 @@ export function PublicUpdateComposer({
           nextStatus={nextStatus}
           draftDoc={draftDoc}
         />
+        <div className="flex justify-end gap-2 border-t border-border-subtle pt-3">
+          <Button type="button" variant="secondary" size="sm" onClick={() => setPreviewOpen(false)}>
+            Continue editing
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            disabled={isSubmitBlocked}
+            onClick={handlePreviewPublish}
+          >
+            Publish update
+          </Button>
+        </div>
       </PreviewModal>
     </div>
   );
