@@ -219,6 +219,10 @@ export function ManagedSystemsBody({
 }) {
   const qc = useQueryClient();
   const [editTarget, setEditTarget] = useState<ManagedSystemDto | null>(null);
+  // Archived rows cannot be restored (ADR-0019 §A: archived rows are immutable).
+  // The designed remedy for "archived by mistake" is re-registering the same
+  // slug (ADR-0017), so Configure hands the archived row's fields to Register.
+  const [reregisterFrom, setReregisterFrom] = useState<ManagedSystemDto | null>(null);
 
   const listQuery = useQuery({
     queryKey: [...MANAGED_SYSTEMS_KEY, { includeArchived }] as const,
@@ -349,10 +353,16 @@ export function ManagedSystemsBody({
       </div>
 
       <RegisterDialog
+        key={reregisterFrom?.id ?? 'blank'}
         open={registerOpen}
-        onOpenChange={setRegisterOpen}
+        prefill={reregisterFrom}
+        onOpenChange={(open) => {
+          setRegisterOpen(open);
+          if (!open) setReregisterFrom(null);
+        }}
         onSaved={async () => {
           setRegisterOpen(false);
+          setReregisterFrom(null);
           await invalidate();
         }}
       />
@@ -360,6 +370,11 @@ export function ManagedSystemsBody({
         target={editTarget}
         onOpenChange={(open) => {
           if (!open) setEditTarget(null);
+        }}
+        onReregister={(target) => {
+          setEditTarget(null);
+          setReregisterFrom(target);
+          setRegisterOpen(true);
         }}
         onSaved={async () => {
           setEditTarget(null);
@@ -485,16 +500,19 @@ function RegistryRow({
 
 function RegisterDialog({
   open,
+  prefill,
   onOpenChange,
   onSaved,
 }: {
   open: boolean;
+  /** Archived row being re-registered under the same slug, if any. */
+  prefill?: ManagedSystemDto | null;
   onOpenChange: (v: boolean) => void;
   onSaved: () => Promise<void>;
 }) {
-  const [slug, setSlug] = useState('');
-  const [name, setName] = useState('');
-  const [externalKey, setExternalKey] = useState('');
+  const [slug, setSlug] = useState(prefill?.slug ?? '');
+  const [name, setName] = useState(prefill?.name ?? '');
+  const [externalKey, setExternalKey] = useState(prefill?.external_key ?? '');
   const [owner, setOwner] = useState<OwnerSelection>({ kind: 'none' });
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<'slug' | 'name', string>>>({});
@@ -518,8 +536,12 @@ function RegisterDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="ms-register-dialog">
         <DialogHeader>
-          <DialogTitle>Register system</DialogTitle>
-          <DialogDescription>새 Managed System 을 레지스트리에 추가합니다.</DialogDescription>
+          <DialogTitle>{prefill ? '보관된 시스템 재등록' : 'Register system'}</DialogTitle>
+          <DialogDescription>
+            {prefill
+              ? `보관된 "${prefill.slug}" 를 같은 slug로 다시 등록합니다. 보관 해제가 아니라 새 레코드가 만들어지며, 기존 VOC·Finding·Task 등 과거 참조는 보관된 시스템에 그대로 남습니다.`
+              : '새 Managed System 을 레지스트리에 추가합니다.'}
+          </DialogDescription>
         </DialogHeader>
         <form
           data-testid="create-managed-system-form"
@@ -623,16 +645,25 @@ function RegisterDialog({
 function EditDialog({
   target,
   onOpenChange,
+  onReregister,
   onSaved,
 }: {
   target: ManagedSystemDto | null;
   onOpenChange: (v: boolean) => void;
+  onReregister: (target: ManagedSystemDto) => void;
   onSaved: () => Promise<void>;
 }) {
   return (
     <Dialog open={target !== null} onOpenChange={onOpenChange}>
       <DialogContent data-testid="ms-edit-dialog">
-        {target && <EditForm key={target.id} target={target} onSaved={onSaved} />}
+        {target && (
+          <EditForm
+            key={target.id}
+            target={target}
+            onReregister={onReregister}
+            onSaved={onSaved}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -640,11 +671,14 @@ function EditDialog({
 
 function EditForm({
   target,
+  onReregister,
   onSaved,
 }: {
   target: ManagedSystemDto;
+  onReregister: (target: ManagedSystemDto) => void;
   onSaved: () => Promise<void>;
 }) {
+  const isArchived = target.archived_at !== null;
   const [name, setName] = useState(target.name);
   const [externalKey, setExternalKey] = useState(target.external_key ?? '');
   const [owner, setOwner] = useState<OwnerSelection>(() => ownerSelection(target));
@@ -703,6 +737,7 @@ function EditForm({
             id={`ms-edit-name-${target.slug}`}
             value={name}
             onChange={(e) => setName(e.target.value)}
+            readOnly={isArchived}
             data-testid={`name-input-${target.slug}`}
           />
         </div>
@@ -720,6 +755,7 @@ function EditForm({
             id={`ms-edit-key-${target.slug}`}
             value={externalKey}
             onChange={(e) => setExternalKey(e.target.value)}
+            readOnly={isArchived}
             data-testid={`external-key-input-${target.slug}`}
           />
         </div>
@@ -728,8 +764,20 @@ function EditForm({
             {error}
           </p>
         )}
+        {isArchived && (
+          <p
+            className="text-sm text-text-muted"
+            data-testid={`archived-immutable-note-${target.slug}`}
+          >
+            보관된 시스템은 수정할 수 없고 보관 해제도 지원하지 않습니다. 실수로 보관했다면 같은
+            slug로 다시 등록하세요 — 새 레코드가 만들어지고, 과거 참조는 이 보관된 시스템에 그대로
+            남습니다.
+          </p>
+        )}
         <DialogFooter className="justify-between">
-          {target.archived_at === null ? (
+          {isArchived ? (
+            <span className="text-sm text-text-muted">이미 보관됨</span>
+          ) : (
             <Button
               type="button"
               variant="destructive"
@@ -739,16 +787,26 @@ function EditForm({
             >
               Archive
             </Button>
-          ) : (
-            <span className="text-sm text-text-muted">이미 보관됨</span>
           )}
-          <Button
-            type="submit"
-            disabled={updateMutation.isPending}
-            data-testid={`save-${target.slug}`}
-          >
-            Save
-          </Button>
+          {isArchived ? (
+            // No Save: PATCH against an archived row is 409 conflict.record_archived
+            // by contract (ADR-0019 §A), so offering it can only fail.
+            <Button
+              type="button"
+              onClick={() => onReregister(target)}
+              data-testid={`reregister-${target.slug}`}
+            >
+              같은 slug로 재등록
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              disabled={updateMutation.isPending}
+              data-testid={`save-${target.slug}`}
+            >
+              Save
+            </Button>
+          )}
         </DialogFooter>
       </form>
     </>

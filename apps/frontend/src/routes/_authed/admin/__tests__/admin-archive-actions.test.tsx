@@ -133,4 +133,39 @@ describe('admin archive actions', () => {
     expect(screen.getByText('이미 보관됨')).toBeInTheDocument();
     expect(screen.queryByTestId(`archive-${ARCHIVED_MS_SLUG}`)).not.toBeInTheDocument();
   });
+
+  test('#324 an archived Managed System offers re-registration instead of a Save that must 409', async () => {
+    installFetch();
+    renderPage('/admin/managed-systems', ManagedSystemsAdminPage);
+    await waitFor(() =>
+      expect(screen.getByTestId(`managed-system-row-${ACTIVE_MS_SLUG}`)).toBeInTheDocument(),
+    );
+
+    // Active row first: it keeps Save. Without this the archived assertion below
+    // would also pass against a build that simply never renders Save.
+    fireEvent.click(screen.getByTestId(`ms-configure-${ACTIVE_MS_SLUG}`));
+    expect(await screen.findByTestId(`save-${ACTIVE_MS_SLUG}`)).toBeInTheDocument();
+    expect(screen.queryByTestId(`reregister-${ACTIVE_MS_SLUG}`)).not.toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    fireEvent.click(screen.getByTestId('ms-filter-button'));
+    fireEvent.click(await screen.findByTestId('ms-filter-include-archived'));
+    await waitFor(() =>
+      expect(screen.getByTestId(`managed-system-row-${ARCHIVED_MS_SLUG}`)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId(`ms-configure-${ARCHIVED_MS_SLUG}`));
+
+    // PATCH against an archived row is 409 conflict.record_archived by contract,
+    // so Save must be gone rather than merely disabled.
+    expect(
+      await screen.findByTestId(`archived-immutable-note-${ARCHIVED_MS_SLUG}`),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId(`save-${ARCHIVED_MS_SLUG}`)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId(`reregister-${ARCHIVED_MS_SLUG}`));
+
+    const register = await screen.findByTestId('ms-register-dialog');
+    expect(register).toBeInTheDocument();
+    expect(screen.getByTestId('create-slug')).toHaveValue(ARCHIVED_MS_SLUG);
+  });
 });
