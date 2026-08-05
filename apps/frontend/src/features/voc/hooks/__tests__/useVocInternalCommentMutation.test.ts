@@ -49,7 +49,10 @@ const BASE_VARS: InternalCommentVars = {
   vocId: VOC_ID,
   ifMatch: UPDATED_AT,
   body: {
-    body_rich_content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    body_rich_content: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body' }] }],
+    },
     mentions: MENTION_IDS,
     attachment_ids: ['30000000-0000-4000-8000-000000000005'],
   },

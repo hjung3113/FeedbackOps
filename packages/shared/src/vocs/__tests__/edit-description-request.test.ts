@@ -7,6 +7,12 @@ const validDoc = {
   type: 'doc' as const,
   content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }],
 };
+const blankDoc = {
+  type: 'doc' as const,
+  content: [{ type: 'paragraph', content: [{ type: 'text', text: '   ' }] }],
+};
+const emptyDoc = { type: 'doc' as const, content: [] };
+const mentionDoc = { type: 'doc' as const, content: [{ type: 'mention' }] };
 
 describe('editDescriptionRequestSchema', () => {
   it('accepts all 3 fields', () => {
@@ -28,6 +34,19 @@ describe('editDescriptionRequestSchema', () => {
       description_rich_content: validDoc,
     });
     expect(result.description_rich_content).toEqual(validDoc);
+  });
+
+  it.each([
+    ['whitespace-only paragraph', blankDoc],
+    ['structurally empty document', emptyDoc],
+  ])('rejects %s description_rich_content', (_name, description_rich_content) => {
+    expect(() => editDescriptionRequestSchema.parse({ description_rich_content })).toThrow();
+  });
+
+  it('accepts a mention-only description_rich_content as content', () => {
+    expect(
+      editDescriptionRequestSchema.safeParse({ description_rich_content: mentionDoc }).success,
+    ).toBe(true);
   });
 
   it('accepts attachment_ids only (PLAN-22 C7b)', () => {
