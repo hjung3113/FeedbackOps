@@ -156,12 +156,13 @@ export function PublicUpdateComposer({
   const isEmpty = isTipTapDocBlank(draftDoc);
 
   const mutation = useVocPublicUpdateMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       submitInFlightRef.current = false;
+      queryClient.setQueryData(['voc', voc.id], data.voc);
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
       // clear draft (calls onDraftChange?.(null) when controlled)
       setDraftDoc(null);
-      setNextStatus(voc.reporter_facing_status);
+      setNextStatus(data.voc.reporter_facing_status);
       toast.success('공개 업데이트가 게시되었습니다.');
     },
     onError: (error) => {

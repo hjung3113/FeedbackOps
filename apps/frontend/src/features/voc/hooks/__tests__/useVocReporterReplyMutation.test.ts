@@ -11,8 +11,10 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api';
-import { reporterReplyRequestSchema } from '@fops/shared';
+import { type VocDetailEnvelope, reporterReplyRequestSchema } from '@fops/shared';
+import { DETAIL_ENVELOPE } from '../../components/detail/__tests__/_fixtures';
 import {
+  type ReporterReplySuccess,
   type ReporterReplyVars,
   useVocReporterReplyMutation,
 } from '../useVocReporterReplyMutation';
@@ -42,6 +44,29 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const VOC_ID = '00000000-0000-0000-0000-000000000001';
 const UPDATED_AT = '2026-05-01T00:00:00.000Z';
+
+const UPDATED_VOC: VocDetailEnvelope = {
+  ...DETAIL_ENVELOPE,
+  id: VOC_ID,
+  primary_managed_system_id: '00000000-0000-0000-0000-000000000010',
+  reporter_id: '00000000-0000-0000-0000-000000000011',
+  reporter_facing_status: 'reviewing',
+  updated_at: '2026-05-02T00:00:00.000Z',
+};
+
+const SUCCESS_ENVELOPE: ReporterReplySuccess = {
+  reporter_reply: {
+    id: '00000000-0000-0000-0000-000000000013',
+    voc_id: VOC_ID,
+    actor_id: '00000000-0000-0000-0000-000000000011',
+    body_rich_content: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body' }] }],
+    },
+    created_at: '2026-05-02T00:00:00.000Z',
+  },
+  voc: UPDATED_VOC,
+};
 
 const REPLY_VARS: ReporterReplyVars = {
   vocId: VOC_ID,
@@ -85,7 +110,7 @@ describe('useVocReporterReplyMutation', () => {
       if (init?.body) {
         capturedBody = JSON.parse(init.body as string);
       }
-      return jsonResponse({ id: VOC_ID, updated_at: '2026-05-02T00:00:00.000Z' });
+      return jsonResponse(SUCCESS_ENVELOPE, 201);
     }) as typeof globalThis.fetch;
 
     const onSuccess = vi.fn();
@@ -119,6 +144,7 @@ describe('useVocReporterReplyMutation', () => {
     expect(reporterReplyRequestSchema.safeParse(capturedBody).success).toBe(true);
 
     expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onSuccess.mock.calls[0]?.[0]).toEqual(SUCCESS_ENVELOPE);
   });
 
   // ── 2. Error: idempotency key reuse ───────────────────────────────────────
