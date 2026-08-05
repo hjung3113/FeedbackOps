@@ -11,11 +11,12 @@
 //   Idempotency-Key: auto-minted by apiClient (POST/PATCH/DELETE)
 //   If-Match: voc.updated_at (optimistic concurrency)
 //
-// On 200: caller should invalidate ['voc', vocId] and clear draft.
+// On 201: caller should invalidate ['voc', vocId] and clear draft.
 // Toast copy: 리포터에게 답장이 전송되었습니다.
 
 import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';
+import type { VocDetailEnvelope } from '@fops/shared';
 import type { TipTapDoc } from '@fops/ui';
 import { type UseMutationResult, useMutation } from '@tanstack/react-query';
 
@@ -37,8 +38,14 @@ export interface ReporterReplyVars {
 }
 
 export interface ReporterReplySuccess {
-  id: string;
-  updated_at: string;
+  reporter_reply: {
+    id: string;
+    voc_id: string;
+    actor_id: string;
+    body_rich_content: unknown;
+    created_at: string;
+  };
+  voc: VocDetailEnvelope;
 }
 
 export interface UseVocReporterReplyMutationArgs {

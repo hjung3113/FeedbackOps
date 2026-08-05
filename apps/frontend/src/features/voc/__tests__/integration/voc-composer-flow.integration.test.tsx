@@ -11,6 +11,7 @@
 // C6.3 of slice3 #21.
 // Test framework: Vitest + @testing-library/react (O-6 in PLAN-21).
 
+import type { PublicUpdateSuccess } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import type { MeResponse } from '@/lib/api/auth';
 import type { VocDetailEnvelope } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -147,6 +148,35 @@ const VOC_GATE_BLOCKED: VocDetailEnvelope = {
   ...VOC_ADMIN_VIEW,
   reporter_status_gate: { blocking_for: ['progress'], reason: '연결된 Task가 아직 진행 중입니다.' },
 };
+
+const VOC_AFTER_PUBLIC_UPDATE: VocDetailEnvelope = {
+  ...VOC_ADMIN_VIEW,
+  reporter_facing_status: 'resolved',
+  updated_at: '2026-05-01T12:00:00.000Z',
+  next_reporter_states: { allowed: ['closed', 'reopened'], forbidden: {} },
+};
+
+function publicUpdateEnvelope(
+  id: string,
+  voc: VocDetailEnvelope = VOC_ADMIN_VIEW,
+): PublicUpdateSuccess {
+  return {
+    public_update: {
+      id,
+      voc_id: VOC_ADMIN_VIEW.id,
+      body_rich_content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: '공개 업데이트' }] }],
+      },
+      reporter_facing_status_before: VOC_ADMIN_VIEW.reporter_facing_status,
+      reporter_facing_status_after: voc.reporter_facing_status,
+      skip_public_update: false,
+      skip_reason: null,
+      created_at: '2026-05-01T12:00:00.000Z',
+    },
+    voc,
+  };
+}
 
 const ATTACHMENT = {
   id: '00000000-0000-0000-0000-000000000200',
@@ -285,11 +315,7 @@ describe('Composer flow — integration (C6.3)', () => {
       capturedUrl = typeof input === 'string' ? input : input.toString();
       capturedMethod = init?.method ?? 'GET';
       if (init?.body) capturedBody = JSON.parse(init.body as string);
-      return jsonResponse({
-        id: 'pub-update-001',
-        voc_id: VOC_ADMIN_VIEW.id,
-        created_at: '2026-05-01T12:00:00.000Z',
-      });
+      return jsonResponse(publicUpdateEnvelope('pub-update-001', VOC_AFTER_PUBLIC_UPDATE), 201);
     }) as typeof globalThis.fetch;
 
     const Wrapper = makeWrapper();
@@ -303,6 +329,9 @@ describe('Composer flow — integration (C6.3)', () => {
     // Type into the public-update rich editor (mocked as textarea)
     const editor = screen.getByTestId('rich-editor-public-update');
     fireEvent.change(editor, { target: { value: '공개 업데이트 내용입니다.' } });
+    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
+      target: { value: 'resolved' },
+    });
 
     // Find the Publish button on the ComposerFooter and click it
     const publishBtn = screen.getByRole('button', { name: /publish update/i });
@@ -321,7 +350,7 @@ describe('Composer flow — integration (C6.3)', () => {
     const body = capturedBody as Record<string, unknown>;
     // Must have body_rich_content and next_reporter_facing_status
     expect(body.body_rich_content).toBeTruthy();
-    expect(body.next_reporter_facing_status).toBeTruthy();
+    expect(body.next_reporter_facing_status).toBe('resolved');
 
     // Success toast fired
     await waitFor(() => {
@@ -371,11 +400,7 @@ describe('Composer flow — integration (C6.3)', () => {
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
 
     globalThis.fetch = vi.fn(async () =>
-      jsonResponse({
-        id: 'pub-update-002',
-        voc_id: VOC_ADMIN_VIEW.id,
-        created_at: '2026-05-01T12:00:00.000Z',
-      }),
+      jsonResponse(publicUpdateEnvelope('pub-update-002'), 201),
     ) as typeof globalThis.fetch;
 
     render(
@@ -403,7 +428,7 @@ describe('Composer flow — integration (C6.3)', () => {
     const requests: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') requests.push({ input, init });
-      return jsonResponse({ id: 'pub-update-preview-001' });
+      return jsonResponse(publicUpdateEnvelope('pub-update-preview-001'), 201);
     }) as typeof globalThis.fetch;
 
     const Wrapper = makeWrapper();
@@ -578,7 +603,7 @@ describe('Composer flow — integration (C6.3)', () => {
       body_rich_content: { content: [{ content: [{ text: '프리뷰 연타 방지' }] }] },
     });
     await act(async () => {
-      resolvePost?.(jsonResponse({ id: 'pub-update-preview-rapid-001' }));
+      resolvePost?.(jsonResponse(publicUpdateEnvelope('pub-update-preview-rapid-001'), 201));
     });
   });
 
@@ -588,7 +613,7 @@ describe('Composer flow — integration (C6.3)', () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       capturedRequest = { input, init };
       if (init?.method === 'POST') capturedBody = JSON.parse(init.body as string);
-      return jsonResponse({ id: 'pub-update-footer-001' });
+      return jsonResponse(publicUpdateEnvelope('pub-update-footer-001'), 201);
     }) as typeof globalThis.fetch;
     const Wrapper = makeWrapper();
     render(

@@ -9,8 +9,10 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { internalCommentRequestSchema } from '@fops/shared';
+import { type VocDetailEnvelope, internalCommentRequestSchema } from '@fops/shared';
+import { DETAIL_ENVELOPE } from '../../components/detail/__tests__/_fixtures';
 import {
+  type InternalCommentSuccess,
   type InternalCommentVars,
   useVocInternalCommentMutation,
 } from '../useVocInternalCommentMutation';
@@ -44,6 +46,29 @@ const MENTION_IDS = [
   '30000000-0000-4000-8000-000000000003',
   '30000000-0000-4000-8000-000000000004',
 ];
+
+const UPDATED_VOC: VocDetailEnvelope = {
+  ...DETAIL_ENVELOPE,
+  id: VOC_ID,
+  primary_managed_system_id: '00000000-0000-0000-0000-000000000010',
+  reporter_id: '00000000-0000-0000-0000-000000000011',
+  reporter_facing_status: 'reviewing',
+  updated_at: '2026-05-02T00:00:00.000Z',
+};
+
+const SUCCESS_ENVELOPE: InternalCommentSuccess = {
+  internal_comment: {
+    id: '00000000-0000-0000-0000-000000000014',
+    voc_id: VOC_ID,
+    actor_id: '00000000-0000-0000-0000-000000000011',
+    body_rich_content: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body' }] }],
+    },
+    created_at: '2026-05-02T00:00:00.000Z',
+  },
+  voc: UPDATED_VOC,
+};
 
 const BASE_VARS: InternalCommentVars = {
   vocId: VOC_ID,
@@ -88,7 +113,7 @@ describe('useVocInternalCommentMutation', () => {
       if (init?.body) {
         capturedBody = JSON.parse(init.body as string);
       }
-      return jsonResponse({ id: 'comment-uuid-1', created_at: '2026-05-02T00:00:00.000Z' });
+      return jsonResponse(SUCCESS_ENVELOPE, 201);
     }) as typeof globalThis.fetch;
 
     const onSuccess = vi.fn();
@@ -120,5 +145,6 @@ describe('useVocInternalCommentMutation', () => {
     expect(internalCommentRequestSchema.safeParse(capturedBody).success).toBe(true);
 
     expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onSuccess.mock.calls[0]?.[0]).toEqual(SUCCESS_ENVELOPE);
   });
 });

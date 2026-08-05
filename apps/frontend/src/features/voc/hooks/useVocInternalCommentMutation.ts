@@ -7,10 +7,11 @@
 //   Idempotency-Key: auto-minted by apiClient
 //   If-Match: voc.updated_at (optimistic concurrency)
 //
-// On 200: caller should invalidate ['voc', vocId], clear draft, toast.
+// On 201: caller should invalidate ['voc', vocId], clear draft, toast.
 
 import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';
+import type { VocDetailEnvelope } from '@fops/shared';
 import type { TipTapDoc } from '@fops/ui';
 import { type UseMutationResult, useMutation } from '@tanstack/react-query';
 
@@ -35,8 +36,14 @@ export interface InternalCommentVars {
 }
 
 export interface InternalCommentSuccess {
-  id: string;
-  created_at: string;
+  internal_comment: {
+    id: string;
+    voc_id: string;
+    actor_id: string;
+    body_rich_content: unknown;
+    created_at: string;
+  };
+  voc: VocDetailEnvelope;
 }
 
 export interface UseVocInternalCommentMutationArgs {
