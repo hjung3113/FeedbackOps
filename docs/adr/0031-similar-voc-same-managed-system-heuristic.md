@@ -46,14 +46,23 @@ statuses and all ages are eligible. This is deliberately a weak heuristic, not
 > because the provider is disabled or the source has not yet been embedded, the
 > heuristic remains the only related-VOC signal.
 
-> **Amended 2026-08-05 (#337).** Reporter ownership does not grant peer read
-> access. A reporter arm without `voc.read` or `voc.triage` receives a full
-> detail envelope without peer-derived or internal-triage fields.
+> **Amended 2026-08-05 (#337).** A reporter arm — an actor who reported the
+> source VOC but holds neither `voc.read` nor `voc.triage` on its Managed
+> System — receives a full detail envelope with the peer-derived and
+> internal-triage fields omitted entirely, not zeroed.
+>
+> **Corrected 2026-08-05 (#347).** The #337 amendment first restated the peer
+> rule below as `voc.read` scope alone, dropping the reporter-ownership arm.
+> That was wrong and did not match `similarVocVisibilityPredicate`: the arm
+> admits only VOCs the actor themself reported, so it never reveals that
+> another reporter submitted a peer. The rule below is restored; #337 narrows
+> which *envelope* carries peer fields, not which *peers* are visible.
 
 A peer is visible only when its Managed System is in the actor's `voc.read`
-scope. A triage-only summary envelope and a reporter arm without `voc.read` or
-`voc.triage` expose neither `similar_count` nor `similar.items`: a full
-envelope for an actor's own VOC does not grant peer read access.
+scope or the actor reported that peer. A triage-only summary envelope and a
+reporter arm without `voc.read` or `voc.triage` expose neither `similar_count`
+nor `similar.items`: a full envelope for an actor's own VOC does not grant
+peer read access.
 
 `similar_count` is the sole authorized-peer total. Detail adds
 `similar.items`, ordered by `created_at DESC, id DESC` and capped at three,
