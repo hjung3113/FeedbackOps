@@ -47,7 +47,10 @@ const REPLY_VARS: ReporterReplyVars = {
   vocId: VOC_ID,
   ifMatch: UPDATED_AT,
   body: {
-    body_rich_content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    body_rich_content: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body' }] }],
+    },
     attachment_ids: ['10000000-0000-4000-8000-000000000001'],
   },
 };

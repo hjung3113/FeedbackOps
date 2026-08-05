@@ -41,7 +41,7 @@ import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporter
 import type { ApiError } from '@/lib/api';
 import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
-import { type VocDetailEnvelope, isTipTapDocStructurallyEmpty } from '@fops/shared';
+import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
 import { Callout, PreviewModal, RichEditor } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
@@ -111,7 +111,7 @@ export function ReporterReplyComposer({
     setPreviewOpen(false);
   }
 
-  const isEmpty = isTipTapDocStructurallyEmpty(draftDoc);
+  const isEmpty = isTipTapDocBlank(draftDoc);
 
   const mutation = useVocReporterReplyMutation({
     onSuccess: () => {

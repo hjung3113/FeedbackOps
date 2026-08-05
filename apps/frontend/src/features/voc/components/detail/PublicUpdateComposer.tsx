@@ -66,7 +66,11 @@ import type { ApiError } from '@/lib/api';
 import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
-import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
+import {
+  type ReporterFacingStatusEnum,
+  type VocDetailEnvelope,
+  isTipTapDocBlank,
+} from '@fops/shared';
 import { Button, Callout, PreviewModal, RichEditor } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
@@ -92,20 +96,6 @@ export interface PublicUpdateComposerProps {
   draftDoc?: TipTapDoc | null;
   /** REV-1 #7: called when the editor content changes. */
   onDraftChange?: (doc: TipTapDoc | null) => void;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isDocEmpty(doc: TipTapDoc | null): boolean {
-  if (doc == null) return true;
-  const content = doc.content;
-  if (!Array.isArray(content) || content.length === 0) return true;
-  return content.every((node) => {
-    if (node == null || typeof node !== 'object') return true;
-    const n = node as { type?: string; content?: unknown[] };
-    if (n.type !== 'paragraph') return false;
-    return !Array.isArray(n.content) || n.content.length === 0;
-  });
 }
 
 // Maps ApiError code to Callout tone for the inline error surface.
@@ -163,7 +153,7 @@ export function PublicUpdateComposer({
   // Gate check: Publish is disabled when reporter_status_gate.blocking_for includes nextStatus.
   const isGateBlocked = voc.reporter_status_gate?.blocking_for.includes(nextStatus) ?? false;
 
-  const isEmpty = isDocEmpty(draftDoc);
+  const isEmpty = isTipTapDocBlank(draftDoc);
 
   const mutation = useVocPublicUpdateMutation({
     onSuccess: () => {

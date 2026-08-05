@@ -30,7 +30,7 @@ import { useVocInternalCommentMutation } from '@/features/voc/hooks/useVocIntern
 import { extractMentions } from '@/features/voc/lib/extractMentions';
 import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
-import type { VocDetailEnvelope } from '@fops/shared';
+import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
 import type { TipTapDoc, TipTapEditor } from '@fops/ui';
 import { RichEditor } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
@@ -50,20 +50,6 @@ export interface InternalCommentComposerProps {
   draftDoc?: TipTapDoc | null;
   /** REV-1 #7: called when the editor content changes. */
   onDraftChange?: (doc: TipTapDoc | null) => void;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isDocEmpty(doc: TipTapDoc | null): boolean {
-  if (doc == null) return true;
-  const content = doc.content;
-  if (!Array.isArray(content) || content.length === 0) return true;
-  return content.every((node) => {
-    if (node == null || typeof node !== 'object') return true;
-    const n = node as { type?: string; content?: unknown[] };
-    if (n.type !== 'paragraph') return false;
-    return !Array.isArray(n.content) || n.content.length === 0;
-  });
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -108,7 +94,7 @@ export function InternalCommentComposer({
   const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
   const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
 
-  const isEmpty = isDocEmpty(draftDoc);
+  const isEmpty = isTipTapDocBlank(draftDoc);
 
   const mutation = useVocInternalCommentMutation({
     onSuccess: () => {

@@ -130,3 +130,11 @@ apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts lint/style/no
 apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts lint/complexity/useLiteralKeys -- pre-existing on develop (5x, unchanged)
 apps/frontend/src/features/voc/components/detail/IdentitySection.tsx format -- pre-existing on develop (2x, unchanged)
 apps/frontend/src/features/voc/components/detail/__tests__/VocDetailPanel.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterReplyComposer.test.tsx format -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterReplyComposer.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterReplyComposer.test.tsx lint/suspicious/noExplicitAny -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/voc/components/detail/__tests__/PublicUpdateComposer.test.tsx format -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/components/detail/__tests__/PublicUpdateComposer.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+packages/shared/src/vocs/edit-description-request.ts format -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/__tests__/internal-comment-request.test.ts format -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/__tests__/edit-description-request.test.ts format -- pre-existing on develop (1x, unchanged)

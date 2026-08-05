@@ -185,4 +185,41 @@ describe('<InternalCommentComposer>', () => {
     expect(previewBtn).toBeInTheDocument();
     expect(previewBtn).toBeDisabled();
   });
+
+  it('disables Add note for a whitespace-only draft without calling the mutation', () => {
+    render(
+      <InternalCommentComposer
+        voc={BASE_VOC}
+        me={ME_ADMIN}
+        draftDoc={{
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: '   ' }] }],
+        }}
+      />,
+      { wrapper: makeWrapper() },
+    );
+
+    expect(screen.getByTestId('internal-comment-composer')).toBeInTheDocument();
+    const add = screen.getByRole('button', { name: /add note/i });
+    expect(add).toBeDisabled();
+    fireEvent.click(add);
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('enables Add note for a text draft', () => {
+    render(
+      <InternalCommentComposer
+        voc={BASE_VOC}
+        me={ME_ADMIN}
+        draftDoc={{
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'note' }] }],
+        }}
+      />,
+      { wrapper: makeWrapper() },
+    );
+
+    expect(screen.getByTestId('internal-comment-composer')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add note/i })).not.toBeDisabled();
+  });
 });

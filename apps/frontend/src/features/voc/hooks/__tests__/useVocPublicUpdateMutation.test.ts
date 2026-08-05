@@ -45,7 +45,10 @@ const BODY_ONLY_VARS: PublicUpdateVars = {
   ifMatch: UPDATED_AT,
   body: {
     skip_public_update: false,
-    body_rich_content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    body_rich_content: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body' }] }],
+    },
     next_reporter_facing_status: 'received',
     attachment_ids: ['20000000-0000-4000-8000-000000000002'],
   },

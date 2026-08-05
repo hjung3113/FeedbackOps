@@ -15,9 +15,11 @@ import * as React from 'react';
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
+const mockMutate = vi.fn();
+
 vi.mock('@/features/voc/hooks/useVocPublicUpdateMutation', () => ({
   useVocPublicUpdateMutation: vi.fn(() => ({
-    mutate: vi.fn(),
+    mutate: mockMutate,
     isPending: false,
     isError: false,
     error: null,
@@ -152,5 +154,42 @@ describe('<PublicUpdateComposer>', () => {
     // The Publish button must be disabled when gate blocks the staged next status.
     const publishBtn = screen.getByRole('button', { name: /publish update/i });
     expect(publishBtn).toBeDisabled();
+  });
+
+  it('disables Publish for a whitespace-only draft without calling the mutation', () => {
+    render(
+      <PublicUpdateComposer
+        voc={BASE_VOC}
+        me={ME_ADMIN}
+        draftDoc={{
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: '   ' }] }],
+        }}
+      />,
+      { wrapper: makeWrapper() },
+    );
+
+    expect(screen.getByTestId('public-update-composer')).toBeInTheDocument();
+    const publish = screen.getByRole('button', { name: /^publish update$/i });
+    expect(publish).toBeDisabled();
+    publish.click();
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('enables Publish for a text draft', () => {
+    render(
+      <PublicUpdateComposer
+        voc={BASE_VOC}
+        me={ME_ADMIN}
+        draftDoc={{
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'update' }] }],
+        }}
+      />,
+      { wrapper: makeWrapper() },
+    );
+
+    expect(screen.getByTestId('public-update-composer')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^publish update$/i })).not.toBeDisabled();
   });
 });
