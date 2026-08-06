@@ -93,6 +93,9 @@ export function InternalCommentComposer({
   // PLAN-22 C7a: composer-level attachment dropzone state.
   const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
   const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
+  // #354: bumped on submit success so the dropzone drops the rows the server
+  // has now linked to the added comment.
+  const [attachmentResetToken, setAttachmentResetToken] = React.useState(0);
 
   const isEmpty = isTipTapDocBlank(draftDoc);
 
@@ -100,6 +103,9 @@ export function InternalCommentComposer({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
       setDraftDoc(null); // calls onDraftChange?.(null) when controlled
+      // #354: linked to the added comment now — re-sending would be already_linked.
+      // attachmentIds clears through the dropzone's onChange, not from here.
+      setAttachmentResetToken((n) => n + 1);
       toast.success('내부 코멘트가 추가되었습니다.');
     },
     onError: (error) => {
@@ -187,6 +193,7 @@ export function InternalCommentComposer({
         testId="internal-comment-attachment-dropzone"
         onChange={setAttachmentIds}
         onUploadingChange={setAttachmentsUploading}
+        resetToken={attachmentResetToken}
       />
 
       {/* ComposerFooter — Preview disabled per D-5.4 */}

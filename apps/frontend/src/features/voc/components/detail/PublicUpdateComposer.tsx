@@ -138,6 +138,9 @@ export function PublicUpdateComposer({
   // PLAN-22 C7a: composer-level attachment dropzone state.
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+  // #354: bumped on publish success so the dropzone drops the rows the server
+  // has now linked to the published update.
+  const [attachmentResetToken, setAttachmentResetToken] = useState(0);
 
   // Reset state when VOC changes (status + preview; draft reset handled by parent for controlled).
   const prevVocIdRef = useRef(voc.id);
@@ -163,6 +166,12 @@ export function PublicUpdateComposer({
       // clear draft (calls onDraftChange?.(null) when controlled)
       setDraftDoc(null);
       setNextStatus(data.voc.reporter_facing_status);
+      // #354: these attachments belong to the published update now. Keeping
+      // them would re-send already-linked ids on the next publish (422).
+      // The dropzone drops the linked rows and reports the shrunk list back
+      // through onChange, so attachmentIds clears along the one path it always
+      // travels — clearing it here as well would be a second, silent writer.
+      setAttachmentResetToken((n) => n + 1);
       toast.success('공개 업데이트가 게시되었습니다.');
     },
     onError: (error) => {
@@ -270,6 +279,7 @@ export function PublicUpdateComposer({
         testId="public-update-attachment-dropzone"
         onChange={setAttachmentIds}
         onUploadingChange={setAttachmentsUploading}
+        resetToken={attachmentResetToken}
       />
 
       {/* ReporterStatusChangeBlock — always shown in the public-update composer */}

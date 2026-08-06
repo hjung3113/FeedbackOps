@@ -23,10 +23,10 @@ import { Check, Paperclip, X } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
+import { formatFileSize } from '@/features/voc/lib/format-file-size';
 import { uploadAttachment } from '@/lib/api/attachments';
 import { errorMapper } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
-import { formatFileSize } from '@/features/voc/lib/format-file-size';
 
 const MAX_SIZE_BYTES = 25 * 1024 * 1024;
 
@@ -59,6 +59,13 @@ export interface ComposerAttachmentDropzoneProps {
   testId: string;
   onChange?: (serverAttachmentIds: string[]) => void;
   onUploadingChange?: (uploading: boolean) => void;
+  /**
+   * #354: bump this after a successful post to drop the rows whose attachments
+   * the server has now linked to the published item. Only `uploaded` rows are
+   * dropped — a row still uploading (the user may add files while the post is
+   * in flight) and a row that failed both stay, so nothing is silently lost.
+   */
+  resetToken?: number;
 }
 
 function mintRowId(): string {
@@ -79,10 +86,20 @@ function mintIdempotencyKey(): string {
 
 // formatFileSize moved to lib/format-file-size.ts (PLAN-22 §Bug-1, 2026-05-22).
 
+// Module scope: it reads nothing from the component, and defining it inside
+// made addFiles' empty dependency list a lint error (useExhaustiveDependencies).
+function clientSideRejection(file: File): { code: string; message: string } | null {
+  if (file.size > MAX_SIZE_BYTES) {
+    return { code: 'attachment.too_large', message: COPY.oversize };
+  }
+  return null;
+}
+
 export function ComposerAttachmentDropzone({
   testId,
   onChange,
   onUploadingChange,
+  resetToken,
 }: ComposerAttachmentDropzoneProps): React.ReactElement {
   const [rows, setRows] = React.useState<Row[]>([]);
   const [dragOver, setDragOver] = React.useState(false);
@@ -117,12 +134,18 @@ export function ComposerAttachmentDropzone({
     }
   }, [anyUploading, onUploadingChange]);
 
-  function clientSideRejection(file: File): { code: string; message: string } | null {
-    if (file.size > MAX_SIZE_BYTES) {
-      return { code: 'attachment.too_large', message: COPY.oversize };
-    }
-    return null;
-  }
+  // #354: the parent bumps resetToken after a successful post. Rows that are
+  // still uploading or that errored are kept — only the linked ones go away.
+  // Dropping them re-runs the uploadedIds effect above, so the parent's
+  // attachment id list clears through the same onChange path as any other edit.
+  React.useEffect(() => {
+    if (resetToken === undefined) return;
+    setRows((cur) =>
+      cur.some((r) => r.state.kind === 'uploaded')
+        ? cur.filter((r) => r.state.kind !== 'uploaded')
+        : cur,
+    );
+  }, [resetToken]);
 
   const addFiles = React.useCallback((fileList: FileList | File[] | null): void => {
     if (!fileList) return;
@@ -226,10 +249,7 @@ export function ComposerAttachmentDropzone({
   const inputId = `${testId}-input-control`;
 
   return (
-    <div
-      data-testid={testId}
-      className="flex flex-col gap-1.5 px-3 pb-2"
-    >
+    <div data-testid={testId} className="flex flex-col gap-1.5 px-3 pb-2">
       {/* Compact dropzone — no FieldLabel; composer context implies "첨부" */}
       {/* biome-ignore lint/a11y/noLabelWithoutControl: htmlFor wires to hidden input */}
       <label
@@ -258,10 +278,7 @@ export function ComposerAttachmentDropzone({
       </label>
 
       {rows.length > 0 && (
-        <ul
-          className="mt-1 flex flex-col gap-1"
-          data-testid={`${testId}-rows`}
-        >
+        <ul className="mt-1 flex flex-col gap-1" data-testid={`${testId}-rows`}>
           {rows.map((row) => (
             <AttachmentRow key={row.rowId} row={row} onRemove={() => removeRow(row.rowId)} />
           ))}

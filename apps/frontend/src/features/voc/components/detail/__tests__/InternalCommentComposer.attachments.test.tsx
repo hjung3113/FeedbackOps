@@ -1,9 +1,9 @@
 // InternalCommentComposer — attachment dropzone wiring tests (PLAN-22 C7a).
 
-import * as React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@fops/ui', async (importOriginal) => {
@@ -37,12 +37,15 @@ vi.mock('@/features/voc/hooks/useVocInternalCommentMutation', () => ({
   useVocInternalCommentMutation: vi.fn(),
 }));
 
-import { useVocInternalCommentMutation } from '@/features/voc/hooks/useVocInternalCommentMutation';
-import { InternalCommentComposer } from '../InternalCommentComposer';
+import {
+  type InternalCommentSuccess,
+  useVocInternalCommentMutation,
+} from '@/features/voc/hooks/useVocInternalCommentMutation';
 import * as attachmentsApi from '@/lib/api/attachments';
 import { ApiError } from '@/lib/api/types';
-import type { VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
+import type { VocDetailEnvelope } from '@fops/shared';
+import { InternalCommentComposer } from '../InternalCommentComposer';
 
 const ADMIN_ID = '00000000-0000-0000-0000-000000000002';
 
@@ -145,11 +148,10 @@ describe('<InternalCommentComposer> attachments (PLAN-22 C7a)', () => {
   it('upload → submit body includes attachment_ids[]', async () => {
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
     const mutateMock = vi.fn();
-    vi.mocked(useVocInternalCommentMutation).mockReturnValue(
-      { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<
-        typeof useVocInternalCommentMutation
-      >,
-    );
+    vi.mocked(useVocInternalCommentMutation).mockReturnValue({
+      ...DEFAULT_MUTATION,
+      mutate: mutateMock,
+    } as unknown as ReturnType<typeof useVocInternalCommentMutation>);
 
     render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
 
@@ -169,10 +171,61 @@ describe('<InternalCommentComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalled();
     });
-    const calledVars = mutateMock.mock.calls[0]![0] as {
+    const firstCall = mutateMock.mock.calls[0];
+    if (!firstCall) throw new Error('expected the internal-comment mutation to have been called');
+    const calledVars = firstCall[0] as {
       body: { attachment_ids: string[] };
     };
     expect(calledVars.body.attachment_ids).toEqual([ATTACHMENT.id]);
+  });
+
+  it('#354 clears linked attachments on submit success so the next submit sends none', async () => {
+    vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
+    const mutateMock = vi.fn();
+    let capturedOnSuccess: ((data: InternalCommentSuccess) => void) | undefined;
+    vi.mocked(useVocInternalCommentMutation).mockImplementation((args) => {
+      capturedOnSuccess = args?.onSuccess as ((data: InternalCommentSuccess) => void) | undefined;
+      return { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<
+        typeof useVocInternalCommentMutation
+      >;
+    });
+
+    render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId('rich-editor-internal-comment'));
+    await act(async () => {
+      pickFile(makeFile());
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
+    });
+    await user.click(screen.getByRole('button', { name: 'Add note' }));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      capturedOnSuccess?.({
+        internal_comment: {
+          id: 'ic-1',
+          voc_id: BASE_VOC.id,
+          actor_id: ADMIN_ID,
+          body_rich_content: null,
+          created_at: '2026-05-01T00:01:00Z',
+        },
+        voc: BASE_VOC,
+      });
+    });
+
+    expect(screen.queryByTestId('attachment-row')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('rich-editor-internal-comment'));
+    await user.click(screen.getByRole('button', { name: 'Add note' }));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
+
+    const secondCall = mutateMock.mock.calls[1];
+    if (!secondCall) throw new Error('expected a second internal-comment mutation call');
+    const secondVars = secondCall[0] as { body: { attachment_ids: string[] } };
+    expect(secondVars.body.attachment_ids).toEqual([]);
   });
 
   it('failed upload not included in POST body', async () => {
@@ -180,11 +233,10 @@ describe('<InternalCommentComposer> attachments (PLAN-22 C7a)', () => {
       new ApiError(422, { code: 'attachment.unsupported_type', message: 'nope' }),
     );
     const mutateMock = vi.fn();
-    vi.mocked(useVocInternalCommentMutation).mockReturnValue(
-      { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<
-        typeof useVocInternalCommentMutation
-      >,
-    );
+    vi.mocked(useVocInternalCommentMutation).mockReturnValue({
+      ...DEFAULT_MUTATION,
+      mutate: mutateMock,
+    } as unknown as ReturnType<typeof useVocInternalCommentMutation>);
 
     render(<InternalCommentComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
 
@@ -204,7 +256,9 @@ describe('<InternalCommentComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalled();
     });
-    const calledVars = mutateMock.mock.calls[0]![0] as {
+    const firstCall = mutateMock.mock.calls[0];
+    if (!firstCall) throw new Error('expected the internal-comment mutation to have been called');
+    const calledVars = firstCall[0] as {
       body: { attachment_ids: string[] };
     };
     expect(calledVars.body.attachment_ids).toEqual([]);
