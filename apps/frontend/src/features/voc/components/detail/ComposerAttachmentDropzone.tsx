@@ -23,10 +23,10 @@ import { Check, Paperclip, X } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
+import { formatFileSize } from '@/features/voc/lib/format-file-size';
 import { uploadAttachment } from '@/lib/api/attachments';
 import { errorMapper } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
-import { formatFileSize } from '@/features/voc/lib/format-file-size';
 
 const MAX_SIZE_BYTES = 25 * 1024 * 1024;
 
@@ -86,6 +86,15 @@ function mintIdempotencyKey(): string {
 
 // formatFileSize moved to lib/format-file-size.ts (PLAN-22 §Bug-1, 2026-05-22).
 
+// Module scope: it reads nothing from the component, and defining it inside
+// made addFiles' empty dependency list a lint error (useExhaustiveDependencies).
+function clientSideRejection(file: File): { code: string; message: string } | null {
+  if (file.size > MAX_SIZE_BYTES) {
+    return { code: 'attachment.too_large', message: COPY.oversize };
+  }
+  return null;
+}
+
 export function ComposerAttachmentDropzone({
   testId,
   onChange,
@@ -137,13 +146,6 @@ export function ComposerAttachmentDropzone({
         : cur,
     );
   }, [resetToken]);
-
-  function clientSideRejection(file: File): { code: string; message: string } | null {
-    if (file.size > MAX_SIZE_BYTES) {
-      return { code: 'attachment.too_large', message: COPY.oversize };
-    }
-    return null;
-  }
 
   const addFiles = React.useCallback((fileList: FileList | File[] | null): void => {
     if (!fileList) return;
@@ -247,10 +249,7 @@ export function ComposerAttachmentDropzone({
   const inputId = `${testId}-input-control`;
 
   return (
-    <div
-      data-testid={testId}
-      className="flex flex-col gap-1.5 px-3 pb-2"
-    >
+    <div data-testid={testId} className="flex flex-col gap-1.5 px-3 pb-2">
       {/* Compact dropzone — no FieldLabel; composer context implies "첨부" */}
       {/* biome-ignore lint/a11y/noLabelWithoutControl: htmlFor wires to hidden input */}
       <label
@@ -279,10 +278,7 @@ export function ComposerAttachmentDropzone({
       </label>
 
       {rows.length > 0 && (
-        <ul
-          className="mt-1 flex flex-col gap-1"
-          data-testid={`${testId}-rows`}
-        >
+        <ul className="mt-1 flex flex-col gap-1" data-testid={`${testId}-rows`}>
           {rows.map((row) => (
             <AttachmentRow key={row.rowId} row={row} onRemove={() => removeRow(row.rowId)} />
           ))}
