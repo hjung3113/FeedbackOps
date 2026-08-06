@@ -59,6 +59,13 @@ export interface ComposerAttachmentDropzoneProps {
   testId: string;
   onChange?: (serverAttachmentIds: string[]) => void;
   onUploadingChange?: (uploading: boolean) => void;
+  /**
+   * #354: bump this after a successful post to drop the rows whose attachments
+   * the server has now linked to the published item. Only `uploaded` rows are
+   * dropped — a row still uploading (the user may add files while the post is
+   * in flight) and a row that failed both stay, so nothing is silently lost.
+   */
+  resetToken?: number;
 }
 
 function mintRowId(): string {
@@ -83,6 +90,7 @@ export function ComposerAttachmentDropzone({
   testId,
   onChange,
   onUploadingChange,
+  resetToken,
 }: ComposerAttachmentDropzoneProps): React.ReactElement {
   const [rows, setRows] = React.useState<Row[]>([]);
   const [dragOver, setDragOver] = React.useState(false);
@@ -116,6 +124,19 @@ export function ComposerAttachmentDropzone({
       onUploadingChange?.(anyUploading);
     }
   }, [anyUploading, onUploadingChange]);
+
+  // #354: the parent bumps resetToken after a successful post. Rows that are
+  // still uploading or that errored are kept — only the linked ones go away.
+  // Dropping them re-runs the uploadedIds effect above, so the parent's
+  // attachment id list clears through the same onChange path as any other edit.
+  React.useEffect(() => {
+    if (resetToken === undefined) return;
+    setRows((cur) =>
+      cur.some((r) => r.state.kind === 'uploaded')
+        ? cur.filter((r) => r.state.kind !== 'uploaded')
+        : cur,
+    );
+  }, [resetToken]);
 
   function clientSideRejection(file: File): { code: string; message: string } | null {
     if (file.size > MAX_SIZE_BYTES) {

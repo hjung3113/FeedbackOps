@@ -100,6 +100,9 @@ export function ReporterReplyComposer({
   // PLAN-22 C7a: composer-level attachment dropzone state.
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+  // #354: bumped on send success so the dropzone drops the rows the server
+  // has now linked to the sent reply.
+  const [attachmentResetToken, setAttachmentResetToken] = useState(0);
 
   // Reset state when VOC changes (preview; draft reset handled by parent for controlled).
   const prevVocIdRef = useRef(voc.id);
@@ -117,6 +120,9 @@ export function ReporterReplyComposer({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
       setDraftDoc(null); // calls onDraftChange?.(null) when controlled
+      // #354: linked to the sent reply now — re-sending would be already_linked.
+      // attachmentIds clears through the dropzone's onChange, not from here.
+      setAttachmentResetToken((n) => n + 1);
       toast.success('리포터에게 답장이 전송되었습니다.');
     },
     onError: (error) => {
@@ -198,6 +204,7 @@ export function ReporterReplyComposer({
         testId="reporter-reply-attachment-dropzone"
         onChange={setAttachmentIds}
         onUploadingChange={setAttachmentsUploading}
+        resetToken={attachmentResetToken}
       />
 
       {/* Inline error Callout — reporter_facing_status.gate_blocked (amber)
