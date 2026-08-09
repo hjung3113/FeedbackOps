@@ -61,6 +61,10 @@
 //   reporter_facing_status.gate_blocked       → amber Callout inline
 //   conflict.idempotency_key_reuse            → lock Submit + Preview until VOC switch
 
+import {
+  isForbiddenTransition,
+  useReporterStatusTransitions,
+} from '@/features/voc/hooks/useReporterStatusTransitions';
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import type { ApiError } from '@/lib/api';
 import { uploadAttachment } from '@/lib/api/attachments';
@@ -99,6 +103,11 @@ export interface PublicUpdateComposerProps {
 }
 
 // Maps ApiError code to Callout tone for the inline error surface.
+//
+// #356: ReporterReplyComposer has a same-named local function, but it is NOT a
+// copy of this one — it maps invalid_transition to amber because a status
+// transition is not that surface's subject. Merging the two would take a
+// `surface` parameter and hide the divergence inside a branch. Keep them local.
 function getComposerErrorTone(code: string): 'red' | 'amber' | null {
   if (code === 'reporter_facing_status.invalid_transition') return 'red';
   if (code === 'reporter_facing_status.gate_blocked') return 'amber';
@@ -156,6 +165,21 @@ export function PublicUpdateComposer({
   // Gate check: Publish is disabled when reporter_status_gate.blocking_for includes nextStatus.
   const isGateBlocked = voc.reporter_status_gate?.blocking_for.includes(nextStatus) ?? false;
 
+  // #356: nextStatus is not resynced when another actor moves the VOC, so a
+  // selection that was allowed at pick time can become a non-allowed transition
+  // after a detail refetch. ReporterStatusChangeBlock already warns inline, but
+  // that verdict lived inside the child, so Publish stayed enabled and the server
+  // answered with a 422 the user saw as an opaque `validation.failed` toast —
+  // the pair is usually absent from the transition matrix entirely, so it lands
+  // in the backend's unknown branch rather than invalid_transition. Deriving it
+  // here from the same helper blocks submit before the request is made.
+  const transitions = useReporterStatusTransitions(voc);
+  const isForbiddenSelected = isForbiddenTransition(
+    transitions,
+    voc.reporter_facing_status,
+    nextStatus,
+  );
+
   const isEmpty = isTipTapDocBlank(draftDoc);
 
   const mutation = useVocPublicUpdateMutation({
@@ -186,7 +210,12 @@ export function PublicUpdateComposer({
   const isIdempotencyLocked =
     mutationError != null && mutationError.code === 'conflict.idempotency_key_reuse';
   const isSubmitBlocked =
-    isEmpty || mutation.isPending || isGateBlocked || isIdempotencyLocked || attachmentsUploading;
+    isEmpty ||
+    mutation.isPending ||
+    isGateBlocked ||
+    isForbiddenSelected ||
+    isIdempotencyLocked ||
+    attachmentsUploading;
 
   function handleSubmit() {
     if (!draftDoc || isSubmitBlocked || submitInFlightRef.current) return;

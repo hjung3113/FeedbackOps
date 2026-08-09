@@ -276,4 +276,113 @@ describe('<PublicUpdateComposer>', () => {
       resolveDetailRefetch(UPDATED_VOC);
     });
   });
+
+  // ── #356: staged status goes stale when another actor moves the VOC ──────────
+  //
+  // Reproduced before the fix: nextStatus stayed 'reviewing', the child rendered
+  // its red Callout, Publish stayed enabled, and the click sent
+  // next_reporter_facing_status: 'reviewing' — a pair absent from the transition
+  // matrix, so the server answered `validation.failed` and the user saw an opaque
+  // toast. Per the #356 verdict the staged value is NOT resynced; submit is
+  // blocked instead.
+
+  const STALE_DRAFT = {
+    type: 'doc' as const,
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'update' }] }],
+  };
+
+  // Another actor moved the VOC to 'progress'. Same voc.id, so the prevVocIdRef
+  // resync does not fire. (progress → reviewing is absent from the seed matrix.)
+  const MOVED_VOC = {
+    ...BASE_VOC,
+    reporter_facing_status: 'progress',
+    updated_at: '2026-05-01T00:05:00Z',
+    next_reporter_states: {
+      allowed: ['prep', 'resolved', 'closed'],
+      forbidden: { received: '다시 접수 상태로 돌릴 수 없습니다.' },
+    },
+  } as unknown as VocDetailEnvelope;
+
+  function renderThenMoveVoc() {
+    const { rerender } = render(
+      <PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} draftDoc={STALE_DRAFT} />,
+      { wrapper: makeWrapper() },
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
+      target: { value: 'reviewing' },
+    });
+    rerender(<PublicUpdateComposer voc={MOVED_VOC} me={ME_ADMIN} draftDoc={STALE_DRAFT} />);
+  }
+
+  it('keeps the staged status instead of silently resyncing it to the moved VOC', () => {
+    renderThenMoveVoc();
+
+    expect(
+      screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }),
+    ).toHaveValue('reviewing');
+    // The choice is still presented as pending, not quietly dropped: the footer
+    // hint would read "그대로 유지됩니다" if nextStatus had been resynced.
+    expect(screen.getByText('로 함께 게시')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Reporter-facing status는 그대로 유지됩니다.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('blocks Publish when the staged status is no longer an allowed transition', () => {
+    renderThenMoveVoc();
+
+    const publish = screen.getByRole('button', { name: /^publish update$/i });
+    expect(publish).toBeDisabled();
+
+    fireEvent.click(publish);
+    expect(mutationMock.mutate).not.toHaveBeenCalled();
+  });
+
+  it('blocks the PreviewModal Publish for a stale staged status too', () => {
+    renderThenMoveVoc();
+
+    fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
+    const modalPublish = screen
+      .getAllByRole('button', { name: /^publish update$/i })
+      .find((btn) => btn.closest('[role="dialog"]') != null);
+    expect(modalPublish).toBeDefined();
+    expect(modalPublish).toBeDisabled();
+
+    // biome-ignore lint/style/noNonNullAssertion: guarded by the toBeDefined above
+    fireEvent.click(modalPublish!);
+    expect(mutationMock.mutate).not.toHaveBeenCalled();
+  });
+
+  it('tells the user the current status changed rather than blaming their choice', () => {
+    renderThenMoveVoc();
+
+    expect(screen.getByText('선택한 상태로는 더 이상 전환할 수 없습니다')).toBeInTheDocument();
+    // The copy must name both statuses — which one it moved to, and which one is
+    // now unreachable — or the user cannot tell what to pick instead.
+    const reason = screen.getByTestId('reporter-status-forbidden-reason').textContent ?? '';
+    expect(reason).toContain('처리 중');
+    expect(reason).toContain('검토 중');
+    expect(reason).toContain('다시 선택');
+  });
+
+  it('re-enables Publish once the user picks an allowed transition', () => {
+    renderThenMoveVoc();
+
+    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
+      target: { value: 'resolved' },
+    });
+
+    expect(
+      screen.queryByText('선택한 상태로는 더 이상 전환할 수 없습니다'),
+    ).not.toBeInTheDocument();
+    const publish = screen.getByRole('button', { name: /^publish update$/i });
+    expect(publish).not.toBeDisabled();
+
+    fireEvent.click(publish);
+    expect(mutationMock.mutate).toHaveBeenCalledTimes(1);
+    expect(mutationMock.mutate.mock.calls[0]?.[0]).toMatchObject({
+      ifMatch: MOVED_VOC.updated_at,
+      body: { next_reporter_facing_status: 'resolved' },
+    });
+  });
 });
