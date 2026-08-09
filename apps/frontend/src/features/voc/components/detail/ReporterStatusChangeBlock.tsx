@@ -70,7 +70,10 @@ import {
   type ReporterFacingStatusEnum,
 } from '@fops/shared';
 import { REPORTER_FACING_STATUS_ALL, REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
-import { useReporterStatusTransitions } from '@/features/voc/hooks/useReporterStatusTransitions';
+import {
+  isForbiddenTransition,
+  useReporterStatusTransitions,
+} from '@/features/voc/hooks/useReporterStatusTransitions';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -118,8 +121,7 @@ export function ReporterStatusChangeBlock({
   ];
 
   const isStaged = nextStatus !== currentStatus;
-  const isForbiddenSelected =
-    nextStatus !== currentStatus && !allowed.includes(nextStatus);
+  const isForbiddenSelected = isForbiddenTransition({ allowed }, currentStatus, nextStatus);
 
   // Gate blocks the currently-staged next status
   const isGateBlocked =
@@ -200,14 +202,25 @@ export function ReporterStatusChangeBlock({
       </div>
 
       {/* ── Forbidden-state red Callout ─────────────────────────── */}
+      {/* #356: this Callout is only reachable when the VOC's current status (or its
+          allowed set) changed underneath a selection the user had already made —
+          see isForbiddenTransition. The old copy read as "you picked the wrong
+          option", which is never the actual story, and it was the only signal the
+          user got. The composer now also blocks Publish, so the copy has to say
+          what changed and what to do. The seeded forbidden reason, when the pair
+          is listed at all, is appended as the concrete rule. */}
       {isForbiddenSelected && (
         <Callout
           tone="red"
-          title="이 전환은 허용되지 않습니다"
+          title="선택한 상태로는 더 이상 전환할 수 없습니다"
           className="mb-2.5"
         >
-          {forbidden[nextStatus] ??
-            '현재 상태에서 직접 전이할 수 있는 다음 상태가 아닙니다. spec 의 reporter-facing status 전이 규칙을 따릅니다.'}
+          <span data-testid="reporter-status-forbidden-reason">
+            이 VOC의 현재 상태가 그 사이 &lsquo;{REPORTER_STATUS_LABELS[currentStatus]}
+            &rsquo;(으)로 바뀌어, 먼저 고른 &lsquo;{REPORTER_STATUS_LABELS[nextStatus]}
+            &rsquo;(으)로는 전환할 수 없습니다. 다음 상태를 다시 선택해야 게시할 수 있습니다.
+            {forbidden[nextStatus] != null && ` ${forbidden[nextStatus]}`}
+          </span>
         </Callout>
       )}
 

@@ -43,3 +43,24 @@ export function useReporterStatusTransitions(
 
   return { allowed, forbidden, gate };
 }
+
+/**
+ * True when the staged next status is neither the current status nor an allowed
+ * transition from it.
+ *
+ * #356: the picker renders non-allowed options as `disabled`, so a user cannot
+ * select one directly, and `nextStatus` is initialised to the current status
+ * (which is never forbidden). The only way this returns true is that
+ * `voc.reporter_facing_status` / `allowed` changed underneath a selection the
+ * user had already made — another actor moved the VOC and the detail query
+ * refetched. `nextStatus` is deliberately NOT resynced (that would silently drop
+ * the user's choice), so both the composer and the block derive the blocked
+ * state from here instead of duplicating the comparison.
+ */
+export function isForbiddenTransition(
+  transitions: Pick<ReporterStatusTransitions, 'allowed'>,
+  currentStatus: ReporterFacingStatusEnum,
+  nextStatus: ReporterFacingStatusEnum,
+): boolean {
+  return nextStatus !== currentStatus && !transitions.allowed.includes(nextStatus);
+}

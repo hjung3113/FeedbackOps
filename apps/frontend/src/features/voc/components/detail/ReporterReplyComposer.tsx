@@ -65,6 +65,9 @@ export interface ReporterReplyComposerProps {
 }
 
 // Maps ApiError code to Callout tone for the inline error surface.
+//
+// #356: deliberately diverges from the same-named function in
+// PublicUpdateComposer — see the note there before merging the two.
 function getComposerErrorTone(code: string): 'amber' | null {
   if (code === 'reporter_facing_status.gate_blocked') return 'amber';
   // invalid_transition is primarily a public-update error; treat as amber fallback on reply surface.
