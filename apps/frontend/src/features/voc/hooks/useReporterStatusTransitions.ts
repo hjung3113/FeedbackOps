@@ -5,7 +5,7 @@
 // Spec: docs/frontend/specs/voc.md §5.10
 // Prototype ref: docs/design-prototype/screen-voc.jsx:522-534
 
-import type { VocDetailEnvelope, ReporterFacingStatusEnum } from '@fops/shared';
+import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
 
 export interface ReporterStatusGate {
   blocking_for: ReporterFacingStatusEnum[];
@@ -25,9 +25,7 @@ export interface ReporterStatusTransitions {
  * Derives picker data from the VOC detail envelope.
  * Defaults to empty arrays when fields are absent to guard against stale shapes.
  */
-export function useReporterStatusTransitions(
-  voc: VocDetailEnvelope,
-): ReporterStatusTransitions {
+export function useReporterStatusTransitions(voc: VocDetailEnvelope): ReporterStatusTransitions {
   const allowed = voc.next_reporter_states?.allowed ?? [];
   const forbidden = (voc.next_reporter_states?.forbidden ?? {}) as Partial<
     Record<ReporterFacingStatusEnum, string>
@@ -37,9 +35,7 @@ export function useReporterStatusTransitions(
   const rawGate = voc.reporter_status_gate;
 
   const gate: ReporterStatusGate | null =
-    rawGate != null
-      ? { blocking_for: rawGate.blocking_for, reason: rawGate.reason }
-      : null;
+    rawGate != null ? { blocking_for: rawGate.blocking_for, reason: rawGate.reason } : null;
 
   return { allowed, forbidden, gate };
 }
