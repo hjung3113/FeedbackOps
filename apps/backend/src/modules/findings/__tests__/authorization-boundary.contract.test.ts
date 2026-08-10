@@ -251,7 +251,7 @@ describe.skipIf(!runIntegration)(
           actorIds.reporterWithGrant,
           "voc.read",
           ids.activeMs,
-          actorIds.admin,
+          actorIds.admin!,
         ),
       );
       grantIds.push(
@@ -261,7 +261,7 @@ describe.skipIf(!runIntegration)(
           actorIds.reporterWithGrant,
           "finding.read",
           ids.activeMs,
-          actorIds.admin,
+          actorIds.admin!,
         ),
       );
       await grant(

@@ -59,7 +59,10 @@ describe('vocDetailEnvelopeSchema', () => {
         }],
       },
     });
-    expect(result.similar.items[0]?.display_id).toBe('VOC-002');
+    // `similar` is optional on the envelope, so narrow it before indexing —
+    // an absent block must fail this assertion, not crash the type checker.
+    expect(result.similar).toBeDefined();
+    expect(result.similar?.items[0]?.display_id).toBe('VOC-002');
   });
 
   it('rejects a similar peer preview with more than three items', () => {
