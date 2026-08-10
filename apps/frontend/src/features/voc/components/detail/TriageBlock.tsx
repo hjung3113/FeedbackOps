@@ -1,28 +1,39 @@
-// TriageBlock — read-only triage fields (Slice 3, no edit affordances).
+// TriageBlock — read-only triage fields; edits happen in the triage console (#363).
 
 import * as React from 'react';
 import type { VocDetailEnvelope } from '@fops/shared';
-import {
-  PanelSectionTitle,
-  FieldRow,
-  SeverityBadge,
-  UserChip,
-} from '@fops/ui';
+import { PanelSectionTitle, FieldRow, SeverityBadge, UserChip, Button } from '@fops/ui';
 
 export interface TriageBlockProps {
   voc: VocDetailEnvelope;
   ownerDisplayName?: string | null | undefined;
   analyticsAreaName?: string | null | undefined;
+  canTriage: boolean;
+  onOpenTriage: () => void;
 }
 
 export function TriageBlock({
   voc,
   ownerDisplayName,
   analyticsAreaName,
+  canTriage,
+  onOpenTriage,
 }: TriageBlockProps): React.ReactElement {
   return (
     <div>
-      <PanelSectionTitle>트리아지 (Read only)</PanelSectionTitle>
+      <div className="flex items-center justify-between">
+        <PanelSectionTitle>트리아지 (Read only)</PanelSectionTitle>
+        {canTriage && (
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="triage-open-console"
+            onClick={onOpenTriage}
+          >
+            트리아지에서 변경
+          </Button>
+        )}
+      </div>
 
       {/* 심각도 */}
       <FieldRow label="심각도">

@@ -2,6 +2,7 @@
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
+import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
 import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
@@ -165,6 +166,7 @@ export function VocDetailPanel({
       voc={voc}
       vocId={vocId}
       onClose={onClose}
+      {...(managedSystemId !== undefined ? { managedSystemId } : {})}
       {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
       isReporterOnOwnVoc={isReporterOnOwnVoc}
       canRenderAllowedTask={canRenderAllowedTask}
@@ -178,6 +180,7 @@ export function VocDetailPanel({
 interface FullDetailViewProps {
   voc: VocDetailEnvelope;
   vocId: string;
+  managedSystemId?: string;
   onClose: () => void;
   onExpandToggle?: () => void;
   isReporterOnOwnVoc: boolean;
@@ -202,6 +205,7 @@ const STATIC_DETAIL_SECTIONS = [
 function FullDetailView({
   voc,
   vocId,
+  managedSystemId,
   onClose,
   onExpandToggle,
   isReporterOnOwnVoc,
@@ -215,6 +219,11 @@ function FullDetailView({
   const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
   const [reviewOpen, setReviewOpen] = React.useState(false);
   const navigate = useNavigate();
+  const capCheck = usePermissionCheck({
+    capability: 'voc.triage',
+    ...(managedSystemId !== undefined ? { managedSystemId } : {}),
+  });
+  const canTriage = capCheck.data?.state === 'approved';
   const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
     useIdempotencyKey();
   // Scroll container ref for section nav anchor tracking
@@ -312,6 +321,14 @@ function FullDetailView({
     });
   }
 
+  function handleOpenTriage(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void navigate({
+      to: '/vocs',
+      search: (prev: any) => ({ ...prev, view: 'triage', selected: vocId }) as any,
+    });
+  }
+
   return (
     <>
       <div className="flex flex-col h-full" data-testid="voc-detail-panel">
@@ -347,6 +364,8 @@ function FullDetailView({
                     ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
                     : null
                 }
+                canTriage={canTriage}
+                onOpenTriage={handleOpenTriage}
               />
             </div>
           )}
