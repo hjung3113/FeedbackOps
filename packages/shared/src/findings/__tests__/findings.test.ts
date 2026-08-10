@@ -9,6 +9,7 @@ import {
   findingSourceSchema,
   findingStatusSchema,
   linkTaskRequestSchema,
+  patchFindingRequestSchema,
   surveyResponseExcerptCandidateDtoSchema,
 } from '../index.js';
 
@@ -39,6 +40,50 @@ describe('createFindingRequestSchema', () => {
         severity: 'high',
         source_id: U1,
       }),
+    ).toThrow();
+  });
+
+  it.each([
+    ['title', { title: '   ', summary: 'VOC evidence needs synthesis.' }],
+    ['summary', { title: 'Export failures', summary: '   ' }],
+  ])('rejects a whitespace-only %s', (_field, body) => {
+    expect(() =>
+      createFindingRequestSchema.parse({
+        ...body,
+        severity: 'high',
+      }),
+    ).toThrow();
+  });
+
+  it('trims a valid title and preserves the 200-character title boundary', () => {
+    expect(
+      createFindingRequestSchema.parse({
+        title: '  유효한 제목  ',
+        summary: 'VOC evidence needs synthesis.',
+        severity: 'high',
+      }).title,
+    ).toBe('유효한 제목');
+    expect(
+      createFindingRequestSchema.safeParse({
+        title: 'a'.repeat(200),
+        summary: 'VOC evidence needs synthesis.',
+        severity: 'high',
+      }).success,
+    ).toBe(true);
+    expect(
+      createFindingRequestSchema.safeParse({
+        title: 'a'.repeat(201),
+        summary: 'VOC evidence needs synthesis.',
+        severity: 'high',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('patchFindingRequestSchema', () => {
+  it('rejects a whitespace-only reason', () => {
+    expect(() =>
+      patchFindingRequestSchema.parse({ status: 'not_actionable', reason: '   ' }),
     ).toThrow();
   });
 });
