@@ -26,9 +26,32 @@ export const CAPABILITIES = [
 
 export type Capability = (typeof CAPABILITIES)[number];
 
+/**
+ * How the workspace-admin role is satisfied *above* the generic
+ * `roleSatisfies` layer in `modules/permissions/check-service.ts`.
+ *
+ * `roleSatisfies` only covers the Slice 1 role-derived set (`workspace.read`,
+ * `workspace.admin`, `voc.triage`, `voc.read`). Several domain modules layer an
+ * additional admin bypass on top of it, and those bypasses are part of the
+ * access contract — not local shortcuts. This field is the single declaration
+ * of that layering so the advisory `GET /me/permissions/check` decision cannot
+ * drift from what the enforcing route will actually do (issue #372).
+ *
+ * - `none` — admin gets nothing beyond `roleSatisfies` for this capability.
+ * - `unless_denied` — admin is allowed unless an explicit deny applies; the
+ *   module runs the scoped check first and returns it when the reason is
+ *   `explicit_deny`. See `modules/surveys/authorization.ts`.
+ * - `always` — the module short-circuits on `role_level === 'admin'` before
+ *   consulting Permission at all. See `modules/findings/authorization.ts` and
+ *   `modules/task-requests/service.ts`.
+ */
+export type AdminModuleBypass = 'none' | 'unless_denied' | 'always';
+
 export interface CapabilityMeta {
   /** When true, permission_requests must include a non-empty reason. */
   sensitive: boolean;
+  /** Admin-role satisfaction layered above `roleSatisfies`. */
+  adminModuleBypass: AdminModuleBypass;
 }
 
 /**
@@ -38,26 +61,33 @@ export interface CapabilityMeta {
  * another rename.
  */
 export const CAPABILITY_META: Readonly<Record<Capability, CapabilityMeta>> = {
-  'workspace.read': { sensitive: false },
-  'workspace.admin': { sensitive: true },
+  // The four role-derived Slice 1 capabilities are satisfied by `roleSatisfies`
+  // itself, so no module layers anything on top: `adminModuleBypass: 'none'`.
+  'workspace.read': { sensitive: false, adminModuleBypass: 'none' },
+  'workspace.admin': { sensitive: true, adminModuleBypass: 'none' },
   // voc.triage: NOT sensitive — Developers may request it for a specific MS.
-  'voc.triage': { sensitive: false },
+  'voc.triage': { sensitive: false, adminModuleBypass: 'none' },
   // voc.read: NOT sensitive — Developers may request it for a specific MS to view VOCs.
-  'voc.read': { sensitive: false },
-  'finding.read': { sensitive: false },
-  'finding.manage': { sensitive: false },
+  'voc.read': { sensitive: false, adminModuleBypass: 'none' },
+  // Finding point authorization short-circuits on the admin role before
+  // consulting Permission (`modules/findings/authorization.ts`).
+  'finding.read': { sensitive: false, adminModuleBypass: 'always' },
+  'finding.manage': { sensitive: false, adminModuleBypass: 'always' },
   // Self-approval is sensitive because it bypasses normal reviewer separation.
-  'task_request.self_approve': { sensitive: true },
+  // `hasSelfApprovalCapability` still short-circuits on the admin role.
+  'task_request.self_approve': { sensitive: true, adminModuleBypass: 'always' },
   // survey.read: NOT sensitive — Developers may request scoped read access for a Managed System.
-  'survey.read': { sensitive: false },
+  // ADR-0033 §C: Admin may bypass, but an explicit deny still wins.
+  'survey.read': { sensitive: false, adminModuleBypass: 'unless_denied' },
   // Survey creation and management are sensitive actions for a Managed System.
-  'survey.manage': { sensitive: true },
+  // ADR-0033 §C: same Admin bypass as survey.read, explicit deny dominant.
+  'survey.manage': { sensitive: true, adminModuleBypass: 'unless_denied' },
   // Workspace Admin does not bypass this by role alone; explicit permission is required.
-  // See docs/design/07-survey-system.md:230-232.
-  'survey.read_personal_responses': { sensitive: true },
+  // See docs/design/07-survey-system.md and ADR-0033 §C ("no role bypass, including Admin").
+  'survey.read_personal_responses': { sensitive: true, adminModuleBypass: 'none' },
   // Workspace Admin does not bypass this by role alone; explicit permission is required.
-  // See docs/design/07-survey-system.md:230-232.
-  'survey.export': { sensitive: true },
+  // See docs/design/07-survey-system.md and ADR-0033 §C ("no role bypass, including Admin").
+  'survey.export': { sensitive: true, adminModuleBypass: 'none' },
 };
 
 export function isCapability(value: string): value is Capability {
@@ -66,4 +96,8 @@ export function isCapability(value: string): value is Capability {
 
 export function isSensitiveCapability(cap: Capability): boolean {
   return CAPABILITY_META[cap].sensitive;
+}
+
+export function adminModuleBypassFor(cap: Capability): AdminModuleBypass {
+  return CAPABILITY_META[cap].adminModuleBypass;
 }

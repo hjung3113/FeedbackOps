@@ -9,6 +9,8 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import { checkSurveyManage } from '../../surveys/authorization.js';
+import { createCheckService } from '../check-service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
@@ -56,10 +58,10 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
     await dbHandle.pool.query(
       `delete from core.sessions where created_user_agent_summary = 'integration-test'`,
     );
-    await dbHandle.pool.query(`delete from core.rate_limits`);
+    await dbHandle.pool.query('delete from core.rate_limits');
     // Earlier suites may have left pending permission_requests rows that
     // flip this suite's `request_access` expectation to `pending_request`.
-    await dbHandle.pool.query(`delete from permission.permission_requests`);
+    await dbHandle.pool.query('delete from permission.permission_requests');
   });
 
   it('admin + workspace.admin → state=approved', async () => {
@@ -149,6 +151,108 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
     });
     expect(res2.statusCode).toBe(200);
     expect(res2.json().state).toBe('pending_request');
+  });
+
+  // ── issue #372: advisory answer must match the enforcing module ─────────
+  //
+  // `checkCapability` alone only knows `roleSatisfies`, which gives the admin
+  // role neither survey.* nor finding.*. The Survey/Finding modules layer
+  // their own admin bypass on top before enforcing, so before the fix this
+  // route told an Admin they needed `survey.manage` while `POST /surveys`
+  // would have accepted them.
+
+  async function checkAs(externalId: string, query: string): Promise<Record<string, unknown>> {
+    const cookie = await loginAs(app, externalId);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/me/permissions/check?${query}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    return res.json();
+  }
+
+  async function adminActorId(): Promise<string> {
+    const rows = await dbHandle.pool.query<{ id: string }>(
+      `select id from core.actors where external_id = 'mock-admin-1' and workspace_id = $1`,
+      [WORKSPACE_ID],
+    );
+    const id = rows.rows[0]?.id;
+    if (!id) throw new Error('mock-admin-1 missing');
+    return id;
+  }
+
+  async function anyManagedSystemId(): Promise<string> {
+    const rows = await dbHandle.pool.query<{ id: string }>(
+      'select id from core.managed_systems where workspace_id = $1 and archived_at is null limit 1',
+      [WORKSPACE_ID],
+    );
+    const id = rows.rows[0]?.id;
+    if (!id) throw new Error('no active managed system in seeded workspace');
+    return id;
+  }
+
+  it('admin + survey.manage → approved, matching what checkSurveyManage enforces', async () => {
+    const managedSystemId = await anyManagedSystemId();
+    const body = await checkAs(
+      'mock-admin-1',
+      `capability=survey.manage&managed_system_id=${managedSystemId}`,
+    );
+    expect(body.state).toBe('approved');
+    expect(body.decision).toEqual({ allow: true, via: 'role' });
+
+    // Parity oracle: the enforcing helper `POST /surveys` calls must agree.
+    const enforced = await checkSurveyManage(
+      createCheckService({ db: dbHandle.db }),
+      {
+        actor_id: await adminActorId(),
+        workspace_id: WORKSPACE_ID,
+        role_level: 'admin',
+      },
+      managedSystemId,
+    );
+    expect(enforced).toEqual(body.decision);
+  });
+
+  it('admin + finding.manage → approved (module short-circuits on role)', async () => {
+    const body = await checkAs(
+      'mock-admin-1',
+      `capability=finding.manage&managed_system_id=${await anyManagedSystemId()}`,
+    );
+    expect(body.state).toBe('approved');
+    expect(body.decision).toEqual({ allow: true, via: 'role' });
+  });
+
+  it('admin + survey.read_personal_responses → NOT approved (no role bypass, ADR-0033 §C)', async () => {
+    const body = await checkAs(
+      'mock-admin-1',
+      `capability=survey.read_personal_responses&managed_system_id=${await anyManagedSystemId()}`,
+    );
+    expect(body.state).not.toBe('approved');
+    expect((body.decision as { allow: boolean }).allow).toBe(false);
+  });
+
+  it('admin + explicit deny on survey.manage → blocked, deny still dominates', async () => {
+    const managedSystemId = await anyManagedSystemId();
+    const actorId = await adminActorId();
+    await dbHandle.pool.query(
+      `insert into permission.permission_denies
+         (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id)
+       values ($1, $2, 'survey.manage', $3, 'issue #372 test', $2)`,
+      [WORKSPACE_ID, actorId, managedSystemId],
+    );
+    try {
+      const body = await checkAs(
+        'mock-admin-1',
+        `capability=survey.manage&managed_system_id=${managedSystemId}`,
+      );
+      expect(body.state).toBe('blocked_non_requestable');
+      expect(body.decision).toMatchObject({ allow: false, reason: 'explicit_deny' });
+    } finally {
+      await dbHandle.pool.query(
+        `delete from permission.permission_denies where reason = 'issue #372 test'`,
+      );
+    }
   });
 
   it('unknown capability → validation.unknown_capability envelope', async () => {

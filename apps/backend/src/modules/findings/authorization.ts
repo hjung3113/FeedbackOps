@@ -54,6 +54,7 @@ export async function checkFindingRead(
   policy: FindingPointAuthorizationPolicy,
   options?: Parameters<CheckService['checkCapability']>[3],
 ): Promise<Decision> {
+  // Declared as `adminModuleBypass: 'always'` in `CAPABILITY_META` (issue #372).
   if (actor.role_level === 'admin') return { allow: true, via: 'role' };
   if (policy.requireElevatedRole && actor.role_level !== 'developer') return findingRoleDenied;
   return checkService.checkCapability(
@@ -73,6 +74,8 @@ export async function checkFindingManage(
 ): Promise<Decision> {
   // Preserve the workspace-admin bypass before delegating scoped decisions to
   // Permission. This mirrors the Finding policy and avoids needless DB reads.
+  // Declared as `adminModuleBypass: 'always'` in `CAPABILITY_META` — change
+  // both together or the advisory check route drifts from here (issue #372).
   if (actor.role_level === 'admin') return { allow: true, via: 'role' };
   if (policy.requireElevatedRole && actor.role_level !== 'developer') return findingRoleDenied;
   return checkService.checkCapability(

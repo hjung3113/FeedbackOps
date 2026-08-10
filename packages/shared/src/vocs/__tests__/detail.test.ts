@@ -50,16 +50,21 @@ describe('vocDetailEnvelopeSchema', () => {
     const result = vocDetailEnvelopeSchema.parse({
       ...validDetail,
       similar: {
-        items: [{
-          id: U2,
-          display_id: 'VOC-002',
-          title: 'Peer VOC',
-          reporter_facing_status: 'received',
-          severity: 'high',
-        }],
+        items: [
+          {
+            id: U2,
+            display_id: 'VOC-002',
+            title: 'Peer VOC',
+            reporter_facing_status: 'received',
+            severity: 'high',
+          },
+        ],
       },
     });
-    expect(result.similar.items[0]?.display_id).toBe('VOC-002');
+    // `similar` is optional on the envelope, so narrow it before indexing —
+    // an absent block must fail this assertion, not crash the type checker.
+    expect(result.similar).toBeDefined();
+    expect(result.similar?.items[0]?.display_id).toBe('VOC-002');
   });
 
   it('rejects a similar peer preview with more than three items', () => {
@@ -71,17 +76,19 @@ describe('vocDetailEnvelopeSchema', () => {
       severity: 'high' as const,
     };
 
-    expect(() => vocDetailEnvelopeSchema.parse({
-      ...validDetail,
-      similar: {
-        items: [
-          peer,
-          { ...peer, id: '01919b8c-0000-7000-8000-000000000003' },
-          { ...peer, id: '01919b8c-0000-7000-8000-000000000004' },
-          { ...peer, id: '01919b8c-0000-7000-8000-000000000005' },
-        ],
-      },
-    })).toThrow();
+    expect(() =>
+      vocDetailEnvelopeSchema.parse({
+        ...validDetail,
+        similar: {
+          items: [
+            peer,
+            { ...peer, id: '01919b8c-0000-7000-8000-000000000003' },
+            { ...peer, id: '01919b8c-0000-7000-8000-000000000004' },
+            { ...peer, id: '01919b8c-0000-7000-8000-000000000005' },
+          ],
+        },
+      }),
+    ).toThrow();
   });
 
   it('accepts description_rich_content as any shape (opaque)', () => {
@@ -172,9 +179,7 @@ describe('vocSummaryEnvelopeSchema', () => {
   });
 
   it('rejects invalid id (not uuid)', () => {
-    expect(() =>
-      vocSummaryEnvelopeSchema.parse({ ...validSummary, id: 'not-a-uuid' }),
-    ).toThrow();
+    expect(() => vocSummaryEnvelopeSchema.parse({ ...validSummary, id: 'not-a-uuid' })).toThrow();
   });
 
   it('rejects missing display_id', () => {

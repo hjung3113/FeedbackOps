@@ -138,3 +138,6 @@ apps/frontend/src/features/voc/components/detail/__tests__/PublicUpdateComposer.
 packages/shared/src/vocs/edit-description-request.ts format -- pre-existing on develop (1x, unchanged)
 packages/shared/src/vocs/__tests__/internal-comment-request.test.ts format -- pre-existing on develop (1x, unchanged)
 packages/shared/src/vocs/__tests__/edit-description-request.test.ts format -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/findings/__tests__/authorization-boundary.contract.test.ts lint/style/noNonNullAssertion -- pre-existing on develop; the suite reads seeded ids out of a Record<string, string> and asserts non-null at 13 call sites, none of which this branch added
+apps/backend/src/modules/findings/__tests__/authorization-boundary.contract.test.ts format -- pre-existing on develop; the file predates biome formatting and reformatting it would rewrite lines this branch never touched
+apps/backend/src/modules/findings/__tests__/authorization-boundary.contract.test.ts organizeImports -- pre-existing on develop; import order predates biome
