@@ -132,4 +132,33 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
     });
     expect(body).not.toHaveProperty('analytics_area_id');
   });
+
+  it.each([
+    ['제목', 'title', '   ', '유효한 요약'],
+    ['요약', 'summary', '   ', '유효한 제목'],
+  ])(
+    'does not submit a whitespace-only %s and shows its validation error',
+    async (label, field, whitespace, validValue) => {
+      renderModal(null);
+      const input = screen.getByLabelText(new RegExp(label));
+      fireEvent.change(input, { target: { value: whitespace } });
+      fireEvent.change(screen.getByLabelText(new RegExp(field === 'title' ? '요약' : '제목')), {
+        target: { value: validValue },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));
+
+      await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'));
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('submits trimmed title and summary exactly once', async () => {
+    renderModal(null);
+    fireEvent.change(screen.getByLabelText(/제목/), { target: { value: '  유효한 제목  ' } });
+    fireEvent.change(screen.getByLabelText(/요약/), { target: { value: '  유효한 요약  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));
+
+    expect(await submittedBody()).toMatchObject({ title: '유효한 제목', summary: '유효한 요약' });
+  });
 });
