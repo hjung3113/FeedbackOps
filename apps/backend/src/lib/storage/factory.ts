@@ -14,8 +14,8 @@
 // `toString()` on the config object — see `redact()` and the
 // `Symbol.for('nodejs.util.inspect.custom')` hook below.
 
-import { S3CompatStorageBackend, type S3CompatConfig } from './s3-compat.js';
 import type { StorageBackend } from './index.js';
+import { type S3CompatConfig, S3CompatStorageBackend } from './s3-compat.js';
 
 const REDACTED = '***REDACTED***';
 
