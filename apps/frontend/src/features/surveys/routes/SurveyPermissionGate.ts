@@ -13,6 +13,7 @@ export function useSurveyManageGate(managedSystemId?: string) {
     !loading && !me.isError && !permission.isError && permission.data?.state === 'approved';
   return {
     canManage,
+    permissionState: permission.data?.state,
     gateState: loading
       ? ('loading' as const)
       : me.isError || permission.isError

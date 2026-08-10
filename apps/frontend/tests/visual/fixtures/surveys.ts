@@ -42,6 +42,7 @@ export type SurveyVisualScenario =
   | 'builder-drag-over'
   | 'create-dialog'
   | 'empty'
+  | 'empty-no-permission'
   | 'error'
   | 'no-permission';
 export const surveyVisualScenarios = z
@@ -54,6 +55,7 @@ export const surveyVisualScenarios = z
       'builder-drag-over',
       'create-dialog',
       'empty',
+      'empty-no-permission',
       'error',
       'no-permission',
     ]),
@@ -66,6 +68,7 @@ export const surveyVisualScenarios = z
     'builder-drag-over',
     'create-dialog',
     'empty',
+    'empty-no-permission',
     'error',
     'no-permission',
   ]);
