@@ -63,6 +63,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 0,
+    attachment_count: 0,
   },
   {
     id: 'voc-int-0002',
@@ -80,6 +81,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 0,
+    attachment_count: 0,
   },
   {
     id: 'voc-int-0003',
@@ -97,6 +99,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 2,
+    attachment_count: 0,
   },
   {
     id: 'voc-int-0004',
@@ -114,6 +117,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 0,
+    attachment_count: 0,
   },
   {
     id: 'voc-int-0005',
@@ -131,6 +135,7 @@ const MOCK_VOCS: VocListItem[] = [
     created_at: '2026-05-01T00:00:00.000Z',
     updated_at: '2026-05-01T00:00:00.000Z',
     similar_count: 0,
+    attachment_count: 0,
   },
 ];
 

@@ -33,6 +33,31 @@ vi.mock('@/lib/auth/useMe', () => ({
   useMe: vi.fn(),
 }));
 
+// RichEditor — ProseMirror mounts in jsdom but refuses text: measured here,
+// both userEvent.type and userEvent.paste leave the doc at an empty paragraph.
+// Since #327 made a non-blank description a submit precondition, these tests
+// need some way to supply one, and their subject is submit/routing/error
+// handling, not the editor. The editor's own behaviour is covered by its tests.
+vi.mock('@fops/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@fops/ui')>()),
+  RichEditor: ({ onChange }: { onChange: (doc: unknown) => void }) => (
+    <textarea
+      data-testid="mock-rich-editor"
+      aria-label="상세 설명"
+      onChange={(e) =>
+        onChange(
+          e.target.value
+            ? {
+                type: 'doc',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: e.target.value }] }],
+              }
+            : { type: 'doc', content: [] },
+        )
+      }
+    />
+  ),
+}));
+
 import { toast } from 'sonner';
 import { useMe } from '@/lib/auth/useMe';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -143,6 +168,7 @@ function renderHarness(screenProps?: Partial<React.ComponentProps<typeof VocCrea
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return { router, qc };
 }
 
 // Helper: build a JSON Response
@@ -162,6 +188,7 @@ function installFetch(
   },
 ) {
   const { msItems = [MS_ITEM], aaItems = [AA_ITEM], postVocsResponse } = options;
+  const postBodies: unknown[] = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.includes('/managed-systems') && (!init?.method || init.method === 'GET')) {
@@ -171,11 +198,13 @@ function installFetch(
       return jsonResponse({ items: aaItems, total: aaItems.length });
     }
     if (url.includes('/vocs') && init?.method === 'POST') {
+      postBodies.push(JSON.parse(String(init.body)));
       if (!postVocsResponse) return jsonResponse({}, 500);
       return jsonResponse(postVocsResponse.body, postVocsResponse.status, postVocsResponse.headers ?? {});
     }
     return new Response('not mocked', { status: 500 });
   }) as typeof globalThis.fetch;
+  return { postBodies };
 }
 
 // ── Test suite ────────────────────────────────────────────────────────────────
@@ -198,8 +227,7 @@ describe('VocCreateScreen integration', () => {
   });
 
   // ── 1. Happy path (201) ────────────────────────────────────────────────────
-  test('happy path: 201 navigates to /vocs?view=inbox&selected=<id>', async () => {
-    const navigateMock = vi.fn();
+  test('happy path: 201 navigates to /vocs?view=my&selected=<id>', async () => {
     installFetch({
       postVocsResponse: {
         status: 201,
@@ -207,7 +235,7 @@ describe('VocCreateScreen integration', () => {
       },
     });
 
-    renderHarness({ onCancel: vi.fn() });
+    const { router } = renderHarness({ onCancel: vi.fn() });
 
     // Wait for MS picker to appear
     await waitFor(() => {
@@ -222,6 +250,12 @@ describe('VocCreateScreen integration', () => {
     fireEvent.change(titleInput, { target: { value: '테스트 제목입니다' } });
     fireEvent.blur(titleInput);
 
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
+
     // The description_rich_content has a default emptyTipTapDoc() — zod allows
     // it (type: 'doc', content: []). The form's isValid gate depends on the
     // zodResolver; with a valid MS ID and title the form should become valid.
@@ -234,15 +268,54 @@ describe('VocCreateScreen integration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'VOC 제출' }));
 
-    // After successful POST, navigate should be called with the right args.
-    // VocCreateScreen calls useNavigate() from TanStack Router internally.
-    // In the router harness the navigation triggers a route change — check
-    // that /vocs URL becomes the target and the fetch was called.
+    // The route must land on the reporter-readable My VOCs list with the
+    // submitted record still selected.
     await waitFor(() => {
-      const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
-      const postCall = calls.find(([, init]) => init?.method === 'POST');
-      expect(postCall).toBeTruthy();
+      expect(router.state.location.search).toEqual(
+        expect.objectContaining({ view: 'my', selected: VOC_ID }),
+      );
     });
+  });
+
+  test('AC-E14 renders help and submits independent source and Analytics Area values without a warning dialog', async () => {
+    const { postBodies } = installFetch({
+      postVocsResponse: {
+        status: 201,
+        body: { id: VOC_ID, display_id: 'V-1', created_at: '2026-05-20T00:00:00Z' },
+      },
+    });
+
+    renderHarness({ onCancel: vi.fn() });
+
+    await waitFor(() => expect(screen.getByTestId('ms-picker')).toBeInTheDocument());
+    expect(screen.getByText('타인 대신 보고는 다른 팀원이나 고객의 경험을 대신 등록하는 경우입니다.')).toBeInTheDocument();
+    expect(screen.getByText('Analytics Area는 VOC를 분석할 때 함께 볼 주제에 맞춰 선택하세요.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: MS_ITEM.name }));
+    // Radix TabsTrigger activates on mousedown, not click.
+    fireEvent.mouseDown(screen.getByRole('tab', { name: '타인 대신 보고' }));
+    await waitFor(() => expect(screen.getByTestId('aa-picker')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('radio', { name: AA_ITEM.name }));
+    fireEvent.change(screen.getByRole('textbox', { name: /제목/i }), { target: { value: '분류와 출처가 독립적인 VOC' } });
+    fireEvent.blur(screen.getByRole('textbox', { name: /제목/i }));
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'VOC 제출' }));
+
+    await waitFor(() => expect(postBodies).toHaveLength(1));
+    expect(postBodies[0]).toEqual(expect.objectContaining({
+      primary_managed_system_id: MS_ID,
+      analytics_area_id: AA_ID,
+      source_context: 'proxy_report',
+      title: '분류와 출처가 독립적인 VOC',
+      attachment_ids: [],
+    }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   // ── 2. 422 validation.failed with detail.fields ───────────────────────────
@@ -277,6 +350,12 @@ describe('VocCreateScreen integration', () => {
     const titleInput = screen.getByRole('textbox', { name: /제목/i });
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
+
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
@@ -328,6 +407,12 @@ describe('VocCreateScreen integration', () => {
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
 
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
+
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
     });
@@ -362,6 +447,12 @@ describe('VocCreateScreen integration', () => {
     const titleInput = screen.getByRole('textbox', { name: /제목/i });
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
+
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
@@ -400,6 +491,12 @@ describe('VocCreateScreen integration', () => {
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
 
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
+
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();
     });
@@ -433,6 +530,12 @@ describe('VocCreateScreen integration', () => {
     const titleInput = screen.getByRole('textbox', { name: /제목/i });
     fireEvent.change(titleInput, { target: { value: '제목' } });
     fireEvent.blur(titleInput);
+
+    // #327: a blank description is now rejected at the schema, which is what
+    // gates `formState.isValid` and therefore the submit button.
+    fireEvent.change(screen.getByTestId('mock-rich-editor'), {
+      target: { value: '재현 절차와 기대 동작' },
+    });
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled();

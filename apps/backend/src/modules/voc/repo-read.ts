@@ -137,13 +137,77 @@ export interface ListVocsRepoArgs {
   scopeFilter: Scope;
   view: 'inbox' | 'my' | 'triage';
   actorIdForMyFilter?: string; // required when view='my'
-  tab?: 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link' | 'waiting';
+  tab?: 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link' | 'high-no-link' | 'waiting';
   filterSeverity?: ('low' | 'medium' | 'high' | 'critical')[];
   filterReporterFacingStatus?: string[];
   filterOwner?: 'assigned' | 'unassigned';
   sort: 'created_at:desc' | 'created_at:asc' | 'severity:asc' | 'severity:desc' | 'reporter_facing_status:asc' | 'triage_pinned';
   cursor?: { sv: string | number; id: string };
   limit: number;
+}
+
+type VocListPredicateArgs = Omit<ListVocsRepoArgs, 'sort' | 'cursor' | 'limit'>;
+
+/**
+ * The canonical list/count predicate.  Keep navigation counts on this path so
+ * a badge cannot silently drift from the corresponding VOC list.
+ */
+export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<typeof sql>[] | null {
+  const {
+    workspaceId,
+    scopeFilter,
+    view,
+    actorIdForMyFilter,
+    tab,
+    filterSeverity,
+    filterReporterFacingStatus,
+    filterOwner,
+  } = args;
+  if (scopeFilter.kind === 'scoped' && scopeFilter.managedSystemIds.length === 0) return null;
+  if (tab === 'similar') return null;
+
+  const wheres: ReturnType<typeof sql>[] = [
+    sql`workspace_id = ${workspaceId}`,
+    sql`archived_at IS NULL`,
+  ];
+  if (scopeFilter.kind === 'scoped') {
+    wheres.push(sql`primary_managed_system_id = ANY(${sqlUuidArray(scopeFilter.managedSystemIds)})`);
+  }
+  if (view === 'my') {
+    if (!actorIdForMyFilter) throw new Error('actorIdForMyFilter required for view=my');
+    wheres.push(sql`reporter_id = ${actorIdForMyFilter}`);
+  } else if (view === 'triage') {
+    wheres.push(sql`triage_state IN ('untriaged','needs_more_information')`);
+  }
+  if (tab === 'untriaged') wheres.push(sql`triage_state = 'untriaged'`);
+  else if (tab === 'high') wheres.push(sql`severity = 'high'`);
+  else if (tab === 'unassigned') wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
+  else if (tab === 'waiting') wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
+  else if (tab === 'no-link' || tab === 'high-no-link') {
+    if (tab === 'high-no-link') wheres.push(sql`severity IN ('high', 'critical')`);
+    wheres.push(sql`NOT EXISTS (
+      SELECT 1 FROM ${entityLinks} el
+      WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
+        AND ((el.source_type = 'voc' AND el.source_id = ${vocs.id})
+          OR (el.target_type = 'voc' AND el.target_id = ${vocs.id}))
+    )`);
+  }
+  if (filterSeverity && filterSeverity.length > 0) wheres.push(sql`severity = ANY(${sqlTextArray(filterSeverity)})`);
+  if (filterReporterFacingStatus && filterReporterFacingStatus.length > 0) {
+    wheres.push(sql`reporter_facing_status = ANY(${sqlTextArray(filterReporterFacingStatus)})`);
+  }
+  if (filterOwner === 'assigned') wheres.push(sql`(owner_user_id IS NOT NULL OR owner_team_id IS NOT NULL)`);
+  else if (filterOwner === 'unassigned') wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
+  return wheres;
+}
+
+export async function countVocsForRead(db: Db | Tx, args: VocListPredicateArgs): Promise<number> {
+  const wheres = buildVocListPredicate(args);
+  if (wheres === null) return 0;
+  const result = await (db as Db).execute<{ count: number | string }>(sql`
+    SELECT count(*)::int AS count FROM ${vocs} WHERE ${sql.join(wheres, sql` AND `)}
+  `);
+  return Number(result.rows[0]?.count ?? 0);
 }
 
 // Utility: normalise raw postgres row dates.
@@ -199,72 +263,8 @@ export async function listVocsForRead(
 ): Promise<{ rows: VocReadRow[]; hasMore: boolean; nextCursor: { sv: string | number; id: string } | null }> {
   const { workspaceId, scopeFilter, view, actorIdForMyFilter, tab, filterSeverity, filterReporterFacingStatus, filterOwner, sort, cursor, limit } = args;
 
-  // Short-circuit: empty scoped list → no rows possible, skip DB query.
-  if (scopeFilter.kind === 'scoped' && scopeFilter.managedSystemIds.length === 0) {
-    return { rows: [], hasMore: false, nextCursor: null };
-  }
-
-  // tab='similar' → WHERE false (Slice 3; cluster service not available).
-  if (tab === 'similar') {
-    return { rows: [], hasMore: false, nextCursor: null };
-  }
-
-  // Build the WHERE clauses via raw SQL fragments.
-  // All values are bound via parameterised sql`` tags — never string-interpolated.
-  const wheres: ReturnType<typeof sql>[] = [
-    sql`workspace_id = ${workspaceId}`,
-    sql`archived_at IS NULL`,
-  ];
-
-  // Scope filter.
-  if (scopeFilter.kind === 'scoped') {
-    wheres.push(sql`primary_managed_system_id = ANY(${sqlUuidArray(scopeFilter.managedSystemIds)})`);
-  }
-
-  // View-specific filters.
-  if (view === 'my') {
-    if (!actorIdForMyFilter) throw new Error('actorIdForMyFilter required for view=my');
-    wheres.push(sql`reporter_id = ${actorIdForMyFilter}`);
-  } else if (view === 'triage') {
-    wheres.push(sql`triage_state IN ('untriaged','needs_more_information')`);
-  }
-
-  // Tab filters.
-  if (tab === 'untriaged') {
-    wheres.push(sql`triage_state = 'untriaged'`);
-  } else if (tab === 'high') {
-    wheres.push(sql`severity = 'high'`);
-  } else if (tab === 'unassigned') {
-    wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
-  } else if (tab === 'waiting') {
-    // Only valid for triage view; no extra clause beyond the triage_state filter
-    // since service layer validates view=triage for this tab.
-    wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
-  } else if (tab === 'no-link') {
-    wheres.push(sql`NOT EXISTS (
-      SELECT 1
-      FROM ${entityLinks} el
-      WHERE el.workspace_id = ${workspaceId}
-        AND el.status = 'active'
-        AND (
-          (el.source_type = 'voc' AND el.source_id = ${vocs.id})
-          OR (el.target_type = 'voc' AND el.target_id = ${vocs.id})
-        )
-    )`);
-  }
-
-  // Scalar column filters.
-  if (filterSeverity && filterSeverity.length > 0) {
-    wheres.push(sql`severity = ANY(${sqlTextArray(filterSeverity)})`);
-  }
-  if (filterReporterFacingStatus && filterReporterFacingStatus.length > 0) {
-    wheres.push(sql`reporter_facing_status = ANY(${sqlTextArray(filterReporterFacingStatus)})`);
-  }
-  if (filterOwner === 'assigned') {
-    wheres.push(sql`(owner_user_id IS NOT NULL OR owner_team_id IS NOT NULL)`);
-  } else if (filterOwner === 'unassigned') {
-    wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
-  }
+  const wheres = buildVocListPredicate(args);
+  if (wheres === null) return { rows: [], hasMore: false, nextCursor: null };
 
   // Determine sort order and cursor predicate.
   // triage_pinned uses a server-pinned composite sort; others use SORT_CONFIG.
@@ -915,11 +915,36 @@ export interface SimilarVocReadItem {
   severity: 'low' | 'medium' | 'high' | 'critical' | null;
 }
 
-function similarPeerVisibilityPredicate(readScope: Scope, actorId: string): ReturnType<typeof sql> {
+/**
+ * The ADR-0031 VOC visibility rule, and the only copy of it.
+ *
+ * A VOC other than the actor's own source is visible when its Managed System
+ * is in the actor's `voc.read` scope, or the actor reported it. Both the
+ * ADR-0031 similar-peer projections below and the ADR-0034 recommendation read
+ * model (`recommendations/repo.ts`) call this one function; ADR-0034 D4 says
+ * the recommendation surface *reuses* this rule rather than deriving one of
+ * its own, and reuse means calling it, not restating it.
+ *
+ * It was briefly restated in `recommendations/scope.ts` because that query
+ * aliases the VOC differently — which is why the alias is a parameter now. A
+ * second body is not worth an aliasing difference: a future change to the
+ * scope semantics (a team-based arm, a different resolution of `kind: 'all'`)
+ * would be made in one copy, the other would keep authorizing under the old
+ * rule, and the divergence would leak VOC existence with nothing failing.
+ *
+ * `vocAlias` is a table alias, not a value — callers supply e.g. sql`p`.
+ * `__tests__/voc-visibility-predicate.integration.test.ts` pins the verdict
+ * matrix and asserts both surfaces admit the same VOCs on one fixture.
+ */
+export function similarVocVisibilityPredicate(
+  readScope: Scope,
+  actorId: string,
+  vocAlias: ReturnType<typeof sql>,
+): ReturnType<typeof sql> {
   if (readScope.kind === 'all') return sql`true`;
   return sql`(
-    p.primary_managed_system_id = ANY(${sqlUuidArray(readScope.managedSystemIds)})
-    OR p.reporter_id = ${actorId}
+    ${vocAlias}.primary_managed_system_id = ANY(${sqlUuidArray(readScope.managedSystemIds)})
+    OR ${vocAlias}.reporter_id = ${actorId}
   )`;
 }
 
@@ -931,7 +956,7 @@ export async function selectSimilarVocCounts(
   const out = new Map<string, number>();
   const { workspaceId, sourceVocIds, actorId, readScope } = args;
   if (sourceVocIds.length === 0) return out;
-  const peerVisible = similarPeerVisibilityPredicate(readScope, actorId);
+  const peerVisible = similarVocVisibilityPredicate(readScope, actorId, sql`p`);
   const result = await (db as Db).execute<{ source_voc_id: string; cnt: string }>(sql`
     SELECT source.id AS source_voc_id, COUNT(p.id)::text AS cnt
       FROM ${vocs} source
@@ -961,7 +986,7 @@ export async function selectSimilarVocCount(
   },
 ): Promise<number> {
   const { workspaceId, sourceVocId, primaryManagedSystemId, actorId, readScope } = args;
-  const peerVisible = similarPeerVisibilityPredicate(readScope, actorId);
+  const peerVisible = similarVocVisibilityPredicate(readScope, actorId, sql`p`);
   const result = await (db as Db).execute<{ cnt: string }>(sql`
     SELECT COUNT(p.id)::text AS cnt
       FROM ${vocs} p
@@ -985,7 +1010,7 @@ export async function selectSimilarVocItems(
   },
 ): Promise<SimilarVocReadItem[]> {
   const { workspaceId, sourceVocId, primaryManagedSystemId, actorId, readScope } = args;
-  const peerVisible = similarPeerVisibilityPredicate(readScope, actorId);
+  const peerVisible = similarVocVisibilityPredicate(readScope, actorId, sql`p`);
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT p.id, p.display_id, p.title, p.reporter_facing_status, p.severity
       FROM ${vocs} p

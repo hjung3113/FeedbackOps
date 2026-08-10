@@ -83,6 +83,8 @@ Every page-level FE issue (route mount, full screen) runs a structured Playwrigh
 
 For a route with a committed Playwright visual harness (currently `/voc-clusters`), the durable `test:visual` regression run replaces the manual Playwright-MCP recapture step above. The one-time CP-pixel fidelity table against `docs/design-prototype/screenshots/final-baselines/<page>.png` still happens once when introducing the harness, and again for an intentional redesign.
 
+The harness pins a fixed page clock (`FIXED_CLOCK` in `tests/visual/support/visual-test.ts`), so screens that render fixture timestamps as relative time ("3일 전") stay reproducible instead of encoding the capture date. A fixture whose timestamp is newer than the pin will render a future-dated label — move the pin forward with the fixture, and regenerate the affected baselines in that same commit.
+
 The authority prototype baseline is `final-baselines/`, never `pack20-current/`. Committed Playwright screenshot baselines change only in a commit that declares the intended visual change. Blanket `--update-snapshots` to silence red is forbidden. A baseline-change commit must state the intended change, attach or point to the Playwright diff, and have a changed-PNG count equal to the intended-screen count.
 
 ## Prototype Copy Authority

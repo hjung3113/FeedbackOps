@@ -95,7 +95,10 @@ function useFullscreenPanel() {
 // ------------------------------------------------------------
 // Popover — anchored to an element by ref.
 // ------------------------------------------------------------
-function Popover({ open, anchorRef, onClose, align = 'left', children, width, offset = 6 }) {
+// `placement="top"` opens upward instead. Every existing consumer is a toolbar
+// near the top of the screen, so downward is still the default; the rail's
+// account menu sits at the bottom edge and would otherwise open off-screen.
+function Popover({ open, anchorRef, onClose, align = 'left', placement = 'bottom', children, width, offset = 6 }) {
   const popoverRef = useRef(null);
   const [pos, setPos] = useState(null);
   useEffect(() => {
@@ -105,8 +108,9 @@ function Popover({ open, anchorRef, onClose, align = 'left', children, width, of
       if (!a) return;
       const r = a.getBoundingClientRect();
       const top = r.bottom + offset;
+      const bottom = window.innerHeight - r.top + offset;
       const left = align === 'right' ? r.right : r.left;
-      setPos({ top, left, align });
+      setPos({ top, bottom, left, align });
     };
     update();
     window.addEventListener('resize', update);
@@ -133,7 +137,7 @@ function Popover({ open, anchorRef, onClose, align = 'left', children, width, of
   }, [open, onClose, anchorRef]);
   if (!open || !pos) return null;
   const style = {
-    top: pos.top,
+    ...(placement === 'top' ? { bottom: pos.bottom } : { top: pos.top }),
     width,
     ...(align === 'right' ? { right: window.innerWidth - pos.left } : { left: pos.left }),
   };

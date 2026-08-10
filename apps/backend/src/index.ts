@@ -19,6 +19,8 @@ import { createAuditService } from './modules/core/audit/index.js';
 import { registerCoreJobs } from './modules/core/jobs/index.js';
 import { registerTasksJobs } from './modules/tasks/index.js';
 import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
+import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
+import { registerVocJobs } from './modules/voc/jobs/index.js';
 import { buildServer } from './server.js';
 
 const config = loadConfig();
@@ -41,6 +43,15 @@ await registerTasksJobs(boss, {
     db: dbHandle.db,
     auditService: createAuditService(),
   }),
+});
+// #168 (ADR-0034 D6). Registered even when the provider is disabled: the
+// backfill cron row must exist so enabling a provider is a config change, not
+// a queue-registration change. Both handlers no-op while disabled.
+await registerVocJobs(boss, {
+  db: dbHandle.db,
+  provider: createEmbeddingProvider(config),
+  embeddingVersion: config.EMBEDDING_VERSION,
+  embeddingEnabled: isEmbeddingEnabled(config),
 });
 
 const app = await buildServer({ config, dbHandle, boss });

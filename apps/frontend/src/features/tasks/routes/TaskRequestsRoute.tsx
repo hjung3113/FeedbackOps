@@ -1,3 +1,4 @@
+import { useFindingDetail } from '@/features/integration/hooks/useFindingDetail';
 import {
   approveTaskRequest,
   convertTaskRequest,
@@ -12,15 +13,27 @@ import {
 } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
-import { useFindingDetail } from '@/features/integration/hooks/useFindingDetail';
-import type { ApiError } from '@/lib/api/types';
-import type { TaskDto, TaskPriority, TaskRequestDto, TaskRequestStatus } from '@fops/shared';
+import { ApiError } from '@/lib/api/types';
+import {
+  type TaskDto,
+  type TaskPriority,
+  type TaskRequestDto,
+  type TaskRequestStatus,
+  convertTaskRequestRequestSchema,
+} from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   FieldRow,
+  Label,
   ListShell,
   ListToolbar,
   type ListToolbarTab,
@@ -31,6 +44,8 @@ import {
   type PanelSection,
   PanelSectionTitle,
   PanelTitleBlock,
+  PermissionBlockedPanel,
+  Textarea,
   UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -39,6 +54,13 @@ import * as React from 'react';
 import { toast } from 'sonner';
 
 type TaskRequestTab = TaskRequestStatus | 'all';
+type DecisionAction = 'approve' | 'request-more-evidence' | 'reject';
+
+interface DecisionDialogState {
+  action: DecisionAction;
+  value: string;
+  error: string | null;
+}
 
 const TAB_ORDER: Array<{ value: TaskRequestTab; label: string }> = [
   { value: 'pending_review', label: 'Pending' },
@@ -74,6 +96,25 @@ const STATUS_SEVERITY: Record<TaskRequestStatus, ObjectRowSeverity> = {
 
 const REVIEW_DECISION_STATUSES = ['pending_review', 'needs_more_evidence'] as const;
 const TASK_PRIORITIES: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
+const TASK_TITLE_TRUNCATION_MARKER = '…';
+// The module-level null check narrows the statement that follows it, but not the
+// function bodies below — they could run after any later reassignment as far as
+// TS is concerned. Re-binding to a `number` const carries the narrowing into them.
+const canonicalTitleMaxLength = convertTaskRequestRequestSchema.shape.title.maxLength;
+
+if (canonicalTitleMaxLength === null) {
+  throw new Error('Task conversion title requires a canonical maximum length.');
+}
+
+const TASK_TITLE_MAX_LENGTH: number = canonicalTitleMaxLength;
+
+function defaultConvertTitle(requestedOutcome: string): string {
+  if (requestedOutcome.length <= TASK_TITLE_MAX_LENGTH) return requestedOutcome;
+  return `${requestedOutcome.slice(
+    0,
+    TASK_TITLE_MAX_LENGTH - TASK_TITLE_TRUNCATION_MARKER.length,
+  )}${TASK_TITLE_TRUNCATION_MARKER}`;
+}
 
 export function canApproveTaskRequest(status: TaskRequestStatus): boolean {
   return REVIEW_DECISION_STATUSES.some((allowed) => allowed === status);
@@ -112,6 +153,94 @@ function TaskRequestBadge({ status }: { status: TaskRequestStatus }) {
   );
 }
 
+function TaskRequestDecisionDialog({
+  dialog,
+  isSelfApproval,
+  isSubmitting,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  dialog: DecisionDialogState | null;
+  isSelfApproval: boolean;
+  isSubmitting: boolean;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  if (!dialog) return null;
+
+  const details =
+    dialog.action === 'approve'
+      ? {
+          title: 'Approve Task Request',
+          description: 'Record the rationale for accepting this execution candidate.',
+          label: isSelfApproval ? 'Self-approval reason' : 'Approval reason',
+          submitLabel: 'Approve Task Request',
+          required: isSelfApproval,
+        }
+      : dialog.action === 'request-more-evidence'
+        ? {
+            title: 'Request more evidence',
+            description: 'Record the evidence needed before this request can be reviewed.',
+            label: 'Evidence note',
+            submitLabel: 'Request evidence',
+            required: true,
+          }
+        : {
+            title: 'Reject Task Request',
+            description: 'Record why this execution candidate cannot be accepted.',
+            label: 'Reject reason',
+            submitLabel: 'Reject Task Request',
+            required: true,
+          };
+  const inputId = `task-request-${dialog.action}-reason`;
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && !isSubmitting && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{details.title}</DialogTitle>
+          <DialogDescription>{details.description}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={inputId}>{details.label}</Label>
+            <Textarea
+              id={inputId}
+              rows={3}
+              value={dialog.value}
+              onChange={(event) => onChange(event.target.value)}
+              disabled={isSubmitting}
+              aria-invalid={dialog.error !== null}
+            />
+            {details.required && <span className="text-xs text-text-muted">Required.</span>}
+          </div>
+          {dialog.error && (
+            <p className="text-sm text-accent-danger" role="alert">
+              {dialog.error}
+            </p>
+          )}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={isSubmitting}
+              onClick={onClose}
+              data-testid="task-request-decision-cancel"
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={isSubmitting} disabled={isSubmitting}>
+              {details.submitLabel}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function dot() {
   return <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />;
 }
@@ -125,8 +254,10 @@ interface NameMaps {
   managedSystemsById: Record<string, { name: string }>;
 }
 
+// `exactOptionalPropertyTypes` is on: an optional property must spell `| undefined`
+// explicitly for a value that may actually be undefined to be assignable.
 type TaskRequestListItem = TaskRequestDto & {
-  source?: TaskRequestDto['source'] & { display_id?: string | null };
+  source?: (NonNullable<TaskRequestDto['source']> & { display_id?: string | null }) | undefined;
 };
 
 interface TaskRequestRowProps {
@@ -207,15 +338,23 @@ function TaskRequestPanel({
   const isSelfApproval = currentActorId === item.requester_actor_id;
   const [convertOpen, setConvertOpen] = React.useState(false);
   const [linkOpen, setLinkOpen] = React.useState(false);
-  const [convertTitle, setConvertTitle] = React.useState(item.requested_outcome);
+  const [convertTitle, setConvertTitle] = React.useState(() =>
+    defaultConvertTitle(item.requested_outcome),
+  );
+  const [convertTitleError, setConvertTitleError] = React.useState<string | null>(null);
+  const convertTitleInputRef = React.useRef<HTMLInputElement>(null);
   const [convertPriority, setConvertPriority] = React.useState<TaskPriority>('medium');
   const [convertAssigneeId, setConvertAssigneeId] = React.useState('');
   const [convertDueDate, setConvertDueDate] = React.useState('');
   const [convertMilestoneId, setConvertMilestoneId] = React.useState('');
   const [convertAnalyticsAreaId, setConvertAnalyticsAreaId] = React.useState('');
+  const [decisionDialog, setDecisionDialog] = React.useState<DecisionDialogState | null>(null);
+  const [isDecisionSubmitting, setIsDecisionSubmitting] = React.useState(false);
+  const decisionSubmittingRef = React.useRef(false);
 
   React.useEffect(() => {
-    setConvertTitle(item.requested_outcome);
+    setConvertTitle(defaultConvertTitle(item.requested_outcome));
+    setConvertTitleError(null);
     setConvertPriority('medium');
     setConvertAssigneeId('');
     setConvertDueDate('');
@@ -223,6 +362,9 @@ function TaskRequestPanel({
     setConvertAnalyticsAreaId('');
     setConvertOpen(false);
     setLinkOpen(false);
+    setDecisionDialog(null);
+    setIsDecisionSubmitting(false);
+    decisionSubmittingRef.current = false;
   }, [item]);
 
   const selfApprovalCheck = useQuery({
@@ -289,20 +431,26 @@ function TaskRequestPanel({
       return requestMoreEvidenceForTaskRequest(item.id, { note: vars.note ?? '' }, key);
     },
     onSuccess: () => {
+      decisionSubmittingRef.current = false;
+      setIsDecisionSubmitting(false);
+      setDecisionDialog(null);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       toast('Task Request updated.');
     },
     onError: (err) => {
-      toast.error(err.envelope.message);
+      decisionSubmittingRef.current = false;
+      setIsDecisionSubmitting(false);
+      setDecisionDialog((current) => {
+        if (current) return { ...current, error: err.envelope.message };
+        toast.error(err.envelope.message);
+        return current;
+      });
     },
   });
 
   const convertMutation = useMutation<TaskDto, Error, void>({
     mutationFn: async () => {
       const title = convertTitle.trim();
-      if (title.length === 0) {
-        throw new Error('Title is required.');
-      }
       return convertTaskRequest(
         item.id,
         {
@@ -343,40 +491,48 @@ function TaskRequestPanel({
   });
 
   function approve(): void {
-    const reason = window.prompt(isSelfApproval ? 'Self-approval reason' : 'Approval reason');
-    if (reason === null) return;
-    if (isSelfApproval && reason.trim().length === 0) {
-      toast.error('Self-approval requires a reason.');
-      return;
-    }
     if (isSelfApproval && !canSelfApprove) {
       toast.error('Self-approval requires scoped capability.');
       return;
     }
-    const trimmed = reason.trim();
-    decisionMutation.mutate(
-      trimmed.length > 0 ? { action: 'approve', reason: trimmed } : { action: 'approve' },
-    );
+    setDecisionDialog({ action: 'approve', value: '', error: null });
   }
 
   function requestEvidence(): void {
-    const note = window.prompt('Evidence note');
-    if (note === null) return;
-    if (note.trim().length === 0) {
-      toast.error('Note is required.');
-      return;
-    }
-    decisionMutation.mutate({ action: 'request-more-evidence', note: note.trim() });
+    setDecisionDialog({ action: 'request-more-evidence', value: '', error: null });
   }
 
   function reject(): void {
-    const reason = window.prompt('Reject reason');
-    if (reason === null) return;
-    if (reason.trim().length === 0) {
-      toast.error('Reason is required.');
+    setDecisionDialog({ action: 'reject', value: '', error: null });
+  }
+
+  function submitDecision(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (!decisionDialog || decisionSubmittingRef.current) return;
+    const value = decisionDialog.value.trim();
+    const error =
+      decisionDialog.action === 'approve' && isSelfApproval && value.length === 0
+        ? 'Self-approval requires a reason.'
+        : decisionDialog.action === 'request-more-evidence' && value.length === 0
+          ? 'Note is required.'
+          : decisionDialog.action === 'reject' && value.length === 0
+            ? 'Reason is required.'
+            : null;
+    if (error) {
+      setDecisionDialog((current) => (current ? { ...current, error } : current));
       return;
     }
-    decisionMutation.mutate({ action: 'reject', reason: reason.trim() });
+    decisionSubmittingRef.current = true;
+    setIsDecisionSubmitting(true);
+    if (decisionDialog.action === 'approve') {
+      decisionMutation.mutate(value ? { action: 'approve', reason: value } : { action: 'approve' });
+      return;
+    }
+    decisionMutation.mutate(
+      decisionDialog.action === 'reject'
+        ? { action: 'reject', reason: value }
+        : { action: 'request-more-evidence', note: value },
+    );
   }
 
   const sections: PanelSection[] = [
@@ -520,17 +676,53 @@ function TaskRequestPanel({
                 className="flex flex-col gap-2 rounded border border-border-subtle bg-surface-card p-3"
                 onSubmit={(event) => {
                   event.preventDefault();
+                  const titleResult =
+                    convertTaskRequestRequestSchema.shape.title.safeParse(convertTitle);
+                  if (!titleResult.success) {
+                    setConvertTitleError(
+                      titleResult.error.issues[0]?.message ?? 'Title is invalid.',
+                    );
+                    convertTitleInputRef.current?.focus();
+                    return;
+                  }
+                  setConvertTitleError(null);
                   convertMutation.mutate();
                 }}
               >
                 <label className="flex flex-col gap-1 text-xs text-text-muted">
                   Title
                   <input
+                    ref={convertTitleInputRef}
                     className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
                     value={convertTitle}
-                    maxLength={200}
-                    onChange={(event) => setConvertTitle(event.target.value)}
+                    aria-invalid={convertTitleError !== null}
+                    aria-describedby={
+                      convertTitleError
+                        ? 'task-request-convert-title-count task-request-convert-title-error'
+                        : 'task-request-convert-title-count'
+                    }
+                    data-testid="task-request-convert-title-input"
+                    onChange={(event) => {
+                      setConvertTitle(event.target.value);
+                      setConvertTitleError(null);
+                    }}
                   />
+                  <span
+                    id="task-request-convert-title-count"
+                    data-testid="task-request-convert-title-count"
+                  >
+                    {convertTitle.length}/{TASK_TITLE_MAX_LENGTH}
+                  </span>
+                  {convertTitleError && (
+                    <span
+                      id="task-request-convert-title-error"
+                      role="alert"
+                      className="text-xs text-accent-danger"
+                      data-testid="task-request-convert-title-error"
+                    >
+                      {convertTitleError}
+                    </span>
+                  )}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="flex flex-col gap-1 text-xs text-text-muted">
@@ -600,6 +792,7 @@ function TaskRequestPanel({
                   size="sm"
                   loading={convertMutation.isPending}
                   disabled={!canConvert}
+                  data-testid="task-request-convert-submit"
                 >
                   Convert to Task
                 </Button>
@@ -698,6 +891,18 @@ function TaskRequestPanel({
           </div>
         </section>
       </div>
+      <TaskRequestDecisionDialog
+        dialog={decisionDialog}
+        isSelfApproval={isSelfApproval}
+        isSubmitting={isDecisionSubmitting}
+        onChange={(value) =>
+          setDecisionDialog((current) => (current ? { ...current, value, error: null } : current))
+        }
+        onClose={() => {
+          if (!decisionSubmittingRef.current) setDecisionDialog(null);
+        }}
+        onSubmit={submitDecision}
+      />
     </aside>
   );
 }
@@ -787,6 +992,16 @@ export function TaskRequestsRoute({ selectedParam }: { selectedParam?: string | 
     return <div className="p-4 text-sm text-text-muted">Loading Task Requests…</div>;
   }
 
+  if (isPermissionDenied(taskRequestsQuery.error)) {
+    return (
+      <PermissionBlockedPanel
+        state="denied"
+        category="Task Request queue"
+        reason={taskRequestsQuery.error.message}
+        className="m-4"
+      />
+    );
+  }
   if (taskRequestsQuery.error) {
     return <div className="p-4 text-sm text-accent-danger">Task Request queue unavailable.</div>;
   }
@@ -828,5 +1043,13 @@ export function TaskRequestsRoute({ selectedParam }: { selectedParam?: string | 
         ) : null
       }
     />
+  );
+}
+
+function isPermissionDenied(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }

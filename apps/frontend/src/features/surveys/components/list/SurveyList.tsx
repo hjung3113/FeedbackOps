@@ -1,5 +1,7 @@
-import { EmptyState, Input, Skeleton } from '@fops/ui';
-import { Grid2X2, List } from 'lucide-react';
+import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import type { FrontendPermissionState } from '@/lib/api';
+import { Button, EmptyState, Input, Skeleton } from '@fops/ui';
+import { Grid2X2, List, Plus } from 'lucide-react';
 import * as React from 'react';
 import type { Survey, SurveyStatus } from '../../types';
 
@@ -15,19 +17,27 @@ const tabs: Array<{ label: string; value: SurveyStatus | 'all' }> = [
   { label: 'Closed', value: 'closed' },
 ];
 
+export interface SurveyListProps {
+  surveys: Survey[];
+  isLoading: boolean;
+  error: Error | null;
+  selectedId?: string | null;
+  onSelect: (id: string) => void;
+  canCreate?: boolean;
+  permissionState?: FrontendPermissionState;
+  onCreate?: () => void;
+}
+
 export function SurveyList({
   surveys,
   isLoading,
   error,
   selectedId,
   onSelect,
-}: {
-  surveys: Survey[];
-  isLoading: boolean;
-  error: Error | null;
-  selectedId?: string | null;
-  onSelect: (id: string) => void;
-}) {
+  canCreate = false,
+  permissionState,
+  onCreate,
+}: SurveyListProps) {
   const [status, setStatus] = React.useState<SurveyStatus | 'all'>('all');
   const [search, setSearch] = React.useState('');
   const [viewMode, setViewMode] = React.useState<'list' | 'card'>('list');
@@ -98,9 +108,41 @@ export function SurveyList({
             <Grid2X2 className="h-3.5 w-3.5" />
           </button>
         </div>
+        {canCreate && onCreate && (
+          <Button variant="primary" size="sm" onClick={onCreate} data-testid="survey-create-button">
+            <Plus className="h-4 w-4" />
+            New survey
+          </Button>
+        )}
       </div>
       {visible.length === 0 ? (
-        <EmptyState title="생성된 설문이 없습니다." body="설문을 만들어 응답을 수집하세요." />
+        <EmptyState
+          title="생성된 설문이 없습니다."
+          body={
+            canCreate
+              ? '설문을 만들어 응답을 수집하세요.'
+              : '설문을 만들려면 survey.manage 권한이 필요합니다.'
+          }
+          action={
+            canCreate ? (
+              onCreate && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={onCreate}
+                  data-testid="survey-empty-create-button"
+                >
+                  <Plus className="h-4 w-4" />
+                  New survey
+                </Button>
+              )
+            ) : permissionState === 'request_access' ? (
+              <RequestAccessButton capability="survey.manage" returnRouteIntent="/surveys" />
+            ) : (
+              <p data-testid="survey-empty-contact-admin">담당 관리자에게 문의하세요.</p>
+            )
+          }
+        />
       ) : (
         <div
           className={

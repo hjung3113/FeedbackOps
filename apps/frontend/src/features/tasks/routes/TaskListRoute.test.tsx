@@ -1,8 +1,10 @@
+import { getTask, listTasks } from '@/lib/api';
+import { ApiError } from '@/lib/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { TaskListRoute } from './TaskListRoute';
+import { TaskDetailPanel, TaskListRoute } from './TaskListRoute';
 
 vi.mock('@fops/ui', async () => {
   const actual = await vi.importActual<typeof import('@fops/ui')>('@fops/ui');
@@ -94,5 +96,67 @@ describe('TaskListRoute display ids', () => {
     });
     expect(await screen.findByText('FIN-179')).toBeInTheDocument();
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
+  });
+
+  it('renders permission denied instead of the list unavailable copy for a 403', async () => {
+    vi.mocked(listTasks).mockRejectedValueOnce(
+      new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.manage capability required',
+      }),
+    );
+    renderWithClient(<TaskListRoute />);
+
+    const panel = await screen.findByText('Task list');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
+  });
+
+  it('keeps a non-permission list failure unavailable', async () => {
+    vi.mocked(listTasks).mockRejectedValueOnce(
+      new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+    );
+    renderWithClient(<TaskListRoute />);
+
+    expect(await screen.findByText('Task list unavailable.')).toBeInTheDocument();
+    expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
+  });
+
+  it('renders permission denied instead of task detail unavailable for a 403', async () => {
+    vi.mocked(getTask).mockRejectedValueOnce(
+      new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.manage capability required',
+      }),
+    );
+    renderWithClient(
+      <TaskDetailPanel
+        taskId="10000000-0000-0000-0000-000000000001"
+        actorNamesById={new Map()}
+        managedSystemNamesById={new Map()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const panel = await screen.findByText('Task detail');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.queryByText('Task detail unavailable.')).not.toBeInTheDocument();
+  });
+
+  it('keeps a non-permission task detail failure unavailable', async () => {
+    vi.mocked(getTask).mockRejectedValueOnce(
+      new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+    );
+    renderWithClient(
+      <TaskDetailPanel
+        taskId="10000000-0000-0000-0000-000000000001"
+        actorNamesById={new Map()}
+        managedSystemNamesById={new Map()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Task detail unavailable.')).toBeInTheDocument();
+    expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
   });
 });

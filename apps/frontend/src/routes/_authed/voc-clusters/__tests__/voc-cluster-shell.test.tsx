@@ -888,7 +888,7 @@ describe("VOC cluster route shells", () => {
     },
   );
 
-  it("picks a candidate peer and submits its VOC id instead of accepting a raw UUID", async () => {
+  it("AC-E10a keeps current members visible, disabled, and badged", async () => {
     const { VocClusterDetailPanel } = await import("../$clusterId");
 
     render(
@@ -899,16 +899,44 @@ describe("VOC cluster route shells", () => {
     );
 
     fireEvent.click(screen.getByTestId("cluster-add-voc-button"));
-    expect(screen.getByTestId("add-voc-candidate-picker")).toHaveTextContent(
-      "VOC-444 · 결제 재시도 안내 요청 · high · received",
-    );
-    expect(screen.queryByTestId("add-voc-id-input")).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId(
+        "add-voc-candidate-33333333-3333-3333-3333-333333333333",
+      ),
+    ).toBeDisabled();
+    expect(
+      screen.getByTestId(
+        "add-voc-included-33333333-3333-3333-3333-333333333333",
+      ),
+    ).toHaveTextContent("이미 포함됨");
+  });
 
-    fireEvent.change(screen.getByTestId("add-voc-candidate-picker"), {
-      target: { value: "44444444-4444-4444-4444-444444444444" },
-    });
+  it("AC-E10b keeps nonmembers selectable without an included badge", async () => {
+    const { VocClusterDetailPanel } = await import("../$clusterId");
+
+    render(
+      <VocClusterDetailPanel
+        clusterId="11111111-1111-1111-1111-111111111111"
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("cluster-add-voc-button"));
+
+    const nonmember = screen.getByTestId(
+      "add-voc-candidate-44444444-4444-4444-4444-444444444444",
+    );
+    expect(nonmember).toBeEnabled();
+    expect(
+      screen.queryByTestId(
+        "add-voc-included-44444444-4444-4444-4444-444444444444",
+      ),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(nonmember);
     fireEvent.submit(screen.getByTestId("add-voc-form"));
 
+    expect(addClusterMemberMutate).toHaveBeenCalledTimes(1);
     expect(addClusterMemberMutate).toHaveBeenCalledWith(
       {
         clusterId: "11111111-1111-1111-1111-111111111111",

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { attachmentIdsSchema, tipTapDocSchema } from './create-request.js';
 import { reporterFacingStatusEnumSchema } from './list-item.js';
+import { isTipTapDocBlank } from './rich-content.js';
 
 // shape A / B — body present, skip_public_update=false.
 // shape A = status change (next !== current, validated server-side).
@@ -13,7 +14,9 @@ import { reporterFacingStatusEnumSchema } from './list-item.js';
 const publicUpdateBodyShape = z
   .object({
     skip_public_update: z.literal(false),
-    body_rich_content: tipTapDocSchema,
+    body_rich_content: tipTapDocSchema.refine((doc) => !isTipTapDocBlank(doc), {
+      message: '상세 설명을 입력해 주세요.',
+    }),
     next_reporter_facing_status: reporterFacingStatusEnumSchema,
     attachment_ids: attachmentIdsSchema.optional(),
   })

@@ -23,6 +23,10 @@ import type { RequestService } from './request-service.js';
 import type { DecisionService } from './decision-service.js';
 import { type FrontendState, toFrontendState } from './state-mapper.js';
 
+// Export the exact parser used by the approve route so its shared-contract
+// binding can be asserted without booting Fastify or opening a database.
+export const approvePermissionRequestBodySchema = approvePermissionRequestSchema;
+
 export interface PermissionsRoutesOptions {
   sessionService: SessionService;
   checkService: CheckService;
@@ -124,6 +128,40 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
   // ── POST /permission-requests ───────────────────────────────────────────
   // Slice 1 #5 — the first audited mutation. Idempotency-Key honored
   // (ADR-0015), audit row committed in the same transaction (ADR-0008).
+  app.route({
+    method: 'GET',
+    url: '/me/permissions/scope',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    schema: { querystring: z.object({ capability: z.string().min(1) }) },
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess)
+        throw new HttpError(
+          'internal.unexpected',
+          'session missing after middleware',
+        );
+      const q = req.query as { capability: string };
+      if (!isCapability(q.capability)) {
+        return sendError(
+          reply,
+          'validation.unknown_capability',
+          'unknown capability',
+          { capability: q.capability },
+        );
+      }
+      const scope = await checkService.capabilityScope(
+        {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        q.capability,
+        { workspace_id: sess.workspace_id },
+      );
+      return { scope };
+    },
+  });
+
   app.route({
     method: 'POST',
     url: '/permission-requests',
@@ -275,11 +313,22 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
   }> = [
     {
       suffix: 'approve',
-      schema: approvePermissionRequestSchema,
+      schema: approvePermissionRequestBodySchema,
       invoke: (actor, id, body, idempotencyKey) =>
-        decisionService.approveRequest(actor, id, body as { reason?: string }, {
-          idempotencyKey,
-        }),
+        decisionService.approveRequest(
+          actor,
+          id,
+          body as {
+            reason?: string;
+            self_approval?: {
+              policy_citation: string;
+              peer_reviewer_absence: string;
+            };
+          },
+          {
+            idempotencyKey,
+          },
+        ),
     },
     {
       suffix: 'reject',

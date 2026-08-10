@@ -135,7 +135,7 @@ Survey:
 - simple builder
 - readable result summary
 - Survey Result is result summary-first, not action queue-first
-- Create Finding / Link Finding / Request Task CTAs
+- Create Finding / Request Task CTAs; Link Finding is deferred out of MVP scope (ADR-0037)
 - Poor Outcome Survey or configured follow-up may highlight next action near the top without replacing result interpretation
 ```
 
@@ -180,7 +180,7 @@ Allowed Survey Result / Response follow-up actions:
 ```text
 - Add Evidence Highlight
 - Create Finding
-- Link Finding
+- Link Finding — deferred out of MVP scope (ADR-0037)
 - Request Task
 - Attach to Existing VOC when attaching evidence to an already existing VOC is useful and permitted
 ```

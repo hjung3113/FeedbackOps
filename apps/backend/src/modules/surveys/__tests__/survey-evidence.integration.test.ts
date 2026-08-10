@@ -313,6 +313,22 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
     });
   }
+  function del(url: string, cookie: string) {
+    return app.inject({
+      method: 'DELETE',
+      url,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+  }
+  async function approveDirectly(source: Awaited<ReturnType<typeof seed>>) {
+    const approval = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_response_excerpt_approvals
+        (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
+       values ($1,$2,$3,$4,'Approved safe excerpt',$5) returning id`,
+      [WORKSPACE_ID, source.surveyId, source.responseId, source.questionId, adminId],
+    );
+    return approval.rows[0]?.id ?? '';
+  }
 
   async function seedForeignResponse() {
     const workspaceId = randomUUID();
@@ -624,5 +640,141 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
       (await post(`/survey-responses/${source.responseId}/approved-excerpts`, input, adminCookie))
         .statusCode,
     ).toBe(404);
+  });
+
+  it('revokes one approved excerpt once, keeps its row, hides it from results, and audits IDs only', async () => {
+    expectedSideEffects = {
+      audit: { count: 2, message: 'revocation and results-read personal-read audit rows before cleanup' },
+      approvals: { count: 2, message: 'two retained approval rows before cleanup' },
+    };
+    const source = await seed();
+    const revoker = await actor();
+    await grant(revoker.id, 'survey.read', source.msId);
+    await grant(revoker.id, 'survey.read_personal_responses', source.msId);
+    await grant(revoker.id, 'survey.manage', source.msId);
+    const revokedId = await approveDirectly(source);
+    const survivingId = await approveDirectly(source);
+    const first = await del(
+      `/survey-responses/${source.responseId}/approved-excerpts/${revokedId}`,
+      revoker.cookie,
+    );
+    expect(first.statusCode).toBe(200);
+    expect(approvedExcerptDtoSchema.parse(first.json()).approved_excerpt_id).toBe(revokedId);
+    const beforeRetry = await migrateHandle.pool.query<{ revoked_at: string | null }>(
+      'select revoked_at::text from survey.survey_response_excerpt_approvals where id=$1',
+      [revokedId],
+    );
+    expect(beforeRetry.rows[0]?.revoked_at).not.toBeNull();
+    const results = surveyResultDtoSchema.parse(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/surveys/${source.surveyId}/results`,
+          headers: { cookie: `${SESSION_COOKIE_NAME}=${revoker.cookie}` },
+        })
+      ).json(),
+    );
+    const question = results.questions.find((item) => item.question_id === source.questionId);
+    if (question?.visibility !== 'visible' || question.kind !== 'text')
+      throw new Error('expected visible text result');
+    expect(question.excerpts.map((excerpt) => excerpt.id)).not.toContain(revokedId);
+    expect(question.excerpts.map((excerpt) => excerpt.id)).toContain(survivingId);
+    const retry = await del(
+      `/survey-responses/${source.responseId}/approved-excerpts/${revokedId}`,
+      revoker.cookie,
+    );
+    expect(retry.statusCode).toBe(200);
+    const afterRetry = await migrateHandle.pool.query<{ revoked_at: string | null }>(
+      'select revoked_at::text from survey.survey_response_excerpt_approvals where id=$1',
+      [revokedId],
+    );
+    expect(afterRetry.rows[0]?.revoked_at).toBe(beforeRetry.rows[0]?.revoked_at);
+    const audit = await migrateHandle.pool.query<{ detail: Record<string, string> }>(
+      "select detail from core.audit_log where event_type='survey_response_excerpt_revoked' and subject_id=$1",
+      [revokedId],
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(Object.keys(audit.rows[0]?.detail ?? {}).sort()).toEqual([
+      'approved_excerpt_id',
+      'question_id',
+      'survey_id',
+      'survey_response_id',
+    ]);
+  });
+
+  it('returns 404 before survey.manage for personal-read denial and 403 after it, without revocation', async () => {
+    expectedSideEffects = {
+      audit: { count: 0, message: 'denied revocation leaves no audit row before cleanup' },
+      approvals: { count: 1, message: 'unrevoked approval row before cleanup' },
+    };
+    const source = await seed();
+    const approvalId = await approveDirectly(source);
+    const noPersonal = await actor();
+    const personalNoManage = await actor();
+    await grant(noPersonal.id, 'survey.read', source.msId);
+    await grant(personalNoManage.id, 'survey.read', source.msId);
+    await grant(personalNoManage.id, 'survey.read_personal_responses', source.msId);
+    const url = `/survey-responses/${source.responseId}/approved-excerpts/${approvalId}`;
+    expect((await del(url, noPersonal.cookie)).statusCode).toBe(404);
+    expect((await del(url, adminCookie)).statusCode).toBe(404);
+    const denied = await del(url, personalNoManage.cookie);
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().code).toBe('permission.denied');
+    const approval = await migrateHandle.pool.query<{ revoked_at: string | null }>(
+      'select revoked_at::text from survey.survey_response_excerpt_approvals where id=$1',
+      [approvalId],
+    );
+    expect(approval.rows[0]?.revoked_at).toBeNull();
+  });
+
+  it('returns 422 for an approval belonging to another response without revoking either row', async () => {
+    expectedSideEffects = {
+      audit: { count: 0, message: 'mismatched approval leaves no audit row before cleanup' },
+      approvals: { count: 2, message: 'mismatched approval rows remain before cleanup' },
+    };
+    const source = await seed();
+    const otherRespondent = await actor();
+    const other = await migrateHandle.pool.query<{ id: string }>(
+      'insert into survey.survey_responses (workspace_id,survey_id,respondent_actor_id,identity_protected,submitted_at) values ($1,$2,$3,true,now()) returning id',
+      [WORKSPACE_ID, source.surveyId, otherRespondent.id],
+    );
+    const otherResponseId = other.rows[0]?.id ?? '';
+    await migrateHandle.pool.query(
+      "insert into survey.survey_response_answers (workspace_id,survey_id,response_id,question_id,answer_kind,answer_value) values ($1,$2,$3,$4,'text',$5::jsonb)",
+      [
+        WORKSPACE_ID,
+        source.surveyId,
+        otherResponseId,
+        source.questionId,
+        JSON.stringify('Other private response text'),
+      ],
+    );
+    const sourceApprovalId = await approveDirectly(source);
+    const otherApproval = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_response_excerpt_approvals
+        (workspace_id,survey_id,response_id,question_id,redacted_excerpt,approved_by)
+       values ($1,$2,$3,$4,'Other approved excerpt',$5) returning id`,
+      [WORKSPACE_ID, source.surveyId, otherResponseId, source.questionId, adminId],
+    );
+    const revoker = await actor();
+    await grant(revoker.id, 'survey.read', source.msId);
+    await grant(revoker.id, 'survey.read_personal_responses', source.msId);
+    await grant(revoker.id, 'survey.manage', source.msId);
+    const response = await del(
+      `/survey-responses/${source.responseId}/approved-excerpts/${otherApproval.rows[0]?.id}`,
+      revoker.cookie,
+    );
+    expect(response.statusCode).toBe(422);
+    expect(response.json().code).toBe('validation.failed');
+    const approvals = await migrateHandle.pool.query<{ id: string; revoked_at: string | null }>(
+      'select id, revoked_at::text from survey.survey_response_excerpt_approvals where id = any($1::uuid[]) order by id',
+      [[sourceApprovalId, otherApproval.rows[0]?.id]],
+    );
+    expect(
+      approvals.rows.find((approval) => approval.id === sourceApprovalId)?.revoked_at,
+    ).toBeNull();
+    expect(
+      approvals.rows.find((approval) => approval.id === otherApproval.rows[0]?.id)?.revoked_at,
+    ).toBeNull();
   });
 });

@@ -114,6 +114,36 @@ describe('<VocRow>', () => {
     expect(screen.getByText('4 similar')).toBeInTheDocument();
   });
 
+  it('renders the attachment count chip when attachment_count > 0', () => {
+    render(
+      <VocRow
+        voc={{ ...BASE_VOC, attachment_count: 3 }}
+        selected={false}
+        onSelect={onSelect}
+        managedSystem={null}
+      />,
+    );
+    expect(screen.getByLabelText('3 attachments')).toHaveTextContent('3');
+  });
+
+  it('does NOT render the attachment count chip when attachment_count is 0', () => {
+    render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
+    expect(screen.queryByLabelText('0 attachments')).not.toBeInTheDocument();
+  });
+
+  it('renders distinct attachment and similar count chips', () => {
+    render(
+      <VocRow
+        voc={{ ...BASE_VOC, attachment_count: 2, similar_count: 5 }}
+        selected={false}
+        onSelect={onSelect}
+        managedSystem={null}
+      />,
+    );
+    expect(screen.getByLabelText('2 attachments')).toHaveTextContent('2');
+    expect(screen.getByLabelText('5 similar')).toHaveTextContent('5 similar');
+  });
+
   it('renders amber "No area" when analytics_area_id is null', () => {
     render(<VocRow voc={BASE_VOC} selected={false} onSelect={onSelect} managedSystem={null} />);
     expect(screen.getByText('No area')).toBeInTheDocument();

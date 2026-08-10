@@ -9,6 +9,7 @@ import {
   InternalTaskBadge,
   ListFilterButton,
   OutlineBadge,
+  PermissionBlockedPanel,
   SeverityBadge,
   UserAvatar,
   WorkbenchShell,
@@ -151,11 +152,14 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
   function onDragEnd(event: DragEndEvent) { const task = event.active.data.current?.task as TaskDto | undefined; const target = event.over?.id; if (groupBy !== 'status') { toast.warning('Group by Status 일 때만 드래그로 상태를 변경할 수 있습니다.'); return; } if (!task || typeof target !== 'string') return; if (task.status !== target) mutation.mutate({ task, status: target as TaskStatus }); }
   function moveToNextStatus(taskId: string) {
     const task = items.find((item) => item.id === taskId);
-    const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = { todo: 'doing', doing: 'review', review: 'done', done: 'released', reopened: 'todo' };
+    const nextStatus: Partial<Record<TaskStatus, TaskStatus>> = { backlog: 'todo', todo: 'doing', doing: 'review', review: 'done', done: 'released', reopened: 'todo' };
     const next = task && nextStatus[task.status];
     if (task && next) mutation.mutate({ task, status: next });
   }
   if (tasksQuery.isLoading) return <div className="p-4 text-sm text-text-muted">Loading Tasks...</div>;
+  if (isPermissionDenied(tasksQuery.error)) {
+    return <PermissionBlockedPanel state="denied" category="Task board" reason={tasksQuery.error.message} className="m-4" />;
+  }
   if (tasksQuery.error) return <div className="p-4 text-sm text-accent-danger">Task board unavailable.</div>;
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
   return <WorkbenchShell toolbar={{ title: <span className="flex items-center gap-2">Board <OutlineBadge>{filtered.length} tasks</OutlineBadge></span>, actions: <><ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} /><GroupByButton value={groupBy} onChange={setGroupBy} /><Button variant="primary" size="sm" disabled title="Task creation API is not available yet"><Plus className="h-4 w-4" />New task</Button></> }} detailPanel={selected ? <TaskDetailPanel taskId={selected.id} actorNamesById={actorNames} managedSystemNamesById={systemNames} view="board" onMoveToNextStatus={moveToNextStatus} onClose={() => { setSelectedId(null); void navigate({ to: '/tasks', search: { view: 'board' } }); }} /> : null}>
@@ -168,6 +172,14 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
     </div>
     <DndContext sensors={sensors} onDragEnd={onDragEnd}><div className="flex h-full gap-3 overflow-x-auto p-4">{columns.map((column) => <BoardColumn key={column.key} id={column.key} label={column.label} tasks={filtered.filter((task) => groupValue(task, groupBy) === column.key)} groupBy={groupBy} selectedId={selectedId} selectTask={selectTask} names={{ systems: systemNames, actors: actorNames }} enabled={groupBy === 'status'} />)}</div></DndContext>
   </WorkbenchShell>;
+}
+
+function isPermissionDenied(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
+  );
 }
 
 function StatBlock({ label, value, valueClassName = '' }: { label: string; value: number; valueClassName?: string }) {

@@ -72,3 +72,11 @@ The schema stores response identity safely enough for future authorised flows, w
 ## Reopening triggers
 
 Reopen this ADR for threshold customization, truly anonymous responses with no stored Actor, LLM-assisted summaries, cross-workspace research/export, or a new linked surface that needs richer fields.
+
+## Addendum — Slice 9 workspace configuration
+
+The anonymity threshold is workspace-configurable in `core.workspace_settings`.
+The configured value retains a hard floor of five, which remains this ADR's
+baseline protection; values below five are invalid. Storage and the admin
+settings API land in #195. Survey result and other consumer wiring is deferred
+to #196, so this addendum does not weaken the safe-summary contract.

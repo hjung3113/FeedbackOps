@@ -1,5 +1,6 @@
 import { getTask, listTasks } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { ApiError } from '@/lib/api/types';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import type { TaskDetailDto, TaskDto } from '@fops/shared';
 import {
@@ -16,6 +17,7 @@ import {
   OutlineBadge,
   PanelSectionTitle,
   PanelTitleBlock,
+  PermissionBlockedPanel,
   SeverityBadge,
   type ObjectRowSeverity,
   type PanelSection,
@@ -84,6 +86,9 @@ export function TaskDetailPanel({
 
   if (taskQuery.isLoading) {
     return <div className="p-4 text-sm text-text-muted">Loading Task...</div>;
+  }
+  if (isPermissionDenied(taskQuery.error)) {
+    return <PermissionBlockedPanel state="denied" category="Task detail" reason={taskQuery.error.message} className="m-4" />;
   }
   if (taskQuery.error || !taskQuery.data) {
     return <div className="p-4 text-sm text-accent-danger">Task detail unavailable.</div>;
@@ -192,7 +197,7 @@ export function TaskDetailPanel({
           </div>
         </div>
       </div>
-      {view === 'board' && task.status !== 'backlog' && task.status !== 'released' && onMoveToNextStatus && (
+      {view === 'board' && task.status !== 'released' && onMoveToNextStatus && (
         <div className="border-t border-border-subtle p-3">
           <Button type="button" variant="primary" className="w-full" onClick={() => onMoveToNextStatus(task.id)}>
             <ArrowRight className="h-4 w-4" />Move to next status
@@ -244,6 +249,9 @@ export function TaskListRoute({ selectedParam }: { selectedParam?: string | unde
 
   if (tasksQuery.isLoading) {
     return <div className="p-4 text-sm text-text-muted">Loading Tasks...</div>;
+  }
+  if (isPermissionDenied(tasksQuery.error)) {
+    return <PermissionBlockedPanel state="denied" category="Task list" reason={tasksQuery.error.message} className="m-4" />;
   }
   if (tasksQuery.error) {
     return <div className="p-4 text-sm text-accent-danger">Task list unavailable.</div>;
@@ -301,5 +309,13 @@ export function TaskListRoute({ selectedParam }: { selectedParam?: string | unde
         ) : null
       }
     />
+  );
+}
+
+function isPermissionDenied(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }

@@ -679,7 +679,10 @@ describe.skipIf(!runIntegration)(
         response_count: null,
         suppression: { code: "anonymity_threshold" },
       });
-      expect(before.next_actions).toEqual([]);
+      expect(before.next_actions).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "create_finding" })]),
+      );
+      expect(before.next_actions.map((action) => action.id)).not.toContain("request_task");
       const findingId = await approveAndCreate(source, creator);
       const after = surveyResultDtoSchema.parse(
         (
@@ -696,7 +699,22 @@ describe.skipIf(!runIntegration)(
         response_count: null,
         suppression: { code: "anonymity_threshold" },
       });
-      expect(after.next_actions).toEqual([]);
+      expect(after.next_actions).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "create_finding" })]),
+      );
+      expect(after.next_actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "request_task",
+            availability: "blocked_requestable",
+            source_finding_id: findingId,
+            requestable_permission: {
+              permission: "finding.manage",
+              managed_system_id: source.msId,
+            },
+          }),
+        ]),
+      );
       const targetMs = await insertMsDirectly(
         migrateHandle,
         WORKSPACE_ID,

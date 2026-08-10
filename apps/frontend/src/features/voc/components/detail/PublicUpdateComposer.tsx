@@ -61,12 +61,21 @@
 //   reporter_facing_status.gate_blocked       → amber Callout inline
 //   conflict.idempotency_key_reuse            → lock Submit + Preview until VOC switch
 
+import {
+  isForbiddenTransition,
+  useReporterStatusTransitions,
+} from '@/features/voc/hooks/useReporterStatusTransitions';
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import type { ApiError } from '@/lib/api';
+import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
-import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
-import { Callout, PreviewModal, RichEditor } from '@fops/ui';
+import {
+  type ReporterFacingStatusEnum,
+  type VocDetailEnvelope,
+  isTipTapDocBlank,
+} from '@fops/shared';
+import { Button, Callout, PreviewModal, RichEditor } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Megaphone } from 'lucide-react';
@@ -76,7 +85,6 @@ import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { ComposerPublicPreview } from './ComposerPublicPreview';
 import { ReporterStatusChangeBlock } from './ReporterStatusChangeBlock';
-import { uploadAttachment } from '@/lib/api/attachments';
 import { PublicUpdateToolbar } from './rich-toolbars/PublicUpdateToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -94,21 +102,12 @@ export interface PublicUpdateComposerProps {
   onDraftChange?: (doc: TipTapDoc | null) => void;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isDocEmpty(doc: TipTapDoc | null): boolean {
-  if (doc == null) return true;
-  const content = doc.content;
-  if (!Array.isArray(content) || content.length === 0) return true;
-  return content.every((node) => {
-    if (node == null || typeof node !== 'object') return true;
-    const n = node as { type?: string; content?: unknown[] };
-    if (n.type !== 'paragraph') return false;
-    return !Array.isArray(n.content) || n.content.length === 0;
-  });
-}
-
 // Maps ApiError code to Callout tone for the inline error surface.
+//
+// #356: ReporterReplyComposer has a same-named local function, but it is NOT a
+// copy of this one — it maps invalid_transition to amber because a status
+// transition is not that surface's subject. Merging the two would take a
+// `surface` parameter and hide the divergence inside a branch. Keep them local.
 function getComposerErrorTone(code: string): 'red' | 'amber' | null {
   if (code === 'reporter_facing_status.invalid_transition') return 'red';
   if (code === 'reporter_facing_status.gate_blocked') return 'amber';
@@ -117,7 +116,12 @@ function getComposerErrorTone(code: string): 'red' | 'amber' | null {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, onDraftChange }: PublicUpdateComposerProps): ReactElement {
+export function PublicUpdateComposer({
+  voc,
+  me,
+  draftDoc: controlledDraftDoc,
+  onDraftChange,
+}: PublicUpdateComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
   // REV-1 #7: if parent provides controlled draft, use it; otherwise keep local state
@@ -138,10 +142,14 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
     voc.reporter_facing_status,
   );
   const [previewOpen, setPreviewOpen] = useState(false);
+  const submitInFlightRef = useRef(false);
 
   // PLAN-22 C7a: composer-level attachment dropzone state.
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+  // #354: bumped on publish success so the dropzone drops the rows the server
+  // has now linked to the published update.
+  const [attachmentResetToken, setAttachmentResetToken] = useState(0);
 
   // Reset state when VOC changes (status + preview; draft reset handled by parent for controlled).
   const prevVocIdRef = useRef(voc.id);
@@ -157,31 +165,77 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
   // Gate check: Publish is disabled when reporter_status_gate.blocking_for includes nextStatus.
   const isGateBlocked = voc.reporter_status_gate?.blocking_for.includes(nextStatus) ?? false;
 
-  const isEmpty = isDocEmpty(draftDoc);
+  // #356: nextStatus is not resynced when another actor moves the VOC, so a
+  // selection that was allowed at pick time can become a non-allowed transition
+  // after a detail refetch. ReporterStatusChangeBlock already warns inline, but
+  // that verdict lived inside the child, so Publish stayed enabled and the server
+  // answered with a 422 the user saw as an opaque `validation.failed` toast —
+  // the pair is usually absent from the transition matrix entirely, so it lands
+  // in the backend's unknown branch rather than invalid_transition. Deriving it
+  // here from the same helper blocks submit before the request is made.
+  const transitions = useReporterStatusTransitions(voc);
+  const isForbiddenSelected = isForbiddenTransition(
+    transitions,
+    voc.reporter_facing_status,
+    nextStatus,
+  );
+
+  const isEmpty = isTipTapDocBlank(draftDoc);
 
   const mutation = useVocPublicUpdateMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      submitInFlightRef.current = false;
+      queryClient.setQueryData(['voc', voc.id], data.voc);
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
       // clear draft (calls onDraftChange?.(null) when controlled)
       setDraftDoc(null);
-      setNextStatus(voc.reporter_facing_status);
+      setNextStatus(data.voc.reporter_facing_status);
+      // #354: these attachments belong to the published update now. Keeping
+      // them would re-send already-linked ids on the next publish (422).
+      // The dropzone drops the linked rows and reports the shrunk list back
+      // through onChange, so attachmentIds clears along the one path it always
+      // travels — clearing it here as well would be a second, silent writer.
+      setAttachmentResetToken((n) => n + 1);
       toast.success('공개 업데이트가 게시되었습니다.');
+    },
+    onError: (error) => {
+      submitInFlightRef.current = false;
+      if (getComposerErrorTone(error.code) == null) {
+        toast.error(`${error.code}: ${error.message}`);
+      }
     },
   });
 
+  const mutationError = mutation.error as ApiError | null;
+  const isIdempotencyLocked =
+    mutationError != null && mutationError.code === 'conflict.idempotency_key_reuse';
+  const isSubmitBlocked =
+    isEmpty ||
+    mutation.isPending ||
+    isGateBlocked ||
+    isForbiddenSelected ||
+    isIdempotencyLocked ||
+    attachmentsUploading;
+
   function handleSubmit() {
-    if (!draftDoc) return;
+    if (!draftDoc || isSubmitBlocked || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     mutation.mutate({
       vocId: voc.id,
       ifMatch: voc.updated_at,
       body: {
+        skip_public_update: false,
         body_rich_content: draftDoc,
         next_reporter_facing_status: nextStatus,
-        attachments: [],
-        // PLAN-22 C7a (D1): widened body field — schema reconciled in C7b.
         attachment_ids: attachmentIds,
       },
     });
+  }
+
+  function handlePreviewPublish() {
+    if (isSubmitBlocked) return;
+    setPreviewOpen(false);
+    handleSubmit();
   }
 
   // Owner for the ReporterStatusChangeBlock preview card + ComposerPublicPreview.
@@ -210,10 +264,6 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
   // ── Error matrix ─────────────────────────────────────────────────────────────
   // Inline Callout copy comes from backend detail.reason per D-5.6 in PLAN-21.
   // conflict.idempotency_key_reuse → lock both Submit + Preview until VOC switch.
-
-  const mutationError = mutation.error as ApiError | null;
-  const isIdempotencyLocked =
-    mutationError != null && mutationError.code === 'conflict.idempotency_key_reuse';
 
   const inlineCalloutTone = mutationError != null ? getComposerErrorTone(mutationError.code) : null;
   const inlineCalloutReason =
@@ -258,6 +308,7 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
         testId="public-update-attachment-dropzone"
         onChange={setAttachmentIds}
         onUploadingChange={setAttachmentsUploading}
+        resetToken={attachmentResetToken}
       />
 
       {/* ReporterStatusChangeBlock — always shown in the public-update composer */}
@@ -291,7 +342,7 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
         onSubmit={handleSubmit}
         isEmpty={isEmpty}
         isSubmitting={mutation.isPending}
-        isSubmitDisabled={isGateBlocked || isIdempotencyLocked || attachmentsUploading}
+        isSubmitDisabled={isSubmitBlocked}
         isPreviewDisabled={isIdempotencyLocked}
         statusHint={statusHint}
       />
@@ -308,6 +359,20 @@ export function PublicUpdateComposer({ voc, me, draftDoc: controlledDraftDoc, on
           nextStatus={nextStatus}
           draftDoc={draftDoc}
         />
+        <div className="flex justify-end gap-2 border-t border-border-subtle pt-3">
+          <Button type="button" variant="secondary" size="sm" onClick={() => setPreviewOpen(false)}>
+            Continue editing
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            disabled={isSubmitBlocked}
+            onClick={handlePreviewPublish}
+          >
+            Publish update
+          </Button>
+        </div>
       </PreviewModal>
     </div>
   );

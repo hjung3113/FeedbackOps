@@ -6,6 +6,7 @@ const approvedExcerptItemSchema = z
   .object({
     id: z.string().uuid(),
     text: z.string().min(1),
+    response_id: z.string().uuid().optional(),
   })
   .strict();
 

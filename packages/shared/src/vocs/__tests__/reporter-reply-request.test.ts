@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { reporterReplyRequestSchema } from '../reporter-reply-request.js';
 
-const VALID_DOC = { type: 'doc' as const, content: [] };
+const VALID_DOC = {
+  type: 'doc' as const,
+  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'normal reply' }] }],
+};
+const BLANK_DOC = {
+  type: 'doc' as const,
+  content: [{ type: 'paragraph', content: [{ type: 'text', text: '   ' }] }],
+};
+const EMPTY_DOC = { type: 'doc' as const, content: [] };
+const MENTION_DOC = { type: 'doc' as const, content: [{ type: 'mention' }] };
 const UUID = '00000000-0000-4000-8000-000000000001';
 
 describe('reporterReplyRequestSchema', () => {
@@ -53,5 +62,18 @@ describe('reporterReplyRequestSchema', () => {
     expect(() =>
       reporterReplyRequestSchema.parse({ body_rich_content: { type: 'paragraph' } }),
     ).toThrow();
+  });
+
+  it.each([
+    ['whitespace-only paragraph', BLANK_DOC],
+    ['structurally empty document', EMPTY_DOC],
+  ])('rejects %s', (_name, body_rich_content) => {
+    expect(() => reporterReplyRequestSchema.parse({ body_rich_content })).toThrow();
+  });
+
+  it('accepts a mention-only document as content', () => {
+    expect(reporterReplyRequestSchema.safeParse({ body_rich_content: MENTION_DOC }).success).toBe(
+      true,
+    );
   });
 });

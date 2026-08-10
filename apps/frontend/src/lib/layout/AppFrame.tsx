@@ -1,11 +1,20 @@
 import * as React from 'react';
 import { DetailPanelSlotContext, cn } from '@fops/ui';
-import { AppRail } from './AppRail';
+import { useQuery } from '@tanstack/react-query';
+import { createSavedView, deleteSavedView, fetchCapabilityScope, fetchManagedSystems, fetchNavCounts, fetchSavedViews, type SavedView, type SavedViewSurface } from '@/lib/api';
+import { useMe } from '@/lib/auth/useMe';
+import { AppRail, type RailDomain } from './AppRail';
 import { AppSidebar, type SidebarNavEntry } from './AppSidebar';
 
 export interface AppFrameProps {
   sidebarEntries: SidebarNavEntry[];
-  workspaceName?: string;
+  activeDomain: RailDomain;
+  managedSystemId?: string;
+  /** VOC routes already encode this scope in their strict URL search schema. */
+  syncManagedSystemFromUrl?: boolean;
+  onManagedSystemChange?: (managedSystemId: string | undefined) => void;
+  savedViewFilter?: Record<string, unknown>;
+  onApplySavedView?: (view: SavedView) => void;
   /** The shell-rendered route content. AppFrame is NOT itself a shell. */
   children: React.ReactNode;
   className?: string;
@@ -22,8 +31,99 @@ interface SlotEntry {
  * NOT a shell — does NOT live in packages/ui. The shell taxonomy is fixed at exactly three
  * (PageShell / ListShell / WorkbenchShell per ADR-0020). AppFrame composes one of those as its outlet.
  */
-export function AppFrame({ sidebarEntries, workspaceName, children, className }: AppFrameProps) {
+export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncManagedSystemFromUrl = false, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
   const [slots, setSlots] = React.useState<SlotEntry[]>([]);
+  const [selectedManagedSystemId, setSelectedManagedSystemId] = React.useState<string | undefined>(managedSystemId);
+  React.useEffect(() => {
+    if (syncManagedSystemFromUrl) setSelectedManagedSystemId(managedSystemId);
+  }, [managedSystemId, syncManagedSystemFromUrl]);
+  const me = useMe();
+  const actor = me.data?.actor;
+  const actorId = typeof actor?.id === 'string' ? actor.id : undefined;
+  const roleLevel = actor?.role_level;
+  const isAdmin = typeof roleLevel === 'string' && roleLevel.toLowerCase() === 'admin';
+  const systemsQuery = useQuery({
+    queryKey: ['managed-systems', 'scope-selector'] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ signal }),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const grantsQuery = useQuery({
+    queryKey: ['managed-system-scope', actorId, 'voc.read'] as const,
+    enabled: actorId !== undefined && !isAdmin,
+    queryFn: ({ signal }) => fetchCapabilityScope('voc.read', { signal }),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const countsQuery = useQuery({
+    queryKey: ['nav-counts', selectedManagedSystemId] as const,
+    queryFn: ({ signal }) => fetchNavCounts({
+      signal,
+      ...(selectedManagedSystemId !== undefined ? { managedSystemId: selectedManagedSystemId } : {}),
+    }),
+    retry: false,
+  });
+  const savedViewSurface: SavedViewSurface | undefined = activeDomain === 'voc'
+    ? 'voc'
+    : activeDomain === 'tasks'
+      ? 'tasks'
+      : activeDomain === 'findings'
+        ? 'findings'
+        : undefined;
+  const savedViewsQuery = useQuery({
+    queryKey: ['saved-views', savedViewSurface] as const,
+    queryFn: ({ signal }) => fetchSavedViews(savedViewSurface, signal),
+    retry: false,
+  });
+  const managedSystems = (systemsQuery.data?.items ?? []).map((system) => ({
+    id: system.id,
+    name: system.name,
+    granted:
+      isAdmin ||
+      grantsQuery.data?.scope.kind === 'all' ||
+      (grantsQuery.data?.scope.kind === 'scoped' &&
+        grantsQuery.data.scope.managed_system_ids.includes(system.id)),
+  }));
+  const systemMeta: Record<RailDomain, { label: string; subtitle: string }> = {
+    home: { label: 'Home', subtitle: '오늘의 운영 갭' },
+    voc: { label: 'VOC', subtitle: 'Voice of Customer' },
+    findings: { label: 'Findings', subtitle: 'Evidence → Execution' },
+    tasks: { label: 'Tasks', subtitle: 'Execution' },
+    integration: { label: 'Integration', subtitle: 'Coverage & Recovery' },
+    surveys: { label: 'Surveys', subtitle: 'Discovery · Validation · Outcome' },
+    admin: { label: 'Admin', subtitle: 'Workspace' },
+  };
+  const changeManagedSystem = React.useCallback((managedSystemId: string | undefined) => {
+    setSelectedManagedSystemId(managedSystemId);
+    onManagedSystemChange?.(managedSystemId);
+  }, [onManagedSystemChange]);
+  const counts = countsQuery.data?.counts;
+  const savedViews = savedViewsQuery.data?.items ?? [];
+  const saveCurrentView = React.useCallback((name: string) => {
+    if (activeDomain !== 'voc' || savedViewFilter === undefined) return;
+    void createSavedView({ surface: 'voc', name, filter: savedViewFilter }).then(() => savedViewsQuery.refetch());
+  }, [activeDomain, savedViewFilter, savedViewsQuery]);
+  const deleteCurrentView = React.useCallback((id: string) => {
+    void deleteSavedView(id).then(() => savedViewsQuery.refetch());
+  }, [savedViewsQuery]);
+  const sidebarProps = {
+    entries: sidebarEntries,
+    systemLabel: systemMeta[activeDomain].label,
+    systemSubtitle: systemMeta[activeDomain].subtitle,
+    managedSystems,
+    isAdmin,
+    onManagedSystemChange: changeManagedSystem,
+    ...(counts !== undefined ? { counts } : {}),
+    ...(selectedManagedSystemId !== undefined ? { selectedManagedSystemId } : {}),
+    savedViews,
+    canSaveView: activeDomain === 'voc' && savedViewFilter !== undefined,
+    onSaveView: saveCurrentView,
+    onApplySavedView: (id: string) => {
+      const view = savedViews.find((candidate) => candidate.id === id);
+      if (view) onApplySavedView?.(view);
+    },
+    onDeleteSavedView: deleteCurrentView,
+  };
 
   const setContent = React.useCallback((key: string, node: React.ReactNode) => {
     setSlots((prev) => {
@@ -52,12 +152,8 @@ export function AppFrame({ sidebarEntries, workspaceName, children, className }:
   return (
     <DetailPanelSlotContext.Provider value={ctxValue}>
       <div className={cn('flex h-screen bg-surface-canvas text-text-primary', className)} data-app-frame>
-        <AppRail />
-        {workspaceName !== undefined ? (
-          <AppSidebar entries={sidebarEntries} workspaceName={workspaceName} />
-        ) : (
-          <AppSidebar entries={sidebarEntries} />
-        )}
+        <AppRail activeDomain={activeDomain} />
+        <AppSidebar {...sidebarProps} />
         <main className="flex-1 min-w-0 flex flex-col" data-testid="app-main">
           {children}
         </main>

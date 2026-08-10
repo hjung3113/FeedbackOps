@@ -3,7 +3,7 @@
 // The frontend never enforces backend permissions as truth (AGENTS.md:69) —
 // these types only describe what the server returned so the UI can pick a state.
 
-import type { PermissionDecisionResult } from '@fops/shared';
+import type { ApprovePermissionRequest, PermissionDecisionResult } from '@fops/shared';
 
 import { UnauthenticatedError } from './auth';
 import { apiClient } from './client';
@@ -31,6 +31,25 @@ export interface PermissionDecision {
 export interface PermissionCheckResponse {
   state: FrontendPermissionState;
   decision: PermissionDecision;
+}
+
+export type CapabilityScope =
+  | { kind: 'all' }
+  | { kind: 'scoped'; managed_system_ids: string[] };
+
+export async function fetchCapabilityScope(
+  capability: string,
+  options?: { signal?: AbortSignal },
+): Promise<{ scope: CapabilityScope }> {
+  const init: RequestInit = { credentials: 'same-origin' };
+  if (options?.signal) init.signal = options.signal;
+  const res = await fetch(
+    `/me/permissions/scope?${new URLSearchParams({ capability }).toString()}`,
+    init,
+  );
+  if (res.status === 401) throw new UnauthenticatedError();
+  if (!res.ok) throw new Error(`/me/permissions/scope failed: ${res.status}`);
+  return (await res.json()) as { scope: CapabilityScope };
 }
 
 export interface CreatePermissionRequestBody {
@@ -162,8 +181,15 @@ export async function decidePermissionRequest(
   action: PermissionRequestDecisionAction,
   reason: string,
   idempotencyKey: string,
+  selfApproval?: ApprovePermissionRequest['self_approval'],
 ): Promise<PermissionDecisionResult> {
-  const body = action === 'need-more-info' ? { note: reason || undefined } : { reason: reason || undefined };
+  const body =
+    action === 'need-more-info'
+      ? { note: reason || undefined }
+      : {
+          reason: reason || undefined,
+          ...(action === 'approve' && selfApproval !== undefined ? { self_approval: selfApproval } : {}),
+        };
   const response = await apiClient<PermissionDecisionResult>(
     'POST',
     `/permissions/requests/${id}/${action}`,

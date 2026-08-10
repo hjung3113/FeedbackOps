@@ -15,8 +15,9 @@
 // probing. Detection: Vite's `import.meta.env.PROD` (true in `vite build`
 // production bundle; false in `vite dev` and during vitest runs).
 
+import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
 import { Button } from '@fops/ui';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Navigate, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { mockLogin } from '../lib/api';
 
@@ -24,18 +25,47 @@ export const Route = createFileRoute('/login')({
   component: LoginPage,
 });
 
-const SEED_ACTORS = [
+const SEED_ACTORS: ReadonlyArray<{
+  external_id: string;
+  display_name: string;
+  role_level: RoleLevel;
+  email: string;
+}> = [
   {
     external_id: 'mock-admin-1',
-    display_name: 'Admin One',
-    role_level: 'Admin',
+    display_name: 'Mock Admin',
+    role_level: 'admin',
     email: 'admin@feedbackops.local',
   },
   {
+    external_id: 'mock-admin-2',
+    display_name: 'Mock Admin Two',
+    role_level: 'admin',
+    email: 'admin2@feedbackops.local',
+  },
+  {
+    external_id: 'mock-developer-1',
+    display_name: 'Mock Developer One',
+    role_level: 'developer',
+    email: 'dev1@feedbackops.local',
+  },
+  {
+    external_id: 'mock-developer-2',
+    display_name: 'Mock Developer Two',
+    role_level: 'developer',
+    email: 'dev2@feedbackops.local',
+  },
+  {
     external_id: 'mock-user-1',
-    display_name: 'User One',
-    role_level: 'User',
+    display_name: 'Mock User',
+    role_level: 'user',
     email: 'user@feedbackops.local',
+  },
+  {
+    external_id: 'mock-user-2',
+    display_name: 'Mock User Two',
+    role_level: 'user',
+    email: 'user2@feedbackops.local',
   },
 ];
 
@@ -48,9 +78,12 @@ export function LoginPage() {
 
 function MockLoginPicker() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: mockLogin,
     onSuccess: () => {
+      // An actor boundary must drop all prior actor-scoped data before navigation.
+      queryClient.clear();
       navigate({ to: '/' });
     },
   });
@@ -65,7 +98,7 @@ function MockLoginPicker() {
         {SEED_ACTORS.map((a) => (
           <li key={a.external_id}>
             <Button onClick={() => mutation.mutate(a.external_id)} disabled={mutation.isPending}>
-              {a.display_name} ({a.role_level})
+              {a.display_name} ({ROLE_LEVEL_LABELS[a.role_level]})
             </Button>
             <span className="ml-3 text-text-muted">{a.email}</span>
           </li>

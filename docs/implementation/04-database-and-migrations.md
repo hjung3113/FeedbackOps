@@ -19,7 +19,28 @@ Applied migrations are the final database authority.
 - Migrations must be reversible when practical.
 - Sensitive decisions append audit log entries.
 - Inline images are stored as governed attachment records and referenced from rich content; never store base64 body images.
+- Survey response and answer tables remain outside `fops_app` read access. Any
+  dashboard or result projection over them must use a narrow `SECURITY DEFINER`
+  aggregate owned by `fops_survey_aggregate_owner`, returning only the contract's
+  aggregate value and never response identifiers or answer bodies. The authorized
+  exception is `survey.read_approved_result_excerpts_personal`, a separate
+  `SECURITY DEFINER` owned by `fops_survey_evidence_reader_owner` that returns
+  `response_id` only behind `survey.read_personal_responses`.
 ```
+
+### Database prerequisite: pgvector (ADR-0034 D1)
+
+`voc.voc_embeddings` stores vectors, so every database that runs migrations
+must already have the `vector` extension installed. pgvector is not a trusted
+extension: `CREATE EXTENSION vector` requires superuser, and `fops_migrate`
+deliberately is not one. Bootstrap owns it — `scripts/db/init.sql` installs it
+when the volume is first created, and migration 0042 only asserts it is
+present, failing with a directive message when it is not.
+
+An existing database created before this change needs a one-time superuser
+`CREATE EXTENSION vector;`, because `init.sql` runs only on a fresh volume. The
+dev image is `pgvector/pgvector:pg16` (`docker-compose.dev.yml`); the older
+`postgres:16-alpine` does not carry the extension at all.
 
 ## Schema Namespaces
 
@@ -44,6 +65,7 @@ core
 
 voc
 - vocs
+- voc_embeddings (versioned pgvector rows; workspace scope is denormalized for active-version scans)
 - voc_public_updates
 - voc_reporter_replies
 - voc_internal_comments

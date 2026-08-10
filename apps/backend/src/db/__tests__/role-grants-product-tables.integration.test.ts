@@ -1,10 +1,10 @@
 /**
  * Slice 3 #22 — DB role grants drift check for product tables.
  *
- * Asserts that `fops_app` holds exactly the DML privileges each `voc.*` base
- * table is designed for — no more, no less. Most product tables are full-DML
- * (SELECT/INSERT/UPDATE/DELETE), but several are intentionally append-only or
- * read-only per migration 0010 (`0010_slice3_voc_foundation.sql`):
+ * Asserts that `fops_app` holds exactly the DML privileges each product-schema
+ * base table is designed for — no more, no less. Most product tables are
+ * full-DML (SELECT/INSERT/UPDATE/DELETE), but several are intentionally
+ * append-only or read-only per migration 0010 (`0010_slice3_voc_foundation.sql`):
  *
  *   - voc_public_updates / voc_reporter_replies / voc_internal_comments:
  *     SELECT + INSERT only. These are immutable conversation-feed rows; the
@@ -38,15 +38,66 @@ const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 
 const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
-const PRODUCT_SCHEMAS = ['voc', 'survey'] as const;
+const PRODUCT_SCHEMAS = [
+  'core',
+  'finding',
+  'permission',
+  'survey',
+  'task',
+  'task_request',
+  'voc',
+  'voc_cluster',
+] as const;
 const DML_PRIVILEGES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] as const;
 type DmlPrivilege = (typeof DML_PRIVILEGES)[number];
 
 const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
+const SURVEY_AGGREGATE_FUNCTIONS = [
+  'count_negative_outcome_without_followup',
+  'read_result_aggregates',
+  'read_result_response_count',
+] as const;
 
 // Tables intentionally narrower than full-DML for fops_app, keyed by the
-// fully-qualified `schema.table` name. Grants come from migrations 0010, 0037, and 0039.
+// fully-qualified `schema.table` name. Grants come from the cited migrations.
+//
+// A table absent from this map is asserted as full-DML. That default is why a
+// new narrower table shows up here as a missing-DELETE failure rather than as
+// silence: the entry is the design record, and adding one is a decision, not
+// paperwork (#207).
 const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
+  // Migration 0000 makes the audit log append-only so application writes retain
+  // an immutable history.
+  'core.audit_log': ['SELECT', 'INSERT'],
+  // Migration 0027 keeps counter mutation inside next_display_id, a SECURITY
+  // DEFINER function; the application can only read the backing counter rows.
+  'core.display_counters': ['SELECT'],
+  // Migrations 0018 and 0019 record canonical link history by inserting and
+  // soft-detaching links (status='detached'), never hard-deleting them.
+  'core.entity_links': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0009 revokes writes per ADR-0019 Section C: teams remain a
+  // read-only placeholder until a team-management service ships.
+  'core.teams': ['SELECT'],
+  // Migration 0041 grants the settings upsert path; settings are updated in
+  // place and are not deleted by the application.
+  'core.workspace_settings': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0021 models evidence as maintained finding context, allowing
+  // creation and correction but no application hard-delete path.
+  'finding.evidence_highlights': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0020 uses Finding status transitions (including archived) rather
+  // than application hard deletes.
+  'finding.findings': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0025 models Task lifecycle through status updates, not deletion.
+  'task.tasks': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0023 preserves Task Request review/conversion history through
+  // status transitions rather than application hard deletes.
+  'task_request.task_requests': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0022 makes clusters draft/confirmed records, updated in place
+  // rather than deleted by the application.
+  'voc_cluster.voc_clusters': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0022 treats membership as a mutable set: members are added or
+  // removed, but their immutable join rows are never updated.
+  'voc_cluster.voc_cluster_members': ['SELECT', 'INSERT', 'DELETE'],
   'survey.surveys': ['SELECT', 'INSERT', 'UPDATE'],
   'survey.survey_questions': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   'survey.survey_responses': ['INSERT'],
@@ -62,6 +113,11 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // must remain without table-wide UPDATE.
   'voc.public_update_review_candidates': ['SELECT', 'INSERT'],
   'voc.reporter_facing_status_transitions': ['SELECT'],
+  // No DELETE by design (migration 0044): a dismissal the application can
+  // erase is not a dismissal that survives recomputation. UPDATE is granted
+  // for the one legal transition out of a terminal state — a dismissed pair
+  // promoted to `confirmed` in place (ADR-0034 D3).
+  'voc.voc_recommendation_decisions': ['SELECT', 'INSERT', 'UPDATE'],
 };
 
 describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice 3 #22)', () => {
@@ -78,7 +134,7 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
     await appHandle?.close();
   });
 
-  it('fops_app holds exactly the designed DML privileges on every voc.* base table', async () => {
+  it('fops_app holds exactly the designed DML privileges on every product-schema base table', async () => {
     const { rows: tables } = await migrateHandle.pool.query<{
       table_schema: string;
       table_name: string;
@@ -90,7 +146,14 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
           order by table_schema, table_name`,
       [PRODUCT_SCHEMAS as unknown as string[]],
     );
-    expect(tables.length, 'should discover at least one product table').toBeGreaterThan(0);
+    const schemasWithoutTables = PRODUCT_SCHEMAS.filter(
+      (schema) => !tables.some((table) => table.table_schema === schema),
+    );
+    expect(
+      schemasWithoutTables,
+      `product schemas without discovered base tables: ${schemasWithoutTables.join(', ')}`,
+    ).toEqual([]);
+    expect(tables.length, 'should discover at least 38 product tables').toBeGreaterThanOrEqual(38);
 
     const failures: string[] = [];
     for (const t of tables) {
@@ -112,13 +175,37 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
         }
         if (!expected.has(priv) && got.has(priv)) {
           failures.push(
-            `fops_app has unexpected GRANT ${priv} ON ${fq}; ${fq} is append-only by design (migration 0010 or 0037) — REVOKE it or update EXPECTED_GRANTS if the design changed`,
+            `fops_app has unexpected GRANT ${priv} ON ${fq}; ${fq} is narrower than full-DML by design (see the migration that created it) — REVOKE it or update EXPECTED_GRANTS if the design changed`,
           );
         }
       }
     }
 
     expect(failures, failures.join('\n')).toEqual([]);
+  });
+
+  it('fops_app reaches survey response aggregates only through the registered definer functions', async () => {
+    const { rows } = await migrateHandle.pool.query<{
+      proname: string;
+      app_execute: boolean;
+      public_execute: boolean;
+    }>(
+      `select p.proname,
+              pg_catalog.has_function_privilege('fops_app', p.oid, 'EXECUTE') as app_execute,
+              pg_catalog.has_function_privilege('public', p.oid, 'EXECUTE') as public_execute
+         from pg_catalog.pg_proc p
+         join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+         join pg_catalog.pg_roles owner_role on owner_role.oid = p.proowner
+        where n.nspname = 'survey'
+          and owner_role.rolname = 'fops_survey_aggregate_owner'
+        order by p.proname`,
+    );
+    expect(rows.map((row) => row.proname)).toEqual(SURVEY_AGGREGATE_FUNCTIONS);
+    expect(rows).toEqual(SURVEY_AGGREGATE_FUNCTIONS.map((proname) => ({
+      proname,
+      app_execute: true,
+      public_execute: false,
+    })));
   });
 
   it('fops_app UPDATE on review candidates is limited to resolution columns', async () => {

@@ -12,8 +12,10 @@
 //   2. Default owner — resolved via GET /actors/resolve (#87 new endpoint);
 //      the prototype hard-codes a single user.
 
+import type { ListActorsResponse } from '@fops/shared';
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -24,12 +26,20 @@ import {
   Label,
   OutlineBadge,
   PageShell,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { ArrowRight, Filter, Plus, Shield } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { scopeMark } from '../../../features/admin/lib/scopeMark.js';
 import { PermissionGate } from '../../../features/admin/permissions/permission-gate.js';
@@ -40,6 +50,7 @@ import {
   type RegisterManagedSystemBody,
   type ResolveActorsResponse,
   type UpdateManagedSystemBody,
+  apiClient,
   archiveManagedSystem,
   fetchAnalyticsAreas,
   fetchManagedSystems,
@@ -63,8 +74,91 @@ const MANAGED_SYSTEMS_KEY = ['managed-systems'] as const;
 const SUBTITLE =
   'Managed System 은 MVP 의 권한·집계 단위입니다. Project 가 아닙니다. 각 시스템의 default owner, AA 매핑, 활성 상태를 관리합니다.';
 
+type OwnerSelection =
+  | { kind: 'none' }
+  | { kind: 'actor'; id: string }
+  | { kind: 'team'; id: string };
+
+function ownerSelection(row?: ManagedSystemDto): OwnerSelection {
+  if (row?.default_owner_actor_id) return { kind: 'actor', id: row.default_owner_actor_id };
+  if (row?.default_owner_team_id) return { kind: 'team', id: row.default_owner_team_id };
+  return { kind: 'none' };
+}
+
+function ownerSelectionValue(owner: OwnerSelection): string {
+  return owner.kind === 'none' ? 'none' : `${owner.kind}:${owner.id}`;
+}
+
+function parseOwnerSelection(value: string): OwnerSelection {
+  if (value === 'none') return { kind: 'none' };
+  const separator = value.indexOf(':');
+  const kind = value.slice(0, separator);
+  const id = value.slice(separator + 1);
+  return kind === 'team' ? { kind: 'team', id } : { kind: 'actor', id };
+}
+
+function OwnerSelect({
+  value,
+  onChange,
+  knownTeamId,
+  testId,
+}: {
+  value: OwnerSelection;
+  onChange: (value: OwnerSelection) => void;
+  // `exactOptionalPropertyTypes` is on — callers pass `?? undefined` for systems
+  // with no team owner, so the property must accept an explicit undefined.
+  knownTeamId?: string | undefined;
+  testId: string;
+}) {
+  const actorsQuery = useQuery({
+    queryKey: ['actors', 'workspace', 'current'] as const,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const response = await apiClient<ListActorsResponse>('GET', '/actors?workspace=current', {
+        signal,
+      });
+      return response.data.actors.map(({ id, display_name }) => ({ id, display_name }));
+    },
+  });
+  const teamQuery = useQuery({
+    queryKey: ['actors-resolve', [], knownTeamId ? [knownTeamId] : []] as const,
+    enabled: knownTeamId !== undefined,
+    retry: false,
+    queryFn: ({ signal }) => resolveActors({ teamIds: knownTeamId ? [knownTeamId] : [] }, signal),
+  });
+  const knownTeam = teamQuery.data?.teams[0];
+
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={testId} className="text-text-secondary">
+        Default owner (optional)
+      </Label>
+      <Select
+        value={ownerSelectionValue(value)}
+        onValueChange={(next) => onChange(parseOwnerSelection(next))}
+      >
+        <SelectTrigger id={testId} data-testid={testId}>
+          <SelectValue placeholder="(미지정)" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">(미지정)</SelectItem>
+          {knownTeam ? (
+            <SelectItem value={`team:${knownTeam.id}`}>{knownTeam.name}</SelectItem>
+          ) : null}
+          {(actorsQuery.data ?? []).map((actor) => (
+            <SelectItem key={actor.id} value={`actor:${actor.id}`}>
+              {actor.display_name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 export function ManagedSystemsAdminPage() {
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
   return (
     <PageShell
       header={{
@@ -72,10 +166,10 @@ export function ManagedSystemsAdminPage() {
         subtitle: SUBTITLE,
         actions: (
           <PermissionGate capability="workspace.admin" fallback={null} loading={null}>
-            <Button variant="subtle" size="sm" data-testid="ms-filter-button">
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
+            <ManagedSystemsFilter
+              includeArchived={includeArchived}
+              onIncludeArchivedChange={setIncludeArchived}
+            />
             <Button
               variant="primary"
               size="sm"
@@ -90,16 +184,23 @@ export function ManagedSystemsAdminPage() {
       }}
     >
       <PermissionGate capability="workspace.admin">
-        <ManagedSystemsBody registerOpen={registerOpen} setRegisterOpen={setRegisterOpen} />
+        <ManagedSystemsBody
+          includeArchived={includeArchived}
+          registerOpen={registerOpen}
+          setRegisterOpen={setRegisterOpen}
+        />
       </PermissionGate>
     </PageShell>
   );
 }
 
-function groupAreasByMs(items: AnalyticsAreaDto[]): Map<string, AnalyticsAreaDto[]> {
+function groupAreasByMs(
+  items: AnalyticsAreaDto[],
+  includeArchived: boolean,
+): Map<string, AnalyticsAreaDto[]> {
   const out = new Map<string, AnalyticsAreaDto[]>();
   for (const a of items) {
-    if (a.archived_at !== null) continue;
+    if (!includeArchived && a.archived_at !== null) continue;
     const arr = out.get(a.managed_system_id) ?? [];
     arr.push(a);
     out.set(a.managed_system_id, arr);
@@ -108,23 +209,29 @@ function groupAreasByMs(items: AnalyticsAreaDto[]): Map<string, AnalyticsAreaDto
 }
 
 export function ManagedSystemsBody({
+  includeArchived,
   registerOpen,
   setRegisterOpen,
 }: {
+  includeArchived: boolean;
   registerOpen: boolean;
   setRegisterOpen: (v: boolean) => void;
 }) {
   const qc = useQueryClient();
   const [editTarget, setEditTarget] = useState<ManagedSystemDto | null>(null);
+  // Archived rows cannot be restored (ADR-0019 §A: archived rows are immutable).
+  // The designed remedy for "archived by mistake" is re-registering the same
+  // slug (ADR-0017), so Configure hands the archived row's fields to Register.
+  const [reregisterFrom, setReregisterFrom] = useState<ManagedSystemDto | null>(null);
 
   const listQuery = useQuery({
-    queryKey: [...MANAGED_SYSTEMS_KEY, { includeArchived: false }] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: false, signal }),
+    queryKey: [...MANAGED_SYSTEMS_KEY, { includeArchived }] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived, signal }),
     retry: false,
   });
   const areasQuery = useQuery({
-    queryKey: ['analytics-areas', 'all'] as const,
-    queryFn: ({ signal }) => fetchAnalyticsAreas({ signal }),
+    queryKey: ['analytics-areas', { includeArchived }] as const,
+    queryFn: ({ signal }) => fetchAnalyticsAreas({ includeArchived, signal }),
     retry: false,
   });
   const requestsQuery = useQuery({
@@ -135,8 +242,11 @@ export function ManagedSystemsBody({
 
   const systems = useMemo(() => listQuery.data?.items ?? [], [listQuery.data]);
   const areas = useMemo(() => areasQuery.data?.items ?? [], [areasQuery.data]);
-  const areasByMs = useMemo(() => groupAreasByMs(areas), [areas]);
-  const activeAreaCount = areas.filter((a) => a.archived_at === null).length;
+  const areasByMs = useMemo(() => groupAreasByMs(areas, includeArchived), [areas, includeArchived]);
+  const renderedAreaCount = useMemo(
+    () => systems.reduce((count, system) => count + (areasByMs.get(system.id)?.length ?? 0), 0),
+    [areasByMs, systems],
+  );
 
   const ownerActorIds = useMemo(
     () => [
@@ -169,7 +279,7 @@ export function ManagedSystemsBody({
             Registry
           </h3>
           <span className="text-xs text-text-muted">
-            {systems.length} systems · {activeAreaCount} analytics areas
+            {systems.length} systems · {renderedAreaCount} analytics areas
           </span>
         </div>
 
@@ -243,10 +353,16 @@ export function ManagedSystemsBody({
       </div>
 
       <RegisterDialog
+        key={reregisterFrom?.id ?? 'blank'}
         open={registerOpen}
-        onOpenChange={setRegisterOpen}
+        prefill={reregisterFrom}
+        onOpenChange={(open) => {
+          setRegisterOpen(open);
+          if (!open) setReregisterFrom(null);
+        }}
         onSaved={async () => {
           setRegisterOpen(false);
+          setReregisterFrom(null);
           await invalidate();
         }}
       />
@@ -255,12 +371,50 @@ export function ManagedSystemsBody({
         onOpenChange={(open) => {
           if (!open) setEditTarget(null);
         }}
+        onReregister={(target) => {
+          setEditTarget(null);
+          setReregisterFrom(target);
+          setRegisterOpen(true);
+        }}
         onSaved={async () => {
           setEditTarget(null);
           await invalidate();
         }}
       />
     </section>
+  );
+}
+
+function ManagedSystemsFilter({
+  includeArchived,
+  onIncludeArchivedChange,
+}: {
+  includeArchived: boolean;
+  onIncludeArchivedChange: (value: boolean) => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="subtle" size="sm" data-testid="ms-filter-button">
+          <Filter className="h-4 w-4" />
+          Filter
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end">
+        <label
+          className="flex items-center gap-2 text-sm text-text-primary"
+          htmlFor="ms-filter-include-archived"
+        >
+          <Checkbox
+            id="ms-filter-include-archived"
+            checked={includeArchived}
+            onCheckedChange={(checked) => onIncludeArchivedChange(checked === true)}
+            data-testid="ms-filter-include-archived"
+          />
+          Archived 포함
+        </label>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -308,16 +462,26 @@ function RegistryRow({
         {mark.label}
       </div>
       <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-text-primary">{row.name}</div>
+        <div className="flex items-center gap-1.5">
+          <div className="truncate text-sm font-medium text-text-primary">{row.name}</div>
+          {row.archived_at !== null ? <OutlineBadge>Archived</OutlineBadge> : null}
+        </div>
         <div className="truncate font-mono text-xs text-text-muted">managed-system/{row.slug}</div>
       </div>
       <div className="flex flex-col gap-0.5">
         <span className="text-xs text-text-muted">Default owner</span>
-        <UserChip user={owner} size="sm" />
+        {row.default_owner_actor_id === null && row.default_owner_team_id === null ? (
+          <span className="text-xs text-text-muted">(미지정)</span>
+        ) : (
+          <UserChip user={owner} size="sm" />
+        )}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {areas.map((a) => (
-          <OutlineBadge key={a.id}>{a.name}</OutlineBadge>
+          <OutlineBadge key={a.id}>
+            {a.name}
+            {a.archived_at !== null ? ' · Archived' : ''}
+          </OutlineBadge>
         ))}
       </div>
       <div className="text-right">
@@ -336,17 +500,24 @@ function RegistryRow({
 
 function RegisterDialog({
   open,
+  prefill,
   onOpenChange,
   onSaved,
 }: {
   open: boolean;
+  /** Archived row being re-registered under the same slug, if any. */
+  prefill?: ManagedSystemDto | null;
   onOpenChange: (v: boolean) => void;
   onSaved: () => Promise<void>;
 }) {
-  const [slug, setSlug] = useState('');
-  const [name, setName] = useState('');
-  const [externalKey, setExternalKey] = useState('');
+  const [slug, setSlug] = useState(prefill?.slug ?? '');
+  const [name, setName] = useState(prefill?.name ?? '');
+  const [externalKey, setExternalKey] = useState(prefill?.external_key ?? '');
+  const [owner, setOwner] = useState<OwnerSelection>({ kind: 'none' });
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'slug' | 'name', string>>>({});
+  const slugRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const mutation = useMutation({
     mutationFn: async (body: RegisterManagedSystemBody) => registerManagedSystem(body),
@@ -354,6 +525,7 @@ function RegisterDialog({
       setSlug('');
       setName('');
       setExternalKey('');
+      setOwner({ kind: 'none' });
       setError(null);
       await onSaved();
     },
@@ -364,43 +536,75 @@ function RegisterDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="ms-register-dialog">
         <DialogHeader>
-          <DialogTitle>Register system</DialogTitle>
-          <DialogDescription>새 Managed System 을 레지스트리에 추가합니다.</DialogDescription>
+          <DialogTitle>{prefill ? '보관된 시스템 재등록' : 'Register system'}</DialogTitle>
+          <DialogDescription>
+            {prefill
+              ? `보관된 "${prefill.slug}" 를 같은 slug로 다시 등록합니다. 보관 해제가 아니라 새 레코드가 만들어지며, 기존 VOC·Finding·Task 등 과거 참조는 보관된 시스템에 그대로 남습니다.`
+              : '새 Managed System 을 레지스트리에 추가합니다.'}
+          </DialogDescription>
         </DialogHeader>
         <form
           data-testid="create-managed-system-form"
           className="space-y-3"
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
             setError(null);
+            const nextErrors: Partial<Record<'slug' | 'name', string>> = {};
+            if (!slug.trim()) nextErrors.slug = 'Slug is required.';
+            if (!name.trim()) nextErrors.name = 'Name is required.';
+            if (Object.keys(nextErrors).length > 0) {
+              setFieldErrors(nextErrors);
+              (nextErrors.slug ? slugRef : nameRef).current?.focus();
+              return;
+            }
+            setFieldErrors({});
             const body: RegisterManagedSystemBody = { slug, name };
             if (externalKey.length > 0) body.external_key = externalKey;
+            if (owner.kind === 'actor') body.default_owner_actor_id = owner.id;
+            if (owner.kind === 'team') body.default_owner_team_id = owner.id;
             mutation.mutate(body);
           }}
         >
           <div className="space-y-1">
             <Label htmlFor="ms-create-slug" className="text-text-secondary">
-              Slug
+              Slug <span className="text-accent-danger">· 필수</span>
             </Label>
             <Input
               id="ms-create-slug"
+              ref={slugRef}
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              required
+              aria-describedby={fieldErrors.slug ? 'ms-create-slug-error' : undefined}
+              aria-invalid={Boolean(fieldErrors.slug)}
+              aria-required="true"
               data-testid="create-slug"
             />
+            {fieldErrors.slug && (
+              <p id="ms-create-slug-error" className="text-sm text-accent-danger">
+                {fieldErrors.slug}
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label htmlFor="ms-create-name" className="text-text-secondary">
-              Name
+              Name <span className="text-accent-danger">· 필수</span>
             </Label>
             <Input
               id="ms-create-name"
+              ref={nameRef}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              required
+              aria-describedby={fieldErrors.name ? 'ms-create-name-error' : undefined}
+              aria-invalid={Boolean(fieldErrors.name)}
+              aria-required="true"
               data-testid="create-name"
             />
+            {fieldErrors.name && (
+              <p id="ms-create-name-error" className="text-sm text-accent-danger">
+                {fieldErrors.name}
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label htmlFor="ms-create-external-key" className="text-text-secondary">
@@ -413,6 +617,7 @@ function RegisterDialog({
               data-testid="create-external-key"
             />
           </div>
+          <OwnerSelect value={owner} onChange={setOwner} testId="create-default-owner" />
           {error && (
             <p data-testid="create-error" className="text-sm text-accent-danger">
               {error}
@@ -440,16 +645,25 @@ function RegisterDialog({
 function EditDialog({
   target,
   onOpenChange,
+  onReregister,
   onSaved,
 }: {
   target: ManagedSystemDto | null;
   onOpenChange: (v: boolean) => void;
+  onReregister: (target: ManagedSystemDto) => void;
   onSaved: () => Promise<void>;
 }) {
   return (
     <Dialog open={target !== null} onOpenChange={onOpenChange}>
       <DialogContent data-testid="ms-edit-dialog">
-        {target && <EditForm key={target.id} target={target} onSaved={onSaved} />}
+        {target && (
+          <EditForm
+            key={target.id}
+            target={target}
+            onReregister={onReregister}
+            onSaved={onSaved}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -457,13 +671,17 @@ function EditDialog({
 
 function EditForm({
   target,
+  onReregister,
   onSaved,
 }: {
   target: ManagedSystemDto;
+  onReregister: (target: ManagedSystemDto) => void;
   onSaved: () => Promise<void>;
 }) {
+  const isArchived = target.archived_at !== null;
   const [name, setName] = useState(target.name);
   const [externalKey, setExternalKey] = useState(target.external_key ?? '');
+  const [owner, setOwner] = useState<OwnerSelection>(() => ownerSelection(target));
   const [error, setError] = useState<string | null>(null);
 
   const updateMutation = useMutation({
@@ -472,6 +690,10 @@ function EditForm({
       if (name !== target.name) body.name = name;
       const nextKey = externalKey.length > 0 ? externalKey : null;
       if (nextKey !== target.external_key) body.external_key = nextKey;
+      if (ownerSelectionValue(owner) !== ownerSelectionValue(ownerSelection(target))) {
+        body.default_owner_actor_id = owner.kind === 'actor' ? owner.id : null;
+        body.default_owner_team_id = owner.kind === 'team' ? owner.id : null;
+      }
       return updateManagedSystem(target.id, body);
     },
     onSuccess: async () => {
@@ -515,9 +737,16 @@ function EditForm({
             id={`ms-edit-name-${target.slug}`}
             value={name}
             onChange={(e) => setName(e.target.value)}
+            readOnly={isArchived}
             data-testid={`name-input-${target.slug}`}
           />
         </div>
+        <OwnerSelect
+          value={owner}
+          onChange={setOwner}
+          knownTeamId={target.default_owner_team_id ?? undefined}
+          testId={`edit-default-owner-${target.slug}`}
+        />
         <div className="space-y-1">
           <Label htmlFor={`ms-edit-key-${target.slug}`} className="text-text-secondary">
             External key
@@ -526,6 +755,7 @@ function EditForm({
             id={`ms-edit-key-${target.slug}`}
             value={externalKey}
             onChange={(e) => setExternalKey(e.target.value)}
+            readOnly={isArchived}
             data-testid={`external-key-input-${target.slug}`}
           />
         </div>
@@ -534,23 +764,49 @@ function EditForm({
             {error}
           </p>
         )}
+        {isArchived && (
+          <p
+            className="text-sm text-text-muted"
+            data-testid={`archived-immutable-note-${target.slug}`}
+          >
+            보관된 시스템은 수정할 수 없고 보관 해제도 지원하지 않습니다. 실수로 보관했다면 같은
+            slug로 다시 등록하세요 — 새 레코드가 만들어지고, 과거 참조는 이 보관된 시스템에 그대로
+            남습니다.
+          </p>
+        )}
         <DialogFooter className="justify-between">
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => archiveMutation.mutate()}
-            disabled={archiveMutation.isPending}
-            data-testid={`archive-${target.slug}`}
-          >
-            Archive
-          </Button>
-          <Button
-            type="submit"
-            disabled={updateMutation.isPending}
-            data-testid={`save-${target.slug}`}
-          >
-            Save
-          </Button>
+          {isArchived ? (
+            <span className="text-sm text-text-muted">이미 보관됨</span>
+          ) : (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => archiveMutation.mutate()}
+              disabled={archiveMutation.isPending}
+              data-testid={`archive-${target.slug}`}
+            >
+              Archive
+            </Button>
+          )}
+          {isArchived ? (
+            // No Save: PATCH against an archived row is 409 conflict.record_archived
+            // by contract (ADR-0019 §A), so offering it can only fail.
+            <Button
+              type="button"
+              onClick={() => onReregister(target)}
+              data-testid={`reregister-${target.slug}`}
+            >
+              같은 slug로 재등록
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              disabled={updateMutation.isPending}
+              data-testid={`save-${target.slug}`}
+            >
+              Save
+            </Button>
+          )}
         </DialogFooter>
       </form>
     </>

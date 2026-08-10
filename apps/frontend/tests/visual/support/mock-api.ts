@@ -1,6 +1,7 @@
 import {
   addVocClusterMemberRequestSchema,
   approvePermissionRequestSchema,
+  dashboardSummarySchema,
   denyPermissionRequestSchema,
   linkExistingFindingToVocClusterRequestSchema,
   needMoreInfoPermissionRequestSchema,
@@ -22,10 +23,35 @@ import {
 } from '../fixtures/voc-reporter-task-summary';
 
 import {
+  type AdminSettingsVisualScenario,
+  adminSettingsFixture,
+  adminSettingsFixtureSchema,
+  adminSettingsPatchSchema,
+} from '../fixtures/admin-settings';
+import {
+  homeMyWorkRequestsFixture,
+  homeMyWorkTasksFixture,
+  homeOpenPermissionRequestsFixture,
+  homeSummaryFixture,
+} from '../fixtures/home';
+import {
+  managedSystemOwnerActors,
+  managedSystemOwnerList,
+  managedSystemVisualSchema,
+  registerManagedSystemVisualBodySchema,
+} from '../fixtures/managed-system-owner';
+import {
+  permissionRequestComposeBodySchema,
+  permissionRequestComposeSuccess,
+} from '../fixtures/permission-request-compose';
+import {
   type PermissionScenarioName,
   createPermissionRequestsScenario,
   permissionDecisionResultTemplates,
+  permissionSettingsFixture,
+  workspaceActorsFixture,
 } from '../fixtures/permissions';
+import { railScopeManagedSystems } from '../fixtures/rail-scope';
 import {
   type SurveyResultsVisualScenario,
   surveyResultVisualFixture,
@@ -34,10 +60,28 @@ import {
 } from '../fixtures/survey-results';
 import {
   type SurveyVisualScenario,
+  surveyBuilderDragOverVisualFixture,
+  surveyDetailVisualFixture,
   surveyVisualFixture,
   surveyVisualFixtureSchema,
 } from '../fixtures/surveys';
+import {
+  TRIAGE_AREA_IDS,
+  type TriageAreaVisualScenario,
+  triageAreaActors,
+  triageAreaAnalyticsAreas,
+  triageAreaAnalyticsAreasResponseSchema,
+  triageAreaConversationPage,
+  triageAreaFindingSourceVoc,
+  triageAreaReviewCandidates,
+  triageAreaTriageVoc,
+} from '../fixtures/triage-analytics-area';
 import { IDS, managedSystems, memberFromCandidate } from '../fixtures/voc-clusters';
+import {
+  vocCreateAnalyticsAreas,
+  vocCreateManagedSystems,
+  vocCreatePeersByManagedSystem,
+} from '../fixtures/voc-create';
 import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
@@ -58,10 +102,27 @@ interface InstallOptions {
   scenario?: ScenarioName;
   /** Issue #180 VOC detail surface; schemas validate its fixture at import. */
   vocReview?: boolean;
+  /** Supplies a schema-validated VOC list for the High · no link inbox state. */
+  inboxHighNoLink?: boolean;
   /** Issue #179 reporter-safe linked Task summary surface. */
   vocReporterTaskSummary?: boolean;
   surveyScenario?: SurveyVisualScenario;
   surveyResultsScenario?: SurveyResultsVisualScenario;
+  adminSettingsScenario?: AdminSettingsVisualScenario;
+  /** Rail/scope fixture uses two systems to make scope selector snapshots meaningful. */
+  railScope?: boolean;
+  /** Declares the saved-view sidebar visual state; its PNG is host-generated. */
+  savedViews?: boolean;
+  /** Home action dashboard fixture state. */
+  home?: 'populated' | 'empty';
+  /** Request-access confirmation dialog state; screenshot spec is host-owned. */
+  permissionRequestCompose?: boolean;
+  /** Managed System registration dialog with owner candidates; screenshot spec is host-owned. */
+  managedSystemOwner?: boolean;
+  /** Triage Analytics Area wiring and Finding inheritance states. */
+  triageAreaScenario?: TriageAreaVisualScenario;
+  /** VOC creation with a selected Managed System and pre-submit peers. */
+  vocCreate?: boolean;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -103,6 +164,24 @@ export async function installMockApi(
   const postedBodies: unknown[] = [];
   const postedRequests: InstalledMockApi['postedRequests'] = [];
   const permissionRequests = createPermissionRequestsScenario(options.permissionScenario);
+  const savedViews: Array<{
+    id: string;
+    surface: string;
+    name: string;
+    filter: Record<string, unknown>;
+    created_at: string;
+    updated_at: string;
+  }> = [];
+  if (options.savedViews) {
+    savedViews.push({
+      id: 'saved-view-1',
+      surface: 'voc',
+      name: 'High priority',
+      filter: { view: 'inbox', 'filter.severity': 'high,critical' },
+      created_at: '2026-07-28T00:00:00.000Z',
+      updated_at: '2026-07-28T00:00:00.000Z',
+    });
+  }
   const role = options.role ?? 'admin';
   const reporterActorId = options.vocReporterTaskSummary
     ? VOC_REPORTER_TASK_SUMMARY_IDS.reporter
@@ -131,6 +210,151 @@ export async function installMockApi(
       return;
     }
 
+    if (isRequest(route, 'GET', '/nav/counts')) {
+      await json(route, 200, {
+        counts: {
+          'voc.inbox': 0,
+          'voc.triage': 6,
+          'voc.my': 2,
+          'voc.tab.high': 1,
+          'voc.tab.unassigned': 3,
+          'voc.clusters': 4,
+          'findings.all': 8,
+          'surveys.all': 5,
+        },
+      });
+      return;
+    }
+
+    if (options.home && isRequest(route, 'GET', '/dashboard/summary')) {
+      await json(route, 200, dashboardSummarySchema.parse(homeSummaryFixture));
+      return;
+    }
+
+    if (options.home && isRequest(route, 'GET', '/tasks')) {
+      await json(route, 200, { items: options.home === 'populated' ? homeMyWorkTasksFixture : [] });
+      return;
+    }
+
+    if (options.home && isRequest(route, 'GET', '/task-requests')) {
+      await json(route, 200, {
+        items: options.home === 'populated' ? homeMyWorkRequestsFixture : [],
+      });
+      return;
+    }
+
+    if (options.home && isRequest(route, 'GET', '/permission-requests/mine')) {
+      await json(route, 200, {
+        requests: options.home === 'populated' ? homeOpenPermissionRequestsFixture : [],
+      });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/saved-views')) {
+      const surface = url.searchParams.get('surface');
+      await json(route, 200, {
+        items: surface ? savedViews.filter((view) => view.surface === surface) : savedViews,
+      });
+      return;
+    }
+
+    if (isRequest(route, 'POST', '/saved-views')) {
+      const body = request.postDataJSON() as {
+        surface: string;
+        name: string;
+        filter: Record<string, unknown>;
+      };
+      const now = '2026-07-28T00:00:00.000Z';
+      const view = {
+        id: `saved-view-${savedViews.length + 1}`,
+        ...body,
+        created_at: now,
+        updated_at: now,
+      };
+      savedViews.push(view);
+      await json(route, 201, view);
+      return;
+    }
+
+    if (request.method() === 'DELETE' && /^\/saved-views\/[^/]+$/.test(url.pathname)) {
+      const id = url.pathname.split('/').at(-1);
+      const index = savedViews.findIndex((view) => view.id === id);
+      if (index === -1) await json(route, 404, errorEnvelope(404));
+      else await route.fulfill({ status: 204 });
+      if (index !== -1) savedViews.splice(index, 1);
+      return;
+    }
+
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/vocs')) {
+      await json(route, 200, {
+        items: [
+          options.triageAreaScenario === 'triage-analytics-area-populated'
+            ? triageAreaTriageVoc
+            : triageAreaFindingSourceVoc,
+        ],
+      });
+      return;
+    }
+
+    if (
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}`)
+    ) {
+      await json(route, 200, triageAreaFindingSourceVoc);
+      return;
+    }
+
+    if (
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}/conversation`)
+    ) {
+      await json(route, 200, triageAreaConversationPage);
+      return;
+    }
+
+    if (
+      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}/public-update-candidates`)
+    ) {
+      await json(route, 200, triageAreaReviewCandidates);
+      return;
+    }
+
+    // The VOC detail panel asks for similarity recommendations on mount; the
+    // mock is fail-closed, so an unanswered route ends the test before any
+    // screenshot is taken. Empty is the right answer for these scenarios.
+    if (
+      options.triageAreaScenario &&
+      request.method() === 'GET' &&
+      /^\/vocs\/[^/]+\/recommendations$/.test(url.pathname)
+    ) {
+      await json(route, 200, { items: [], total: 0 });
+      return;
+    }
+
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/analytics-areas')) {
+      // The triage panel scopes this call to the VOC's Managed System, but the
+      // surrounding list also resolves area names with an unscoped call. Both are
+      // legitimate here, so this serves the same fixture either way — the scoping
+      // contract itself is asserted by AC-B4b in the unit suite, not by pixels.
+      await json(
+        route,
+        200,
+        triageAreaAnalyticsAreasResponseSchema.parse(triageAreaAnalyticsAreas),
+      );
+      return;
+    }
+
+    if (options.triageAreaScenario && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, triageAreaActors);
+      return;
+    }
+
+    if (options.inboxHighNoLink && isRequest(route, 'GET', '/vocs')) {
+      await json(route, 200, { items: [populatedReviewVoc] });
+      return;
+    }
+
     if (options.vocReview && isRequest(route, 'GET', '/vocs')) {
       await json(route, 200, { items: [populatedReviewVoc] });
       return;
@@ -138,6 +362,17 @@ export async function installMockApi(
 
     if (options.vocReporterTaskSummary && isRequest(route, 'GET', '/vocs')) {
       await json(route, 200, { items: [reporterTaskSummaryVoc] });
+      return;
+    }
+
+    if (options.vocCreate && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, vocCreateAnalyticsAreas);
+      return;
+    }
+
+    if (options.vocCreate && isRequest(route, 'GET', '/vocs/pre-submit-peers')) {
+      const managedSystemId = url.searchParams.get('managed_system_id');
+      await json(route, 200, { items: vocCreatePeersByManagedSystem.get(managedSystemId ?? '')?.items ?? [] });
       return;
     }
 
@@ -175,6 +410,11 @@ export async function installMockApi(
       return;
     }
 
+    if (options.inboxHighNoLink && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, { actors: [] });
+      return;
+    }
+
     if (options.vocReview && isRequest(route, 'GET', '/actors')) {
       await json(route, 200, { actors: [] });
       return;
@@ -182,6 +422,11 @@ export async function installMockApi(
 
     if (options.vocReporterTaskSummary && isRequest(route, 'GET', '/actors')) {
       await json(route, 200, { actors: [] });
+      return;
+    }
+
+    if (options.inboxHighNoLink && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, { items: [], total: 0 });
       return;
     }
 
@@ -195,24 +440,117 @@ export async function installMockApi(
       return;
     }
 
+    // The Managed Systems registry renders each system's areas alongside it, so
+    // the owner scenario has to answer this even though owners are the subject.
+    if (options.managedSystemOwner && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, { items: [], total: 0 });
+      return;
+    }
+
     if (isRequest(route, 'GET', '/me/permissions/check')) {
       await json(route, 200, {
-        state: role === 'admin' ? 'approved' : 'blocked_non_requestable',
-        decision: { allow: role === 'admin' },
+        state: options.permissionRequestCompose
+          ? 'request_access'
+          : role === 'admin'
+            ? 'approved'
+            : 'blocked_non_requestable',
+        decision: { allow: role === 'admin' && !options.permissionRequestCompose },
       });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/me/permissions/scope')) {
+      await json(route, 200, {
+        scope: role === 'admin' ? { kind: 'all' } : { kind: 'scoped', managed_system_ids: [] },
+      });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/actors')) {
+      await json(
+        route,
+        200,
+        options.managedSystemOwner ? managedSystemOwnerActors : workspaceActorsFixture,
+      );
+      return;
+    }
+
+    if (options.permissionRequestCompose && isRequest(route, 'POST', '/permission-requests')) {
+      const body = permissionRequestComposeBodySchema.parse(request.postDataJSON());
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      await json(route, 201, permissionRequestComposeSuccess);
+      return;
+    }
+
+    if (options.managedSystemOwner && isRequest(route, 'POST', '/managed-systems')) {
+      const body = registerManagedSystemVisualBodySchema.parse(request.postDataJSON());
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      await json(
+        route,
+        201,
+        managedSystemVisualSchema.parse({
+          id: '22222222-2222-4222-8222-222222222274',
+          workspace_id: IDS.workspace,
+          slug: body.slug,
+          name: body.name,
+          external_key: body.external_key ?? null,
+          default_owner_actor_id: body.default_owner_actor_id ?? null,
+          default_owner_team_id: body.default_owner_team_id ?? null,
+          archived_at: null,
+          archived_by_actor_id: null,
+          created_at: '2026-08-03T09:30:00.000Z',
+          updated_at: '2026-08-03T09:30:00.000Z',
+        }),
+      );
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/workspace/settings')) {
+      const settingsFixture = options.adminSettingsScenario
+        ? adminSettingsFixture
+        : permissionSettingsFixture;
+      await json(
+        route,
+        options.adminSettingsScenario === 'error' ? 500 : 200,
+        options.adminSettingsScenario === 'error' ? errorEnvelope(500) : settingsFixture,
+      );
+      return;
+    }
+
+    if (options.adminSettingsScenario && isRequest(route, 'PATCH', '/workspace/settings')) {
+      const patch = adminSettingsPatchSchema.parse(request.postDataJSON());
+      const next = adminSettingsFixtureSchema.parse({ ...adminSettingsFixture, ...patch });
+      postedBodies.push(patch);
+      postedRequests.push({
+        body: patch,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      await json(route, 200, next);
       return;
     }
 
     if (options.surveyScenario && isRequest(route, 'GET', '/surveys')) {
       const scenario = options.surveyScenario;
+      const fixture = scenario === 'detail' ? surveyDetailVisualFixture : surveyVisualFixture;
       await json(
         route,
         scenario === 'error' ? 500 : 200,
         scenario === 'error'
           ? errorEnvelope(500)
-          : scenario === 'empty'
+          : scenario === 'empty' || scenario === 'empty-no-permission'
             ? []
-            : [surveyVisualFixtureSchema.parse(surveyVisualFixture)],
+            : [surveyVisualFixtureSchema.parse(fixture)],
       );
       return;
     }
@@ -239,7 +577,13 @@ export async function installMockApi(
     }
 
     if (options.surveyScenario && isRequest(route, 'GET', `/surveys/${surveyVisualFixture.id}`)) {
-      await json(route, 200, surveyVisualFixtureSchema.parse(surveyVisualFixture));
+      const fixture =
+        options.surveyScenario === 'detail'
+          ? surveyDetailVisualFixture
+          : options.surveyScenario === 'builder-drag-over'
+            ? surveyBuilderDragOverVisualFixture
+            : surveyVisualFixture;
+      await json(route, 200, surveyVisualFixtureSchema.parse(fixture));
       return;
     }
 
@@ -288,7 +632,17 @@ export async function installMockApi(
     }
 
     if (isRequest(route, 'GET', '/managed-systems')) {
-      await json(route, 200, managedSystems);
+      await json(
+        route,
+        200,
+        options.vocCreate
+          ? vocCreateManagedSystems
+          : options.managedSystemOwner
+          ? managedSystemOwnerList
+          : options.railScope
+            ? railScopeManagedSystems
+            : managedSystems,
+      );
       return;
     }
 
@@ -376,7 +730,7 @@ export async function installMockApi(
   return { postedBodies, postedRequests, scenario };
 }
 
-function parsePermissionDecisionBody(
+export function parsePermissionDecisionBody(
   action: keyof typeof permissionDecisionResultTemplates,
   body: unknown,
 ): unknown {

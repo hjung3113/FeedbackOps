@@ -10,7 +10,7 @@
 - For multi-step work, define success criteria and verify them before claiming completion.
 - If domain rules conflict with generic framework habits, follow the domain rules.
 - Finish one issue fully (tests + typecheck + boundaries + commit + PR + merge + close) before starting the next.
-- Stop on locked-decision ambiguity. A grill-locked Q collision, or a contradiction the [Source Of Truth](#source-of-truth) tiebreaks do not cover → stop and report which doc must reopen. Never resolve unilaterally.
+- Stop on locked-decision ambiguity — see [Source Of Truth](#source-of-truth) → "Stop and report" for the exact condition. Never resolve unilaterally.
 
 ## Prototype Is The Spec
 
@@ -96,6 +96,7 @@ Authority follows subject; there is no universal conflict ladder.
 
 ## Verification
 
+- **The gate is `pnpm --filter backend test:integration` + `pnpm typecheck` + `pnpm check:boundaries` + `pnpm gate:fe-typecheck` + `pnpm gate:fe-lint`** (plus the frontend pixel-diff harness for page-level FE work). `pnpm test` / `pnpm --filter backend test` alone is **not** the gate: the 90 backend integration suites are env-gated and all skip without a database, so a green there covers only the unit path (#204). The integration command loads `.env` and **truncates + re-seeds the target database** before the run — point it at a throwaway database if the dev one matters. See `apps/backend/AGENTS.md` → Verification for the env, the reset contract, and the `ALLOW_SKIPPED_INTEGRATION=1` opt-out.
 - For behavior changes and bug fixes, write or update the failing test first, then make the smallest change that passes it. If TDD is not practical, state why and still add verification for the touched behavior.
 - Add or update tests for product invariants touched by the change.
 - For frontend work, verify desktop states when layout or interaction changes (see `apps/frontend/AGENTS.md` for pixel-diff rule).
@@ -114,7 +115,23 @@ Test code is a liability. Fewer, sharper tests beat more tests.
 
 ## Workflow Operations
 
-Execution playbook (model tiers, task sizing, REV cycles, user confirms, HTML artifacts, plan/REV doc layout, prototype copy authority): see the `/agent-workflow` skill (external toolkit). The toolkit installs here via `install-into.sh --mode symlink` → `.agent-workflow/` + `.claude/skills/agent-workflow` (absolute machine-local links, gitignored — worktrees need their own install run).
+Execution playbook (roles, model tiers, task sizing, review/verify cycles, conductor conduct): see the `/agent-workflow` skill (external toolkit). The toolkit installs here via `install-into.sh <target>`, which **copies** four managed leaves as a self-contained snapshot: `.agent-workflow/{scripts,schemas,docs/agents}` + `.claude/skills/agent-workflow`. Existing installs upgrade with `--upgrade`; `--mode`/`--force` no longer exist and are rejected.
+
+The four leaves are gitignored here, and **git worktrees do not inherit ignored files** — a fresh worktree has no `.agent-workflow/`, so a relative `.agent-workflow/scripts/...` call from inside one fails with `No such file or directory`. Until toolkit issue #62 lands, call the scripts by absolute path from the main checkout, or install into the worktree.
+
+### Model Routing (temporary — pending toolkit issue #84)
+
+The toolkit installs its allocation policy but nothing surfaces it: `.agent-workflow/**` is gitignored and referenced by no tracked doc, and the `/agent-workflow` skill only loads when explicitly invoked. This block is a hand-maintained stand-in for the installer-managed pointer requested in toolkit issue #84 — delete it once `install-into.sh` writes its own marked block here.
+
+**Read before any dispatch** (do not work from recall):
+
+- `.agent-workflow/model-alloc.json` — the project-owned allocation contract.
+- `.agent-workflow/docs/agents/multi-agent-workflow.md` → Model Allocation.
+- `.agent-workflow/docs/agents/conductor-persona.md` §2 — the conductor is **READ-ONLY on product code**.
+
+Defaults: CONDUCTOR Opus · implementation terra (luna for trivial touch sets) · REVIEWER and contract gate Opus.
+
+**The split is artifact vs verdict.** Work that produces an artifact — implementation, fixes, documentation, planning, reconnaissance, broad file reads — is dispatched to codex. Work that produces a verdict — review, verification, audit, contract decisions — and the session's own orchestration stay with the conductor. Never let the writer grade its own output. A gate script, a fixture fix, or a doc edit is an artifact even when it looks small enough to type inline; scope it as a chunk instead.
 
 ### Target Profile (toolkit adapter answers for THIS repo)
 
@@ -123,6 +140,8 @@ Answers to the toolkit's compatibility interview (`references/adoption.md`) — 
 - **Verify signal traps.** A narrow test filter yields false PASS; a superuser app handle yields false FAIL. Gate runs use a whole-touched-module filter + the low-priv `fops_app` role (`VERIFY_DATABASE_URL`), with migrations applied via the separate `fops_migrate` URL. Cross-module verify noise is known debt (other modules' suites attempt `audit_log` DELETE with the app handle — fails by design).
 - **Verify DBs.** Per-issue throwaway DBs via `prepare-verify-db.sh` (admin URL must be `postgres`, port 5434 — `fops_migrate` lacks CREATEDB). Rebuild after crashed runs or migration chunks; crash-polluted DBs produce phantom failures.
 - **FE visual harness.** Committed Playwright harness at `apps/frontend/tests/visual` (vite-preview IPv4, fail-closed Zod-validated mock, CP-pixel sign-off). Sandboxed codex has no browser — the conductor generates baselines outside the sandbox. Every new screen needs fixture + spec.
+- **FE gates.** `scripts/gates/frontend-verify-profile.json` runs `fe-typecheck-gate.mjs` (fails only newly introduced typecheck errors against its baseline) and `fe-biome-gate.mjs` (checks only branch-changed files). Biome errors fail the gate; warnings do not. In a fresh worktree, run `pnpm --filter frontend build` from `apps/frontend` (or start dev) before `pnpm gate:fe-typecheck` to generate gitignored `apps/frontend/src/routeTree.gen.ts`; without it, 24 reported new errors are setup noise, not baseline drift, and must never be added to `scripts/gates/frontend-typecheck-baseline.txt`. The Biome gate does not need this generated file. Update the typecheck baseline or biome allowlist only when the existing diagnostic is intentionally accepted and documented in review.
+- **FE chunks are exempt from AC-ID discovery.** `completion-check.sh` maps AC-IDs by scanning test names, and only backend integration tests carry them here, so **no FE chunk can pass that part of the gate**. Trust its path and test-count checks; treat the AC-ID mapping as unavailable rather than as a failure to fix. Do not add AC-IDs to frontend test titles to satisfy the parser — that inverts ownership, and the tool has no tracked consumer in this repo (#250, wontfix). Upstream: hjung3113/feedbackops-workflow#80.
 - **FE design review.** Reviews compare the implementation against the RENDERED prototype (`docs/design-prototype/`), not prose specs; hand the implementing agent the prototype screen up front.
 - **Migrations.** Every new drizzle migration must be registered in the drizzle journal in the same chunk (omission has cost a review round).
 
@@ -137,3 +156,14 @@ When reviewing a PR, prioritize product invariant violations, ownership boundary
 - **Domain docs.** Root `CONTEXT.md` owns the domain glossary and stable invariants; `docs/adr/` owns architectural decisions; per-directory `AGENTS.md` owns technical-layer rules. See `docs/agents/domain.md`.
 - **Workflow.** Model tiers, REV cycles, dispatch patterns: the `/agent-workflow` skill (external toolkit).
 - **Vendored skills.** `.agents/skills/` holds the vendored `mattpocock/skills`, symlinked into `.claude/skills/`. `caveman` and `zoom-out` are local-only additions. Upstream `code-review` is deliberately not vendored, so `/code-review` resolves to the Claude Code built-in.
+
+<!-- agent-workflow:begin (managed by install-into.sh — do not edit) -->
+### Model routing (installed by the agent-workflow toolkit)
+
+Read before any dispatch:
+- .agent-workflow/model-alloc.json — project-owned allocation contract
+- .agent-workflow/docs/agents/multi-agent-workflow.md — Model Allocation
+- .agent-workflow/docs/agents/conductor-persona.md — section 2: CONDUCTOR is read-only on product code
+
+The allocation file is authoritative. CONDUCTOR dispatches artifact-producing work; workers produce code, docs, plans, and recon.
+<!-- agent-workflow:end -->

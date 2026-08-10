@@ -32,11 +32,37 @@ statuses and all ages are eligible. This is deliberately a weak heuristic, not
 > scaffolding and does NOT widen `voc_clusters.status` to `suggested`;
 > recommendations are modelled as a separate DTO/state machine whose
 > confirmation creates a `draft`/`confirmed` cluster (#127 decision D1).
+>
+> **Design decided 2026-07-26.** ADR-0034 records how #168 builds that
+> infrastructure (pgvector, an embedding provider port with a deterministic
+> offline fake, a versioned embedding store, and a recommendation resource with
+> dismissal state). The heuristic described below remains the shipped behavior
+> until that recommendation resource lands; this ADR is amended at that point,
+> not before.
+>
+> **Amended 2026-07-27 (#168 step 6).** The ADR-0034 recommendation resource
+> now has its HTTP surface. This heuristic remains **Accepted** alongside it,
+> rather than being replaced: when recommendations report `available:false`
+> because the provider is disabled or the source has not yet been embedded, the
+> heuristic remains the only related-VOC signal.
+
+> **Amended 2026-08-05 (#337).** A reporter arm — an actor who reported the
+> source VOC but holds neither `voc.read` nor `voc.triage` on its Managed
+> System — receives a full detail envelope with the peer-derived and
+> internal-triage fields omitted entirely, not zeroed.
+>
+> **Corrected 2026-08-05 (#347).** The #337 amendment first restated the peer
+> rule below as `voc.read` scope alone, dropping the reporter-ownership arm.
+> That was wrong and did not match `similarVocVisibilityPredicate`: the arm
+> admits only VOCs the actor themself reported, so it never reveals that
+> another reporter submitted a peer. The rule below is restored; #337 narrows
+> which *envelope* carries peer fields, not which *peers* are visible.
 
 A peer is visible only when its Managed System is in the actor's `voc.read`
-scope or the actor reported that peer. A triage-only summary envelope exposes
-neither `similar_count` nor `similar.items`: a full envelope for an actor's own
-VOC does not grant peer read access.
+scope or the actor reported that peer. A triage-only summary envelope and a
+reporter arm without `voc.read` or `voc.triage` expose neither `similar_count`
+nor `similar.items`: a full envelope for an actor's own VOC does not grant
+peer read access.
 
 `similar_count` is the sole authorized-peer total. Detail adds
 `similar.items`, ordered by `created_at DESC, id DESC` and capped at three,
@@ -62,3 +88,5 @@ already populated.
   detail envelope placement.
 - Consumers must treat the detail endpoint as non-conditional while this
   projection is peer-derived.
+- The VOC create surface consumes this heuristic through its pre-submit peers
+  panel, before a source VOC exists.

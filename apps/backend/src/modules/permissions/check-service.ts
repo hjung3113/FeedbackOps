@@ -30,8 +30,9 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import type { Capability } from '@fops/shared';
 import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
 import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
+import type { Tx } from '../../db/tx.js';
+import { allManagedSystemIds } from '../core/managed-systems/read-projections.js';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Decision shape — locked verbatim by issue #4. Do not extend without an
@@ -55,6 +56,8 @@ export interface RequestableScope {
 export type Decision =
   | { allow: true; via: 'direct_grant' | 'role' | 'managed_system_scope'; grant_id?: string }
   | { allow: false; reason: DenyReason; requestable: RequestableScope[] | null };
+
+export type CapabilityScope = { kind: 'all' } | { kind: 'scoped'; managed_system_ids: string[] };
 
 export interface ActorContext {
   actor_id: string;
@@ -204,7 +207,75 @@ export function createCheckService(deps: CheckServiceDeps) {
     return { allow: false, reason: 'no_grant', requestable };
   }
 
-  return { checkCapability };
+  async function capabilityScope(
+    actor: ActorContext,
+    capability: Capability,
+    scope: { workspace_id: string },
+    options: { tx?: Tx } = {},
+  ): Promise<CapabilityScope> {
+    const db: Tx = options.tx ?? deps.db;
+    if (actor.workspace_id !== scope.workspace_id)
+      return { kind: 'scoped', managed_system_ids: [] };
+
+    const denyRows = await db
+      .select({ managedSystemId: permissionDenies.managedSystemId })
+      .from(permissionDenies)
+      .where(
+        and(
+          eq(permissionDenies.workspaceId, actor.workspace_id),
+          eq(permissionDenies.actorId, actor.actor_id),
+          eq(permissionDenies.capability, capability),
+          isNull(permissionDenies.revokedAt),
+        ),
+      );
+    if (denyRows.some((row) => row.managedSystemId === null)) {
+      return { kind: 'scoped', managed_system_ids: [] };
+    }
+    const deniedIds = new Set(
+      denyRows.map((row) => row.managedSystemId).filter((id): id is string => id !== null),
+    );
+
+    const grantRows = await db
+      .select({
+        managedSystemId: permissionGrants.managedSystemId,
+        revokedAt: permissionGrants.revokedAt,
+        expiresAt: permissionGrants.expiresAt,
+      })
+      .from(permissionGrants)
+      .where(
+        and(
+          eq(permissionGrants.workspaceId, actor.workspace_id),
+          eq(permissionGrants.actorId, actor.actor_id),
+          eq(permissionGrants.capability, capability),
+        ),
+      );
+    const rightNow = now();
+    const isActive = (row: {
+      revokedAt: Date | null;
+      expiresAt: Date | null;
+    }) =>
+      row.revokedAt === null &&
+      (row.expiresAt === null || row.expiresAt.getTime() > rightNow.getTime());
+    const broadAllow =
+      grantRows.some((row) => row.managedSystemId === null && isActive(row)) ||
+      roleSatisfies(actor.role_level, capability);
+    if (broadAllow && deniedIds.size === 0) return { kind: 'all' };
+
+    const allowedIds = broadAllow
+      ? await allManagedSystemIds(db, actor.workspace_id)
+      : grantRows
+          .filter(
+            (row): row is typeof row & { managedSystemId: string } =>
+              row.managedSystemId !== null && isActive(row),
+          )
+          .map((row) => row.managedSystemId);
+    return {
+      kind: 'scoped',
+      managed_system_ids: allowedIds.filter((id) => !deniedIds.has(id)),
+    };
+  }
+
+  return { checkCapability, capabilityScope };
 }
 
 function roleSatisfies(roleLevel: string, capability: Capability): boolean {

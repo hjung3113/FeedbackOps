@@ -15,6 +15,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { createVocReadService, type CountVocsQuery } from '../read-service.js';
 import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
@@ -117,6 +118,26 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     const msIds = body.items.map((i) => i.primary_managed_system_id);
     expect(msIds).toContain(msAId);
     expect(msIds).not.toContain(msBId);
+  });
+
+  it('countVocs forwards filter.severity to the shared read predicate', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-count-severity`, 'Count Severity MS');
+    // countVocs only resolves scope and calls the repo predicate, so its other
+    // service dependencies are intentionally not reached by this direct test.
+    const vocReadService = createVocReadService({
+      db: dbHandle.db,
+      checkService: undefined as never,
+      entityLinksService: undefined as never,
+    });
+    const actor = { actor_id: adminActorId, workspace_id: WORKSPACE_ID, role_level: 'admin' as const };
+    const query: CountVocsQuery = { view: 'inbox', 'filter.severity': ['high'] };
+    const before = await vocReadService.countVocs({ actor, query });
+
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Count high one', { severity: 'high' });
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Count high two', { severity: 'high' });
+    await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Count low', { severity: 'low' });
+
+    await expect(vocReadService.countVocs({ actor, query })).resolves.toBe(before + 2);
   });
 
   // ── AC3: view=my filters by reporter_id ───────────────────────────────────

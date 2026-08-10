@@ -28,12 +28,13 @@ Expected behavior:
 
 ```text
 POST /survey-responses/:id/create-finding
-POST /survey-findings/:id/request-task
-POST /survey-findings/:id/create-task
-POST /survey-findings/:id/link-task
+POST /survey-findings/:id/request-task (not implemented)
+POST /survey-findings/:id/link-task (not implemented)
 # future: POST /survey-findings/:id/create-milestone
 # future: POST /survey-findings/:id/link-milestone
 ```
+
+Current reachable Finding task paths are in the `/findings/:id` family.
 
 ## VOC APIs
 

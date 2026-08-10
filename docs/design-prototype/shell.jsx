@@ -201,6 +201,8 @@ const RAIL_ITEMS = [
 // Global rail (system selector)
 // ============================================================
 function GlobalRail({ activeRoute, onNavigate, role = 'admin' }) {
+  const avatarRef = useRef(null);
+  const [accountOpen, setAccountOpen] = useStateShell(false);
   // map route → rail
   const activeKey = useMemo(() => {
     if (activeRoute === 'home' || activeRoute === 'my-work') return 'home';
@@ -212,6 +214,8 @@ function GlobalRail({ activeRoute, onNavigate, role = 'admin' }) {
     if (activeRoute.startsWith('admin')) return 'admin';
     return 'home';
   }, [activeRoute]);
+
+  const roleLabel = role === 'admin' ? '김지원 · Admin' : role === 'dev' ? '김지원 · Developer' : '김지원 · User';
 
   const allowed = ROLE_RAIL_VISIBILITY[role] || ROLE_RAIL_VISIBILITY.admin;
   const visibleRail = RAIL_ITEMS.filter(item => allowed.includes(item.key));
@@ -242,7 +246,34 @@ function GlobalRail({ activeRoute, onNavigate, role = 'admin' }) {
       ))}
       <div className="rail-spacer" />
       <button className="rail-item" title="Notifications"><Icon name="bell" size={15} /></button>
-      <div className="rail-avatar" title={`${role === 'admin' ? '김지원 · Admin' : role === 'dev' ? '김지원 · Developer' : '김지원 · User'}`}>김</div>
+      <button
+        ref={avatarRef}
+        type="button"
+        className="rail-avatar"
+        aria-haspopup="menu"
+        aria-expanded={accountOpen}
+        title={`${roleLabel} · 계정`}
+        onClick={() => setAccountOpen(o => !o)}>
+        김
+      </button>
+      <Popover open={accountOpen} anchorRef={avatarRef} onClose={() => setAccountOpen(false)} placement="top" width={200}>
+        <div className="popover-section-title">{roleLabel}</div>
+        <div className="popover-divider" />
+        {/* The prototype has no login screen — role is switched through the dev
+            Tweaks panel, not a product surface. So this records the copy and
+            placement of the control; production wires it to POST /auth/logout
+            and returns to the login picker (ADR-0006). */}
+        <button
+          type="button"
+          role="menuitem"
+          className="popover-item"
+          onClick={() => {
+            setAccountOpen(false);
+            window.__toast({ message: '로그아웃 (mock)', tone: 'default' });
+          }}>
+          로그아웃
+        </button>
+      </Popover>
     </aside>
   );
 }

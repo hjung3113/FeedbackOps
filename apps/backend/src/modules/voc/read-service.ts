@@ -49,6 +49,17 @@ export interface ReadActorContext {
   role_level: 'admin' | 'developer' | 'user';
 }
 
+/** Count queries use the same predicates as the list, without list-only fields. */
+export type CountVocsQuery = Pick<
+  ListVocsQuery,
+  | 'view'
+  | 'managed_system_id'
+  | 'tab'
+  | 'filter.severity'
+  | 'filter.reporter_facing_status'
+  | 'filter.owner'
+>;
+
 // ── Inline conversation cursor (conversation-specific; separate from VOC list cursor) ──
 
 interface ConversationCursor {
@@ -200,9 +211,106 @@ function intersectScopes(a: Scope, b: Scope): Scope {
   return { kind: 'all' };
 }
 
+type ResolvedVocListScope = {
+  scopeFilter: Scope;
+  actorIdForMyFilter?: string;
+};
+
+/** Shared view-to-scope decision for VOC lists and their navigation counts. */
+function resolveVocListScope(args: {
+  actor: ReadActorContext;
+  query: Pick<ListVocsQuery, 'view' | 'managed_system_id'>;
+  readScope: Scope;
+  triageScope: Scope | undefined;
+}): ResolvedVocListScope {
+  const { actor, query, readScope, triageScope } = args;
+  const { view, managed_system_id } = query;
+
+  if (view === 'my') {
+    if (managed_system_id === 'all') {
+      throw new HttpError('validation.failed', 'managed_system_id=all not allowed for view=my', {
+        fields: [{ path: ['managed_system_id'], code: 'invalid' }],
+      });
+    }
+    return {
+      scopeFilter: managed_system_id && managed_system_id !== 'all'
+        ? { kind: 'scoped', managedSystemIds: [managed_system_id] }
+        : { kind: 'all' },
+      actorIdForMyFilter: actor.actor_id,
+    };
+  }
+
+  if (view === 'inbox') {
+    if (readScope.kind === 'scoped' && readScope.managedSystemIds.length === 0) {
+      if (actor.role_level === 'developer') {
+        throw new HttpError('permission.scope_required', 'voc.read capability required; developer needs MS-scoped grant', {
+          requiredScope: [],
+          requestable_permission: { permission: 'voc.read', managed_system_id: null },
+        });
+      }
+      throw new HttpError('permission.denied', 'no voc.read scope for actor', { reason: 'no_grant' });
+    }
+    if (managed_system_id && managed_system_id !== 'all') {
+      if (!msInScope(readScope, managed_system_id)) {
+        throw new HttpError('permission.scope_required', 'managed_system_id not in voc.read scope', {
+          requiredScope: [managed_system_id],
+          requestable_permission: { permission: 'voc.read', managed_system_id },
+        });
+      }
+      return { scopeFilter: { kind: 'scoped', managedSystemIds: [managed_system_id] } };
+    }
+    return { scopeFilter: readScope };
+  }
+
+  const intersected = intersectScopes(readScope, triageScope!);
+  if (intersected.kind === 'scoped' && intersected.managedSystemIds.length === 0) {
+    throw new HttpError('permission.denied', 'no voc.triage scope for actor', {
+      requestable_permission: { permission: 'voc.triage', managed_system_id: null },
+    });
+  }
+  if (managed_system_id && managed_system_id !== 'all') {
+    if (!msInScope(intersected, managed_system_id)) {
+      throw new HttpError('permission.scope_required', 'managed_system_id not in voc.triage scope', {
+        requiredScope: [managed_system_id],
+        requestable_permission: { permission: 'voc.triage', managed_system_id },
+      });
+    }
+    return { scopeFilter: { kind: 'scoped', managedSystemIds: [managed_system_id] } };
+  }
+  return { scopeFilter: intersected };
+}
+
 // ── Service factory ──────────────────────────────────────────────────────────
 
 export function createVocReadService(deps: VocReadServiceDeps) {
+  async function countVocs(args: { actor: ReadActorContext; query: CountVocsQuery }): Promise<number> {
+    const { actor, query } = args;
+    const { view, tab } = query;
+    const filterSeverity = query['filter.severity'];
+    const filterReporterFacingStatus = query['filter.reporter_facing_status'];
+    const filterOwner = query['filter.owner'];
+    if (tab === 'waiting' && view !== 'triage') {
+      throw new HttpError('validation.failed', 'tab=waiting is only valid for view=triage', {
+        fields: [{ path: ['tab'], code: 'invalid_for_view' }],
+      });
+    }
+    const [readScope, triageScope] = await Promise.all([
+      repoRead.actorReadScope(deps.db, actor),
+      view === 'triage' ? repoRead.actorTriageScope(deps.db, actor) : Promise.resolve(undefined),
+    ]);
+    const { scopeFilter, actorIdForMyFilter } = resolveVocListScope({ actor, query, readScope, triageScope });
+    return repoRead.countVocsForRead(deps.db, {
+      workspaceId: actor.workspace_id,
+      scopeFilter,
+      view,
+      ...(actorIdForMyFilter !== undefined ? { actorIdForMyFilter } : {}),
+      ...(tab !== undefined ? { tab } : {}),
+      ...(filterSeverity !== undefined ? { filterSeverity } : {}),
+      ...(filterReporterFacingStatus !== undefined ? { filterReporterFacingStatus } : {}),
+      ...(filterOwner !== undefined ? { filterOwner } : {}),
+    });
+  }
+
   // ── listVocs ───────────────────────────────────────────────────────────────
 
   async function listVocs(args: {
@@ -257,14 +365,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       decodedCursor = { sv: cursor.sv, id: cursor.id };
     }
 
-    // ── 5. view=my: reject managed_system_id='all' ────────────────────────────
-    if (view === 'my' && managed_system_id === 'all') {
-      throw new HttpError('validation.failed', 'managed_system_id=all not allowed for view=my', {
-        fields: [{ path: ['managed_system_id'], code: 'invalid' }],
-      });
-    }
-
-    // ── 6. Resolve scopes (skip triageScope for non-triage views) ─────────────
+    // ── 5. Resolve scopes (skip triageScope for non-triage views) ─────────────
     let readScope: Scope;
     let effectiveScope: Scope;
     let triageScope: Scope | undefined;
@@ -282,101 +383,15 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       ]);
     }
 
-    // ── 7. View-specific scope validation + scope filter selection ─────────────
-    let scopeFilter: Scope;
-    let actorIdForMyFilter: string | undefined;
+    // ── 6. Resolve view-specific scope and validation ─────────────────────────
+    const { scopeFilter, actorIdForMyFilter } = resolveVocListScope({
+      actor,
+      query,
+      readScope,
+      triageScope,
+    });
 
-    if (view === 'my') {
-      // No scope filter for 'my' view (reporter_id filter is applied in repo).
-      // Allow managed_system_id=<uuid> narrowing.
-      if (managed_system_id && managed_system_id !== 'all') {
-        scopeFilter = { kind: 'scoped', managedSystemIds: [managed_system_id] };
-      } else {
-        scopeFilter = { kind: 'all' };
-      }
-      actorIdForMyFilter = actor.actor_id;
-    } else if (view === 'inbox') {
-      // Validate read scope is non-empty.
-      if (readScope.kind === 'scoped' && readScope.managedSystemIds.length === 0) {
-        if (actor.role_level === 'developer') {
-          throw new HttpError(
-            'permission.scope_required',
-            'voc.read capability required; developer needs MS-scoped grant',
-            {
-              requiredScope: [],
-              requestable_permission: {
-                permission: 'voc.read',
-                managed_system_id: null,
-              },
-            },
-          );
-        }
-        throw new HttpError(
-          'permission.denied',
-          'no voc.read scope for actor',
-          { reason: 'no_grant' },
-        );
-      }
-
-      // managed_system_id narrowing for inbox view.
-      if (managed_system_id && managed_system_id !== 'all') {
-        // Must be in actor's read scope.
-        if (!msInScope(readScope, managed_system_id)) {
-          throw new HttpError(
-            'permission.scope_required',
-            'managed_system_id not in voc.read scope',
-            {
-              requiredScope: [managed_system_id],
-              requestable_permission: {
-                permission: 'voc.read',
-                managed_system_id,
-              },
-            },
-          );
-        }
-        scopeFilter = { kind: 'scoped', managedSystemIds: [managed_system_id] };
-      } else {
-        scopeFilter = readScope;
-      }
-    } else {
-      // view === 'triage'
-      const tScope = triageScope!;
-      const intersected = intersectScopes(readScope, tScope);
-      if (intersected.kind === 'scoped' && intersected.managedSystemIds.length === 0) {
-        throw new HttpError(
-          'permission.denied',
-          'no voc.triage scope for actor',
-          {
-            requestable_permission: {
-              permission: 'voc.triage',
-              managed_system_id: null,
-            },
-          },
-        );
-      }
-
-      // managed_system_id narrowing for triage view.
-      if (managed_system_id && managed_system_id !== 'all') {
-        if (!msInScope(intersected, managed_system_id)) {
-          throw new HttpError(
-            'permission.scope_required',
-            'managed_system_id not in voc.triage scope',
-            {
-              requiredScope: [managed_system_id],
-              requestable_permission: {
-                permission: 'voc.triage',
-                managed_system_id,
-              },
-            },
-          );
-        }
-        scopeFilter = { kind: 'scoped', managedSystemIds: [managed_system_id] };
-      } else {
-        scopeFilter = intersected;
-      }
-    }
-
-    // ── 8. Call repo ──────────────────────────────────────────────────────────
+    // ── 7. Call repo ──────────────────────────────────────────────────────────
     const repoArgs: repoRead.ListVocsRepoArgs = {
       workspaceId: actor.workspace_id,
       scopeFilter,
@@ -469,6 +484,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     const msInReadScope = msInScope(readScope, primaryMs);
     const msInEffectiveScope = msInScope(effectiveScope, primaryMs);
     const canTriage = msInScope(triageScope, primaryMs);
+    const isReporterArm = isReporter && !msInReadScope && !canTriage;
 
     // ── 4. Access matrix ─────────────────────────────────────────────────────
     const etag = `W/"${row.updatedAt.toISOString()}"`;
@@ -587,18 +603,22 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       display_id: row.displayId,
       title: row.title,
       primary_managed_system_id: primaryMs,
-      analytics_area_id: row.analyticsAreaId,
       reporter_id: row.reporterId,
-      owner_user_id: row.ownerUserId,
-      owner_team_id: row.ownerTeamId,
       severity: row.severity,
       reporter_facing_status: row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],
       source_context: row.sourceContext as VocDetailEnvelope['source_context'],
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
-      similar_count: similarCount,
-      similar: mapSimilarItems(similarItems),
+      ...(!isReporterArm
+        ? {
+            analytics_area_id: row.analyticsAreaId,
+            owner_user_id: row.ownerUserId,
+            owner_team_id: row.ownerTeamId,
+            similar_count: similarCount,
+            similar: mapSimilarItems(similarItems),
+          }
+        : {}),
       // PLAN-22 §Bug-1: detail row also carries attachment_count (matches the
       // shared schema which extends vocListItemSchema).
       attachment_count: vocAttRows.length,
@@ -736,6 +756,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       repoRead.actorReadScope(tx, actor),
     ]);
     const canTriage = msInScope(triageScope, primaryMs);
+    const isReporterArm = isReporter && !msInScope(readScope, primaryMs) && !canTriage;
 
     // Inline conversation (first 50 entries).
     const convResult = await repoRead.selectConversationPage(tx, {
@@ -801,18 +822,22 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       display_id: row.displayId,
       title: row.title,
       primary_managed_system_id: primaryMs,
-      analytics_area_id: row.analyticsAreaId,
       reporter_id: row.reporterId,
-      owner_user_id: row.ownerUserId,
-      owner_team_id: row.ownerTeamId,
       severity: row.severity,
       reporter_facing_status: row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],
       source_context: row.sourceContext as VocDetailEnvelope['source_context'],
       created_at: row.createdAt.toISOString(),
       updated_at: row.updatedAt.toISOString(),
-      similar_count: similarCount,
-      similar: mapSimilarItems(similarItems),
+      ...(!isReporterArm
+        ? {
+            analytics_area_id: row.analyticsAreaId,
+            owner_user_id: row.ownerUserId,
+            owner_team_id: row.ownerTeamId,
+            similar_count: similarCount,
+            similar: mapSimilarItems(similarItems),
+          }
+        : {}),
       attachment_count: vocAttRows.length,
       description_rich_content: row.descriptionRichContent,
       next_actions: [],
@@ -831,7 +856,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     };
   }
 
-  return { listVocs, getVocDetail, getConversation, composeDetailEnvelope };
+  return { listVocs, countVocs, getVocDetail, getConversation, composeDetailEnvelope };
 }
 
 export type VocReadService = ReturnType<typeof createVocReadService>;

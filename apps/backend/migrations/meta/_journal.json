@@ -288,6 +288,55 @@
       "when": 1782900000000,
       "tag": "0040_evidence_highlight_approval_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1783000000000,
+      "tag": "0041_workspace_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1783100000000,
+      "tag": "0042_voc_embeddings",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1783200000000,
+      "tag": "0043_voc_embedding_queues",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1783300000000,
+      "tag": "0044_voc_recommendation_decisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1783400000000,
+      "tag": "0045_saved_views",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1783500000000,
+      "tag": "0046_dashboard_survey_gap_aggregate",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1783600000000,
+      "tag": "0047_survey_result_next_actions",
+      "breakpoints": true
     }
   ]
 }

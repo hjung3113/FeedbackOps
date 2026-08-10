@@ -14,25 +14,23 @@
 //   Idempotency-Key: auto-minted by apiClient
 //   If-Match: voc.updated_at (optimistic concurrency)
 //
-// On 200: caller should invalidate ['voc', vocId] and clear draft.
+// On 201: caller should invalidate ['voc', vocId] and clear draft.
 
 import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';
-import type { ReporterFacingStatusEnum } from '@fops/shared';
+import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
 import type { TipTapDoc } from '@fops/ui';
 import { type UseMutationResult, useMutation } from '@tanstack/react-query';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface PublicUpdateBody {
+  skip_public_update: false;
   body_rich_content: TipTapDoc;
   /** Always sent; backend tolerates no-op when equal to current status. */
   next_reporter_facing_status: ReporterFacingStatusEnum;
-  attachments: unknown[];
   /**
-   * PLAN-22 C7a (D1): widened body field — FE-side list of successfully-uploaded
-   * attachment ids from <ComposerAttachmentDropzone>. Backend schema reconciled
-   * in C7b (legacy `attachments: AttachmentRef[]` deprecated then).
+   * PLAN-22 C7b: uploaded attachment ids accepted by the canonical request schema.
    */
   attachment_ids?: string[];
 }
@@ -45,8 +43,17 @@ export interface PublicUpdateVars {
 }
 
 export interface PublicUpdateSuccess {
-  id: string;
-  updated_at: string;
+  public_update: {
+    id: string;
+    voc_id: string;
+    body_rich_content: unknown | null;
+    reporter_facing_status_before: ReporterFacingStatusEnum;
+    reporter_facing_status_after: ReporterFacingStatusEnum;
+    skip_public_update: boolean;
+    skip_reason: string | null;
+    created_at: string;
+  };
+  voc: VocDetailEnvelope;
 }
 
 export interface UseVocPublicUpdateMutationArgs {

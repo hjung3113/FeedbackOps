@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { ErrorCode } from '../errors/codes.js';
 import { attachmentIdsSchema, tipTapDocSchema } from './create-request.js';
+import { isTipTapDocBlank } from './rich-content.js';
 
 // ── editDescriptionRequestSchema ───────────────────────────────────────────
 // Used by PATCH /vocs/:id/description (Slice 3 #17). Strict so that any
@@ -18,7 +19,11 @@ import { attachmentIdsSchema, tipTapDocSchema } from './create-request.js';
 export const editDescriptionRequestSchema = z
   .object({
     title: z.string().min(1).max(200).optional(),
-    description_rich_content: tipTapDocSchema.optional(),
+    description_rich_content: tipTapDocSchema
+      .refine((doc) => !isTipTapDocBlank(doc), {
+        message: '상세 설명을 입력해 주세요.',
+      })
+      .optional(),
     attachment_ids: attachmentIdsSchema.optional(),
   })
   .strict()

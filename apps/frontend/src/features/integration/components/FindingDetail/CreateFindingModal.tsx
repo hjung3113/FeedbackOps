@@ -2,12 +2,15 @@
 // Fields: title, summary, severity. Mirrors EditDescriptionModal pattern.
 // On success: navigates to /findings/:newId.
 
-import * as React from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useNavigate } from '@tanstack/react-router';
-import { toast } from 'sonner';
+import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import {
+  type CreateFindingRequest,
+  type FindingSeverity,
+  createFindingRequestSchema,
+} from '@fops/shared';
+import {
+  AnalyticsAreaPicker,
   Button,
   Dialog,
   DialogContent,
@@ -23,14 +26,20 @@ import {
   SelectValue,
   Textarea,
 } from '@fops/ui';
-import { createFindingRequestSchema, type CreateFindingRequest, type FindingSeverity } from '@fops/shared';
-import { useIdempotencyKey, errorMapper, type ApiError } from '@/lib/api';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import * as React from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import { useCreateFindingFromVocMutation } from '../../hooks/useCreateFindingFromVocMutation';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface CreateFindingModalProps {
   vocId: string;
+  managedSystemId: string;
+  sourceAnalyticsAreaId: string | null;
   open: boolean;
   onClose: () => void;
 }
@@ -46,7 +55,13 @@ const SEVERITY_OPTIONS: { value: FindingSeverity; label: string }[] = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function CreateFindingModal({ vocId, open, onClose }: CreateFindingModalProps): React.ReactElement {
+export function CreateFindingModal({
+  vocId,
+  managedSystemId,
+  sourceAnalyticsAreaId,
+  open,
+  onClose,
+}: CreateFindingModalProps): React.ReactElement {
   const navigate = useNavigate();
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
@@ -58,9 +73,33 @@ export function CreateFindingModal({ vocId, open, onClose }: CreateFindingModalP
       title: '',
       summary: '',
       severity: 'medium',
+      analytics_area_id: sourceAnalyticsAreaId ?? undefined,
     },
     mode: 'onBlur',
   });
+
+  const analyticsAreasQuery = useQuery({
+    queryKey: ['analytics-areas', managedSystemId] as const,
+    queryFn: ({ signal }) =>
+      fetchAnalyticsAreas({ managedSystemId, includeArchived: true, signal }),
+    enabled: open,
+    staleTime: 10 * 60 * 1000,
+  });
+  const analyticsAreaOptions = React.useMemo(
+    () =>
+      (analyticsAreasQuery.data?.items ?? [])
+        .filter(
+          (area) =>
+            area.managed_system_id === managedSystemId &&
+            (area.archived_at === null || area.id === sourceAnalyticsAreaId),
+        )
+        .map((area) => ({
+          id: area.id,
+          label: area.archived_at === null ? area.name : `${area.name} (보관됨)`,
+          archived: area.archived_at !== null,
+        })),
+    [analyticsAreasQuery.data?.items, managedSystemId, sourceAnalyticsAreaId],
+  );
 
   function closeAndReset(): void {
     form.reset();
@@ -150,7 +189,9 @@ export function CreateFindingModal({ vocId, open, onClose }: CreateFindingModalP
             </FieldLabel>
             <Select
               defaultValue="medium"
-              onValueChange={(val) => form.setValue('severity', val as FindingSeverity, { shouldValidate: true })}
+              onValueChange={(val) =>
+                form.setValue('severity', val as FindingSeverity, { shouldValidate: true })
+              }
             >
               <SelectTrigger id="finding-severity">
                 <SelectValue placeholder="심각도 선택" />
@@ -168,6 +209,37 @@ export function CreateFindingModal({ vocId, open, onClose }: CreateFindingModalP
                 {form.formState.errors.severity.message}
               </p>
             )}
+          </div>
+
+          {/* Analytics Area */}
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel>Analytics Area (선택)</FieldLabel>
+            {analyticsAreasQuery.isLoading ? (
+              <p className="text-xs text-text-muted">Analytics Area를 불러오는 중입니다.</p>
+            ) : analyticsAreasQuery.isError ? (
+              <p className="text-xs text-feedback-error">Analytics Area를 불러오지 못했습니다.</p>
+            ) : analyticsAreaOptions.length === 0 ? (
+              <p className="text-xs text-text-muted">
+                이 Managed System에 선택할 수 있는 Analytics Area가 없습니다.
+              </p>
+            ) : (
+              <Controller
+                control={form.control}
+                name="analytics_area_id"
+                render={({ field }) => (
+                  <AnalyticsAreaPicker
+                    options={analyticsAreaOptions}
+                    value={field.value ?? null}
+                    onChange={(id) => field.onChange(id ?? undefined)}
+                    placeholder="Analytics Area 선택"
+                    testId="create-finding-aa-picker"
+                  />
+                )}
+              />
+            )}
+            <p className="text-xs text-text-muted">
+              소스 VOC의 Analytics Area를 승계하며 생성 전에 변경할 수 있습니다.
+            </p>
           </div>
         </form>
 

@@ -31,7 +31,9 @@ test.describe('/voc-clusters visual harness', () => {
 
     await page.goto('/voc-clusters');
 
-    await expect(page.getByTestId('cluster-list-error')).toHaveText('데이터를 불러오지 못했습니다.');
+    await expect(page.getByTestId('cluster-list-error')).toHaveText(
+      '데이터를 불러오지 못했습니다.',
+    );
   });
 
   test('filters the list through one real Confirmed tab click', async ({ page }) => {
@@ -57,5 +59,20 @@ test.describe('/voc-clusters visual harness', () => {
     );
     await expect(page.getByTestId('cluster-add-voc-button')).toHaveCount(0);
     await expect(page.getByTestId('cluster-confirm-button')).toHaveCount(0);
+  });
+
+  test('renders the cluster-add-member-already-included dialog', async ({ page }) => {
+    await installMockApi(page);
+
+    await page.goto(`/voc-clusters/${IDS.draft}`);
+    await page.getByTestId('cluster-add-voc-button').click();
+
+    const dialog = page.getByTestId('add-voc-modal');
+    await expect(dialog.getByTestId(`add-voc-candidate-${IDS.existingVoc}`)).toBeDisabled();
+    await expect(dialog.getByTestId(`add-voc-included-${IDS.existingVoc}`)).toHaveText(
+      '이미 포함됨',
+    );
+    await expect(dialog.getByTestId(`add-voc-candidate-${IDS.candidateVoc}`)).toBeEnabled();
+    await expectVisual(page, dialog, 'cluster-add-member-already-included.png');
   });
 });

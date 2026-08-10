@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { publicUpdateRequestSchema } from '../public-update-request.js';
 
-const VALID_DOC = { type: 'doc' as const, content: [] };
+const VALID_DOC = {
+  type: 'doc' as const,
+  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'normal update' }] }],
+};
+const BLANK_DOC = {
+  type: 'doc' as const,
+  content: [{ type: 'paragraph', content: [{ type: 'text', text: '   ' }] }],
+};
+const EMPTY_DOC = { type: 'doc' as const, content: [] };
+const MENTION_DOC = { type: 'doc' as const, content: [{ type: 'mention' }] };
 const STATUS = 'reviewing' as const;
 
 describe('publicUpdateRequestSchema — shape A/B (skip_public_update=false)', () => {
@@ -44,6 +53,29 @@ describe('publicUpdateRequestSchema — shape A/B (skip_public_update=false)', (
         next_reporter_facing_status: 'bogus',
       }),
     ).toThrow();
+  });
+
+  it.each([
+    ['whitespace-only paragraph', BLANK_DOC],
+    ['structurally empty document', EMPTY_DOC],
+  ])('rejects %s', (_name, body_rich_content) => {
+    expect(() =>
+      publicUpdateRequestSchema.parse({
+        skip_public_update: false,
+        body_rich_content,
+        next_reporter_facing_status: STATUS,
+      }),
+    ).toThrow();
+  });
+
+  it('accepts a mention-only document as content', () => {
+    expect(
+      publicUpdateRequestSchema.safeParse({
+        skip_public_update: false,
+        body_rich_content: MENTION_DOC,
+        next_reporter_facing_status: STATUS,
+      }).success,
+    ).toBe(true);
   });
 });
 

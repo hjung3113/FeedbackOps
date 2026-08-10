@@ -22,6 +22,7 @@ import {
   selectEligibleVocLinksForReleasedTask,
 } from '../entity-links/repo.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
+import { lockFindingById, updateFindingLinkedTask } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
 import {
@@ -207,7 +208,9 @@ export function createTasksService(deps: TasksServiceDeps) {
     if (!row) throw new HttpError('not_found.record', 'task not found');
 
     const canManage = (
-      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
+      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+        requireElevatedRole: true,
+      })
     ).allow;
     if (!canManage) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
@@ -275,6 +278,20 @@ export function createTasksService(deps: TasksServiceDeps) {
             taskRequest,
             task,
           });
+
+          if (taskRequest.source_type === 'finding') {
+            const finding = await lockFindingById(tx, {
+              workspaceId: args.actor.workspace_id,
+              findingId: taskRequest.source_id,
+            });
+            if (finding?.linked_task_id === null) {
+              await updateFindingLinkedTask(tx, {
+                workspaceId: args.actor.workspace_id,
+                findingId: finding.id,
+                taskId: task.id,
+              });
+            }
+          }
 
           await markTaskRequestConverted(tx, {
             workspaceId: args.actor.workspace_id,
@@ -504,7 +521,9 @@ export function createTasksService(deps: TasksServiceDeps) {
     const items: TaskDto[] = [];
     for (const row of rows) {
       const canManage = (
-        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
+        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+          requireElevatedRole: true,
+        })
       ).allow;
       if (!canManage) continue;
       items.push(taskToDto(row));

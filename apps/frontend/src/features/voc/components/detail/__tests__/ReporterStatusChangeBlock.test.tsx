@@ -4,8 +4,7 @@
 //
 // Prototype ref: docs/design-prototype/screen-voc.jsx:537-655
 
-import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ReporterStatusChangeBlock } from '../ReporterStatusChangeBlock';
 import type { VocDetailEnvelope } from '@fops/shared';
@@ -28,6 +27,9 @@ const BASE_VOC: VocDetailEnvelope = {
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   similar_count: 0,
+  similar: { items: [] },
+  attachments: [],
+  attachment_count: 0,
   description_rich_content: { type: 'doc', content: [] },
   next_actions: [],
   next_reporter_states: {
@@ -134,9 +136,15 @@ describe('ReporterStatusChangeBlock', () => {
     );
 
     // Red callout should appear
-    expect(screen.getByText('이 전환은 허용되지 않습니다')).toBeInTheDocument();
-    const callout = screen.getByText('이 전환은 허용되지 않습니다').closest('[data-tone]');
-    expect(callout?.getAttribute('data-tone')).toBe('red');
+    const title = screen.getByText('선택한 상태로는 더 이상 전환할 수 없습니다');
+    expect(title).toBeInTheDocument();
+    expect(title.closest('[data-tone]')?.getAttribute('data-tone')).toBe('red');
+
+    // #356: the seeded forbidden reason is appended, not replaced by the
+    // changed-status framing — dropping it loses the only concrete rule the
+    // backend gave us for this pair.
+    const reason = screen.getByTestId('reporter-status-forbidden-reason').textContent ?? '';
+    expect(reason).toContain(BASE_VOC.next_reporter_states?.forbidden?.resolved);
   });
 
   it('shows amber Callout when reporter_status_gate blocks next status', () => {

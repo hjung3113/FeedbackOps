@@ -14,6 +14,11 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import {
+  actorFindingReadScope,
+  checkFindingManage,
+  isFindingInReadScope,
+} from '../findings/authorization.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   actorSurveyReadScope,
@@ -26,11 +31,13 @@ import {
   type SurveyResponseEvidenceSubject,
   hasActiveApprovedResponseExcerpt,
   insertApprovedExcerpt,
+  listDerivedFindingsForResponses,
   lockResponseEvidenceSubject,
   readApprovedResponseExcerpts,
-  readApprovedResultExcerpts,
+  readApprovedResultExcerptsPersonal,
   readResponseTextCandidate,
   readSurveyQuestionLabel,
+  revokeApprovedExcerpt,
 } from './repo-evidence.js';
 import {
   type QuestionKind,
@@ -52,6 +59,7 @@ import {
   setSurveyStatus,
   updateQuestion,
   updateQuestionSortOrders,
+  updateSurvey,
 } from './repo.js';
 
 export interface SurveysActor {
@@ -59,11 +67,18 @@ export interface SurveysActor {
   workspace_id: string;
   role_level: 'admin' | 'developer' | 'user';
 }
+export interface ResolvedSurveyWorkspaceSettings {
+  survey_anonymity_threshold: number;
+}
 export interface SurveysServiceDeps {
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  resolveWorkspaceSettings: (
+    dbOrTx: Db | Tx,
+    workspaceId: string,
+  ) => Promise<ResolvedSurveyWorkspaceSettings>;
 }
 export type CreateSurveyInput = {
   type: 'discovery' | 'validation' | 'outcome';
@@ -81,12 +96,21 @@ export type QuestionInput = {
   options?: Array<{ key: string; label: string }>;
   rating_min?: number;
   rating_max?: number;
-  rating_low_label?: string;
-  rating_high_label?: string;
+  rating_low_label?: string | null;
+  rating_high_label?: string | null;
   sort_order?: number;
-  branch_parent_question_id?: string;
-  branch_trigger_option_key?: string;
+  branch_parent_question_id?: string | null;
+  branch_trigger_option_key?: string | null;
 };
+export type UpdateSurveyInput = Partial<{
+  type: CreateSurveyInput['type'];
+  title: string;
+  description: string;
+  primary_managed_system_id: string;
+  analytics_area_id: string;
+  operator_actor_id: string;
+  responses_identity_protected: boolean;
+}>;
 export type ResponseSubmissionInput = {
   answers: Array<{ question_id: string; value: string | string[] | number }>;
 };
@@ -97,6 +121,12 @@ export type SurveyResponseEvidencePurpose =
   | 'read_highlight';
 export type SurveyResponseEvidenceAccess = {
   subject: SurveyResponseEvidenceSubject;
+};
+type ResultExcerptRow = {
+  approved_excerpt_id: string;
+  question_id: string;
+  redacted_excerpt: string;
+  response_id?: string;
 };
 const dto = (s: SurveyRow, questions?: QuestionRow[]) => ({
   id: s.id,
@@ -358,7 +388,21 @@ function normalized(input: QuestionInput, existing?: QuestionRow) {
   const kind = input.kind;
   const choice = kind === 'single_choice' || kind === 'multiple_choice';
   const branchParent =
-    input.branch_parent_question_id ?? existing?.branch_parent_question_id ?? null;
+    input.branch_parent_question_id === undefined
+      ? (existing?.branch_parent_question_id ?? null)
+      : input.branch_parent_question_id;
+  const branchTrigger =
+    input.branch_trigger_option_key === undefined
+      ? (existing?.branch_trigger_option_key ?? null)
+      : input.branch_trigger_option_key;
+  const ratingLowLabel =
+    input.rating_low_label === undefined
+      ? (existing?.rating_low_label ?? null)
+      : input.rating_low_label;
+  const ratingHighLabel =
+    input.rating_high_label === undefined
+      ? (existing?.rating_high_label ?? null)
+      : input.rating_high_label;
   return {
     kind,
     prompt: input.prompt,
@@ -366,17 +410,13 @@ function normalized(input: QuestionInput, existing?: QuestionRow) {
     options: choice ? (input.options ?? existing?.options ?? null) : null,
     ratingMin: kind === 'rating' ? (input.rating_min ?? existing?.rating_min ?? null) : null,
     ratingMax: kind === 'rating' ? (input.rating_max ?? existing?.rating_max ?? null) : null,
-    ratingLowLabel:
-      kind === 'rating' ? (input.rating_low_label ?? existing?.rating_low_label ?? null) : null,
-    ratingHighLabel:
-      kind === 'rating' ? (input.rating_high_label ?? existing?.rating_high_label ?? null) : null,
+    ratingLowLabel: kind === 'rating' ? ratingLowLabel : null,
+    ratingHighLabel: kind === 'rating' ? ratingHighLabel : null,
     sortOrder: input.sort_order ?? existing?.sort_order ?? 0,
     branchDepth: branchParent ? 1 : 0,
     branchParentQuestionId: branchParent,
     branchParentDepth: branchParent ? 0 : null,
-    branchTriggerOptionKey: branchParent
-      ? (input.branch_trigger_option_key ?? existing?.branch_trigger_option_key ?? null)
-      : null,
+    branchTriggerOptionKey: branchParent ? branchTrigger : null,
   };
 }
 
@@ -729,6 +769,153 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       ),
     );
   }
+  async function updateSurveyFields(a: {
+    actor: SurveysActor;
+    surveyId: string;
+    input: UpdateSurveyInput;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return deps.db.transaction((tx) =>
+      deps.idempotencyService.runIdempotent(
+        tx,
+        a.actor.actor_id,
+        a.idempotencyKey,
+        a.requestHash,
+        async () => {
+          const s = await lockSurvey(tx, a.actor.workspace_id, a.surveyId);
+          if (!s) throw new HttpError('not_found.record', 'survey not found');
+          await requireManage(deps, tx, a.actor, s);
+          draft(s);
+          const primaryManagedSystemId = a.input.primary_managed_system_id ?? s.primary_managed_system_id;
+          const managedSystem = await tx.execute<{
+            id: string;
+            archived_at: Date | null;
+          }>(
+            sql`select id,archived_at from core.managed_systems where id=${primaryManagedSystemId} and workspace_id=${a.actor.workspace_id} for update`,
+          );
+          const m = managedSystem.rows[0];
+          if (!m) throw new HttpError('not_found.record', 'managed system not found');
+          if (m.archived_at)
+            throw new HttpError('conflict.parent_archived', 'managed system archived');
+          if (primaryManagedSystemId !== s.primary_managed_system_id) {
+            const targetManage = await checkSurveyManage(deps.checkService, a.actor, m.id, {
+              tx,
+            });
+            if (!targetManage.allow)
+              throw new HttpError('permission.denied', 'survey.manage capability required');
+          }
+          const analyticsAreaId = a.input.analytics_area_id ?? s.analytics_area_id;
+          if (analyticsAreaId) {
+            const analyticsArea = await tx.execute<{
+              managed_system_id: string;
+              archived_at: Date | null;
+            }>(
+              sql`select managed_system_id,archived_at from core.analytics_areas where id=${analyticsAreaId} and workspace_id=${a.actor.workspace_id} for update`,
+            );
+            const area = analyticsArea.rows[0];
+            if (!area) throw new HttpError('not_found.record', 'analytics area not found');
+            if (area.managed_system_id !== m.id || area.archived_at)
+              throw new HttpError(
+                'validation.failed',
+                'analytics area must be active and belong to managed system',
+                { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
+              );
+          }
+          const operatorActorId = a.input.operator_actor_id ?? s.operator_actor_id;
+          if (a.input.operator_actor_id) {
+            const operator = await tx.execute<{
+              id: string;
+              role_level: 'admin' | 'developer' | 'user';
+            }>(
+              sql`select id,role_level from core.actors where id=${operatorActorId} and workspace_id=${a.actor.workspace_id} for update`,
+            );
+            if (!operator.rows[0])
+              throw new HttpError('validation.failed', 'operator must be in workspace', {
+                fields: [{ path: ['operator_actor_id'], code: 'invalid' }],
+              });
+            const operatorManage = await checkSurveyManage(
+              deps.checkService,
+              { ...a.actor, actor_id: operatorActorId, role_level: operator.rows[0].role_level },
+              m.id,
+              { tx },
+            );
+            if (!operatorManage.allow)
+              throw new HttpError('validation.failed', 'operator requires survey.manage', {
+                fields: [{ path: ['operator_actor_id'], code: 'permission_denied' }],
+              });
+          }
+          const updated = await updateSurvey(tx, a.actor.workspace_id, s.id, {
+            type: a.input.type ?? s.type,
+            title: a.input.title ?? s.title,
+            description: a.input.description ?? s.description,
+            primaryManagedSystemId,
+            analyticsAreaId,
+            operatorActorId,
+            responsesIdentityProtected:
+              a.input.responses_identity_protected ?? s.responses_identity_protected,
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: a.actor.workspace_id,
+            actor_id: a.actor.actor_id,
+            event_type: 'survey_updated',
+            subject_type: 'survey',
+            subject_id: s.id,
+            summary: 'Survey updated',
+            detail: { survey_id: s.id },
+          });
+          return { status: 200, body: dto(updated) };
+        },
+      ),
+    );
+  }
+  async function reorderQuestions(a: {
+    actor: SurveysActor;
+    surveyId: string;
+    questionIds: string[];
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return deps.db.transaction((tx) =>
+      deps.idempotencyService.runIdempotent(
+        tx,
+        a.actor.actor_id,
+        a.idempotencyKey,
+        a.requestHash,
+        async () => {
+          const s = await lockSurvey(tx, a.actor.workspace_id, a.surveyId);
+          if (!s) throw new HttpError('not_found.record', 'survey not found');
+          await requireManage(deps, tx, a.actor, s);
+          draft(s);
+          const questions = await lockQuestions(tx, a.actor.workspace_id, s.id);
+          const questionIds = new Set(a.questionIds);
+          if (
+            questionIds.size !== a.questionIds.length ||
+            questionIds.size !== questions.length ||
+            questions.some((question) => !questionIds.has(question.id))
+          )
+            throw new HttpError('validation.failed', 'question_ids must list every survey question once', {
+              fields: [{ path: ['question_ids'], code: 'invalid' }],
+            });
+          await updateQuestionSortOrders(
+            tx,
+            a.actor.workspace_id,
+            a.questionIds.map((id, sortOrder) => ({ id, sortOrder })),
+          );
+          await deps.auditService.record(tx, {
+            workspace_id: a.actor.workspace_id,
+            actor_id: a.actor.actor_id,
+            event_type: 'survey_questions_reordered',
+            subject_type: 'survey',
+            subject_id: s.id,
+            summary: 'Survey questions reordered',
+            detail: { survey_id: s.id },
+          });
+          return { status: 200, body: dto(s, await listQuestions(tx, a.actor.workspace_id, s.id)) };
+        },
+      ),
+    );
+  }
   async function transition(a: {
     actor: SurveysActor;
     surveyId: string;
@@ -828,97 +1015,213 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     );
     if (survey.status === 'draft')
       throw new HttpError('conflict.survey_results_unavailable', 'survey results unavailable');
-    const [questions, responseCount, aggregateRows, approvedExcerpts] = await Promise.all([
-      listQuestions(deps.db, actor.workspace_id, survey.id),
-      readSurveyResultResponseCount(deps.db, actor.workspace_id, survey.id),
-      readSurveyResultAggregates(deps.db, actor.workspace_id, survey.id),
-      readApprovedResultExcerpts(deps.db, actor.workspace_id, survey.id),
-    ]);
-    const rowsByQuestion = new Map<string, typeof aggregateRows>();
-    for (const row of aggregateRows) {
-      const rows = rowsByQuestion.get(row.question_id) ?? [];
-      rows.push(row);
-      rowsByQuestion.set(row.question_id, rows);
-    }
-    const suppressed = (questionId: string) => ({
-      question_id: questionId,
-      visibility: 'suppressed' as const,
-      response_count: null,
-      suppression: { code: 'anonymity_threshold' as const },
-    });
     const holder = personal.allow;
-    const excerptsByQuestion = new Map<string, Array<{ id: string; text: string }>>();
-    for (const excerpt of approvedExcerpts) {
-      const excerpts = excerptsByQuestion.get(excerpt.question_id) ?? [];
-      excerpts.push({ id: excerpt.approved_excerpt_id, text: excerpt.redacted_excerpt });
-      excerptsByQuestion.set(excerpt.question_id, excerpts);
-    }
-    return surveyResultDtoSchema.parse({
-      survey_id: survey.id,
-      status: survey.status,
-      identity_protected: survey.responses_identity_protected,
-      questions: questions.map((question) => {
-        if (!holder && responseCount < 5) return suppressed(question.id);
-        const rows = rowsByQuestion.get(question.id) ?? [];
-        const answerCount = rows.find((row) => row.bucket_key === null)?.bucket_count ?? 0;
-        if (question.kind === 'text') {
-          return answerCount > 0 && answerCount < 5 && !holder
-            ? suppressed(question.id)
-            : {
-                question_id: question.id,
-                visibility: 'visible' as const,
-                kind: 'text' as const,
-                answer_count: answerCount,
-                distribution: null,
-                excerpts: excerptsByQuestion.get(question.id) ?? [],
-              };
-        }
-        if (question.kind === 'rating') {
-          const distribution = { low: 0, mid: 0, high: 0 };
-          for (const row of rows) {
-            if (row.bucket_key === null) continue;
-            const value = Number(row.bucket_key);
-            if (
-              !Number.isInteger(value) ||
-              question.rating_min === null ||
-              question.rating_max === null ||
-              value < question.rating_min ||
-              value > question.rating_max
-            )
-              continue;
-            distribution[getRatingBandForValue(question.rating_min, question.rating_max, value)] +=
-              row.bucket_count;
+    return deps.db.transaction(async (tx) => {
+      const workspaceSettings = await deps.resolveWorkspaceSettings(tx, actor.workspace_id);
+      const anonymityThreshold = workspaceSettings.survey_anonymity_threshold;
+      // Response IDs stay payload-gated below; this internal projection only
+      // supplies the IDs needed to resolve already-derived Finding links.
+      const excerptRows: Promise<ResultExcerptRow[]> = readApprovedResultExcerptsPersonal(
+        tx,
+        actor.workspace_id,
+        survey.id,
+      );
+      const [questions, responseCount, aggregateRows, approvedExcerpts, findingManage] =
+        await Promise.all([
+          listQuestions(tx, actor.workspace_id, survey.id),
+          readSurveyResultResponseCount(tx, actor.workspace_id, survey.id),
+          readSurveyResultAggregates(tx, actor.workspace_id, survey.id),
+          excerptRows,
+          checkFindingManage(deps.checkService, actor, survey.primary_managed_system_id, {
+            requireElevatedRole: false,
+          }),
+        ]);
+      const derivedFindings = await listDerivedFindingsForResponses(
+        tx,
+        actor.workspace_id,
+        approvedExcerpts.flatMap((excerpt) => (excerpt.response_id ? [excerpt.response_id] : [])),
+      );
+      const findingReadScope = await actorFindingReadScope(tx, actor, {
+        requireElevatedRole: true,
+      });
+      // blocked_requestable is elevated + readable + not manageable; a user
+      // cannot receive this action because Finding read scope is elevated-only.
+      const requestTaskActions = await Promise.all(
+        derivedFindings
+          .filter((finding) =>
+            isFindingInReadScope(findingReadScope, finding.primary_managed_system_id),
+          )
+          .map(async (finding) => {
+            const decision = await checkFindingManage(
+              deps.checkService,
+              actor,
+              finding.primary_managed_system_id,
+              { requireElevatedRole: true },
+            );
+            return {
+              id: 'request_task' as const,
+              availability: decision.allow
+                ? ('allowed' as const)
+                : ('blocked_requestable' as const),
+              intent: 'open_task_request_draft' as const,
+              source_finding_id: finding.finding_id,
+              ...(!decision.allow && decision.requestable !== null
+                ? {
+                    requestable_permission: {
+                      permission: 'finding.manage' as const,
+                      managed_system_id: finding.primary_managed_system_id,
+                    },
+                  }
+                : {}),
+            };
+          }),
+      );
+      const rowsByQuestion = new Map<string, typeof aggregateRows>();
+      for (const row of aggregateRows) {
+        const rows = rowsByQuestion.get(row.question_id) ?? [];
+        rows.push(row);
+        rowsByQuestion.set(row.question_id, rows);
+      }
+      const suppressed = (questionId: string) => ({
+        question_id: questionId,
+        visibility: 'suppressed' as const,
+        response_count: null,
+        suppression: { code: 'anonymity_threshold' as const },
+      });
+      const excerptsByQuestion = new Map<
+        string,
+        Array<{ id: string; text: string; response_id?: string }>
+      >();
+      for (const excerpt of approvedExcerpts) {
+        const excerpts = excerptsByQuestion.get(excerpt.question_id) ?? [];
+        const rid = holder ? excerpt.response_id : undefined;
+        excerpts.push({
+          id: excerpt.approved_excerpt_id,
+          text: excerpt.redacted_excerpt,
+          ...(rid ? { response_id: rid } : {}),
+        });
+        excerptsByQuestion.set(excerpt.question_id, excerpts);
+      }
+      const requestablePermission = {
+        permission: 'finding.manage' as const,
+        managed_system_id: survey.primary_managed_system_id,
+      };
+      const availability = findingManage.allow ? 'allowed' : 'blocked_requestable';
+      const actionPermission =
+        !findingManage.allow && findingManage.requestable !== null
+          ? { requestable_permission: requestablePermission }
+          : {};
+      const result = surveyResultDtoSchema.parse({
+        survey_id: survey.id,
+        status: survey.status,
+        identity_protected: survey.responses_identity_protected,
+        questions: questions.map((question) => {
+          if (!holder && responseCount < anonymityThreshold) return suppressed(question.id);
+          const rows = rowsByQuestion.get(question.id) ?? [];
+          const answerCount = rows.find((row) => row.bucket_key === null)?.bucket_count ?? 0;
+          if (question.kind === 'text') {
+            return answerCount > 0 && answerCount < anonymityThreshold && !holder
+              ? suppressed(question.id)
+              : {
+                  question_id: question.id,
+                  visibility: 'visible' as const,
+                  kind: 'text' as const,
+                  answer_count: answerCount,
+                  distribution: null,
+                  excerpts: excerptsByQuestion.get(question.id) ?? [],
+                };
           }
-          if (!holder && Object.values(distribution).some((count) => count > 0 && count < 5))
+          if (question.kind === 'rating') {
+            const distribution = { low: 0, mid: 0, high: 0 };
+            for (const row of rows) {
+              if (row.bucket_key === null) continue;
+              const value = Number(row.bucket_key);
+              if (
+                !Number.isInteger(value) ||
+                question.rating_min === null ||
+                question.rating_max === null ||
+                value < question.rating_min ||
+                value > question.rating_max
+              )
+                continue;
+              distribution[
+                getRatingBandForValue(question.rating_min, question.rating_max, value)
+              ] += row.bucket_count;
+            }
+            if (
+              !holder &&
+              Object.values(distribution).some((count) => count > 0 && count < anonymityThreshold)
+            )
+              return suppressed(question.id);
+            return {
+              question_id: question.id,
+              visibility: 'visible' as const,
+              kind: 'rating' as const,
+              answer_count: answerCount,
+              distribution,
+            };
+          }
+          const rowCounts = new Map<string, number>();
+          for (const row of rows) {
+            if (row.bucket_key !== null) rowCounts.set(row.bucket_key, row.bucket_count);
+          }
+          const option_buckets = (question.options ?? []).map((option) => ({
+            key: option.key,
+            label: option.label,
+            count: rowCounts.get(option.key) ?? 0,
+          }));
+          if (
+            !holder &&
+            option_buckets.some((bucket) => bucket.count > 0 && bucket.count < anonymityThreshold)
+          )
             return suppressed(question.id);
           return {
             question_id: question.id,
             visibility: 'visible' as const,
-            kind: 'rating' as const,
+            kind: 'choice' as const,
             answer_count: answerCount,
-            distribution,
+            option_buckets,
           };
-        }
-        const rowCounts = new Map<string, number>();
-        for (const row of rows) {
-          if (row.bucket_key !== null) rowCounts.set(row.bucket_key, row.bucket_count);
-        }
-        const option_buckets = (question.options ?? []).map((option) => ({
-          key: option.key,
-          label: option.label,
-          count: rowCounts.get(option.key) ?? 0,
-        }));
-        if (!holder && option_buckets.some((bucket) => bucket.count > 0 && bucket.count < 5))
-          return suppressed(question.id);
-        return {
-          question_id: question.id,
-          visibility: 'visible' as const,
-          kind: 'choice' as const,
-          answer_count: answerCount,
-          option_buckets,
-        };
-      }),
-      next_actions: [],
+        }),
+        next_actions: [
+          {
+            id: 'create_finding' as const,
+            availability,
+            intent: 'open_finding_draft' as const,
+            ...actionPermission,
+          },
+          ...requestTaskActions,
+        ],
+      });
+      if (holder) {
+        const exposed = new Map<string, { responseId: string; questionId: string }>();
+        for (const question of result.questions)
+          if ('excerpts' in question)
+            for (const excerpt of question.excerpts)
+              {
+                const rid = excerpt.response_id;
+                if (rid)
+                  exposed.set(`${rid}:${question.question_id}`, {
+                    responseId: rid,
+                  questionId: question.question_id,
+                  });
+              }
+        for (const { responseId, questionId } of exposed.values())
+          await deps.auditService.record(tx, {
+            workspace_id: actor.workspace_id,
+            actor_id: actor.actor_id,
+            event_type: 'survey_response_personal_read',
+            subject_type: 'survey_response',
+            subject_id: responseId,
+            summary: 'Survey response personal result read',
+            detail: {
+              survey_id: survey.id,
+              survey_response_id: responseId,
+              question_id: questionId,
+            },
+          });
+      }
+      return result;
     });
   }
   async function readEvidenceExcerptCandidate(
@@ -1018,6 +1321,49 @@ export function createSurveysService(deps: SurveysServiceDeps) {
       return approvedExcerptDtoSchema.parse(approved);
     });
   }
+  async function revokeEvidenceExcerpt(
+    actor: SurveysActor,
+    responseId: string,
+    approvedExcerptId: string,
+  ): Promise<ApprovedExcerptDto> {
+    return deps.db.transaction(async (tx) => {
+      const { subject } = await resolveSurveyResponseEvidenceAccess(
+        deps,
+        tx,
+        actor,
+        responseId,
+        'approve_excerpt',
+      );
+      const revoked = await revokeApprovedExcerpt(tx, {
+        workspaceId: actor.workspace_id,
+        responseId,
+        approvedExcerptId,
+      });
+      if (!revoked)
+        throw new HttpError(
+          'validation.failed',
+          'approved excerpt does not belong to survey response',
+        );
+      const { revoked_now, ...approvedExcerpt } = revoked;
+      if (revoked_now) {
+        await deps.auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: 'survey_response_excerpt_revoked',
+          subject_type: 'survey_response_excerpt_approval',
+          subject_id: approvedExcerptId,
+          summary: 'Survey response excerpt revoked',
+          detail: {
+            survey_id: subject.survey_id,
+            survey_response_id: responseId,
+            question_id: revoked.question_id,
+            approved_excerpt_id: approvedExcerptId,
+          },
+        });
+      }
+      return approvedExcerptDtoSchema.parse(approvedExcerpt);
+    });
+  }
   async function submitResponse(a: {
     actor: SurveysActor;
     surveyId: string;
@@ -1095,6 +1441,8 @@ export function createSurveysService(deps: SurveysServiceDeps) {
   }
   return {
     createSurvey,
+    updateSurveyFields,
+    reorderQuestions,
     createQuestion: (a: Parameters<typeof mutateQuestion>[1]) => mutateQuestion('create', a),
     updateQuestion: (a: Parameters<typeof mutateQuestion>[1]) => mutateQuestion('update', a),
     deleteQuestion: (a: Parameters<typeof mutateQuestion>[1]) => mutateQuestion('delete', a),
@@ -1105,6 +1453,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     getSurveyResults,
     readEvidenceExcerptCandidate,
     approveEvidenceExcerpt,
+    revokeEvidenceExcerpt,
     listSurvey,
     submitResponse,
   };

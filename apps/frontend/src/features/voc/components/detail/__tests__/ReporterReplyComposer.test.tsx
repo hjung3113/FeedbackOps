@@ -186,4 +186,41 @@ describe('<ReporterReplyComposer>', () => {
     const composers = screen.getAllByTestId('reporter-reply-composer');
     expect(composers.length).toBeGreaterThanOrEqual(1);
   });
+
+  it('disables Send reply for a whitespace-only draft without calling the mutation', () => {
+    render(
+      <ReporterReplyComposer
+        voc={BASE_VOC}
+        me={ME_REPORTER}
+        draftDoc={{
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: '   ' }] }],
+        }}
+      />,
+      { wrapper: makeWrapper() },
+    );
+
+    expect(screen.getByTestId('reporter-reply-composer')).toBeInTheDocument();
+    const send = screen.getByRole('button', { name: /send reply/i });
+    expect(send).toBeDisabled();
+    fireEvent.click(send);
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('enables Send reply for a text draft', () => {
+    render(
+      <ReporterReplyComposer
+        voc={BASE_VOC}
+        me={ME_REPORTER}
+        draftDoc={{
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'reply' }] }],
+        }}
+      />,
+      { wrapper: makeWrapper() },
+    );
+
+    expect(screen.getByTestId('reporter-reply-composer')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send reply/i })).not.toBeDisabled();
+  });
 });

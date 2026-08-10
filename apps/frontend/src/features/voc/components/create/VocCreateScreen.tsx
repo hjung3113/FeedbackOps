@@ -32,6 +32,7 @@ import { useVocCreateMutation } from '../../hooks/useVocCreateMutation';
 import { SourceContextSegmented } from './SourceContextSegmented';
 import { AttachmentDropzone } from './AttachmentDropzone';
 import { ReporterCard } from './ReporterCard';
+import { SimilarVocPanel } from './SimilarVocPanel';
 import { SeverityDisclaimerCard } from './SeverityDisclaimerCard';
 import { vocDescriptionToolbar } from './VocDescriptionToolbar';
 import { uploadAttachment } from '@/lib/api/attachments';
@@ -92,7 +93,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
       // useEffect-driven sync below would not have propagated by the time
       // useBlocker.shouldBlockFn runs against this navigation intent.
       onDirtyChange?.(false);
-      void navigate({ to: '/vocs', search: { view: 'inbox', selected: data.id } });
+      void navigate({ to: '/vocs', search: { view: 'my', selected: data.id } });
     },
     onError: (err: ApiError) => {
       // 1. validation.failed with detail.fields → form.setError per field
@@ -265,6 +266,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                   />
                 )}
               />
+              <p className="text-xs text-text-muted">타인 대신 보고는 다른 팀원이나 고객의 경험을 대신 등록하는 경우입니다.</p>
             </div>
 
             <FormDivider />
@@ -353,6 +355,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                   {form.formState.errors.analytics_area_id.message}
                 </p>
               )}
+              <p className="text-xs text-text-muted">Analytics Area는 VOC를 분석할 때 함께 볼 주제에 맞춰 선택하세요.</p>
             </div>
 
             <FormDivider />
@@ -369,6 +372,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
           {/* Right column */}
           <div className="flex flex-col gap-3 lg:col-span-3">
             <ReporterCard />
+            <SimilarVocPanel managedSystemId={selectedMs} />
             <SeverityDisclaimerCard />
           </div>
         </div>

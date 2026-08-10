@@ -18,6 +18,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /voc-clusters?selected=:clusterId
 /surveys
 /surveys/:surveyId
+/surveys/:surveyId?builder=true
 /surveys/:surveyId/results
 /tasks?view=my&managedSystem=:managedSystemId|all&selected=:taskId
 /tasks?view=inbox&managedSystem=:managedSystemId|all
@@ -81,6 +82,8 @@ Admin:
 ```
 
 Current sidebar entries live in `SIDEBAR_ENTRIES` (`apps/frontend/src/routes/_authed.tsx`) — that array is authoritative; this paragraph describes it. Entries are grouped under the section labels `VOC` (Inbox, Triage, My VOCs, Clusters, Findings, New VOC), `TASKS` (Task Requests, Tasks, My Tasks), and `MANAGED SYSTEMS` (Managed Systems, Analytics Areas). Per the AGENTS.md two-consumer rule, each feature adds its entry in the slice that owns it.
+
+The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login also clears that cache before routing so a new Actor never sees prior Actor data.
 
 Count badges and global Managed System scope selection are still absent — they are the scope of #143 (GlobalRail multi-domain IA).
 

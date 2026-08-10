@@ -7,7 +7,9 @@
 //   - clicking a row calls navigate with `selected` URL param
 //   - VocDetailPanel is mounted when `selected` is set
 
+import { ApiError } from '@/lib/api/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,6 +35,20 @@ vi.mock('@tanstack/react-router', () => ({
     <a href={to} data-search={JSON.stringify(search)} className={className}>
       {children}
     </a>
+  ),
+}));
+
+vi.mock('@/features/admin/permissions/request-access-button', () => ({
+  RequestAccessButton: ({
+    capability,
+    managedSystemId,
+  }: {
+    capability: string;
+    managedSystemId?: string;
+  }) => (
+    <button type="button" data-managed-system-id={managedSystemId} data-testid="request-access">
+      {capability}
+    </button>
   ),
 }));
 
@@ -95,13 +111,10 @@ const MOCK_VOC_ITEMS = [
   },
 ];
 
+const useVocListMock = vi.hoisted(() => vi.fn());
+
 vi.mock('../../hooks/useVocList', () => ({
-  useVocList: () => ({
-    data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
+  useVocList: useVocListMock,
 }));
 
 // ── Stub VocDetailPanel ───────────────────────────────────────────────────────
@@ -109,17 +122,29 @@ vi.mock('../../hooks/useVocList', () => ({
 vi.mock('../../components/detail/VocDetailPanel', () => ({
   VocDetailPanel: ({
     vocId,
+    managedSystemId,
     onClose,
   }: {
     vocId: string;
+    managedSystemId?: string;
     onClose: () => void;
-  }) => (
-    <div data-testid="voc-detail-panel-stub" data-voc-id={vocId}>
-      <button type="button" onClick={onClose}>
-        닫기
-      </button>
-    </div>
-  ),
+  }) => {
+    useEffect(() => {
+      if (managedSystemId !== undefined && managedSystemId !== 'ms-1') onClose();
+    }, [managedSystemId, onClose]);
+
+    return (
+      <div
+        data-testid="voc-detail-panel-stub"
+        data-managed-system-id={managedSystemId}
+        data-voc-id={vocId}
+      >
+        <button type="button" onClick={onClose}>
+          닫기
+        </button>
+      </div>
+    );
+  },
 }));
 
 // ── Stub VocList to use real component but mock managed-systems query ─────────
@@ -149,6 +174,12 @@ describe('useInboxRoute', () => {
   beforeEach(() => {
     searchState = {};
     navigateMock.mockClear();
+    useVocListMock.mockReturnValue({
+      data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
   });
 
   it('renders 3 VocList rows for inbox view', async () => {
@@ -216,6 +247,41 @@ describe('useInboxRoute', () => {
     );
   });
 
+  it('clears selected after the URL Managed System changes outside the open VOC scope', async () => {
+    const selected = '00000000-0000-0000-0000-000000000001';
+    searchState = { view: 'inbox', managedSystem: 'ms-1', selected };
+    const { rerender } = render(<InboxTestHarness view="inbox" />);
+
+    await screen.findByTestId('voc-detail-panel-stub');
+
+    searchState = { view: 'inbox', managedSystem: 'ms-2', selected };
+    rerender(<InboxTestHarness view="inbox" />);
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    const navigation = navigateMock.mock.calls.at(-1)?.[0] as {
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navigation.search(searchState)).toEqual({ view: 'inbox', managedSystem: 'ms-2' });
+
+    searchState = navigation.search(searchState);
+    rerender(<InboxTestHarness view="inbox" />);
+    expect(screen.queryByTestId('voc-detail-panel-stub')).not.toBeInTheDocument();
+  });
+
+  it('passes the selected Managed System to the open detail panel', async () => {
+    searchState = {
+      view: 'my',
+      managedSystem: 'ms-1',
+      selected: '00000000-0000-0000-0000-000000000001',
+    };
+    render(<InboxTestHarness view="my" />);
+
+    expect(await screen.findByTestId('voc-detail-panel-stub')).toHaveAttribute(
+      'data-managed-system-id',
+      'ms-1',
+    );
+  });
+
   it('clears VocDetailPanel when selected is not set', async () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
@@ -235,6 +301,49 @@ describe('useInboxRoute', () => {
     });
   });
 
+  it('AC-E6a renders High · no link as the selected URL tab', async () => {
+    searchState = { view: 'inbox', tab: 'high-no-link' };
+    render(<InboxTestHarness view="inbox" />);
+
+    const tab = await screen.findByRole('tab', { name: 'High · no link' });
+    expect(tab).toHaveAttribute('data-state', 'active');
+  });
+
+  it('AC-E6b renders the six inbox tabs in canonical value order', async () => {
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    await screen.findByRole('tab', { name: 'Untriaged' });
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      'Untriaged',
+      'High',
+      'Unassigned',
+      'Similar',
+      'No link',
+      'High · no link',
+    ]);
+
+    // Untriaged is already the active tab and Radix emits no onValueChange for
+    // the selected value, so it is asserted through aria-selected instead of
+    // through a navigation. The other five each have to route.
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+
+    // Radix TabsTrigger activates on mousedown, not click (same note as
+    // SourceContextSegmented.test.tsx:2). fireEvent.click left navigateMock at
+    // 0, so the assertion below had nothing to beat.
+    for (const tab of tabs.slice(1)) fireEvent.mouseDown(tab);
+    expect(navigateMock).toHaveBeenCalledTimes(5);
+    expect(
+      navigateMock.mock.calls.map(([call]) => {
+        const reducer = (
+          call as { search: (previous: Record<string, unknown>) => Record<string, unknown> }
+        ).search;
+        return reducer({}).tab;
+      }),
+    ).toEqual(['high', 'unassigned', 'similar', 'no-link', 'high-no-link']);
+  });
+
   it('my view renders My VOCs title instead of tabs', async () => {
     searchState = { view: 'my' };
     render(<InboxTestHarness view="my" />);
@@ -242,6 +351,57 @@ describe('useInboxRoute', () => {
     await waitFor(() => {
       expect(screen.getByText('My VOCs')).toBeInTheDocument();
     });
+  });
+
+  it('renders permission denied instead of VocList failed-load copy for a 403', async () => {
+    useVocListMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError(403, {
+        code: 'permission.denied',
+        message: 'no voc.read scope for actor',
+      }),
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    const panel = await screen.findByText('VOC Inbox');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.queryByText('불러오기 실패')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('request-access')).not.toBeInTheDocument();
+  });
+
+  it('adds a request-access CTA only when the Inbox error provides the permission', async () => {
+    useVocListMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError(403, {
+        code: 'permission.scope_required',
+        message: 'voc.read capability required',
+        requestable_permission: { permission: 'voc.read', managed_system_id: 'ms-1' },
+      }),
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    expect(await screen.findByTestId('request-access')).toHaveTextContent('voc.read');
+    expect(screen.getByTestId('request-access')).toHaveAttribute('data-managed-system-id', 'ms-1');
+  });
+
+  it('keeps a non-permission error on VocList failed-load copy', async () => {
+    useVocListMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    expect(await screen.findByText('불러오기 실패')).toBeInTheDocument();
+    expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
   });
 
   // ── Filter-key round-trip regression (#89) ──────────────────────────────────

@@ -22,18 +22,22 @@ const approved = {
 
 describe('useSurveyManageGate', () => {
   it.each([
-    ['loading', { ...readyMe, isLoading: true }, approved],
-    ['error', { ...readyMe, isError: true }, approved],
-    ['absent', readyMe, { ...approved, data: { state: 'denied' } }],
+    ['loading', 'approved', { ...readyMe, isLoading: true }, approved],
+    ['error', 'approved', { ...readyMe, isError: true }, approved],
+    ['absent', 'denied', readyMe, { ...approved, data: { state: 'denied' } }],
   ] as const)(
     'fails closed when /me is %s or survey.manage is unavailable',
-    (state, me, permission) => {
+    (state, permissionState, me, permission) => {
       useMe.mockReturnValue(me);
       usePermissionCheck.mockReturnValue(permission);
 
       const { result } = renderHook(() => useSurveyManageGate('system-1'));
 
-      expect(result.current).toEqual({ canManage: false, gateState: state });
+      expect(result.current).toEqual({
+        canManage: false,
+        permissionState,
+        gateState: state,
+      });
     },
   );
 
@@ -43,7 +47,11 @@ describe('useSurveyManageGate', () => {
 
     const { result } = renderHook(() => useSurveyManageGate('system-1'));
 
-    expect(result.current).toEqual({ canManage: true, gateState: undefined });
+    expect(result.current).toEqual({
+      canManage: true,
+      permissionState: 'approved',
+      gateState: undefined,
+    });
     expect(usePermissionCheck).toHaveBeenCalledWith({
       capability: 'survey.manage',
       managedSystemId: 'system-1',

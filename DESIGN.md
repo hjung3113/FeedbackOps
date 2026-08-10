@@ -143,6 +143,16 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 - **Element gap:** 8px
 - **Entity link inventory object rows:** headerless 4-column object-row grid (`--entity-link-object-row-grid`: checkbox, id, body, trailing), 64px id stem (`--entity-link-object-id-min-width`), and default 60px row rhythm (`--row-height-default`) to mirror the integration-links prototype density.
 
+## Survey
+
+Survey uses the same compact operational rhythm as the rest of FeedbackOps: a
+list-first overview, a full-page WorkbenchShell builder, and a result summary
+that prioritizes question distribution and safe text highlights. Use the shared
+light surfaces, 8px element gaps, and one Samsung-blue primary action per
+context; keep builder outline controls and result follow-up actions dense and
+secondary to the survey content. Personal responses are never rendered as a
+read surface; result content must remain aggregate- or approved-excerpt-safe.
+
 ## Components
 
 ### Primary Action Button

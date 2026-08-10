@@ -3,12 +3,14 @@
 import { FindingDetailPanel } from '@/features/integration/components/FindingDetail';
 import { useFindingsList } from '@/features/integration/hooks/useFindingsList';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
+import { ApiError } from '@/lib/api/types';
 import type { FindingDto } from '@fops/shared';
 import {
   type AvatarUser,
   ListShell,
   ObjectRow,
   OutlineBadge,
+  PermissionBlockedPanel,
   Skeleton,
   UserAvatar,
 } from '@fops/ui';
@@ -58,6 +60,8 @@ function FindingsListShell({
           findings={findings}
           isPending={listQuery.isPending}
           isError={listQuery.isError}
+          isSuccess={listQuery.isSuccess}
+          error={listQuery.error}
           selectedId={selectedId}
           actorsById={actorsById}
           onSelect={onSelect}
@@ -74,6 +78,8 @@ function FindingsListBody({
   findings,
   isPending,
   isError,
+  isSuccess,
+  error,
   selectedId,
   actorsById,
   onSelect,
@@ -81,6 +87,8 @@ function FindingsListBody({
   findings: FindingDto[];
   isPending: boolean;
   isError: boolean;
+  isSuccess: boolean;
+  error: unknown;
   selectedId: string | null;
   actorsById: Map<string, AvatarUser>;
   onSelect: (id: string) => void;
@@ -92,7 +100,7 @@ function FindingsListBody({
           <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
             Finding 목록
           </h3>
-          <span className="text-xs text-text-muted">{findings.length}개</span>
+          {isSuccess ? <span className="text-xs text-text-muted">{findings.length}개</span> : null}
         </div>
       </div>
 
@@ -102,6 +110,13 @@ function FindingsListBody({
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
         </div>
+      ) : isError && isPermissionDenied(error) ? (
+        <PermissionBlockedPanel
+          state="denied"
+          category="Findings"
+          reason={error.message}
+          className="m-4"
+        />
       ) : isError ? (
         <p className="p-4 text-sm text-accent-danger" data-testid="finding-list-error">
           데이터를 불러오지 못했습니다.
@@ -124,6 +139,14 @@ function FindingsListBody({
         </div>
       )}
     </section>
+  );
+}
+
+function isPermissionDenied(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }
 

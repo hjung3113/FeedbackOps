@@ -11,8 +11,9 @@
  * any unit test. The latest occurrence was `/attachments` (PR #75 hotfix).
  *
  * Implementation:
- *   - Parse `apps/backend/src/server.ts` for top-level `app.route({ url: '/x' })`.
- *   - Parse every `apps/backend/src/modules/<name>/routes.ts` for the same.
+ *   - Parse `apps/backend/src/server.ts` for both fastify registration forms:
+ *     `app.route({ url: '/x' })` and `app.get('/x', …)`.
+ *   - Parse every `apps/backend/src/modules/<name>/*routes.ts` for the same.
  *   - Reduce to unique root prefixes (`/foo/bar` → `/foo`).
  *   - Assert each is a proxy key in `vite.config.ts` (or in KNOWN_FE_ONLY).
  *
@@ -35,13 +36,23 @@ const SERVER_TS = path.join(REPO_ROOT, 'apps/backend/src/server.ts');
 const VITE_CONFIG = path.join(REPO_ROOT, 'apps/frontend/vite.config.ts');
 const MODULES_DIR = path.join(REPO_ROOT, 'apps/backend/src/modules');
 
+// Fastify accepts two registration forms and this repo uses both: the object
+// form `app.route({ url: '/x' })` and the method shorthand `app.get('/x', …)`
+// (the latter only in `modules/surveys/routes.ts` today). A form this check
+// cannot see is a backend prefix it never demands a proxy entry for — and
+// unlike the twin check in `apps/backend/src/__tests__/fe-call-endpoints-exist.test.ts`,
+// which goes red, a miss here is silently green (#206). Keep both forms.
+const ROUTE_URL_PATTERNS: readonly RegExp[] = [
+  /url:\s*['"`](\/[A-Za-z0-9/_\-:]*)['"`]/g,
+  /\b(?:app|fastify)\.(?:get|post|put|patch|delete|head|options|all)\(\s*['"`](\/[A-Za-z0-9/_\-:]*)['"`]/g,
+];
+
 function extractRouteUrls(source: string): string[] {
-  // Match `url: '/...'` or `url: "/..."` inside `app.route({ ... })` /
-  // `fastify.route({ ... })`. Quote-aware, single-line.
-  const re = /url:\s*['"](\/[A-Za-z0-9/_\-:]*)['"]/g;
   const out: string[] = [];
-  for (const m of source.matchAll(re)) {
-    if (m[1]) out.push(m[1]);
+  for (const re of ROUTE_URL_PATTERNS) {
+    for (const m of source.matchAll(re)) {
+      if (m[1]) out.push(m[1]);
+    }
   }
   return out;
 }
@@ -49,12 +60,14 @@ function extractRouteUrls(source: string): string[] {
 function collectBackendRoutes(): string[] {
   const urls: string[] = [];
   urls.push(...extractRouteUrls(fs.readFileSync(SERVER_TS, 'utf8')));
-  // Walk apps/backend/src/modules/*/routes.ts
+  // Walk apps/backend/src/modules/*/routes.ts AND *-routes.ts naming variants
+  // (e.g. `auth/list-actors-routes.ts`), matching the twin check's discovery.
   for (const entry of fs.readdirSync(MODULES_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const candidate = path.join(MODULES_DIR, entry.name, 'routes.ts');
-    if (fs.existsSync(candidate)) {
-      urls.push(...extractRouteUrls(fs.readFileSync(candidate, 'utf8')));
+    const moduleDir = path.join(MODULES_DIR, entry.name);
+    for (const fileEntry of fs.readdirSync(moduleDir, { withFileTypes: true })) {
+      if (!fileEntry.isFile() || !fileEntry.name.endsWith('routes.ts')) continue;
+      urls.push(...extractRouteUrls(fs.readFileSync(path.join(moduleDir, fileEntry.name), 'utf8')));
     }
   }
   return urls;
@@ -82,6 +95,26 @@ function parseProxyKeys(viteConfig: string): Set<string> {
 }
 
 describe('Vite dev proxy completeness (Slice 3 #22)', () => {
+  // A registration form this check cannot parse is a prefix it never demands a
+  // proxy entry for, and the omission looks like a pass (#206).
+  it('discovers both fastify registration forms', () => {
+    const urls = extractRouteUrls(
+      [
+        "app.route({ method: 'GET', url: '/object-form' });",
+        "app.get('/shorthand', { preHandler: pre }, handler);",
+        'app.post(`/shorthand/:id/nested`, handler);',
+        "cache.get('not-a-route');",
+        "map.get('/looks-like-a-path-but-is-not-fastify');",
+      ].join('\n'),
+    );
+    expect(new Set(urls)).toEqual(new Set(['/object-form', '/shorthand', '/shorthand/:id/nested']));
+  });
+
+  it('discovers the shorthand-registered routes in the real backend source', () => {
+    // `modules/surveys/routes.ts` is the repo's only shorthand user today.
+    expect(new Set(collectBackendRoutes().map(rootPrefix)).has('/surveys')).toBe(true);
+  });
+
   it('every BE root prefix has a matching vite proxy entry (or is in KNOWN_FE_ONLY)', () => {
     const backendUrls = collectBackendRoutes();
     expect(backendUrls.length, 'should discover at least one BE route').toBeGreaterThan(0);

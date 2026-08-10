@@ -67,6 +67,15 @@ capability checks locally.
 
 Explicit Deny overrides general Allow.
 
+`GET /me/permissions/scope` resolves a capability over every Managed System
+using the same order as a point check: workspace mismatch denies; active
+workspace-wide or matching Managed-System denies deny before grants; active
+workspace-wide grants allow; role-derived capability allows; then active
+matching Managed-System grants allow. A workspace-wide grant or role match
+returns `kind: all` only when there are no active Managed-System-scoped denies.
+When such denies exist, the scope is the workspace Managed System list minus
+the denied ids so its membership remains identical to point checks.
+
 Managed System Permission Scope is the MVP authorization boundary for
 Developer access. Access to one Managed System does not grant access to sibling
 Managed Systems. Analytics Area is not an MVP permission boundary.
@@ -218,6 +227,19 @@ POST /permissions/requests/:id/deny            { reason: string }
   are `conflict.stale_write` (`409`). Duplicate active grants/denies are
   `conflict.capability_already_granted` / `conflict.capability_already_denied`.
   `Idempotency-Key` replays the stored decision response without a second write.
+
+### Permission Request self-approval policy
+
+An Admin deciding their own Permission Request is a self-approval. The resolved
+workspace `permission_self_approval` setting defaults to `allowed`; in that
+mode the approve body must include strict
+`self_approval: { policy_citation: string, peer_reviewer_absence: string }`.
+The approve body schema lives in `packages/shared/src/permissions/decisions.ts`, and the backend route imports it rather than declaring its own.
+The recorded `permission_approved` audit detail carries this envelope only for
+self-approval. The envelope is rejected for an approval decided by another
+Admin. If the workspace setting is `forbidden`, self-approval returns
+`permission.denied` without changing the pending request; another Admin may
+approve the same request normally.
 
 Audit events:
 

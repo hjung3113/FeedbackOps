@@ -1,55 +1,172 @@
 import * as React from 'react';
-import { Inbox, Settings, User } from 'lucide-react';
-import { cn } from '@fops/ui';
+import {
+  Bell,
+  Boxes,
+  ClipboardList,
+  FileBarChart,
+  House,
+  Shield,
+  UserRound,
+  UsersRound,
+} from 'lucide-react';
+import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
+import {
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@fops/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { logout } from '@/lib/api/auth';
+import { useMe } from '@/lib/auth/useMe';
+
+export type RailDomain = 'home' | 'voc' | 'findings' | 'tasks' | 'integration' | 'surveys' | 'admin';
+
+export const RAIL_ITEMS: Array<{
+  key: RailDomain;
+  label: string;
+  href: string;
+  icon: React.ElementType<{ className?: string }>;
+}> = [
+  { key: 'home', label: 'Home', href: '/home', icon: House },
+  { key: 'voc', label: 'VOC', href: '/vocs?view=inbox', icon: UsersRound },
+  { key: 'findings', label: 'Findings', href: '/findings', icon: FileBarChart },
+  { key: 'tasks', label: 'Tasks', href: '/tasks?view=board', icon: ClipboardList },
+  { key: 'integration', label: 'Integration', href: '/integration', icon: Boxes },
+  { key: 'surveys', label: 'Surveys', href: '/surveys', icon: FileBarChart },
+  { key: 'admin', label: 'Admin', href: '/admin/managed-systems', icon: Shield },
+];
+
+export function railForPathname(pathname: string): RailDomain {
+  if (pathname === '/home') return 'home';
+  if (pathname.startsWith('/vocs') || pathname.startsWith('/voc-clusters')) return 'voc';
+  if (pathname.startsWith('/findings')) return 'findings';
+  if (pathname.startsWith('/tasks')) return 'tasks';
+  if (pathname.startsWith('/integration')) return 'integration';
+  if (pathname.startsWith('/surveys')) return 'surveys';
+  return 'admin';
+}
 
 export interface AppRailProps {
+  activeDomain?: RailDomain;
   className?: string;
 }
 
-/**
- * 52px vertical rail. Workspace switcher placeholder + global utility icons.
- * Per-feature entries land in their own issue (AGENTS.md two-consumer rule). #18 ships placeholders.
- */
-export function AppRail({ className }: AppRailProps) {
+/** 52px global domain selector. The sidebar owns the selected domain's tree. */
+export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
+  const head = RAIL_ITEMS.filter((item) => item.key !== 'admin');
+  const admin = RAIL_ITEMS.find((item) => item.key === 'admin');
+  const { data: me } = useMe();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+
+  async function handleLogout() {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      // Navigation still ends the local session when the revoke request cannot finish.
+    } finally {
+      queryClient.clear();
+      // `replace` so Back cannot return to the previous actor's app shell. The
+      // revoked session would not serve it data, but a stale render of another
+      // actor's screen is exactly the boundary a logout is meant to draw.
+      // Wrapped rather than chained directly: navigate's return value is not
+      // part of the contract we rely on here.
+      void Promise.resolve(navigate({ to: '/login', replace: true })).catch(() => {
+        // Only on failure: the success path unmounts this rail. Without this the
+        // menu item stays disabled forever and the user cannot retry.
+        setIsLoggingOut(false);
+      });
+    }
+  }
+
   return (
     <nav
       className={cn(
-        'flex flex-col items-center gap-3 py-3 bg-surface-sidebar border-r border-border-subtle',
+        'flex flex-col items-center gap-2 py-3 bg-surface-sidebar border-r border-border-subtle',
         className,
       )}
       style={{ width: 'var(--rail-width)' }}
-      aria-label="Global rail"
+      aria-label="System selector"
       data-testid="app-rail"
     >
-      <button
-        type="button"
-        className="w-8 h-8 rounded-md bg-surface-card border border-border-subtle flex items-center justify-center text-text-muted hover:text-text-primary"
-        aria-label="Workspace switcher"
+      <div
+        className="mb-1 flex h-8 w-8 items-center justify-center rounded-md bg-accent-primary text-xs font-semibold text-white"
+        title="FeedbackOps"
+        aria-label="FeedbackOps"
       >
-        <span className="text-xs font-semibold">FO</span>
-      </button>
+        F
+      </div>
+      {head.map((item) => (
+        <RailButton key={item.key} item={item} active={activeDomain === item.key} />
+      ))}
+      {admin && <div className="my-1 w-6 border-t border-border-subtle" aria-hidden="true" />}
+      {admin && <RailButton item={admin} active={activeDomain === admin.key} />}
       <div className="flex-1" />
       <button
         type="button"
-        className="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-text-primary"
-        aria-label="Inbox"
+        className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary"
+        aria-label="Notifications"
       >
-        <Inbox className="h-4 w-4" />
+        <Bell className="h-4 w-4" />
       </button>
-      <button
-        type="button"
-        className="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-text-primary"
-        aria-label="Settings"
-      >
-        <Settings className="h-4 w-4" />
-      </button>
-      <button
-        type="button"
-        className="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-text-primary"
-        aria-label="Profile"
-      >
-        <User className="h-4 w-4" />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-primary/15 text-xs font-semibold text-accent-primary"
+            title="Profile"
+            aria-label="Profile"
+          >
+            <UserRound className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="center">
+          {/* `/me` can answer without an `actor` — guarding only on `me` here
+              crashed the whole frame through the error boundary, which is
+              strictly worse than showing no label. The rail must survive any
+              /me shape; logout below stays reachable either way. */}
+          {me?.actor && (
+            <DropdownMenuLabel>
+              {me.actor.display_name} · {ROLE_LEVEL_LABELS[me.actor.role_level as RoleLevel]}
+            </DropdownMenuLabel>
+          )}
+          <DropdownMenuItem disabled={isLoggingOut} onSelect={handleLogout}>
+            로그아웃
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </nav>
+  );
+}
+
+function RailButton({
+  item,
+  active,
+}: {
+  item: (typeof RAIL_ITEMS)[number];
+  active: boolean;
+}) {
+  const Icon = item.icon;
+  return (
+    <a
+      href={item.href}
+      className={cn(
+        'flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary',
+        active && 'bg-surface-row-selected text-accent-primary',
+      )}
+      aria-label={item.label}
+      aria-current={active ? 'page' : undefined}
+      data-testid={`rail-${item.key}`}
+      title={item.label}
+    >
+      <Icon className="h-4 w-4" />
+    </a>
   );
 }

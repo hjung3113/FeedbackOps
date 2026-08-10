@@ -15,8 +15,8 @@ const envSchema = z.object({
   AUTH_PROVIDER: z.enum(['mock', 'oidc']).default('mock'),
   WORKSPACE_ID: z.string().uuid().optional(),
   WORKSPACE_NAME: z.string().default('FeedbackOps'),
-  // Slice 1 seed scope: 'core' inserts workspace + 3 baseline actors only.
-  SEED_MODE: z.enum(['core']).default('core'),
+  // `personas` layers black-box test actors and grants over the core seed.
+  SEED_MODE: z.enum(['core', 'personas']).default('core'),
   PUBLIC_ATTACHMENT_ORIGIN: z.string().default("'self'"),
   // Review HTTP-H-2: `trustProxy: true` is unconditional and lets clients
   // spoof `X-Forwarded-For` to reset anon rate-limit buckets and audit IPs
@@ -26,6 +26,17 @@ const envSchema = z.object({
   // single ingress; 0 disables trust, identical to `false`). Defaults to
   // 0 outside production so dev/test/CI cannot spoof.
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+  EMBEDDING_PROVIDER: z.enum(['voyage', 'fake', 'disabled']).default('disabled'),
+  EMBEDDING_API_KEY: z.string().min(1).optional(),
+  EMBEDDING_VERSION: z.coerce.number().int().positive().default(1),
+}).superRefine((config, context) => {
+  if (config.EMBEDDING_PROVIDER === 'voyage' && !config.EMBEDDING_API_KEY) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['EMBEDDING_API_KEY'],
+      message: 'EMBEDDING_API_KEY is required when EMBEDDING_PROVIDER=voyage',
+    });
+  }
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

@@ -28,14 +28,14 @@
 
 import { useVocInternalCommentMutation } from '@/features/voc/hooks/useVocInternalCommentMutation';
 import { extractMentions } from '@/features/voc/lib/extractMentions';
+import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
-import type { VocDetailEnvelope } from '@fops/shared';
+import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
 import type { TipTapDoc, TipTapEditor } from '@fops/ui';
 import { RichEditor } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 import { toast } from 'sonner';
-import { uploadAttachment } from '@/lib/api/attachments';
 import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { MentionPickerButton } from './MentionPickerButton';
@@ -50,20 +50,6 @@ export interface InternalCommentComposerProps {
   draftDoc?: TipTapDoc | null;
   /** REV-1 #7: called when the editor content changes. */
   onDraftChange?: (doc: TipTapDoc | null) => void;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isDocEmpty(doc: TipTapDoc | null): boolean {
-  if (doc == null) return true;
-  const content = doc.content;
-  if (!Array.isArray(content) || content.length === 0) return true;
-  return content.every((node) => {
-    if (node == null || typeof node !== 'object') return true;
-    const n = node as { type?: string; content?: unknown[] };
-    if (n.type !== 'paragraph') return false;
-    return !Array.isArray(n.content) || n.content.length === 0;
-  });
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -107,14 +93,23 @@ export function InternalCommentComposer({
   // PLAN-22 C7a: composer-level attachment dropzone state.
   const [attachmentIds, setAttachmentIds] = React.useState<string[]>([]);
   const [attachmentsUploading, setAttachmentsUploading] = React.useState(false);
+  // #354: bumped on submit success so the dropzone drops the rows the server
+  // has now linked to the added comment.
+  const [attachmentResetToken, setAttachmentResetToken] = React.useState(0);
 
-  const isEmpty = isDocEmpty(draftDoc);
+  const isEmpty = isTipTapDocBlank(draftDoc);
 
   const mutation = useVocInternalCommentMutation({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
       setDraftDoc(null); // calls onDraftChange?.(null) when controlled
+      // #354: linked to the added comment now — re-sending would be already_linked.
+      // attachmentIds clears through the dropzone's onChange, not from here.
+      setAttachmentResetToken((n) => n + 1);
       toast.success('내부 코멘트가 추가되었습니다.');
+    },
+    onError: (error) => {
+      toast.error(`${error.code}: ${error.message}`);
     },
   });
 
@@ -198,6 +193,7 @@ export function InternalCommentComposer({
         testId="internal-comment-attachment-dropzone"
         onChange={setAttachmentIds}
         onUploadingChange={setAttachmentsUploading}
+        resetToken={attachmentResetToken}
       />
 
       {/* ComposerFooter — Preview disabled per D-5.4 */}

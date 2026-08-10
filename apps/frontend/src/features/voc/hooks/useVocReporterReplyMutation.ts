@@ -5,17 +5,18 @@
 // Prototype ref: docs/design-prototype/screen-voc.jsx:415-468 (reply variant)
 //
 // Endpoint: POST /vocs/:id/reporter-replies
-// Body: { body_rich_content, attachments: [] }
+// Body: { body_rich_content, attachment_ids? }
 //
 // Headers:
 //   Idempotency-Key: auto-minted by apiClient (POST/PATCH/DELETE)
 //   If-Match: voc.updated_at (optimistic concurrency)
 //
-// On 200: caller should invalidate ['voc', vocId] and clear draft.
+// On 201: caller should invalidate ['voc', vocId] and clear draft.
 // Toast copy: 리포터에게 답장이 전송되었습니다.
 
 import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';
+import type { VocDetailEnvelope } from '@fops/shared';
 import type { TipTapDoc } from '@fops/ui';
 import { type UseMutationResult, useMutation } from '@tanstack/react-query';
 
@@ -23,11 +24,8 @@ import { type UseMutationResult, useMutation } from '@tanstack/react-query';
 
 export interface ReporterReplyBody {
   body_rich_content: TipTapDoc;
-  /** Always empty until attachment-deferral lifts in #22. */
-  attachments: unknown[];
   /**
-   * PLAN-22 C7a (D1): widened body field — FE list of uploaded attachment ids
-   * from <ComposerAttachmentDropzone>. BE schema reconciled in C7b.
+   * PLAN-22 C7b: uploaded attachment ids accepted by the canonical request schema.
    */
   attachment_ids?: string[];
 }
@@ -40,8 +38,14 @@ export interface ReporterReplyVars {
 }
 
 export interface ReporterReplySuccess {
-  id: string;
-  updated_at: string;
+  reporter_reply: {
+    id: string;
+    voc_id: string;
+    actor_id: string;
+    body_rich_content: unknown;
+    created_at: string;
+  };
+  voc: VocDetailEnvelope;
 }
 
 export interface UseVocReporterReplyMutationArgs {
@@ -64,15 +68,11 @@ export function useVocReporterReplyMutation(
 
   return useMutation<ReporterReplySuccess, ApiError, ReporterReplyVars>({
     mutationFn: async ({ vocId, ifMatch, body }) => {
-      const res = await apiClient<ReporterReplySuccess>(
-        'POST',
-        `/vocs/${vocId}/reporter-replies`,
-        {
-          body,
-          ifMatch,
-          // Idempotency-Key is auto-minted by apiClient for POST/PATCH/DELETE
-        },
-      );
+      const res = await apiClient<ReporterReplySuccess>('POST', `/vocs/${vocId}/reporter-replies`, {
+        body,
+        ifMatch,
+        // Idempotency-Key is auto-minted by apiClient for POST/PATCH/DELETE
+      });
       return res.data;
     },
     ...(onSuccess ? { onSuccess } : {}),

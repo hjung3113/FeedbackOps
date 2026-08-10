@@ -1,6 +1,20 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
-import type { SurveyResultDto } from '@fops/shared';
-import { Button } from '@fops/ui';
+import type { FindingSeverity, SurveyResultDto } from '@fops/shared';
+import {
+  Button,
+  Checkbox,
+  FieldLabel,
+  RadioGroup,
+  RadioGroupItem,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@fops/ui';
+import { FilePlus } from 'lucide-react';
+import { useState } from 'react';
+import { useCreateFindingFromSurveyResponse } from '../../hooks/useCreateFindingFromSurveyResponse';
 import type { Survey } from '../../types';
 
 export interface SurveyResultsSummaryProps {
@@ -87,12 +101,175 @@ function QuestionResult({
   );
 }
 
-function NextActions({ actions }: { actions: SurveyResultDto['next_actions'] }) {
+type ResponseExcerpt = { id: string; text: string; response_id: string };
+
+function excerptsByResponse(results: SurveyResultDto): ResponseExcerpt[][] {
+  const grouped = new Map<string, ResponseExcerpt[]>();
+  for (const question of results.questions) {
+    if (question.visibility !== 'visible') continue;
+    if (question.kind !== 'text') continue;
+    for (const excerpt of question.excerpts) {
+      if (!excerpt.response_id) continue;
+      const group = grouped.get(excerpt.response_id) ?? [];
+      group.push({ ...excerpt, response_id: excerpt.response_id });
+      grouped.set(excerpt.response_id, group);
+    }
+  }
+  return [...grouped.values()];
+}
+
+function CreateFindingDraftPanel({
+  surveyId,
+  groups,
+}: {
+  surveyId: string;
+  groups: ResponseExcerpt[][];
+}) {
+  const [selection, setSelection] = useState<{ responseId?: string; excerptIds: string[] }>({
+    excerptIds: [],
+  });
+  const [severity, setSeverity] = useState<FindingSeverity>('medium');
+  const mutation = useCreateFindingFromSurveyResponse(surveyId);
+  const selectedGroup = groups.find((group) => group[0]?.response_id === selection.responseId);
+  const selectedExcerptIds = selection.excerptIds.filter((id) =>
+    selectedGroup?.some((excerpt) => excerpt.id === id),
+  );
+
+  function selectResponse(nextResponseId: string) {
+    setSelection({ responseId: nextResponseId, excerptIds: [] });
+  }
+
+  function setExcerptSelected(id: string, checked: boolean) {
+    setSelection((current) => ({
+      ...current,
+      excerptIds: checked
+        ? [...current.excerptIds, id]
+        : current.excerptIds.filter((excerptId) => excerptId !== id),
+    }));
+  }
+
+  function submit() {
+    if (!selectedGroup || selectedExcerptIds.length === 0) return;
+    const first = selectedGroup[0];
+    if (!first) return;
+    mutation.mutate({
+      responseId: first.response_id,
+      body: { severity, approved_excerpt_ids: selectedExcerptIds },
+    });
+  }
+
+  return (
+    <section
+      className="mt-3 space-y-3 border-t border-border-subtle pt-3"
+      data-testid="survey-create-finding-draft"
+    >
+      <p className="text-sm font-medium text-text-primary">Create or link Finding</p>
+      <fieldset className="space-y-2">
+        <legend className="text-sm text-text-secondary" id="survey-finding-response-label">
+          Choose a response
+        </legend>
+        <RadioGroup
+          aria-labelledby="survey-finding-response-label"
+          onValueChange={selectResponse}
+          value={selection.responseId ?? ''}
+        >
+          {groups.map((group, index) => {
+            const first = group[0];
+            if (!first) return null;
+            return (
+              <label
+                className="flex items-center gap-2 text-sm text-text-secondary"
+                htmlFor={`survey-finding-response-${first.response_id}`}
+                key={first.response_id}
+              >
+                <RadioGroupItem
+                  data-testid={`survey-finding-response-${index}`}
+                  id={`survey-finding-response-${first.response_id}`}
+                  value={first.response_id}
+                />
+                Response {index + 1}
+              </label>
+            );
+          })}
+        </RadioGroup>
+      </fieldset>
+      {selectedGroup && (
+        <fieldset className="space-y-2">
+          <legend className="text-sm text-text-secondary">Approved excerpts</legend>
+          {selectedGroup.map((excerpt) => (
+            <label
+              className="flex gap-2 text-sm text-text-secondary"
+              htmlFor={`survey-finding-excerpt-${excerpt.id}`}
+              key={excerpt.id}
+            >
+              <Checkbox
+                checked={selectedExcerptIds.includes(excerpt.id)}
+                data-testid={`survey-finding-excerpt-${excerpt.id}`}
+                id={`survey-finding-excerpt-${excerpt.id}`}
+                onCheckedChange={(checked) => setExcerptSelected(excerpt.id, checked === true)}
+              />
+              <span>{excerpt.text}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <FieldLabel
+        className="block text-sm text-text-secondary"
+        htmlFor="survey-finding-severity"
+        id="survey-finding-severity-label"
+      >
+        Severity
+      </FieldLabel>
+      <Select onValueChange={(value) => setSeverity(value as FindingSeverity)} value={severity}>
+        <SelectTrigger
+          aria-labelledby="survey-finding-severity-label"
+          className="mt-1"
+          data-testid="survey-finding-severity"
+          id="survey-finding-severity"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="low">Low</SelectItem>
+          <SelectItem value="medium">Medium</SelectItem>
+          <SelectItem value="high">High</SelectItem>
+          <SelectItem value="critical">Critical</SelectItem>
+        </SelectContent>
+      </Select>
+      {mutation.error && (
+        <p className="text-sm text-text-danger" role="alert">
+          {mutation.error.message}
+        </p>
+      )}
+      <Button
+        data-testid="survey-create-finding-submit"
+        disabled={!selectedGroup || selectedExcerptIds.length === 0}
+        loading={mutation.isPending}
+        onClick={submit}
+        type="button"
+      >
+        Create selected Finding
+      </Button>
+    </section>
+  );
+}
+
+function NextActions({
+  actions,
+  results,
+  surveyId,
+}: {
+  actions: SurveyResultDto['next_actions'];
+  results: SurveyResultDto;
+  surveyId: string;
+}) {
+  const [draftOpen, setDraftOpen] = useState(false);
+  const groups = excerptsByResponse(results);
   if (actions.length === 0) return null;
 
   return (
     <aside
-      className="rounded-md border border-border-subtle bg-surface-raised p-4"
+      className="sticky top-4 self-start rounded-md border border-border-subtle bg-surface-raised p-4"
       data-testid="survey-result-next-actions"
     >
       <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
@@ -119,17 +296,41 @@ function NextActions({ actions }: { actions: SurveyResultDto['next_actions'] }) 
                 <RequestAccessButton
                   capability={action.requestable_permission.permission}
                   managedSystemId={action.requestable_permission.managed_system_id}
+                  returnRouteIntent={`/surveys/${surveyId}/results`}
                 />
               </div>
             );
           }
+          if (action.id === 'create_finding') {
+            const unavailable = groups.length === 0;
+            return (
+              <div
+                className="space-y-1"
+                data-testid="survey-result-action-create-finding"
+                key={action.id}
+              >
+                <Button
+                  className="w-full justify-start text-left"
+                  data-action-id={action.id}
+                  disabled={unavailable}
+                  onClick={() => setDraftOpen(true)}
+                  type="button"
+                  variant="primary"
+                >
+                  <FilePlus aria-hidden className="h-4 w-4" />
+                  {label}
+                </Button>
+                {unavailable && (
+                  <p className="text-sm text-text-muted">
+                    No approved excerpts are available for a response you can access.
+                  </p>
+                )}
+                {draftOpen && <CreateFindingDraftPanel groups={groups} surveyId={surveyId} />}
+              </div>
+            );
+          }
           return (
-            <Button
-              data-action-id={action.id}
-              key={action.id}
-              type="button"
-              variant={action.id === 'create_finding' ? 'primary' : 'secondary'}
-            >
+            <Button data-action-id={action.id} key={action.id} type="button" variant="secondary">
               {label}
             </Button>
           );
@@ -173,7 +374,7 @@ export function SurveyResultsSummary({ survey, results }: SurveyResultsSummaryPr
             />
           ))}
         </div>
-        <NextActions actions={results.next_actions} />
+        <NextActions actions={results.next_actions} results={results} surveyId={survey.id} />
       </div>
     </main>
   );

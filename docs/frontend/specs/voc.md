@@ -96,7 +96,7 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
-| `<VocList>` + `<VocRow>` | `<VocList>` + `<VocRow>` in `features/voc/components/list/` | none (Tailwind grid, `<Checkbox>` from shadcn for row checkbox) | `vocs: VocListItem[]`, `selectedId: string \| null`, `onSelect: (id) => void`, `checked: Set<string>`, `onToggleCheck: (id) => void` | default · hover · selected · checked · permission-limited (row body replaced by `<PermissionBlockedPanel state="summary_visible">`) · skeleton · error |
+| `<VocList>` + `<VocRow>` | `<VocList>` + `<VocRow>` with paperclip + attachment count chip in `features/voc/components/list/` | none (Tailwind grid, `<Checkbox>` from shadcn for row checkbox) | `vocs: VocListItem[]`, `selectedId: string \| null`, `onSelect: (id) => void`, `checked: Set<string>`, `onToggleCheck: (id) => void` | default · hover · selected · checked · permission-limited (row body replaced by `<PermissionBlockedPanel state="summary_visible">`) · skeleton · error |
 | Bulk action bar (inline in `<VocList>`) | `<VocBulkActionBar>` in `features/voc/components/list/` | shadcn `<Button>` | `selectedIds: string[]`, `onAssign`, `onSetSeverity`, `onAddToCluster`, `onCreateFinding`, `onClear` | hidden when `selectedIds.length === 0` |
 | `<ListToolbar tabs activeTab onTabChange action>` | `<ListToolbar>` in `packages/ui/src/toolbar/` | shadcn `<Tabs>` for tab strip | `tabs: TabDescriptor[]`, `activeTab: string`, `onTabChange`, `action?: ReactNode`, `children?: ReactNode` | default; `action` slot pinned right via `position: sticky` (per Pack 12 wiring rule) |
 | `<ListFilterButton categories applied onChange onClear>` | `<ListFilterButton>` in `packages/ui/src/toolbar/` | shadcn `<Popover>` + `<Checkbox>` group | `categories: FilterCategory[]`, `applied: Record<string, Set<string>>`, `onChange: (cat, value, on) => void`, `onClear: () => void` | closed · open · applied (count badge) |
@@ -115,6 +115,8 @@ Production tree under `apps/frontend/src/features/voc/`. Shared primitives live 
 | Triage undo toast | `<UndoToast>` in `packages/ui/src/feedback/` | shadcn `<Toast>` from `sonner` (per `apps/frontend/AGENTS.md` "use installed libraries" rule) | `message`, `actionLabel: '실행 취소'`, `onAction`, `duration: 4000` | visible · dismissing |
 
 ### 3.4 Create form
+
+- **Pre-submit Similar VOC panel** — once a Managed System is selected, the right column reads `GET /vocs/pre-submit-peers?managed_system_id=:managedSystemId` and shows up to three authorized peers as title plus `display_id · relative time`. Activating a peer navigates to that existing VOC (`/vocs?view=inbox&selected=:vocId`); it creates neither a new VOC nor a relationship. An empty result is normal and renders `0건`. There is no dismiss or confirm action.
 
 | Prototype surface | Production component | shadcn/ui base | Props | State variants |
 |---|---|---|---|---|
@@ -415,7 +417,7 @@ Per `<ReporterStatusChangeBlock>` (Pack 8):
 
 1. Block appears only on the `public` composer tab.
 2. Status picker is a `<Select>` listing **current first, then allowed transitions, then forbidden transitions (disabled with `· 차단됨` suffix)**. Allowed set comes from `voc.next_reporter_states.allowed`.
-3. If user selects a forbidden status (only possible via keyboard or stale data), a red `<Callout>` explains `voc.next_reporter_states.forbidden[next]` (e.g. "결과 확인 전에 해결됨으로 바꿀 수 없습니다.").
+3. Non-allowed options are `disabled`, and the staged status is initialised to the current status, so the only way the staged status becomes non-allowed is that **another actor moved the VOC and the detail query refetched underneath the selection**. The staged status is deliberately **not** resynced on refetch — resyncing would silently drop the user's choice while the body draft survives, leaving them to publish believing the status change went with it. Instead a red `<Callout>` states that the current status changed, names both statuses, and tells the user to pick again; `voc.next_reporter_states.forbidden[next]` is appended as the concrete rule when the pair is listed at all (most pairs are absent from the matrix). **Publish is disabled while the staged status is non-allowed** — before #356 only the inline Callout fired and submit went through, and the server rejected it with an opaque `validation.failed` toast.
 4. If `voc.reporter_status_gate` blocks the staged status (e.g. linked Task not yet released), an amber `<Callout>` renders with an "Open task" CTA. **Publish button is disabled while the gate is active.**
 5. Reporter preview card mirrors the reporter inbox row: VOC id · new `<ReporterStatusBadge>` · 업데이트 chip · title · owner attribution · sanitized body excerpt · public-safe footer reminder.
 6. On Publish: `POST /vocs/:id/public-updates` with body `{ body_rich_content, next_reporter_facing_status, skip_public_update: false }`. **Status change and Public Update body are paired in one request** per ADR-0019 / API contract (atomic; one audit row each for `public_update_created` + `reporter_facing_status_changed`).
@@ -620,7 +622,7 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 | Response | `VocDetailEnvelope` = `{ ...VocFields, next_actions, next_reporter_states, reporter_status_gate?, permission_decisions, linked_execution: { finding?, task? }, conversation_timeline: ConversationEntry[], attachments: LinkedAttachment[], attachment_count }` |
 | `attachments[]` (PLAN-22 §Bug-1) | Always present; `[]` when none. Each item: `{ id, name, size_bytes, mime_type, uploaded_by_actor_id, created_at, linked_at }`. `storage_key`/`storage_uri` NOT exposed — clients reference by `id` and download via `GET /attachments/:id/download`. Archived rows excluded. |
 | `ConversationEntry.attachments[]` (PLAN-22 §Bug-1) | Same shape as `attachments[]`. Always present on every entry on `conversation_timeline[]` AND on `GET /vocs/:id/conversation` items. `[]` when the entry has no linked rows. |
-| `attachment_count` on list rows | `GET /vocs` includes `attachment_count: number` on each `VocListItem` (subquery, no full JOIN). Used by inbox to render a paperclip + count chip. |
+| `attachment_count` on list rows | `GET /vocs` includes `attachment_count: number` on each `VocListItem` (subquery, no full JOIN). Used by inbox to render a paperclip + count chip in `VocRow`. |
 | Errors | `not_found.record` (404) · `permission.denied` (403; backend may instead return summary envelope w/ permission_decision) |
 | Conversation pagination | If `conversation_timeline.has_more`, fetch via `GET /vocs/:id/conversation?cursor=`. **`cursor` is optional** (PLAN-22 §Bug-2): the endpoint accepts a first-page call (no cursor) and treats it as "start from oldest". The FE infinite-query hook issues its first GET without a cursor by design. Subsequent calls carry the encoded `{ createdAt, id }` cursor returned from the previous page. |
 

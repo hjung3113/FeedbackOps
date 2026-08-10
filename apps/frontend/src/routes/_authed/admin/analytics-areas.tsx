@@ -20,6 +20,7 @@
 import {
   Button,
   Callout,
+  Checkbox,
   DetailPanelSectionNav,
   Dialog,
   DialogContent,
@@ -37,6 +38,14 @@ import {
   type PanelSection,
   PanelSectionTitle,
   PanelTitleBlock,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   type PickerOption,
   Sheet,
   SheetContent,
@@ -88,6 +97,8 @@ export function AnalyticsAreasAdminPage() {
     open: false,
     msId: null,
   });
+  const [managedSystemId, setManagedSystemId] = useState<string | undefined>();
+  const [includeArchived, setIncludeArchived] = useState(false);
   return (
     <PageShell
       header={{
@@ -95,10 +106,12 @@ export function AnalyticsAreasAdminPage() {
         subtitle: SUBTITLE,
         actions: (
           <PermissionGate capability="workspace.admin" fallback={null} loading={null}>
-            <Button variant="subtle" size="sm" data-testid="aa-filter-button">
-              <Filter className="h-4 w-4" />
-              Filter
-            </Button>
+            <AnalyticsAreasFilter
+              includeArchived={includeArchived}
+              managedSystemId={managedSystemId}
+              onIncludeArchivedChange={setIncludeArchived}
+              onManagedSystemIdChange={setManagedSystemId}
+            />
             <Button
               variant="primary"
               size="sm"
@@ -113,16 +126,28 @@ export function AnalyticsAreasAdminPage() {
       }}
     >
       <PermissionGate capability="workspace.admin">
-        <AnalyticsAreasBody registerCtx={registerCtx} setRegisterCtx={setRegisterCtx} />
+        <AnalyticsAreasBody
+          includeArchived={includeArchived}
+          managedSystemId={managedSystemId}
+          onClearFilters={() => {
+            setManagedSystemId(undefined);
+            setIncludeArchived(false);
+          }}
+          registerCtx={registerCtx}
+          setRegisterCtx={setRegisterCtx}
+        />
       </PermissionGate>
     </PageShell>
   );
 }
 
-function groupByMs(items: AnalyticsAreaDto[]): Map<string, AnalyticsAreaDto[]> {
+function groupByMs(
+  items: AnalyticsAreaDto[],
+  includeArchived: boolean,
+): Map<string, AnalyticsAreaDto[]> {
   const out = new Map<string, AnalyticsAreaDto[]>();
   for (const a of items) {
-    if (a.archived_at !== null) continue;
+    if (!includeArchived && a.archived_at !== null) continue;
     const arr = out.get(a.managed_system_id) ?? [];
     arr.push(a);
     out.set(a.managed_system_id, arr);
@@ -131,9 +156,15 @@ function groupByMs(items: AnalyticsAreaDto[]): Map<string, AnalyticsAreaDto[]> {
 }
 
 export function AnalyticsAreasBody({
+  includeArchived,
+  managedSystemId,
+  onClearFilters,
   registerCtx,
   setRegisterCtx,
 }: {
+  includeArchived: boolean;
+  managedSystemId: string | undefined;
+  onClearFilters: () => void;
   registerCtx: { open: boolean; msId: string | null };
   setRegisterCtx: (v: { open: boolean; msId: string | null }) => void;
 }) {
@@ -142,20 +173,39 @@ export function AnalyticsAreasBody({
   const [editTarget, setEditTarget] = useState<AnalyticsAreaDto | null>(null);
 
   const msQuery = useQuery({
-    queryKey: ['managed-systems', { includeArchived: false }] as const,
-    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: false, signal }),
+    queryKey: ['managed-systems', { includeArchived }] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived, signal }),
     retry: false,
   });
   const aaQuery = useQuery({
-    queryKey: [...AA_KEY, 'all'] as const,
-    queryFn: ({ signal }) => fetchAnalyticsAreas({ signal }),
+    queryKey: [...AA_KEY, { managedSystemId, includeArchived }] as const,
+    queryFn: ({ signal }) =>
+      fetchAnalyticsAreas({
+        ...(managedSystemId ? { managedSystemId } : {}),
+        includeArchived,
+        signal,
+      }),
     retry: false,
   });
 
   const systems = useMemo(() => msQuery.data?.items ?? [], [msQuery.data]);
+  const renderedSystems = useMemo(
+    () => (managedSystemId ? systems.filter((system) => system.id === managedSystemId) : systems),
+    [managedSystemId, systems],
+  );
   const areas = useMemo(() => aaQuery.data?.items ?? [], [aaQuery.data]);
-  const areasByMs = useMemo(() => groupByMs(areas), [areas]);
-  const activeAreas = useMemo(() => areas.filter((a) => a.archived_at === null), [areas]);
+  const areasByMs = useMemo(
+    () => groupByMs(areas, includeArchived),
+    [areas, includeArchived],
+  );
+  const renderedAreaCount = useMemo(
+    () =>
+      renderedSystems.reduce(
+        (count, system) => count + (areasByMs.get(system.id)?.length ?? 0),
+        0,
+      ),
+    [areasByMs, renderedSystems],
+  );
   const msById = useMemo(
     () => new Map<string, ManagedSystemDto>(systems.map((m) => [m.id, m])),
     [systems],
@@ -173,7 +223,7 @@ export function AnalyticsAreasBody({
   });
 
   const msOptions: PickerOption[] = systems
-    .filter((m) => m.archived_at === null)
+    .filter((m) => includeArchived || m.archived_at === null)
     .map((m) => ({ id: m.id, label: m.name }));
 
   async function invalidate() {
@@ -192,7 +242,8 @@ export function AnalyticsAreasBody({
         <div className="mb-3.5 flex items-center justify-between">
           <PanelSectionTitle className="mb-0">Catalog</PanelSectionTitle>
           <span className="text-xs text-text-muted">
-            {activeAreas.length} areas · {systems.length} systems
+            {renderedAreaCount} {renderedAreaCount === 1 ? 'area' : 'areas'} ·{' '}
+            {renderedSystems.length} {renderedSystems.length === 1 ? 'system' : 'systems'}
           </span>
         </div>
 
@@ -209,9 +260,25 @@ export function AnalyticsAreasBody({
           >
             등록된 Managed System 이 없습니다.
           </div>
+        ) : renderedSystems.length === 0 ? (
+          <div
+            className="rounded-md border border-border-subtle bg-surface-card p-8 text-center text-sm text-text-muted"
+            data-testid="aa-filter-empty-state"
+          >
+            <p>필터에 해당하는 Managed System이 없습니다.</p>
+            <Button
+              variant="subtle"
+              size="sm"
+              className="mt-3"
+              onClick={onClearFilters}
+              data-testid="aa-clear-filters"
+            >
+              필터 해제
+            </Button>
+          </div>
         ) : (
           <div data-testid="aa-grouped-list" className="space-y-4">
-            {systems.map((m) => (
+            {renderedSystems.map((m) => (
               <GroupCard
                 key={m.id}
                 ms={m}
@@ -262,6 +329,66 @@ export function AnalyticsAreasBody({
   );
 }
 
+function AnalyticsAreasFilter({
+  includeArchived,
+  managedSystemId,
+  onIncludeArchivedChange,
+  onManagedSystemIdChange,
+}: {
+  includeArchived: boolean;
+  managedSystemId: string | undefined;
+  onIncludeArchivedChange: (value: boolean) => void;
+  onManagedSystemIdChange: (value: string | undefined) => void;
+}) {
+  const systemsQuery = useQuery({
+    queryKey: ['managed-systems', { includeArchived }] as const,
+    queryFn: ({ signal }) => fetchManagedSystems({ includeArchived, signal }),
+    retry: false,
+  });
+  const systems = systemsQuery.data?.items ?? [];
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="subtle" size="sm" data-testid="aa-filter-button">
+          <Filter className="h-4 w-4" />
+          Filter
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="aa-filter-managed-system">Managed System</Label>
+          <Select
+            value={managedSystemId ?? 'all'}
+            onValueChange={(value) => onManagedSystemIdChange(value === 'all' ? undefined : value)}
+          >
+            <SelectTrigger id="aa-filter-managed-system" data-testid="aa-filter-managed-system">
+              <SelectValue placeholder="전체" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              {systems.map((system) => (
+                <SelectItem key={system.id} value={system.id}>
+                  {system.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-text-primary" htmlFor="aa-filter-include-archived">
+          <Checkbox
+            id="aa-filter-include-archived"
+            checked={includeArchived}
+            onCheckedChange={(checked) => onIncludeArchivedChange(checked === true)}
+            data-testid="aa-filter-include-archived"
+          />
+          Archived 포함
+        </label>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function teamName(
   area: AnalyticsAreaDto,
   resolved: ResolveActorsResponse | undefined,
@@ -299,6 +426,7 @@ function GroupCard({
           {mark.label}
         </div>
         <span className="text-sm font-semibold text-text-primary">{ms.name}</span>
+        {ms.archived_at !== null ? <OutlineBadge>Archived</OutlineBadge> : null}
         <span className="text-xs text-text-muted">
           · {areas.length} {areas.length === 1 ? 'area' : 'areas'}
         </span>
@@ -340,6 +468,7 @@ function GroupCard({
               <span className="flex min-w-0 items-center gap-2">
                 <Layers className="h-3 w-3 shrink-0 text-text-muted" />
                 <span className="truncate font-medium text-text-primary">{a.name}</span>
+                {a.archived_at !== null ? <OutlineBadge>Archived</OutlineBadge> : null}
               </span>
               <span className="truncate font-mono text-xs text-text-muted">
                 analytics-area/{a.slug}
@@ -596,6 +725,12 @@ function RegisterForm({
   const [slug, setSlug] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<'managedSystem' | 'slug' | 'name', string>>
+  >({});
+  const managedSystemRef = useRef<HTMLFieldSetElement>(null);
+  const slugRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const mutation = useMutation({
     mutationFn: async (body: RegisterAnalyticsAreaBody) => registerAnalyticsArea(body),
@@ -617,48 +752,108 @@ function RegisterForm({
       <form
         data-testid="create-analytics-area-form"
         className="space-y-3"
+        noValidate
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
-          if (!msId) {
-            setError('validation.failed: managed_system_id required');
+          const nextErrors: Partial<
+            Record<'managedSystem' | 'slug' | 'name', string>
+          > = {};
+          if (!msId) nextErrors.managedSystem = 'Managed System is required.';
+          if (!slug.trim()) nextErrors.slug = 'Slug is required.';
+          if (!name.trim()) nextErrors.name = 'Name is required.';
+          if (Object.keys(nextErrors).length > 0) {
+            setFieldErrors(nextErrors);
+            if (nextErrors.managedSystem) {
+              managedSystemRef.current
+                ?.querySelector<HTMLButtonElement>('button')
+                ?.focus();
+            }
+            else if (nextErrors.slug) slugRef.current?.focus();
+            else nameRef.current?.focus();
             return;
           }
+          setFieldErrors({});
+          // Unreachable: the block above returns whenever msId is unset. Kept
+          // so the narrowing is local instead of relying on nextErrors.
+          if (!msId) return;
           mutation.mutate({ managed_system_id: msId, slug, name });
         }}
       >
-        <div className="space-y-1">
-          <Label className="text-text-secondary">Managed System</Label>
+        {/* fieldset, not a div with role="group" — biome's useSemanticElements
+            rejects the ARIA-only form and the native element carries the same
+            grouping for assistive tech. */}
+        <fieldset
+          className="space-y-1"
+          ref={managedSystemRef}
+          aria-labelledby="aa-create-managed-system-label"
+          aria-describedby={
+            fieldErrors.managedSystem
+              ? 'aa-create-managed-system-error'
+              : undefined
+          }
+          aria-required="true"
+        >
+          <Label
+            id="aa-create-managed-system-label"
+            className="text-text-secondary"
+          >
+            Managed System <span className="text-accent-danger">· 필수</span>
+          </Label>
           <ManagedSystemPicker
             options={msOptions}
             value={msId}
             onChange={setMsId}
             testId="create-ms-picker"
           />
-        </div>
+          {fieldErrors.managedSystem && (
+            <p
+              id="aa-create-managed-system-error"
+              className="text-sm text-accent-danger"
+            >
+              {fieldErrors.managedSystem}
+            </p>
+          )}
+        </fieldset>
         <div className="space-y-1">
           <Label htmlFor="aa-create-slug" className="text-text-secondary">
-            Slug
+            Slug <span className="text-accent-danger">· 필수</span>
           </Label>
           <Input
             id="aa-create-slug"
+            ref={slugRef}
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            required
+            aria-describedby={fieldErrors.slug ? 'aa-create-slug-error' : undefined}
+            aria-invalid={Boolean(fieldErrors.slug)}
+            aria-required="true"
             data-testid="create-aa-slug"
           />
+          {fieldErrors.slug && (
+            <p id="aa-create-slug-error" className="text-sm text-accent-danger">
+              {fieldErrors.slug}
+            </p>
+          )}
         </div>
         <div className="space-y-1">
           <Label htmlFor="aa-create-name" className="text-text-secondary">
-            Name
+            Name <span className="text-accent-danger">· 필수</span>
           </Label>
           <Input
             id="aa-create-name"
+            ref={nameRef}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            required
+            aria-describedby={fieldErrors.name ? 'aa-create-name-error' : undefined}
+            aria-invalid={Boolean(fieldErrors.name)}
+            aria-required="true"
             data-testid="create-aa-name"
           />
+          {fieldErrors.name && (
+            <p id="aa-create-name-error" className="text-sm text-accent-danger">
+              {fieldErrors.name}
+            </p>
+          )}
         </div>
         {error && (
           <p data-testid="create-aa-error" className="text-sm text-accent-danger">
@@ -759,15 +954,19 @@ function EditForm({
           </p>
         )}
         <DialogFooter className="justify-between">
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => archiveMutation.mutate()}
-            disabled={archiveMutation.isPending}
-            data-testid={`aa-archive-${target.slug}`}
-          >
-            Archive
-          </Button>
+          {target.archived_at === null ? (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => archiveMutation.mutate()}
+              disabled={archiveMutation.isPending}
+              data-testid={`aa-archive-${target.slug}`}
+            >
+              Archive
+            </Button>
+          ) : (
+            <span className="text-sm text-text-muted">이미 보관됨</span>
+          )}
           <Button
             type="submit"
             disabled={updateMutation.isPending}

@@ -39,8 +39,9 @@
 
 import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporterReplyMutation';
 import type { ApiError } from '@/lib/api';
+import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
-import type { VocDetailEnvelope } from '@fops/shared';
+import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
 import { Callout, PreviewModal, RichEditor } from '@fops/ui';
 import type { TipTapDoc } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
@@ -50,7 +51,6 @@ import { toast } from 'sonner';
 import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
 import { ComposerReplyPreview } from './ComposerReplyPreview';
-import { uploadAttachment } from '@/lib/api/attachments';
 import { ReporterReplyToolbar } from './rich-toolbars/ReporterReplyToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -64,21 +64,10 @@ export interface ReporterReplyComposerProps {
   onDraftChange?: (doc: TipTapDoc | null) => void;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isDocEmpty(doc: TipTapDoc | null): boolean {
-  if (doc == null) return true;
-  const content = doc.content;
-  if (!Array.isArray(content) || content.length === 0) return true;
-  return content.every((node) => {
-    if (node == null || typeof node !== 'object') return true;
-    const n = node as { type?: string; content?: unknown[] };
-    if (n.type !== 'paragraph') return false;
-    return !Array.isArray(n.content) || n.content.length === 0;
-  });
-}
-
 // Maps ApiError code to Callout tone for the inline error surface.
+//
+// #356: deliberately diverges from the same-named function in
+// PublicUpdateComposer — see the note there before merging the two.
 function getComposerErrorTone(code: string): 'amber' | null {
   if (code === 'reporter_facing_status.gate_blocked') return 'amber';
   // invalid_transition is primarily a public-update error; treat as amber fallback on reply surface.
@@ -88,7 +77,12 @@ function getComposerErrorTone(code: string): 'amber' | null {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, onDraftChange }: ReporterReplyComposerProps): ReactElement {
+export function ReporterReplyComposer({
+  voc,
+  me,
+  draftDoc: controlledDraftDoc,
+  onDraftChange,
+}: ReporterReplyComposerProps): ReactElement {
   const queryClient = useQueryClient();
 
   // REV-1 #7: controlled draft support.
@@ -109,6 +103,9 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
   // PLAN-22 C7a: composer-level attachment dropzone state.
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+  // #354: bumped on send success so the dropzone drops the rows the server
+  // has now linked to the sent reply.
+  const [attachmentResetToken, setAttachmentResetToken] = useState(0);
 
   // Reset state when VOC changes (preview; draft reset handled by parent for controlled).
   const prevVocIdRef = useRef(voc.id);
@@ -120,13 +117,21 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
     setPreviewOpen(false);
   }
 
-  const isEmpty = isDocEmpty(draftDoc);
+  const isEmpty = isTipTapDocBlank(draftDoc);
 
   const mutation = useVocReporterReplyMutation({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['voc', voc.id] });
       setDraftDoc(null); // calls onDraftChange?.(null) when controlled
+      // #354: linked to the sent reply now — re-sending would be already_linked.
+      // attachmentIds clears through the dropzone's onChange, not from here.
+      setAttachmentResetToken((n) => n + 1);
       toast.success('리포터에게 답장이 전송되었습니다.');
+    },
+    onError: (error) => {
+      if (getComposerErrorTone(error.code) == null) {
+        toast.error(`${error.code}: ${error.message}`);
+      }
     },
   });
 
@@ -137,8 +142,6 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
       ifMatch: voc.updated_at,
       body: {
         body_rich_content: draftDoc,
-        attachments: [],
-        // PLAN-22 C7a (D1): widened body field — schema reconciled in C7b.
         attachment_ids: attachmentIds,
       },
     });
@@ -204,6 +207,7 @@ export function ReporterReplyComposer({ voc, me, draftDoc: controlledDraftDoc, o
         testId="reporter-reply-attachment-dropzone"
         onChange={setAttachmentIds}
         onUploadingChange={setAttachmentsUploading}
+        resetToken={attachmentResetToken}
       />
 
       {/* Inline error Callout — reporter_facing_status.gate_blocked (amber)

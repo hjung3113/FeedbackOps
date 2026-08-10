@@ -26,6 +26,7 @@ import {
 } from './modules/analytics-areas/index.js';
 import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
 import { createAttachmentsService } from './modules/attachments/service.js';
+import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
 import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
@@ -38,6 +39,8 @@ import {
   createManagedSystemService,
   managedSystemsRoutes,
 } from './modules/managed-systems/index.js';
+import { createNavCountsService, navRoutes, type NavCountsService } from './modules/nav/index.js';
+import { createSavedViewsService, savedViewsRoutes } from './modules/saved-views/index.js';
 import {
   createCheckService,
   createDecisionService,
@@ -49,12 +52,25 @@ import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-re
 import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
 import {
+  createWorkspaceSettingsService,
+  getResolvedWorkspaceSettings,
+  workspaceSettingsRoutes,
+} from './modules/workspace-settings/index.js';
+import {
   createConversationService,
   createPublicUpdateReviewCandidateService,
+  createVocEmbeddingEnqueuer,
+  createVocRecommendationsService,
   createVocReadService,
   createVocService,
+  vocRecommendationsRoutes,
   vocRoutes,
 } from './modules/voc/index.js';
+import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
+import {
+  createPreSubmitVocPeersService,
+  preSubmitVocPeersRoutes,
+} from './modules/voc/pre-submit-peers/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -73,6 +89,8 @@ export interface BuildServerOptions {
    * production this is undefined and `getStorage()` builds the singleton.
    */
   storage?: StorageBackend;
+  /** Route-test seam; production constructs the navigation read model below. */
+  navCountsService?: NavCountsService;
 }
 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
@@ -391,6 +409,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     checkService,
     auditService,
     idempotencyService,
+    resolveWorkspaceSettings: getResolvedWorkspaceSettings,
   });
   await app.register(permissionsRoutes, {
     sessionService,
@@ -413,6 +432,21 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   await app.register(managedSystemsRoutes, {
     sessionService,
     managedSystemService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+    },
+  });
+
+  // ── Workspace Settings module — Slice 9 issue #195 ─────────────────────
+  const workspaceSettingsService = createWorkspaceSettingsService({
+    db: dbHandle.db,
+    checkService,
+    auditService,
+  });
+  await app.register(workspaceSettingsRoutes, {
+    sessionService,
+    workspaceSettingsService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
@@ -474,6 +508,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     idempotencyService,
+    resolveWorkspaceSettings: getResolvedWorkspaceSettings,
   });
   await app.register(surveysRoutes, {
     sessionService,
@@ -524,6 +559,13 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     db: dbHandle.db,
     auditService,
     checkService,
+    // #168 (ADR-0034 D6). Disabled provider → the enqueuer is a no-op, so a
+    // key-less environment creates no embedding jobs at all.
+    embeddingEnqueuer: createVocEmbeddingEnqueuer({
+      ...(boss ? { boss } : {}),
+      embeddingEnabled: isEmbeddingEnabled(config),
+      log: { error: (msg, meta) => app.log.error(meta ?? {}, msg) },
+    }),
   });
   const vocReadService = createVocReadService({
     db: dbHandle.db,
@@ -559,6 +601,68 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       mutation: app.rateLimitConfig.mutation,
       read: app.rateLimitConfig.read,
     },
+  });
+  const navCountsService = opts.navCountsService ?? createNavCountsService({
+    vocReadService,
+    findingsService,
+    surveysService,
+    vocClustersService,
+  });
+  await app.register(navRoutes, {
+    sessionService,
+    navCountsService,
+    workspaceId,
+    rateLimitConfig: { read: app.rateLimitConfig.read },
+  });
+  const dashboardService = createDashboardService({
+    db: dbHandle.db,
+    checkService,
+    requestService,
+    vocReadService,
+  });
+  await app.register(dashboardRoutes, {
+    sessionService,
+    dashboardService,
+    workspaceId,
+    rateLimitConfig: { read: app.rateLimitConfig.read },
+  });
+
+  // #143 actor-private persisted list filters. This is intentionally a root
+  // prefix (rather than /nav) because it is a CRUD resource, not navigation's
+  // read-only badge aggregation.
+  const savedViewsService = createSavedViewsService({ db: dbHandle.db });
+  await app.register(savedViewsRoutes, {
+    sessionService,
+    savedViewsService,
+    workspaceId,
+    rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
+  });
+
+  const vocRecommendationsService = createVocRecommendationsService({
+    db: dbHandle.db,
+    auditService,
+    embeddingVersion: config.EMBEDDING_VERSION,
+    embeddingEnabled: isEmbeddingEnabled(config),
+    createClustersService: (db) => createVocClustersService({
+      db,
+      auditService,
+      checkService,
+      idempotencyService,
+      postPublicUpdate: conversationService.postPublicUpdate,
+    }),
+  });
+  await app.register(vocRecommendationsRoutes, {
+    sessionService,
+    vocRecommendationsService,
+    workspaceId,
+    rateLimitConfig: { mutation: app.rateLimitConfig.mutation, read: app.rateLimitConfig.read },
+  });
+  const preSubmitVocPeersService = createPreSubmitVocPeersService({ db: dbHandle.db });
+  await app.register(preSubmitVocPeersRoutes, {
+    sessionService,
+    preSubmitVocPeersService,
+    workspaceId,
+    rateLimitConfig: { read: app.rateLimitConfig.read },
   });
 
   // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────

@@ -1,0 +1,140 @@
+# Intentionally empty. Add only documented, pre-existing diagnostic identities.
+apps/backend/src/config.ts format -- pre-existing on develop; the file predates biome formatting and this branch adds two lines to the env schema only
+apps/backend/src/seed/index.ts format -- pre-existing on develop; the file predates biome formatting and reformatting it would rewrite lines this branch never touched
+apps/frontend/src/features/home/HomeScreen.tsx format -- pre-existing on develop; dense single-line JSX predates biome formatting
+apps/frontend/src/features/home/HomeScreen.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/home/__tests__/HomeScreen.test.tsx format -- pre-existing on develop; long inline fetch mocks predate biome formatting
+apps/frontend/src/features/home/__tests__/HomeScreen.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/lib/copy/home.ts format -- pre-existing on develop; multi-key single lines predate biome formatting
+apps/frontend/src/routes/login.test.tsx format -- pre-existing on develop; long inline harness lines predate biome formatting
+apps/frontend/tests/visual/fixtures/home.ts format -- pre-existing on develop; long fixture literals predate biome formatting
+apps/frontend/tests/visual/support/mock-api.ts format -- pre-existing on develop; long route handler lines predate biome formatting
+apps/frontend/tests/visual/support/mock-api.ts organizeImports -- pre-existing on develop; import order predates biome
+# Added for the deep-link contract branch (#279 et al). Every identity below was
+# measured on develop with the gate's own invocation --
+#   pnpm exec biome check --reporter=json --max-diagnostics=500 <same file list>
+# -- and reproduced identically, counts included. Note that `biome check <file>`
+# in text mode under-reports (it omits the file-level `format` diagnostic), so
+# comparing with that command will wrongly look like the branch introduced them.
+apps/backend/src/modules/dashboard/service.ts format -- pre-existing on develop; the file predates biome formatting
+apps/backend/src/modules/dashboard/service.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/backend/src/modules/dashboard/__tests__/summary.integration.test.ts format -- pre-existing on develop; long single-line expectations predate biome formatting
+apps/backend/src/modules/dashboard/__tests__/summary.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (12x, unchanged); test helpers assert non-null after an explicit status check
+apps/backend/src/modules/dashboard/__tests__/summary.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (9x, unchanged)
+apps/backend/src/modules/nav/service.ts format -- pre-existing on develop; the file predates biome formatting
+apps/backend/src/modules/nav/__tests__/nav-counts.integration.test.ts format -- pre-existing on develop; long single-line expectations predate biome formatting
+apps/backend/src/modules/nav/__tests__/nav-counts.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (4x, unchanged)
+apps/backend/src/modules/nav/__tests__/nav-counts.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/nav/__tests__/nav-counts.integration.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/vocs.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/vocs.tsx organizeImports -- pre-existing on develop; import order predates biome
+packages/shared/src/dashboard.ts format -- pre-existing on develop; the file predates biome formatting
+packages/shared/src/vocs/list-query.ts format -- pre-existing on develop; the file predates biome formatting
+# Added for the permission-state branch (#284 #283 #261). Each identity below was
+# measured on develop with the gate's own invocation over the same file list and
+# reproduced exactly. Every identity this branch actually introduced was fixed
+# rather than allowlisted.
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx lint/a11y/useSemanticElements -- pre-existing on develop (2x, unchanged); drag-and-drop board columns use role attributes
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx lint/style/noNonNullAssertion -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.tsx lint/complexity/noUselessFragments -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.test.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/tasks/routes/TaskBoardRoute.test.tsx lint/style/useImportType -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/tasks/routes/TaskListRoute.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/tasks/routes/TaskListRoute.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx lint/complexity/useLiteralKeys -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx lint/style/useImportType -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/routes/InboxRoute.tsx lint/suspicious/noExplicitAny -- pre-existing on develop (10x, unchanged); the file's local slot types predate stricter typing
+apps/frontend/src/lib/layout/AppSidebar.tsx format -- pre-existing on develop; dense single-line JSX predates biome formatting
+apps/frontend/src/lib/layout/AppSidebar.tsx lint/a11y/useFocusableInteractive -- pre-existing on develop (1x, unchanged); the scope popover is a listbox of buttons
+apps/frontend/src/lib/layout/AppSidebar.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x, unchanged); the scope popover cannot be a native <select>, its options carry icons and badges
+apps/frontend/src/lib/layout/__tests__/AppSidebar.test.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/lib/layout/__tests__/AppSidebar.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/voc-clusters/$clusterId.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/voc-clusters/$clusterId.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx lint/a11y/noLabelWithoutControl -- pre-existing on develop (2x, unchanged); test-local harness markup
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx lint/a11y/useButtonType -- pre-existing on develop (1x, unchanged); test-local harness markup
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx lint/performance/noDelete -- pre-existing on develop (6x, unchanged); fixture teardown deletes optional keys
+apps/frontend/src/routes/_authed/voc-clusters/__tests__/voc-cluster-shell.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (40x, unchanged); fixture lookups assert presence
+docs/design-prototype/screen-voc.jsx format -- pre-existing on develop; the prototype is a design reference, not shipped code
+docs/design-prototype/screen-voc.jsx lint/a11y/useButtonType -- pre-existing on develop (10x, unchanged); prototype reference, not shipped code
+docs/design-prototype/screen-voc.jsx lint/a11y/useKeyWithClickEvents -- pre-existing on develop (2x, unchanged); prototype reference, not shipped code
+docs/design-prototype/screen-voc.jsx lint/correctness/noUnusedVariables -- pre-existing on develop (2x, unchanged); prototype reference, not shipped code
+docs/design-prototype/screen-voc.jsx lint/security/noDangerouslySetInnerHtml -- pre-existing on develop (3x, unchanged); prototype reference, not shipped code
+apps/frontend/src/features/home/homeNavigation.tsx format -- pre-existing on develop; dense single-line entries predate biome formatting
+apps/frontend/src/routes/_authed/admin/analytics-areas.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/admin/analytics-areas.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/admin/analytics-areas.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x, unchanged); the catalog row is a div with role=button and a nested affordance
+apps/frontend/src/routes/_authed/admin/analytics-areas.tsx suppressions/unused -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx lint/correctness/useExhaustiveDependencies -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/routes/_authed/admin/permissions/requests.tsx lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/admin/settings/WorkspaceSettingsScreen.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/admin/managed-systems.tsx format -- pre-existing on develop; the file predates biome formatting
+apps/frontend/src/routes/_authed/admin/managed-systems.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/hooks/__tests__/useReporterStatusTransitions.test.ts format -- pre-existing on develop; the file predates biome formatting and this branch only adds three fixture fields
+apps/frontend/src/features/voc/hooks/__tests__/useReporterStatusTransitions.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/hooks/__tests__/useTriagePanelState.test.ts format -- pre-existing on develop; the file predates biome formatting and this branch only adds one fixture field
+apps/frontend/src/features/voc/hooks/__tests__/useTriagePanelState.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/triage/__tests__/TriageQueue.test.tsx format -- pre-existing on develop; the file predates biome formatting and this branch only adds two fixture fields
+apps/frontend/src/features/voc/components/triage/__tests__/TriageQueue.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterStatusChangeBlock.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterStatusChangeBlock.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (5x, unchanged); test helpers assert non-null after an explicit lookup
+apps/frontend/src/features/voc/components/list/VocRow.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x at VocRow.tsx:141, unchanged); the row is a clickable div with role="row" predating this branch; fixing it is a keyboard/semantics change out of scope for the attachment chip
+apps/frontend/tests/visual/fixtures/voc-reporter-task-summary.ts format -- pre-existing on develop; the whole file uses double quotes and predates biome formatting, and this branch only adds two attachment fixture entries in the same style
+docs/design-prototype/screen-voc-create.jsx format -- pre-existing on develop (1x, unchanged); the whole prototype predates biome formatting and this branch only rewrites one map callback
+docs/design-prototype/screen-voc-create.jsx lint/a11y/useButtonType -- pre-existing on develop (14x, unchanged; measured against `git show develop:` of the same file); the prototype's other buttons omit type=, and the button this branch adds does carry type="button"
+docs/design-prototype/screen-voc-create.jsx lint/a11y/noLabelWithoutControl -- pre-existing on develop (1x, unchanged); prototype form labels are not wired to controls
+docs/design-prototype/screen-voc-create.jsx lint/a11y/useKeyWithClickEvents -- pre-existing on develop (1x, unchanged); an unrelated clickable div in the same file
+docs/design-prototype/screen-voc-create.jsx lint/complexity/noForEach -- pre-existing on develop (1x, unchanged); the attachment accept/reject loop
+docs/design-prototype/screen-voc-create.jsx lint/correctness/noUnusedVariables -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/integration/routes/LinksRoute.tsx format -- pre-existing on develop (1x, unchanged; measured against `git show develop:` of the same file); it is the `counts.set(...)` call at the status-tab memo, untouched by this branch — the one line this branch did introduce was reformatted rather than allowlisted
+apps/frontend/src/features/voc/components/create/__tests__/AttachmentDropzone.test.tsx format -- pre-existing on develop (1x, unchanged); the violations are the file's own long expect/render lines, none of them in the multi-file test this branch adds
+apps/frontend/src/features/voc/components/create/__tests__/AttachmentDropzone.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/create/__tests__/AttachmentDropzone.test.tsx lint/style/noNonNullAssertion -- pre-existing on develop (1x at the unchanged `spy.mock.calls[0]!` line, verified identical on develop)
+apps/frontend/src/lib/layout/AppRail.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/lib/layout/AppRail.tsx format -- pre-existing on develop (1x, unchanged; measured against `git show develop:` of the same file)
+apps/frontend/src/routes/login.test.tsx format -- pre-existing on develop (1x, unchanged); the file's long harness lines predate biome. AppRail.test.tsx was format-clean on develop, so the violation this branch introduced there was formatted rather than allowlisted
+docs/design-prototype/shell.jsx format -- pre-existing on develop (1x, unchanged; measured against `git show develop:` of the same file)
+docs/design-prototype/shell.jsx lint/a11y/useButtonType -- pre-existing on develop (11x, unchanged); the avatar trigger this branch adds does carry type="button"
+docs/design-prototype/shell.jsx lint/complexity/useOptionalChain -- pre-existing on develop (1x, unchanged)
+docs/design-prototype/shell.jsx lint/suspicious/noArrayIndexKey -- pre-existing on develop (1x, unchanged)
+docs/design-prototype/affordances.jsx format -- pre-existing on develop (1x, unchanged)
+docs/design-prototype/affordances.jsx lint/a11y/useKeyWithClickEvents -- pre-existing on develop (8x, unchanged); the filter/sort popovers' div items predate this branch
+docs/design-prototype/affordances.jsx lint/a11y/useButtonType -- pre-existing on develop (4x, unchanged)
+docs/design-prototype/affordances.jsx lint/complexity/useOptionalChain -- pre-existing on develop (2x, unchanged)
+docs/design-prototype/affordances.jsx lint/correctness/noUnusedVariables -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/voc/components/detail/DescriptionSection.tsx format -- pre-existing on develop (1x, unchanged; measured against `git show develop:` of the same file)
+apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx format -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx lint/complexity/useOptionalChain -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/components/detail/ReporterStatusChangeBlock.tsx lint/style/useImportType -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/create-request.ts format -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/__tests__/create-request.test.ts format -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/__tests__/create-request.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/backend/src/modules/voc/read-service.ts format -- pre-existing on develop (1x, unchanged; measured against `git show develop:` of the same file)
+apps/backend/src/modules/voc/read-service.ts lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/voc/read-service.ts lint/correctness/noUnusedVariables -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts format -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (4x, unchanged)
+apps/backend/src/modules/voc/__tests__/get-voc.integration.test.ts lint/complexity/useLiteralKeys -- pre-existing on develop (5x, unchanged)
+apps/frontend/src/features/voc/components/detail/IdentitySection.tsx format -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/voc/components/detail/__tests__/VocDetailPanel.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterReplyComposer.test.tsx format -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterReplyComposer.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/frontend/src/features/voc/components/detail/__tests__/ReporterReplyComposer.test.tsx lint/suspicious/noExplicitAny -- pre-existing on develop (2x, unchanged)
+apps/frontend/src/features/voc/components/detail/__tests__/PublicUpdateComposer.test.tsx format -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/features/voc/components/detail/__tests__/PublicUpdateComposer.test.tsx organizeImports -- pre-existing on develop; import order predates biome
+packages/shared/src/vocs/edit-description-request.ts format -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/__tests__/internal-comment-request.test.ts format -- pre-existing on develop (1x, unchanged)
+packages/shared/src/vocs/__tests__/edit-description-request.test.ts format -- pre-existing on develop (1x, unchanged)

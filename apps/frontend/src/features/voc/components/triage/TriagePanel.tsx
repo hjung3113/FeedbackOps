@@ -14,6 +14,7 @@
  */
 
 import { ApiError, apiClient } from '@/lib/api';
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import type { VocListItem } from '@fops/shared';
 import {
   AnalyticsAreaPicker,
@@ -26,7 +27,7 @@ import {
   UndoToast,
   cn,
 } from '@fops/ui';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Maximize2, MoreHorizontal } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
@@ -115,8 +116,30 @@ export function TriagePanel({
     return map;
   }, [candidates]);
 
-  // Stub analytics area options
-  const aaOptions: PickerOption[] = [];
+  const analyticsAreasQuery = useQuery({
+    queryKey: ['analytics-areas', voc.primary_managed_system_id, 'triage'] as const,
+    queryFn: ({ signal }) =>
+      fetchAnalyticsAreas({
+        managedSystemId: voc.primary_managed_system_id,
+        includeArchived: true,
+        signal,
+      }),
+  });
+  const aaOptions: PickerOption[] = React.useMemo(
+    () =>
+      (analyticsAreasQuery.data?.items ?? [])
+        .filter(
+          (area) =>
+            area.managed_system_id === voc.primary_managed_system_id &&
+            (area.archived_at === null || area.id === voc.analytics_area_id),
+        )
+        .map((area) => ({
+          id: area.id,
+          label: area.archived_at === null ? area.name : `${area.name} (보관됨)`,
+          archived: area.archived_at !== null,
+        })),
+    [analyticsAreasQuery.data?.items, voc.analytics_area_id, voc.primary_managed_system_id],
+  );
 
   const currentOwnerId = panelState.ownerUserId ?? panelState.ownerTeamId;
 
@@ -499,7 +522,7 @@ export function TriagePanel({
 
         {/* Owner section */}
         <div className="mb-8" data-anchor="owner">
-          <PanelSectionTitle>Owner 배정</PanelSectionTitle>
+          <PanelSectionTitle>Owner 배정 (선택)</PanelSectionTitle>
           <OwnerPicker
             candidates={candidates}
             value={currentOwnerId}
@@ -507,27 +530,40 @@ export function TriagePanel({
               dispatch({ type: 'set_owner', ownerUserId, ownerTeamId });
             }}
           />
+          <p className="text-xs text-text-muted mt-2 leading-relaxed">
+            미지정 상태로 확정할 수 있으며 Owner는 나중에 지정할 수 있습니다.
+          </p>
         </div>
 
         {/* Analytics Area section */}
         <div className="mb-8" data-anchor="area">
           <PanelSectionTitle>Analytics Area 연결</PanelSectionTitle>
-          <AnalyticsAreaPicker
-            options={aaOptions}
-            value={panelState.analyticsAreaId}
-            onChange={(id) => {
-              dispatch({ type: 'set_analytics_area', analyticsAreaId: id });
-            }}
-            placeholder="Analytics Area 선택"
-            testId="triage-aa-picker"
-          />
+          {analyticsAreasQuery.isLoading ? (
+            <p className="text-xs text-text-muted">Analytics Area를 불러오는 중입니다.</p>
+          ) : analyticsAreasQuery.isError ? (
+            <p className="text-xs text-feedback-error">Analytics Area를 불러오지 못했습니다.</p>
+          ) : aaOptions.length === 0 ? (
+            <p className="text-xs text-text-muted">
+              이 Managed System에 선택할 수 있는 Analytics Area가 없습니다.
+            </p>
+          ) : (
+            <AnalyticsAreaPicker
+              options={aaOptions}
+              value={panelState.analyticsAreaId}
+              onChange={(id) => {
+                dispatch({ type: 'set_analytics_area', analyticsAreaId: id });
+              }}
+              placeholder="Analytics Area 선택"
+              testId="triage-aa-picker"
+            />
+          )}
           <p className="text-xs text-text-muted mt-2 leading-relaxed">
             Analytics Area는 권한 경계가 아닙니다. 분류·기본값 용도로만 사용됩니다.
           </p>
         </div>
 
         {/* Cluster section */}
-        <ClusterSectionReadOnly similarCount={voc.similar_count} />
+        <ClusterSectionReadOnly vocId={voc.id} similarCount={voc.similar_count} />
 
         {/* Triage 결과 미리보기 */}
         <div className="mb-0" data-anchor="summary">

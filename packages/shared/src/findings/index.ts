@@ -26,8 +26,8 @@ export type EvidenceHighlightImportance = z.infer<typeof evidenceHighlightImport
 
 export const createFindingRequestSchema = z
   .object({
-    title: z.string().min(1).max(200),
-    summary: z.string().min(1),
+    title: z.string().trim().min(1).max(200),
+    summary: z.string().trim().min(1),
     severity: findingSeveritySchema,
     confidence: findingConfidenceSchema.optional(),
     analytics_area_id: z.string().uuid().optional(),
@@ -91,7 +91,7 @@ export type ListSurveyResponseExcerptCandidatesResponse = z.infer<
 export const patchFindingRequestSchema = z
   .object({
     status: findingStatusSchema,
-    reason: z.string().min(1).max(1000).optional(),
+    reason: z.string().trim().min(1).max(1000).optional(),
   })
   .strict();
 export type PatchFindingRequest = z.infer<typeof patchFindingRequestSchema>;

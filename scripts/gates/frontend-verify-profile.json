@@ -1,0 +1,37 @@
+{
+  "schema_version": "1",
+  "id": "feedbackops-frontend",
+  "runtime": {
+    "executables": ["node", "pnpm"]
+  },
+  "setup": [],
+  "verification": {
+    "output_bytes": 65536,
+    "groups": [
+      {
+        "id": "vitest",
+        "required": true,
+        "commands": [
+          {
+            "argv": ["pnpm", "exec", "vitest", "run"],
+            "cwd": "apps/frontend"
+          }
+        ],
+        "test_count": {
+          "pattern": "Tests[ ]+([0-9]+) passed",
+          "group": 1
+        }
+      },
+      {
+        "id": "typecheck",
+        "required": true,
+        "commands": [{ "argv": ["node", "scripts/gates/fe-typecheck-gate.mjs"] }]
+      },
+      {
+        "id": "biome",
+        "required": true,
+        "commands": [{ "argv": ["node", "scripts/gates/fe-biome-gate.mjs"] }]
+      }
+    ]
+  }
+}

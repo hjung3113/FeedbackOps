@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Database, Inbox, Plus, Settings } from 'lucide-react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
+import { NAV_TREE } from '@/routes/_authed';
 
 const entries = [
   {
@@ -156,6 +157,22 @@ describe('AppSidebar', () => {
     expect(screen.queryByText('VOC')).not.toBeInTheDocument();
   });
 
+  it('renders, applies, saves, and deletes private saved views without badges', () => {
+    const apply = vi.fn();
+    const save = vi.fn();
+    const remove = vi.fn();
+    render(<AppSidebar entries={entries} savedViews={[{ id: 'view-1', name: 'High priority' }]} canSaveView onApplySavedView={apply} onSaveView={save} onDeleteSavedView={remove} />);
+    expect(screen.getByTestId('saved-views-section')).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-count-view-1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('saved-view-apply-view-1'));
+    expect(apply).toHaveBeenCalledWith('view-1');
+    fireEvent.change(screen.getByLabelText('Saved view name'), { target: { value: 'Mine' } });
+    fireEvent.click(screen.getByTestId('saved-view-save'));
+    expect(save).toHaveBeenCalledWith('Mine');
+    fireEvent.click(screen.getByTestId('saved-view-delete-view-1'));
+    expect(remove).toHaveBeenCalledWith('view-1');
+  });
+
   it('renders footer items and keeps collapsed icons accessible', () => {
     render(
       <AppSidebar
@@ -193,5 +210,91 @@ describe('AppSidebar', () => {
     expect(invite).toHaveAttribute('aria-label', 'Invite member');
     expect(invite.querySelector('svg')).not.toBeNull();
     expect(invite.textContent).toBe('');
+  });
+
+  it('distinguishes an absent count from an explicit zero count', () => {
+    const countEntries = [
+      { id: 'inbox', label: 'Inbox', href: '/vocs?view=inbox', countKey: 'voc.inbox' as const },
+      { id: 'triage', label: 'Triage', href: '/vocs?view=triage', countKey: 'voc.triage' as const },
+    ];
+    const { rerender } = render(<AppSidebar entries={countEntries} counts={{ 'voc.inbox': 0 }} />);
+
+    expect(screen.getByTestId('sidebar-count-inbox')).toHaveTextContent('0');
+    expect(screen.queryByTestId('sidebar-count-triage')).not.toBeInTheDocument();
+
+    rerender(<AppSidebar entries={countEntries} counts={{ 'voc.inbox': 0, 'voc.triage': 0 }} />);
+    expect(screen.getByTestId('sidebar-count-triage')).toHaveTextContent('0');
+  });
+
+  it('AC-E5b keeps every out-of-grant Managed System name visible in the scope list', () => {
+    render(
+      <AppSidebar
+        entries={entries}
+        isAdmin={false}
+        managedSystems={[
+          { id: 'granted', name: 'Identity', granted: true },
+          { id: 'outside', name: 'Finance', granted: false },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('scope-selector'));
+    expect(screen.getByTestId('scope-option-outside')).toBeVisible();
+    expect(screen.getByLabelText('Outside your grants')).toBeVisible();
+  });
+
+  it('AC-E5a shows granted and total counts without claiming zero systems', () => {
+    render(
+      <AppSidebar
+        entries={entries}
+        isAdmin={false}
+        managedSystems={[
+          { id: 'identity', name: 'Identity Platform', granted: false },
+          { id: 'finance', name: 'Finance Analytics', granted: false },
+          { id: 'sales', name: 'Sales Workspace', granted: false },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('scope-selector'));
+    const allScope = screen.getByTestId('scope-option-all');
+    expect(allScope).toHaveTextContent('granted 0 / 3');
+    expect(allScope).not.toHaveTextContent('0 systems');
+    // The note lives outside the option buttons so it never becomes part of an
+    // option's accessible name.
+    expect(screen.getByTestId('scope-name-visibility-note')).toHaveTextContent(
+      '이름은 워크스페이스 전체에 공개되며, 접근하려면 권한을 요청하세요.',
+    );
+    expect(allScope).not.toHaveTextContent('이름은 워크스페이스 전체에 공개되며');
+    expect(screen.getByTestId('scope-option-identity')).toHaveTextContent('Identity Platform');
+    expect(screen.getByTestId('scope-option-finance')).toHaveTextContent('Finance Analytics');
+    expect(screen.getByTestId('scope-option-sales')).toHaveTextContent('Sales Workspace');
+  });
+
+  it('labels non-admin all scope as the union of granted Managed Systems only', () => {
+    const { rerender } = render(
+      <AppSidebar
+        entries={entries}
+        isAdmin={false}
+        managedSystems={[
+          { id: 'one', name: 'Identity', granted: true },
+          { id: 'two', name: 'Finance', granted: true },
+        ]}
+      />,
+    );
+    expect(screen.getByTestId('scope-union-badge')).toBeVisible();
+    expect(screen.getByTestId('scope-selector')).toHaveTextContent('Identity · Finance');
+
+    rerender(<AppSidebar entries={entries} isAdmin={true} managedSystems={[{ id: 'one', name: 'Identity', granted: true }]} />);
+    expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
+  });
+
+  it('replaces prior-rail items when the sidebar tree changes', () => {
+    const { rerender } = render(<AppSidebar entries={NAV_TREE.voc} />);
+    expect(screen.getByTestId('sidebar-nav-inbox')).toBeInTheDocument();
+
+    rerender(<AppSidebar entries={NAV_TREE.tasks} />);
+    expect(screen.queryByTestId('sidebar-nav-inbox')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sidebar-nav-tasks-board')).toBeInTheDocument();
   });
 });

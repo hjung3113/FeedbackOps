@@ -90,6 +90,23 @@ describe('TaskBoardRoute', () => {
     expect(screen.getAllByText('비어있음').length).toBe(6);
   });
 
+  it('renders permission denied instead of the board unavailable copy for a 403', async () => {
+    api.listTasks.mockRejectedValue(new ApiError(403, { code: 'permission.denied', message: 'finding.manage capability required' }));
+    renderBoard();
+
+    const panel = await screen.findByText('Task board');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.queryByText('Task board unavailable.')).not.toBeInTheDocument();
+  });
+
+  it('keeps a non-permission board failure unavailable', async () => {
+    api.listTasks.mockRejectedValue(new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }));
+    renderBoard();
+
+    expect(await screen.findByText('Task board unavailable.')).toBeInTheDocument();
+    expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
+  });
+
   it('keeps a pointer click on a status-board card available for selection', async () => {
     api.listTasks.mockResolvedValue({ items: [task] });
     api.getTask.mockResolvedValue({ ...task, source: null });
@@ -197,6 +214,29 @@ describe('TaskBoardRoute', () => {
     await waitFor(() => expect(api.getTask).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Move to next status' })).not.toBeInTheDocument());
     expect(screen.getAllByText('Released').length).toBeGreaterThan(0);
+  });
+
+  // #290: ADR-0030 allows every status to reach every other status, but the
+  // board excluded backlog from the next-status button, leaving drag as the
+  // only way out — and drag is closed to keyboard users. Two defects, not one:
+  // the render guard hid the button, and the nextStatus map had no backlog
+  // entry, so removing the guard alone would render a button that does nothing.
+  it('#290 moves a backlog task to todo through the next-status button', async () => {
+    const backlogTask = { ...task, status: 'backlog' as const };
+    const todoTask = { ...backlogTask, status: 'todo' as const };
+    api.listTasks.mockResolvedValue({ items: [backlogTask] });
+    api.getTask.mockResolvedValueOnce({ ...backlogTask, source: null }).mockResolvedValueOnce({ ...todoTask, source: null });
+    api.updateTaskStatus.mockResolvedValue(todoTask);
+
+    renderBoard(backlogTask.id);
+    const footerAction = await screen.findByRole('button', { name: 'Move to next status' });
+
+    fireEvent.click(footerAction);
+
+    await waitFor(() => expect(api.updateTaskStatus).toHaveBeenCalledTimes(1));
+    expect(api.updateTaskStatus.mock.calls[0]?.[0]).toBe(backlogTask.id);
+    expect(api.updateTaskStatus.mock.calls[0]?.[1]).toBe('todo');
+    await waitFor(() => expect(screen.getAllByText('Todo').length).toBeGreaterThan(0));
   });
 
   it.each(['backlog', 'my', 'inbox'] as const)('keeps the %s view on TaskListRoute', (view) => {

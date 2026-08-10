@@ -10,4 +10,7 @@ export * from './list-query.js';
 export * from './patch-request.js';
 export * from './public-update-request.js';
 export * from './public-update-review-candidate.js';
+export * from './pre-submit-peers.js';
+export * from './recommendations.js';
 export * from './reporter-reply-request.js';
+export * from './rich-content.js';

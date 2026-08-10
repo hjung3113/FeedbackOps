@@ -14,9 +14,13 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import { AnalyticsAreasAdminPage } from './analytics-areas';
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 function buildHarness({ initialPath }: { initialPath: string }) {
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
@@ -54,6 +58,11 @@ const TABLEAU = {
   updated_at: '2026-05-17T00:00:00Z',
 };
 const POWERBI = { ...TABLEAU, id: 'ms-pbi', slug: 'power-bi', name: 'Power BI' };
+const ARCHIVED_POWERBI = {
+  ...POWERBI,
+  archived_at: '2026-06-01T00:00:00Z',
+  archived_by_actor_id: 'actor-1',
+};
 
 const AA_TAB_PM = {
   id: 'aa-1',
@@ -67,18 +76,34 @@ const AA_TAB_PM = {
   created_at: '2026-05-17T00:00:00Z',
   updated_at: '2026-05-17T00:00:00Z',
 };
+const AA_PBI_SALES = {
+  ...AA_TAB_PM,
+  id: 'aa-2',
+  managed_system_id: 'ms-pbi',
+  slug: 'sales',
+  name: 'Sales Power BI',
+};
+const ARCHIVED_AA = {
+  ...AA_TAB_PM,
+  id: 'aa-archived',
+  slug: 'legacy-revenue',
+  name: 'Legacy Revenue',
+  archived_at: '2026-06-01T00:00:00Z',
+};
 
 interface FetchCase {
   permissionState: 'approved' | 'request_access';
-  managedSystems: unknown[];
-  analyticsAreas: unknown[];
+  managedSystems: Array<Record<string, unknown>>;
+  analyticsAreas: Array<Record<string, unknown>>;
   resolve?: { actors: unknown[]; teams: unknown[] };
   createResponse?: { status: number; body: unknown };
+  requests?: string[];
 }
 
 function installFetch(c: FetchCase) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
+    c.requests?.push(url);
     if (url.includes('/me/permissions/check')) {
       return jsonResponse({
         state: c.permissionState,
@@ -94,10 +119,23 @@ function installFetch(c: FetchCase) {
       return jsonResponse(c.resolve ?? { actors: [], teams: [] });
     }
     if (url.includes('/managed-systems') && (!init?.method || init.method === 'GET')) {
-      return jsonResponse({ items: c.managedSystems, total: c.managedSystems.length });
+      const query = new URL(url, 'http://localhost').searchParams;
+      const items =
+        query.get('include_archived') === 'true'
+          ? c.managedSystems
+          : c.managedSystems.filter((system) => system.archived_at === null);
+      return jsonResponse({ items, total: items.length });
     }
     if (url.includes('/analytics-areas') && (!init?.method || init.method === 'GET')) {
-      return jsonResponse({ items: c.analyticsAreas, total: c.analyticsAreas.length });
+      const query = new URL(url, 'http://localhost').searchParams;
+      let items = c.analyticsAreas;
+      if (query.get('managed_system_id')) {
+        items = items.filter((area) => area.managed_system_id === query.get('managed_system_id'));
+      }
+      if (query.get('include_archived') !== 'true') {
+        items = items.filter((area) => area.archived_at === null);
+      }
+      return jsonResponse({ items, total: items.length });
     }
     if (url.endsWith('/analytics-areas') && init?.method === 'POST') {
       const r = c.createResponse ?? { status: 201, body: { ...AA_TAB_PM, slug: 'created' } };
@@ -142,6 +180,91 @@ describe('/admin/analytics-areas route', () => {
     expect(
       within(screen.getByTestId('aa-group-ms-pbi')).getByText(/등록된 Analytics Area/),
     ).toBeInTheDocument();
+  });
+
+  test('filters by Managed System and archived inclusion through requests, then clears both', async () => {
+    const requests: string[] = [];
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU, POWERBI],
+      analyticsAreas: [AA_TAB_PM, AA_PBI_SALES, ARCHIVED_AA],
+      requests,
+    });
+    await waitFor(() => expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument());
+    expect(screen.getByText('2 areas · 2 systems')).toBeInTheDocument();
+    expect(screen.queryByTestId('aa-row-legacy-revenue')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('aa-filter-button'));
+    fireEvent.click(screen.getByTestId('aa-filter-managed-system'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Power BI' }));
+
+    await waitFor(() => {
+      expect(requests).toContain('/analytics-areas?managed_system_id=ms-pbi');
+      expect(screen.getByTestId('aa-row-sales')).toBeInTheDocument();
+      expect(screen.queryByTestId('aa-row-permission-management')).not.toBeInTheDocument();
+      expect(screen.getByTestId('aa-group-ms-pbi')).toBeInTheDocument();
+      expect(screen.queryByTestId('aa-group-ms-tab')).not.toBeInTheDocument();
+      expect(screen.getByText('1 area · 1 system')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('aa-filter-managed-system'));
+    fireEvent.click(await screen.findByRole('option', { name: '전체' }));
+    await waitFor(() => {
+      expect(requests.filter((url) => url === '/analytics-areas').length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument();
+      expect(screen.getByTestId('aa-group-ms-tab')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('aa-filter-include-archived'));
+    await waitFor(() => {
+      expect(requests).toContain('/analytics-areas?include_archived=true');
+      expect(screen.getByTestId('aa-row-legacy-revenue')).toBeInTheDocument();
+      expect(screen.getByText('3 areas · 2 systems')).toBeInTheDocument();
+      expect(screen.getAllByTestId(/^aa-row-/)).toHaveLength(3);
+    });
+
+    fireEvent.click(screen.getByTestId('aa-filter-include-archived'));
+    await waitFor(() => {
+      expect(requests.filter((url) => url === '/analytics-areas').length).toBeGreaterThanOrEqual(3);
+      expect(screen.queryByTestId('aa-row-legacy-revenue')).not.toBeInTheDocument();
+    });
+  });
+
+  test('shows a distinct empty state when no Managed Systems are registered', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [],
+      analyticsAreas: [],
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('aa-empty-state')).toHaveTextContent('등록된 Managed System 이 없습니다.');
+    });
+    expect(screen.queryByText('필터에 해당하는 Managed System이 없습니다.')).not.toBeInTheDocument();
+  });
+
+  test('shows a filter-empty state when a selected archived Managed System is hidden', async () => {
+    renderPage({
+      permissionState: 'approved',
+      managedSystems: [TABLEAU, ARCHIVED_POWERBI],
+      analyticsAreas: [AA_TAB_PM, { ...AA_PBI_SALES, managed_system_id: 'ms-pbi' }],
+    });
+    await waitFor(() => expect(screen.getByTestId('aa-row-permission-management')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('aa-filter-button'));
+    fireEvent.click(screen.getByTestId('aa-filter-include-archived'));
+    await waitFor(() => expect(screen.getByTestId('aa-filter-managed-system')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('aa-filter-managed-system'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Power BI' }));
+    await waitFor(() => expect(screen.getByTestId('aa-group-ms-pbi')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('aa-filter-include-archived'));
+    await waitFor(() => {
+      expect(screen.getByText('필터에 해당하는 Managed System이 없습니다.')).toBeInTheDocument();
+      expect(screen.queryByTestId('aa-grouped-list')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('aa-clear-filters'));
+    await waitFor(() => expect(screen.getByTestId('aa-group-ms-tab')).toBeInTheDocument());
   });
 
   test('clicking a catalog row opens the slide-over with its sections', async () => {

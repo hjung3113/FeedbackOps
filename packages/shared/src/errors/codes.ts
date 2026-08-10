@@ -36,6 +36,8 @@ export const ERROR_CODES = [
   // immutable; distinct from `conflict.parent_archived` which rejects
   // because the referenced parent is archived).
   'conflict.record_archived',
+  // conflict.* → 409 (#143 saved view unique actor/surface/name constraint)
+  'conflict.saved_view_name_taken',
   // not_found.* → 404
   'not_found.record',
   // internal.* → 500

@@ -5,10 +5,10 @@
 // into the paginated tail. The server already enforces visibility per actor role,
 // so an empty array here for Reporter-only viewers is expected.
 
-import * as React from 'react';
-import type { ConversationEntry } from '@fops/shared';
-import { EmptyState, Button } from '@fops/ui';
 import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
+import type { ConversationEntry } from '@fops/shared';
+import { Button, EmptyState } from '@fops/ui';
+import type * as React from 'react';
 import { TimelineEntry } from './TimelineEntry';
 
 export interface TimelineProps {
@@ -25,8 +25,13 @@ export function InternalTimeline({
   actorNamesById,
 }: TimelineProps): React.ReactElement {
   const query = useVocConversation({ vocId, kind: 'internal_comment' });
-  const paginatedEntries: ConversationEntry[] =
-    query.data?.pages.flatMap((p) => p.items) ?? [];
+  const paginatedEntries: ConversationEntry[] = query.data?.pages.flatMap((p) => p.items) ?? [];
+  const seenIds = new Set<string>();
+  const entries = [...paginatedEntries, ...inline].filter((entry) => {
+    if (seenIds.has(entry.id)) return false;
+    seenIds.add(entry.id);
+    return true;
+  });
 
   const showLoadMore = hasMore || query.hasNextPage === true;
 
@@ -46,18 +51,10 @@ export function InternalTimeline({
         </div>
       )}
 
-      {paginatedEntries.map((entry) => (
-        <TimelineEntry
-          key={entry.id}
-          entry={entry}
-          actorDisplayName={actorNamesById?.get(entry.actor_id)}
-        />
-      ))}
-
-      {inline.length === 0 && paginatedEntries.length === 0 ? (
+      {entries.length === 0 ? (
         <EmptyState size="sm" title="아직 대화가 없습니다." />
       ) : (
-        inline.map((entry) => (
+        entries.map((entry) => (
           <TimelineEntry
             key={entry.id}
             entry={entry}

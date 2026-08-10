@@ -34,6 +34,45 @@ Detailed endpoint schemas may later move into OpenAPI, but this document remains
 - Rich content fields must reference inline images through attachment IDs, not base64 body data or external image URLs.
 ```
 
+## Navigation Count Contract
+
+`GET /nav/counts`
+
+- Authenticated, workspace-scoped read endpoint returning `{ counts: Record<string, integer> }`.
+- Optional `managed_system_id` is a UUID and narrows each emitted count through the same
+  predicate and resolved read scope as its backing list route. Invalid values return
+  `validation.failed` (422).
+- Currently emitted keys are `voc.inbox`, `voc.triage`, `voc.my`, `voc.tab.high`,
+  `voc.tab.unassigned`, `voc.tab.no-link`, `voc.clusters`, `findings.all`, and
+  `surveys.all`. The VOC keys use the shared VOC list predicate; the other keys
+  call their owning list read services. A key is absent only when it has no backing
+  list filter or when scope resolution returns the expected `permission.denied` or
+  `permission.scope_required` authorization outcome. An absent key is not zero and
+  may be permission-shaped; any unexpected failure propagates as an error response
+  rather than omitting the key.
+- `voc.tab.similar` is deliberately absent because that list tab has no backing query.
+- A key without a backing list filter is omitted rather than represented by a synthetic zero.
+- Read-only endpoint: no audit event, entity-link mutation, or dashboard queue side effect.
+
+## Dashboard Summary Contract
+
+`GET /dashboard/summary?managed_system_id=<uuid|all>` is an authenticated,
+workspace-scoped read returning KPI, action-queue, and coverage projections.
+`all` resolves to the caller's effective Managed System scope (workspace-wide
+only for an Admin). Each key is independently omitted when its backing read is
+unavailable or returns `permission.denied` / `permission.scope_required`. A
+permitted, empty backing result is present with zero; absence means the actor
+cannot receive that projection, not that its count is zero. The route writes no
+audit row or source record. `milestone-outcome` is absent until the MVP has a
+Milestone backing table and filter.
+
+`coverage.released-update` is **Released Task with public update**: its total
+is released Tasks in scope with at least one active `voc → task` `evidence_of`
+link to a non-archived VOC; its value is the subset with at least one linked
+VOC that has a non-skipped `voc.voc_public_updates` row. A skipped update is a
+recorded status transition without reporter-visible content and does not count
+as coverage.
+
 ## Standard Error Codes
 
 ```text
@@ -107,6 +146,10 @@ analytics_area_id optional
 source_context optional enum: direct_use | proxy_report | operational_discovery | stakeholder_request
 attachments optional attachment references
 ```
+
+`title` must contain at least one character after trimming; the trimmed value is
+stored. `description_rich_content` must contain non-whitespace content. Either
+required-value violation returns `422 validation.failed`.
 
 `POST /vocs` must not accept:
 
@@ -403,6 +446,9 @@ API-provided priority or `recommended_action_id`, not inferred by the frontend
 from score thresholds alone. Recommendation reasons must use domain-safe summary
 text and must not expose hidden response detail.
 
+Survey Results returns permission-filtered `next_actions`: `create_finding` is
+always present. `request_task` for Findings derived from Survey Responses is deferred to issue #239.
+
 `attach_evidence_to_existing_voc` may be returned only when eligible target VOCs
 exist in the actor's effective Managed System scope, the actor may see
 summary-visible VOC context, Survey evidence attachment is policy-allowed, and
@@ -539,7 +585,7 @@ events, and dashboard repair signals.
 | `POST /vocs/:id/request-task` | FOP-TASK-001 | VOC | Task Request | `requested_task` | task_request_created_from_voc | moves VOC follow-up to pending execution review | creating Task directly from VOC follow-up |
 | `POST /voc-clusters/:id/request-task` | FOP-TASK-001 | VOC Cluster | Task Request | `requested_task` | task_request_created_from_voc_cluster | moves cluster follow-up to pending execution review | creating Task directly from VOC Cluster follow-up |
 | `POST /findings/:id/request-task` | FOP-TASK-001 | Finding | Task Request | `requested_task` | task_request_created_from_finding | moves Finding to pending execution review | creating Task without review when review is required |
-| `POST /survey-findings/:id/request-task` | FOP-SURVEY-005 | Finding | Task Request | `requested_task` | task_request_created_from_survey_finding | moves survey-derived Finding to pending execution review | Survey Response creates VOC |
+| `POST /survey-findings/:id/request-task` | FOP-SURVEY-005 | Finding | Task Request | `requested_task` | task_request_created_from_survey_finding | moves survey-derived Finding to pending execution review | |
 | `POST /task-requests/:id/convert` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_created_from_request | satisfies approved execution candidate | folding conversion into approval |
 | `POST /task-requests/:id/link-task` | FOP-TASK-002 / FOP-TASK-003 | Task Request | Task | `converted_to` | task_linked_to_request | satisfies approved execution candidate with existing work | creating duplicate Task when suitable Task exists |
 | `POST /permission-requests/:id/approve` | FOP-PERM-002 | Permission Request | Permission Grant | none | permission_request_approved (미구현 as of Slice 6) | may restore blocked object visibility | bypassing explicit deny checks |
@@ -566,6 +612,7 @@ but execution has not started until the Task moves to Todo or Doing.
 ```text
 POST /vocs
 GET /vocs
+GET /vocs/pre-submit-peers?managed_system_id=<uuid>
 GET /vocs/:id
 GET /vocs/:id/conversation
 PATCH /vocs/:id
@@ -756,16 +803,84 @@ Slice 6. It is created only through source transition routes:
 POST /surveys
 GET /surveys
 GET /surveys/:id
+PATCH /surveys/:id
+POST /surveys/:id/questions
+PATCH /surveys/:id/questions/:question_id
+PATCH /surveys/:id/questions/reorder
+DELETE /surveys/:id/questions/:question_id
+POST /surveys/:id/open
+POST /surveys/:id/close
 GET /surveys/:id/form
 POST /surveys/:id/responses
 GET /surveys/:id/results
 POST /survey-responses/:id/evidence-excerpt-candidates
 POST /survey-responses/:id/approved-excerpts
+DELETE /survey-responses/:id/approved-excerpts/:approved_excerpt_id
 POST /survey-responses/:id/create-finding
-POST /survey-findings/:id/request-task
-POST /survey-findings/:id/link-task
+POST /survey-findings/:id/request-task (not implemented)
+POST /survey-findings/:id/link-task (not implemented)
 # future: POST /survey-findings/:id/link-milestone
 ```
+
+Current reachable Finding task paths are in the `/findings/:id` family.
+
+`POST /surveys` requires `survey.manage`, an `Idempotency-Key`, and mutation
+rate limiting. Its strict request body is `{ type: 'discovery' | 'validation' |
+'outcome', title, description?, primary_managed_system_id, analytics_area_id?,
+operator_actor_id?, responses_identity_protected }`. It returns `201` with the
+Survey DTO: `{ id, workspace_id, display_id, type, status, title, description,
+primary_managed_system_id, analytics_area_id, operator_actor_id,
+responses_identity_protected, created_by, opened_at, closed_at, created_at,
+updated_at }`.
+
+`GET /surveys` accepts the optional query
+`managed_system_id=<uuid>|all` and returns a permission-filtered array of the
+same Survey DTO (without `questions`).
+
+`PATCH /surveys/:id` requires `survey.manage`, an `Idempotency-Key`, and
+mutation rate limiting. Its strict, non-empty partial body permits only
+`type`, `title`, `description`, `primary_managed_system_id`,
+`analytics_area_id`, `operator_actor_id`, and
+`responses_identity_protected`; omitted fields retain their stored values.
+It is draft-only; an open or closed Survey returns `422 validation.failed` with
+`fields: [{ path: ['status'], code: 'not_draft' }]`. Missing or cross-workspace
+Surveys return `404 not_found.record`. Changing `primary_managed_system_id`
+checks `survey.manage` on both the current and target Managed System, so a
+caller cannot move a Survey into an unauthorized scope. A successful update
+returns `200` with the Survey DTO and writes `survey_updated` in the same
+transaction; audit detail is `{ survey_id }` only.
+Errors: `validation.failed`, `validation.malformed_idempotency_key`,
+`permission.denied`, `not_found.record`, `conflict.parent_archived`,
+`conflict.idempotency_key_reuse`, and `rate_limited.actor`.
+
+The three question commands require `survey.manage`, an `Idempotency-Key`, and
+mutation rate limiting; they are draft-only. They create, update, or delete a
+question at the listed Survey/question IDs.
+
+`PATCH /surveys/:id/questions/reorder` requires the same `survey.manage`,
+Idempotency-Key, mutation-rate-limit, and draft guard. Its strict body is
+`{ question_ids: uuid[] }`, containing every question ID for that Survey
+exactly once. Missing, duplicate, or foreign IDs return `422 validation.failed`
+without changing any order. The command locks the Survey and all of its
+questions, then atomically assigns dense `sort_order` values `0..n-1` in body
+order. It returns `200` with the Survey DTO including reordered questions and
+writes `survey_questions_reordered` in the same transaction with audit detail
+`{ survey_id }` only.
+Errors: `validation.failed`, `validation.malformed_idempotency_key`,
+`permission.denied`, `not_found.record`, `conflict.idempotency_key_reuse`, and
+`rate_limited.actor`.
+
+`POST /surveys/:id/open` and `POST /surveys/:id/close` require
+`survey.manage`, an `Idempotency-Key`, and mutation rate limiting. Both return
+`200` with the Survey DTO. Opening an already open Survey is an idempotent no-op
+that returns its current DTO. Opening is otherwise valid only from `draft`, and
+closing only from `open`; an invalid transition returns `422 validation.failed`
+with `fields: [{ path: ['status'], code: 'invalid_transition' }]`. Opening with
+zero questions returns `422 validation.failed` with
+`fields: [{ path: ['questions'], code: 'required' }]`, then validates the
+questions. A successful open/close updates the status and records respectively
+`survey_opened` (with `survey_id`, `display_id`, `question_count`) or
+`survey_closed` (with `survey_id`, `display_id`).
 
 `GET /surveys/:id/form` is the respondent form read surface. Any authenticated
 Actor in the same Workspace may read an open Survey without `survey.read`; a
@@ -789,19 +904,19 @@ choice mismatches, rating bounds, and trimmed text length.
 
 This read-only endpoint requires a session and matching workspace context. It first looks up the Survey by `(workspace_id, survey_id)`, then checks `survey.read` on the Survey's primary Managed System. A missing, cross-workspace, or denied Survey returns `404 not_found.record`; an explicit deny also returns 404 so the route does not disclose existence. Admin role may satisfy `survey.read` under the normal Survey authorization rule, but does not bypass the anonymity policy.
 
-`survey.read_personal_responses` is a separate explicit capability. Its holder receives exact aggregate counts, never personal response records, identities, response IDs, timestamps, raw text, or excerpts. Admin role alone never grants this capability. Open and closed Surveys return results; a draft Survey returns `409 conflict.survey_results_unavailable`.
+`survey.read_personal_responses` is a separate explicit capability. Its holder receives exact aggregate counts and approved result excerpts; result-excerpt items additionally carry `response_id` only behind this gate. Admin role alone never grants this capability. Open and closed Surveys return results; a draft Survey returns `409 conflict.survey_results_unavailable`.
 
 The query schema is a strict empty object. Result filters are deferred because responses do not retain immutable cohort dimensions and overlapping filtered cohorts would permit subtraction attacks. Future filters require stored cohort snapshots plus an explicit privacy policy.
 
-For a non-holder, a response cohort below five suppresses every question using `{ question_id, visibility: "suppressed", response_count: null, suppression: { code: "anonymity_threshold" } }`; zero through four responses are indistinguishable. At five or more responses, a choice or rating question is also fully suppressed when any positive exposed option or collapsed rating-band count is one through four. Text is suppressed when its answer count is one through four. Zero-count buckets do not trigger low-bucket suppression.
+For a non-holder, the resolved workspace `survey_anonymity_threshold` controls suppression (default `5` when no workspace-settings row exists). A response cohort below that threshold suppresses every question using `{ question_id, visibility: "suppressed", response_count: null, suppression: { code: "anonymity_threshold" } }`; zero through `threshold - 1` responses are indistinguishable. At or above the threshold, a choice or rating question is also fully suppressed when any positive exposed option or collapsed rating-band count is below it. Text is suppressed when its positive answer count is below it. Zero-count buckets do not trigger low-bucket suppression.
 
-Visible choice results contain configured option `key`, `label`, and count plus the question answer count. Visible rating results contain only deterministic `low`, `mid`, and `high` counts derived from the configured rating domain; raw values and averages are not returned. Visible text results contain only `answer_count`, `distribution: null`, and active approved `excerpts: [{ id, text }]`. These safe redacted excerpts require only `survey.read`; they never include response IDs, respondent identity, approval metadata, or raw text. Question order follows the Survey configuration and `identity_protected` mirrors the Survey setting.
+Visible choice results contain configured option `key`, `label`, and count plus the question answer count. Visible rating results contain only deterministic `low`, `mid`, and `high` counts derived from the configured rating domain; raw values and averages are not returned. Visible text results contain only `answer_count`, `distribution: null`, and active approved `excerpts: [{ id, text }]`; holders of `survey.read_personal_responses` additionally receive excerpt `response_id`. Non-holders never receive that key. Question order follows the Survey configuration and `identity_protected` mirrors the Survey setting.
 
 #### Survey response evidence approval
 
-`POST /survey-responses/:id/evidence-excerpt-candidates` accepts `{ question_id }` and returns the one matching `{ question_id, question_label, raw_text }` candidate. `POST /survey-responses/:id/approved-excerpts` accepts `{ question_id, redacted_excerpt }` and creates an append-only approved excerpt, returning `{ approved_excerpt_id, question_id, redacted_excerpt }`. Both routes resolve the response through the Survey evidence definer, then require `survey.read` and explicit `survey.read_personal_responses`; missing response, cross-workspace response, denied source read, and denied personal read are all `404 not_found.record`. Admin never bypasses personal-response access. A fully authorized actor receives `409 conflict.survey_results_unavailable` for a draft Survey. Approval then requires `survey.manage`; only this post-readable failure is `403 permission.denied`.
+`POST /survey-responses/:id/evidence-excerpt-candidates` accepts `{ question_id }` and returns the one matching `{ question_id, question_label, raw_text }` candidate. `POST /survey-responses/:id/approved-excerpts` accepts `{ question_id, redacted_excerpt }` and creates an append-only approved excerpt, returning `{ approved_excerpt_id, question_id, redacted_excerpt }`. Both routes resolve the response through the Survey evidence definer, then require `survey.read` and explicit `survey.read_personal_responses`; missing response, cross-workspace response, denied source read, and denied personal read are all `404 not_found.record`. Admin never bypasses personal-response access. A fully authorized actor receives `409 conflict.survey_results_unavailable` for a draft Survey. Approval then requires `survey.manage`; only this post-readable failure is `403 permission.denied`. `DELETE /survey-responses/:id/approved-excerpts/:approved_excerpt_id` validates both path IDs, follows the same access order, and returns `{ approved_excerpt_id, question_id, redacted_excerpt }` after revoking the active row or reading back an already-revoked row; an approval belonging to another response is `422 validation.failed`.
 
-Candidate reads write `survey_response_personal_read` in the same transaction; approvals write `survey_response_excerpt_approved` in the same transaction as the approval row. Audit detail contains IDs only—never raw or redacted text. Duplicate approvals are intentional separate rows. Revoked approvals are omitted from results. These per-response commands do not make aggregate result `next_actions` executable, so that field remains `[]`.
+Candidate reads write `survey_response_personal_read` in the same transaction; approvals write `survey_response_excerpt_approved` in the same transaction as the approval row; first revocations write `survey_response_excerpt_revoked` in the same transaction as the `revoked_at` update. Audit detail contains IDs only—never raw or redacted text. Duplicate approvals are intentional separate rows. Revoked approvals are omitted from results. Aggregate result `next_actions` exposes permission-filtered `create_finding`.
 
 #### POST /survey-responses/:id/create-finding
 
@@ -811,7 +926,7 @@ The Finding has database provenance `source_type='survey_response'` and stores t
 
 Same actor/key/body/source replays the original Finding with no duplicate side effects; changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic survey-response highlight attachment remains deferred.
 
-`next_actions` remains `[]`; it is an aggregate-read field and does not expose the approved-excerpt/personal-response Finding command. This GET route takes no `Idempotency-Key` and writes no audit event. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
+Evidence-read projections never return response UUIDs, respondent identity, raw answer, or Survey title. Result-excerpt `response_id` is a distinct surface, returned only behind the `survey.read_personal_responses` gate. A holder result read whose payload includes `response_id` writes one `survey_response_personal_read` audit event per exposed response/question pair; a non-holder result read writes none. This GET route takes no `Idempotency-Key`. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
 
 ### Core / Managed System / Analytics Area
 
@@ -826,7 +941,30 @@ PATCH /analytics-areas/:id
 POST /analytics-areas/:id/archive
 GET /actors?workspace=current
 GET /actors/resolve?actor_ids=<csv-uuid>&team_ids=<csv-uuid>
+GET /workspace/settings
+PATCH /workspace/settings
 ```
+
+`GET /workspace/settings` and `PATCH /workspace/settings` (Slice 9 #195) are
+workspace-admin-only policy endpoints. Both require `workspace.admin`; a denied
+caller receives `permission.denied` → `403`. The resolved response is always:
+
+```json
+{
+  "permission_self_approval": "allowed | forbidden",
+  "survey_anonymity_threshold": 5
+}
+```
+
+When no `core.workspace_settings` row exists, GET returns the baseline defaults
+`{ "permission_self_approval": "allowed", "survey_anonymity_threshold": 5 }`.
+PATCH accepts a strict, non-empty partial of those two snake_case fields;
+`survey_anonymity_threshold` is an integer from 5 through 50. It creates and
+locks the workspace singleton in one transaction, updates only supplied
+effective changes, and returns the complete resolved settings. An effective
+no-op returns `200` without a mutation or audit event. Effective changes append
+`workspace_settings_updated` for subject `workspace/<workspace_id>` with only
+the changed `{ from, to }` entries in `detail.changes`.
 
 `GET /actors/resolve` (Slice 3 #87) — workspace-scoped bulk identity lookup for
 owner chips. Any session may read (low sensitivity, like `GET /actors`). Each id
@@ -844,6 +982,12 @@ lists yield empty arrays. Response:
 ### Permission
 
 ```text
+GET /me/permissions/scope?capability={capability}
+  -> 200 { scope: { kind: "all" } }
+  -> 200 { scope: { kind: "scoped", managed_system_ids: [uuid, ...] } }
+  -> 401 auth.session_invalid
+  -> 422 validation.unknown_capability
+
 POST /permission-requests
 GET /permission-requests          # admin-only workspace list (#87)
 GET /permission-requests/mine     # caller's open requests
@@ -851,6 +995,12 @@ POST /permission-requests/:id/approve   # 미구현 as of Slice 6 — permission
 POST /permission-requests/:id/reject    # 미구현 as of Slice 6 — permission request rejection workflow not started
 POST /permission-requests/:id/revoke    # 미구현 as of Slice 6 — permission grant/request revoke workflow not started
 ```
+
+`GET /me/permissions/scope` (Slice 11 #215) is the per-Managed-System bulk
+equivalent of `GET /me/permissions/check` and resolves in the same order, so
+membership in its result is identical to a point check on every Managed System.
+`all` is returned only when every Managed System is allowed; an active
+Managed-System-scoped deny forces `scoped` enumeration.
 
 `GET /permission-requests` (Slice 3 #87) — admin-only workspace-wide list of
 open (`pending` | `needs_more_info`) requests, plus a `count`. Guarded by the
@@ -900,6 +1050,15 @@ link. Only Finding-domain commands may write these tuples; the forthcoming
 relation.
 
 ### VOC Similarity Projection
+
+`GET /vocs/pre-submit-peers?managed_system_id=<uuid>` is an authenticated,
+read-only pre-submit peer query. It returns `200 { items: [{ id, display_id,
+title, created_at }] }`: at most three active, authorized VOCs in the session
+workspace and requested primary Managed System, ordered `created_at DESC, id
+DESC`. `managed_system_id` is required and must be a UUID (`422
+validation.failed`); a nonexistent or unreadable Managed System and no peers
+are normal `200 { items: [] }` results. It uses the per-actor read rate-limit
+tier and must not expose embedding availability, scores, totals, or counts.
 
 `GET /vocs` returns a real `similar_count` for each list item. `GET /vocs/:id`
 returns that same sole total plus `similar: { items }`; items are capped at

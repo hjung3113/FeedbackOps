@@ -1,13 +1,19 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-const { useSurvey, useSurveys, useSurveyManageGate } = vi.hoisted(() => ({
-  useSurvey: vi.fn(),
-  useSurveys: vi.fn(),
-  useSurveyManageGate: vi.fn(),
-}));
+const { useCloseSurvey, useOpenSurvey, useSurvey, useSurveys, useSurveyManageGate } = vi.hoisted(
+  () => ({
+    useCloseSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+    useOpenSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+    useSurvey: vi.fn(),
+    useSurveys: vi.fn(),
+    useSurveyManageGate: vi.fn(),
+  }),
+);
 
 vi.mock('@/features/surveys/hooks/useSurveys', () => ({
+  useCloseSurvey,
+  useOpenSurvey,
   useSurvey,
   useSurveys,
 }));

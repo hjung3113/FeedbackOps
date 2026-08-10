@@ -118,7 +118,7 @@ Common Survey follow-up action ids:
 ```text
 - add_evidence_highlight
 - create_finding
-- link_finding
+- link_finding (deferred out of MVP scope; ADR-0037)
 - request_task
 - attach_evidence_to_existing_voc
 - mark_no_follow_up
@@ -180,7 +180,7 @@ UX rules:
 
 ```text
 - Survey Result and Survey Response surfaces must not show Create VOC.
-- Allowed follow-up actions are Create Finding, Link Finding, Request Task, Add Evidence Highlight, and optional Attach to Existing VOC.
+- Allowed follow-up actions are Create Finding, Link Finding (deferred out of MVP scope; ADR-0037), Request Task, Add Evidence Highlight, and optional Attach to Existing VOC.
 - Attach to Existing VOC uses action id `attach_evidence_to_existing_voc` and links survey evidence to an already existing VOC; it must not create a new VOC.
 - Do not label this action Create VOC, Convert to VOC, Generate VOC from Response, or Link Existing VOC.
 - Survey-derived Request Task follows the Task Request flow and review boundary.

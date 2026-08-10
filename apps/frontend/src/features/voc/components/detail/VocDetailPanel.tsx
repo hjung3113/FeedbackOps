@@ -1,10 +1,11 @@
 // VocDetailPanel — orchestrator for the read-only VOC detail panel (Slice 3 #20 C8).
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
+import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
 import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
+import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
-import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
@@ -25,7 +26,6 @@ import { toast } from 'sonner';
 import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
 import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
 import { ComposerSection } from './ComposerSection';
-import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
 import { ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
 import { DetailHeader } from './DetailHeader';
@@ -34,6 +34,7 @@ import { IdentityMetadataStrip, IdentitySection } from './IdentitySection';
 import { LinkedEntityTrailSection } from './LinkedEntityTrailSection';
 import { LinkedExecutionSection } from './LinkedExecutionSection';
 import { NextActionFooter } from './NextActionFooter';
+import { PublicUpdateReviewModal } from './PublicUpdateReviewModal';
 import { SimilarVocSection, hasSimilarVocSection } from './SimilarVocSection';
 import { TriageBlock } from './TriageBlock';
 
@@ -41,6 +42,8 @@ import { TriageBlock } from './TriageBlock';
 
 export interface VocDetailPanelProps {
   vocId: string;
+  /** Current Managed System URL scope; an out-of-scope cached selection closes. */
+  managedSystemId?: string;
   /** Called when user closes the panel via X button or 404 selection clear. */
   onClose: () => void;
   /** Optional fullscreen toggle handler from useFullscreenPanel (#18). */
@@ -86,11 +89,24 @@ function DetailPanelSkeleton(): React.ReactElement {
 
 export function VocDetailPanel({
   vocId,
+  managedSystemId,
   onClose,
   onExpandToggle,
-}: VocDetailPanelProps): React.ReactElement {
+  // `null` while the scope-exit effect clears `selected`: rendering the old
+  // record for that tick is the bug this panel is closing over.
+}: VocDetailPanelProps): React.ReactElement | null {
   const { data, isLoading, isError, error } = useVocDetail(vocId);
   const { data: me } = useMe();
+  const selectedScopeExcludesVoc =
+    managedSystemId !== undefined &&
+    !isLoading &&
+    !isError &&
+    data !== undefined &&
+    data.primary_managed_system_id !== managedSystemId;
+
+  React.useEffect(() => {
+    if (selectedScopeExcludesVoc) onClose();
+  }, [onClose, selectedScopeExcludesVoc]);
 
   // 1. Loading
   if (isLoading) {
@@ -121,6 +137,10 @@ export function VocDetailPanel({
     return <DetailPanelNotFound onClearSelection={onClose} />;
   }
 
+  if (selectedScopeExcludesVoc) {
+    return null;
+  }
+
   // 3. Summary envelope — permission blocked
   if (isSummaryEnvelope(data)) {
     return (
@@ -146,6 +166,7 @@ export function VocDetailPanel({
       voc={voc}
       vocId={vocId}
       onClose={onClose}
+      {...(managedSystemId !== undefined ? { managedSystemId } : {})}
       {...(onExpandToggle !== undefined ? { onExpandToggle } : {})}
       isReporterOnOwnVoc={isReporterOnOwnVoc}
       canRenderAllowedTask={canRenderAllowedTask}
@@ -159,6 +180,7 @@ export function VocDetailPanel({
 interface FullDetailViewProps {
   voc: VocDetailEnvelope;
   vocId: string;
+  managedSystemId?: string;
   onClose: () => void;
   onExpandToggle?: () => void;
   isReporterOnOwnVoc: boolean;
@@ -183,6 +205,7 @@ const STATIC_DETAIL_SECTIONS = [
 function FullDetailView({
   voc,
   vocId,
+  managedSystemId,
   onClose,
   onExpandToggle,
   isReporterOnOwnVoc,
@@ -196,6 +219,11 @@ function FullDetailView({
   const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
   const [reviewOpen, setReviewOpen] = React.useState(false);
   const navigate = useNavigate();
+  const capCheck = usePermissionCheck({
+    capability: 'voc.triage',
+    ...(managedSystemId !== undefined ? { managedSystemId } : {}),
+  });
+  const canTriage = capCheck.data?.state === 'approved';
   const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =
     useIdempotencyKey();
   // Scroll container ref for section nav anchor tracking
@@ -243,13 +271,16 @@ function FullDetailView({
   const pendingReviewCount = reviewCandidates.data?.items.length ?? 0;
   const canRequestTask = canCreateFinding;
   const showsSimilarVocSection = hasSimilarVocSection(voc.similar, voc.similar_count);
-  const detailSections = showsSimilarVocSection
-    ? [
-        ...STATIC_DETAIL_SECTIONS.slice(0, 4),
-        { id: 'similar', label: 'Similar' },
-        ...STATIC_DETAIL_SECTIONS.slice(4),
-      ]
-    : STATIC_DETAIL_SECTIONS;
+  const isReporterArm = voc.similar === undefined || voc.similar_count === undefined;
+  const detailSections = isReporterArm
+    ? STATIC_DETAIL_SECTIONS.filter((section) => section.id !== 'triage')
+    : showsSimilarVocSection
+      ? [
+          ...STATIC_DETAIL_SECTIONS.slice(0, 4),
+          { id: 'similar', label: 'Similar' },
+          ...STATIC_DETAIL_SECTIONS.slice(4),
+        ]
+      : STATIC_DETAIL_SECTIONS;
 
   const requestTaskMutation = useRequestTaskFromVoc({
     vocId,
@@ -290,6 +321,15 @@ function FullDetailView({
     });
   }
 
+  function handleOpenTriage(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void navigate({
+      to: '/vocs',
+      // biome-ignore lint/suspicious/noExplicitAny: TanStack search updater is untyped at this call site (same idiom as TriageRoute.tsx:73)
+      search: (prev: any) => ({ ...prev, view: 'triage', selected: vocId }) as any,
+    });
+  }
+
   return (
     <>
       <div className="flex flex-col h-full" data-testid="voc-detail-panel">
@@ -313,19 +353,23 @@ function FullDetailView({
               reporterDisplayName={actorNamesById.get(voc.reporter_id) ?? me?.actor.display_name}
             />
           </div>
-          <div data-anchor="triage">
-            <TriageBlock
-              voc={voc}
-              ownerDisplayName={
-                voc.owner_user_id !== null ? (actorNamesById.get(voc.owner_user_id) ?? null) : null
-              }
-              analyticsAreaName={
-                voc.analytics_area_id !== null
-                  ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
-                  : null
-              }
-            />
-          </div>
+          {!isReporterArm && (
+            <div data-anchor="triage">
+              <TriageBlock
+                voc={voc}
+                ownerDisplayName={
+                  voc.owner_user_id != null ? (actorNamesById.get(voc.owner_user_id) ?? null) : null
+                }
+                analyticsAreaName={
+                  voc.analytics_area_id != null
+                    ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
+                    : null
+                }
+                canTriage={canTriage}
+                onOpenTriage={handleOpenTriage}
+              />
+            </div>
+          )}
           <div data-anchor="description">
             <DescriptionSection voc={voc} isReporterOnOwnVoc={isReporterOnOwnVoc} />
             {/* Relocated metadata strip — severity/managed-system/AA/source-context
@@ -333,7 +377,7 @@ function FullDetailView({
             <IdentityMetadataStrip
               voc={voc}
               analyticsAreaName={
-                voc.analytics_area_id !== null
+                voc.analytics_area_id != null
                   ? (analyticsAreasById.get(voc.analytics_area_id) ?? null)
                   : null
               }
@@ -380,7 +424,7 @@ function FullDetailView({
                   data-testid="public-update-review-button"
                 >
                   리뷰{' '}
-                  <span className="ml-1 rounded-full bg-surface-muted px-1.5 py-0.5 text-xs">
+                  <span className="ml-1 rounded-full bg-surface-row-hover px-1.5 py-0.5 text-xs">
                     {pendingReviewCount}
                   </span>
                 </Button>
@@ -418,6 +462,8 @@ function FullDetailView({
       />
       <CreateFindingModal
         vocId={vocId}
+        managedSystemId={voc.primary_managed_system_id}
+        sourceAnalyticsAreaId={voc.analytics_area_id ?? null}
         open={createFindingOpen}
         onClose={() => setCreateFindingOpen(false)}
       />
@@ -425,6 +471,7 @@ function FullDetailView({
         open={requestTaskOpen}
         evidenceSummaryDefault={`VOC ${voc.display_id}: ${voc.title}`}
         isSubmitting={requestTaskMutation.isPending}
+        source={{ type: 'voc', id: vocId }}
         onClose={closeRequestTaskModal}
         onSubmit={(values) => {
           requestTaskMutation.mutate(values, {

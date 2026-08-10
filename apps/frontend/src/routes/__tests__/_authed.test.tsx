@@ -89,8 +89,8 @@ describe('_authed beforeLoad', () => {
   });
 });
 
-describe('_authed sidebar entries', () => {
-  it('exposes shipped VOC cluster, Findings, and Tasks routes', () => {
+describe('_authed sidebar navigation tree', () => {
+  it('keeps every shipped destination reachable from exactly one rail tree', () => {
     const entries = SIDEBAR_ENTRIES.map(({ id, label, href, section }) => ({
       id,
       label,
@@ -113,8 +113,9 @@ describe('_authed sidebar entries', () => {
     );
     expect(entries).toEqual(
       expect.arrayContaining([
-        { id: 'findings', label: 'Findings', href: '/findings', section: 'VOC' },
+        { id: 'findings', label: 'All findings', href: '/findings', section: 'FINDINGS' },
       ]),
     );
   });
+
 });

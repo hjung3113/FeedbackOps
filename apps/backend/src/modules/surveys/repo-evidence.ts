@@ -67,6 +67,43 @@ export async function insertApprovedExcerpt(
   return row;
 }
 
+export async function revokeApprovedExcerpt(
+  tx: Tx,
+  input: { workspaceId: string; responseId: string; approvedExcerptId: string },
+): Promise<{
+  approved_excerpt_id: string;
+  question_id: string;
+  redacted_excerpt: string;
+  revoked_now: boolean;
+} | null> {
+  const result = await tx.execute<{
+    approved_excerpt_id: string;
+    question_id: string;
+    redacted_excerpt: string;
+    revoked_now: boolean;
+  }>(sql`
+    with revoked as (
+      update survey.survey_response_excerpt_approvals
+         set revoked_at = now()
+       where workspace_id = ${input.workspaceId}
+         and response_id = ${input.responseId}
+         and id = ${input.approvedExcerptId}
+         and revoked_at is null
+      returning id, question_id, redacted_excerpt
+    )
+    select id as approved_excerpt_id, question_id, redacted_excerpt, true as revoked_now
+      from revoked
+    union all
+    select a.id as approved_excerpt_id, a.question_id, a.redacted_excerpt, false as revoked_now
+      from survey.survey_response_excerpt_approvals a
+     where a.workspace_id = ${input.workspaceId}
+       and a.response_id = ${input.responseId}
+       and a.id = ${input.approvedExcerptId}
+       and not exists (select 1 from revoked)
+  `);
+  return result.rows[0] ?? null;
+}
+
 export async function readApprovedResultExcerpts(
   tx: Tx,
   workspaceId: string,
@@ -77,6 +114,56 @@ export async function readApprovedResultExcerpts(
     question_id: string;
     redacted_excerpt: string;
   }>(sql`select * from survey.read_approved_result_excerpts(${workspaceId}, ${surveyId})`);
+  return result.rows;
+}
+
+export async function readApprovedResultExcerptsPersonal(
+  tx: Tx,
+  workspaceId: string,
+  surveyId: string,
+): Promise<
+  Array<{
+    approved_excerpt_id: string;
+    question_id: string;
+    redacted_excerpt: string;
+    response_id: string;
+  }>
+> {
+  const result = await tx.execute<{
+    approved_excerpt_id: string;
+    question_id: string;
+    redacted_excerpt: string;
+    response_id: string;
+  }>(
+    sql`select * from survey.read_approved_result_excerpts_personal(${workspaceId}, ${surveyId})`,
+  );
+  return result.rows;
+}
+
+export async function listDerivedFindingsForResponses(
+  tx: Tx,
+  workspaceId: string,
+  responseIds: string[],
+): Promise<Array<{ finding_id: string; primary_managed_system_id: string }>> {
+  if (responseIds.length === 0) return [];
+  const ids = sql`ARRAY[${sql.join(
+    responseIds.map((id) => sql`${id}`),
+    sql`, `,
+  )}]::uuid[]`;
+  const result = await tx.execute<{ finding_id: string; primary_managed_system_id: string }>(sql`
+    select distinct f.id as finding_id, f.primary_managed_system_id
+      from core.entity_links el
+      join finding.findings f
+        on f.id = el.target_id
+       and f.workspace_id = el.workspace_id
+     where el.workspace_id = ${workspaceId}
+       and el.source_type = 'survey_response'
+       and el.target_type = 'finding'
+       and el.relation_type = 'generated_finding'
+       and el.status = 'active'
+       and el.source_id = any(${ids})
+     order by f.id
+  `);
   return result.rows;
 }
 

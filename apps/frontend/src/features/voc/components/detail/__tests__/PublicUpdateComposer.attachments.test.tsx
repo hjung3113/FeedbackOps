@@ -5,10 +5,10 @@
 //   - failed upload not included
 //   - Send disabled while uploading
 
-import * as React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // RichEditor stub so the composer mounts headlessly.
@@ -43,12 +43,15 @@ vi.mock('@/features/voc/hooks/useVocPublicUpdateMutation', () => ({
   useVocPublicUpdateMutation: vi.fn(),
 }));
 
-import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
-import { PublicUpdateComposer } from '../PublicUpdateComposer';
+import {
+  type PublicUpdateSuccess,
+  useVocPublicUpdateMutation,
+} from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import * as attachmentsApi from '@/lib/api/attachments';
 import { ApiError } from '@/lib/api/types';
-import type { VocDetailEnvelope } from '@fops/shared';
 import type { MeResponse } from '@/lib/auth/useMe';
+import { type VocDetailEnvelope, publicUpdateRequestSchema } from '@fops/shared';
+import { PublicUpdateComposer } from '../PublicUpdateComposer';
 
 const REPORTER_ID = '00000000-0000-0000-0000-000000000001';
 const ADMIN_ID = '00000000-0000-0000-0000-000000000002';
@@ -149,14 +152,13 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     vi.restoreAllMocks();
   });
 
-  it('upload → submit body includes attachment_ids[]', async () => {
+  it('AC-A1b AC-A1c submits the body-present discriminant without attachments and passes the schema', async () => {
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
     const mutateMock = vi.fn();
-    vi.mocked(useVocPublicUpdateMutation).mockReturnValue(
-      { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<
-        typeof useVocPublicUpdateMutation
-      >,
-    );
+    vi.mocked(useVocPublicUpdateMutation).mockReturnValue({
+      ...DEFAULT_MUTATION,
+      mutate: mutateMock,
+    } as unknown as ReturnType<typeof useVocPublicUpdateMutation>);
 
     render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
 
@@ -175,12 +177,24 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     await user.click(screen.getByRole('button', { name: 'Publish update' }));
 
     await waitFor(() => {
-      expect(mutateMock).toHaveBeenCalled();
+      expect(mutateMock).toHaveBeenCalledTimes(1);
     });
-    const calledVars = mutateMock.mock.calls[0]![0] as {
-      body: { attachment_ids: string[] };
+    const firstCall = mutateMock.mock.calls[0];
+    if (!firstCall) throw new Error('expected the public-update mutation to have been called');
+    const calledVars = firstCall[0] as {
+      body: Record<string, unknown>;
     };
-    expect(calledVars.body.attachment_ids).toEqual([ATTACHMENT.id]);
+    expect(calledVars.body).toEqual({
+      skip_public_update: false,
+      body_rich_content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }],
+      },
+      next_reporter_facing_status: 'received',
+      attachment_ids: [ATTACHMENT.id],
+    });
+    expect(calledVars.body).not.toHaveProperty('attachments');
+    expect(publicUpdateRequestSchema.safeParse(calledVars.body).success).toBe(true);
   });
 
   it('failed upload not included in POST body', async () => {
@@ -188,11 +202,10 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
       new ApiError(422, { code: 'attachment.unsupported_type', message: 'nope' }),
     );
     const mutateMock = vi.fn();
-    vi.mocked(useVocPublicUpdateMutation).mockReturnValue(
-      { ...DEFAULT_MUTATION, mutate: mutateMock } as unknown as ReturnType<
-        typeof useVocPublicUpdateMutation
-      >,
-    );
+    vi.mocked(useVocPublicUpdateMutation).mockReturnValue({
+      ...DEFAULT_MUTATION,
+      mutate: mutateMock,
+    } as unknown as ReturnType<typeof useVocPublicUpdateMutation>);
 
     render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
 
@@ -212,10 +225,210 @@ describe('<PublicUpdateComposer> attachments (PLAN-22 C7a)', () => {
     await waitFor(() => {
       expect(mutateMock).toHaveBeenCalled();
     });
-    const calledVars = mutateMock.mock.calls[0]![0] as {
+    const firstCall = mutateMock.mock.calls[0];
+    if (!firstCall) throw new Error('expected the public-update mutation to have been called');
+    const calledVars = firstCall[0] as {
       body: { attachment_ids: string[] };
     };
     expect(calledVars.body.attachment_ids).toEqual([]);
+  });
+
+  it('#354 clears linked attachments on publish success so the next submit sends none', async () => {
+    vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
+    const mutateMock = vi.fn();
+    let capturedOnSuccess: ((data: PublicUpdateSuccess) => void) | undefined;
+    vi.mocked(useVocPublicUpdateMutation).mockImplementation((args) => {
+      capturedOnSuccess = args?.onSuccess as ((data: PublicUpdateSuccess) => void) | undefined;
+      return {
+        ...DEFAULT_MUTATION,
+        mutate: mutateMock,
+      } as unknown as ReturnType<typeof useVocPublicUpdateMutation>;
+    });
+
+    render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId('rich-editor-public-update'));
+    await act(async () => {
+      pickFile(makeFile());
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
+    });
+    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+
+    // Server accepted the publish and linked the attachment.
+    await act(async () => {
+      capturedOnSuccess?.({
+        public_update: {
+          id: 'pu-1',
+          voc_id: BASE_VOC.id,
+          body_rich_content: null,
+          reporter_facing_status_before: 'received',
+          reporter_facing_status_after: 'received',
+          skip_public_update: false,
+          skip_reason: null,
+          created_at: '2026-05-01T00:01:00Z',
+        },
+        voc: BASE_VOC,
+      });
+    });
+
+    // The chip must be gone — the attachment now belongs to the published item.
+    expect(screen.queryByTestId('attachment-row')).not.toBeInTheDocument();
+
+    // Compose a second update and publish again.
+    await user.click(screen.getByTestId('rich-editor-public-update'));
+    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
+
+    const secondCall = mutateMock.mock.calls[1];
+    if (!secondCall) throw new Error('expected a second public-update mutation call');
+    const secondVars = secondCall[0] as { body: { attachment_ids: string[] } };
+    expect(secondVars.body.attachment_ids).toEqual([]);
+  });
+
+  it('#354 reset keeps a still-uploading row — a file added while the post was in flight survives', async () => {
+    // First file resolves immediately; the second is left pending so it is
+    // mid-upload at the moment the publish succeeds.
+    let resolveSecond!: (v: typeof ATTACHMENT) => void;
+    const SECOND = { ...ATTACHMENT, id: 'aaaa1111-0000-4000-8000-000000000002' };
+    vi.spyOn(attachmentsApi, 'uploadAttachment')
+      .mockResolvedValueOnce(ATTACHMENT)
+      .mockReturnValueOnce(
+        new Promise((res) => {
+          resolveSecond = res;
+        }),
+      );
+
+    const mutateMock = vi.fn();
+    let capturedOnSuccess: ((data: PublicUpdateSuccess) => void) | undefined;
+    vi.mocked(useVocPublicUpdateMutation).mockImplementation((args) => {
+      capturedOnSuccess = args?.onSuccess as ((data: PublicUpdateSuccess) => void) | undefined;
+      return {
+        ...DEFAULT_MUTATION,
+        mutate: mutateMock,
+      } as unknown as ReturnType<typeof useVocPublicUpdateMutation>;
+    });
+
+    render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId('rich-editor-public-update'));
+    await act(async () => {
+      pickFile(makeFile('first.png'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
+    });
+    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+
+    // User attaches another file while the publish request is still in flight.
+    await act(async () => {
+      pickFile(makeFile('second.png'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId('attachment-row').map((r) => r.getAttribute('data-state')),
+      ).toEqual(['uploaded', 'uploading']);
+    });
+
+    await act(async () => {
+      capturedOnSuccess?.({
+        public_update: {
+          id: 'pu-1',
+          voc_id: BASE_VOC.id,
+          body_rich_content: null,
+          reporter_facing_status_before: 'received',
+          reporter_facing_status_after: 'received',
+          skip_public_update: false,
+          skip_reason: null,
+          created_at: '2026-05-01T00:01:00Z',
+        },
+        voc: BASE_VOC,
+      });
+    });
+
+    // The linked row is gone; the in-flight one is untouched.
+    const rowsAfterReset = screen.getAllByTestId('attachment-row');
+    expect(rowsAfterReset).toHaveLength(1);
+    expect(rowsAfterReset[0]?.getAttribute('data-state')).toBe('uploading');
+
+    // It finishes normally and is carried by the next submit.
+    await act(async () => {
+      resolveSecond(SECOND);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('attachment-row').getAttribute('data-state')).toBe('uploaded');
+    });
+
+    await user.click(screen.getByTestId('rich-editor-public-update'));
+    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(2));
+    const secondCall = mutateMock.mock.calls[1];
+    if (!secondCall) throw new Error('expected a second public-update mutation call');
+    expect((secondCall[0] as { body: { attachment_ids: string[] } }).body.attachment_ids).toEqual([
+      SECOND.id,
+    ]);
+  });
+
+  it('#354 reset keeps a failed row so the user can still see and remove it', async () => {
+    vi.spyOn(attachmentsApi, 'uploadAttachment')
+      .mockResolvedValueOnce(ATTACHMENT)
+      .mockRejectedValueOnce(
+        new ApiError(422, { code: 'attachment.unsupported_type', message: 'nope' }),
+      );
+
+    const mutateMock = vi.fn();
+    let capturedOnSuccess: ((data: PublicUpdateSuccess) => void) | undefined;
+    vi.mocked(useVocPublicUpdateMutation).mockImplementation((args) => {
+      capturedOnSuccess = args?.onSuccess as ((data: PublicUpdateSuccess) => void) | undefined;
+      return {
+        ...DEFAULT_MUTATION,
+        mutate: mutateMock,
+      } as unknown as ReturnType<typeof useVocPublicUpdateMutation>;
+    });
+
+    render(<PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} />, { wrapper: wrap() });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId('rich-editor-public-update'));
+    await act(async () => {
+      pickFile(makeFile('ok.png'));
+    });
+    await act(async () => {
+      pickFile(makeFile('bad.zip', 'application/zip'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId('attachment-row').map((r) => r.getAttribute('data-state')),
+      ).toEqual(['uploaded', 'error']);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Publish update' }));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      capturedOnSuccess?.({
+        public_update: {
+          id: 'pu-1',
+          voc_id: BASE_VOC.id,
+          body_rich_content: null,
+          reporter_facing_status_before: 'received',
+          reporter_facing_status_after: 'received',
+          skip_public_update: false,
+          skip_reason: null,
+          created_at: '2026-05-01T00:01:00Z',
+        },
+        voc: BASE_VOC,
+      });
+    });
+
+    const rowsAfterReset = screen.getAllByTestId('attachment-row');
+    expect(rowsAfterReset).toHaveLength(1);
+    expect(rowsAfterReset[0]?.getAttribute('data-state')).toBe('error');
   });
 
   it('Publish disabled while any attachment is mid-upload', async () => {

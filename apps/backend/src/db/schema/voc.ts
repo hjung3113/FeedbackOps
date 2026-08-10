@@ -17,7 +17,9 @@ import {
   bigint,
   boolean,
   check,
+  customType,
   index,
+  integer,
   jsonb,
   pgSchema,
   primaryKey,
@@ -31,6 +33,14 @@ import { actors, analyticsAreas, entityLinks, managedSystems, teams, workspaces 
 import { tasks } from './task.js';
 
 export const vocSchema = pgSchema('voc');
+
+// pgvector is not a built-in Drizzle Postgres column type. Keep its database
+// representation narrow here; provider adapters own vector construction later.
+const vector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'vector';
+  },
+});
 
 // ─────────────────────────────────────────────────────────────────────────
 // voc.vocs — canonical VOC record.
@@ -106,6 +116,105 @@ export const vocs = vocSchema.table(
     ownerXor: check(
       'vocs_owner_xor',
       sql`${t.ownerUserId} IS NULL OR ${t.ownerTeamId} IS NULL`,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// voc.voc_embeddings — versioned pgvector rows (ADR-0034 D1/D2).
+// The vector is intentionally dimensionless: a model swap writes a new active
+// version, and storage must retain the prior model's dimensions during re-embed.
+// ─────────────────────────────────────────────────────────────────────────
+export const vocEmbeddings = vocSchema.table(
+  'voc_embeddings',
+  {
+    vocId: uuid('voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    embeddingVersion: integer('embedding_version').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    dimensions: integer('dimensions').notNull(),
+    embedding: vector('embedding').notNull(),
+    sourceHash: text('source_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    vocVersionPk: primaryKey({
+      name: 'voc_embeddings_voc_version_pk',
+      columns: [t.vocId, t.embeddingVersion],
+    }),
+    workspaceVersionIdx: index('voc_embeddings_workspace_version_idx').on(
+      t.workspaceId,
+      t.embeddingVersion,
+    ),
+    dimensionsPositive: check('voc_embeddings_dimensions_positive', sql`${t.dimensions} > 0`),
+    versionPositive: check('voc_embeddings_version_positive', sql`${t.embeddingVersion} > 0`),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// voc.voc_recommendation_decisions — the durable half of ADR-0034 D3.
+// Mirrors migration 0044. `suggested` has no row by design: D6 computes
+// recommendations on read, so only the two terminal states persist.
+// `cluster_id` deliberately carries no `.references()` here — the target lives
+// in the `voc_cluster` namespace, and voc-cluster.ts already imports this file
+// for its member FK, so a Drizzle-level reference would close an import cycle.
+// The foreign key itself is declared in the migration, which is what the
+// database enforces.
+// ─────────────────────────────────────────────────────────────────────────
+export const vocRecommendationDecisions = vocSchema.table(
+  'voc_recommendation_decisions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    sourceVocId: uuid('source_voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    candidateVocId: uuid('candidate_voc_id')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    embeddingVersion: integer('embedding_version').notNull(),
+    state: text('state').notNull(),
+    scopeKey: text('scope_key').notNull(),
+    clusterId: uuid('cluster_id'),
+    decidedBy: uuid('decided_by')
+      .notNull()
+      .references(() => actors.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pairScopeVersionUq: uniqueIndex('voc_recommendation_decisions_pair_scope_version_uq').on(
+      t.sourceVocId,
+      t.candidateVocId,
+      t.embeddingVersion,
+      t.scopeKey,
+    ),
+    sourceVersionIdx: index('voc_recommendation_decisions_source_version_idx').on(
+      t.sourceVocId,
+      t.embeddingVersion,
+    ),
+    stateEnum: check(
+      'voc_recommendation_decisions_state_check',
+      sql`${t.state} IN ('dismissed','confirmed')`,
+    ),
+    versionPositive: check(
+      'voc_recommendation_decisions_version_positive',
+      sql`${t.embeddingVersion} > 0`,
+    ),
+    distinctPair: check(
+      'voc_recommendation_decisions_distinct_pair',
+      sql`${t.sourceVocId} <> ${t.candidateVocId}`,
+    ),
+    clusterMatchesState: check(
+      'voc_recommendation_decisions_cluster_matches_state',
+      sql`(${t.state} = 'confirmed') = (${t.clusterId} IS NOT NULL)`,
     ),
   }),
 );

@@ -24,8 +24,11 @@ import {
   surveyQuestionDeletedDetailSchema,
   surveyQuestionUpdatedDetailSchema,
   surveyResponseExcerptApprovedDetailSchema,
+  surveyResponseExcerptRevokedDetailSchema,
   surveyResponsePersonalReadDetailSchema,
   surveyResponseSubmittedDetailSchema,
+  surveyQuestionsReorderedDetailSchema,
+  surveyUpdatedDetailSchema,
 } from '../audit/survey.js';
 import {
   internalCommentCreatedDetailSchema,
@@ -113,6 +116,8 @@ export const AUDIT_EVENT_TYPES = [
   'public_update_review_candidate_dismissed',
   // Slice 8 #191: Survey lifecycle and question structure events.
   'survey_created',
+  'survey_updated',
+  'survey_questions_reordered',
   'survey_question_created',
   'survey_question_updated',
   'survey_question_deleted',
@@ -122,7 +127,13 @@ export const AUDIT_EVENT_TYPES = [
   // Slice 8 #187: audited personal candidate read and approval lifecycle.
   'survey_response_personal_read',
   'survey_response_excerpt_approved',
+  'survey_response_excerpt_revoked',
   'finding_created_from_survey_response',
+  // Slice 9 #195: workspace-level policy singleton mutation.
+  'workspace_settings_updated',
+  // #168 step 4: embedding recommendation decisions (ADR-0034 D3).
+  'voc_recommendation_dismissed',
+  'voc_recommendation_confirmed',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
@@ -151,6 +162,13 @@ export const permissionApprovedDetailSchema = z
     requester_actor_id: z.string().uuid(),
     reason: z.string().min(1).nullable(),
     grant_id: z.string().uuid(),
+    self_approval: z
+      .object({
+        policy_citation: z.string().min(1),
+        peer_reviewer_absence: z.string().min(1),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type PermissionApprovedDetail = z.infer<typeof permissionApprovedDetailSchema>;
@@ -679,6 +697,64 @@ export const publicUpdateReviewCandidateDismissedDetailSchema = z
   })
   .strict();
 
+export const workspaceSettingsUpdatedDetailSchema = z
+  .object({
+    changes: z
+      .object({
+        permission_self_approval: z
+          .object({
+            from: z.enum(['allowed', 'forbidden']),
+            to: z.enum(['allowed', 'forbidden']),
+          })
+          .strict()
+          .optional(),
+        survey_anonymity_threshold: z
+          .object({ from: z.number().int().min(5).max(50), to: z.number().int().min(5).max(50) })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .refine((changes) => Object.keys(changes).length > 0, {
+        message: 'changes must include at least one field',
+      }),
+  })
+  .strict();
+export type WorkspaceSettingsUpdatedDetail = z.infer<typeof workspaceSettingsUpdatedDetailSchema>;
+
+// #168 step 4 — embedding recommendation decisions (ADR-0034 D3).
+//
+// `embedding_version` and `scope_key` are on the audit row, not just the
+// decision row: the whole point of D3's suppression rules is that a decision
+// is scoped, and an audit trail that omits the scope cannot answer "why did
+// this pair come back" after a version bump.
+export const vocRecommendationDismissedDetailSchema = z
+  .object({
+    source_voc_id: z.string().uuid(),
+    candidate_voc_id: z.string().uuid(),
+    embedding_version: z.number().int().positive(),
+    scope_key: z.string().min(1),
+  })
+  .strict();
+export type VocRecommendationDismissedDetail = z.infer<
+  typeof vocRecommendationDismissedDetailSchema
+>;
+
+export const vocRecommendationConfirmedDetailSchema = z
+  .object({
+    source_voc_id: z.string().uuid(),
+    candidate_voc_id: z.string().uuid(),
+    embedding_version: z.number().int().positive(),
+    scope_key: z.string().min(1),
+    voc_cluster_id: z.string().uuid(),
+    // Whether this confirmation created the cluster or joined an existing one.
+    cluster_created: z.boolean(),
+    primary_managed_system_id: z.string().uuid(),
+  })
+  .strict();
+export type VocRecommendationConfirmedDetail = z.infer<
+  typeof vocRecommendationConfirmedDetailSchema
+>;
+
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   permission_approved: permissionApprovedDetailSchema,
@@ -747,6 +823,8 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   public_update_review_candidate_dismissed: publicUpdateReviewCandidateDismissedDetailSchema,
   // Slice 8 #191: Survey lifecycle and question structure events.
   survey_created: surveyCreatedDetailSchema,
+  survey_updated: surveyUpdatedDetailSchema,
+  survey_questions_reordered: surveyQuestionsReorderedDetailSchema,
   survey_question_created: surveyQuestionCreatedDetailSchema,
   survey_question_updated: surveyQuestionUpdatedDetailSchema,
   survey_question_deleted: surveyQuestionDeletedDetailSchema,
@@ -755,5 +833,10 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   survey_response_submitted: surveyResponseSubmittedDetailSchema,
   survey_response_personal_read: surveyResponsePersonalReadDetailSchema,
   survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
+  survey_response_excerpt_revoked: surveyResponseExcerptRevokedDetailSchema,
   finding_created_from_survey_response: findingCreatedFromSurveyResponseDetailSchema,
+  workspace_settings_updated: workspaceSettingsUpdatedDetailSchema,
+  // #168 step 4.
+  voc_recommendation_dismissed: vocRecommendationDismissedDetailSchema,
+  voc_recommendation_confirmed: vocRecommendationConfirmedDetailSchema,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

@@ -17,3 +17,14 @@ if (typeof window !== 'undefined' && !window.scrollTo) {
 } else if (typeof window !== 'undefined') {
   window.scrollTo = (() => {}) as typeof window.scrollTo;
 }
+
+// jsdom doesn't implement Element.prototype.scrollIntoView. Radix Select
+// calls it on the selected item when its content mounts, and the throw
+// unmounts the whole tree — every query after that sees an empty body.
+// Real browsers (and the Playwright visual harness) have it.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    value: () => {},
+    writable: true,
+  });
+}

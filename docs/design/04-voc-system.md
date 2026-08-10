@@ -253,16 +253,29 @@ Acceptance Criteria:
 - Recommended matches can be dismissed.
 ```
 
-> **Implementation status (2026-07-15).** NOT satisfied. The shipped
-> "similar VOC" surface (#141, ADR-0031) is a same-Managed-System peer
-> heuristic — no embedding similarity, no dismissal state. A #127 ARCHITECT
-> audit at develop `68f121e` confirmed no embedding/vector infrastructure
-> exists. Full satisfaction of this requirement is tracked by epic **#168**;
-> ADR-0031 has been amended to re-assign it there (it previously pointed at
-> #127, which is a UI slice and does not deliver similarity infrastructure).
-> The second criterion is already honoured: #127 does not auto-cluster —
-> recommendations stay a separate resource requiring authorized confirmation
-> (#127 decision D1).
+> **Implementation status (2026-07-27).** The ADR-0034 mechanism is now
+> shipped: pgvector-backed, versioned embeddings; a recommendation resource
+> with directional dismissal; and explicit confirmation that creates or joins
+> a cluster without auto-clustering. Its HTTP surface is `GET
+> /vocs/:id/recommendations`, `POST
+> /vocs/:id/recommendations/:candidate_id/dismiss`, and `POST
+> /vocs/:id/recommendations/:candidate_id/confirm`. ADR-0031's same-Managed-
+> System heuristic remains alongside this resource when recommendations are
+> unavailable.
+>
+> A user-facing surface now exists as well: the triage panel's Cluster 추천
+> section renders per-candidate recommendations with confirm and dismiss
+> actions, so all three acceptance criteria above are reachable by a user and
+> not only through the API.
+>
+> The 0.75 similarity threshold is still unvalidated against real embeddings.
+> The shipped fixture verifies query and threshold mechanics, not recommendation
+> quality, so this requirement's quality is not yet demonstrated.
+>
+> **Implementation status (2026-08-04).** The VOC create screen's pre-submit
+> panel is a separate ADR-0031 same-Managed-System heuristic peer read. It is
+> distinct from the saved-VOC embedding recommendation resource and has no
+> embedding availability, score, dismiss, or confirm state.
 
 ### FR-VOC-005: Public Update
 

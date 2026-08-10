@@ -90,6 +90,40 @@ describe('<AttachmentDropzone> (C6 active upload)', () => {
     });
   });
 
+  it('selects two files at once and emits both uploaded server ids', async () => {
+    const firstAttachment = { ...FAKE_ATTACHMENT, id: '00000000-0000-4000-8000-000000000002' };
+    const secondAttachment = { ...FAKE_ATTACHMENT, id: '00000000-0000-4000-8000-000000000003' };
+    const spy = vi
+      .spyOn(attachmentsApi, 'uploadAttachment')
+      .mockResolvedValueOnce(firstAttachment)
+      .mockResolvedValueOnce(secondAttachment);
+    const onChange = vi.fn();
+    const { container } = render(<AttachmentDropzone onChange={onChange} testId="dz" />);
+
+    await act(async () => {
+      fireFilePick(container, [
+        makeFile('first.png', 'image/png', 1024),
+        makeFile('second.pdf', 'application/pdf', 2048),
+      ]);
+    });
+
+    // Name-bearing assertions come before the count assertions on purpose: a
+    // count that fires first only says "not two", while these name which file
+    // went missing.
+    await waitFor(() => {
+      expect(screen.getByText('first.png')).toBeInTheDocument();
+      expect(screen.getByText('second.pdf')).toBeInTheDocument();
+      expect(screen.getAllByTestId('attachment-row')).toHaveLength(2);
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      const ids = onChange.mock.calls.at(-1)?.[0] as string[] | undefined;
+      expect(ids).toContain(firstAttachment.id);
+      expect(ids).toContain(secondAttachment.id);
+      expect(ids).toHaveLength(2);
+    });
+  });
+
   it('26MB file → row shows attachment.too_large copy and is NOT in attachment_ids[]', async () => {
     const spy = vi.spyOn(attachmentsApi, 'uploadAttachment');
     const onChange = vi.fn();

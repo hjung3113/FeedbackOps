@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isTipTapDocBlank } from './rich-content.js';
+
 export const SOURCE_CONTEXTS = [
   'direct_use',
   'proxy_report',
@@ -56,8 +58,13 @@ export type ForbiddenCreateField = (typeof FORBIDDEN_CREATE_FIELDS)[number];
 
 export const createVocRequestSchema = z.object({
   primary_managed_system_id: z.string().uuid(),
-  title: z.string().min(1).max(200),
-  description_rich_content: tipTapDocSchema,
+  title: z.string().trim().min(1).max(200),
+  // Korean because `VocCreateScreen` renders this message verbatim under the
+  // editor. The schema's other messages are still zod's English defaults —
+  // pre-existing, and not something this change should widen into.
+  description_rich_content: tipTapDocSchema.refine((doc) => !isTipTapDocBlank(doc), {
+    message: '상세 설명을 입력해 주세요.',
+  }),
   analytics_area_id: z.string().uuid().optional(),
   source_context: sourceContextSchema.default('direct_use'),
   attachment_ids: attachmentIdsSchema.optional(),
