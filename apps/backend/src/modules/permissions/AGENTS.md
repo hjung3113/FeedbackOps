@@ -11,6 +11,11 @@ Permission is not a generic shared utility package.
 - Permission errors must include requestable permission information only when safe.
 - Permission-limited content should expose approved summary contracts, not raw restricted data.
 - Frontend permission states are display hints only; backend decisions are authoritative.
+- A display hint must still agree with the route that enforces it. `checkCapability` answers for the
+  generic role layer only (`roleSatisfies`); domain modules that layer an admin-role bypass on top
+  declare it once in `CAPABILITY_META.adminModuleBypass` (`packages/shared/src/enums/capabilities.ts`),
+  and `GET /me/permissions/check` re-applies that declaration via `applyAdminModuleBypass`. Adding or
+  moving a module-level bypass without updating that declaration is the issue #372 defect.
 
 ## Cross-System Rules
 

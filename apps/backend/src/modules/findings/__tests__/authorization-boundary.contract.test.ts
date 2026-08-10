@@ -244,6 +244,8 @@ describe.skipIf(!runIntegration)(
         await grant(actorIds.userWithGrant!, "finding.read", managedSystemId);
         await grant(actorIds.userWithGrant!, "finding.manage", managedSystemId);
       }
+      const grantedBy = actorIds.admin;
+      if (!grantedBy) throw new Error("admin actor was not seeded");
       grantIds.push(
         await grantCapability(
           dbHandle,
@@ -251,7 +253,7 @@ describe.skipIf(!runIntegration)(
           actorIds.reporterWithGrant,
           "voc.read",
           ids.activeMs,
-          actorIds.admin,
+          grantedBy,
         ),
       );
       grantIds.push(
@@ -261,7 +263,7 @@ describe.skipIf(!runIntegration)(
           actorIds.reporterWithGrant,
           "finding.read",
           ids.activeMs,
-          actorIds.admin,
+          grantedBy,
         ),
       );
       await grant(

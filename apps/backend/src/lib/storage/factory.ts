@@ -14,18 +14,23 @@
 // `toString()` on the config object — see `redact()` and the
 // `Symbol.for('nodejs.util.inspect.custom')` hook below.
 
-import { S3CompatStorageBackend, type S3CompatConfig } from './s3-compat.js';
 import type { StorageBackend } from './index.js';
+import { type S3CompatConfig, S3CompatStorageBackend } from './s3-compat.js';
 
 const REDACTED = '***REDACTED***';
 
 export interface StorageEnv {
-  STORAGE_S3_ENDPOINT?: string;
-  STORAGE_S3_REGION?: string;
-  STORAGE_S3_BUCKET?: string;
-  STORAGE_S3_ACCESS_KEY_ID?: string;
-  STORAGE_S3_SECRET_ACCESS_KEY?: string;
-  STORAGE_S3_FORCE_PATH_STYLE?: string;
+  STORAGE_S3_ENDPOINT?: string | undefined;
+  STORAGE_S3_REGION?: string | undefined;
+  STORAGE_S3_BUCKET?: string | undefined;
+  STORAGE_S3_ACCESS_KEY_ID?: string | undefined;
+  STORAGE_S3_SECRET_ACCESS_KEY?: string | undefined;
+  STORAGE_S3_FORCE_PATH_STYLE?: string | undefined;
+  // An environment bag carries arbitrary other keys. Without this, every
+  // property is optional and TypeScript's weak-type check rejects
+  // `process.env` outright (TS2559) for sharing no declared property with
+  // this interface — which is exactly what `cli/storage-bootstrap.ts` passes.
+  [key: string]: string | undefined;
 }
 
 /** Pure env → config parser. Throws on missing required fields. Exported for tests. */
