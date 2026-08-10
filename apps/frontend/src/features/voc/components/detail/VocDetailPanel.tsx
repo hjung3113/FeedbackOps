@@ -1,8 +1,8 @@
 // VocDetailPanel — orchestrator for the read-only VOC detail panel (Slice 3 #20 C8).
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
-import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
@@ -325,6 +325,7 @@ function FullDetailView({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     void navigate({
       to: '/vocs',
+      // biome-ignore lint/suspicious/noExplicitAny: TanStack search updater is untyped at this call site (same idiom as TriageRoute.tsx:73)
       search: (prev: any) => ({ ...prev, view: 'triage', selected: vocId }) as any,
     });
   }

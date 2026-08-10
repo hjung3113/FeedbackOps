@@ -1,8 +1,8 @@
 // TriageBlock — read-only triage fields; edits happen in the triage console (#363).
 
-import * as React from 'react';
 import type { VocDetailEnvelope } from '@fops/shared';
-import { PanelSectionTitle, FieldRow, SeverityBadge, UserChip, Button } from '@fops/ui';
+import { Button, FieldRow, PanelSectionTitle, SeverityBadge, UserChip } from '@fops/ui';
+import type * as React from 'react';
 
 export interface TriageBlockProps {
   voc: VocDetailEnvelope;
