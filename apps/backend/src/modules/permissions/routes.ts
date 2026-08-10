@@ -18,6 +18,7 @@ import { HttpError, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
+import { applyAdminModuleBypass } from './check-service.js';
 import type { ActorContext, CheckService, Decision } from './check-service.js';
 import type { RequestService } from './request-service.js';
 import type { DecisionService } from './decision-service.js';
@@ -103,10 +104,18 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
         role_level: sess.role_level,
       };
 
-      const decision: Decision = await checkService.checkCapability(actor, capability, {
-        workspace_id: sess.workspace_id,
-        ...(q.managed_system_id !== undefined ? { managed_system_id: q.managed_system_id } : {}),
-      });
+      // The generic check answers for `roleSatisfies` only. Domain modules that
+      // layer their own admin bypass (Finding, Task Request, Survey) would let
+      // this actor through, so mirror that rule here — otherwise the frontend
+      // gate hides an action the enforcing route allows (issue #372).
+      const decision: Decision = applyAdminModuleBypass(
+        sess.role_level,
+        capability,
+        await checkService.checkCapability(actor, capability, {
+          workspace_id: sess.workspace_id,
+          ...(q.managed_system_id !== undefined ? { managed_system_id: q.managed_system_id } : {}),
+        }),
+      );
 
       // Look up the actor's currently-open request (pending|needs_more_info)
       // for this capability AND the same managed-system scope so the state

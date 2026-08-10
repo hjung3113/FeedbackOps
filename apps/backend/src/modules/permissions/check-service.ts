@@ -28,7 +28,7 @@
 
 import { and, eq, isNull } from 'drizzle-orm';
 
-import type { Capability } from '@fops/shared';
+import { type Capability, adminModuleBypassFor } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
@@ -276,6 +276,43 @@ export function createCheckService(deps: CheckServiceDeps) {
   }
 
   return { checkCapability, capabilityScope };
+}
+
+/**
+ * Mirror a domain module's admin-role bypass onto an advisory decision.
+ *
+ * `checkCapability` answers for the generic layer only: `roleSatisfies` covers
+ * the four role-derived Slice 1 capabilities and nothing else. Several domain
+ * modules layer their own admin bypass on top of it before enforcing — Finding
+ * point authorization, Task Request self-approval, and Survey read/manage. A
+ * caller that asks the generic service *about* one of those capabilities
+ * therefore gets a stricter answer than the enforcing route would give.
+ *
+ * That divergence is safe in the deny direction but wrong as a display hint:
+ * `GET /me/permissions/check` is what the frontend gates on, so an Admin was
+ * told they needed `survey.manage` while `POST /surveys` would have let them
+ * through (issue #372). This function re-applies the module's rule from the
+ * single declaration in `CAPABILITY_META.adminModuleBypass`.
+ *
+ * It is deliberately advisory-only: enforcement still happens in the domain
+ * modules, so this widens no permission wall. `workspace_mismatch` is never
+ * bypassed — a cross-workspace actor is not this workspace's Admin.
+ */
+export function applyAdminModuleBypass(
+  roleLevel: string,
+  capability: Capability,
+  decision: Decision,
+): Decision {
+  if (decision.allow || roleLevel !== 'admin') return decision;
+  if (decision.reason === 'workspace_mismatch') return decision;
+  switch (adminModuleBypassFor(capability)) {
+    case 'always':
+      return { allow: true, via: 'role' };
+    case 'unless_denied':
+      return decision.reason === 'explicit_deny' ? decision : { allow: true, via: 'role' };
+    case 'none':
+      return decision;
+  }
 }
 
 function roleSatisfies(roleLevel: string, capability: Capability): boolean {

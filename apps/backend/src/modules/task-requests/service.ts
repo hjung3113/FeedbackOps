@@ -128,6 +128,8 @@ async function hasSelfApprovalCapability(
   managedSystemId: string,
   options: Parameters<TaskRequestsServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
+  // Declared as `adminModuleBypass: 'always'` in `CAPABILITY_META` — change
+  // both together or the advisory check route drifts from here (issue #372).
   if (actor.role_level === 'admin') return true;
   const decision = await deps.checkService.checkCapability(
     actor,
