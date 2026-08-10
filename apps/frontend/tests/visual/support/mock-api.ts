@@ -548,7 +548,7 @@ export async function installMockApi(
         scenario === 'error' ? 500 : 200,
         scenario === 'error'
           ? errorEnvelope(500)
-          : scenario === 'empty'
+          : scenario === 'empty' || scenario === 'empty-no-permission'
             ? []
             : [surveyVisualFixtureSchema.parse(fixture)],
       );

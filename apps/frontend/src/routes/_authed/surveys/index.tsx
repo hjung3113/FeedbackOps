@@ -48,6 +48,9 @@ export function SurveysIndexRoute() {
             selectedId={selectedId}
             onSelect={setSelectedId}
             canCreate={gate.canManage}
+            {...(gate.permissionState !== undefined
+              ? { permissionState: gate.permissionState }
+              : {})}
             onCreate={() => setCreateOpen(true)}
           />
         }

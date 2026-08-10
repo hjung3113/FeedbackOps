@@ -8,7 +8,7 @@ test.describe('/surveys visual harness', () => {
     test(`renders ${scenario}`, async ({ page }) => {
       await installMockApi(page, {
         surveyScenario: scenario,
-        role: scenario === 'no-permission' ? 'user' : 'admin',
+        role: scenario === 'no-permission' || scenario === 'empty-no-permission' ? 'user' : 'admin',
       });
       const isBuilder = ['builder', 'builder-dirty', 'builder-drag-over'].includes(scenario);
       const url =
@@ -48,9 +48,11 @@ test.describe('/surveys visual harness', () => {
           ? page.getByRole('dialog')
           : scenario === 'detail'
             ? page.getByTestId('survey-detail')
-            : scenario === 'error'
-              ? page.getByTestId('survey-list-error')
-              : page.getByTestId('survey-list');
+            : scenario === 'empty-no-permission'
+              ? page.getByTestId('survey-list')
+              : scenario === 'error'
+                ? page.getByTestId('survey-list-error')
+                : page.getByTestId('survey-list');
       await expect(target).toBeVisible();
       await expectVisual(page, target, `surveys-${scenario}.png`);
     });
