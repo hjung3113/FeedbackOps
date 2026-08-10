@@ -360,9 +360,15 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
           }
 
           const canManage = (
-            await checkFindingManage(deps.checkService, args.actor, voc.primaryManagedSystemId, { requireElevatedRole: true }, {
-              tx,
-            })
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              voc.primaryManagedSystemId,
+              { requireElevatedRole: true },
+              {
+                tx,
+              },
+            )
           ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
@@ -459,7 +465,9 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
     const items: TaskRequestDto[] = [];
     for (const row of rows) {
       const canManage = (
-        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, { requireElevatedRole: true })
+        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+          requireElevatedRole: true,
+        })
       ).allow;
       if (!canManage) continue;
       items.push(taskRequestToDto(row, await sourceLinkForTaskRequest(row)));

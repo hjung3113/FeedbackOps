@@ -58,10 +58,10 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
     await dbHandle.pool.query(
       `delete from core.sessions where created_user_agent_summary = 'integration-test'`,
     );
-    await dbHandle.pool.query(`delete from core.rate_limits`);
+    await dbHandle.pool.query('delete from core.rate_limits');
     // Earlier suites may have left pending permission_requests rows that
     // flip this suite's `request_access` expectation to `pending_request`.
-    await dbHandle.pool.query(`delete from permission.permission_requests`);
+    await dbHandle.pool.query('delete from permission.permission_requests');
   });
 
   it('admin + workspace.admin → state=approved', async () => {
@@ -184,7 +184,7 @@ describe.skipIf(!runIntegration)('GET /me/permissions/check', () => {
 
   async function anyManagedSystemId(): Promise<string> {
     const rows = await dbHandle.pool.query<{ id: string }>(
-      `select id from core.managed_systems where workspace_id = $1 and archived_at is null limit 1`,
+      'select id from core.managed_systems where workspace_id = $1 and archived_at is null limit 1',
       [WORKSPACE_ID],
     );
     const id = rows.rows[0]?.id;

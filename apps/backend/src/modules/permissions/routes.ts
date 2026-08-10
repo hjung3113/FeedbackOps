@@ -7,12 +7,12 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import {
+  type Capability,
   approvePermissionRequestSchema,
   denyPermissionRequestSchema,
+  isCapability,
   needMoreInfoPermissionRequestSchema,
   rejectPermissionRequestSchema,
-  type Capability,
-  isCapability,
 } from '@fops/shared';
 import { HttpError, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
@@ -20,8 +20,8 @@ import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import { applyAdminModuleBypass } from './check-service.js';
 import type { ActorContext, CheckService, Decision } from './check-service.js';
-import type { RequestService } from './request-service.js';
 import type { DecisionService } from './decision-service.js';
+import type { RequestService } from './request-service.js';
 import { type FrontendState, toFrontendState } from './state-mapper.js';
 
 // Export the exact parser used by the approve route so its shared-contract
@@ -144,19 +144,12 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     schema: { querystring: z.object({ capability: z.string().min(1) }) },
     handler: async (req, reply) => {
       const sess = req.session;
-      if (!sess)
-        throw new HttpError(
-          'internal.unexpected',
-          'session missing after middleware',
-        );
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
       const q = req.query as { capability: string };
       if (!isCapability(q.capability)) {
-        return sendError(
-          reply,
-          'validation.unknown_capability',
-          'unknown capability',
-          { capability: q.capability },
-        );
+        return sendError(reply, 'validation.unknown_capability', 'unknown capability', {
+          capability: q.capability,
+        });
       }
       const scope = await checkService.capabilityScope(
         {
@@ -230,7 +223,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
     method: 'GET',
     url: '/permission-requests/mine',
     preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    handler: async (req, reply) => {
+    handler: async (req) => {
       const sess = req.session;
       if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
 
