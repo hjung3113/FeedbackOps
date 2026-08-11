@@ -1,3 +1,4 @@
+import { mintIdempotencyKey } from './idempotency';
 import { ApiError, type ApiErrorEnvelope, type RateLimitInfo } from './types';
 
 export interface ApiClientOptions {
@@ -43,7 +44,7 @@ export async function apiClient<T = unknown>(
   }
 
   if (MUTATION_METHODS.has(upper)) {
-    headers['Idempotency-Key'] = opts.idempotencyKey ?? mintInlineKey();
+    headers['Idempotency-Key'] = opts.idempotencyKey ?? mintIdempotencyKey();
   }
   if (opts.ifMatch) headers['If-Match'] = opts.ifMatch;
   if (opts.ifNoneMatch) headers['If-None-Match'] = opts.ifNoneMatch;
@@ -89,10 +90,6 @@ export async function apiClient<T = unknown>(
   return base;
 }
 
-function mintInlineKey(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
 
 // Parses fastify @fastify/rate-limit response headers.
 // `x-ratelimit-reset` is unix epoch seconds; `retry-after` is delta-seconds.
