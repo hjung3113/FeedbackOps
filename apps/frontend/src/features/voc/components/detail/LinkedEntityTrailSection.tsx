@@ -1,4 +1,3 @@
-import * as React from 'react';
 import type { EntityLinkDto, TaskReporterSummary } from '@fops/shared';
 import {
   LinkedEntityTrail,
@@ -6,6 +5,7 @@ import {
   PanelSectionTitle,
   PermissionBlockedPanel,
 } from '@fops/ui';
+import type * as React from 'react';
 
 export interface LinkedEntityTrailSectionProps {
   /** Backend-decided link DTOs included with the VOC detail read model. */

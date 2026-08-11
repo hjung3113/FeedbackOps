@@ -1,7 +1,7 @@
+import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { getTask, listTasks } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';
-import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import type { TaskDetailDto, TaskDto } from '@fops/shared';
 import {
   Button,
@@ -14,16 +14,16 @@ import {
   ListShell,
   ManagedSystemPill,
   ObjectRow,
+  type ObjectRowSeverity,
   OutlineBadge,
+  type PanelSection,
   PanelSectionTitle,
   PanelTitleBlock,
   PermissionBlockedPanel,
   SeverityBadge,
-  type ObjectRowSeverity,
-  type PanelSection,
 } from '@fops/ui';
-import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
 
@@ -89,7 +89,14 @@ export function TaskDetailPanel({
     return <div className="p-4 text-sm text-text-muted">Loading Task...</div>;
   }
   if (isPermissionDenied(taskQuery.error)) {
-    return <PermissionBlockedPanel state="denied" category="Task detail" reason={taskQuery.error.message} className="m-4" />;
+    return (
+      <PermissionBlockedPanel
+        state="denied"
+        category="Task detail"
+        reason={taskQuery.error.message}
+        className="m-4"
+      />
+    );
   }
   if (taskQuery.error || !taskQuery.data) {
     return <div className="p-4 text-sm text-accent-danger">Task detail unavailable.</div>;
@@ -145,7 +152,9 @@ export function TaskDetailPanel({
               <span className="text-accent-danger">Unassigned</span>
             )}
           </FieldRow>
-          <FieldRow label="Due">{task.due_date ?? <span className="text-text-muted">-</span>}</FieldRow>
+          <FieldRow label="Due">
+            {task.due_date ?? <span className="text-text-muted">-</span>}
+          </FieldRow>
           <FieldRow label="Managed System">
             <ManagedSystemPill
               name={managedSystemNamesById.get(task.primary_managed_system_id) ?? 'Managed System'}
@@ -202,7 +211,12 @@ export function TaskDetailPanel({
                   : []),
                 // The last node is the task being viewed — deliberately not
                 // navigable, it is the "you are here" marker.
-                { type: 'task' as const, id: task.id, display_id: task.display_id, title: task.title },
+                {
+                  type: 'task' as const,
+                  id: task.id,
+                  display_id: task.display_id,
+                  title: task.title,
+                },
               ]}
             />
           </div>
@@ -210,8 +224,14 @@ export function TaskDetailPanel({
       </div>
       {view === 'board' && task.status !== 'released' && onMoveToNextStatus && (
         <div className="border-t border-border-subtle p-3">
-          <Button type="button" variant="primary" className="w-full" onClick={() => onMoveToNextStatus(task.id)}>
-            <ArrowRight className="h-4 w-4" />Move to next status
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full"
+            onClick={() => onMoveToNextStatus(task.id)}
+          >
+            <ArrowRight className="h-4 w-4" />
+            Move to next status
           </Button>
         </div>
       )}
@@ -262,7 +282,14 @@ export function TaskListRoute({ selectedParam }: { selectedParam?: string | unde
     return <div className="p-4 text-sm text-text-muted">Loading Tasks...</div>;
   }
   if (isPermissionDenied(tasksQuery.error)) {
-    return <PermissionBlockedPanel state="denied" category="Task list" reason={tasksQuery.error.message} className="m-4" />;
+    return (
+      <PermissionBlockedPanel
+        state="denied"
+        category="Task list"
+        reason={tasksQuery.error.message}
+        className="m-4"
+      />
+    );
   }
   if (tasksQuery.error) {
     return <div className="p-4 text-sm text-accent-danger">Task list unavailable.</div>;
@@ -293,8 +320,7 @@ export function TaskListRoute({ selectedParam }: { selectedParam?: string | unde
                   </span>
                   {dot()}
                   <span>
-                    {managedSystemNamesById.get(task.primary_managed_system_id) ??
-                      'Managed System'}
+                    {managedSystemNamesById.get(task.primary_managed_system_id) ?? 'Managed System'}
                   </span>
                   {dot()}
                   <span>{formatDate(task.updated_at)}</span>
