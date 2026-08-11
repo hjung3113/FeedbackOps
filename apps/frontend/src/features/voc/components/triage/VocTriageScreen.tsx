@@ -11,6 +11,7 @@
 import type { VocListItem } from '@fops/shared';
 import { Flag } from 'lucide-react';
 import type * as React from 'react';
+import { useEffect, useRef } from 'react';
 import { useTriageQueue } from '../../hooks/useTriageQueue';
 import { TriagePanel } from './TriagePanel';
 import { TriageQueue } from './TriageQueue';
@@ -57,9 +58,34 @@ export function VocTriageScreen({
   // exists for a per-session processed count.
   const processedCount = queueState.optimisticallyRemoved.size;
 
-  // Derive the selected VOC — when the current selection is optimistically removed,
-  // auto-advance to the next item in the live queue.
-  const selectedVoc = liveQueue.find((v) => v.id === selectedId) ?? liveQueue[0] ?? null;
+  // Derive the selected VOC.
+  //
+  // Two cases must NOT be conflated (#383):
+  //   1. The selection was in this queue at some point during the session and
+  //      has since left it — triaged away optimistically, or dropped by the
+  //      next server refetch. That is the "확정 & 다음 VOC" flow: auto-advance
+  //      to the next item, exactly as before.
+  //   2. The selection was never in this queue — a deep link whose target the
+  //      queue predicate cannot show. Falling back here would silently put a
+  //      DIFFERENT VOC's commit form in front of an operator who asked for a
+  //      specific one, which is a wrong-record write hazard. Render the reason
+  //      instead of a substitute.
+  //
+  // A ref (not derived state) records case 1 because the row is already gone
+  // from `items` by the time the refetch lands — the queue itself can no longer
+  // answer "was this ever mine?".
+  const everInQueueRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const v of items) everInQueueRef.current.add(v.id);
+  }, [items]);
+
+  const selectedInQueue = liveQueue.find((v) => v.id === selectedId) ?? null;
+  const deepLinkTargetMissing =
+    selectedId !== null &&
+    selectedInQueue === null &&
+    !items.some((v) => v.id === selectedId) &&
+    !everInQueueRef.current.has(selectedId);
+  const selectedVoc = deepLinkTargetMissing ? null : (selectedInQueue ?? liveQueue[0] ?? null);
 
   return (
     <div className="flex flex-col h-full">
@@ -140,6 +166,23 @@ export function VocTriageScreen({
             {...(outOfScopeSummary !== undefined ? { outOfScopeSummary } : {})}
           />
         </div>
+
+        {/* Deep link target this queue cannot show (#383) — never silently
+            swap in another VOC's commit form. */}
+        {deepLinkTargetMissing && (
+          <div className="w-[440px] shrink-0 border-l border-border-subtle p-6">
+            <p
+              data-testid="triage-deeplink-missing"
+              className="text-sm font-medium text-text-primary"
+            >
+              요청한 VOC를 이 대기열에서 찾을 수 없습니다.
+            </p>
+            <p className="mt-2 text-sm text-text-muted">
+              다른 담당자가 이미 처리했거나, 현재 권한 범위 밖일 수 있습니다. 왼쪽 대기열에서 다른
+              VOC를 선택하세요.
+            </p>
+          </div>
+        )}
 
         {/* Right: detail panel (always rendered when queue non-empty) */}
         {selectedVoc !== null && (

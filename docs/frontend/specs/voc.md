@@ -608,11 +608,12 @@ All paths relative to the VOC service base (`/api` per `apps/backend/AGENTS.md` 
 | Property | Value |
 |---|---|
 | Method / Path | `GET /vocs` |
-| Query params | `view=inbox\|my\|triage`, `managed_system_id=:id\|all`, `tab=untriaged\|high\|unassigned\|similar\|no-link\|waiting`, `filter.severity=`, `filter.reporter_facing_status=`, `filter.owner=assigned\|unassigned`, `sort=created_at:desc\|severity:asc\|reporter_facing_status:asc`, `cursor=`, `limit=` |
+| Query params | `view=inbox\|my\|triage`, `managed_system_id=:id\|all`, `tab=untriaged\|high\|unassigned\|similar\|no-link\|waiting`, `pin_voc_id=:vocId` (view=triage only), `filter.severity=`, `filter.reporter_facing_status=`, `filter.owner=assigned\|unassigned`, `sort=created_at:desc\|severity:asc\|reporter_facing_status:asc`, `cursor=`, `limit=` |
+| `pin_voc_id` (#383) | Unions ONE VOC into a `view=triage` result even though the triage predicate (`triage_state IN ('untriaged','needs_more_information')`) excludes it, and returns it first. Exists so the detail panel's `트리아지에서 변경` deep link can re-triage an already-triaged VOC. Honoured **only inside the caller's existing triage scope** — an id outside scope, archived, in another workspace, or unknown is dropped **silently with 200** (a 403/404 here would be an existence probe). A VOC the tab already returns is not duplicated. The pinned row does **not** affect `page.has_more` / `page.cursor`, which stay computed from the tab query alone. `pin_voc_id` on any other `view` → `validation.failed`. |
 | Response | `{ items: VocListItem[], page: { cursor?, has_more: bool }, out_of_scope_summary?: { count, severity_distribution } }` |
 | `out_of_scope_summary` | Present when actor's effective scope union contains VOCs the actor cannot see; powers the Triage `<PermissionBlockedPanel state="summary_visible">` peek banner |
 | Errors | `permission.denied` (403 if actor lacks any VOC read scope) · `validation.failed` (bad cursor) |
-| Caching | Stale-while-revalidate on TanStack Query, key `[ 'vocs', view, managedSystem, tab, filters, sort ]` |
+| Caching | Stale-while-revalidate on TanStack Query, key `[ 'vocs', view, managedSystem, tab, filters, sort, cursor, pinVocId ]` — `pinVocId` is part of the key so two deep links differing only by target cannot share a cached queue |
 
 ### 8.3 `GET /vocs/:id` — Detail
 

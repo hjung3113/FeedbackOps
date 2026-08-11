@@ -518,6 +518,56 @@ export async function selectVocByIdForRead(
   return mapVocRow(row);
 }
 
+// ── selectPinnedVocListRow ───────────────────────────────────────────────────
+
+/**
+ * Fetch ONE VOC in the list-row projection, bypassing the view/tab predicate
+ * but NOT the scope predicate.
+ *
+ * WHY: the triage console's queue predicate pins `triage_state IN
+ * ('untriaged','needs_more_information')` (see buildVocListPredicate), so a VOC
+ * that has already been triaged can never appear in it — including the one the
+ * VOC detail panel's "트리아지에서 변경" deep link points at (#383). This helper
+ * is the ONLY path that re-triage deep links use to put that row back in the
+ * queue.
+ *
+ * The scope contract is unchanged: workspace + `scopeFilter` are applied here
+ * exactly as buildVocListPredicate applies them, and archived rows stay out.
+ * A row outside the caller's scope returns null so the caller can drop it
+ * silently — never 403/404, which would turn this into an existence probe.
+ */
+export async function selectPinnedVocListRow(
+  db: Db | Tx,
+  args: { workspaceId: string; scopeFilter: Scope; vocId: string },
+): Promise<VocReadRow | null> {
+  const { workspaceId, scopeFilter, vocId } = args;
+  if (scopeFilter.kind === 'scoped' && scopeFilter.managedSystemIds.length === 0) return null;
+
+  const wheres: ReturnType<typeof sql>[] = [
+    sql`id = ${vocId}`,
+    sql`workspace_id = ${workspaceId}`,
+    sql`archived_at IS NULL`,
+  ];
+  if (scopeFilter.kind === 'scoped') {
+    wheres.push(sql`primary_managed_system_id = ANY(${sqlUuidArray(scopeFilter.managedSystemIds)})`);
+  }
+
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT
+      id, display_id, title, workspace_id, primary_managed_system_id,
+      analytics_area_id, reporter_id, owner_user_id, owner_team_id,
+      severity, reporter_facing_status, triage_state,
+      triage_state_review_postponed_at, source_context,
+      NULL::jsonb as description_rich_content,
+      created_at, updated_at
+    FROM ${vocs}
+    WHERE ${sql.join(wheres, sql` AND `)}
+  `);
+  const row = result.rows[0];
+  if (!row) return null;
+  return mapVocRow(row);
+}
+
 // ── selectConversationPage ────────────────────────────────────────────────────
 
 export type ConversationKind = 'public_update' | 'reporter_reply' | 'internal_comment';
