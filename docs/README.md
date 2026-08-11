@@ -2,6 +2,12 @@
 
 This directory separates product design, frontend UI contracts, and implementation decisions.
 
+## Reading As An Operator
+
+`USER-MANUAL.md` documents the shipped product organised by task ("I need to
+triage what came in", "I need permission I do not have"). It describes behaviour,
+not intent — for why a behaviour is what it is, follow it into `docs/adr/`.
+
 ## Reading For Implementation
 
 Root `AGENTS.md` → "Required Reading" and "Source Of Truth" decide what to read for a given change.
