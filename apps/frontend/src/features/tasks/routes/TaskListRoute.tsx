@@ -78,6 +78,7 @@ export function TaskDetailPanel({
   onMoveToNextStatus?: (taskId: string) => void;
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const taskQuery = useQuery({
     queryKey: ['task', taskId] as const,
     queryFn: ({ signal }) => getTask(taskId, signal),
@@ -188,9 +189,19 @@ export function TaskDetailPanel({
                         id: sourceFinding.id,
                         display_id: optionalDisplayId(sourceFinding),
                         title: sourceFinding.title,
+                        // The trail is the only place this panel names the source
+                        // Finding, so it has to be the way there too.
+                        onNavigate: () => {
+                          void navigate({
+                            to: '/findings/$findingId',
+                            params: { findingId: sourceFinding.id },
+                          });
+                        },
                       },
                     ]
                   : []),
+                // The last node is the task being viewed — deliberately not
+                // navigable, it is the "you are here" marker.
                 { type: 'task' as const, id: task.id, display_id: task.display_id, title: task.title },
               ]}
             />
