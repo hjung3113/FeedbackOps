@@ -398,6 +398,9 @@ function FullDetailView({
             <LinkedEntityTrailSection
               links={voc.links ?? []}
               isReporterContext={!canRenderAllowedTask}
+              onOpenTask={(taskId) => {
+                void navigate({ to: '/tasks', search: { param: taskId } });
+              }}
             />
           </div>
           {showsSimilarVocSection && (

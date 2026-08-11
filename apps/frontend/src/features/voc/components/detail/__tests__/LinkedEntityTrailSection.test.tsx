@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
 import type { EntityLinkDto } from '@fops/shared';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 
 import { LinkedEntityTrailSection } from '../LinkedEntityTrailSection';
 
@@ -35,6 +36,27 @@ const summaryVisibleTask: EntityLinkDto = {
     reporter_facing_status: '진행 중',
   },
 };
+
+function allowedTaskLink(): EntityLinkDto {
+  return {
+    ...baseLink(),
+    source_id: IDS.voc,
+    target_id: IDS.task,
+    visibility: 'internal_only',
+    visibility_state: 'allowed',
+    target_summary: {
+      type: 'task',
+      id: IDS.task,
+      display_id: 'TASK-42',
+      title: '운영자 전용 Task',
+      status: 'in_progress',
+      priority: 'high',
+      primary_managed_system_id: IDS.system,
+      assignee_actor_id: null,
+      due_date: null,
+    },
+  };
+}
 
 describe('<LinkedEntityTrailSection>', () => {
   it('renders only the reporter summary title and projected status', () => {
@@ -82,27 +104,45 @@ describe('<LinkedEntityTrailSection>', () => {
   });
 
   it('renders an allowed Task only for an operator view', () => {
-    const allowedTask: EntityLinkDto = {
-      ...baseLink(),
-      source_id: IDS.voc,
-      target_id: IDS.task,
-      visibility: 'internal_only',
-      visibility_state: 'allowed',
-      target_summary: {
-        type: 'task',
-        id: IDS.task,
-        display_id: 'TASK-42',
-        title: '운영자 전용 Task',
-        status: 'in_progress',
-        priority: 'high',
-        primary_managed_system_id: IDS.system,
-        assignee_actor_id: null,
-        due_date: null,
-      },
-    };
-
-    render(<LinkedEntityTrailSection links={[allowedTask]} isReporterContext={false} />);
+    render(<LinkedEntityTrailSection links={[allowedTaskLink()]} isReporterContext={false} />);
     expect(screen.getByTestId('linked-task-allowed')).toHaveTextContent('운영자 전용 Task');
+  });
+
+  it('opens the linked Task from an allowed trail node', async () => {
+    const onOpenTask = vi.fn();
+    render(
+      <LinkedEntityTrailSection
+        links={[allowedTaskLink()]}
+        isReporterContext={false}
+        onOpenTask={onOpenTask}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /운영자 전용 Task/ }));
+    expect(onOpenTask).toHaveBeenCalledWith(IDS.task);
+  });
+
+  it('renders the allowed node as plain text when no destination is supplied', () => {
+    render(<LinkedEntityTrailSection links={[allowedTaskLink()]} isReporterContext={false} />);
+
+    expect(screen.getByTestId('linked-task-allowed')).toHaveTextContent('운영자 전용 Task');
+    expect(screen.queryByRole('button', { name: /운영자 전용 Task/ })).not.toBeInTheDocument();
+  });
+
+  it('never offers a destination for a summary_visible Task, even when one is supplied', () => {
+    // ADR-0023 §E: a Reporter sees the projected summary and nothing more —
+    // handing this surface a navigation callback must not create a way in.
+    const onOpenTask = vi.fn();
+    render(
+      <LinkedEntityTrailSection
+        links={[summaryVisibleTask]}
+        isReporterContext
+        onOpenTask={onOpenTask}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /공개 가능한 개선 작업/ })).not.toBeInTheDocument();
+    expect(onOpenTask).not.toHaveBeenCalled();
   });
 
   it('conceals hidden Task links completely', () => {

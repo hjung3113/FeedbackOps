@@ -6,10 +6,7 @@ import { type Editor, EditorContent, useEditor } from '@tiptap/react';
 import StarterKit, { type StarterKitOptions } from '@tiptap/starter-kit';
 import * as React from 'react';
 import { cn } from '../utils/cn';
-import {
-  getExtensionsForSurface,
-  type UIRichContentExtensionCapability,
-} from './allowlist-local';
+import { type UIRichContentExtensionCapability, getExtensionsForSurface } from './allowlist-local';
 import { AttachmentRef } from './extensions/attachmentRef';
 import { Mention } from './extensions/mention';
 
@@ -102,7 +99,8 @@ export function RichEditor({
   const editor = useEditor({
     extensions,
     // value can be null (explicit clear); fall through to defaultValue / empty doc.
-    content: (value ?? defaultValue ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as TipTapDoc,
+    content: (value ??
+      defaultValue ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as TipTapDoc,
     editable: !disabled,
     onUpdate({ editor }) {
       const doc = editor.getJSON() as TipTapDoc;
@@ -191,9 +189,20 @@ export function RichEditor({
       data-surface={surface}
     >
       {toolbar?.(editor, toolbarApi)}
+      {/*
+        `minHeight` sizes this wrapper, but the editable element TipTap renders
+        inside it (`.ProseMirror`) is only as tall as its content. Everything
+        below the first line was therefore dead space: clicking it hit the
+        wrapper, not the editor, so an 84px composer only took focus on its top
+        line. Laying the wrapper out as a column, letting `.ProseMirror` grow
+        into it, and moving the padding onto `.ProseMirror` itself makes the
+        whole box the click target. Geometry is unchanged: the padding renders
+        at the same offsets, it just belongs to the editable element now, so
+        the inset that used to swallow clicks no longer does.
+      */}
       <EditorContent
         editor={editor}
-        className="prose prose-sm max-w-none px-3 py-2 focus:outline-none"
+        className="prose prose-sm flex max-w-none flex-col focus:outline-none [&_.ProseMirror]:flex-1 [&_.ProseMirror]:px-3 [&_.ProseMirror]:py-2"
         style={
           minHeight
             ? { minHeight: typeof minHeight === 'number' ? `${minHeight}px` : minHeight }
