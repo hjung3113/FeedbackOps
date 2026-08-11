@@ -1,5 +1,3 @@
-/// <reference types="@testing-library/jest-dom" />
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DetailPanelHeaderActions } from '../DetailPanelHeaderActions.js';
@@ -182,7 +180,9 @@ describe('DetailPanelHeaderActions — kebab dropdown', () => {
     await user.click(screen.getByRole('button', { name: '더 보기' }));
     const item = screen.getByText('읽음 표시');
     // Radix DropdownMenuItem with disabled prop sets aria-disabled
-    expect(item.closest('[aria-disabled="true"]') ?? item.closest('[data-disabled]')).not.toBeNull();
+    expect(
+      item.closest('[aria-disabled="true"]') ?? item.closest('[data-disabled]'),
+    ).not.toBeNull();
   });
 
   it('renders extraMore slot inside dropdown', async () => {

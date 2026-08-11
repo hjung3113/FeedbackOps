@@ -1,14 +1,14 @@
-import * as React from 'react';
 import { Link2, Maximize2, MoreVertical } from 'lucide-react';
+import type * as React from 'react';
 import { toast } from 'sonner';
-import { cn } from '../utils/cn.js';
-import type { DetailPanelKind } from './DetailPanelHeader.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../components/shadcn/dropdown-menu.js';
+import { cn } from '../utils/cn.js';
+import type { DetailPanelKind } from './DetailPanelHeader.js';
 
 export interface DetailPanelHeaderActionsProps {
   entityKind: DetailPanelKind;
@@ -19,10 +19,10 @@ export interface DetailPanelHeaderActionsProps {
 }
 
 const DEFERRED_ITEMS: Array<{ label: string; disabledReason: string }> = [
-  { label: '읽음 표시',  disabledReason: 'Slice 3+에 출시 예정' },
-  { label: '스누즈',     disabledReason: 'Slice 3+에 출시 예정' },
-  { label: '구독',       disabledReason: 'Slice 3+에 출시 예정' },
-  { label: '보관',       disabledReason: 'Slice 3+에 출시 예정' },
+  { label: '읽음 표시', disabledReason: 'Slice 3+에 출시 예정' },
+  { label: '스누즈', disabledReason: 'Slice 3+에 출시 예정' },
+  { label: '구독', disabledReason: 'Slice 3+에 출시 예정' },
+  { label: '보관', disabledReason: 'Slice 3+에 출시 예정' },
 ];
 
 /**
@@ -124,23 +124,14 @@ export function DetailPanelHeaderActions({
       {/* Kebab dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="더 보기"
-            title="더 보기"
-            className={iconButtonCls}
-          >
+          <button type="button" aria-label="더 보기" title="더 보기" className={iconButtonCls}>
             <MoreVertical size={16} />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           {extraMore}
           {DEFERRED_ITEMS.map((item) => (
-            <DropdownMenuItem
-              key={item.label}
-              disabled
-              title={item.disabledReason}
-            >
+            <DropdownMenuItem key={item.label} disabled title={item.disabledReason}>
               {item.label}
             </DropdownMenuItem>
           ))}
