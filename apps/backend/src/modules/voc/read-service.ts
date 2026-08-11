@@ -341,6 +341,14 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       });
     }
 
+    // ── 2b. pin_voc_id cross-view validation (#383) ──────────────────────────
+    const pinVocId = query.pin_voc_id;
+    if (pinVocId !== undefined && view !== 'triage') {
+      throw new HttpError('validation.failed', 'pin_voc_id is only valid for view=triage', {
+        fields: [{ path: ['pin_voc_id'], code: 'invalid_for_view' }],
+      });
+    }
+
     // ── 3. Determine sort key and direction ──────────────────────────────────
     // For triage view, use internal 'triage_pinned' sort.
     // For other views, default to 'created_at:desc' if sort not specified.
@@ -408,8 +416,31 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
     const { rows, hasMore, nextCursor: repoCursor } = await repoRead.listVocsForRead(deps.db, repoArgs);
 
+    // ── 8. Pin the re-triage deep-link target (#383) ─────────────────────────
+    // The triage queue predicate excludes already-triaged VOCs, so a deep link
+    // from the VOC detail panel would otherwise land on a queue that cannot
+    // show its target — and the screen would silently fall back to a different
+    // VOC's commit form. Union the requested row in FIRST, and only when the
+    // caller's own triage scope already covers it.
+    //
+    // Deliberately placed AFTER the repo call and BEFORE the count/mapping
+    // stage so the pinned row gets the same attachment/similar projection as
+    // every other row. `hasMore` / `nextCursor` are computed from the tab query
+    // alone and are NOT touched here — pagination must not shift because a row
+    // was pinned.
+    let pinnedRows = rows;
+    if (pinVocId !== undefined && !rows.some((r) => r.id === pinVocId)) {
+      const pinnedRow = await repoRead.selectPinnedVocListRow(deps.db, {
+        workspaceId: actor.workspace_id,
+        scopeFilter,
+        vocId: pinVocId,
+      });
+      // Out of scope, archived, other workspace, or unknown id → drop silently.
+      if (pinnedRow !== null) pinnedRows = [pinnedRow, ...rows];
+    }
+
     // ── 9. Bulk attachment count per row (PLAN-22 §Bug-1) ────────────────────
-    const sourceVocIds = rows.map((r) => r.id);
+    const sourceVocIds = pinnedRows.map((r) => r.id);
     const [attachmentCounts, similarCounts] = await Promise.all([
       repoRead.selectVocAttachmentCounts(deps.db, sourceVocIds),
       repoRead.selectSimilarVocCounts(deps.db, {
@@ -421,7 +452,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     ]);
 
     // ── 9b. Map rows → VocListItem with attachment_count ─────────────────────
-    const items = rows.map((r) => mapRowToListItem(
+    const items = pinnedRows.map((r) => mapRowToListItem(
       r,
       attachmentCounts.get(r.id) ?? 0,
       similarCounts.get(r.id) ?? 0,

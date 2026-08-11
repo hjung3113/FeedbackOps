@@ -141,3 +141,17 @@ packages/shared/src/vocs/__tests__/edit-description-request.test.ts format -- pr
 apps/backend/src/modules/findings/__tests__/authorization-boundary.contract.test.ts lint/style/noNonNullAssertion -- pre-existing on develop; the suite reads seeded ids out of a Record<string, string> and asserts non-null at 13 call sites, none of which this branch added
 apps/backend/src/modules/findings/__tests__/authorization-boundary.contract.test.ts format -- pre-existing on develop; the file predates biome formatting and reformatting it would rewrite lines this branch never touched
 apps/backend/src/modules/findings/__tests__/authorization-boundary.contract.test.ts organizeImports -- pre-existing on develop; import order predates biome
+# Added for the re-triage deep-link branch (#383). Both files were already in
+# this state on develop; this branch adds a comment block plus one hook call to
+# TriageRoute.tsx and one new exported function to repo-read.ts, and touching a
+# file pulls its whole pre-existing diagnostic set into the gate's scope. Counts
+# were measured on develop 24c49c8 per file and reproduce exactly:
+# TriageRoute.tsx 6 = 6, repo-read.ts 17 = 17. This branch's own diagnostic
+# count on every file it touches is 0.
+apps/frontend/src/features/voc/routes/TriageRoute.tsx lint/suspicious/noExplicitAny -- pre-existing on develop (4x, unchanged); the two navigate() search reducers are typed `any` with inline eslint-disable comments that predate biome
+apps/frontend/src/features/voc/routes/TriageRoute.tsx lint/style/useImportType -- pre-existing on develop; `import * as React` predates biome
+apps/frontend/src/features/voc/routes/TriageRoute.tsx organizeImports -- pre-existing on develop; import order predates biome
+apps/backend/src/modules/voc/repo-read.ts lint/style/noNonNullAssertion -- pre-existing on develop (3x, unchanged); the triage scope path asserts non-null on scopes the caller already resolved
+apps/backend/src/modules/voc/repo-read.ts lint/correctness/noUnusedVariables -- pre-existing on develop (8x, unchanged); destructured repo args kept for call-site symmetry
+apps/backend/src/modules/voc/repo-read.ts lint/style/useNumberNamespace -- pre-existing on develop (5x, unchanged); cursor decoding uses bare Number/parseInt globals
+apps/backend/src/modules/voc/repo-read.ts format -- pre-existing on develop; long sql`` template lines predate biome formatting and reformatting them would rewrite lines this branch never touched
