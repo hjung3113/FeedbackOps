@@ -6,10 +6,7 @@ import { type Editor, EditorContent, useEditor } from '@tiptap/react';
 import StarterKit, { type StarterKitOptions } from '@tiptap/starter-kit';
 import * as React from 'react';
 import { cn } from '../utils/cn';
-import {
-  getExtensionsForSurface,
-  type UIRichContentExtensionCapability,
-} from './allowlist-local';
+import { type UIRichContentExtensionCapability, getExtensionsForSurface } from './allowlist-local';
 import { AttachmentRef } from './extensions/attachmentRef';
 import { Mention } from './extensions/mention';
 
@@ -102,7 +99,8 @@ export function RichEditor({
   const editor = useEditor({
     extensions,
     // value can be null (explicit clear); fall through to defaultValue / empty doc.
-    content: (value ?? defaultValue ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as TipTapDoc,
+    content: (value ??
+      defaultValue ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as TipTapDoc,
     editable: !disabled,
     onUpdate({ editor }) {
       const doc = editor.getJSON() as TipTapDoc;

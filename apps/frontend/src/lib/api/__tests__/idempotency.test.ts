@@ -24,7 +24,9 @@ describe('mintIdempotencyKey', () => {
     // `crypto.randomUUID` is secure-context only, so any non-https origin that
     // is not localhost — a LAN IP during device testing — takes this path on
     // every mutation.
-    vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
+    vi.stubGlobal('crypto', {
+      getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+    });
 
     for (let i = 0; i < 200; i++) {
       expect(mintIdempotencyKey()).toMatch(BACKEND_IDEMPOTENCY_KEY_REGEX);
@@ -74,7 +76,9 @@ describe('apiClient auto-minted Idempotency-Key', () => {
     // `Math.random().toString(36) + Date.now().toString(36)`, which is not a
     // UUID, so every mutation that did not pass its own key failed with
     // validation.malformed_idempotency_key on such an origin.
-    vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
+    vi.stubGlobal('crypto', {
+      getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+    });
     const fetchMock = stubFetch();
 
     await apiClient('POST', '/vocs/abc/reporter-replies', { body: {} });

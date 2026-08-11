@@ -90,14 +90,14 @@ export async function apiClient<T = unknown>(
   return base;
 }
 
-
 // Parses fastify @fastify/rate-limit response headers.
 // `x-ratelimit-reset` is unix epoch seconds; `retry-after` is delta-seconds.
 // All four headers must be present and integer-parseable for rateLimit to be populated;
 // otherwise the field is omitted (callers fall back to generic copy).
-function parseRateLimitHeaders(
-  headers: Headers,
-): { rateLimit?: RateLimitInfo; retryAfterSeconds?: number } {
+function parseRateLimitHeaders(headers: Headers): {
+  rateLimit?: RateLimitInfo;
+  retryAfterSeconds?: number;
+} {
   const limit = parseIntHeader(headers.get('x-ratelimit-limit'));
   const remaining = parseIntHeader(headers.get('x-ratelimit-remaining'));
   const reset = parseIntHeader(headers.get('x-ratelimit-reset'));
