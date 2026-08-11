@@ -1,4 +1,3 @@
-import * as React from 'react';
 import type { EntityLinkDto, TaskReporterSummary } from '@fops/shared';
 import {
   LinkedEntityTrail,
@@ -6,12 +5,20 @@ import {
   PanelSectionTitle,
   PermissionBlockedPanel,
 } from '@fops/ui';
+import type * as React from 'react';
 
 export interface LinkedEntityTrailSectionProps {
   /** Backend-decided link DTOs included with the VOC detail read model. */
   links?: EntityLinkDto[];
   /** A Reporter may consume only summary_visible.summary, never an allowed Task DTO. */
   isReporterContext: boolean;
+  /**
+   * Opens the linked Task. Injected rather than taken from `useNavigate` so this
+   * stays a presentational component its tests can render without a router.
+   * Omitted means the trail renders as plain text, which is the correct
+   * fallback for any surface with nowhere to send the actor.
+   */
+  onOpenTask?: ((taskId: string) => void) | undefined;
 }
 
 function isTaskLink(link: EntityLinkDto): boolean {
@@ -75,15 +82,18 @@ function SafeTaskLink({
 function AllowedTaskLink({
   link,
   isReporterContext,
+  onOpenTask,
 }: {
   link: Extract<EntityLinkDto, { visibility_state: 'allowed' }>;
   isReporterContext: boolean;
+  onOpenTask?: ((taskId: string) => void) | undefined;
 }): React.ReactElement | null {
   if (isReporterContext) return null;
 
   const task = link.target_summary?.type === 'task' ? link.target_summary : null;
   if (task === null) return null;
 
+  const openTask = onOpenTask;
   return (
     <div data-testid="linked-task-allowed">
       <LinkedEntityTrail
@@ -94,6 +104,12 @@ function AllowedTaskLink({
             display_id: task.display_id,
             title: task.title,
             meta: task.status,
+            // `allowed` already means the backend decided this actor may read
+            // the Task, so naming it without a way there is a dead end. Only
+            // this state gets a destination — summary_visible and denied must
+            // stay unnavigable (ADR-0023 §A/§E), and Reporter context returned
+            // above before reaching here.
+            ...(openTask ? { onNavigate: () => openTask(task.id) } : {}),
           },
         ]}
       />
@@ -104,9 +120,11 @@ function AllowedTaskLink({
 function TaskLink({
   link,
   isReporterContext,
+  onOpenTask,
 }: {
   link: EntityLinkDto;
   isReporterContext: boolean;
+  onOpenTask?: ((taskId: string) => void) | undefined;
 }): React.ReactElement | null {
   switch (link.visibility_state) {
     case 'summary_visible':
@@ -119,7 +137,13 @@ function TaskLink({
         />
       );
     case 'allowed':
-      return <AllowedTaskLink link={link} isReporterContext={isReporterContext} />;
+      return (
+        <AllowedTaskLink
+          link={link}
+          isReporterContext={isReporterContext}
+          onOpenTask={onOpenTask}
+        />
+      );
     case 'hidden':
       // ADR-0023 §A: do not acknowledge that this link exists.
       return null;
@@ -131,6 +155,7 @@ function TaskLink({
 export function LinkedEntityTrailSection({
   links = [],
   isReporterContext,
+  onOpenTask,
 }: LinkedEntityTrailSectionProps): React.ReactElement {
   const taskLinks = links.filter(
     (link) =>
@@ -145,7 +170,12 @@ export function LinkedEntityTrailSection({
     <div>
       <PanelSectionTitle>관련 엔티티</PanelSectionTitle>
       {taskLinks.map((link) => (
-        <TaskLink key={link.id} link={link} isReporterContext={isReporterContext} />
+        <TaskLink
+          key={link.id}
+          link={link}
+          isReporterContext={isReporterContext}
+          onOpenTask={onOpenTask}
+        />
       ))}
     </div>
   );

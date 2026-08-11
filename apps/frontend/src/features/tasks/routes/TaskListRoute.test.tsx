@@ -1,7 +1,8 @@
 import { getTask, listTasks } from '@/lib/api';
 import { ApiError } from '@/lib/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { TaskDetailPanel, TaskListRoute } from './TaskListRoute';
@@ -25,8 +26,10 @@ vi.mock('@fops/ui', async () => {
   };
 });
 
+// Shared across renders so a test can assert where a trail node sends the actor.
+const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
 }));
 
 vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
@@ -96,6 +99,36 @@ describe('TaskListRoute display ids', () => {
     });
     expect(await screen.findByText('FIN-179')).toBeInTheDocument();
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
+  });
+
+  it('opens the source Finding from the linked-context trail', async () => {
+    navigateMock.mockClear();
+    renderWithClient(<TaskListRoute />);
+
+    // The trail names the Finding twice over (Source evidence block and the
+    // trail node); the navigable one is the button the trail renders.
+    const findingNode = await screen.findByRole('button', { name: /리포트 속도 저하/ });
+    await userEvent.click(findingNode);
+
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/findings/$findingId',
+      params: { findingId: '40000000-0000-0000-0000-000000000004' },
+    });
+  });
+
+  it('leaves the viewed Task itself unnavigable in the trail', async () => {
+    renderWithClient(<TaskListRoute />);
+
+    await screen.findByText('FIN-179');
+    // Scoped to the Linked context section — the list row on the other side of
+    // the shell is a button carrying the same title, and it is not the subject.
+    const trail = document.querySelector('[data-anchor="context"]');
+    expect(trail).not.toBeNull();
+    const context = within(trail as HTMLElement);
+    expect(context.getByRole('button', { name: /리포트 속도 저하/ })).toBeInTheDocument();
+    expect(
+      context.queryByRole('button', { name: /매출 리포트 쿼리 플랜 개선/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders permission denied instead of the list unavailable copy for a 403', async () => {
