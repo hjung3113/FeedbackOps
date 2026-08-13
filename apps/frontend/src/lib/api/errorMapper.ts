@@ -1,4 +1,4 @@
-import { ERROR_CODES, type ErrorCode } from '@fops/shared';
+import type { ErrorCode } from '@fops/shared';
 import type { ApiErrorEnvelope, MappedError, Tone } from './types';
 
 export const GENERIC_ERROR_MESSAGE = '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
@@ -8,7 +8,7 @@ interface CatalogEntry {
   message: string | ((detail?: Record<string, unknown>) => string);
 }
 
-const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
+export const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   // auth.*
   'auth.session_invalid':  { tone: 'error', message: '세션이 유효하지 않습니다. 다시 로그인해 주세요.' },
   'auth.session_required': { tone: 'error', message: '로그인이 필요합니다.' },
@@ -51,12 +51,17 @@ const CATALOG: Partial<Record<ErrorCode, CatalogEntry>> = {
   // conflict.*
   'conflict.idempotency_key_reuse':        { tone: 'error', message: '같은 요청 키로 다른 작업을 시도했습니다. 새로고침 후 다시 시도해 주세요.' },
   'conflict.capability_already_granted':   { tone: 'info',  message: '이미 권한이 부여되어 있습니다.' },
+  'conflict.capability_already_denied':    { tone: 'info',  message: '이미 권한이 거부되어 있습니다.' },
   'conflict.permission_request_duplicate': { tone: 'info',  message: '동일한 권한 요청이 이미 진행 중입니다.' },
   'conflict.duplicate_slug':               { tone: 'error', message: '이미 사용 중인 식별자입니다.' },
   'conflict.parent_archived':              { tone: 'error', message: '상위 항목이 보관되어 더 이상 변경할 수 없습니다.' },
   'conflict.record_archived':              { tone: 'error', message: '이 항목은 보관되어 더 이상 변경할 수 없습니다.' },
+  'conflict.saved_view_name_taken':        { tone: 'error', message: '이미 사용 중인 저장된 뷰 이름입니다.' },
   'conflict.stale_write':                  { tone: 'warning', message: '다른 사용자가 먼저 변경했습니다. 최신 내용을 불러올까요?' },
   'conflict.triage_already_committed':     { tone: 'error', message: '이미 트리아지가 완료되어 본인이 직접 수정할 수 없습니다.' },
+  'conflict.survey_not_open':              { tone: 'error', message: '이 설문은 현재 응답을 받을 수 없습니다.' },
+  'conflict.survey_response_already_submitted': { tone: 'info', message: '이 설문에는 이미 응답을 제출했습니다.' },
+  'conflict.survey_results_unavailable':   { tone: 'error', message: '이 설문은 아직 결과를 볼 수 없습니다.' },
 
   // not_found.*
   'not_found.record': { tone: 'error', message: '존재하지 않거나 접근할 수 없는 항목입니다.' },
@@ -117,5 +122,7 @@ export function errorMapper(envelope: ApiErrorEnvelope, opts?: { onRetry?: () =>
   return { tone, message, action };
 }
 
-// Sanity invariant — fail at module load if catalog drifts from ERROR_CODES.
-export const __codeCount = ERROR_CODES.length;
+// 501 tombstone for a server-internal unimplemented endpoint; no user copy by design.
+export const RETIRED_OR_SERVER_ONLY_CODES: ReadonlySet<ErrorCode> = new Set([
+  'not_implemented.todo',
+]);
