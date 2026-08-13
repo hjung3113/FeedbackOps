@@ -180,7 +180,7 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     wheres.push(sql`triage_state IN ('untriaged','needs_more_information')`);
   }
   if (tab === 'untriaged') wheres.push(sql`triage_state = 'untriaged'`);
-  else if (tab === 'high') wheres.push(sql`severity = 'high'`);
+  else if (tab === 'high') wheres.push(sql`severity IN ('high', 'critical')`);
   else if (tab === 'unassigned') wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
   else if (tab === 'waiting') wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
   else if (tab === 'no-link' || tab === 'high-no-link') {
