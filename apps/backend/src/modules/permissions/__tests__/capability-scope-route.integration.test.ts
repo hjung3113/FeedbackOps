@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { allManagedSystemIds } from '../../core/managed-systems/read-projections.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { createCheckService } from '../check-service.js';
@@ -301,10 +302,12 @@ describe.skipIf(!runIntegration)('GET /me/permissions/scope', () => {
       `insert into permission.permission_denies (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id) values ($1,$2,'survey.read',$3,'test',$4)`,
       [WORKSPACE_ID, ACTORS.admin.id, B, ACTORS.admin.id],
     );
-    expect(await scope(ACTORS.admin.external, 'survey.read')).toEqual({
-      kind: 'scoped',
-      managed_system_ids: [A, C],
-    });
+    const expectedIds = (await allManagedSystemIds(dbHandle.db, WORKSPACE_ID))
+      .filter((id) => id !== B)
+      .sort();
+    const result = await scope(ACTORS.admin.external, 'survey.read');
+    if (result.kind !== 'scoped') throw new Error('expected scoped');
+    expect([...result.managed_system_ids].sort()).toEqual(expectedIds);
   });
 
   it('AC-5 keeps admin survey.export scoped without grants', async () => {
