@@ -9,12 +9,23 @@
       "cache": false,
       "persistent": true
     },
+    "//#gen:routes": {
+      "inputs": [
+        "apps/frontend/package.json",
+        "apps/frontend/src/routes/**",
+        "apps/frontend/vite.config.ts",
+        "package.json",
+        "pnpm-lock.yaml",
+        "scripts/generate-routes.mjs"
+      ],
+      "outputs": ["apps/frontend/src/routeTree.gen.ts"]
+    },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "//#gen:routes"],
       "outputs": ["coverage/**"]
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "//#gen:routes"]
     }
   }
 }

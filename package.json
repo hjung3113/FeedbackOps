@@ -10,6 +10,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "gen:routes": "node scripts/generate-routes.mjs",
     "test": "turbo run test",
     "lint": "biome check .",
     "format": "biome format --write .",
