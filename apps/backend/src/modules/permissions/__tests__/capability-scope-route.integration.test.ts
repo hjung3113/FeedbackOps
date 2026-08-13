@@ -6,6 +6,7 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import { allManagedSystemIds } from '../../core/managed-systems/read-projections.js';
 import { createCheckService } from '../check-service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -72,18 +73,23 @@ describe.skipIf(!runIntegration)('GET /me/permissions/scope', () => {
         })
       ).headers['set-cookie'],
     );
-  const scope = async (external: string) =>
+  const scope = async (external: string, capability = 'voc.read') =>
     (
       await app.inject({
         method: 'GET',
-        url: '/me/permissions/scope?capability=voc.read',
+        url: `/me/permissions/scope?capability=${capability}`,
         headers: { cookie: `${SESSION_COOKIE_NAME}=${await login(external)}` },
       })
     ).json().scope as { kind: 'all' } | { kind: 'scoped'; managed_system_ids: string[] };
-  const grant = async (actorId: string, managedSystemId: string | null, extra = '') =>
+  const grant = async (
+    actorId: string,
+    managedSystemId: string | null,
+    extra = '',
+    capability = 'voc.read',
+  ) =>
     dbHandle.pool.query(
-      `insert into permission.permission_grants (workspace_id, actor_id, capability, managed_system_id, granted_by_actor_id, ${extra || 'granted_at'}) values ($1,$2,'voc.read',$3,$4${extra ? ", now() - interval '1 day'" : ', now()'})`,
-      [WORKSPACE_ID, actorId, managedSystemId, ACTORS.admin.id],
+      `insert into permission.permission_grants (workspace_id, actor_id, capability, managed_system_id, granted_by_actor_id, ${extra || 'granted_at'}) values ($1,$2,$3,$4,$5${extra ? ", now() - interval '1 day'" : ', now()'})`,
+      [WORKSPACE_ID, actorId, capability, managedSystemId, ACTORS.admin.id],
     );
 
   beforeAll(async () => {
@@ -259,5 +265,73 @@ describe.skipIf(!runIntegration)('GET /me/permissions/scope', () => {
       url: '/me/permissions/scope?capability=voc.read',
     });
     expect(unauthenticated.statusCode).toBe(401);
+  });
+
+  it('AC-1 returns all for admin finding.manage despite a workspace-wide deny', async () => {
+    await dbHandle.pool.query(
+      `insert into permission.permission_denies (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id) values ($1,$2,'finding.manage',null,'test',$3)`,
+      [WORKSPACE_ID, ACTORS.admin.id, ACTORS.admin.id],
+    );
+    const check = createCheckService({ db: dbHandle.db });
+    await expect(
+      check.capabilityScope(
+        { actor_id: ACTORS.admin.id, workspace_id: WORKSPACE_ID, role_level: 'admin' },
+        'finding.manage',
+        { workspace_id: WORKSPACE_ID },
+      ),
+    ).resolves.toEqual({ kind: 'all' });
+  });
+
+  it('AC-2 returns all for admin survey.manage without grants or denies', async () => {
+    expect(await scope(ACTORS.admin.external, 'survey.manage')).toEqual({ kind: 'all' });
+  });
+
+  it('AC-3 returns no ids for admin survey.manage with a workspace-wide deny', async () => {
+    await dbHandle.pool.query(
+      `insert into permission.permission_denies (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id) values ($1,$2,'survey.manage',null,'test',$3)`,
+      [WORKSPACE_ID, ACTORS.admin.id, ACTORS.admin.id],
+    );
+    expect(await scope(ACTORS.admin.external, 'survey.manage')).toEqual({
+      kind: 'scoped',
+      managed_system_ids: [],
+    });
+  });
+
+  it('AC-4 returns exactly all non-denied ids for admin survey.read', async () => {
+    await dbHandle.pool.query(
+      `insert into permission.permission_denies (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id) values ($1,$2,'survey.read',$3,'test',$4)`,
+      [WORKSPACE_ID, ACTORS.admin.id, B, ACTORS.admin.id],
+    );
+    const expectedIds = (await allManagedSystemIds(dbHandle.db, WORKSPACE_ID))
+      .filter((id) => id !== B)
+      .sort();
+    const result = await scope(ACTORS.admin.external, 'survey.read');
+    if (result.kind !== 'scoped') throw new Error('expected scoped');
+    expect([...result.managed_system_ids].sort()).toEqual(expectedIds);
+  });
+
+  it('AC-5 keeps admin survey.export scoped without grants', async () => {
+    expect(await scope(ACTORS.admin.external, 'survey.export')).toEqual({
+      kind: 'scoped',
+      managed_system_ids: [],
+    });
+  });
+
+  it('AC-6 keeps developer survey.manage limited to its granted managed system', async () => {
+    await grant(ACTORS.developer.id, A, '', 'survey.manage');
+    expect(await scope(ACTORS.developer.external, 'survey.manage')).toEqual({
+      kind: 'scoped',
+      managed_system_ids: [A],
+    });
+  });
+
+  it('AC-7 returns the all envelope for an authenticated admin survey.manage request', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/me/permissions/scope?capability=survey.manage',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${await login(ACTORS.admin.external)}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ scope: { kind: 'all' } });
   });
 });
