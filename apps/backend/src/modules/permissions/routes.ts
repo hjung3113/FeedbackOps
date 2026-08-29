@@ -14,7 +14,7 @@ import {
   needMoreInfoPermissionRequestSchema,
   rejectPermissionRequestSchema,
 } from '@fops/shared';
-import { HttpError, sendError } from '../../lib/errors.js';
+import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -36,6 +36,7 @@ export interface PermissionsRoutesOptions {
   workspaceId: string;
   rateLimitConfig?: {
     mutation: Record<string, unknown>;
+    sensitive: Record<string, unknown>;
   };
 }
 
@@ -262,9 +263,8 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
         })
         .safeParse(req.query);
       if (!parsed.success) {
-        return reply.code(400).send({
-          code: 'validation.failed',
-          message: 'invalid query parameters',
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
         });
       }
       return await requestService.listAllActive(actor, parsed.data.status);
@@ -287,9 +287,8 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
         })
         .safeParse(req.query);
       if (!parsed.success) {
-        return reply.code(400).send({
-          code: 'validation.failed',
-          message: 'invalid query parameters',
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
         });
       }
       return await requestService.listAllActive(
@@ -363,7 +362,7 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
       method: 'POST',
       url: `/permissions/requests/:id/${route.suffix}`,
       preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-      ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+      ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.sensitive as never } } : {}),
       handler: async (req, reply) => {
         const sess = req.session;
         if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
@@ -382,9 +381,8 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
         }
         const parsed = route.schema.safeParse(req.body ?? {});
         if (!parsed.success) {
-          return reply.code(400).send({
-            code: 'validation.failed',
-            message: 'invalid request body',
+          return sendError(reply, 'validation.failed', 'invalid request body', {
+            fields: fieldsFromZodIssues(parsed.error.issues),
           });
         }
         const actor: ActorContext = {
