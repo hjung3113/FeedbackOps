@@ -163,7 +163,7 @@ When reviewing a PR, prioritize product invariant violations, ownership boundary
 Read before any dispatch:
 - .agent-workflow/model-alloc.json — project-owned allocation contract
 - .agent-workflow/docs/agents/multi-agent-workflow.md — Model Allocation
-- .agent-workflow/docs/agents/conductor-persona.md — section 2: CONDUCTOR is read-only on product code
+- .agent-workflow/docs/agents/conductor-persona.md — section 2: product-code writes are delegated by default; direct edits require the narrow explicit path
 
 The allocation file is authoritative. CONDUCTOR dispatches artifact-producing work; workers produce code, docs, plans, and recon.
 <!-- agent-workflow:end -->
