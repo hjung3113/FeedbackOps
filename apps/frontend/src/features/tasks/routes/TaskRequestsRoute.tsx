@@ -907,13 +907,23 @@ function TaskRequestPanel({
   );
 }
 
-export function TaskRequestsRoute({ selectedParam }: { selectedParam?: string | undefined }) {
+export function TaskRequestsRoute({
+  selectedParam,
+  managedSystem,
+}: {
+  selectedParam?: string | undefined;
+  managedSystem?: string;
+}) {
   const [activeTab, setActiveTab] = React.useState<TaskRequestTab>('pending_review');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   const taskRequestsQuery = useQuery({
-    queryKey: ['task-requests'] as const,
-    queryFn: ({ signal }) => fetchTaskRequests({ signal }),
+    queryKey: ['task-requests', managedSystem] as const,
+    queryFn: ({ signal }) =>
+      fetchTaskRequests({
+        signal,
+        ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
+      }),
   });
   const meQuery = useQuery({
     queryKey: ['me'] as const,

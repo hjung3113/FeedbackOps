@@ -513,10 +513,15 @@ export function createTasksService(deps: TasksServiceDeps) {
     }
     const assigneeActorId =
       args.query.assignee === 'me' ? args.actor.actor_id : args.query.assignee;
+    const managedSystemId =
+      args.query.managed_system_id && args.query.managed_system_id !== 'all'
+        ? args.query.managed_system_id
+        : undefined;
     const rows = await listTasksByWorkspace(deps.db, {
       workspaceId: args.actor.workspace_id,
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),
       ...(assigneeActorId !== undefined ? { assigneeActorId } : {}),
+      ...(managedSystemId !== undefined ? { managedSystemId } : {}),
     });
     const items: TaskDto[] = [];
     for (const row of rows) {

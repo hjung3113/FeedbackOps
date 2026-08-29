@@ -94,14 +94,15 @@ function GroupByButton({ value, onChange }: { value: GroupBy; onChange: (value: 
   </div>;
 }
 
-export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
+export function TaskBoardRoute({ selectedParam, managedSystem }: { selectedParam?: string; managedSystem?: string }) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const [groupBy, setGroupBy] = React.useState<GroupBy>('status');
   const [filters, setFilters] = React.useState<Filters>({});
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
   const mutationTokens = React.useRef(new Map<string, number>());
-  const tasksQuery = useQuery({ queryKey: ['tasks'] as const, queryFn: ({ signal }) => listTasks({ signal }), staleTime: 30_000 });
+  const tasksKey = ['tasks', managedSystem] as const;
+  const tasksQuery = useQuery({ queryKey: tasksKey, queryFn: ({ signal }) => listTasks({ signal, ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}) }), staleTime: 30_000 });
   const { actors } = useWorkspaceActors();
   const systemsQuery = useQuery({ queryKey: ['managed-systems', 'all'] as const, queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }), staleTime: 600_000 });
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
@@ -130,13 +131,13 @@ export function TaskBoardRoute({ selectedParam }: { selectedParam?: string }) {
       const token = (mutationTokens.current.get(task.id) ?? 0) + 1;
       mutationTokens.current.set(task.id, token);
       await client.cancelQueries({ queryKey: ['tasks'] });
-      const previousStatus = client.getQueryData<{ items: TaskDto[] }>(['tasks'])?.items.find((item) => item.id === task.id)?.status ?? task.status;
-      client.setQueryData<{ items: TaskDto[] }>(['tasks'], (old) => old ? { ...old, items: old.items.map((item) => item.id === task.id ? { ...item, status } : item) } : old);
+      const previousStatus = client.getQueryData<{ items: TaskDto[] }>(tasksKey)?.items.find((item) => item.id === task.id)?.status ?? task.status;
+      client.setQueryData<{ items: TaskDto[] }>(tasksKey, (old) => old ? { ...old, items: old.items.map((item) => item.id === task.id ? { ...item, status } : item) } : old);
       return { taskId: task.id, previousStatus, token };
     },
     onError: (error, _variables, context) => {
       if (context && mutationTokens.current.get(context.taskId) === context.token) {
-        client.setQueryData<{ items: TaskDto[] }>(['tasks'], (old) => old ? { ...old, items: old.items.map((item) => item.id === context.taskId ? { ...item, status: context.previousStatus } : item) } : old);
+        client.setQueryData<{ items: TaskDto[] }>(tasksKey, (old) => old ? { ...old, items: old.items.map((item) => item.id === context.taskId ? { ...item, status: context.previousStatus } : item) } : old);
       }
       if (error instanceof ApiError && error.code === 'conflict.stale_write' && context && mutationTokens.current.get(context.taskId) === context.token) { void client.invalidateQueries({ queryKey: ['tasks'] }); toast.error('Task changed elsewhere. Board refreshed.'); return; }
       toast.error('Task status could not be updated.');

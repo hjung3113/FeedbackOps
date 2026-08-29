@@ -101,6 +101,18 @@ describe('TaskListRoute display ids', () => {
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
   });
 
+  it('AC-395-5: passes managed_system_id to listTasks when managedSystem prop is set', async () => {
+    vi.mocked(listTasks).mockClear();
+    renderWithClient(<TaskListRoute managedSystem="30000000-0000-0000-0000-000000000003" />);
+
+    await screen.findByText('TASK-1000');
+    expect(vi.mocked(listTasks)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        managed_system_id: '30000000-0000-0000-0000-000000000003',
+      }),
+    );
+  });
+
   it('opens the source Finding from the linked-context trail', async () => {
     navigateMock.mockClear();
     renderWithClient(<TaskListRoute />);

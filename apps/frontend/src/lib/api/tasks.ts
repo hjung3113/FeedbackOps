@@ -15,11 +15,19 @@ export interface ListTasksResponse {
 }
 
 export async function listTasks(
-  options: { status?: TaskStatus; assignee?: string; signal?: AbortSignal } = {},
+  options: {
+    status?: TaskStatus;
+    assignee?: string;
+    managed_system_id?: string;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<ListTasksResponse> {
   const qs = new URLSearchParams();
   if (options.status !== undefined) qs.set('status', options.status);
   if (options.assignee !== undefined) qs.set('assignee', options.assignee);
+  if (options.managed_system_id !== undefined) {
+    qs.set('managed_system_id', options.managed_system_id);
+  }
   const path = qs.size > 0 ? `/tasks?${qs.toString()}` : '/tasks';
   const res = await apiClient<ListTasksResponse>('GET', path, {
     ...(options.signal !== undefined ? { signal: options.signal } : {}),
