@@ -133,9 +133,14 @@ export async function listTaskRequestsByWorkspace(
   input: {
     workspaceId: string;
     status?: TaskRequestRow['status'];
+    managedSystemId?: string;
   },
 ): Promise<TaskRequestRow[]> {
-  const statusPredicate = input.status === undefined ? sql`TRUE` : sql`status = ${input.status}`;
+  const predicates = [sql`workspace_id = ${input.workspaceId}`];
+  if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
+  if (input.managedSystemId !== undefined) {
+    predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
+  }
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
       id, workspace_id, display_id, source_type, source_id, primary_managed_system_id,
@@ -143,8 +148,7 @@ export async function listTaskRequestsByWorkspace(
       reviewer_actor_id, decision_reason, decided_at,
       created_at, updated_at
     FROM task_request.task_requests
-    WHERE workspace_id = ${input.workspaceId}
-      AND ${statusPredicate}
+    WHERE ${sql.join(predicates, sql` AND `)}
     ORDER BY created_at DESC, id DESC
   `);
   return result.rows.map(mapTaskRequestRow);

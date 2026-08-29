@@ -149,12 +149,16 @@ export async function listTasksByWorkspace(
     workspaceId: string;
     status?: TaskStatus;
     assigneeActorId?: string;
+    managedSystemId?: string;
   },
 ): Promise<TaskRow[]> {
   const predicates = [sql`workspace_id = ${input.workspaceId}`];
   if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
   if (input.assigneeActorId !== undefined) {
     predicates.push(sql`assignee_actor_id = ${input.assigneeActorId}`);
+  }
+  if (input.managedSystemId !== undefined) {
+    predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
   }
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT ${TASK_SELECT}

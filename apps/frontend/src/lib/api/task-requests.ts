@@ -13,10 +13,17 @@ export interface ListTaskRequestsResponse {
 }
 
 export async function fetchTaskRequests(
-  options: { status?: TaskRequestStatus; signal?: AbortSignal } = {},
+  options: {
+    status?: TaskRequestStatus;
+    managed_system_id?: string;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<ListTaskRequestsResponse> {
   const qs = new URLSearchParams();
   if (options.status !== undefined) qs.set('status', options.status);
+  if (options.managed_system_id !== undefined) {
+    qs.set('managed_system_id', options.managed_system_id);
+  }
   const path = qs.size > 0 ? `/task-requests?${qs.toString()}` : '/task-requests';
   const res = await apiClient<ListTaskRequestsResponse>('GET', path, {
     ...(options.signal !== undefined ? { signal: options.signal } : {}),

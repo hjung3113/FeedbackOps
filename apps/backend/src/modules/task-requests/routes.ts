@@ -70,6 +70,9 @@ export const taskRequestsRoutes: FastifyPluginAsync<TaskRequestsRoutesOptions> =
           role_level: sess.role_level,
         },
         ...(parsed.data.status !== undefined ? { status: parsed.data.status } : {}),
+        ...(parsed.data.managed_system_id !== undefined
+          ? { managed_system_id: parsed.data.managed_system_id }
+          : {}),
       });
       return reply.header('cache-control', 'private, no-cache').code(200).send(result);
     },
