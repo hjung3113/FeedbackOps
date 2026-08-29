@@ -554,6 +554,101 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     expect(await isPendingInMine(request, requesterCookie)).toBe(true);
   });
 
+  // ── Issue #404: validation 422 normalization + sensitive rate tier ──────
+
+  it.each([
+    ['AC-1 returns 422 with field detail for a bogus status filter (legacy list)', '/permission-requests'],
+    ['AC-1 returns 422 with field detail for a bogus status filter (console list)', '/permissions/requests'],
+  ] as const)('%s', async (_title, url) => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `${url}?status=bogus`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({
+      code: 'validation.failed',
+      message: 'invalid query parameters',
+    });
+    const fields = response.json<{ detail: { fields: Array<{ path: unknown[] }> } }>().detail
+      .fields;
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields.some((field) => field.path.includes('status'))).toBe(true);
+  });
+
+  it('AC-2 returns 422 with field detail for a schema-violating decision body', async () => {
+    const id = await seedRequest();
+    const response = await decide(id, 'approve', { self_approval: 'not-an-object' });
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ code: 'validation.failed' });
+    const fields = response.json<{ detail: { fields: Array<{ path: unknown[] }> } }>().detail
+      .fields;
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields.some((field) => field.path.includes('self_approval'))).toBe(true);
+  });
+
+  it('AC-3 rate-limits decision routes on the sensitive tier (5/min)', async () => {
+    const approver = await insertAdmin(`perm-self-rate404-${randomUUID()}`);
+    const requester = await insertDevActor(db, WORKSPACE_ID, `perm-decision-${randomUUID()}`);
+    const capabilities = [
+      'workspace.read',
+      'voc.read',
+      'finding.read',
+      'finding.manage',
+      'survey.read',
+      'survey.manage',
+    ] as const;
+    const ids = await Promise.all(
+      capabilities.map((capability) => seedRequest({ capability, requesterActorId: requester.id })),
+    );
+    for (const id of ids.slice(0, 5)) {
+      expect((await decide(id, 'approve', {}, approver.cookie)).statusCode).toBe(200);
+    }
+    const sixth = await decide(ids[5] ?? '', 'approve', {}, approver.cookie);
+    expect(sixth.statusCode).toBe(429);
+    const rateRow = await db.pool.query<{ counter: string }>(
+      `select counter from core.rate_limits where route_group = 'sensitive' and key = $1`,
+      [`${WORKSPACE_ID}:${approver.id}`],
+    );
+    expect(rateRow.rows).toHaveLength(1);
+    expect(Number(rateRow.rows[0]?.counter)).toBe(6);
+  });
+
+  it('AC-4 keeps the mutation tier (10/min) on permission request creation', async () => {
+    const requesterCookie = await loginAs(app, requesterExternalId);
+    const capabilities = [
+      'workspace.read',
+      'voc.read',
+      'finding.read',
+      'finding.manage',
+      'survey.read',
+      'survey.manage',
+      'survey.export',
+      'voc.triage',
+      'workspace.admin',
+      'task_request.self_approve',
+      'survey.read_personal_responses',
+    ] as const;
+    let sixthStatus = -1;
+    for (const [index, capability] of capabilities.entries()) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/permission-requests',
+        headers: {
+          cookie: `${SESSION_COOKIE_NAME}=${requesterCookie}`,
+          'content-type': 'application/json',
+        },
+        payload: {
+          requested_capability: capability,
+          reason: `AC-4 ${capability}`,
+        },
+      });
+      if (index === 5) sixthStatus = response.statusCode;
+      if (index === 10) expect(response.statusCode).toBe(429);
+    }
+    expect(sixthStatus).not.toBe(429);
+  });
+
   it('returns not-found for an unknown request', async () => {
     const response = await decide(randomUUID(), 'approve', {});
     expect(response.statusCode).toBe(404);
