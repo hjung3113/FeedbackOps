@@ -27,6 +27,10 @@ export interface UseTaskRequestDecisionResult {
   dialog: DecisionDialogState | null;
   isSubmitting: boolean;
   isPending: boolean;
+  /** Last decision mutation's settled result, independent of dialog/toast state. */
+  result: TaskRequestDto | null;
+  /** Last decision mutation's settled error, independent of dialog/toast state. */
+  error: ApiError | null;
   isSelfApproval: boolean;
   canApprove: boolean;
   canReject: boolean;
@@ -165,6 +169,8 @@ export function useTaskRequestDecision({
     dialog: decisionDialog,
     isSubmitting: isDecisionSubmitting,
     isPending: decisionMutation.isPending,
+    result: decisionMutation.data ?? null,
+    error: decisionMutation.error ?? null,
     isSelfApproval,
     canApprove,
     canReject,

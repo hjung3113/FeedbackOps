@@ -38,6 +38,10 @@ export interface UseTaskRequestConversionResult {
   setAnalyticsAreaId: (value: string) => void;
   analyticsAreas: Array<{ id: string; name: string }> | undefined;
   isPending: boolean;
+  /** Last conversion mutation's settled result, independent of toast state. */
+  result: TaskDto | null;
+  /** Last conversion mutation's settled error, independent of toast state. */
+  error: Error | null;
   canConvert: boolean;
   submit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
@@ -155,6 +159,8 @@ export function useTaskRequestConversion({
     setAnalyticsAreaId: setConvertAnalyticsAreaId,
     analyticsAreas: analyticsAreasQuery.data?.items,
     isPending: convertMutation.isPending,
+    result: convertMutation.data ?? null,
+    error: convertMutation.error ?? null,
     canConvert: canConvertTaskRequest(item.status) && canManage,
     submit,
   };
