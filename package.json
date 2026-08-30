@@ -16,6 +16,7 @@
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "check:boundaries": "node scripts/check-boundaries.mjs",
+    "gate:db-migration-drift": "node scripts/gates/db-migration-drift-gate.mjs",
     "gate:fe-typecheck": "node scripts/gates/fe-typecheck-gate.mjs",
     "gate:fe-lint": "node scripts/gates/fe-biome-gate.mjs"
   },
