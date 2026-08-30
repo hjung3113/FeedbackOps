@@ -70,19 +70,19 @@ function checkRegistration() {
 }
 
 function checkDrizzleHistory() {
-  const configuredMigrateUrl = process.env.DATABASE_URL_MIGRATE;
+  // Always override DATABASE_URL_MIGRATE with an unreachable URL, even when
+  // the calling shell/CI has a real one set — this gate must never be able
+  // to reach a live database (dev or otherwise), regardless of environment.
   const safeMigrateUrl = 'postgres://fops_migrate@127.0.0.1:1/drizzle_gate_no_database';
-  if (!configuredMigrateUrl) {
-    console.error(
-      'migration drift: DATABASE_URL_MIGRATE is unset; using a safe unreachable URL for drizzle-kit check',
-    );
-  }
+  console.error(
+    'migration drift: forcing DATABASE_URL_MIGRATE to an unreachable URL for drizzle-kit check',
+  );
   const run = spawnSync('pnpm', ['--filter', 'backend', 'db:check'], {
     cwd: root,
     stdio: 'inherit',
     env: {
       ...process.env,
-      DATABASE_URL_MIGRATE: configuredMigrateUrl || safeMigrateUrl,
+      DATABASE_URL_MIGRATE: safeMigrateUrl,
     },
   });
   if (run.error) {
