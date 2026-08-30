@@ -18,6 +18,10 @@ export interface UseTaskRequestLinkResult {
   isTasksLoading: boolean;
   inScopeTasks: TaskDto[] | undefined;
   isPending: boolean;
+  /** Last link mutation's settled result, independent of toast state. */
+  result: TaskDto | null;
+  /** Last link mutation's settled error, independent of toast state. */
+  error: ApiError | null;
   canLinkExisting: boolean;
   link: (taskId: string) => void;
 }
@@ -83,6 +87,8 @@ export function useTaskRequestLink({
     isTasksLoading: tasksQuery.isLoading,
     inScopeTasks,
     isPending: linkMutation.isPending,
+    result: linkMutation.data ?? null,
+    error: linkMutation.error ?? null,
     canLinkExisting: canLinkExistingTaskRequest(item.status) && canManage,
     link: (taskId) => {
       if (!linkMutation.isPending) linkMutation.mutate(taskId);
