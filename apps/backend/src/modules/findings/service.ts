@@ -18,6 +18,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { insertActiveEntityLink, resolveVocEndpoint } from '../entity-links/repo.js';
+import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import type { EntityLinksService } from '../entity-links/service.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
@@ -264,6 +265,14 @@ export function createFindingsService(deps: FindingsServiceDeps) {
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
+
+          assertLinkManagedSystemCompatibility(
+            sourceVoc.primaryManagedSystemId,
+            targetManagedSystemId,
+            {
+              path: ['primary_managed_system_id'],
+            },
+          );
 
           if (input.analytics_area_id) {
             const aa = await lockAnalyticsArea(tx, actor.workspace_id, input.analytics_area_id);
