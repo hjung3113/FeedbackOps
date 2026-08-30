@@ -21,6 +21,7 @@ import {
   selectActiveLinksForEndpoint,
   selectEligibleVocLinksForReleasedTask,
 } from '../entity-links/repo.js';
+import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { lockFindingById, updateFindingLinkedTask } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
@@ -118,6 +119,15 @@ async function preserveSourceLinks(args: {
     (link) => link.source_type === 'finding' && link.relation_type === 'requested_task',
   );
   if (findingLink) {
+    // #388: a legacy finding->task_request link created before cross-MS
+    // enforcement can still carry a different Managed System than the task
+    // it is now being converted into. Refuse to propagate it as a new
+    // canonical link rather than silently writing a mismatched MS.
+    assertLinkManagedSystemCompatibility(
+      findingLink.managed_system_id,
+      args.task.primary_managed_system_id,
+      { path: ['task_id'] },
+    );
     const findingTuple = registeredEntityLinkPairSchema.parse({
       source_type: 'finding',
       target_type: 'task',
@@ -146,6 +156,13 @@ async function preserveSourceLinks(args: {
       if (evidenceLink.source_type !== 'voc' || evidenceLink.relation_type !== 'evidence_of') {
         continue;
       }
+      // #388: same rationale as the finding->task link above — a legacy
+      // voc->finding evidence link may predate cross-MS enforcement.
+      assertLinkManagedSystemCompatibility(
+        evidenceLink.managed_system_id,
+        args.task.primary_managed_system_id,
+        { path: ['task_id'] },
+      );
       const evidenceTuple = registeredEntityLinkPairSchema.parse({
         source_type: 'voc',
         target_type: 'task',

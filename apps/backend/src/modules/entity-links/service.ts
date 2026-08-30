@@ -218,8 +218,9 @@ function toDetachedResponse(row: EntityLinkRow): DetachedEntityLinkResponse {
 /**
  * Create-time Managed System compatibility gate (#388). Both endpoints of an
  * entity link must resolve to the same Managed System; a mismatch is rejected
- * before any capability check or insert. This is the single authoritative seam
- * — the polymorphic entity_links table cannot express it as a CHECK/FK.
+ * after endpoint authorization and before insert. This is the single
+ * authoritative seam — the polymorphic entity_links table cannot express it
+ * as a CHECK/FK.
  */
 export function assertLinkManagedSystemCompatibility(
   sourceManagedSystemId: string,
@@ -762,8 +763,6 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
 
-    assertLinkManagedSystemCompatibility(sourceRow.managed_system_id, targetRow.managed_system_id);
-
     const sourceAllowed = await sourceProvider.canRead(deps, actor, sourceRow);
     if (!sourceAllowed) {
       throw new HttpError('permission.denied', 'missing source VOC read scope');
@@ -776,6 +775,8 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     if (!targetAllowed) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
+
+    assertLinkManagedSystemCompatibility(sourceRow.managed_system_id, targetRow.managed_system_id);
 
     const persist = async (tx: Tx) => {
       const inserted = await insertActiveEntityLink(tx, {
