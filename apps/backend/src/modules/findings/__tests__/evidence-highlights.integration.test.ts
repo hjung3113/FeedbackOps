@@ -136,16 +136,24 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
 
   async function seedSource(
     title = 'Evidence Source VOC',
+    msId?: string,
   ): Promise<{ msId: string; vocId: string; vocDisplayId: string; title: string }> {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), `${title} MS`);
-    const voc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterActorId, title);
+    const managedSystemId =
+      msId ?? (await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), `${title} MS`));
+    const voc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      managedSystemId,
+      reporterActorId,
+      title,
+    );
     const display = await dbHandle.pool.query<{ display_id: string }>(
       'select display_id from voc.vocs where id = $1',
       [voc.id],
     );
     const vocDisplayId = display.rows[0]?.display_id;
     if (!vocDisplayId) throw new Error(`seedSource failed to read display_id for ${title}`);
-    return { msId, vocId: voc.id, vocDisplayId, title };
+    return { msId: managedSystemId, vocId: voc.id, vocDisplayId, title };
   }
 
   async function seedFinding(input: {
@@ -352,7 +360,9 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
 
   it('links additional VOC evidence to a Finding using the evidence_of tuple', async () => {
     const source = await seedSource();
-    const extra = await seedSource('Additional Evidence VOC');
+    // Cross-MS link creation is rejected (#388): the extra evidence VOC must
+    // share the Finding's Managed System.
+    const extra = await seedSource('Additional Evidence VOC', source.msId);
     const finding = await seedFinding({
       managedSystemId: source.msId,
       sourceVocId: source.vocId,
@@ -508,6 +518,8 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
 
   it('denies unauthorized highlight writes and hides unreadable source VOCs on link-evidence', async () => {
     const source = await seedSource();
+    // The source is cross-MS and unreadable. The missing voc.read scope must
+    // still be evaluated before #388's compatibility rejection is disclosed.
     const hidden = await seedSource('Unreadable Link Evidence VOC');
     const finding = await seedFinding({
       managedSystemId: source.msId,
@@ -535,5 +547,25 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
     const unreadableSource = await linkEvidence(devCookie, finding.id, hidden.vocId);
     expect(unreadableSource.statusCode).toBe(404);
     expect(unreadableSource.json<{ code: string }>().code).toBe('not_found.record');
+  });
+
+  it('AC-388-4 link-evidence rejects a cross-MS source VOC without persisting a link (AC-388-3)', async () => {
+    const source = await seedSource();
+    const crossMs = await seedSource('Cross-MS Evidence VOC');
+    const finding = await seedFinding({
+      managedSystemId: source.msId,
+      sourceVocId: source.vocId,
+    });
+
+    const res = await linkEvidence(adminCookie, finding.id, crossMs.vocId);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ code: string }>().code).toBe('validation.failed');
+    const rows = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.entity_links
+        where workspace_id = $1 and source_id = $2 and target_id = $3`,
+      [WORKSPACE_ID, crossMs.vocId, finding.id],
+    );
+    expect(rows.rows[0]?.n).toBe(0);
   });
 });

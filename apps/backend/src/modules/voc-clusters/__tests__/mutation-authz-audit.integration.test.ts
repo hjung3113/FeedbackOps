@@ -405,6 +405,43 @@ describe.skipIf(!runIntegration)('VOC cluster mutation authorization and audit r
     expect(await auditCount()).toBe(0);
   });
 
+  it('AC-388-4 createFindingFromCluster rejects a cross-MS target and persists no finding, link, or audit row (AC-388-3)', async () => {
+    const cluster = await seedCluster('Cross-MS create finding cluster');
+
+    await expect(
+      vocClustersService.createFindingFromCluster({
+        actor: { actor_id: adminActorId, workspace_id: workspaceId, role_level: 'admin' },
+        clusterId: cluster.id,
+        input: {
+          title: 'Cross-MS cluster finding',
+          summary: 'Must not persist',
+          severity: 'medium',
+          primary_managed_system_id: targetManagedSystemId,
+        },
+        idempotencyKey: randomUUID(),
+        requestHash: 'cross-ms-create-finding-from-cluster',
+      }),
+    ).rejects.toMatchObject({ code: 'validation.failed' });
+
+    expect(
+      await tableCount(
+        `select count(*)::int as n
+           from finding.findings
+          where workspace_id = $1 and source_type = 'voc_cluster' and source_id = $2`,
+        [workspaceId, cluster.id],
+      ),
+    ).toBe(0);
+    expect(
+      await tableCount(
+        `select count(*)::int as n
+           from core.entity_links
+          where workspace_id = $1 and source_type = 'voc_cluster' and source_id = $2`,
+        [workspaceId, cluster.id],
+      ),
+    ).toBe(0);
+    expect(await auditCount()).toBe(0);
+  });
+
   it('denies listClusters to a non-developer reader before any audit or state change', async () => {
     await seedCluster('Read denied cluster');
 

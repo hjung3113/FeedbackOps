@@ -215,6 +215,27 @@ function toDetachedResponse(row: EntityLinkRow): DetachedEntityLinkResponse {
   };
 }
 
+/**
+ * Create-time Managed System compatibility gate (#388). Both endpoints of an
+ * entity link must resolve to the same Managed System; a mismatch is rejected
+ * after endpoint authorization and before insert. This is the single
+ * authoritative seam — the polymorphic entity_links table cannot express it
+ * as a CHECK/FK.
+ */
+export function assertLinkManagedSystemCompatibility(
+  sourceManagedSystemId: string,
+  targetManagedSystemId: string,
+  field: { path: (string | number)[] } = { path: ['target', 'id'] },
+): void {
+  if (sourceManagedSystemId !== targetManagedSystemId) {
+    throw new HttpError(
+      'validation.failed',
+      'entity link source and target must belong to the same managed system',
+      { fields: [{ path: field.path, code: 'managed_system_mismatch' }] },
+    );
+  }
+}
+
 async function assertVocReadScope(
   deps: Pick<EntityLinksServiceDeps, 'checkService'>,
   actor: EntityLinksActor,
@@ -754,6 +775,8 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     if (!targetAllowed) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
+
+    assertLinkManagedSystemCompatibility(sourceRow.managed_system_id, targetRow.managed_system_id);
 
     const persist = async (tx: Tx) => {
       const inserted = await insertActiveEntityLink(tx, {

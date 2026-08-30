@@ -44,6 +44,31 @@ Every new entity link must validate:
 - visibility is allowed for the relation and actor
 ```
 
+Managed System compatibility (#388) is enforced as equality: the source and
+target endpoints must resolve to the same `managed_system_id`. The single
+authoritative seam is `assertLinkManagedSystemCompatibility` in the backend
+entity-links service, invoked by `createLink` (generic `POST /entity-links`,
+Finding `link-evidence`) and by the domain creation paths that insert links
+directly (`POST /vocs/:id/create-finding`, `POST /voc-clusters/:id/create-finding`,
+`POST /voc-clusters/:id/link-finding`). A mismatch is rejected with
+`validation.failed` (`managed_system_mismatch`) before any insert or audit
+row. Task Request/Task conversion paths already constrain both endpoints to
+one Managed System by construction or explicit equality guards.
+
+Survey-response tuples are exempt: `survey_response` endpoints are
+command-only and opaque in the provider registry (no resolvable Managed
+System scope), and `POST /survey-responses/:id/create-finding` intentionally
+lets an operator derive the Finding into a chosen Managed System under dual
+authorization (survey read capability plus `finding.manage` on the target).
+
+No DB-level constraint enforces this: `core.entity_links` is polymorphic
+(`source_id`/`target_id` are bare uuids; the owning table — and therefore the
+authoritative `managed_system_id` — depends on `source_type`/`target_type`).
+A CHECK constraint cannot contain subqueries and a composite FK has no single
+column to reference; per-type triggers would re-implement endpoint resolution
+and authorization rules in SQL, duplicating the application seam. Application
+enforcement is therefore authoritative (#388, D-388-3).
+
 ## Provider Interface
 
 Each linkable module registers:
