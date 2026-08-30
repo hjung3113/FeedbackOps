@@ -7,8 +7,8 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
-import { loginAs } from '../../voc/__tests__/_seed-helpers.js';
 import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
+import { loginAs } from '../../voc/__tests__/_seed-helpers.js';
 import {
   cleanupVocClusterFixtures,
   grantCapability,
@@ -26,13 +26,13 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
   let appDb: DbHandle;
   let ops: DbHandle;
   let adminId: string;
-  let authorizedActorId: string;
   let clusterMsId: string;
   let targetMsId: string;
   let clusterId: string;
   let targetFindingId: string;
   let targetDisplayId: string;
   let deniedFindingId: string;
+  let sameMsFindingId: string;
   let authorizedCookie: string;
   let blindCookie: string;
   let noManageCookie: string;
@@ -86,6 +86,17 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
     });
     targetFindingId = finding.id;
     targetDisplayId = finding.display_id;
+    // Same-MS counterpart for create-path flows; cross-MS creation is
+    // rejected (#388) so the cross-MS pair below is only linkable via seed.
+    sameMsFindingId = (
+      await insertFindingRow(ops, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: clusterMsId,
+        sourceId: clusterId,
+        createdBy: adminId,
+        status: 'active',
+      })
+    ).id;
     deniedFindingId = (
       await insertFindingRow(ops, {
         workspaceId: WORKSPACE_ID,
@@ -100,7 +111,6 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
       externalId: `link-authorized-${randomUUID()}`,
       roleLevel: 'developer',
     });
-    authorizedActorId = authorized.id;
     fixtureActorIds.push(authorized.id);
     const blind = await insertActorRow(ops, {
       workspaceId: WORKSPACE_ID,
@@ -197,7 +207,7 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
         actorIds: fixtureActorIds,
         managedSystemIds: [clusterMsId, targetMsId],
         clusterIds: [clusterId],
-        findingIds: [targetFindingId, deniedFindingId],
+        findingIds: [targetFindingId, deniedFindingId, sameMsFindingId],
         permissionGrantIds: fixtureGrantIds,
       });
     }
@@ -214,25 +224,23 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
       body: { finding_id: options.findingId ?? targetFindingId },
     });
 
-  it('links as evidence, audits it, and hides the cross-MS target from a cluster reader without target scope', async () => {
-    const linked = await link(authorizedCookie);
-    expect(linked.statusCode).toBe(201);
-    expect(linked.json()).toEqual({
-      id: targetFindingId,
-      display_id: targetDisplayId,
-      status: 'active',
-    });
+  it('seeds a cross-MS evidence link and hides the target from a cluster reader without target scope', async () => {
+    // Cross-MS creation is rejected (#388); seed the row directly so the
+    // hidden linked-finding projections below stay covered.
+    await ops.pool.query(
+      `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        )
+       values ($1, 'voc_cluster', $2, 'finding', $3, 'evidence_of',
+               'internal_only', 'active', $4, $5)`,
+      [WORKSPACE_ID, clusterId, targetFindingId, clusterMsId, adminId],
+    );
     const relation = await ops.pool.query<{ relation_type: string }>(
       'select relation_type from core.entity_links where source_id=$1 and target_id=$2 and status=$3',
       [clusterId, targetFindingId, 'active'],
     );
     expect(relation.rows).toEqual([{ relation_type: 'evidence_of' }]);
-    const audit = await ops.pool.query<{ event_type: string; actor_id: string }>(
-      'select event_type, actor_id from core.audit_log where subject_id=$1 and event_type=$2',
-      [targetFindingId, 'finding_linked_to_voc_cluster'],
-    );
-    expect(audit.rows).toHaveLength(1);
-    expect(audit.rows[0]?.actor_id).toBe(authorizedActorId);
     const visible = await app.inject({
       method: 'GET',
       url: `/voc-clusters/${clusterId}`,
@@ -292,12 +300,30 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
   });
 
   it('returns the existing link on a duplicate without creating a second audit row', async () => {
-    const duplicate = await link(authorizedCookie);
+    const first = await link(authorizedCookie, { findingId: sameMsFindingId });
+    expect(first.statusCode).toBe(201);
+    const duplicate = await link(authorizedCookie, { findingId: sameMsFindingId });
     expect(duplicate.statusCode).toBe(200);
     const audit = await ops.pool.query(
       'select id from core.audit_log where subject_id=$1 and event_type=$2',
-      [targetFindingId, 'finding_linked_to_voc_cluster'],
+      [sameMsFindingId, 'finding_linked_to_voc_cluster'],
     );
     expect(audit.rows).toHaveLength(1);
+  });
+
+  it('AC-388-4 link-finding rejects a cross-MS target without persisting a link or audit row (AC-388-3)', async () => {
+    const rejected = await link(authorizedCookie);
+    expect(rejected.statusCode).toBe(422);
+    expect(rejected.json<{ code: string }>().code).toBe('validation.failed');
+    const persisted = await ops.pool.query<{ links: string; audits: string }>(
+      `select
+        (select count(*)::text from core.entity_links where source_id=$1 and target_id=$2) as links,
+        (select count(*)::text from core.audit_log where subject_id=$2 and event_type='finding_linked_to_voc_cluster') as audits`,
+      [clusterId, targetFindingId],
+    );
+    // The seeded cross-MS row from the first test still exists; the HTTP
+    // create path must not have added or audited a second one.
+    expect(persisted.rows[0]?.links).toBe('1');
+    expect(persisted.rows[0]?.audits).toBe('0');
   });
 });

@@ -143,21 +143,16 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
   async function seedVocPair(): Promise<{
     msA: string;
-    msB: string;
     sourceVoc: { id: string };
     targetVoc: { id: string };
   }> {
+    // Cross-MS link creation is rejected (#388), so every creatable fixture
+    // keeps both endpoints in one Managed System.
     const msA = await insertMsDirectly(
       migrateHandle,
       WORKSPACE_ID,
       `${uid(SLUG_PREFIX)}-a`,
       'Links MS-A',
-    );
-    const msB = await insertMsDirectly(
-      migrateHandle,
-      WORKSPACE_ID,
-      `${uid(SLUG_PREFIX)}-b`,
-      'Links MS-B',
     );
     const sourceVoc = await insertVocDirectly(
       migrateHandle,
@@ -169,11 +164,11 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     const targetVoc = await insertVocDirectly(
       migrateHandle,
       WORKSPACE_ID,
-      msB,
+      msA,
       reporterId,
       'Link Target VOC',
     );
-    return { msA, msB, sourceVoc, targetVoc };
+    return { msA, sourceVoc, targetVoc };
   }
 
   async function seedEntityLinkDirectly(input: {
@@ -375,8 +370,11 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     });
   });
 
-  it('POST returns 404 when actor lacks scope on the target VOC', async () => {
-    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+  it('POST returns 404 when actor lacks scope on the target endpoint', async () => {
+    // Same-MS endpoints (#388 rejects cross-MS): target scope is split by
+    // capability — the developer has voc.read but no finding.read/manage.
+    const { msA, sourceVoc } = await seedVocPair();
+    const finding = await seedFindingDirectly({ managedSystemId: msA, sourceVocId: sourceVoc.id });
     const { id: devId, externalId } = await insertDevActor(
       dbHandle,
       WORKSPACE_ID,
@@ -385,7 +383,10 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
     const devCookie = await loginAs(app, externalId);
 
-    const res = await postEntityLink(devCookie, sourceVoc.id, targetVoc.id);
+    const res = await postEntityLink(devCookie, sourceVoc.id, finding.id, {
+      target: { type: 'finding', id: finding.id },
+      relation_type: 'evidence_of',
+    });
     expect(res.statusCode).toBe(404);
   });
 
@@ -394,6 +395,42 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     const res = await postEntityLink(adminCookie, sourceVoc.id, sourceVoc.id);
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
+  });
+
+  it('AC-388-1 POST rejects a cross-MS link before persisting any row or audit record (AC-388-3)', async () => {
+    const { sourceVoc } = await seedVocPair();
+    const msB = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cross`,
+      'Links Cross MS',
+    );
+    const crossMsTarget = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msB,
+      reporterId,
+      'Cross-MS Target VOC',
+    );
+
+    const res = await postEntityLink(adminCookie, sourceVoc.id, crossMsTarget.id);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ code: string; detail: { fields: Array<{ code: string }> } }>().code).toBe(
+      'validation.failed',
+    );
+    const rows = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.entity_links
+        where workspace_id = $1 and source_id = $2 and target_id = $3`,
+      [WORKSPACE_ID, sourceVoc.id, crossMsTarget.id],
+    );
+    expect(rows.rows[0]?.n).toBe(0);
+    const audits = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from core.audit_log
+        where workspace_id = $1 and event_type = 'entity_link.created'`,
+      [WORKSPACE_ID],
+    );
+    expect(audits.rows[0]?.n).toBe(0);
   });
 
   it('POST accepts VOC→Finding created_finding and still rejects unsupported tuples', async () => {
@@ -424,14 +461,12 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     }
   });
 
-  it('POST honors generic tuples while leaving command-only tuples to their domain route', async () => {
+  it('AC-388-2 POST honors generic tuples while leaving command-only tuples to their domain route', async () => {
     const { endpoints, vocTarget } = await seedRegisteredTupleEndpoints();
 
     for (const tuple of registeredEntityLinkPairs) {
       const source = endpoints[tuple.source_type];
       const target = tuple.target_type === 'voc' ? vocTarget : endpoints[tuple.target_type];
-
-      // Rate-limit tiers currently share one global counter (#153); this test asserts tuple registration/visibility, not rate limits.
       await migrateHandle.pool.query('delete from core.rate_limits');
       const created = await postEntityLink(adminCookie, source.id, target.id, {
         source: { type: tuple.source_type, id: source.id },
@@ -561,7 +596,14 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     );
 
     await postEntityLink(adminCookie, sourceVoc.id, allowedTarget.id);
-    await postEntityLink(adminCookie, sourceVoc.id, hiddenTarget.id);
+    // Cross-MS creation is rejected (#388); seed the out-of-scope-target row
+    // directly so the hidden-stub GET behavior below stays covered.
+    await seedEntityLinkDirectly({
+      sourceId: sourceVoc.id,
+      targetId: hiddenTarget.id,
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
 
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('getsrc'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
@@ -1088,10 +1130,15 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
     const allowed = await postEntityLink(adminCookie, visibleSource.id, visibleTarget.id);
     expect(allowed.statusCode).toBe(201);
-    const hidden = await postEntityLink(adminCookie, visibleSource.id, hiddenTarget.id);
-    expect(hidden.statusCode).toBe(201);
+    // Cross-MS creation is rejected (#388); seed the out-of-scope-target row
+    // directly so the hidden-stub inventory behavior below stays covered.
     const allowedId = allowed.json<{ id: string }>().id;
-    const hiddenId = hidden.json<{ id: string }>().id;
+    const hiddenId = await seedEntityLinkDirectly({
+      sourceId: visibleSource.id,
+      targetId: hiddenTarget.id,
+      managedSystemId: msA,
+      visibility: 'internal_only',
+    });
 
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('invvis'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.read', msA, adminActorId);
@@ -1712,8 +1759,14 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
   });
 
   it('PATCH returns 404 when actor lacks scope on the target endpoint', async () => {
-    const { msA, sourceVoc, targetVoc } = await seedVocPair();
-    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    // Same-MS endpoints (#388 rejects cross-MS): the developer can read the
+    // VOC source but has no finding.read on the Finding target.
+    const { msA, sourceVoc } = await seedVocPair();
+    const finding = await seedFindingDirectly({ managedSystemId: msA, sourceVocId: sourceVoc.id });
+    const create = await postEntityLink(adminCookie, sourceVoc.id, finding.id, {
+      target: { type: 'finding', id: finding.id },
+      relation_type: 'evidence_of',
+    });
     expect(create.statusCode).toBe(201);
     const linkId = create.json<{ id: string }>().id;
 
@@ -1730,9 +1783,12 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
   });
 
   it('PATCH returns 404 for an already-detached link when actor lacks target scope', async () => {
-    const { msA, sourceVoc, targetVoc } = await seedVocPair();
-    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
-    expect(create.statusCode).toBe(201);
+    const { msA, sourceVoc } = await seedVocPair();
+    const finding = await seedFindingDirectly({ managedSystemId: msA, sourceVocId: sourceVoc.id });
+    const create = await postEntityLink(adminCookie, sourceVoc.id, finding.id, {
+      target: { type: 'finding', id: finding.id },
+      relation_type: 'evidence_of',
+    });
     const linkId = create.json<{ id: string }>().id;
 
     const detach = await patchEntityLink(adminCookie, linkId, { reason: 'Authorized detach' });
