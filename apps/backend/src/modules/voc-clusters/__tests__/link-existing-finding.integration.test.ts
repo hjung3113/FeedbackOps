@@ -312,6 +312,12 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
   });
 
   it('AC-388-4 link-finding rejects a cross-MS target without persisting a link or audit row (AC-388-3)', async () => {
+    const before = await ops.pool.query<{ links: string; audits: string }>(
+      `select
+        (select count(*)::text from core.entity_links where source_id=$1 and target_id=$2) as links,
+        (select count(*)::text from core.audit_log where subject_id=$2 and event_type='finding_linked_to_voc_cluster') as audits`,
+      [clusterId, targetFindingId],
+    );
     const rejected = await link(authorizedCookie);
     expect(rejected.statusCode).toBe(422);
     expect(rejected.json<{ code: string }>().code).toBe('validation.failed');
@@ -321,9 +327,6 @@ describe.skipIf(!runIntegration)('VOC cluster link existing Finding (#127)', () 
         (select count(*)::text from core.audit_log where subject_id=$2 and event_type='finding_linked_to_voc_cluster') as audits`,
       [clusterId, targetFindingId],
     );
-    // The seeded cross-MS row from the first test still exists; the HTTP
-    // create path must not have added or audited a second one.
-    expect(persisted.rows[0]?.links).toBe('1');
-    expect(persisted.rows[0]?.audits).toBe('0');
+    expect(persisted.rows).toEqual(before.rows);
   });
 });

@@ -518,9 +518,9 @@ describe.skipIf(!runIntegration)('Evidence Highlights backend (#124)', () => {
 
   it('denies unauthorized highlight writes and hides unreadable source VOCs on link-evidence', async () => {
     const source = await seedSource();
-    // Cross-MS link creation is rejected (#388); the unreadable source shares
-    // the Finding's MS so the 404 comes from the missing voc.read scope.
-    const hidden = await seedSource('Unreadable Link Evidence VOC', source.msId);
+    // The source is cross-MS and unreadable. The missing voc.read scope must
+    // still be evaluated before #388's compatibility rejection is disclosed.
+    const hidden = await seedSource('Unreadable Link Evidence VOC');
     const finding = await seedFinding({
       managedSystemId: source.msId,
       sourceVocId: source.vocId,
