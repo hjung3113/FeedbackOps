@@ -246,6 +246,60 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     });
   });
 
+  it('an archived source VOC turns hidden: the key disappears and its title is gone from the body', async () => {
+    const vocTitle = `SrcVoc VOC ${uid('archived')}`;
+    const chain = await seedChain({ vocTitle, findingSource: 'voc', taskRequestSource: 'finding' });
+
+    // Positive twin: before archiving, the admin sees the VOC as allowed.
+    const before = await getTask(adminCookie, chain.taskId);
+    expect(before.statusCode).toBe(200);
+    expect(
+      before.json<{ source: { voc?: { visibility_state: string } } }>().source.voc
+        ?.visibility_state,
+    ).toBe('allowed');
+
+    await migrateHandle.pool.query('update voc.vocs set archived_at = now() where id = $1', [
+      chain.voc?.id,
+    ]);
+
+    const after = await getTask(adminCookie, chain.taskId);
+    expect(after.statusCode).toBe(200);
+    expect(after.json<{ source: Record<string, unknown> }>().source).not.toHaveProperty('voc');
+    expect(JSON.stringify(after.json())).not.toContain(vocTitle);
+    // The Finding and Task Request nodes are untouched by the VOC's archival.
+    expect(after.json<{ source: { finding?: { id: string } } }>().source.finding?.id).toBe(
+      chain.findingId,
+    );
+  });
+
+  it('PATCH /tasks/:id returns the same source without a voc verdict (only GET carries it)', async () => {
+    const chain = await seedChain({
+      vocTitle: `SrcVoc VOC ${uid('patch')}`,
+      findingSource: 'voc',
+      taskRequestSource: 'finding',
+    });
+    const got = await getTask(adminCookie, chain.taskId);
+    const detail = got.json<{ updated_at: string; source: { voc?: unknown } }>();
+    // Positive twin: GET carries the verdict.
+    expect(detail.source.voc).toBeDefined();
+
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/tasks/${chain.taskId}`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+        'if-match': detail.updated_at,
+      },
+      payload: { status: 'doing' },
+    });
+    expect(patched.statusCode, JSON.stringify(patched.json())).toBe(200);
+    const body = patched.json<{ source: Record<string, unknown> | null }>();
+    expect(body.source).not.toBeNull();
+    expect(body.source).not.toHaveProperty('voc');
+  });
+
   it('developer with voc.read on the Managed System also gets the allowed verdict', async () => {
     const vocTitle = `SrcVoc VOC ${uid('readdev')}`;
     const chain = await seedChain({ vocTitle, findingSource: 'voc', taskRequestSource: 'finding' });
