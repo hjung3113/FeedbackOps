@@ -247,8 +247,10 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   }
 
   // Asserts a rejected conversion left nothing behind (#389): no task row, no
-  // entity link pointing at such a task (or converted_to from the request),
-  // no audit row, and the task request still approved.
+  // entity link into a task from the request or its source (the seed's
+  // finding -> task_request link is expected and excluded), no audit row
+  // correlated by the request id (not via surviving task rows), and the task
+  // request still approved.
   async function expectNoConversionSideEffects(taskRequestId: string): Promise<void> {
     const counts = await dbHandle.pool.query<{ tasks: number; links: number; audits: number }>(
       `select
@@ -257,18 +259,15 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
           (select count(*)::int from core.entity_links
             where workspace_id = $1
               and (
-                (target_type = 'task' and target_id in (
-                  select id from task.tasks
-                   where workspace_id = $1 and source_task_request_id = $2))
-                or (source_type = 'task_request' and source_id = $2
-                    and relation_type = 'converted_to')
+                target_type = 'task'
+                and source_id in (
+                  $2::uuid,
+                  (select source_id from task_request.task_requests where id = $2))
               )) as links,
           (select count(*)::int from core.audit_log
             where workspace_id = $1
               and event_type in ('task_created_from_request', 'task_linked_to_request')
-              and (subject_id = $2 or subject_id in (
-                select id from task.tasks
-                 where workspace_id = $1 and source_task_request_id = $2))) as audits`,
+              and (subject_id = $2 or detail->>'source_task_request_id' = $2::text)) as audits`,
       [WORKSPACE_ID, taskRequestId],
     );
     expect(counts.rows[0]).toMatchObject({ tasks: 0, links: 0, audits: 0 });

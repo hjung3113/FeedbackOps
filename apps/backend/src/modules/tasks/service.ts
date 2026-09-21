@@ -26,7 +26,7 @@ import { checkFindingManage, hasElevatedFindingRole } from '../findings/authoriz
 import { lockFindingById, updateFindingLinkedTask } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
-import { lockAnalyticsArea } from '../voc/repo.js';
+import { lockAnalyticsArea, lockManagedSystem } from '../voc/repo.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,
@@ -95,6 +95,10 @@ async function assertConversionAnalyticsArea(args: {
   managedSystemId: string;
 }): Promise<void> {
   if (!args.analyticsAreaId) return;
+  // Lock order MS -> AA, same as AA archive (ADR-0019 E) and VOC create; the
+  // Task insert's FK also takes a KEY SHARE on the MS, so locking the AA first
+  // would invert the order and can deadlock against a concurrent AA archive.
+  await lockManagedSystem(args.tx, args.workspaceId, args.managedSystemId);
   const aa = await lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
   if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
   if (aa.managed_system_id !== args.managedSystemId) {
