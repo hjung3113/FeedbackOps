@@ -1,5 +1,5 @@
 // Backend runtime entry. Boot order is fixed by ADR-0009:22-27:
-//   1. Connect Drizzle pool (fops_app).
+//   1. Connect Drizzle pool (fops_app) and assert the runtime DB role (#402).
 //   2. Start pg-boss against the same Postgres.
 //   3. Register module jobs (registerCoreJobs, …).
 //   4. Build and listen Fastify HTTP.
@@ -13,6 +13,7 @@
 
 import { loadConfig } from './config.js';
 import { createDb } from './db/client.js';
+import { assertRuntimeDbRole } from './db/runtime-role.js';
 import { initBoss, shutdownBoss } from './lib/jobs.js';
 import { getStorage } from './lib/storage/factory.js';
 import { createAuditService } from './modules/core/audit/index.js';
@@ -30,6 +31,18 @@ if (!config.DATABASE_URL) {
 }
 
 const dbHandle = createDb(config.DATABASE_URL);
+
+// #402 (ADR-0008): fail fast unless the runtime connection is actually
+// authenticated as the plain fops_app role. The guard queries the connected
+// role (current_user), not the URL text, so a URL pointed at fops_migrate or
+// any privileged role is rejected before pg-boss or HTTP start. Migration and
+// seed CLIs use DATABASE_URL_MIGRATE and never enter this guard.
+try {
+  await assertRuntimeDbRole(dbHandle.pool);
+} catch (err) {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+}
 
 const boss = await initBoss({ connectionString: config.DATABASE_URL });
 await registerCoreJobs(boss, {

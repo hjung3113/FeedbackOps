@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { validateAttachmentOrigin } from './config-attachment-origin.js';
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
@@ -17,6 +19,12 @@ const envSchema = z.object({
   WORKSPACE_NAME: z.string().default('FeedbackOps'),
   // `personas` layers black-box test actors and grants over the core seed.
   SEED_MODE: z.enum(['core', 'personas']).default('core'),
+  // CSP `img-src`/`connect-src` origin for public attachment URLs (#402).
+  // Accepted: the quoted literal `'self'` (default, everything same-origin) or
+  // a bare origin `https://host[:port]`; outside production also
+  // `http://localhost[:port]` / `http://127.0.0.1[:port]`. Anything else —
+  // paths, query, credentials, wildcards, whitespace/separators, other
+  // schemes — fails config load via validateAttachmentOrigin.
   PUBLIC_ATTACHMENT_ORIGIN: z.string().default("'self'"),
   // Review HTTP-H-2: `trustProxy: true` is unconditional and lets clients
   // spoof `X-Forwarded-For` to reset anon rate-limit buckets and audit IPs
@@ -30,6 +38,14 @@ const envSchema = z.object({
   EMBEDDING_API_KEY: z.string().min(1).optional(),
   EMBEDDING_VERSION: z.coerce.number().int().positive().default(1),
 }).superRefine((config, context) => {
+  const originIssue = validateAttachmentOrigin(config.PUBLIC_ATTACHMENT_ORIGIN, config.NODE_ENV);
+  if (originIssue) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['PUBLIC_ATTACHMENT_ORIGIN'],
+      message: originIssue,
+    });
+  }
   if (config.EMBEDDING_PROVIDER === 'voyage' && !config.EMBEDDING_API_KEY) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
