@@ -65,6 +65,16 @@ export const surveyDtoSchema = z.object({
 });
 export type SurveyDto = z.infer<typeof surveyDtoSchema>;
 
+/**
+ * GET /surveys/:id always emits the questions array; requiring it here means a
+ * malformed detail payload fails at the network seam instead of rendering an
+ * empty survey.
+ */
+export const surveyDetailDtoSchema = surveyDtoSchema.extend({
+  questions: z.array(surveyQuestionDtoSchema),
+});
+export type SurveyDetailDto = z.infer<typeof surveyDetailDtoSchema>;
+
 /** GET /surveys responds with a bare array (no envelope), questions omitted. */
 export const listSurveysResponseSchema = z.array(surveyDtoSchema);
 export type ListSurveysResponse = z.infer<typeof listSurveysResponseSchema>;

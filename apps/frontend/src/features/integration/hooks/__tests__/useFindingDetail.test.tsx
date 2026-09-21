@@ -78,10 +78,17 @@ describe('useFindingDetail', () => {
   });
 
   it('drives the query into an error state with ApiParseError on a malformed payload', async () => {
-    global.fetch = mockFetch({ status: 200, jsonBody: { ...FINDING, severity: 'catastrophic' } });
+    const fetchMock = mockFetch({
+      status: 200,
+      jsonBody: { ...FINDING, severity: 'catastrophic' },
+    });
+    global.fetch = fetchMock;
     const { result } = renderFindingDetail(FINDING.id);
 
     await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5000 });
+    // A parse failure is deterministic: it must not be retried (retry: 1 only
+    // applies to other errors), so exactly one request was made.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.current.data).toBeUndefined();
     const error = result.current.error;
     expect(error).toBeInstanceOf(ApiParseError);

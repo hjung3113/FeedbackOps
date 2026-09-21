@@ -10,7 +10,10 @@
 //   (b) calls in an unlisted file → fail (new endpoints must use apiRequest);
 //   (c) fewer calls than allowlisted → fail (migrations must shrink the list,
 //       so it cannot rot);
-//   (d) lib/api/client.ts is excluded — it defines the function.
+//   (d) an allowlisted file whose count fell to ZERO must be dropped (a stale
+//       allowance would let a later unparsed call in that file slip in);
+//   (e) lib/api/client.ts is scanned too and pinned — it defines the function
+//       and must not gain new uses.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,10 +25,11 @@ const API_DIR = path.resolve(HERE, '..'); // src/lib/api
 const SRC = path.resolve(API_DIR, '..', '..'); // src/
 const ALLOWLIST_PATH = path.join(API_DIR, 'api-unparsed-allowlist.txt');
 
-// Anchored on word boundaries; the optional generic argument list must not
-// itself contain parentheses, so `apiClient<Foo, Bar>(` and the bare form
-// both match, including when the call wraps to the next line.
-const UNPARSED_CALL = /\bapiClient\s*(<[^>()]*>)?\s*\(/g;
+// Every identifier occurrence of the legacy `apiClient`, not just call syntax:
+// `import { apiClient as x }`, `const f = apiClient`, `api.apiClient(...)` and
+// wrappers all contain the token, so aliasing cannot hide a new unparsed
+// endpoint. Comments are stripped first; `apiRequest` does not match.
+const UNPARSED_CALL = /\bapiClient\b/g;
 
 /**
  * Removes // and block comments with a scanner that understands string and
@@ -106,7 +110,6 @@ describe('unparsed apiClient endpoints allowlist', () => {
     const actual = new Map<string, number>();
     for (const file of collectSourceFiles(SRC)) {
       const rel = toSrcRelative(file);
-      if (rel === 'lib/api/client.ts') continue; // defines the function
       const count = countUnparsedCalls(fs.readFileSync(file, 'utf8'));
       if (count > 0) actual.set(rel, count);
     }
@@ -131,9 +134,11 @@ describe('unparsed apiClient endpoints allowlist', () => {
         );
       }
     }
-    for (const file of allowed.keys()) {
-      if (!actual.has(file) && !fs.existsSync(path.join(SRC, file))) {
-        failures.push(`${file}: allowlisted but the file no longer exists — drop the entry.`);
+    for (const [file, pinned] of allowed) {
+      if ((actual.get(file) ?? 0) === 0) {
+        failures.push(
+          `${file}: allowlisted with ${pinned} but no unparsed apiClient use remains — drop the entry (migrated to zero).`,
+        );
       }
     }
 
@@ -142,8 +147,9 @@ describe('unparsed apiClient endpoints allowlist', () => {
 });
 
 describe('scanner self-test (the guard must not be vacuous)', () => {
-  it('counts generic, non-generic, and multi-line calls', () => {
+  it('counts calls, imports, aliases and references of the legacy apiClient', () => {
     const source = [
+      "import { apiClient } from '@/lib/api';",
       "const a = apiClient<FindingDto>('GET', '/x');",
       "const b = apiClient('GET', '/y');",
       'const c = apiClient<ListFindingsResponse>(',
@@ -151,7 +157,17 @@ describe('scanner self-test (the guard must not be vacuous)', () => {
       "  '/findings',",
       ');',
     ].join('\n');
-    expect(countUnparsedCalls(source)).toBe(3);
+    expect(countUnparsedCalls(source)).toBe(4);
+    // Aliasing / re-binding / member access cannot hide a use: the token is in the source.
+    expect(countUnparsedCalls("import { apiClient as x } from '@/lib/api';\nx('GET', '/z');")).toBe(
+      1,
+    );
+    expect(countUnparsedCalls('const f = apiClient;')).toBe(1);
+    expect(countUnparsedCalls("api.apiClient('GET', '/w');")).toBe(1);
+    // The parsed API and lookalike identifiers do not match.
+    expect(countUnparsedCalls("apiRequest('GET', '/x', schema); const ApiClientOptions = 1;")).toBe(
+      0,
+    );
   });
 
   it('ignores calls inside // and block comments', () => {

@@ -45,9 +45,14 @@ export type ApiParser<T> = ((data: unknown) => T) | { parse(data: unknown): T };
 /** Raw transport outcome before any success-payload typing is applied. */
 interface RawApiResponse {
   status: number;
-  /** 304: body was not sent; `data` is undefined and must not be parsed. */
+  /** 304: body was not sent; `text` is undefined and must not be parsed. */
   notModified: boolean;
-  data: unknown;
+  /**
+   * Unparsed success body. JSON decoding is deferred to the adapters so a
+   * non-JSON 2xx body can surface as a TYPED error from `apiRequest` while
+   * `apiClient` keeps its historical behavior.
+   */
+  text: string | undefined;
   etag: string | undefined;
   requestId: string | undefined;
   rateLimit?: RateLimitInfo;
@@ -100,7 +105,7 @@ async function sendRequest(
     const base: RawApiResponse = {
       status: 304,
       notModified: true,
-      data: undefined,
+      text: undefined,
       etag,
       requestId,
     };
@@ -110,12 +115,14 @@ async function sendRequest(
   }
 
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : undefined;
 
   if (!res.ok) {
+    // Error envelopes are decoded here, exactly as before (a non-JSON error
+    // body still throws the raw SyntaxError — unchanged legacy behavior).
+    const errorData = text ? (JSON.parse(text) as unknown) : undefined;
     const envelope: ApiErrorEnvelope =
-      data && typeof data === 'object' && 'code' in data
-        ? (data as ApiErrorEnvelope)
+      errorData && typeof errorData === 'object' && 'code' in errorData
+        ? (errorData as ApiErrorEnvelope)
         : { code: 'internal.unexpected', message: `HTTP ${res.status}` };
     throw new ApiError(res.status, envelope, requestId, rateLimit, retryAfterSeconds);
   }
@@ -123,7 +130,7 @@ async function sendRequest(
   const base: RawApiResponse = {
     status: res.status,
     notModified: false,
-    data,
+    text,
     etag,
     requestId,
   };
@@ -190,9 +197,17 @@ export async function apiRequest<T>(
   const parse = typeof parser === 'function' ? parser : (input: unknown) => parser.parse(input);
   const query = path.indexOf('?');
   const endpoint = `${method.toUpperCase()} ${query === -1 ? path : path.slice(0, query)}`;
+  let json: unknown;
+  try {
+    json = raw.text ? (JSON.parse(raw.text) as unknown) : undefined;
+  } catch {
+    // A 2xx body that is not JSON (HTML error page, truncated body): typed
+    // error, no body text in the message.
+    throw new ApiParseError(raw.status, endpoint, [], raw.requestId);
+  }
   let data: T;
   try {
-    data = parse(raw.data);
+    data = parse(json);
   } catch (cause) {
     throw new ApiParseError(raw.status, endpoint, parseIssuesFrom(cause), raw.requestId);
   }
@@ -211,7 +226,9 @@ export async function apiClient<T = unknown>(
   opts: ApiClientOptions = {},
 ): Promise<ApiResponse<T>> {
   const raw = await sendRequest(method, path, opts);
-  return rawToResponse(raw, raw.notModified ? (undefined as T) : (raw.data as T));
+  if (raw.notModified) return rawToResponse(raw, undefined as T);
+  const data = raw.text ? (JSON.parse(raw.text) as unknown) : undefined;
+  return rawToResponse(raw, data as T);
 }
 
 // Parses fastify @fastify/rate-limit response headers.

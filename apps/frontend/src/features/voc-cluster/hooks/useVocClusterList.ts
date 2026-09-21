@@ -1,7 +1,7 @@
 // useVocClusterList — react-query wrapper for GET /voc-clusters.
 // Optional managed_system_id filter mirrors the backend query param.
 
-import { apiRequest } from '@/lib/api';
+import { ApiParseError, apiRequest } from '@/lib/api';
 import { listVocClustersResponseSchema } from '@fops/shared';
 import type { ListVocClustersResponse } from '@fops/shared';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
@@ -19,6 +19,7 @@ export function useVocClusterList(
       return res.data;
     },
     staleTime: 30_000,
-    retry: 1,
+    // A parse failure is deterministic: retrying it only delays the error.
+    retry: (failureCount, error) => !(error instanceof ApiParseError) && failureCount < 1,
   });
 }

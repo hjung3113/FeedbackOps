@@ -19,6 +19,8 @@ type MockFetchArgs = {
   status: number;
   headers?: Record<string, string>;
   jsonBody?: unknown;
+  /** Raw (possibly non-JSON) body text; wins over jsonBody. */
+  rawBody?: string;
 };
 
 function mockFetch(response: MockFetchArgs): typeof fetch {
@@ -30,7 +32,11 @@ function mockFetch(response: MockFetchArgs): typeof fetch {
         status: response.status,
         headers,
         text: async () =>
-          response.jsonBody !== undefined ? JSON.stringify(response.jsonBody) : '',
+          response.rawBody !== undefined
+            ? response.rawBody
+            : response.jsonBody !== undefined
+              ? JSON.stringify(response.jsonBody)
+              : '',
       }) as Response,
   ) as unknown as typeof fetch;
 }
@@ -170,5 +176,31 @@ describe('apiRequest', () => {
     global.fetch = mockFetch({ status: 200, jsonBody: { id: 'x', count: 3 } });
     const res = await apiRequest('GET', '/things', (data: unknown) => thingSchema.parse(data));
     expect(res.data).toEqual({ id: 'x', count: 3 });
+  });
+
+  it('wraps a non-JSON 2xx body (HTML page, truncated JSON) in ApiParseError without echoing the body', async () => {
+    // Valid twin first: the same route with a JSON body parses.
+    global.fetch = mockFetch({ status: 200, jsonBody: { id: 'x', count: 1 } });
+    await expect(apiRequest('GET', '/things/1', thingSchema)).resolves.toMatchObject({
+      data: { id: 'x', count: 1 },
+    });
+
+    for (const rawBody of [
+      '<html><body>Bad gateway SECRET-TOKEN-123</body></html>',
+      '{"id": "x", "cou',
+    ]) {
+      global.fetch = mockFetch({
+        status: 200,
+        rawBody,
+        headers: { 'x-request-id': 'req-9' },
+      });
+      const error = await catchError(apiRequest('GET', '/things/1', thingSchema));
+      expect(error).toBeInstanceOf(ApiParseError);
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiParseError).status).toBe(200);
+      expect((error as ApiParseError).requestId).toBe('req-9');
+      expect((error as ApiParseError).detail?.issues).toEqual([]);
+      expect(JSON.stringify(error) + (error as Error).message).not.toContain('SECRET-TOKEN-123');
+    }
   });
 });

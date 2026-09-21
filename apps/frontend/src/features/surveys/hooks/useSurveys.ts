@@ -1,8 +1,8 @@
-import { type ApiError, apiClient, apiRequest } from '@/lib/api';
+import { type ApiError, ApiParseError, apiClient, apiRequest } from '@/lib/api';
 import {
   type SurveyResultDto,
   listSurveysResponseSchema,
-  surveyDtoSchema,
+  surveyDetailDtoSchema,
   surveyResultDtoSchema,
 } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,7 +33,8 @@ export function useSurveys(managedSystemId?: string) {
           { signal },
         )
       ).data,
-    retry: 1,
+    // A parse failure is deterministic: retrying it only delays the error.
+    retry: (failureCount, error) => !(error instanceof ApiParseError) && failureCount < 1,
   });
 }
 
@@ -53,7 +54,7 @@ export function useSurvey(id: string) {
   return useQuery({
     queryKey: surveyKeys.detail(id),
     queryFn: async ({ signal }) =>
-      (await apiRequest<Survey>('GET', `/surveys/${id}`, surveyDtoSchema, { signal })).data,
+      (await apiRequest<Survey>('GET', `/surveys/${id}`, surveyDetailDtoSchema, { signal })).data,
     enabled: Boolean(id),
     retry: false,
   });

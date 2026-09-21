@@ -4,7 +4,12 @@
 // unknown fields are stripped, never fatal.
 
 import { describe, expect, it } from 'vitest';
-import { listSurveysResponseSchema, surveyDtoSchema, surveyQuestionDtoSchema } from '../dto.js';
+import {
+  listSurveysResponseSchema,
+  surveyDetailDtoSchema,
+  surveyDtoSchema,
+  surveyQuestionDtoSchema,
+} from '../dto.js';
 
 const QUESTION = {
   id: '6f1c2b3a-1111-4222-8333-444455556666',
@@ -101,5 +106,16 @@ describe('listSurveysResponseSchema', () => {
       listSurveysResponseSchema.safeParse([{ ...SURVEY, responses_identity_protected: 'yes' }])
         .success,
     ).toBe(false);
+  });
+});
+
+describe('surveyDetailDtoSchema', () => {
+  it('requires the questions array that GET /surveys/:id always emits', () => {
+    // Valid twin: with questions the detail parses.
+    expect(surveyDetailDtoSchema.safeParse({ ...SURVEY, questions: [] }).success).toBe(true);
+    // The list schema tolerates a missing array; the detail schema must not.
+    expect(surveyDtoSchema.safeParse(SURVEY).success).toBe(true);
+    const { questions: _omit, ...withoutQuestions } = { ...SURVEY, questions: [] };
+    expect(surveyDetailDtoSchema.safeParse(withoutQuestions).success).toBe(false);
   });
 });
