@@ -1,0 +1,51 @@
+# Audited exceptions: legacy unparsed `apiClient` endpoints (issue #398).
+# New product endpoints MUST use apiRequest with a shared schema instead;
+# this list only shrinks as endpoints migrate, never grows.
+# Format: <path relative to src/> <number of `apiClient` identifier occurrences in the file>
+# (calls, imports, aliases and references all count, so aliasing cannot hide a use;
+# lib/api/client.ts, which defines it, is pinned too).
+# The unparsed-endpoints test fails when a file's count differs in EITHER
+# direction, so migrated endpoints must shrink their entry.
+features/admin/permissions/permission-state-view.tsx 2
+features/admin/settings/use-workspace-settings.ts 3
+features/cross-system/create-finding/useCreateFindingFromVocMutation.ts 2
+features/integration/hooks/useEntityLinkInventory.ts 2
+features/integration/hooks/useEvidenceHighlights.ts 2
+features/integration/hooks/useEvidenceMutations.ts 3
+features/integration/hooks/useFindingStatusMutation.ts 2
+features/integration/hooks/useRequestTaskFromFinding.ts 2
+features/surveys/hooks/useCreateFindingFromSurveyResponse.ts 2
+features/surveys/hooks/useSurveys.ts 9
+features/voc-cluster/hooks/useAddClusterMember.ts 2
+features/voc-cluster/hooks/useCandidatePeers.ts 2
+features/voc-cluster/hooks/useConfirmCluster.ts 2
+features/voc-cluster/hooks/useCreateFindingFromCluster.ts 2
+features/voc-cluster/hooks/useCreateVocCluster.ts 2
+features/voc-cluster/hooks/useLinkExistingFindingToVocCluster.ts 2
+features/voc-cluster/hooks/useRemoveClusterMember.ts 2
+features/voc-cluster/hooks/useRequestTaskFromCluster.ts 2
+features/voc/components/triage/TriagePanel.tsx 3
+features/voc/hooks/useConfirmVocRecommendation.ts 2
+features/voc/hooks/useDismissVocRecommendation.ts 2
+features/voc/hooks/usePublicUpdateReviewCandidates.ts 3
+features/voc/hooks/useRequestTaskFromVoc.ts 2
+features/voc/hooks/useVocConversation.ts 2
+features/voc/hooks/useVocCreateMutation.ts 2
+features/voc/hooks/useVocEditDescriptionMutation.ts 2
+features/voc/hooks/useVocInternalCommentMutation.ts 2
+features/voc/hooks/useVocList.ts 2
+features/voc/hooks/useVocPreSubmitPeers.ts 2
+features/voc/hooks/useVocPublicUpdateMutation.ts 2
+features/voc/hooks/useVocRecommendations.ts 2
+features/voc/hooks/useVocReporterReplyMutation.ts 2
+features/voc/hooks/useVocTriageMutation.ts 3
+lib/api/attachments.ts 3
+lib/api/client.ts 1
+lib/api/dashboard.ts 2
+lib/api/permissions.ts 2
+lib/api/saved-views.ts 4
+lib/api/task-requests.ts 5
+lib/api/tasks.ts 7
+lib/cross-system/useVocDetail.ts 2
+lib/cross-system/useWorkspaceActors.ts 2
+routes/_authed/admin/managed-systems.tsx 2

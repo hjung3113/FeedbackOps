@@ -16,16 +16,17 @@ import { SurveyList } from '../../components/list/SurveyList';
 import { useSurveys } from '../../hooks/useSurveys';
 import type { Survey, SurveyQuestion } from '../../types';
 
-const { apiClient, fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } = vi.hoisted(
-  () => ({
+const { apiClient, apiRequest, fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } =
+  vi.hoisted(() => ({
     apiClient: vi.fn(),
+    apiRequest: vi.fn(),
     fetchAnalyticsAreas: vi.fn(),
     fetchCapabilityScope: vi.fn(),
     fetchManagedSystems: vi.fn(),
-  }),
-);
+  }));
 vi.mock('@/lib/api', () => ({
   apiClient,
+  apiRequest,
   fetchAnalyticsAreas,
   fetchCapabilityScope,
   fetchManagedSystems,
@@ -115,6 +116,7 @@ function renderDetailWithRouter(detailSurvey: Survey, canManage: boolean) {
 describe('Survey screens', () => {
   beforeEach(() => {
     apiClient.mockReset();
+    apiRequest.mockReset();
     fetchAnalyticsAreas.mockReset();
     fetchCapabilityScope.mockReset();
     fetchManagedSystems.mockReset();
@@ -324,8 +326,13 @@ describe('Survey screens', () => {
 
   it('invalidates and refetches the survey list after Launch', async () => {
     const listAfterLaunch = [{ ...survey, status: 'open' as const }];
-    apiClient.mockImplementation(async (method: string, path: string) => {
+    // #398: GET /surveys is parsed at the seam by apiRequest; the Launch
+    // mutation still rides apiClient.
+    apiRequest.mockImplementation(async (method: string, path: string) => {
       if (method === 'GET' && path === '/surveys') return { data: listAfterLaunch };
+      return { data: survey };
+    });
+    apiClient.mockImplementation(async (method: string, path: string) => {
       if (method === 'POST' && path === '/surveys/survey-1/open')
         return { data: listAfterLaunch[0] };
       return { data: survey };
@@ -356,7 +363,7 @@ describe('Survey screens', () => {
 
     await waitFor(() =>
       expect(
-        apiClient.mock.calls.filter((call) => call[0] === 'GET' && call[1] === '/surveys'),
+        apiRequest.mock.calls.filter((call) => call[0] === 'GET' && call[1] === '/surveys'),
       ).toHaveLength(2),
     );
     expect(screen.getByTestId('survey-row-survey-1')).toHaveTextContent('Open');

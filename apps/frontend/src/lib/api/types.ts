@@ -36,3 +36,34 @@ export interface MappedError {
   message: string;
   action?: { label: string; run: () => void } | undefined;
 }
+
+/** One sanitized parse-failure issue: the zod issue path and machine code only. */
+export interface ApiParseIssue {
+  path: string[];
+  code: string;
+}
+
+const MAX_PARSE_ISSUES = 5;
+
+/**
+ * Thrown by `apiRequest` when a 2xx (non-304) response body fails its runtime
+ * parser. Extending ApiError keeps the `instanceof ApiError` code paths
+ * working (errorMapper catalog, hooks' retry predicates); the envelope reuses
+ * `internal.unexpected`, which the errorMapper already maps to the generic
+ * user-facing copy. Privacy: the envelope carries NO offending payload values
+ * and no parser messages that could echo them — only issue paths and codes.
+ */
+export class ApiParseError extends ApiError {
+  constructor(status: number, endpoint: string, issues: ApiParseIssue[], requestId?: string) {
+    super(
+      status,
+      {
+        code: 'internal.unexpected',
+        message: 'invalid response payload',
+        detail: { endpoint, issues: issues.slice(0, MAX_PARSE_ISSUES) },
+      },
+      requestId,
+    );
+    this.name = 'ApiParseError';
+  }
+}

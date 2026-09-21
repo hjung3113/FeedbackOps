@@ -135,7 +135,7 @@ function installFetch(c: FetchCase): void {
       const items = msFilter
         ? FINDINGS.filter((finding) => finding.primary_managed_system_id === msFilter)
         : FINDINGS;
-      return jsonResponse({ items, total: items.length });
+      return jsonResponse({ items });
     }
     if (path.pathname === '/actors') return jsonResponse({ actors: [] });
     return jsonResponse({ code: 'not_mocked' }, 500);
