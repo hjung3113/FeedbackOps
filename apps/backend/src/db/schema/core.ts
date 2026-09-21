@@ -145,8 +145,8 @@ export const savedViews = coreSchema.table(
       t.actorId,
       t.surface,
     ),
-    // Mirrors the inline UNIQUE in migration 0045 (PostgreSQL-derived name).
-    workspaceActorSurfaceNameUq: unique('saved_views_workspace_id_actor_id_surface_name_key').on(
+    // Mirrors the named UNIQUE constraint in migration 0045.
+    workspaceActorSurfaceNameUq: unique('saved_views_workspace_actor_surface_name_uq').on(
       t.workspaceId,
       t.actorId,
       t.surface,

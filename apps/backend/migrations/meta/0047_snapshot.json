@@ -2717,8 +2717,8 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "saved_views_workspace_id_actor_id_surface_name_key": {
-          "name": "saved_views_workspace_id_actor_id_surface_name_key",
+        "saved_views_workspace_actor_surface_name_uq": {
+          "name": "saved_views_workspace_actor_surface_name_uq",
           "nullsNotDistinct": false,
           "columns": [
             "workspace_id",
