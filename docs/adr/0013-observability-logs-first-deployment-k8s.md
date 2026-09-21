@@ -129,3 +129,44 @@ The `/health/live` + `/health/ready` split is now implemented
   `failureThreshold: 3`).
 - `GET /health` (200 with `{ status: 'ok', ts }`) remains as a legacy process
   check.
+
+## Amended 2026-09-22 (jobs)
+
+Background jobs and the storage factory now emit the same structured Pino
+stdout stream as request logs. `apps/backend/src/index.ts` creates ONE root
+logger per process (`createRootLogger`) and hands it both to Fastify
+(`loggerInstance`) and to every job queue, so job logs and request logs share
+level and redaction.
+
+Job lifecycle events (emitted by `withJobLogging`,
+`apps/backend/src/lib/job-log.ts`) — one line per job:
+
+- `job.start` — `queue`, `job_id`, `correlation_id` (when the payload carries
+  a string `correlation_id`), plus queue-specific allowlisted id fields
+  (e.g. `task_id`, `release_event_id` for
+  `tasks.create_public_update_review_candidates`).
+- `job.retry` — start fields plus `retry_count`; emitted instead of
+  `job.start` when the pg-boss job carries `retry_count > 0`. pg-boss v12
+  attaches `retryCount` only to `JobWithMetadata`, so every `boss.work`
+  registration passes `{ includeMetadata: true }` (`JOB_WORK_OPTIONS`);
+  without it `job.retry` could never fire. The field is omitted, never
+  invented, when a job does not carry it.
+- `job.success` — start fields plus `duration_ms`.
+- `job.failure` — start fields plus `duration_ms`, `err_name`, and
+  `err_code` (only when the error carries a string/number `code`).
+
+No-message rule: failure lines NEVER include the error message, cause, or
+stack (messages can embed DSNs). The same projection (`errorFields`:
+`err_name`, `err_code`) applies to every caught error logged by a job path —
+pg-boss `error` events, the embedding backfill enqueue failure, the attachment
+purge storage failure — and pg-boss `warning` events log no payload fields at all
+(`warningFields`: their `{ message, data }` can carry SQL and parameters); raw `err`/`warning` objects are never passed to the logger.
+Job payload data is never logged —
+bounded, allowlisted fields only. Handler errors are always RETHROWN after
+the `job.failure` line so pg-boss retry config (ADR-0009:35) still applies.
+
+Storage (`apps/backend/src/lib/storage/factory.ts`) logs exactly one
+`storage: materialized` line on first materialization with `bucket`,
+`endpoint_origin` (origin only — the raw endpoint may carry userinfo and
+never reaches the log), `region`, and `force_path_style`. No credentials;
+without a logger nothing is logged.

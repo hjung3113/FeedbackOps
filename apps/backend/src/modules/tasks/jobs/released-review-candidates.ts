@@ -1,5 +1,6 @@
-import type { PgBoss } from "pg-boss";
+import type { Job, PgBoss } from "pg-boss";
 
+import { JOB_WORK_OPTIONS, withJobLogging, type JobLog } from "../../../lib/job-log.js";
 import type { PublicUpdateReviewCandidatesService } from "../../voc/public-update-review-candidates/service.js";
 
 export const TASK_RELEASED_REVIEW_CANDIDATES_QUEUE =
@@ -26,10 +27,24 @@ export function releasedReviewCandidatesHandler(deps: {
   };
 }
 
+/**
+ * Allowlisted payload id fields added to this queue's job log lines
+ * (ADR-0013: bounded fields only — ids, never payload bodies).
+ */
+function releasedReviewFields(
+  job: Job<TaskReleasedReviewCandidatesPayload>,
+): Record<string, unknown> {
+  return {
+    task_id: job.data.task_id,
+    release_event_id: job.data.release_event_id,
+  };
+}
+
 export async function registerReleasedReviewCandidates(
   boss: PgBoss,
   deps: {
     publicUpdateReviewCandidatesService: PublicUpdateReviewCandidatesService;
+    log: JobLog;
   },
 ): Promise<void> {
   const queues = await boss.getQueues([TASK_RELEASED_REVIEW_CANDIDATES_QUEUE]);
@@ -40,6 +55,12 @@ export async function registerReleasedReviewCandidates(
   }
   await boss.work<TaskReleasedReviewCandidatesPayload>(
     TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
-    releasedReviewCandidatesHandler(deps),
+    JOB_WORK_OPTIONS,
+    withJobLogging(
+      deps.log,
+      TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
+      releasedReviewCandidatesHandler(deps),
+      releasedReviewFields,
+    ),
   );
 }

@@ -9,6 +9,7 @@ import { sql } from 'drizzle-orm';
 import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
+import { type JobLog, JOB_WORK_OPTIONS, withJobLogging } from '../../../lib/job-log.js';
 import { EmbeddingUnavailableError } from '../embedding/disabled.js';
 import type { EmbeddingProvider } from '../embedding/port.js';
 import {
@@ -27,11 +28,6 @@ export interface VocEmbedPayload {
   correlation_id: string;
 }
 
-export interface VocEmbedLogger {
-  info: (msg: string, meta?: unknown) => void;
-  warn: (msg: string, meta?: unknown) => void;
-}
-
 export interface EmbedVocDeps {
   db: Db;
   provider: EmbeddingProvider;
@@ -39,7 +35,7 @@ export interface EmbedVocDeps {
   embeddingVersion: number;
   /** False when EMBEDDING_PROVIDER=disabled — see `embedVoc` for the contract. */
   embeddingEnabled: boolean;
-  log?: VocEmbedLogger;
+  log?: JobLog;
 }
 
 /**
@@ -205,12 +201,19 @@ export function embedVocHandler(deps: EmbedVocDeps) {
   };
 }
 
-export async function registerEmbedVoc(boss: PgBoss, deps: EmbedVocDeps): Promise<void> {
+export async function registerEmbedVoc(
+  boss: PgBoss,
+  deps: EmbedVocDeps & { log: JobLog },
+): Promise<void> {
   const queues = await boss.getQueues([VOC_EMBED_QUEUE]);
   if (queues.length === 0) {
     throw new Error(
       `pg-boss queue '${VOC_EMBED_QUEUE}' is not pre-created. Run migrations (ADR-0009).`,
     );
   }
-  await boss.work<VocEmbedPayload>(VOC_EMBED_QUEUE, embedVocHandler(deps));
+  await boss.work<VocEmbedPayload>(
+    VOC_EMBED_QUEUE,
+    JOB_WORK_OPTIONS,
+    withJobLogging(deps.log, VOC_EMBED_QUEUE, embedVocHandler(deps)),
+  );
 }

@@ -58,7 +58,10 @@ describe.skipIf(!runIntegration)(
       process.env.NODE_ENV = "test";
       dbHandle = createDb(APP_URL);
       migrateHandle = createDb(MIGRATE_URL);
-      boss = await initBoss({ connectionString: APP_URL });
+      boss = await initBoss({
+        connectionString: APP_URL,
+        log: { info: () => {}, warn: () => {}, error: () => {} },
+      });
       app = await buildServer({ config: loadConfig(), dbHandle, boss });
       await app.ready();
       adminCookie = await loginAs(app, "mock-admin-1");

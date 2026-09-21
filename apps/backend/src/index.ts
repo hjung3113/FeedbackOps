@@ -14,7 +14,9 @@
 import { loadConfig } from './config.js';
 import { createDb } from './db/client.js';
 import { RuntimeRoleError, assertRuntimeDbRole } from './db/runtime-role.js';
+import { toJobLog } from './lib/job-log.js';
 import { initBoss, shutdownBoss } from './lib/jobs.js';
+import { createRootLogger } from './lib/logger.js';
 import { getStorage } from './lib/storage/factory.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { registerCoreJobs } from './modules/core/jobs/index.js';
@@ -50,11 +52,21 @@ try {
   process.exit(1);
 }
 
-const boss = await initBoss({ connectionString: config.DATABASE_URL });
+// ADR-0013 (amended 2026-09-22): ONE pino root logger per process — job logs
+// and request logs share its level + redaction. Created after the
+// console.error guards above, which run before a logger can be trusted.
+const logger = createRootLogger(config);
+const jobLog = toJobLog(logger);
+
+const boss = await initBoss({ connectionString: config.DATABASE_URL, log: jobLog });
 await registerCoreJobs(boss, {
   db: dbHandle.db,
   pool: dbHandle.pool,
-  storage: getStorage(),
+  // First getStorage() call wins the cached singleton: passing the job log
+  // HERE (before buildServer's bare `getStorage()`) is what puts the
+  // `storage: materialized` line on the structured root logger.
+  storage: getStorage(undefined, { log: jobLog }),
+  log: jobLog,
 });
 await registerTasksJobs(boss, {
   db: dbHandle.db,
@@ -62,6 +74,7 @@ await registerTasksJobs(boss, {
     db: dbHandle.db,
     auditService: createAuditService(),
   }),
+  log: jobLog,
 });
 // #168 (ADR-0034 D6). Registered even when the provider is disabled: the
 // backfill cron row must exist so enabling a provider is a config change, not
@@ -71,9 +84,10 @@ await registerVocJobs(boss, {
   provider: createEmbeddingProvider(config),
   embeddingVersion: config.EMBEDDING_VERSION,
   embeddingEnabled: isEmbeddingEnabled(config),
+  log: jobLog,
 });
 
-const app = await buildServer({ config, dbHandle, boss });
+const app = await buildServer({ config, dbHandle, boss, logger });
 
 // Single-shot shutdown handler. Multiple signals (e.g. SIGTERM then SIGINT)
 // short-circuit through the `shuttingDown` flag so we don't try to close pools

@@ -18,6 +18,7 @@ import { sql } from 'drizzle-orm';
 import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
+import { type JobLog, JOB_WORK_OPTIONS, withJobLogging } from '../../../lib/job-log.js';
 
 /** Queue name. Format: `<module>.<action>` per ADR-0009. */
 export const RATE_LIMITS_PURGE_QUEUE = 'core.rate_limits_purge';
@@ -55,28 +56,31 @@ export async function purgeExpiredRateLimits(deps: {
  */
 export async function registerRateLimitsPurge(
   boss: PgBoss,
-  deps: { db: Db; log?: { info: (msg: string, meta?: unknown) => void } },
+  deps: { db: Db; log: JobLog },
 ): Promise<void> {
   const queues = await boss.getQueues([RATE_LIMITS_PURGE_QUEUE]);
   if (queues.length === 0) {
     throw new Error(
-      `pg-boss queue '${RATE_LIMITS_PURGE_QUEUE}' is not pre-created. Run migrations (ADR-0008 + F-018).`,
+      `pg-boss queue '${RATE_LIMITS_PURGE_QUEUE}' is not pre-created. Run migrations (ADR-0009 + F-018).`,
     );
   }
 
+  const handler = async (jobs: Array<{ id: string; data: RateLimitsPurgePayload }>) => {
+    for (const job of jobs) {
+      const correlationId = job.data?.correlation_id ?? job.id;
+      const { deleted } = await purgeExpiredRateLimits({ db: deps.db });
+      deps.log?.info('core.rate_limits_purge complete', {
+        correlation_id: correlationId,
+        deleted,
+        job_id: job.id,
+      });
+    }
+  };
+
   await boss.work<RateLimitsPurgePayload>(
     RATE_LIMITS_PURGE_QUEUE,
-    async (jobs: Array<{ id: string; data: RateLimitsPurgePayload }>) => {
-      for (const job of jobs) {
-        const correlationId = job.data?.correlation_id ?? job.id;
-        const { deleted } = await purgeExpiredRateLimits({ db: deps.db });
-        deps.log?.info('core.rate_limits_purge complete', {
-          correlation_id: correlationId,
-          deleted,
-          job_id: job.id,
-        });
-      }
-    },
+    JOB_WORK_OPTIONS,
+    withJobLogging(deps.log, RATE_LIMITS_PURGE_QUEUE, handler),
   );
 
   await boss.schedule(RATE_LIMITS_PURGE_QUEUE, RATE_LIMITS_PURGE_CRON, {
