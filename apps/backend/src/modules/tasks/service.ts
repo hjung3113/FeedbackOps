@@ -18,14 +18,18 @@ import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
   type EntityLinkRow,
-  insertActiveEntityLink,
+  createEntityLink,
   selectActiveLinksForEndpoint,
   selectEligibleVocLinksForReleasedTask,
-} from '../entity-links/repo.js';
+} from '../entity-links/commands.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
-import { lockFindingById, updateFindingLinkedTask } from '../findings/repo.js';
+import { linkTaskToFinding } from '../findings/commands.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
+import {
+  type TaskRequestRow,
+  lockTaskRequestForUpdate,
+  markTaskRequestConverted,
+} from '../task-requests/commands.js';
 import { lockAnalyticsArea, lockManagedSystem } from '../voc/repo.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
@@ -37,7 +41,6 @@ import {
   insertTask,
   listTasksByWorkspace,
   lockTaskById,
-  markTaskRequestConverted,
   resolveTaskSource,
   updateTaskStatus,
 } from './repo.js';
@@ -126,7 +129,7 @@ async function preserveSourceLinks(args: {
     target_type: 'task',
     relation_type: 'converted_to',
   });
-  const requestLink = await insertActiveEntityLink(args.tx, {
+  const requestLink = await createEntityLink(args.tx, {
     workspaceId: args.actor.workspace_id,
     sourceType: requestTuple.source_type,
     sourceId: args.taskRequest.id,
@@ -154,7 +157,7 @@ async function preserveSourceLinks(args: {
       target_type: 'task',
       relation_type: 'requested_task',
     });
-    const taskFindingLink = await insertActiveEntityLink(args.tx, {
+    const taskFindingLink = await createEntityLink(args.tx, {
       workspaceId: args.actor.workspace_id,
       sourceType: findingTuple.source_type,
       sourceId: findingLink.source_id,
@@ -182,7 +185,7 @@ async function preserveSourceLinks(args: {
         target_type: 'task',
         relation_type: 'evidence_of',
       });
-      const taskEvidenceLink = await insertActiveEntityLink(args.tx, {
+      const taskEvidenceLink = await createEntityLink(args.tx, {
         workspaceId: args.actor.workspace_id,
         sourceType: evidenceTuple.source_type,
         sourceId: evidenceLink.source_id,
@@ -205,7 +208,7 @@ async function preserveSourceLinks(args: {
       target_type: 'task',
       relation_type: 'evidence_of',
     });
-    const taskEvidenceLink = await insertActiveEntityLink(args.tx, {
+    const taskEvidenceLink = await createEntityLink(args.tx, {
       workspaceId: args.actor.workspace_id,
       sourceType: tuple.source_type,
       sourceId: sourceLink.source_id,
@@ -270,7 +273,7 @@ export function createTasksService(deps: TasksServiceDeps) {
         args.idempotencyKey,
         args.requestHash,
         async () => {
-          const taskRequest = await lockTaskRequestById(tx, {
+          const taskRequest = await lockTaskRequestForUpdate(tx, {
             workspaceId: args.actor.workspace_id,
             taskRequestId: args.taskRequestId,
           });
@@ -318,17 +321,11 @@ export function createTasksService(deps: TasksServiceDeps) {
           });
 
           if (taskRequest.source_type === 'finding') {
-            const finding = await lockFindingById(tx, {
+            await linkTaskToFinding(tx, {
               workspaceId: args.actor.workspace_id,
               findingId: taskRequest.source_id,
+              taskId: task.id,
             });
-            if (finding?.linked_task_id === null) {
-              await updateFindingLinkedTask(tx, {
-                workspaceId: args.actor.workspace_id,
-                findingId: finding.id,
-                taskId: task.id,
-              });
-            }
           }
 
           await markTaskRequestConverted(tx, {
@@ -371,7 +368,7 @@ export function createTasksService(deps: TasksServiceDeps) {
         args.idempotencyKey,
         args.requestHash,
         async () => {
-          const taskRequest = await lockTaskRequestById(tx, {
+          const taskRequest = await lockTaskRequestForUpdate(tx, {
             workspaceId: args.actor.workspace_id,
             taskRequestId: args.taskRequestId,
           });
@@ -405,7 +402,7 @@ export function createTasksService(deps: TasksServiceDeps) {
             target_type: 'task',
             relation_type: 'converted_to',
           });
-          await insertActiveEntityLink(tx, {
+          await createEntityLink(tx, {
             workspaceId: args.actor.workspace_id,
             sourceType: tuple.source_type,
             sourceId: taskRequest.id,

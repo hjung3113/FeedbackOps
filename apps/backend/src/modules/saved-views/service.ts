@@ -12,7 +12,7 @@ import type { Db } from '../../db/client.js';
 import { savedViews } from '../../db/schema/core.js';
 import { HttpError } from '../../lib/errors.js';
 import type { ActorContext } from '../permissions/check-service.js';
-import { listFindingsQuerySchema } from '../findings/routes.js';
+import { listFindingsQuerySchema } from '../findings/list-query.js';
 
 export const savedViewSurfaceSchema = z.enum(['voc', 'tasks', 'task_requests', 'findings']);
 export type SavedViewSurface = z.infer<typeof savedViewSurfaceSchema>;
