@@ -23,7 +23,7 @@ import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { toast } from 'sonner';
 
-import { CreateFindingModal } from '@/features/integration/components/FindingDetail/CreateFindingModal';
+import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
 import { ComposerSection } from './ComposerSection';
 import { ConversationTimeline } from './ConversationTimeline';

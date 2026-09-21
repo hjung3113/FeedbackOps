@@ -23,7 +23,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>();
   return { ...actual, useNavigate: () => vi.fn() };
 });
-vi.mock('@/features/integration/components/FindingDetail/CreateFindingModal', () => ({
+vi.mock('@/features/cross-system/create-finding/CreateFindingModal', () => ({
   CreateFindingModal: (props: {
     managedSystemId: string;
     sourceAnalyticsAreaId: string | null;
