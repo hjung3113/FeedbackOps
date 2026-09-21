@@ -24,10 +24,7 @@ import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
 import { createEntityLinksService } from '../../entity-links/service.js';
 import { createCheckService } from '../../permissions/check-service.js';
-import {
-  createConversationService,
-  type ConversationService,
-} from '../conversation-service.js';
+import { createConversationService, type ConversationService } from '../conversation-service.js';
 import { createVocReadService } from '../read-service.js';
 import { createVocService, type VocService } from '../service.js';
 
@@ -76,7 +73,9 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
   }
 
   async function seedVoc(title: string): Promise<{ id: string; updated_at: string }> {
-    const res = await migrateHandle.pool.query<{ id: string; updated_at: string }>(
+    // If-Match is compared against `row.updatedAt.toISOString()` in the service,
+    // so hand back the driver's Date rendered the same way (not `updated_at::text`).
+    const res = await migrateHandle.pool.query<{ id: string; updated_at: Date }>(
       `insert into voc.vocs
          (workspace_id, primary_managed_system_id, reporter_id, display_id, title,
           description_rich_content, source_context, reporter_facing_status, triage_state)
@@ -84,12 +83,12 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
          ($1, $2, $3, voc.next_voc_display_id($1::uuid), $4,
           '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"body"}]}]}'::jsonb,
           'direct_use', 'received', 'untriaged')
-       returning id, updated_at::text as updated_at`,
+       returning id, updated_at`,
       [workspaceId, managedSystemId, reporterActorId, title],
     );
     const row = res.rows[0];
     if (!row) throw new Error(`seedVoc failed for title=${title}`);
-    return row;
+    return { id: row.id, updated_at: row.updated_at.toISOString() };
   }
 
   async function scalarCount(query: string, params: unknown[]): Promise<number> {
@@ -107,16 +106,14 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
     );
 
   const publicUpdateCount = (vocId: string) =>
-    scalarCount(
-      `select count(*)::int as count from voc.voc_public_updates where voc_id = $1`,
-      [vocId],
-    );
+    scalarCount(`select count(*)::int as count from voc.voc_public_updates where voc_id = $1`, [
+      vocId,
+    ]);
 
   const internalCommentCount = (vocId: string) =>
-    scalarCount(
-      `select count(*)::int as count from voc.voc_internal_comments where voc_id = $1`,
-      [vocId],
-    );
+    scalarCount(`select count(*)::int as count from voc.voc_internal_comments where voc_id = $1`, [
+      vocId,
+    ]);
 
   async function auditEventTypes(vocId: string): Promise<string[]> {
     const res = await migrateHandle.pool.query<{ event_type: string }>(
@@ -321,9 +318,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
       requestHash: hash,
     });
     expect(replay).toEqual(first);
-    expect(
-      (await auditEventTypes(voc.id)).filter((t) => t === 'voc_severity_set'),
-    ).toHaveLength(1);
+    expect((await auditEventTypes(voc.id)).filter((t) => t === 'voc_severity_set')).toHaveLength(1);
   });
 
   it('updateVocCommand: stale ifMatch → conflict.stale_write and no idempotency record', async () => {
@@ -424,6 +419,42 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
       requestHash: hash,
     });
     expect(replay).toEqual(first);
+    expect(await internalCommentCount(voc.id)).toBe(1);
+  });
+
+  it('manual-frame commands race on the same actor+key+hash: advisory lock serializes → one row, identical bodies', async () => {
+    // createVocCommand goes through idempotencyService.runIdempotent; the five
+    // other commands use the shared manual frame whose ONLY serialization is
+    // pg_advisory_xact_lock. Fire several at once so an unlocked frame would
+    // let more than one pass the lookup and insert.
+    const voc = await seedVoc('Cmd manual-frame race VOC');
+    const input = {
+      body_rich_content: paragraphDoc('race note'),
+      mentions: [],
+    };
+    const key = randomUUID();
+    const hash = hashRequestBody({ ...input, vocId: voc.id, route: 'voc.internal_comment' });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 6 }, () =>
+        conversationService.postInternalCommentCommand({
+          actor: adminActor(),
+          vocId: voc.id,
+          input,
+          idempotencyKey: key,
+          requestHash: hash,
+        }),
+      ),
+    );
+
+    expect(results.map((r) => r.status)).toEqual(Array(6).fill('fulfilled'));
+    const bodies = results.map(
+      (r) => (r as PromiseFulfilledResult<{ status: number; body: unknown }>).value,
+    );
+    for (const value of bodies) {
+      expect(value.status).toBe(201);
+      expect(value).toEqual(bodies[0]);
+    }
     expect(await internalCommentCount(voc.id)).toBe(1);
   });
 
