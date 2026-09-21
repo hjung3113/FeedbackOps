@@ -103,6 +103,23 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     return insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, title);
   }
 
+  // _seed-helpers has no admin-actor creator (insertDevActor hardcodes
+  // role_level 'developer'); external_id keeps the 'mock-dev-read-' prefix so
+  // cleanupReadTestTables reaps the actor, its session, and its audit rows.
+  async function insertAdminActor(suffix: string): Promise<{ id: string; externalId: string }> {
+    const externalId = `mock-dev-read-${suffix}`;
+    const res = await dbHandle.pool.query<{ id: string }>(
+      `insert into core.actors (workspace_id, external_id, email, display_name, role_level, actor_type)
+         values ($1, $2, $3, $4, 'admin', 'internal_member')
+         on conflict (workspace_id, external_id) do update set email = excluded.email
+         returning id`,
+      [WORKSPACE_ID, externalId, `admin-${suffix}@local`, `Admin ${suffix}`],
+    );
+    const id = res.rows[0]?.id;
+    if (!id) throw new Error(`insertAdminActor failed for ${externalId}`);
+    return { id, externalId };
+  }
+
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
@@ -707,6 +724,135 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     expect(limited.json<{ code: string }>().code).toBe('rate_limited.actor');
     expect(limited.headers['retry-after']).toBeDefined();
   });
+
+  // ── ADR-0047: post-write envelope omits links for triage-only writers ────
+  // A voc.triage-only actor cannot read the VOC, so composeDetailEnvelope
+  // must call listLinks with onUnreadableFocus: 'empty' (default would 404);
+  // the envelope's voc.links comes back empty even though an active link
+  // exists on the VOC.
+
+  it.skipIf(!MIGRATE_URL)(
+    'triage-only actor → 201 and envelope voc.links is [] despite an active link (ADR-0047)',
+    async () => {
+      const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-trilnk`, 'Triage Links MS');
+      // Fresh actor holding only voc.triage on the MS (no voc.read, not reporter).
+      const { externalId: devExtId, id: devId } = await insertDevActor(dbHandle, WORKSPACE_ID, `pubupd-trilnk-${randomUUID().slice(0, 8)}`);
+      await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
+      const devCookie = await loginAs(app, devExtId);
+
+      const voc = await insertVoc(msId, 'Triage Links VOC');
+      const otherVoc = await insertVoc(msId, 'Triage Links Target VOC');
+
+      // core.entity_links is append-only to fops_app: seed and clean via the
+      // migrate role (same pattern as the review-candidate tests).
+      const ops = createDb(MIGRATE_URL);
+      try {
+        await ops.pool.query(
+          `insert into core.entity_links (workspace_id, source_type, source_id, target_type, target_id,
+            relation_type, visibility, status, managed_system_id, created_by)
+           values ($1, 'voc', $2, 'voc', $3, 'related_to', 'internal_only', 'active', $4, $5)`,
+          [WORKSPACE_ID, voc.id, otherVoc.id, msId, adminActorId],
+        );
+
+        const res = await postPublicUpdate(devCookie, voc.id, {
+          skip_public_update: false,
+          body_rich_content: paragraphDoc('triage-only update'),
+          next_reporter_facing_status: 'received',
+        });
+        expect(res.statusCode).toBe(201);
+        const body = res.json<{ voc: { links?: Array<unknown> } }>();
+        expect(body.voc.links).toEqual([]);
+
+        // Positive control: a full reader's post-write envelope still carries the link.
+        const adminRes = await postPublicUpdate(adminCookie, voc.id, {
+          skip_public_update: false,
+          body_rich_content: paragraphDoc('admin update'),
+          next_reporter_facing_status: 'received',
+        });
+        expect(adminRes.statusCode).toBe(201);
+        expect(adminRes.json<{ voc: { links?: Array<unknown> } }>().voc.links).toHaveLength(1);
+      } finally {
+        // Remove the link row so the shared MS/VOC cleanup is not blocked by
+        // the entity_links → managed_systems FK.
+        await ops.pool.query(
+          `delete from core.entity_links
+            where workspace_id = $1
+              and managed_system_id in (
+                select id from core.managed_systems where workspace_id = $1 and slug like $2
+              )`,
+          [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+        );
+        await ops.close();
+      }
+    },
+  );
+
+  // ── ADR-0047 follow-up: admin with explicit voc.read deny ─────────────────
+  // actorReadScope returns 'all' for admins, ignoring explicit denies
+  // (repo-read.ts / scope-service.ts), while listLinks' canRead applies the
+  // deny first. composeDetailEnvelope must not duplicate the read check — it
+  // delegates to listLinks with onUnreadableFocus: 'empty', so a triage-
+  // capable admin whose voc.read is explicitly denied gets a 201 with
+  // voc.links: [] instead of a rolled-back write.
+
+  it.skipIf(!MIGRATE_URL)(
+    'admin with explicit voc.read deny → 201 and envelope voc.links is [] despite an active link (ADR-0047)',
+    async () => {
+      const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-admdeny`, 'Admin Deny Links MS');
+      // Second admin actor: not the VOC reporter; admins derive voc.read and
+      // voc.triage from role, so no grants are needed.
+      const { externalId: adminExtId, id: deniedAdminId } = await insertAdminActor(`pubupd-admdeny-${randomUUID().slice(0, 8)}`);
+      const deniedAdminCookie = await loginAs(app, adminExtId);
+
+      const voc = await insertVoc(msId, 'Admin Deny Links VOC');
+      const otherVoc = await insertVoc(msId, 'Admin Deny Links Target VOC');
+
+      // core.entity_links is append-only to fops_app: seed and clean via the
+      // migrate role (same pattern as the ADR-0047 test). The deny row uses
+      // the same handle and is removed in finally.
+      const ops = createDb(MIGRATE_URL);
+      let denyId: string | undefined;
+      try {
+        await ops.pool.query(
+          `insert into core.entity_links (workspace_id, source_type, source_id, target_type, target_id,
+            relation_type, visibility, status, managed_system_id, created_by)
+           values ($1, 'voc', $2, 'voc', $3, 'related_to', 'internal_only', 'active', $4, $5)`,
+          [WORKSPACE_ID, voc.id, otherVoc.id, msId, adminActorId],
+        );
+        const denyRes = await ops.pool.query<{ id: string }>(
+          `insert into permission.permission_denies
+             (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id)
+           values ($1, $2, 'voc.read', $3, 'test', $4)
+           returning id`,
+          [WORKSPACE_ID, deniedAdminId, msId, adminActorId],
+        );
+        denyId = denyRes.rows[0]?.id;
+
+        const res = await postPublicUpdate(deniedAdminCookie, voc.id, {
+          skip_public_update: false,
+          body_rich_content: paragraphDoc('denied-admin update'),
+          next_reporter_facing_status: 'received',
+        });
+        expect(res.statusCode).toBe(201);
+        expect(res.json<{ voc: { links?: Array<unknown> } }>().voc.links).toEqual([]);
+      } finally {
+        if (denyId) {
+          await ops.pool.query(`delete from permission.permission_denies where id = $1`, [denyId]);
+        }
+        // Remove the link row so the shared MS/VOC cleanup is not blocked by
+        // the entity_links → managed_systems FK.
+        await ops.pool.query(
+          `delete from core.entity_links
+            where workspace_id = $1
+              and managed_system_id in (
+                select id from core.managed_systems where workspace_id = $1 and slug like $2
+              )`,
+          [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+        );
+        await ops.close();
+      }
+    },
+  );
 
   // ── PLAN-22 C7b — attachment_ids linking on body shape ──────────────────
 

@@ -821,9 +821,16 @@ export function createVocReadService(deps: VocReadServiceDeps) {
         readScope,
       }),
     ]);
+    // ADR-0047: listLinks is the single read authority on the focus VOC
+    // (voc.read deny-first, or reporter). This post-write path also serves
+    // triage-only writers (e.g. public updates), so an unreadable focus must
+    // yield no links rather than 404-ing the write's response envelope —
+    // duplicating the read check here would fork the authority (repo-read's
+    // admin 'all' scope ignores explicit voc.read denies; listLinks does not).
     const links = await deps.entityLinksService.listLinks({
       actor,
       endpoint: { type: 'voc', id: vocId },
+      onUnreadableFocus: 'empty',
     });
 
     const conversationTimeline = mapConversationRowsWithAttachments(

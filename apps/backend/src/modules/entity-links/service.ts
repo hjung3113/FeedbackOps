@@ -225,13 +225,7 @@ async function assertVocReadScope(
     workspace_id: actor.workspace_id,
     managed_system_id: subject.managed_system_id,
   });
-  if (readDecision.allow) return true;
-
-  const triageDecision = await deps.checkService.checkCapability(actor, 'voc.triage', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: subject.managed_system_id,
-  });
-  return triageDecision.allow;
+  return readDecision.allow;
 }
 
 async function assertFindingReadScope(
@@ -806,6 +800,8 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     actor: EntityLinksActor;
     endpoint: EntityLinkRef;
     side?: 'source' | 'target';
+    /** Default 'not_found': GET /entity-links must not leak existence. */
+    onUnreadableFocus?: 'not_found' | 'empty';
   }): Promise<EntityLinkDto[]> {
     const { actor, endpoint, side } = args;
     const provider = providerFor(endpoint.type);
@@ -815,6 +811,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     }
     const focusAllowed = await provider.canRead(deps, actor, focus);
     if (!focusAllowed) {
+      if (args.onUnreadableFocus === 'empty') {
+        return [];
+      }
       throw new HttpError('not_found.record', 'entity link endpoint not found');
     }
 

@@ -57,7 +57,7 @@ Only `entity-links.integration.test.ts:845-884` ("GET by VOC source accepts
 managed-system scoped voc.triage without voc.read") asserts the opposite: a
 triage-only actor gets the **full** `visibility_state: 'allowed'` link,
 including `source_id` and `target_id` — the same result a `voc.read` holder
-gets. That test currently passes because it was written to match the
+gets. That test passed because it was written to match the
 undocumented fallback, not the contract.
 
 ## Decision
@@ -89,7 +89,9 @@ This is Option A, not B, because:
   only via `voc.read` on its Managed System or reporter identity. A
   `voc.triage`-only actor sees the row as `visibility_state: 'hidden'` (or
   `'denied'`, per existing decision logic), like any other non-readable
-  endpoint — never `'allowed'`.
+  endpoint — never `'allowed'`. Endpoint-scoped GET with an unreadable focus
+  returns 404 `not_found.record`; `hidden` rows apply to the workspace
+  inventory and to the opposite endpoint.
 - **Create** (`POST /entity-links`, voc→voc `related_to`): the source-VOC
   check in `createLink` uses the same `canRead` gate, so it inherits the same
   fix automatically — a `voc.triage`-only actor cannot create a link from a
@@ -107,9 +109,9 @@ target_id, or synthesized endpoint summaries" —
 
 ## Follow-up implementation
 
-Issue #423 tracks the code change: drop the `voc.triage` fallback from
-`assertVocReadScope`, and rewrite
-`entity-links.integration.test.ts:845-884` to assert the corrected behavior.
+#423 landed: the `voc.triage` fallback was removed from `assertVocReadScope`,
+and the post-write `composeDetailEnvelope` now calls `listLinks` with
+`onUnreadableFocus: 'empty'` (otherwise triage-only writers would 404).
 
 ## Non-goals
 
