@@ -637,12 +637,21 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
+  // #378: constructed before the Tasks module so Task detail can resolve its
+  // source VOC's visibility through the canonical VOC read-authority path.
+  const vocReadService = createVocReadService({
+    db: dbHandle.db,
+    checkService,
+    entityLinksService,
+  });
+
   // ── Tasks module — Slice 6 issue #134 ────────────────────────────────────
   const tasksService = createTasksService({
     db: dbHandle.db,
     auditService,
     checkService,
     idempotencyService,
+    vocReadService,
     ...(boss ? { boss } : {}),
   });
   await app.register(tasksRoutes, {
@@ -669,11 +678,6 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       embeddingEnabled: isEmbeddingEnabled(config),
       log: { error: (msg, meta) => app.log.error(meta ?? {}, msg) },
     }),
-  });
-  const vocReadService = createVocReadService({
-    db: dbHandle.db,
-    checkService,
-    entityLinksService,
   });
   const conversationService = createConversationService({
     db: dbHandle.db,

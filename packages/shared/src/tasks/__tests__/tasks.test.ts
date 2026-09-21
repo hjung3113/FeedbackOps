@@ -79,3 +79,98 @@ describe('taskDetailDtoSchema', () => {
     ).toThrow();
   });
 });
+
+describe('taskDetailDtoSchema source.voc (#378)', () => {
+  const vocAllowed = {
+    visibility_state: 'allowed',
+    id: U3,
+    display_id: 'V-1042',
+    title: 'Login latency complaints',
+  } as const;
+
+  it('accepts the allowed verdict with id, display_id, and title', () => {
+    const parsed = taskDetailDtoSchema.parse({
+      ...baseTask,
+      source: {
+        task_request: { id: U4, status: 'approved' },
+        voc: vocAllowed,
+      },
+    });
+
+    expect(parsed.source?.voc).toEqual(vocAllowed);
+  });
+
+  it('accepts summary_visible carrying no identifiers', () => {
+    const parsed = taskDetailDtoSchema.parse({
+      ...baseTask,
+      source: { voc: { visibility_state: 'summary_visible' } },
+    });
+
+    expect(parsed.source?.voc).toEqual({ visibility_state: 'summary_visible' });
+  });
+
+  it('accepts denied carrying no identifiers', () => {
+    const parsed = taskDetailDtoSchema.parse({
+      ...baseTask,
+      source: { voc: { visibility_state: 'denied' } },
+    });
+
+    expect(parsed.source?.voc).toEqual({ visibility_state: 'denied' });
+  });
+
+  it('accepts a source without voc (hidden is omitted, never serialized)', () => {
+    const parsed = taskDetailDtoSchema.parse({
+      ...baseTask,
+      source: { task_request: { id: U4, status: 'approved' } },
+    });
+
+    expect(parsed.source?.voc).toBeUndefined();
+  });
+
+  it('rejects the hidden state — the key is omitted instead', () => {
+    expect(() =>
+      taskDetailDtoSchema.parse({
+        ...baseTask,
+        source: { voc: { visibility_state: 'hidden' } },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects allowed without id', () => {
+    const { id: _id, ...withoutId } = vocAllowed;
+    expect(() =>
+      taskDetailDtoSchema.parse({
+        ...baseTask,
+        source: { voc: withoutId },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects allowed without title', () => {
+    const { title: _title, ...withoutTitle } = vocAllowed;
+    expect(() =>
+      taskDetailDtoSchema.parse({
+        ...baseTask,
+        source: { voc: withoutTitle },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects extra keys on the denied verdict', () => {
+    expect(() =>
+      taskDetailDtoSchema.parse({
+        ...baseTask,
+        source: { voc: { visibility_state: 'denied', id: U3 } },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects unknown visibility_state values', () => {
+    expect(() =>
+      taskDetailDtoSchema.parse({
+        ...baseTask,
+        source: { voc: { visibility_state: 'public' } },
+      }),
+    ).toThrow();
+  });
+});

@@ -169,18 +169,33 @@ export async function listTasksByWorkspace(
   return result.rows.map(mapTaskRow);
 }
 
+export interface ResolvedTaskSource {
+  source: TaskDetailSource;
+  /**
+   * VOC id backing the source trail per #378 precedence: the Task Request's
+   * own `source_type='voc'` wins over the resolved Finding's. The repo never
+   * reads VOC tables and the id is never serialized unresolved — the service
+   * resolves it to a visibility verdict through VocReadService first.
+   */
+  vocId: string | null;
+}
+
 export async function resolveTaskSource(
   db: Db | Tx,
   input: { workspaceId: string; sourceTaskRequestId: string },
-): Promise<TaskDetailSource | null> {
+): Promise<ResolvedTaskSource | null> {
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
       tr.id AS task_request_id,
       tr.status AS task_request_status,
+      tr.source_type AS task_request_source_type,
+      tr.source_id AS task_request_source_id,
       f.id AS finding_id,
       f.title AS finding_title,
       f.summary AS finding_summary,
-      f.evidence_count AS finding_evidence_count
+      f.evidence_count AS finding_evidence_count,
+      f.source_type AS finding_source_type,
+      f.source_id AS finding_source_id
     FROM task_request.task_requests tr
     LEFT JOIN core.entity_links el
       ON el.workspace_id = tr.workspace_id
@@ -214,5 +229,13 @@ export async function resolveTaskSource(
       evidence_count: Number(row.finding_evidence_count),
     };
   }
-  return source;
+  const taskRequestSourceId = row.task_request_source_id as string | null;
+  const findingSourceId = row.finding_source_id as string | null;
+  const vocId =
+    row.task_request_source_type === 'voc' && taskRequestSourceId
+      ? taskRequestSourceId
+      : row.finding_source_type === 'voc' && findingSourceId
+        ? findingSourceId
+        : null;
+  return { source, vocId };
 }

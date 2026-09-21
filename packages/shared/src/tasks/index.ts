@@ -61,9 +61,28 @@ export const taskDetailSourceSchema = z
       })
       .strict()
       .optional(),
+    // Source VOC of the resolved trail, decided by the backend (ADR-0023 /
+    // FR-LINK-002): the FE never synthesizes it. `hidden` is never serialized —
+    // the whole key is omitted so existence is not revealed. The non-allowed
+    // states carry no identifiers.
+    voc: z
+      .discriminatedUnion('visibility_state', [
+        z
+          .object({
+            visibility_state: z.literal('allowed'),
+            id: z.string().uuid(),
+            display_id: z.string(),
+            title: z.string(),
+          })
+          .strict(),
+        z.object({ visibility_state: z.literal('summary_visible') }).strict(),
+        z.object({ visibility_state: z.literal('denied') }).strict(),
+      ])
+      .optional(),
   })
   .strict();
 export type TaskDetailSource = z.infer<typeof taskDetailSourceSchema>;
+export type TaskDetailSourceVoc = NonNullable<TaskDetailSource['voc']>;
 
 export const taskDetailDtoSchema = taskDtoSchema
   .extend({
