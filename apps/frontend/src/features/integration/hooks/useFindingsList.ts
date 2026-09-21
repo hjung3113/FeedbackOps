@@ -1,8 +1,9 @@
 // useFindingsList — react-query wrapper for GET /findings.
 // Optional managed_system_id filter mirrors the backend query param.
 
-import { apiClient } from '@/lib/api';
+import { apiRequest } from '@/lib/api';
 import { ApiError } from '@/lib/api/types';
+import { listFindingsResponseSchema } from '@fops/shared';
 import type { ListFindingsResponse } from '@fops/shared';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 
@@ -13,7 +14,7 @@ export function useFindingsList(managedSystemId?: string): UseQueryResult<ListFi
       const path = managedSystemId
         ? `/findings?managed_system_id=${encodeURIComponent(managedSystemId)}`
         : '/findings';
-      const res = await apiClient<ListFindingsResponse>('GET', path, { signal });
+      const res = await apiRequest('GET', path, listFindingsResponseSchema, { signal });
       return res.data;
     },
     staleTime: 30_000,

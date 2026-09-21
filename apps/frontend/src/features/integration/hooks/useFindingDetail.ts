@@ -1,5 +1,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
+import { apiRequest } from '@/lib/api';
+import { findingDtoSchema } from '@fops/shared';
 import type { FindingDto } from '@fops/shared';
 
 export function useFindingDetail(
@@ -8,7 +9,12 @@ export function useFindingDetail(
   return useQuery({
     queryKey: ['finding', id] as const,
     queryFn: async ({ signal }) => {
-      const res = await apiClient<FindingDto>('GET', `/findings/${id as string}`, { signal });
+      const res = await apiRequest<FindingDto>(
+        'GET',
+        `/findings/${id as string}`,
+        findingDtoSchema,
+        { signal },
+      );
       return res.data;
     },
     enabled: Boolean(id),

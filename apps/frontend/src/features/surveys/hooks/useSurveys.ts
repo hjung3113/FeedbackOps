@@ -1,5 +1,10 @@
-import { type ApiError, apiClient } from '@/lib/api';
-import { type SurveyResultDto, surveyResultDtoSchema } from '@fops/shared';
+import { type ApiError, apiClient, apiRequest } from '@/lib/api';
+import {
+  listSurveysResponseSchema,
+  type SurveyResultDto,
+  surveyDtoSchema,
+  surveyResultDtoSchema,
+} from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateSurveyInput, QuestionInput, Survey, SurveyPatchInput } from '../types';
 
@@ -19,11 +24,12 @@ export function useSurveys(managedSystemId?: string) {
     queryKey: managedSystemId ? surveyKeys.listScoped(managedSystemId) : surveyKeys.list,
     queryFn: async ({ signal }) =>
       (
-        await apiClient<Survey[]>(
+        await apiRequest(
           'GET',
           managedSystemId
             ? `/surveys?managed_system_id=${encodeURIComponent(managedSystemId)}`
             : '/surveys',
+          listSurveysResponseSchema,
           { signal },
         )
       ).data,
@@ -47,7 +53,7 @@ export function useSurvey(id: string) {
   return useQuery({
     queryKey: surveyKeys.detail(id),
     queryFn: async ({ signal }) =>
-      (await apiClient<Survey>('GET', `/surveys/${id}`, { signal })).data,
+      (await apiRequest<Survey>('GET', `/surveys/${id}`, surveyDtoSchema, { signal })).data,
     enabled: Boolean(id),
     retry: false,
   });
