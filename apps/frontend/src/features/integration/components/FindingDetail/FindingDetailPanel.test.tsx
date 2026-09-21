@@ -21,7 +21,7 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock('@/features/admin/permissions/use-permission-check', () => ({
+vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
   usePermissionCheck: () => ({ data: { state: 'approved' } }),
 }));
 
@@ -66,11 +66,11 @@ vi.mock('@/features/integration/hooks/useRequestTaskFromFinding', () => ({
   useRequestTaskFromFinding: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
 }));
 
-vi.mock('@/features/voc/hooks/useVocDetail', () => ({
+vi.mock('@/lib/cross-system/useVocDetail', () => ({
   useVocDetail: () => ({ data: null }),
 }));
 
-vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({
     actors: [{ id: '40000000-0000-0000-0000-000000000004', display_name: '분석가' }],
   }),

@@ -32,7 +32,7 @@ import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { useCreateFindingFromVocMutation } from '../../hooks/useCreateFindingFromVocMutation';
+import { useCreateFindingFromVocMutation } from './useCreateFindingFromVocMutation';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
