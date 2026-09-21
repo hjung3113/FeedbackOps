@@ -8,6 +8,7 @@
 // no session cookie, no actor row — and never an echoed secret, code, or
 // IdP error text.
 
+import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -90,10 +91,15 @@ async function drive(
     transform?: (params: URLSearchParams) => void;
   } = {},
 ): Promise<DriveResult> {
-  const loginUrl = opts.returnTo === undefined
-    ? '/auth/login'
-    : `/auth/login?return_to=${encodeURIComponent(opts.returnTo)}`;
-  const loginRes = await app.inject({ method: 'GET', url: loginUrl, headers: { 'user-agent': UA } });
+  const loginUrl =
+    opts.returnTo === undefined
+      ? '/auth/login'
+      : `/auth/login?return_to=${encodeURIComponent(opts.returnTo)}`;
+  const loginRes = await app.inject({
+    method: 'GET',
+    url: loginUrl,
+    headers: { 'user-agent': UA },
+  });
   const location = loginRes.headers.location;
   expect(typeof location).toBe('string');
   const txCookie = findCookie(loginRes, OIDC_TX_COOKIE_NAME);
@@ -131,7 +137,11 @@ describe.skipIf(!runIntegration)('OIDC provider flow (#390)', () => {
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
-    idp = await FakeOidcIdp.start({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, redirectUri: REDIRECT_URI });
+    idp = await FakeOidcIdp.start({
+      clientId: CLIENT_ID,
+      clientSecret: CLIENT_SECRET,
+      redirectUri: REDIRECT_URI,
+    });
     dbHandle = createDb(APP_URL);
     // loadConfig parses process.env — a developer shell exporting
     // AUTH_PROVIDER=oidc (without OIDC_* vars) would fail validation before
@@ -245,7 +255,11 @@ describe.skipIf(!runIntegration)('OIDC provider flow (#390)', () => {
 
   it('callback without / tampered / expired transaction cookie → 401, no session, no actor', async () => {
     // Negative 1: no tx cookie at all.
-    const loginRes = await app.inject({ method: 'GET', url: '/auth/login', headers: { 'user-agent': UA } });
+    const loginRes = await app.inject({
+      method: 'GET',
+      url: '/auth/login',
+      headers: { 'user-agent': UA },
+    });
     const authorizeUrl = idp.authorize(loginRes.headers.location as string);
     const callbackUrl = new URL(authorizeUrl);
     const noCookie = await app.inject({
@@ -288,6 +302,63 @@ describe.skipIf(!runIntegration)('OIDC provider flow (#390)', () => {
     const twin = await drive(app, idp);
     expect(twin.callbackRes.statusCode).toBe(302);
     expect(await actorRow(IT_SUB)).toBeDefined();
+  });
+
+  it('forged transaction cookie (attacker-chosen state/nonce/verifier, wrong signing key) → 401 (login CSRF)', async () => {
+    // The attack the cookie HMAC exists for: the attacker completes an IdP
+    // login of THEIR OWN account with parameters they chose, then plants a
+    // matching transaction cookie in the victim's browser. Every payload field
+    // is consistent (state, nonce, PKCE verifier↔challenge), so ONLY the
+    // signature distinguishes the forgery from a legitimate cookie.
+    const verifier = randomBytes(32).toString('base64url');
+    const state = 'attacker-state';
+    const nonce = 'attacker-nonce';
+    const authorizeParams = new URLSearchParams({
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      response_type: 'code',
+      scope: 'openid email profile',
+      state,
+      nonce,
+      code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+      code_challenge_method: 'S256',
+    });
+    const callbackUrl = new URL(idp.authorize(`http://idp.invalid/authorize?${authorizeParams}`));
+    const payload = {
+      state,
+      nonce,
+      verifier,
+      returnTo: '/',
+      exp: Math.floor(Date.now() / 1000) + 300,
+    };
+
+    // Positive twin: the same forgery signed with the REAL secret is accepted,
+    // proving every other field is consistent and only the signature differs.
+    const validlySigned = signOidcTx(CLIENT_SECRET, payload);
+    const accepted = await app.inject({
+      method: 'GET',
+      url: `/auth/callback${callbackUrl.search}`,
+      headers: { cookie: `${OIDC_TX_COOKIE_NAME}=${validlySigned}`, 'user-agent': UA },
+    });
+    expect(accepted.statusCode).toBe(302);
+    // Reset the account so the negative below is judged from a clean slate.
+    await dbHandle.pool.query(
+      'delete from core.sessions where actor_id in (select id from core.actors where external_id = $1)',
+      [IT_SUB],
+    );
+    await dbHandle.pool.query('delete from core.actors where external_id = $1', [IT_SUB]);
+
+    const secondCallback = new URL(
+      idp.authorize(`http://idp.invalid/authorize?${authorizeParams}`),
+    );
+    const forged = signOidcTx('some-other-secret-the-attacker-controls', payload);
+    const forgedRes = await app.inject({
+      method: 'GET',
+      url: `/auth/callback${secondCallback.search}`,
+      headers: { cookie: `${OIDC_TX_COOKIE_NAME}=${forged}`, 'user-agent': UA },
+    });
+    expectRejected(forgedRes);
+    expect(await actorRow(IT_SUB)).toBeUndefined();
   });
 
   it('state mismatch between callback query and transaction cookie → 401', async () => {
