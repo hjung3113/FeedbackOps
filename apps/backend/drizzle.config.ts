@@ -9,19 +9,17 @@ const migrateUrl =
   'postgres://fops_migrate:fops_migrate@localhost:5432/feedbackops';
 
 export default defineConfig({
-  // Point at the per-namespace files directly so drizzle-kit's CJS loader
-  // doesn't hit ESM .js suffixes used by NodeNext at runtime.
-  schema: [
-    './src/db/schema/core.ts',
-    './src/db/schema/permission.ts',
-    './src/db/schema/voc.ts',
-    './src/db/schema/voc-cluster.ts',
-    './src/db/schema/finding.ts',
-    './src/db/schema/task.ts',
-    './src/db/schema/task-request.ts',
-    './src/db/schema/survey.ts',
-  ],
-  out: './migrations',
+  // drizzle-kit 0.30.1's CJS loader cannot resolve the `.js` specifiers
+  // NodeNext requires for cross-file `.ts` imports (issue #422), so `schema`
+  // points at the pre-bundled CJS file produced by scripts/bundle-schema.mjs
+  // (run automatically by `db:generate`). Bundle drizzle-orm externals resolve
+  // from apps/backend/node_modules as usual.
+  schema: './.drizzle-schema/schema.cjs',
+  // The drift gate (scripts/gates/db-migration-drift-gate.mjs) redirects this
+  // to a throwaway copy of migrations via DRIZZLE_OUT: drizzle-kit's CLI
+  // `--out` flag bypasses this config file entirely (schema/dialect drop to
+  // undefined), so the env var is the only way to reuse the real config.
+  out: process.env.DRIZZLE_OUT ?? './migrations',
   dialect: 'postgresql',
   schemaFilter: [
     'core',

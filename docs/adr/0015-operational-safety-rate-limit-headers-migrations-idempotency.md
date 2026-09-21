@@ -60,7 +60,7 @@ Migrations are authored as **Drizzle Kit-generated SQL files** committed to `app
 5. The migration job (one k8s Job per release) runs `pnpm drizzle-kit migrate` against the target database.
 ```
 
-`drizzle-kit push` is **not used** outside local dev. CI runs `drizzle-kit check` to detect schema drift between code and the committed migrations; a drift makes CI fail.
+`drizzle-kit push` is **not used** outside local dev. `drizzle-kit check` only validates journal/migration-file consistency — it cannot detect drift between the TS schema and the committed migrations. That drift is caught by the `pnpm gate:db-migration-drift` gate, which runs `drizzle-kit generate` against a throwaway copy of the committed migrations and fails if generate would emit any new SQL or journal entry.
 
 Index conventions for review:
 
