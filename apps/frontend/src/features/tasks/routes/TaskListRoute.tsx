@@ -107,6 +107,7 @@ export function TaskDetailPanel({
   const sourceFinding = source?.finding as
     | (NonNullable<TaskDetailDto['source']>['finding'] & { display_id?: string | null })
     | undefined;
+  const sourceVoc = source?.voc;
   return (
     <aside className="flex h-full flex-col bg-surface-detail">
       <DetailPanelHeader
@@ -188,9 +189,35 @@ export function TaskDetailPanel({
 
         <div data-anchor="context" className="border-t border-border-subtle px-4 py-4">
           <PanelSectionTitle>Linked context</PanelSectionTitle>
+          {/* #378: the source VOC is rendered ONLY from the backend payload's
+              visibility verdict. `allowed` leads the trail; summary_visible /
+              denied render a blocked panel without identifiers (ADR-0023);
+              hidden / absent render nothing — no synthesis, no existence leak. */}
+          {sourceVoc && sourceVoc.visibility_state !== 'allowed' && (
+            <PermissionBlockedPanel
+              state={sourceVoc.visibility_state}
+              category="Source VOC"
+              className="mt-2"
+            />
+          )}
           <div className="mt-2">
             <LinkedEntityTrail
               nodes={[
+                ...(sourceVoc?.visibility_state === 'allowed'
+                  ? [
+                      {
+                        type: 'voc' as const,
+                        id: sourceVoc.id,
+                        display_id: sourceVoc.display_id,
+                        title: sourceVoc.title,
+                        // Same destination as every other VOC link in the app:
+                        // the /vocs URL-state selection.
+                        onNavigate: () => {
+                          void navigate({ to: '/vocs', search: { selected: sourceVoc.id } });
+                        },
+                      },
+                    ]
+                  : []),
                 ...(sourceFinding
                   ? [
                       {

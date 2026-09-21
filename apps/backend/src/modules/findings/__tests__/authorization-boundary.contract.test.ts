@@ -191,6 +191,12 @@ describe.skipIf(!runIntegration)(
         auditService,
         checkService,
         idempotencyService,
+        vocReadService: {
+          // #378 read seam. Only reached by getTask after every permission
+          // gate passes; this suite only asserts rejections, so the stub is
+          // never consulted.
+          resolveVocReference: async () => ({ visibility_state: "hidden" }),
+        },
       });
       taskRequestsService = createTaskRequestsService({
         db: dbHandle.db,

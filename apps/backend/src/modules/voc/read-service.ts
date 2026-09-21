@@ -49,6 +49,17 @@ export interface ReadActorContext {
   role_level: 'admin' | 'developer' | 'user';
 }
 
+/**
+ * Visibility verdict for a single VOC reference, in the entity-link vocabulary
+ * (#378). Computed ONLY by mapping the canonical getVocDetail outcome — no
+ * duplicated permission predicates (see #423 regression).
+ */
+export type VocReferenceResolution =
+  | { visibility_state: 'allowed'; id: string; display_id: string; title: string }
+  | { visibility_state: 'summary_visible' }
+  | { visibility_state: 'denied' }
+  | { visibility_state: 'hidden' };
+
 /** Count queries use the same predicates as the list, without list-only fields. */
 export type CountVocsQuery = Pick<
   ListVocsQuery,
@@ -674,6 +685,48 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     return { kind: 'full', envelope, etag };
   }
 
+  // ── resolveVocReference (#378) ────────────────────────────────────────────
+
+  /**
+   * Narrow cross-module read interface (Task detail source trail): maps the
+   * ONE VOC read-authority path (getVocDetail) onto the entity-link visibility
+   * vocabulary. Actual getVocDetail outcomes per actor kind:
+   *   full envelope    → 'allowed' (id/display_id/title from the envelope)
+   *   summary envelope → 'summary_visible' (no identifiers forwarded)
+   *   HttpError not_found.record (missing row OR out-of-effective-scope 404
+   *                    anti-probe) → 'hidden'
+   *   HttpError permission.denied → 'denied' (defensive: getVocDetail's access
+   *                    matrix currently never raises it — reads end in full,
+   *                    summary, or not_found.record — but the mapping keeps
+   *                    the vocabulary complete)
+   *   anything else    → rethrown (callers must not degrade silently)
+   */
+  async function resolveVocReference(args: {
+    actor: ReadActorContext;
+    vocId: string;
+  }): Promise<VocReferenceResolution> {
+    try {
+      const detail = await getVocDetail(args);
+      if (detail.kind === 'full') {
+        return {
+          visibility_state: 'allowed',
+          id: detail.envelope.id,
+          display_id: detail.envelope.display_id,
+          title: detail.envelope.title,
+        };
+      }
+      return { visibility_state: 'summary_visible' };
+    } catch (error) {
+      if (error instanceof HttpError && error.code === 'not_found.record') {
+        return { visibility_state: 'hidden' };
+      }
+      if (error instanceof HttpError && error.code === 'permission.denied') {
+        return { visibility_state: 'denied' };
+      }
+      throw error;
+    }
+  }
+
   // ── getConversation ───────────────────────────────────────────────────────
 
   async function getConversation(args: {
@@ -894,7 +947,14 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     };
   }
 
-  return { listVocs, countVocs, getVocDetail, getConversation, composeDetailEnvelope };
+  return {
+    listVocs,
+    countVocs,
+    getVocDetail,
+    resolveVocReference,
+    getConversation,
+    composeDetailEnvelope,
+  };
 }
 
 export type VocReadService = ReturnType<typeof createVocReadService>;

@@ -30,6 +30,7 @@ import {
   lockTaskRequestForUpdate,
   markTaskRequestConverted,
 } from '../task-requests/commands.js';
+import type { VocReadService } from '../voc/read-service.js';
 import { lockAnalyticsArea, lockManagedSystem } from '../voc/repo.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
@@ -56,6 +57,10 @@ export interface TasksServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  /** Narrow read seam (#378): Task detail resolves its source VOC's visibility
+   *  verdict through the canonical VOC read-authority path — never a copied
+   *  predicate (see #423) and never a VOC repo import (module-seams guard). */
+  vocReadService: Pick<VocReadService, 'resolveVocReference'>;
   boss?: PgBoss;
 }
 
@@ -250,13 +255,27 @@ export function createTasksService(deps: TasksServiceDeps) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
 
-    const source = row.source_task_request_id
+    const resolved = row.source_task_request_id
       ? await resolveTaskSource(deps.db, {
           workspaceId: args.actor.workspace_id,
           sourceTaskRequestId: row.source_task_request_id,
         })
       : null;
-    return { ...taskToDto(row), source };
+    // #378: the source VOC ships only as a backend visibility verdict
+    // (ADR-0023). Seeing the Task does not imply seeing its source VOC; a
+    // `hidden` verdict omits the key entirely so existence is not revealed.
+    // Unexpected read failures propagate — they carry no id and must not be
+    // swallowed into a synthetic state.
+    if (resolved?.vocId) {
+      const voc = await deps.vocReadService.resolveVocReference({
+        actor: args.actor,
+        vocId: resolved.vocId,
+      });
+      if (voc.visibility_state !== 'hidden') {
+        resolved.source.voc = voc;
+      }
+    }
+    return { ...taskToDto(row), source: resolved?.source ?? null };
   }
 
   async function convertTaskRequest(args: {
@@ -479,13 +498,13 @@ export function createTasksService(deps: TasksServiceDeps) {
           }
 
           if (task.status === args.input.status) {
-            const source = task.source_task_request_id
+            const resolved = task.source_task_request_id
               ? await resolveTaskSource(tx, {
                   workspaceId: args.actor.workspace_id,
                   sourceTaskRequestId: task.source_task_request_id,
                 })
               : null;
-            return { status: 200, body: { ...taskToDto(task), source } };
+            return { status: 200, body: { ...taskToDto(task), source: resolved?.source ?? null } };
           }
 
           const updatedTask = await updateTaskStatus(tx, {
@@ -527,13 +546,16 @@ export function createTasksService(deps: TasksServiceDeps) {
             summary: 'Task status changed',
             detail: { from: task.status, to: updatedTask.status },
           });
-          const source = updatedTask.source_task_request_id
+          const resolved = updatedTask.source_task_request_id
             ? await resolveTaskSource(tx, {
                 workspaceId: args.actor.workspace_id,
                 sourceTaskRequestId: updatedTask.source_task_request_id,
               })
             : null;
-          return { status: 200, body: { ...taskToDto(updatedTask), source } };
+          return {
+            status: 200,
+            body: { ...taskToDto(updatedTask), source: resolved?.source ?? null },
+          };
         },
       );
     });
