@@ -56,15 +56,24 @@ import {
   type OidcTxPayload,
 } from './oidc-tx-cookie.js';
 
-/** Same-origin-only sanitizer for post-login redirect targets: must start
- * with '/', must not be protocol-relative ('//'), and must not carry a
- * backslash or CR/LF (browser URL parsers treat '\', CR, LF as scheme or
- * authority hints → open-redirect vectors). */
+/** Same-origin-only sanitizer for post-login redirect targets. Accepts only a
+ * single-slash absolute path made of printable, non-whitespace characters:
+ * browsers strip tab/CR/LF anywhere in a URL and treat '\\' like '/', so
+ * `/<TAB>/evil.example` or `/\\evil.example` would become `//evil.example`
+ * (protocol-relative, off-site) after redirect. The resolved URL must also
+ * stay on the same origin, which catches encoded and exotic forms. */
+const RETURN_TO_SAFE = /^\/[^\s\\\u0000-\u001f\u007f]*$/;
 function sanitizeReturnTo(raw: string | undefined): string {
   if (raw === undefined) return '/';
-  if (!raw.startsWith('/')) return '/';
-  if (raw.startsWith('//')) return '/';
-  if (raw.includes('\\') || raw.includes('\r') || raw.includes('\n')) return '/';
+  if (raw.length > 2048 || !RETURN_TO_SAFE.test(raw) || raw.startsWith('//')) return '/';
+  try {
+    const resolved = new URL(raw, 'http://return-to.invalid');
+    if (resolved.origin !== 'http://return-to.invalid' || resolved.pathname.startsWith('//')) {
+      return '/';
+    }
+  } catch {
+    return '/';
+  }
   return raw;
 }
 
@@ -101,6 +110,38 @@ export interface OidcAuthProviderDeps {
   nodeEnv: 'development' | 'test' | 'production';
   /** Test seam: overrides the global fetch used for discovery/token requests. */
   fetch?: typeof fetch;
+}
+
+/** Returns a reason the discovered metadata cannot serve this provider, or
+ * null. Reasons are static strings — never values from the response. */
+function discoveryMetadataProblem(
+  metadata: {
+    authorization_endpoint?: string;
+    token_endpoint?: string;
+    jwks_uri?: string;
+    token_endpoint_auth_methods_supported?: string[];
+  },
+  allowInsecure: boolean,
+): string | null {
+  for (const key of ['authorization_endpoint', 'token_endpoint', 'jwks_uri'] as const) {
+    const value = metadata[key];
+    if (typeof value !== 'string' || value.length === 0) return `${key} is missing`;
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      return `${key} is not an absolute URL`;
+    }
+    if (url.protocol !== 'https:' && !(allowInsecure && url.protocol === 'http:')) {
+      return `${key} must use https`;
+    }
+  }
+  const methods = metadata.token_endpoint_auth_methods_supported;
+  // OAuth 2.0 / OIDC default when the field is omitted is client_secret_basic.
+  if (Array.isArray(methods) && !methods.includes('client_secret_basic')) {
+    return 'token endpoint does not support client_secret_basic';
+  }
+  return null;
 }
 
 export async function createOidcAuthProvider(deps: OidcAuthProviderDeps): Promise<AuthProvider> {
@@ -153,9 +194,7 @@ export async function createOidcAuthProvider(deps: OidcAuthProviderDeps): Promis
         // seam needs this one cast; at runtime the signatures match.
         ...(deps.fetch !== undefined
           ? {
-              [customFetch]: deps.fetch as NonNullable<
-                DiscoveryRequestOptions[typeof customFetch]
-              >,
+              [customFetch]: deps.fetch as NonNullable<DiscoveryRequestOptions[typeof customFetch]>,
             }
           : {}),
         // Non-repudiation: verify the ID Token signature against the
@@ -174,6 +213,16 @@ export async function createOidcAuthProvider(deps: OidcAuthProviderDeps): Promis
     throw new Error(
       `OIDC discovery failed for issuer host '${issuer.host}' — verify OIDC_ISSUER_URL, ` +
         'OIDC_CLIENT_ID/OIDC_CLIENT_SECRET, and that the IdP is reachable (ADR-0006)',
+    );
+  }
+
+  // A reachable issuer is not enough: the metadata must describe an IdP this
+  // provider can actually complete a login against, otherwise the app would
+  // boot with authentication that fails at the first login.
+  const problem = discoveryMetadataProblem(clientConfig.serverMetadata(), allowInsecure);
+  if (problem !== null) {
+    throw new Error(
+      `OIDC discovery for issuer host '${issuer.host}' is unusable: ${problem} (ADR-0006)`,
     );
   }
 
@@ -264,13 +313,19 @@ export async function createOidcAuthProvider(deps: OidcAuthProviderDeps): Promis
       const email = idClaims['email'];
       if (typeof sub !== 'string' || sub.length === 0) return loginFailed();
       if (typeof email !== 'string' || email.length === 0) return loginFailed();
+      // An IdP that explicitly says the email is unverified must not be able to
+      // provision an actor under someone else's address (the email is unique
+      // per workspace). Absence of the claim is accepted: the corporate IdP
+      // controls who can sign in and does not let users pick addresses
+      // (ADR-0006); an explicit `false` is always refused.
+      if (idClaims['email_verified'] === false) return loginFailed();
       const preferredUsername = idClaims['preferred_username'];
       const displayName =
         typeof idClaims['name'] === 'string'
           ? (idClaims['name'] as string)
           : typeof preferredUsername === 'string'
             ? preferredUsername
-            : email.split('@')[0] ?? email;
+            : (email.split('@')[0] ?? email);
 
       const raw_claims: Record<string, unknown> = {};
       for (const key of RAW_CLAIM_ALLOWLIST) {

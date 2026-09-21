@@ -361,6 +361,68 @@ describe.skipIf(!runIntegration)('OIDC provider flow (#390)', () => {
     expect(await actorRow(IT_SUB)).toBeUndefined();
   });
 
+  it('an IdP that reports email_verified=false cannot provision an actor', async () => {
+    // Positive twin: an explicit email_verified=true (and absence, covered by
+    // the happy path) is accepted.
+    idp.nextIdToken({ emailVerified: true });
+    const accepted = await drive(app, idp);
+    expect(accepted.callbackRes.statusCode).toBe(302);
+    await dbHandle.pool.query(
+      `delete from core.sessions where actor_id in (select id from core.actors where external_id like 'oidc-it-%')`,
+    );
+    await dbHandle.pool.query(`delete from core.actors where external_id like 'oidc-it-%'`);
+
+    idp.nextIdToken({ emailVerified: false });
+    const result = await drive(app, idp);
+    expectRejected(result.callbackRes);
+    expect(await actorRow(IT_SUB)).toBeUndefined();
+  });
+
+  it('an otherwise valid, correctly signed transaction cookie is rejected once expired', async () => {
+    // Every field is consistent (state, nonce, PKCE verifier↔challenge, real
+    // signature); ONLY the expiry differs from the accepted twin, so removing
+    // the expiry check would let the expired variant through.
+    const verifier = randomBytes(32).toString('base64url');
+    const authorizeParams = new URLSearchParams({
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      response_type: 'code',
+      scope: 'openid email profile',
+      state: 'expiry-state',
+      nonce: 'expiry-nonce',
+      code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+      code_challenge_method: 'S256',
+    });
+    const payload = (exp: number) => ({
+      state: 'expiry-state',
+      nonce: 'expiry-nonce',
+      verifier,
+      returnTo: '/',
+      exp,
+    });
+    const callback = async (exp: number) => {
+      const url = new URL(idp.authorize(`http://idp.invalid/authorize?${authorizeParams}`));
+      return app.inject({
+        method: 'GET',
+        url: `/auth/callback${url.search}`,
+        headers: {
+          cookie: `${OIDC_TX_COOKIE_NAME}=${signOidcTx(CLIENT_SECRET, payload(exp))}`,
+          'user-agent': UA,
+        },
+      });
+    };
+
+    const accepted = await callback(Math.floor(Date.now() / 1000) + 300);
+    expect(accepted.statusCode).toBe(302);
+    await dbHandle.pool.query(
+      `delete from core.sessions where actor_id in (select id from core.actors where external_id like 'oidc-it-%')`,
+    );
+    await dbHandle.pool.query(`delete from core.actors where external_id like 'oidc-it-%'`);
+
+    expectRejected(await callback(Math.floor(Date.now() / 1000) - 1));
+    expect(await actorRow(IT_SUB)).toBeUndefined();
+  });
+
   it('state mismatch between callback query and transaction cookie → 401', async () => {
     const result = await drive(app, idp, {
       transform: (params) => params.set('state', 'attacker-chosen-state'),
@@ -410,7 +472,11 @@ describe.skipIf(!runIntegration)('OIDC provider flow (#390)', () => {
     ['//evil.example', '/'],
     ['https://evil.example', '/'],
     ['\\evil.example', '/'],
+    ['/\t/evil.example', '/'],
+    ['/ /evil.example', '/'],
+    ['/\u0000evil', '/'],
     ['/vocs', '/vocs'],
+    ['/vocs?tab=high', '/vocs?tab=high'],
   ])('return_to %s redirects to %s', async (returnTo, expectedLocation) => {
     const result = await drive(app, idp, { returnTo });
     expect(result.callbackRes.statusCode).toBe(302);
@@ -492,4 +558,65 @@ describe.skipIf(!runIntegration)('OIDC boot contract (#390)', () => {
       await dbHandle.close();
     }
   });
+  it.each([
+    ['token_endpoint is missing', { omit: ['token_endpoint'] }],
+    ['jwks_uri is missing', { omit: ['jwks_uri'] }],
+    [
+      'the token endpoint only supports client_secret_post',
+      { tokenEndpointAuthMethods: ['client_secret_post'] },
+    ],
+  ])(
+    'discovery metadata where %s rejects buildServer before listening',
+    async (_label, discovery) => {
+      process.env.NODE_ENV = 'test';
+      const brokenIdp = await FakeOidcIdp.start({
+        clientId: CLIENT_ID,
+        clientSecret: CLIENT_SECRET,
+        redirectUri: REDIRECT_URI,
+        discovery,
+      });
+      const okIdp = await FakeOidcIdp.start({
+        clientId: CLIENT_ID,
+        clientSecret: CLIENT_SECRET,
+        redirectUri: REDIRECT_URI,
+      });
+      const dbHandle = createDb(APP_URL);
+      const boot = async (issuer: string) => {
+        const savedProvider = process.env.AUTH_PROVIDER;
+        delete process.env.AUTH_PROVIDER;
+        const base = loadConfig();
+        if (savedProvider !== undefined) process.env.AUTH_PROVIDER = savedProvider;
+        return buildServer({
+          config: {
+            ...base,
+            AUTH_PROVIDER: 'oidc' as const,
+            NODE_ENV: 'test' as const,
+            OIDC_ISSUER_URL: issuer,
+            OIDC_CLIENT_ID: CLIENT_ID,
+            OIDC_CLIENT_SECRET: CLIENT_SECRET,
+            OIDC_REDIRECT_URI: REDIRECT_URI,
+            OIDC_SCOPES: 'openid email profile',
+          },
+          dbHandle,
+        });
+      };
+      try {
+        // Positive twin: a well-formed IdP boots on the same code path.
+        const app = await boot(okIdp.issuer);
+        await app.close();
+
+        const err = await boot(brokenIdp.issuer).then(
+          () => null,
+          (e: unknown) => e,
+        );
+        if (!(err instanceof Error)) throw new Error('expected buildServer to reject');
+        expect(err.message).toContain('is unusable');
+        expect(err.message).not.toContain(CLIENT_SECRET);
+      } finally {
+        await dbHandle.close();
+        await brokenIdp.close();
+        await okIdp.close();
+      }
+    },
+  );
 });

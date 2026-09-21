@@ -75,6 +75,11 @@ function validateRedirectUri(value: string, nodeEnv: string): string | null {
   if (url.hash.length > 0) {
     return 'OIDC_REDIRECT_URI must not contain a fragment';
   }
+  // The token request's redirect_uri is sent without the callback's query, so
+  // a configured query string can never match what the IdP registered.
+  if (url.search.length > 0) {
+    return 'OIDC_REDIRECT_URI must not contain a query string';
+  }
   if (url.pathname !== '/auth/callback') {
     return 'OIDC_REDIRECT_URI path must be exactly /auth/callback';
   }
@@ -115,12 +120,17 @@ export function validateOidcConfig(input: OidcEnvInput): OidcConfigIssue[] | nul
   const redirectIssue = validateRedirectUri(input.redirectUri as string, input.nodeEnv);
   if (redirectIssue) issues.push({ path: 'OIDC_REDIRECT_URI', message: redirectIssue });
 
-  const scopes = input.scopes ?? '';
-  const scopeTokens = scopes.trim().split(/\s+/).filter((token) => token.length > 0);
-  if (scopeTokens.length === 0 || !scopeTokens.includes('openid')) {
+  const scopes = (input.scopes ?? '').trim();
+  // RFC 6749 §3.3: single-space-separated scope-tokens of printable ASCII
+  // without '"' or '\\'. Anything else (newline, tab, double spaces) would be
+  // sent verbatim to the IdP and break every login.
+  const SCOPE_TOKEN = '[\\x21\\x23-\\x5B\\x5D-\\x7E]+';
+  const scopeGrammar = new RegExp(`^${SCOPE_TOKEN}( ${SCOPE_TOKEN})*$`);
+  if (!scopeGrammar.test(scopes) || !scopes.split(' ').includes('openid')) {
     issues.push({
       path: 'OIDC_SCOPES',
-      message: 'OIDC_SCOPES must include the openid scope (space-separated, e.g. "openid email profile")',
+      message:
+        'OIDC_SCOPES must be single-space-separated scope tokens (no control characters) and include openid, e.g. "openid email profile"',
     });
   }
 

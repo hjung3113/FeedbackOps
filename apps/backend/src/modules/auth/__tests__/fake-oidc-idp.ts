@@ -30,6 +30,8 @@ export interface FakeOidcIdpOptions {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  /** Shape the discovery document: drop keys and/or change advertised auth methods. */
+  discovery?: { omit?: string[]; tokenEndpointAuthMethods?: string[] };
 }
 
 export interface FakeProfileOverride {
@@ -45,6 +47,8 @@ export interface FakeIdTokenOverride {
   expired?: boolean;
   badSignature?: boolean;
   omitEmail?: boolean;
+  /** Adds an explicit `email_verified` claim. */
+  emailVerified?: boolean;
 }
 
 interface IssuedCode {
@@ -66,9 +70,14 @@ export class FakeOidcIdp {
   private readonly altKeyPair = generateKeyPair('RS256', { extractable: true });
   private readonly kid = randomBytes(8).toString('hex');
   private readonly codes = new Map<string, IssuedCode>();
-  private profile = { sub: 'oidc-it-sub-1', email: 'oidc.it.user@example.com', name: 'Oidc IT User' };
+  private profile = {
+    sub: 'oidc-it-sub-1',
+    email: 'oidc.it.user@example.com',
+    name: 'Oidc IT User',
+  };
   private nextTokenOverride: FakeIdTokenOverride | null = null;
   private nextTokenFails = false;
+  private readonly discoveryShape: NonNullable<FakeOidcIdpOptions['discovery']>;
 
   private constructor(server: Server, port: number, opts: FakeOidcIdpOptions) {
     this.server = server;
@@ -76,6 +85,7 @@ export class FakeOidcIdp {
     this.clientId = opts.clientId;
     this.clientSecret = opts.clientSecret;
     this.redirectUri = opts.redirectUri;
+    this.discoveryShape = opts.discovery ?? {};
   }
 
   static async start(opts: FakeOidcIdpOptions): Promise<FakeOidcIdp> {
@@ -169,17 +179,21 @@ export class FakeOidcIdp {
     const url = new URL(req.url ?? '/', this.issuer);
     try {
       if (url.pathname === '/.well-known/openid-configuration') {
-        this.json(res, 200, {
+        const doc: Record<string, unknown> = {
           issuer: this.issuer,
           authorization_endpoint: `${this.issuer}/authorize`,
           token_endpoint: `${this.issuer}/token`,
           jwks_uri: `${this.issuer}/jwks`,
           response_types_supported: ['code'],
           id_token_signing_alg_values_supported: ['RS256'],
-          token_endpoint_auth_methods_supported: ['client_secret_basic'],
+          token_endpoint_auth_methods_supported: this.discoveryShape.tokenEndpointAuthMethods ?? [
+            'client_secret_basic',
+          ],
           code_challenge_methods_supported: ['S256'],
           subject_types_supported: ['public'],
-        });
+        };
+        for (const key of this.discoveryShape.omit ?? []) delete doc[key];
+        this.json(res, 200, doc);
         return;
       }
       if (url.pathname === '/jwks') {
@@ -265,6 +279,7 @@ export class FakeOidcIdp {
       name: this.profile.name,
     };
     if (!override.omitEmail) payload['email'] = this.profile.email;
+    if (override.emailVerified !== undefined) payload['email_verified'] = override.emailVerified;
     const signingPair = override.badSignature === true ? this.altKeyPair : this.keyPair;
     const idToken = await new SignJWT(payload)
       .setProtectedHeader({ alg: 'RS256', kid: this.kid })
