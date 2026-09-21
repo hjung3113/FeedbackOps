@@ -1,62 +1,86 @@
 // Source guard for #392 — VOC routes must not own mutation frames.
 //
 // modules/voc/routes.ts used to inline `db.transaction` + the advisory-lock
-// idempotency frame in six handlers. That ownership moved into the
-// application commands (vocService / conversationService). Intentionally a
-// source-text check — the constraint IS textual. Only the
-// apply-public-update-candidate handler keeps its own `db.transaction`
-// (out of #392 scope). Comment stripping mirrors
-// lib/__tests__/no-console-in-jobs.test.ts: block comments and whole-line
-// comments.
+// idempotency frame in six handlers (and one bare transaction in the
+// apply-public-update-candidate handler). All of that now lives in application
+// commands (vocService / conversationService / publicUpdateReviewCandidateService
+// .resolveCommand). Intentionally a source-text check — the constraint IS
+// textual. Comments are removed with a small scanner that understands string
+// and template literals, so a `//` inside a string neither hides code nor is
+// mistaken for a comment.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-function stripComments(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .split('\n')
-    .filter((line) => !line.trim().startsWith('//'))
-    .join('\n');
-}
-
-function countOccurrences(haystack: string, needle: string): number {
-  let count = 0;
-  let idx = haystack.indexOf(needle);
-  while (idx !== -1) {
-    count += 1;
-    idx = haystack.indexOf(needle, idx + needle.length);
+export function stripComments(src: string): string {
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i] as string;
+    const next = src[i + 1];
+    if (ch === '/' && next === '/') {
+      while (i < src.length && src[i] !== '\n') i += 1;
+    } else if (ch === '/' && next === '*') {
+      i += 2;
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i += 1;
+      i += 2;
+    } else if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch;
+      out += ch;
+      i += 1;
+      while (i < src.length && src[i] !== quote) {
+        if (src[i] === '\\') {
+          out += src[i] as string;
+          i += 1;
+        }
+        out += src[i] ?? '';
+        i += 1;
+      }
+      out += quote;
+      i += 1;
+    } else {
+      out += ch;
+      i += 1;
+    }
   }
-  return count;
+  return out;
 }
 
-const routesSource = stripComments(
-  readFileSync(fileURLToPath(new URL('../routes.ts', import.meta.url)), 'utf8'),
-);
+const TRANSACTION_CALL = /\.transaction\s*(?:<[^>()]*>)?\s*\(/g;
+
+export function findFrameOwnership(source: string): string[] {
+  const code = stripComments(source);
+  const hits: string[] = [];
+  if (code.includes('pg_advisory_xact_lock')) hits.push('pg_advisory_xact_lock');
+  if (/\bidempotencyService\b/.test(code)) hits.push('idempotencyService');
+  for (const m of code.matchAll(TRANSACTION_CALL)) hits.push(m[0]);
+  return hits;
+}
+
+const routesSource = readFileSync(fileURLToPath(new URL('../routes.ts', import.meta.url)), 'utf8');
 
 describe('voc routes.ts frame-ownership guard (#392)', () => {
-  it('contains no advisory-lock idempotency statement', () => {
-    expect(routesSource).not.toContain('pg_advisory_xact_lock');
-  });
-
-  it('never calls idempotencyService directly', () => {
-    expect(routesSource).not.toContain('idempotencyService.');
-  });
-
-  it('has exactly one .transaction( — the apply-public-update-candidate handler', () => {
-    expect(countOccurrences(routesSource, '.transaction(')).toBe(1);
-  });
-
-  it('scanner self-test: flags frame code in code/strings, ignores comments', () => {
-    const dirty = stripComments(
-      [
-        'const s = "idempotencyService.lookup(tx, a, b)"; // idempotencyService.record(tx)',
-        'db.transaction(async (tx) => { /* pg_advisory_xact_lock in comment */ });',
-      ].join('\n'),
+  it('scanner self-test: flags real frames, ignores comments, catches spacing/generic variants', () => {
+    expect(findFrameOwnership('await db.transaction(async (tx) => {})')).toHaveLength(1);
+    expect(findFrameOwnership('await db.transaction (async (tx) => {})')).toHaveLength(1);
+    expect(findFrameOwnership('await db.transaction<Result>(async (tx) => {})')).toHaveLength(1);
+    expect(findFrameOwnership('sql`SELECT pg_advisory_xact_lock(1, 2)`')).toEqual([
+      'pg_advisory_xact_lock',
+    ]);
+    expect(findFrameOwnership('idempotencyService.lookup(tx)')).toEqual(['idempotencyService']);
+    // Comments (line, trailing, block) never count...
+    expect(findFrameOwnership('// db.transaction(x)\nconst a = 1; // idempotencyService')).toEqual(
+      [],
     );
-    expect(dirty).toContain('idempotencyService.');
-    expect(dirty).toContain('.transaction(');
-    expect(dirty).not.toContain('pg_advisory_xact_lock');
+    expect(findFrameOwnership('/* pg_advisory_xact_lock */ const b = 2;')).toEqual([]);
+    // ...and a comment marker inside a string does not hide the code after it.
+    expect(
+      findFrameOwnership("const u = 'http://x'; await db.transaction(async (tx) => {});"),
+    ).toHaveLength(1);
+  });
+
+  it('routes.ts owns no transaction, advisory lock, or idempotency frame', () => {
+    expect(findFrameOwnership(routesSource)).toEqual([]);
   });
 });

@@ -422,6 +422,53 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
     expect(await internalCommentCount(voc.id)).toBe(1);
   });
 
+  it('manual-frame commands take the actor+key advisory lock: a command blocks while the lock is held elsewhere', async () => {
+    // Deterministic lock check (the race test below is probabilistic): hold the
+    // SAME pg_advisory_xact_lock key in another transaction; the command must
+    // not complete until we release it. A frame without the lock finishes at
+    // once and fails this test.
+    const voc = await seedVoc('Cmd lock-held VOC');
+    const input = { body_rich_content: paragraphDoc('lock note'), mentions: [] };
+    const key = randomUUID();
+    const hash = hashRequestBody({ ...input, vocId: voc.id, route: 'voc.internal_comment' });
+
+    const holder = await migrateHandle.pool.connect();
+    let command: Promise<unknown> | undefined;
+    try {
+      await holder.query('begin');
+      await holder.query('select pg_advisory_xact_lock(hashtext($1), hashtext($2))', [
+        adminActorId,
+        key,
+      ]);
+
+      let settled = false;
+      command = conversationService
+        .postInternalCommentCommand({
+          actor: adminActor(),
+          vocId: voc.id,
+          input,
+          idempotencyKey: key,
+          requestHash: hash,
+        })
+        .finally(() => {
+          settled = true;
+        });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(settled, 'command must wait for the advisory lock').toBe(false);
+      expect(await internalCommentCount(voc.id)).toBe(0);
+
+      await holder.query('commit');
+      const result = (await command) as { status: number };
+      expect(result.status).toBe(201);
+      expect(await internalCommentCount(voc.id)).toBe(1);
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+      await command?.catch(() => undefined);
+    }
+  });
+
   it('manual-frame commands race on the same actor+key+hash: advisory lock serializes → one row, identical bodies', async () => {
     // createVocCommand goes through idempotencyService.runIdempotent; the five
     // other commands use the shared manual frame whose ONLY serialization is

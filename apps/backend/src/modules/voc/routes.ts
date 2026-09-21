@@ -25,7 +25,6 @@ import {
   resolvePublicUpdateReviewCandidateRequestSchema,
 } from '@fops/shared';
 
-import type { Db } from '../../db/client.js';
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
@@ -44,7 +43,6 @@ const IDEMPOTENCY_KEY_REGEX =
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export interface VocRoutesOptions {
-  db: Db;
   sessionService: SessionService;
   vocService: VocService;
   vocReadService: VocReadService;
@@ -62,7 +60,6 @@ export interface VocRoutesOptions {
 
 export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts) => {
   const {
-    db,
     sessionService,
     vocService,
     vocReadService,
@@ -149,18 +146,15 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
       try {
-        const result = await db.transaction((tx) =>
-          publicUpdateReviewCandidateService.resolve({
-            tx,
-            actor: {
-              actor_id: sess.actor_id,
-              workspace_id: sess.workspace_id,
-              role_level: sess.role_level,
-            },
-            vocId,
-            input: parsed.data,
-          }),
-        );
+        const result = await publicUpdateReviewCandidateService.resolveCommand({
+          actor: {
+            actor_id: sess.actor_id,
+            workspace_id: sess.workspace_id,
+            role_level: sess.role_level,
+          },
+          vocId,
+          input: parsed.data,
+        });
         return reply.code(201).send(result);
       } catch (error) {
         if (

@@ -755,7 +755,6 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
   await app.register(vocRoutes, {
-    db: dbHandle.db,
     sessionService,
     vocService,
     vocReadService,
