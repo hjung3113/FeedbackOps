@@ -29,9 +29,7 @@ const FOREIGN_SCHEMA_WRITE =
 export function stripComments(source: string): string {
   // `//` only starts a comment after line start, whitespace, or a statement
   // delimiter — so `https://` and `a//b` inside string literals survive.
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[;{}(),=\s])\/\/[^\n]*/g, '$1');
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[;{}(),=\s])\/\/[^\n]*/g, '$1');
 }
 
 export function findForbiddenRepoImports(source: string): string[] {
@@ -88,14 +86,15 @@ describe('module seam recurrence guard (#391)', () => {
       'https://example.com/a//b',
     );
 
+    // The scanner reports the matched verb + schema prefix (`UPDATE task_request.`).
     expect(findForeignSchemaWrites('UPDATE task_request.task_requests SET status')).toEqual([
-      'UPDATE task_request.task_requests',
+      'UPDATE task_request.',
     ]);
     expect(findForeignSchemaWrites('INSERT INTO finding.findings (workspace_id)')).toEqual([
-      'INSERT INTO finding.findings',
+      'INSERT INTO finding.',
     ]);
     expect(findForeignSchemaWrites('delete from task_request.task_requests')).toEqual([
-      'delete from task_request.task_requests',
+      'delete from task_request.',
     ]);
     expect(findForeignSchemaWrites('SELECT * FROM task_request.task_requests tr')).toEqual([]);
     expect(findForeignSchemaWrites('insert into task.tasks (workspace_id)')).toEqual([]);

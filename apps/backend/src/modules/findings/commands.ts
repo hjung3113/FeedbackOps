@@ -36,7 +36,9 @@ export async function lockFindingForUpdate(
 
 /**
  * Locks the finding and sets linked_task_id only while it is still null, so a
- * concurrent linking wins and later callers observe the existing link.
+ * concurrent linking wins and later callers observe the existing link. Returns
+ * the row as it stands after the call (updated when it linked, else the
+ * existing row); null when the finding does not exist.
  */
 export async function linkTaskToFinding(
   tx: Tx,
@@ -47,7 +49,7 @@ export async function linkTaskToFinding(
     findingId: input.findingId,
   });
   if (finding?.linked_task_id === null) {
-    await updateFindingLinkedTask(tx, {
+    return updateFindingLinkedTask(tx, {
       workspaceId: input.workspaceId,
       findingId: finding.id,
       taskId: input.taskId,
