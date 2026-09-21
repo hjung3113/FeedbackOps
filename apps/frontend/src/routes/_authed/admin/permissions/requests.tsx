@@ -10,8 +10,9 @@ import {
 } from "@fops/ui";
 import { isCapability, isSensitiveCapability } from "@fops/shared";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import * as React from "react";
+import { z } from "zod";
 
 import { PermissionGate } from "../../../../features/admin/permissions/permission-gate.js";
 import { useWorkspaceActors } from "../../../../features/admin/permissions/permission-state-view.js";
@@ -28,7 +29,20 @@ import {
   useIdempotencyKey,
 } from "../../../../lib/api";
 
+// Tab + selection are URL state (docs/frontend/routes-and-layout.md §URL State
+// Rules): /admin/permissions/requests?tab=approved&selected=:requestId.
+// `pending` is the default tab and omitted from the URL.
+export const permissionRequestsSearchSchema = z
+  .object({
+    tab: z.enum(["needs_more_info", "approved", "rejected", "all"]).optional(),
+    selected: z.string().uuid().optional(),
+  })
+  .strict();
+
+type PermissionRequestsSearch = z.infer<typeof permissionRequestsSearchSchema>;
+
 export const Route = createFileRoute("/_authed/admin/permissions/requests")({
+  validateSearch: (raw) => permissionRequestsSearchSchema.parse(raw),
   component: PermissionRequestsConsolePage,
 });
 
@@ -69,6 +83,8 @@ export function PermissionRequestsConsolePage() {
 }
 
 function PermissionRequestsConsole() {
+  const search = useSearch({ strict: false }) as PermissionRequestsSearch;
+  const navigate = useNavigate({ from: "/admin/permissions/requests" });
   const query = useQuery({
     queryKey: permissionRequestsReviewKey,
     queryFn: ({ signal }) =>
@@ -79,9 +95,9 @@ function PermissionRequestsConsole() {
   const actorNames = Object.fromEntries(
     (actors.data ?? []).map((actor) => [actor.id, actor.display_name]),
   );
-  const [activeTab, setActiveTab] = React.useState<ReviewTab>("pending");
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const previousActiveTab = React.useRef<ReviewTab | null>(null);
+  // Tab + selection are URL state; `pending` is the default tab (omitted).
+  const activeTab: ReviewTab = search.tab ?? "pending";
+  const selectedId = search.selected ?? null;
   const hasAppliedInitialSelection = React.useRef(false);
   const allRequests = query.data?.requests ?? [];
   const visibleRequests =
@@ -91,34 +107,78 @@ function PermissionRequestsConsole() {
   const selected =
     visibleRequests.find((request) => request.id === selectedId) ?? null;
 
+  function handleTabChange(next: ReviewTab): void {
+    // Existing selection rule: keep the selection if it is visible in the new
+    // tab, else select the first visible request, else none — in one navigate.
+    const nextVisible =
+      next === "all" ? allRequests : allRequests.filter((request) => request.status === next);
+    const selectionIsVisible =
+      selectedId !== null && nextVisible.some((request) => request.id === selectedId);
+    const nextSelectedId = selectionIsVisible ? selectedId : (nextVisible[0]?.id ?? null);
+    void navigate({
+      to: "/admin/permissions/requests",
+      search: (prev) => {
+        const { tab: _tab, selected: _selected, ...rest } = prev;
+        return {
+          ...rest,
+          ...(next !== "pending" ? { tab: next } : {}),
+          ...(nextSelectedId !== null ? { selected: nextSelectedId } : {}),
+        };
+      },
+    });
+  }
+
+  function handleSelect(id: string): void {
+    void navigate({
+      to: "/admin/permissions/requests",
+      search: (prev) => ({ ...prev, selected: id }),
+    });
+  }
+
+  function handleClose(): void {
+    void navigate({
+      to: "/admin/permissions/requests",
+      search: ({ selected: _selected, ...rest }) => rest,
+    });
+  }
+
   React.useEffect(() => {
-    const tabChanged = previousActiveTab.current !== activeTab;
-    previousActiveTab.current = activeTab;
+    // Reconcile only against successfully loaded data: a failed/loading list
+    // must never clear a deep-linked selection. Tab-change selection is decided
+    // in handleTabChange (atomic push); URL-driven tab changes (Back, deep
+    // links) are NOT re-selected here so history restores the exact prior UI.
+    if (!query.isSuccess) return;
 
-    if (tabChanged) {
-      const selectionIsVisible =
-        selectedId !== null &&
-        visibleRequests.some((request) => request.id === selectedId);
-      if (!selectionIsVisible) {
-        setSelectedId(visibleRequests[0]?.id ?? null);
-      }
-      return;
-    }
-
-    if (
-      selectedId !== null &&
-      !visibleRequests.some((request) => request.id === selectedId)
-    ) {
-      setSelectedId(null);
-      return;
-    }
-
-    if (!hasAppliedInitialSelection.current && visibleRequests[0]) {
+    if (selectedId !== null && !visibleRequests.some((request) => request.id === selectedId)) {
+      // Stale/mismatched selection. On the very first reconcile (a deep link
+      // whose selection is not in the tab) fall back to the first visible
+      // request like the original UI; afterwards (e.g. a decided request left
+      // the tab) just drop it.
+      const fallbackId = hasAppliedInitialSelection.current
+        ? null
+        : (visibleRequests[0]?.id ?? null);
       hasAppliedInitialSelection.current = true;
-      if (selectedId === null) setSelectedId(visibleRequests[0].id);
+      void navigate({
+        to: "/admin/permissions/requests",
+        replace: true,
+        search: ({ selected: _selected, ...rest }) =>
+          fallbackId === null ? rest : { ...rest, selected: fallbackId },
+      });
       return;
     }
-  }, [activeTab, selectedId, visibleRequests]);
+
+    if (!hasAppliedInitialSelection.current) {
+      hasAppliedInitialSelection.current = true;
+      const firstVisibleId = visibleRequests[0]?.id;
+      if (selectedId === null && firstVisibleId !== undefined) {
+        void navigate({
+          to: "/admin/permissions/requests",
+          replace: true,
+          search: (prev) => ({ ...prev, selected: firstVisibleId }),
+        });
+      }
+    }
+  }, [navigate, query.isSuccess, selectedId, visibleRequests]);
 
   return (
     <ListShell
@@ -146,7 +206,7 @@ function PermissionRequestsConsole() {
                 size="sm"
                 role="tab"
                 aria-selected={activeTab === tab.value}
-                onClick={() => setActiveTab(tab.value)}
+                onClick={() => handleTabChange(tab.value)}
               >
                 {tab.label} ({count})
               </Button>
@@ -183,7 +243,7 @@ function PermissionRequestsConsole() {
               request={request}
               actorName={actorNames[request.requester_actor_id]}
               selected={selectedId === request.id}
-              onSelect={() => setSelectedId(request.id)}
+              onSelect={() => handleSelect(request.id)}
             />
           ))}
         </section>
@@ -193,7 +253,7 @@ function PermissionRequestsConsole() {
           <PermissionRequestDetail
             request={selected}
             actorName={actorNames[selected.requester_actor_id]}
-            onClose={() => setSelectedId(null)}
+            onClose={handleClose}
           />
         ) : undefined
       }
