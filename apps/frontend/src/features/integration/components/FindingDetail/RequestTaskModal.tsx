@@ -28,7 +28,11 @@ interface RequestTaskModalProps {
   onClose: () => void;
 }
 
-export function RequestTaskModal({ finding, open, onClose }: RequestTaskModalProps): React.ReactElement {
+export function RequestTaskModal({
+  finding,
+  open,
+  onClose,
+}: RequestTaskModalProps): React.ReactElement {
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const form = useForm<CreateTaskRequestFromFindingRequest>({

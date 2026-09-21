@@ -63,7 +63,11 @@ const IMPORTANCE_OPTIONS: {
   { value: 'high', label: 'High' },
 ];
 
-export function AddEvidenceModal({ findingId, open, onClose }: AddEvidenceModalProps): React.ReactElement {
+export function AddEvidenceModal({
+  findingId,
+  open,
+  onClose,
+}: AddEvidenceModalProps): React.ReactElement {
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const form = useForm<AddEvidenceHighlightRequest>({

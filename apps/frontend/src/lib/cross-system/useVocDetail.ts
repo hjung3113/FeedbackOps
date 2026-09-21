@@ -1,12 +1,10 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
+import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 
 export type VocDetailResult = VocDetailEnvelope | VocSummaryEnvelope;
 
-export function useVocDetail(
-  id: string | null | undefined,
-): UseQueryResult<VocDetailResult> {
+export function useVocDetail(id: string | null | undefined): UseQueryResult<VocDetailResult> {
   return useQuery({
     queryKey: ['voc', id] as const,
     queryFn: async ({ signal }) => {
