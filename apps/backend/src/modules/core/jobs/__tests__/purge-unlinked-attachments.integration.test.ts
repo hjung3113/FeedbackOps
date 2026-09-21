@@ -176,7 +176,7 @@ describe.skipIf(!runIntegration)('core.attachments_purge handler', () => {
 
     const storage = makeStubStorage({
       async delete(key: string) {
-        if (key === badKey) throw new Error('boom');
+        if (key === badKey) throw new Error('boom postgres://u:s3cr3t@h/x');
       },
     });
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -186,6 +186,11 @@ describe.skipIf(!runIntegration)('core.attachments_purge handler', () => {
 
     expect(result.storage_delete_failures).toBeGreaterThanOrEqual(1);
     expect(log.error).toHaveBeenCalled();
+    // Bounded error projection: name only, never the message (may embed secrets).
+    const loggedErrors = JSON.stringify(log.error.mock.calls);
+    expect(loggedErrors).toContain('"err_name":"Error"');
+    expect(loggedErrors).not.toContain('s3cr3t');
+    expect(loggedErrors).not.toContain('boom');
 
     // Bad-key row REMAINS so next run retries.
     const badAfter = await appHandle.pool.query(

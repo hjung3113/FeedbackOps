@@ -40,6 +40,31 @@ export function toJobLog(logger: pino.Logger): JobLog {
 }
 
 /**
+ * Bounded projection of an error for log fields: the constructor/name and a
+ * string/number `code` only. NEVER the message, cause, or stack — they can
+ * embed DSNs, credentials or tokens (driver, provider and storage errors do).
+ * Use this everywhere a job path logs a caught error; do not pass raw `err`.
+ */
+export function errorFields(err: unknown): { err_name: string; err_code?: string | number } {
+  const name = err instanceof Error ? err.name : typeof err;
+  const rawCode = (err as { code?: unknown } | null | undefined)?.code;
+  return typeof rawCode === 'string' || typeof rawCode === 'number'
+    ? { err_name: name, err_code: rawCode }
+    : { err_name: name };
+}
+
+/**
+ * Bounded projection of a pg-boss `warning` event payload. pg-boss v12 emits
+ * `{ message, data }` where both can carry SQL text and parameters, so nothing
+ * from the payload is logged except a string `type` if a future pg-boss adds
+ * one; today the line is just the event name.
+ */
+export function warningFields(warning: unknown): { warning_type?: string } {
+  const type = (warning as { type?: unknown } | null | undefined)?.type;
+  return typeof type === 'string' ? { warning_type: type } : {};
+}
+
+/**
  * Pass as the `boss.work` options argument: without `includeMetadata`, pg-boss
  * v12 hands handlers a bare `Job` (no `retryCount`), so `job.retry` could never
  * be emitted in production wiring.
@@ -102,24 +127,24 @@ export function withJobLogging<T>(
       await handler(jobs);
     } catch (err) {
       const durationMs = Date.now() - startedAt;
-      const errName = err instanceof Error ? err.name : typeof err;
-      const rawCode = (err as { code?: unknown } | null | undefined)?.code;
-      const errCode =
-        typeof rawCode === 'string' || typeof rawCode === 'number' ? rawCode : undefined;
+      const projected = errorFields(err);
       for (const job of jobs) {
         log.error('job.failure', {
           event: 'job.failure',
           ...baseFields(job),
           duration_ms: durationMs,
-          err_name: errName,
-          ...(errCode !== undefined ? { err_code: errCode } : {}),
+          ...projected,
         });
       }
       throw err;
     }
     const durationMs = Date.now() - startedAt;
     for (const job of jobs) {
-      log.info('job.success', { event: 'job.success', ...baseFields(job), duration_ms: durationMs });
+      log.info('job.success', {
+        event: 'job.success',
+        ...baseFields(job),
+        duration_ms: durationMs,
+      });
     }
   };
 }

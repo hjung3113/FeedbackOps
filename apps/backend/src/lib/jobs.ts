@@ -12,7 +12,7 @@
 
 import { PgBoss } from 'pg-boss';
 
-import type { JobLog } from './job-log.js';
+import { type JobLog, errorFields, warningFields } from './job-log.js';
 
 export type Boss = PgBoss;
 
@@ -42,8 +42,10 @@ export async function initBoss(opts: InitBossOptions): Promise<Boss> {
     schedule: true,
   });
 
-  boss.on('error', (err: unknown) => opts.log.error('pg-boss error', { err }));
-  boss.on('warning', (warning: unknown) => opts.log.warn('pg-boss warning', { warning }));
+  boss.on('error', (err: unknown) => opts.log.error('pg-boss error', errorFields(err)));
+  boss.on('warning', (warning: unknown) =>
+    opts.log.warn('pg-boss warning', warningFields(warning)),
+  );
 
   await boss.start();
   return boss;

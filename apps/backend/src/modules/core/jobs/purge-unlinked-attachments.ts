@@ -21,7 +21,7 @@
 import type pg from 'pg';
 import type { PgBoss } from 'pg-boss';
 
-import { type JobLog, JOB_WORK_OPTIONS, withJobLogging } from '../../../lib/job-log.js';
+import { type JobLog, JOB_WORK_OPTIONS, errorFields, withJobLogging } from '../../../lib/job-log.js';
 import type { StorageBackend } from '../../../lib/storage/index.js';
 
 /** Queue name. Format: `<module>.<action>` per ADR-0009. */
@@ -94,7 +94,7 @@ export async function purgeUnlinkedAttachments(
       log?.error('core.attachments_purge storage.delete failed', {
         attachment_id: row.id,
         storage_key: row.storage_key,
-        error: err instanceof Error ? err.message : String(err),
+        ...errorFields(err),
       });
       // Leave DB row in place — next hourly run will retry.
       continue;

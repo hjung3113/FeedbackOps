@@ -14,7 +14,7 @@
 import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
-import { type JobLog, JOB_WORK_OPTIONS, withJobLogging } from '../../../lib/job-log.js';
+import { type JobLog, JOB_WORK_OPTIONS, errorFields, withJobLogging } from '../../../lib/job-log.js';
 import {
   countVocsNeedingEmbedding,
   selectVocsNeedingEmbedding,
@@ -103,7 +103,7 @@ export async function backfillVocEmbeddings(
       deps.log?.error('voc.embedding_backfill enqueue failed', {
         voc_id: row.voc_id,
         correlation_id: payload.correlation_id,
-        err,
+        ...errorFields(err),
       });
     }
   }

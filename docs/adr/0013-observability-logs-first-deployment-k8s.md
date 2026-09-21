@@ -147,15 +147,21 @@ Job lifecycle events (emitted by `withJobLogging`,
   `tasks.create_public_update_review_candidates`).
 - `job.retry` — start fields plus `retry_count`; emitted instead of
   `job.start` when the pg-boss job carries `retry_count > 0`. pg-boss v12
-  attaches `retryCount` only to `JobWithMetadata` (the `workWithMetadata`
-  path), so with today's `boss.work` registrations the field is absent and
-  `job.retry` does not fire — it is omitted, never invented.
+  attaches `retryCount` only to `JobWithMetadata`, so every `boss.work`
+  registration passes `{ includeMetadata: true }` (`JOB_WORK_OPTIONS`);
+  without it `job.retry` could never fire. The field is omitted, never
+  invented, when a job does not carry it.
 - `job.success` — start fields plus `duration_ms`.
 - `job.failure` — start fields plus `duration_ms`, `err_name`, and
   `err_code` (only when the error carries a string/number `code`).
 
 No-message rule: failure lines NEVER include the error message, cause, or
-stack (messages can embed DSNs), and job payload data is never logged —
+stack (messages can embed DSNs). The same projection (`errorFields`:
+`err_name`, `err_code`) applies to every caught error logged by a job path —
+pg-boss `error` events, the embedding backfill enqueue failure, the attachment
+purge storage failure — and pg-boss `warning` events log no payload fields at all
+(`warningFields`: their `{ message, data }` can carry SQL and parameters); raw `err`/`warning` objects are never passed to the logger.
+Job payload data is never logged —
 bounded, allowlisted fields only. Handler errors are always RETHROWN after
 the `job.failure` line so pg-boss retry config (ADR-0009:35) still applies.
 

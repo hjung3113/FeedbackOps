@@ -11,7 +11,7 @@ import { pino } from 'pino';
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 
-import { type JobLog, toJobLog, withJobLogging } from '../job-log.js';
+import { type JobLog, errorFields, toJobLog, warningFields, withJobLogging } from '../job-log.js';
 
 interface Payload {
   correlation_id?: string;
@@ -181,5 +181,27 @@ describe('toJobLog', () => {
     expect(withMeta.count).toBe(2);
     const plain = JSON.parse(lines[1] ?? '{}') as Record<string, unknown>;
     expect(plain.msg).toBe('plain message without meta');
+  });
+});
+
+describe('errorFields / warningFields (bounded projections)', () => {
+  it('projects only name and a string/number code, never the message or stack', () => {
+    const err = Object.assign(new Error('connect postgres://u:s3cr3t@h/x failed'), {
+      code: 'ECONNREFUSED',
+    });
+    const fields = errorFields(err);
+    expect(fields).toEqual({ err_name: 'Error', err_code: 'ECONNREFUSED' });
+    expect(JSON.stringify(fields)).not.toContain('s3cr3t');
+    expect(errorFields(new Error('x'))).toEqual({ err_name: 'Error' });
+    expect(errorFields('a string with s3cr3t')).toEqual({ err_name: 'string' });
+    expect(errorFields({ code: { nested: 1 } })).toEqual({ err_name: 'object' });
+  });
+
+  it('logs nothing from a pg-boss warning payload (message/data can carry SQL)', () => {
+    expect(warningFields({ message: 'SELECT ... s3cr3t', data: { sql: 's3cr3t' } })).toEqual({});
+    expect(warningFields({ type: 'slow_query', message: 's3cr3t' })).toEqual({
+      warning_type: 'slow_query',
+    });
+    expect(warningFields(undefined)).toEqual({});
   });
 });
