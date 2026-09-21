@@ -12,6 +12,8 @@ import { assertRuntimeDbRole } from '../runtime-role.js';
 
 interface RoleRow {
   name: string;
+  session_name: string;
+  privileged_member_of: string | null;
   rolsuper: boolean;
   rolcreaterole: boolean;
   rolcreatedb: boolean;
@@ -22,6 +24,8 @@ interface RoleRow {
 function safeRow(name = 'fops_app'): RoleRow {
   return {
     name,
+    session_name: name,
+    privileged_member_of: null,
     rolsuper: false,
     rolcreaterole: false,
     rolcreatedb: false,
@@ -80,5 +84,27 @@ describe('assertRuntimeDbRole', () => {
   it('rejects when pg_roles returns zero rows', async () => {
     const { pool } = fakePool([]);
     await expect(assertRuntimeDbRole(pool)).rejects.toThrow(/no pg_roles entry/);
+  });
+
+  it('rejects when the session user differs from fops_app (SET ROLE / startup role / pooler)', async () => {
+    const { pool } = fakePool([{ ...safeRow(), session_name: 'postgres' }]);
+    const err = await assertRuntimeDbRole(pool).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain('postgres');
+    expect(err?.message).toMatch(/SET ROLE/);
+  });
+
+  it('rejects membership in a privileged role', async () => {
+    const { pool } = fakePool([{ ...safeRow(), privileged_member_of: 'fops_migrate' }]);
+    const err = await assertRuntimeDbRole(pool).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect(err?.message).toContain('fops_migrate');
+    expect(err?.message).toMatch(/member/);
   });
 });

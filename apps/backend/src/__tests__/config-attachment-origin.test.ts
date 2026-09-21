@@ -22,13 +22,16 @@ afterEach(() => {
 
 // Mimics loadConfig() with a hermetic process.env clone so unrelated
 // environment variables cannot leak issues into the result.
-function attachmentOriginIssue(value: string, nodeEnv: string): ZodIssue | undefined {
+// Returns null when the whole config parsed successfully, the attachment issue
+// when it was rejected, or undefined when config failed for an unrelated reason
+// (which positive cases must treat as a failure, not as acceptance).
+function attachmentOriginIssue(value: string, nodeEnv: string): ZodIssue | null | undefined {
   for (const key of Object.keys(process.env)) delete process.env[key];
   process.env.NODE_ENV = nodeEnv;
   process.env.PUBLIC_ATTACHMENT_ORIGIN = value;
   try {
     loadConfig();
-    return undefined;
+    return null;
   } catch (err) {
     if (!(err instanceof ZodError)) throw err;
     return err.issues.find((issue) => issue.path.includes('PUBLIC_ATTACHMENT_ORIGIN'));
@@ -40,7 +43,7 @@ describe('validateAttachmentOrigin', () => {
     'accepts %s in production',
     (value) => {
       expect(validateAttachmentOrigin(value, 'production')).toBeNull();
-      expect(attachmentOriginIssue(value, 'production')).toBeUndefined();
+      expect(attachmentOriginIssue(value, 'production')).toBeNull();
     },
   );
 
@@ -69,6 +72,10 @@ describe('validateAttachmentOrigin', () => {
     ['ftp://x.com'],
     ['not a url'],
     [''],
+    ['https://[::1]'],
+    ['https://cdn_example.com'],
+    ['https://CDN.example.com'],
+    ['https://cdn.example.com:443'],
   ])('rejects %p', (value) => {
     for (const nodeEnv of ['development', 'test', 'production']) {
       const reason = validateAttachmentOrigin(value, nodeEnv);

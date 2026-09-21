@@ -42,7 +42,13 @@ export function validateAttachmentOrigin(value: string, nodeEnv: string): string
   // Exact-origin equality rejects paths, query, fragment, a bare trailing
   // '/', and any parser normalization (uppercase host, IDN, empty port).
   if (url.origin !== value) {
-    return `${PREFIX} must be a bare origin (https://host[:port]) with no path, query, fragment, or trailing slash`;
+    return `${PREFIX} must be a bare origin in canonical form (https://host[:port]: lowercase host, no default port, no path, query, fragment, or trailing slash)`;
+  }
+  // URL validity is not CSP host-source validity: reject IPv6 literals and
+  // anything outside the letters-digits-hyphen DNS label grammar (IDN hosts
+  // arrive already punycoded; underscores are not valid in CSP hosts).
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(url.hostname)) {
+    return `${PREFIX} host must be a plain DNS name or IPv4 address usable in a CSP host-source`;
   }
   const isLocalHttp =
     url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');

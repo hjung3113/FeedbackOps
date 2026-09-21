@@ -13,7 +13,7 @@
 
 import { loadConfig } from './config.js';
 import { createDb } from './db/client.js';
-import { assertRuntimeDbRole } from './db/runtime-role.js';
+import { RuntimeRoleError, assertRuntimeDbRole } from './db/runtime-role.js';
 import { initBoss, shutdownBoss } from './lib/jobs.js';
 import { getStorage } from './lib/storage/factory.js';
 import { createAuditService } from './modules/core/audit/index.js';
@@ -40,7 +40,13 @@ const dbHandle = createDb(config.DATABASE_URL);
 try {
   await assertRuntimeDbRole(dbHandle.pool);
 } catch (err) {
-  console.error(err instanceof Error ? err.message : err);
+  // Only guard rejections carry safe, curated messages; a driver error (e.g.
+  // connection refused) is reported by name so it can never echo a DSN.
+  console.error(
+    err instanceof RuntimeRoleError
+      ? err.message
+      : `runtime DB role check failed (${err instanceof Error ? err.name : 'unknown error'}); verify DATABASE_URL is reachable`,
+  );
   process.exit(1);
 }
 
