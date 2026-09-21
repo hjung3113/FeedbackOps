@@ -1,4 +1,4 @@
-// apps/backend/src/modules/voc/idempotent-command.ts
+// apps/backend/src/modules/core/idempotency/idempotent-command.ts
 //
 // Shared idempotency frame for VOC application commands (#392). Owns the
 // transaction boundary that VOC HTTP routes previously owned, and reproduces
@@ -17,10 +17,10 @@
 
 import { sql } from 'drizzle-orm';
 
-import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
-import { HttpError } from '../../lib/errors.js';
-import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { Db } from '../../../db/client.js';
+import type { Tx } from '../../../db/tx.js';
+import { HttpError } from '../../../lib/errors.js';
+import type { IdempotencyService } from './idempotency-service.js';
 
 export interface IdempotentCommandArgs<TBody> {
   db: Db;

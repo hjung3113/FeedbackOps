@@ -29,7 +29,7 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import type { CheckService } from '../permissions/check-service.js';
 import type { RoleLevel } from '../auth/session-service.js';
 import type { CreateVocRequest, EditDescriptionRequest, PatchVocRequest } from '@fops/shared';
-import { runIdempotentCommand } from './idempotent-command.js';
+import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
 
 export interface CreateVocActor {
   actor_id: string;
