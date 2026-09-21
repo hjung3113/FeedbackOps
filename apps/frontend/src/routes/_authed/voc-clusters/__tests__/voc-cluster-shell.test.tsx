@@ -17,6 +17,8 @@ const detailQueryState = vi.hoisted(() => ({
 let routeParams: Record<string, string> = {
   clusterId: "11111111-1111-1111-1111-111111111111",
 };
+// ?selected= / ?managedSystem= search state read by the route components.
+const urlSearch = vi.hoisted(() => ({} as Record<string, unknown>));
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (config: unknown) => ({
@@ -49,6 +51,7 @@ vi.mock("@tanstack/react-router", () => ({
     </a>
   ),
   useNavigate: () => navigateMock,
+  useSearch: () => urlSearch,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -431,6 +434,7 @@ describe("VOC cluster route shells", () => {
     detailQueryState.status = "success";
     currentRole.role_level = "admin";
     routeParams = { clusterId: "11111111-1111-1111-1111-111111111111" };
+    for (const key of Object.keys(urlSearch)) delete urlSearch[key];
     clusters.splice(1);
     clusters[0]!.status = "draft";
     clusters[0]!.linked_findings = [];
@@ -453,7 +457,10 @@ describe("VOC cluster route shells", () => {
   });
 
   it("renders the cluster index as a ListShell with the selected cluster detail panel", async () => {
+    // Selection is URL state (?selected=:clusterId) — a deep-linked id renders
+    // the detail panel directly from the loaded list.
     const { VocClusterListPage } = await import("../index");
+    urlSearch.selected = "11111111-1111-1111-1111-111111111111";
 
     render(<VocClusterListPage />);
 
@@ -473,18 +480,27 @@ describe("VOC cluster route shells", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("selects a cluster inline from the list route without route navigation", async () => {
+  it("pushes a cluster row selection into the URL search from the list route", async () => {
     const { VocClusterListPage } = await import("../index");
 
     render(<VocClusterListPage />);
 
+    expect(screen.getByTestId("cluster-row-CLU-31")).toBeInTheDocument();
+    // The first-load default selection (replace navigate) already fired on
+    // mount; only the row click's push is asserted below.
+    navigateMock.mockClear();
+
     fireEvent.click(screen.getByTestId("cluster-row-CLU-31"));
 
-    expect(navigateMock).not.toHaveBeenCalled();
-    expect(screen.getByTestId("cluster-row-CLU-31")).toHaveAttribute(
-      "data-selected",
-      "true",
-    );
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    const navOptions = navigateMock.mock.calls[0]?.[0] as {
+      to: string;
+      search: (prev: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navOptions.to).toBe("/voc-clusters");
+    expect(navOptions.search({})).toEqual({
+      selected: "11111111-1111-1111-1111-111111111111",
+    });
   });
 
   it("renders the detail route inside the same ListShell toolbar and detail framing", async () => {

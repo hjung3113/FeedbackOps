@@ -23,6 +23,7 @@ vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
   useNavigate: () => vi.fn(),
+  useSearch: () => ({}),
 }));
 
 import { SurveysIndexRoute } from '@/routes/_authed/surveys/index';
