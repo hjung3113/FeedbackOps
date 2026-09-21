@@ -218,10 +218,25 @@ snapshots, so #422 added `meta/0047_snapshot.json`, generated from the TS
 schema and checked against a database built by applying all 48 migrations
 (tables, columns and nullability match; `voc.workspace_display_counters`,
 created by raw SQL in 0017, is intentionally not modeled in the TS schema).
-When a hand-written migration lands, regenerate the newest snapshot the same
-way (`pnpm --filter backend db:generate` into a scratch copy, keep only the new
-snapshot renamed to the latest journal index); the gate fails with that
-instruction if the newest journal entry has no snapshot.
+When a hand-written migration lands, the newest snapshot must be refreshed, but
+only after the migration and the TS schema agree: apply all migrations to a
+scratch database and compare it with the TS-derived snapshot (tables, columns,
+nullability, defaults, indexes, FKs) *before* adopting a newly generated snapshot
+as the baseline — otherwise a TS change the migration never applied is silently
+blessed. Then run `pnpm --filter backend db:generate` into a scratch copy, keep
+only the new meta snapshot renamed to the latest journal index, and discard the
+generated SQL/journal change. The gate prints this instruction when it detects
+drift and the newest journal entry has no snapshot.
+
+Known limits of the TS-derived baseline: constraint and index *names* in
+hand-written migrations (for example unnamed `REFERENCES`, which PostgreSQL names
+`<table>_<column>_fkey`) differ from the names drizzle derives, and the TS schema
+does not model every SQL-only object (functional `COALESCE` unique indexes on
+`permission.*`, extra indexes/FKs, `voc.workspace_display_counters`; the
+`core.saved_views` unique is `(actor_id, surface, name)` in TS but
+`(workspace_id, actor_id, surface, name)` in the database). A generated
+`DROP CONSTRAINT`/`DROP INDEX` for such an object must be hand-checked against
+the real name before use.
 
 ## Issue #165: released Task review candidates
 

@@ -125,6 +125,9 @@ function checkSchemaDrift() {
   const safeMigrateUrl = 'postgres://fops_migrate@127.0.0.1:1/drizzle_gate_no_database';
   const scratchDir = mkdtempSync(join(tmpdir(), 'db-migration-drift-gate-'));
   const scratchOut = join(scratchDir, 'migrations');
+  // process.exit() below skips `finally`, so clean up from an exit hook too
+  // (it also runs on process.exit) — a failing gate must not leak scratch dirs.
+  process.on('exit', () => rmSync(scratchDir, { recursive: true, force: true }));
   cpSync(migrationsDir, scratchOut, { recursive: true });
   console.error(
     'migration drift: running db:generate against a throwaway copy of the committed migrations',
