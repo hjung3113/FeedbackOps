@@ -194,14 +194,17 @@ export function VocClusterListShell({
   toolbarActions,
   onCloseDetail,
   defaultToFirst = false,
+  managedSystemId,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
   toolbarActions?: React.ReactNode;
   onCloseDetail: () => void;
   defaultToFirst?: boolean;
+  /** Optional scope from the list route's `managedSystem` URL param (undefined = caller's scope union). */
+  managedSystemId?: string | undefined;
 }): React.ReactElement {
-  const listQuery = useVocClusterList();
+  const listQuery = useVocClusterList(managedSystemId);
   const clusters = listQuery.data?.items ?? [];
   const [activeTab, setActiveTab] = useState<
     "all" | "confirmed" | "no-finding"

@@ -13,18 +13,36 @@ import {
   Label,
   Textarea,
 } from "@fops/ui";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { CreateVocClusterRequest } from "@fops/shared";
 import { useCreateVocCluster } from "@/features/voc-cluster/hooks/useCreateVocCluster";
+import { useVocClusterList } from "@/features/voc-cluster/hooks/useVocClusterList";
 import { useMe } from "@/lib/auth/useMe";
 import { fetchManagedSystems, errorMapper, type ApiError } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { VocClusterListShell } from "./$clusterId";
+import { z } from "zod";
+
+// Selection + Managed System scope are URL state (docs/frontend/routes-and-layout.md
+// §URL State Rules): /voc-clusters?managedSystem=:managedSystemId|all&selected=:clusterId.
+// Defaults (scope union / nothing selected) are omitted from the URL. `all` and an
+// absent managedSystem both query WITHOUT managed_system_id (the backend applies the
+// caller's effective scope union); a uuid is passed through. The route has no
+// Managed System selector UI — the URL param is supported for deep links only.
+export const vocClustersSearchSchema = z
+  .object({
+    managedSystem: z.union([z.string().uuid(), z.literal("all")]).optional(),
+    selected: z.string().uuid().optional(),
+  })
+  .strict();
+
+type VocClustersSearch = z.infer<typeof vocClustersSearchSchema>;
 
 export const Route = createFileRoute("/_authed/voc-clusters/")({
+  validateSearch: (raw) => vocClustersSearchSchema.parse(raw),
   component: VocClusterListPage,
 });
 
@@ -32,23 +50,64 @@ export const Route = createFileRoute("/_authed/voc-clusters/")({
 
 export function VocClusterListPage(): React.ReactElement {
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as VocClustersSearch;
+  const navigate = useNavigate({ from: "/voc-clusters/" });
+  const selectedId = search.selected ?? null;
+  const managedSystemId = search.managedSystem === "all" ? undefined : search.managedSystem;
+  // Shared with the shell's identical call — react-query dedupes by key.
+  const listQuery = useVocClusterList(managedSystemId);
   const { data: me } = useMe();
   const canCreate =
     me?.actor.role_level === "admin" || me?.actor.role_level === "developer";
 
-  const selectCluster = React.useCallback((id: string): void => {
-    setSelectedId(id);
-  }, []);
+  const selectCluster = React.useCallback(
+    (id: string): void => {
+      void navigate({ to: "/voc-clusters", search: (prev) => ({ ...prev, selected: id }) });
+    },
+    [navigate],
+  );
+
+  // The shell calls this for BOTH a user close and its stale-selection
+  // reconcile (selected id left the loaded list): a genuine close pushes so
+  // Back re-opens the panel, a stale drop replaces so history does not grow.
+  const closeDetail = React.useCallback((): void => {
+    const items = listQuery.data?.items ?? [];
+    const stale =
+      selectedId !== null && listQuery.isSuccess && !items.some((cluster) => cluster.id === selectedId);
+    void navigate({
+      to: "/voc-clusters",
+      replace: stale,
+      search: ({ selected: _selected, ...rest }) => rest,
+    });
+  }, [listQuery.data, listQuery.isSuccess, navigate, selectedId]);
+
+  // First-row defaulting (original UI behavior): only on the FIRST successful
+  // load, only when the URL carries no explicit `selected`, via replace so a
+  // deep link / Back is never overridden and closing does not re-open.
+  const appliedDefaultRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!listQuery.isSuccess || appliedDefaultRef.current) return;
+    appliedDefaultRef.current = true;
+    if (selectedId === null) {
+      const first = listQuery.data?.items[0];
+      if (first) {
+        void navigate({
+          to: "/voc-clusters",
+          replace: true,
+          search: (prev) => ({ ...prev, selected: first.id }),
+        });
+      }
+    }
+  }, [listQuery.data, listQuery.isSuccess, navigate, selectedId]);
 
   return (
     <>
       <VocClusterListShell
         selectedId={selectedId}
         onSelect={selectCluster}
-        onCloseDetail={() => setSelectedId(null)}
-        defaultToFirst
+        onCloseDetail={closeDetail}
+        defaultToFirst={false}
+        managedSystemId={managedSystemId}
         toolbarActions={
           canCreate ? (
             <Button
@@ -77,7 +136,6 @@ export function VocClusterListPage(): React.ReactElement {
           onClose={() => setCreateOpen(false)}
           onCreated={(id) => {
             setCreateOpen(false);
-            setSelectedId(id);
             void navigate({
               to: "/voc-clusters/$clusterId",
               params: { clusterId: id },
