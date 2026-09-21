@@ -126,6 +126,7 @@ export function getStorage(env: StorageEnv = process.env as StorageEnv): Storage
     get: async (key) => materialize().get(key),
     delete: async (key) => materialize().delete(key),
     exists: async (key) => materialize().exists(key),
+    ping: async () => materialize().ping?.(),
   };
 
   cachedBackend = proxy;
