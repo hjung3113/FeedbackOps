@@ -727,8 +727,9 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
 
   // ── ADR-0047: post-write envelope omits links for triage-only writers ────
   // A voc.triage-only actor cannot read the VOC, so composeDetailEnvelope
-  // must not call listLinks (it 404s); the envelope's voc.links comes back
-  // empty even though an active link exists on the VOC.
+  // must call listLinks with onUnreadableFocus: 'empty' (default would 404);
+  // the envelope's voc.links comes back empty even though an active link
+  // exists on the VOC.
 
   it.skipIf(!MIGRATE_URL)(
     'triage-only actor → 201 and envelope voc.links is [] despite an active link (ADR-0047)',
