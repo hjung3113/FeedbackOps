@@ -10,6 +10,7 @@ import { Readable } from 'node:stream';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -152,5 +153,22 @@ describe('s3-compat', () => {
       }),
     );
     await expect(ctx.backend.get('missing')).rejects.toMatchObject({ name: 'NoSuchKey' });
+  });
+
+  it('ping() resolves when HeadBucket succeeds', async () => {
+    ctx.mock.on(HeadBucketCommand).resolves({});
+    await expect(ctx.backend.ping()).resolves.toBeUndefined();
+  });
+
+  it('ping() rejects with StorageUnavailableError for a missing bucket (404) — unlike exists()', async () => {
+    const notFound = Object.assign(new Error('NoSuchBucket'), {
+      name: 'NoSuchBucket',
+      $metadata: { httpStatusCode: 404 },
+    });
+    ctx.mock.on(HeadBucketCommand).rejects(notFound);
+    ctx.mock.on(HeadObjectCommand).rejects(notFound);
+    // The ambiguity ping() exists to resolve: HEAD-object reports "missing key".
+    expect(await ctx.backend.exists('any-key')).toBe(false);
+    await expect(ctx.backend.ping()).rejects.toBeInstanceOf(StorageUnavailableError);
   });
 });

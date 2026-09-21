@@ -15,7 +15,7 @@ import { z } from 'zod';
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
-import { runReadinessChecks } from './lib/health.js';
+import { type HealthCheckName, runReadinessChecks } from './lib/health.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import { getStorage } from './lib/storage/factory.js';
@@ -378,9 +378,15 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // Liveness: the process is up. Depends on NOTHING downstream (no DB, no
   // boss, no storage) so it never flaps with dependency blips.
+  // Probe routes opt out of @fastify/rate-limit at the ROUTE level
+  // (`config.rateLimit: false`). The global `allowList` runs only AFTER the
+  // plugin's `keyGenerator`, which resolves the session cookie via a DB
+  // lookup — a hung DB would hang even liveness. Route-level opt-out skips
+  // the key generator entirely.
   app.route({
     method: 'GET',
     url: '/health/live',
+    config: { rateLimit: false },
     schema: {
       response: {
         200: z.object({ status: z.literal('ok') }),
@@ -398,9 +404,11 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     pg_boss: z.enum(['ok', 'fail']),
     storage: z.enum(['ok', 'fail']),
   });
+  const readinessInFlight = new Map<HealthCheckName, Promise<unknown>>();
   app.route({
     method: 'GET',
     url: '/health/ready',
+    config: { rateLimit: false },
     schema: {
       response: {
         200: z.object({ status: z.literal('ok'), checks: healthChecksSchema }),
@@ -414,6 +422,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
         storage: attachmentsStorage,
         timeoutMs: opts.healthProbeTimeoutMs,
         log: req.log,
+        inFlight: readinessInFlight,
       });
       if (!result.ok) {
         return reply.code(503).send({ status: 'unavailable', checks: result.checks });

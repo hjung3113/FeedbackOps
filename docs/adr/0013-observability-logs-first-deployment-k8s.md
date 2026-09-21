@@ -107,12 +107,19 @@ The `/health/live` + `/health/ready` split is now implemented
 - Every dependency check has its own timeout (default 2000 ms, overridable via
   the `healthProbeTimeoutMs` build-server option for tests) and all three
   checks run in parallel, so a hanging dependency yields 503 within roughly
-  the timeout instead of hanging the probe; timers are always cleared so a
-  settled probe leaves no dangling work keeping the process alive.
+  the timeout instead of hanging the probe. Timers are always cleared, but a
+  timed-out call keeps running (and holds its connection), so each check is
+  coalesced (single-flight): while a call is unsettled, later probes await
+  that same call within their own timeout instead of issuing new ones, so a
+  hung dependency pins at most one connection per check.
+- Both probe routes opt out of the rate limiter at the route level
+  (`config.rateLimit: false`), so the limiter's session-cookie DB lookup never
+  runs for them; liveness therefore stays independent of every dependency.
 - pg-boss and storage fail closed: a missing pg-boss handle, a thrown error,
   or a timeout all report `'fail'`. The storage probe is
-  `exists('__readiness_probe__')` — a resolved `false` (missing key) means the
-  store answered and is reachable. The same `opts.storage ?? getStorage()`
+  the backend's bucket-level `ping()` (S3 `HeadBucket`, so a deleted bucket
+  fails); backends without `ping()` fall back to `exists('__readiness_probe__')`,
+  where a resolved `false` means the store answered. The same `opts.storage ?? getStorage()`
   instance used for attachments is probed.
 - Failures are logged server-side only, with the error NAME and no message or
   cause: `req.log.warn({ check, errName })` — messages can embed DSNs.

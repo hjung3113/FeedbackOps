@@ -223,4 +223,34 @@ describe.skipIf(!runIntegration)('health probes (ADR-0013)', () => {
     expect(statuses).not.toContain(429);
     expect(statuses.every((status) => status === 200)).toBe(true);
   });
+
+  test('probes opt out of the limiter per route: no rate-limit headers, even with a session cookie', async () => {
+    const app = await buildApp();
+    for (const url of ['/health/live', '/health/ready']) {
+      const res = await app.inject({
+        method: 'GET',
+        url,
+        headers: { cookie: 'fops_session=not-a-real-session' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['x-ratelimit-limit']).toBeUndefined();
+    }
+    // Control: a normal route DOES carry limiter headers, so the absence above is meaningful.
+    const control = await app.inject({ method: 'GET', url: '/me' });
+    expect(control.headers['x-ratelimit-limit']).toBeDefined();
+  });
+
+  test('a missing bucket (exists=false, ping rejects) is not ready', async () => {
+    const storage = {
+      exists: async () => false,
+      ping: async () => {
+        throw new Error(`NoSuchBucket ${AWS_KEY}`);
+      },
+    } as unknown as StorageBackend;
+    const app = await buildApp({ storage });
+    const res = await app.inject({ method: 'GET', url: '/health/ready' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().checks).toEqual({ database: 'ok', pg_boss: 'ok', storage: 'fail' });
+    expect(res.body).not.toContain(AWS_KEY);
+  });
 });

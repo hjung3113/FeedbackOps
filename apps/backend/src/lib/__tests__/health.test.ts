@@ -228,4 +228,56 @@ describe('runReadinessChecks', () => {
     expect(log.warn).toHaveBeenCalledWith({ check: 'pg_boss', errName: 'Error' });
     expect(log.warn).toHaveBeenCalledWith({ check: 'storage', errName: 'Error' });
   });
+
+  it('prefers the bucket-level ping over exists(): a missing bucket that 404s on exists is not ready', async () => {
+    const storage = {
+      exists: async () => false, // what HeadObject reports for a deleted bucket
+      ping: async () => {
+        throw new Error(`NoSuchBucket ${AWS_KEY}`);
+      },
+    } as unknown as StorageBackend;
+    const healthy = await runReadinessChecks({ ...healthyOpts(), storage: okStorage });
+    expect(healthy.checks.storage).toBe('ok'); // baseline: exists-only fake still ok
+    const result = await runReadinessChecks({ ...healthyOpts(), storage });
+    expect(result).toEqual({
+      ok: false,
+      checks: { database: 'ok', pg_boss: 'ok', storage: 'fail' },
+    });
+  });
+
+  it('coalesces: a hung dependency is not probed again until its call settles', async () => {
+    let calls = 0;
+    let settle: (() => void) | undefined;
+    const pool = {
+      query: () => {
+        calls += 1;
+        // First call hangs until settle(); later calls answer immediately.
+        if (calls > 1) return Promise.resolve({ rows: [] });
+        return new Promise<{ rows: [] }>((resolve) => {
+          settle = () => resolve({ rows: [] });
+        });
+      },
+    } as unknown as pg.Pool;
+    const inFlight = new Map<'database' | 'pg_boss' | 'storage', Promise<unknown>>();
+    const opts = { ...healthyOpts(), pool, timeoutMs: 20, inFlight };
+
+    const first = await runReadinessChecks(opts);
+    expect(first.checks.database).toBe('fail'); // timed out
+    const second = await runReadinessChecks(opts);
+    const third = await runReadinessChecks(opts);
+    expect(second.checks.database).toBe('fail');
+    expect(third.checks.database).toBe('fail');
+    // Three probes, ONE underlying query: no connection stacking.
+    expect(calls).toBe(1);
+    // The other checks are unaffected by the stuck one.
+    expect(second.checks.pg_boss).toBe('ok');
+    expect(second.checks.storage).toBe('ok');
+
+    // Once the hung call finally settles, probing resumes and recovers.
+    settle?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const recovered = await runReadinessChecks(opts);
+    expect(calls).toBe(2);
+    expect(recovered.checks.database).toBe('ok');
+  });
 });

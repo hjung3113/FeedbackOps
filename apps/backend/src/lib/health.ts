@@ -15,6 +15,9 @@
 //     error NAME only via `log.warn({ check, errName })`.
 //   * pg-boss and storage fail closed: a missing boss handle, a thrown
 //     error, or a timeout all count as 'fail'.
+//   * A timed-out probe keeps running (its connection stays held), so each
+//     check is coalesced: while a call is unsettled, later probes await that
+//     same promise instead of stacking more connections.
 
 import type pg from 'pg';
 import type { PgBoss } from 'pg-boss';
@@ -94,14 +97,33 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T
  * Run one probe, mapping any failure (throw or timeout) to 'fail'. Logs the
  * error NAME only — never the message, cause, or stack, which can carry
  * DSNs or credentials.
+ *
+ * Coalesced (single-flight): `withTimeout` only stops WAITING; the underlying
+ * call keeps holding its connection. While a call for this check is still
+ * unsettled, later probes await THAT same promise (each within its own
+ * timeout) instead of issuing another, so a hung dependency pins at most one
+ * connection per check no matter how often kubelet probes, while concurrent
+ * probes on a healthy dependency simply share one round trip.
  */
 async function probe(
   check: HealthCheckName,
   log: HealthLog,
+  inFlight: Map<HealthCheckName, Promise<unknown>>,
+  timeoutMs: number,
   run: () => Promise<unknown>,
 ): Promise<HealthCheckStatus> {
   try {
-    await run();
+    let op = inFlight.get(check);
+    if (!op) {
+      const started = run();
+      op = started;
+      inFlight.set(check, started);
+      const release = () => {
+        if (inFlight.get(check) === started) inFlight.delete(check);
+      };
+      started.then(release, release);
+    }
+    await withTimeout(op, timeoutMs);
     return 'ok';
   } catch (err) {
     log.warn({ check, errName: err instanceof Error ? err.name : 'Unknown' });
@@ -116,6 +138,12 @@ export interface ReadinessCheckOptions {
   storage: StorageBackend;
   timeoutMs?: number | undefined;
   log: HealthLog;
+  /**
+   * Unsettled calls per check, shared by later probes (see `probe`). Owned by
+   * the caller (one Map per server) so state survives across requests;
+   * omitted = a fresh Map per call (no cross-call coalescing; unit tests).
+   */
+  inFlight?: Map<HealthCheckName, Promise<unknown>> | undefined;
 }
 
 /**
@@ -124,18 +152,21 @@ export interface ReadinessCheckOptions {
  */
 export async function runReadinessChecks(opts: ReadinessCheckOptions): Promise<ReadinessResult> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_HEALTH_PROBE_TIMEOUT_MS;
+  const inFlight = opts.inFlight ?? new Map<HealthCheckName, Promise<unknown>>();
 
   const [database, pgBoss, storage] = await Promise.all([
-    probe('database', opts.log, () => withTimeout(opts.pool.query('select 1'), timeoutMs)),
-    probe('pg_boss', opts.log, async () => {
+    probe('database', opts.log, inFlight, timeoutMs, () => opts.pool.query('select 1')),
+    probe('pg_boss', opts.log, inFlight, timeoutMs, async () => {
       const boss = opts.boss;
       if (!boss) throw new DependencyUnavailableError('pg_boss');
       // Cheapest real round trip on pg-boss v12: the internal handle's
       // executeSql (no queue-table scan like getQueues()).
-      await withTimeout(boss.getDb().executeSql('select 1'), timeoutMs);
+      await boss.getDb().executeSql('select 1');
     }),
-    probe('storage', opts.log, () =>
-      withTimeout(opts.storage.exists(STORAGE_PROBE_KEY), timeoutMs),
+    // Prefer the bucket-level ping (HeadBucket): exists() would report a
+    // deleted bucket as "reachable" because both cases 404.
+    probe('storage', opts.log, inFlight, timeoutMs, () =>
+      opts.storage.ping ? opts.storage.ping() : opts.storage.exists(STORAGE_PROBE_KEY),
     ),
   ]);
 
