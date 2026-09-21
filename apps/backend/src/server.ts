@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
+import { runReadinessChecks } from './lib/health.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import { getStorage } from './lib/storage/factory.js';
@@ -89,6 +90,12 @@ export interface BuildServerOptions {
    * production this is undefined and `getStorage()` builds the singleton.
    */
   storage?: StorageBackend;
+  /**
+   * Per-check budget in ms for the `GET /health/ready` dependency probes
+   * (ADR-0013, amended 2026-09-22). Tests shrink it to keep
+   * hanging-dependency cases fast; production uses the 2000 ms default.
+   */
+  healthProbeTimeoutMs?: number;
   /** Route-test seam; production constructs the navigation read model below. */
   navCountsService?: NavCountsService;
 }
@@ -186,7 +193,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // Postgres-backed via our custom store. The global tier is per-Actor when
   // authenticated (100/min) or per-IP when not (50/min); the route-level
   // mutation and sensitive tiers are registered as named groups on the
-  // routes that need them. `/health` is exempt via `allowList`.
+  // routes that need them. `/health`, `/health/live`, and `/health/ready`
+  // are exempt via `allowList` — k8s probes must never see 429.
   const sessionService = createSessionService({ db: dbHandle.db, workspaceId });
 
   // Adversarial review API-C-2: `@fastify/rate-limit` runs as an
@@ -228,7 +236,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     global: true,
     max: (req, key) => (key === req.ip ? 50 : 100),
     timeWindow: '1 minute',
-    allowList: (req) => req.url === '/health',
+    allowList: (req) =>
+      req.url === '/health' || req.url === '/health/live' || req.url === '/health/ready',
     keyGenerator: actorAwareKeyGenerator,
     store: createPgRateLimitStore(dbHandle.pool, 'global') as never,
     errorResponseBuilder: (_req, ctx) => ({
@@ -357,6 +366,60 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       },
     },
     handler: async () => ({ status: 'ok' as const, ts: new Date().toISOString() }),
+  });
+
+  // ── Health probes — ADR-0013 "Health endpoints" (amended 2026-09-22) ──
+  // Resolved once and shared with the attachments module below. This is the
+  // same `opts.storage ?? getStorage()` instance attachment routes already
+  // use. `getStorage()` is a lazy proxy: env errors surface on the first
+  // `.exists()` call and count as a readiness-check failure there, never a
+  // boot crash.
+  const attachmentsStorage = opts.storage ?? getStorage();
+
+  // Liveness: the process is up. Depends on NOTHING downstream (no DB, no
+  // boss, no storage) so it never flaps with dependency blips.
+  app.route({
+    method: 'GET',
+    url: '/health/live',
+    schema: {
+      response: {
+        200: z.object({ status: z.literal('ok') }),
+      },
+    },
+    handler: async () => ({ status: 'ok' as const }),
+  });
+
+  // Readiness: Postgres answers, pg-boss is usable, storage is reachable.
+  // Checks run in parallel, each bounded by `healthProbeTimeoutMs` (default
+  // 2000 ms; ADR-0013). Bodies are fixed-shape and never carry error text —
+  // DSN-bearing messages stay server-side, logged as `{ check, errName }`.
+  const healthChecksSchema = z.object({
+    database: z.enum(['ok', 'fail']),
+    pg_boss: z.enum(['ok', 'fail']),
+    storage: z.enum(['ok', 'fail']),
+  });
+  app.route({
+    method: 'GET',
+    url: '/health/ready',
+    schema: {
+      response: {
+        200: z.object({ status: z.literal('ok'), checks: healthChecksSchema }),
+        503: z.object({ status: z.literal('unavailable'), checks: healthChecksSchema }),
+      },
+    },
+    handler: async (req, reply) => {
+      const result = await runReadinessChecks({
+        pool: dbHandle.pool,
+        boss,
+        storage: attachmentsStorage,
+        timeoutMs: opts.healthProbeTimeoutMs,
+        log: req.log,
+      });
+      if (!result.ok) {
+        return reply.code(503).send({ status: 'unavailable', checks: result.checks });
+      }
+      return reply.code(200).send({ status: 'ok' as const, checks: result.checks });
+    },
   });
 
   // ADR-0006:16 — the two providers are swapped by the AUTH_PROVIDER env
@@ -686,7 +749,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   });
 
   // ── Attachments module — Slice 3 #22 / PLAN-22 C3a + C3b ────────────────
-  const attachmentsStorage = opts.storage ?? getStorage();
+  // `attachmentsStorage` is resolved once above the health probes.
   const attachmentsService = createAttachmentsService({
     storage: attachmentsStorage,
     auditService,

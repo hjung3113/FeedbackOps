@@ -66,12 +66,13 @@ Neither endpoint requires authentication; both refuse to disclose internal versi
 
 ## Amended 2026-07-13
 
-The `/health/live` and `/health/ready` split above is the deployment
-target-state, not the current MVP implementation. The current backend exposes
-unauthenticated `GET /health` as a simple process-health endpoint; k8s
-deployment work must implement the target-state split before using these probes
-for production readiness. `/health/ready` remains the chosen readiness name, and
-the legacy `/healthz` wording in ADR-0011 is not the canonical endpoint name.
+At the time of this amendment the `/health/live` and `/health/ready` split
+above was not yet implemented; the backend exposed unauthenticated `GET /health`
+as a simple process-health endpoint, and k8s deployment work had to implement
+the split before these probes could be used for production readiness. The split
+is now implemented — see "Amended 2026-09-22" below. `/health/ready` remains
+the chosen readiness name, and the legacy `/healthz` wording in ADR-0011 is not
+the canonical endpoint name.
 
 ## What this ADR locks
 
@@ -84,3 +85,40 @@ the legacy `/healthz` wording in ADR-0011 is not the canonical endpoint name.
 ## Reopening
 
 Adding metrics, tracing, an APM agent, or switching deployment target each warrants a new ADR. Adding new log event types is *not* a reopen — it is the normal way new features make themselves observable.
+
+## Amended 2026-09-22
+
+The `/health/live` + `/health/ready` split is now implemented
+(`apps/backend/src/lib/health.ts`, registered in `apps/backend/src/server.ts`).
+
+- `GET /health/live` → `200 { status: 'ok' }`. Depends on nothing downstream
+  (no Postgres, no pg-boss, no storage).
+- `GET /health/ready` → `200` only if Postgres answers, pg-boss is usable, and
+  attachment storage is reachable; `503` otherwise. Unauthenticated, like
+  `/health`, and exempt from the global rate limit so probes never see 429.
+- Response bodies are fixed-shape and never carry error details (no error
+  messages, DSNs, bucket/endpoint names, credentials, or stack traces):
+
+```text
+{ status: 'ok' | 'unavailable',
+  checks: { database: 'ok' | 'fail', pg_boss: 'ok' | 'fail', storage: 'ok' | 'fail' } }
+```
+
+- Every dependency check has its own timeout (default 2000 ms, overridable via
+  the `healthProbeTimeoutMs` build-server option for tests) and all three
+  checks run in parallel, so a hanging dependency yields 503 within roughly
+  the timeout instead of hanging the probe; timers are always cleared so a
+  settled probe leaves no dangling work keeping the process alive.
+- pg-boss and storage fail closed: a missing pg-boss handle, a thrown error,
+  or a timeout all report `'fail'`. The storage probe is
+  `exists('__readiness_probe__')` — a resolved `false` (missing key) means the
+  store answered and is reachable. The same `opts.storage ?? getStorage()`
+  instance used for attachments is probed.
+- Failures are logged server-side only, with the error NAME and no message or
+  cause: `req.log.warn({ check, errName })` — messages can embed DSNs.
+- Recommended probe wiring: `livenessProbe` httpGet `/health/live`
+  (`periodSeconds: 10`, `failureThreshold: 3`); `readinessProbe` httpGet
+  `/health/ready` (`periodSeconds: 10`, `timeoutSeconds: 5`,
+  `failureThreshold: 3`).
+- `GET /health` (200 with `{ status: 'ok', ts }`) remains as a legacy process
+  check.
