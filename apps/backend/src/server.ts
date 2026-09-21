@@ -776,13 +776,12 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     storage: attachmentsStorage,
     auditService,
     db: dbHandle.db,
+    idempotencyService,
     vocReadService,
   });
   await app.register(attachmentsRoutes, {
-    db: dbHandle.db,
     sessionService,
     attachmentsService,
-    idempotencyService,
     workspaceId,
     rateLimitConfig: {
       attachmentMutation: app.rateLimitConfig.attachmentMutation,
