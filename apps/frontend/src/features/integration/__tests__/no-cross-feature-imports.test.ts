@@ -1,10 +1,9 @@
 // no-cross-feature-imports.test.ts — #399 step B frontend boundary guard.
 //
 // Plain fs + regex over feature sources (same approach as
-// apps/backend/src/__tests__/module-seams.test.ts): static import/export
-// specifiers are anchored at line start so text inside comments or strings
-// never matches, and no comment stripping (which can erase real code) is
-// needed. Alias (`@/…`) and relative (`../…`) specifiers are resolved
+// apps/backend/src/__tests__/module-seams.test.ts): comments are removed with
+// a string-aware scanner first, then static import/export specifiers are
+// anchored at line start. Alias (`@/…`) and relative (`../…`) specifiers are resolved
 // importer-relative to src-relative paths; package specifiers are ignored.
 //
 // Rules:
@@ -27,10 +26,51 @@ const FEATURES = path.join(SRC, 'features');
 const STATIC_SPECIFIER = /^[ \t]*(?:import|export)\b[^;'"`]*?(?:\bfrom\s*)?['"]([^'"\n]+)['"]/gm;
 const DYNAMIC_SPECIFIER = /\bimport\(\s*['"]([^'"\n]+)['"]\s*\)/g;
 
+/**
+ * Removes // and block comments with a scanner that understands string and
+ * template literals, so a comment marker inside a string neither hides real
+ * code nor is mistaken for a comment, and quotes inside a comment (e.g.
+ * `import /* legacy "VOC" *\/ {x} from '…'`) cannot be picked up as a specifier.
+ */
+function stripComments(src: string): string {
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i] as string;
+    const next = src[i + 1];
+    if (ch === '/' && next === '/') {
+      while (i < src.length && src[i] !== '\n') i += 1;
+    } else if (ch === '/' && next === '*') {
+      i += 2;
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i += 1;
+      i += 2;
+    } else if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch;
+      out += ch;
+      i += 1;
+      while (i < src.length && src[i] !== quote) {
+        if (src[i] === '\\') {
+          out += src[i] as string;
+          i += 1;
+        }
+        out += src[i] ?? '';
+        i += 1;
+      }
+      out += quote;
+      i += 1;
+    } else {
+      out += ch;
+      i += 1;
+    }
+  }
+  return out;
+}
+
 function importSpecifiers(source: string): string[] {
+  const code = stripComments(source);
   return [
-    ...[...source.matchAll(STATIC_SPECIFIER)].map((m) => m[1] as string),
-    ...[...source.matchAll(DYNAMIC_SPECIFIER)].map((m) => m[1] as string),
+    ...[...code.matchAll(STATIC_SPECIFIER)].map((m) => m[1] as string),
+    ...[...code.matchAll(DYNAMIC_SPECIFIER)].map((m) => m[1] as string),
   ];
 }
 
@@ -176,6 +216,28 @@ describe('no cross-feature imports (#399)', () => {
     expect(
       crossFeatureSpecs(`const m = await import('@/features/voc/z');`, integrationFile),
     ).toHaveLength(1);
+
+    // Comment handling: a quoted word inside an inline block comment must not
+    // be mistaken for the specifier, import-looking text inside comments must
+    // not match, and a comment marker inside a string must not erase real code.
+    expect(
+      crossFeatureSpecs(
+        `import /* legacy "VOC" */ { x } from '@/features/voc/x';`,
+        integrationFile,
+      ),
+    ).toEqual(['@/features/voc/x']);
+    expect(
+      crossFeatureSpecs(
+        `/*\nimport { x } from '@/features/voc/x';\n*/\n// import { y } from '@/features/admin/y';`,
+        integrationFile,
+      ),
+    ).toEqual([]);
+    expect(
+      crossFeatureSpecs(
+        `const start = '/*';\nimport { x } from '@/features/voc/x';\nconst end = '*/';`,
+        integrationFile,
+      ),
+    ).toEqual(['@/features/voc/x']);
 
     const vocFile = path.join(FEATURES, 'voc/components/detail/Y.tsx');
     expect(

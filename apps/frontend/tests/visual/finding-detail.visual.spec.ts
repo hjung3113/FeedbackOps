@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test';
+
 import { expect, test } from './support/visual-test';
 
 import {
@@ -24,6 +26,16 @@ const MANAGE_CTAS = [
   'request-task-btn',
   'mark-not-actionable-btn',
 ] as const;
+
+// expectVisual screenshots the WHOLE page, so background queries behind a
+// dialog or a list must have settled before capture. The creator chip renders
+// the 'Finding creator' fallback until /actors resolves; waiting for the
+// RESOLVED name is a positive condition (a `count 0` wait passes trivially
+// before the chip has even rendered and captured the fallback).
+async function expectBackgroundSettled(page: Page): Promise<void> {
+  await expect(page.getByText('정민수')).toHaveCount(1);
+  await expect(page.getByText('Finding creator')).toHaveCount(0);
+}
 
 test.describe('/findings/$findingId visual harness', () => {
   test('deeplinks through auth to the populated Finding detail panel', async ({ page }) => {
@@ -73,6 +85,8 @@ test.describe('/findings/$findingId visual harness', () => {
     }
     await expect(panel.getByTestId('link-task-btn')).toHaveCount(0);
 
+    await expectBackgroundSettled(page);
+
     await expectVisual(page, panel, 'finding-detail-populated.png');
   });
 
@@ -96,6 +110,8 @@ test.describe('/findings/$findingId visual harness', () => {
     }
     await expect(page.getByTestId('request-task-modal')).toHaveCount(0);
 
+    await expectBackgroundSettled(page);
+
     await expectVisual(page, panel, 'finding-detail-permission-limited.png');
   });
 
@@ -117,6 +133,7 @@ test.describe('/findings/$findingId visual harness', () => {
     await dialog
       .getByTestId('request-task-requested-outcome-input')
       .fill(requestTaskBody.requested_outcome);
+    await expectBackgroundSettled(page);
     await expectVisual(page, dialog, 'finding-detail-request-task-modal.png');
 
     const post = page.waitForRequest(
@@ -146,6 +163,8 @@ test.describe('/findings/$findingId visual harness', () => {
     const panel = page.getByTestId('finding-detail-panel');
     await expect(panel.getByRole('heading', { level: 1 })).toHaveText(populatedFinding.title);
     await expect(page.locator('[data-shell="list"]')).toHaveCount(1);
+
+    await expectBackgroundSettled(page);
 
     await expectVisual(page, page.locator('[data-shell="list"]'), 'findings-list-selected.png');
   });
