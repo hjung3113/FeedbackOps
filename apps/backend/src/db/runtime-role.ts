@@ -56,7 +56,10 @@ export async function assertRuntimeDbRole(pool: Pick<pg.Pool, 'query'>): Promise
               where m.rolname <> current_user
                 and pg_has_role(current_user, m.oid, 'MEMBER')
                 and (m.rolsuper or m.rolcreaterole or m.rolcreatedb or m.rolbypassrls
-                     or m.rolreplication or m.rolname = 'fops_migrate')
+                     or m.rolreplication or m.rolname = 'fops_migrate'
+                     or m.rolname in ('pg_write_all_data', 'pg_read_all_data',
+                       'pg_execute_server_program', 'pg_read_server_files',
+                       'pg_write_server_files', 'pg_signal_backend'))
               limit 1) as privileged_member_of
        from pg_roles r where r.rolname = current_user`,
   );

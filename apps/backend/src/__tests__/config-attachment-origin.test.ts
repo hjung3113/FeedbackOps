@@ -39,7 +39,7 @@ function attachmentOriginIssue(value: string, nodeEnv: string): ZodIssue | null 
 }
 
 describe('validateAttachmentOrigin', () => {
-  it.each([["'self'"], ['https://cdn.example.com'], ['https://cdn.example.com:8443']])(
+  it.each([["'self'"], ['https://cdn.example.com'], ['https://cdn.example.com:8443'], ['https://cdn.example.com.']])(
     'accepts %s in production',
     (value) => {
       expect(validateAttachmentOrigin(value, 'production')).toBeNull();

@@ -47,7 +47,7 @@ export function validateAttachmentOrigin(value: string, nodeEnv: string): string
   // URL validity is not CSP host-source validity: reject IPv6 literals and
   // anything outside the letters-digits-hyphen DNS label grammar (IDN hosts
   // arrive already punycoded; underscores are not valid in CSP hosts).
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(url.hostname)) {
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.?$/.test(url.hostname)) {
     return `${PREFIX} host must be a plain DNS name or IPv4 address usable in a CSP host-source`;
   }
   const isLocalHttp =
