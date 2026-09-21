@@ -1,6 +1,6 @@
 // apps/backend/src/modules/core/idempotency/idempotent-command.ts
 //
-// Shared idempotency frame for VOC application commands (#392). Owns the
+// Shared idempotency frame for application commands (#392, #393). Owns the
 // transaction boundary that VOC HTTP routes previously owned, and reproduces
 // the manual frame exactly — statement order, error code/message, recorded
 // status — per the zero-behavior-change constraint:
