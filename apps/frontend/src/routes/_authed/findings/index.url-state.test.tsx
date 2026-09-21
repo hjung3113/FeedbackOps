@@ -181,7 +181,9 @@ describe('/findings URL state', () => {
 
   test('row click pushes selected and Back returns to no selection', async () => {
     const router = renderUrlState({ requested: [] }, '/findings');
-    await waitFor(() => expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument(),
+    );
     const lengthBefore = router.history.length;
 
     fireEvent.click(screen.getByRole('button', { name: /FND-101/ }));
@@ -235,7 +237,9 @@ describe('/findings URL state', () => {
 
   test('stale selected uuid not in the list is replaced away after load', async () => {
     const router = renderUrlState({ requested: [] }, `/findings?selected=${STALE_ID}`);
-    await waitFor(() => expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument(),
+    );
     await waitFor(() => {
       expect(router.state.location.search).toEqual({});
     });
@@ -257,7 +261,9 @@ describe('/findings URL state', () => {
   test('managedSystem=all sends no managed_system_id; a uuid sends it', async () => {
     const all: FetchCase = { requested: [] };
     renderUrlState(all, '/findings?managedSystem=all');
-    await waitFor(() => expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument(),
+    );
     expect(all.requested.some((url) => url.startsWith('/findings'))).toBe(true);
     expect(
       all.requested.some((url) => url.startsWith('/findings') && url.includes('managed_system_id')),
@@ -267,7 +273,9 @@ describe('/findings URL state', () => {
   test('managedSystem=<uuid> passes managed_system_id to the list fetch', async () => {
     const scoped: FetchCase = { requested: [] };
     renderUrlState(scoped, `/findings?managedSystem=${MS_1}`);
-    await waitFor(() => expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument(),
+    );
     expect(
       scoped.requested.some(
         (url) => url.startsWith('/findings') && url.includes(`managed_system_id=${MS_1}`),
