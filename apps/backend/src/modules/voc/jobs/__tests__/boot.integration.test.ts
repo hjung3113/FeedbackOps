@@ -26,7 +26,10 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
-    boss = await initBoss({ connectionString: APP_URL });
+    boss = await initBoss({
+      connectionString: APP_URL,
+      log: { info: () => {}, warn: () => {}, error: () => {} },
+    });
     // pgboss.schedule is durable shared state: a row left by an earlier run
     // would make this suite pass even if registration stopped scheduling
     // anything. Clear it first so the assertion is about *this* boot.
@@ -38,6 +41,7 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
       // Registration must not depend on the provider being enabled: enabling a
       // provider is a config change, never a queue-registration change.
       embeddingEnabled: false,
+      log: { info: () => {}, warn: () => {}, error: () => {} },
     });
   });
 

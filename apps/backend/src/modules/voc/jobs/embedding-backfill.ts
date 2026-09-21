@@ -14,6 +14,7 @@
 import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
+import { type JobLog, JOB_WORK_OPTIONS, errorFields, withJobLogging } from '../../../lib/job-log.js';
 import {
   countVocsNeedingEmbedding,
   selectVocsNeedingEmbedding,
@@ -52,10 +53,7 @@ export interface VocEmbeddingBackfillDeps {
   embeddingVersion: number;
   embeddingEnabled: boolean;
   batchSize?: number;
-  log?: {
-    info: (msg: string, meta?: unknown) => void;
-    error: (msg: string, meta?: unknown) => void;
-  };
+  log?: JobLog;
 }
 
 /**
@@ -105,7 +103,7 @@ export async function backfillVocEmbeddings(
       deps.log?.error('voc.embedding_backfill enqueue failed', {
         voc_id: row.voc_id,
         correlation_id: payload.correlation_id,
-        err,
+        ...errorFields(err),
       });
     }
   }
@@ -135,7 +133,7 @@ export function vocEmbeddingBackfillHandler(deps: VocEmbeddingBackfillDeps) {
 
 export async function registerVocEmbeddingBackfill(
   boss: PgBoss,
-  deps: Omit<VocEmbeddingBackfillDeps, 'boss'>,
+  deps: Omit<VocEmbeddingBackfillDeps, 'boss'> & { log: JobLog },
 ): Promise<void> {
   const queues = await boss.getQueues([VOC_EMBEDDING_BACKFILL_QUEUE]);
   if (queues.length === 0) {
@@ -145,7 +143,12 @@ export async function registerVocEmbeddingBackfill(
   }
   await boss.work<VocEmbeddingBackfillPayload>(
     VOC_EMBEDDING_BACKFILL_QUEUE,
-    vocEmbeddingBackfillHandler({ ...deps, boss }),
+    JOB_WORK_OPTIONS,
+    withJobLogging(
+      deps.log,
+      VOC_EMBEDDING_BACKFILL_QUEUE,
+      vocEmbeddingBackfillHandler({ ...deps, boss }),
+    ),
   );
   // `schedule` is idempotent on (name, key); every boot converges to the same
   // pgboss.schedule row. Registered unconditionally — including when the

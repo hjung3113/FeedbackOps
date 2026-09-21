@@ -10,6 +10,7 @@ import {
   validatorCompiler,
 } from 'fastify-type-provider-zod';
 import type { PgBoss } from 'pg-boss';
+import type { Logger as PinoLogger } from 'pino';
 import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
@@ -85,6 +86,13 @@ export interface BuildServerOptions {
    */
   boss?: PgBoss;
   /**
+   * Optional process root logger (ADR-0013, amended 2026-09-22). When given,
+   * Fastify attaches it via `loggerInstance` so request logs share the ONE
+   * pino config the job logs use. Omitted (route tests): the inline logger
+   * options below apply, byte-for-byte as before.
+   */
+  logger?: PinoLogger;
+  /**
    * Optional storage backend override. Used by integration tests to inject a
    * mock instead of constructing the real S3-compat backend from env. In
    * production this is undefined and `getStorage()` builds the singleton.
@@ -121,23 +129,27 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   const workspaceId = config.WORKSPACE_ID;
 
   const app = Fastify({
-    logger: {
-      level: config.NODE_ENV === 'test' ? 'silent' : 'info',
-      // ADR-0013: logs-first observability via stdout JSON.
-      // Review HTTP-M-3: redact request-header lines that carry secrets
-      // (cookie holds the session id; idempotency-key correlates a single
-      // actor's retries). Without this, anyone with log access can lift a
-      // live session out of stdout (CWE-532).
-      redact: {
-        paths: [
-          'req.headers.cookie',
-          'req.headers["set-cookie"]',
-          'req.headers.authorization',
-          'req.headers["idempotency-key"]',
-        ],
-        remove: true,
-      },
-    },
+    ...(opts.logger
+      ? { loggerInstance: opts.logger }
+      : {
+          logger: {
+            level: config.NODE_ENV === 'test' ? 'silent' : 'info',
+            // ADR-0013: logs-first observability via stdout JSON.
+            // Review HTTP-M-3: redact request-header lines that carry secrets
+            // (cookie holds the session id; idempotency-key correlates a single
+            // actor's retries). Without this, anyone with log access can lift a
+            // live session out of stdout (CWE-532).
+            redact: {
+              paths: [
+                'req.headers.cookie',
+                'req.headers["set-cookie"]',
+                'req.headers.authorization',
+                'req.headers["idempotency-key"]',
+              ],
+              remove: true,
+            },
+          },
+        }),
     disableRequestLogging: config.NODE_ENV === 'test',
     // F-009 + Review HTTP-H-2: `trustProxy: true` is too permissive — it
     // trusts the entire X-Forwarded-For chain, so any client can spoof
@@ -776,5 +788,9 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  return app;
+  // When `loggerInstance` is supplied, Fastify types the instance with the
+  // concrete pino `Logger`; TS cannot prove it satisfies the default
+  // FastifyBaseLogger-typed `FastifyInstance` contract, but at runtime the
+  // pino logger IS a superset of that contract — hence the unknown cast.
+  return app as unknown as FastifyInstance;
 }

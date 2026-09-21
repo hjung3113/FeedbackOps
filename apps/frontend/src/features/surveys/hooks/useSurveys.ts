@@ -5,14 +5,28 @@ import type { CreateSurveyInput, QuestionInput, Survey, SurveyPatchInput } from 
 
 export const surveyKeys = {
   list: ['surveys'] as const,
+  listScoped: (managedSystemId: string) => ['surveys', { managedSystemId }] as const,
   detail: (id: string) => ['surveys', id] as const,
   results: (id: string) => ['surveys', id, 'results'] as const,
 };
 
-export function useSurveys() {
+// Optional managed_system_id filter mirrors the backend GET /surveys query
+// param (uuid | 'all' on the wire; 'all' resolves to no filter = the caller's
+// effective scope union). The scoped key extends surveyKeys.list, so the
+// existing `['surveys']` invalidations still cover it.
+export function useSurveys(managedSystemId?: string) {
   return useQuery({
-    queryKey: surveyKeys.list,
-    queryFn: async ({ signal }) => (await apiClient<Survey[]>('GET', '/surveys', { signal })).data,
+    queryKey: managedSystemId ? surveyKeys.listScoped(managedSystemId) : surveyKeys.list,
+    queryFn: async ({ signal }) =>
+      (
+        await apiClient<Survey[]>(
+          'GET',
+          managedSystemId
+            ? `/surveys?managed_system_id=${encodeURIComponent(managedSystemId)}`
+            : '/surveys',
+          { signal },
+        )
+      ).data,
     retry: 1,
   });
 }

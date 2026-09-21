@@ -155,3 +155,5 @@ apps/backend/src/modules/voc/repo-read.ts lint/style/noNonNullAssertion -- pre-e
 apps/backend/src/modules/voc/repo-read.ts lint/correctness/noUnusedVariables -- pre-existing on develop (8x, unchanged); destructured repo args kept for call-site symmetry
 apps/backend/src/modules/voc/repo-read.ts lint/style/useNumberNamespace -- pre-existing on develop (5x, unchanged); cursor decoding uses bare Number/parseInt globals
 apps/backend/src/modules/voc/repo-read.ts format -- pre-existing on develop; long sql`` template lines predate biome formatting and reformatting them would rewrite lines this branch never touched
+apps/frontend/src/routes/_authed/voc-clusters/index.tsx organizeImports -- pre-existing on develop (same diagnostic before this change); the file predates biome and uses double quotes throughout
+apps/frontend/src/routes/_authed/voc-clusters/index.tsx format -- pre-existing on develop; reformatting would rewrite every line this branch does not touch (#396 edits only the search/selection wiring)

@@ -14,31 +14,75 @@ import {
   Skeleton,
   UserAvatar,
 } from '@fops/ui';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
+import { z } from 'zod';
+
+// Selection + Managed System scope are URL state (docs/frontend/routes-and-layout.md
+// §URL State Rules): /findings?managedSystem=:managedSystemId|all&selected=:findingId.
+// Defaults (scope union / nothing selected) are omitted from the URL. `all` and an
+// absent managedSystem both query WITHOUT managed_system_id (the backend applies the
+// caller's effective scope union); a uuid is passed through.
+export const findingsSearchSchema = z
+  .object({
+    managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
+    selected: z.string().uuid().optional(),
+  })
+  .strict();
+
+type FindingsSearch = z.infer<typeof findingsSearchSchema>;
 
 export const Route = createFileRoute('/_authed/findings/')({
+  validateSearch: (raw) => findingsSearchSchema.parse(raw),
   component: FindingsListPage,
 });
 
 export function FindingsListPage(): React.ReactElement {
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const search = useSearch({ strict: false }) as FindingsSearch;
+  const navigate = useNavigate({ from: '/findings/' });
+  const selectedId = search.selected ?? null;
+  const managedSystemId = search.managedSystem === 'all' ? undefined : search.managedSystem;
 
-  const selectFinding = React.useCallback((id: string): void => {
-    setSelectedId(id);
-  }, []);
+  const selectFinding = React.useCallback(
+    (id: string): void => {
+      void navigate({ to: '/findings', search: (prev) => ({ ...prev, selected: id }) });
+    },
+    [navigate],
+  );
 
-  return <FindingsListShell selectedId={selectedId} onSelect={selectFinding} />;
+  // Stale/invalid `selected` (deleted, or filtered away): once the list has
+  // loaded, replace-drop it so Back is not trapped in the invalid URL. While
+  // loading — or when the list failed — the deep-linked selection is kept.
+  const reconcileSelection = React.useCallback((): void => {
+    void navigate({
+      to: '/findings',
+      replace: true,
+      search: ({ selected: _selected, ...rest }) => rest,
+    });
+  }, [navigate]);
+
+  return (
+    <FindingsListShell
+      managedSystemId={managedSystemId}
+      selectedId={selectedId}
+      onSelect={selectFinding}
+      onSelectionReconciled={reconcileSelection}
+    />
+  );
 }
 
 function FindingsListShell({
+  managedSystemId,
   selectedId,
   onSelect,
+  onSelectionReconciled,
 }: {
+  managedSystemId: string | undefined;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onSelectionReconciled: () => void;
 }): React.ReactElement {
-  const listQuery = useFindingsList();
+  const listQuery = useFindingsList(managedSystemId);
   const { actors } = useWorkspaceActors();
   const findings = listQuery.data?.items ?? [];
   const actorsById = React.useMemo(() => {
@@ -48,6 +92,13 @@ function FindingsListShell({
     }
     return map;
   }, [actors]);
+
+  React.useEffect(() => {
+    if (!listQuery.isSuccess) return;
+    if (selectedId !== null && !findings.some((finding) => finding.id === selectedId)) {
+      onSelectionReconciled();
+    }
+  }, [findings, listQuery.isSuccess, onSelectionReconciled, selectedId]);
 
   return (
     <ListShell

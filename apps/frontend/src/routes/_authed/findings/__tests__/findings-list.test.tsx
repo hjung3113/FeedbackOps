@@ -1,11 +1,18 @@
 import { ApiError } from '@/lib/api/types';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => (config: unknown) => config,
-}));
+import { FindingsListPage, findingsSearchSchema } from '../index';
 
 vi.mock('@fops/ui', () => ({
   ListShell: ({
@@ -164,10 +171,35 @@ describe('FindingsListPage', () => {
     });
   });
 
-  it('renders finding rows from the list hook', async () => {
-    const { FindingsListPage } = await import('../index');
+  // Selection lives in the router search (?selected=:findingId), so the page
+  // mounts inside a real memory-history router with the route's own search
+  // schema (same harness as the reference URL-state tests).
+  async function renderFindingsPage(initialPath = '/findings') {
+    const rootRoute = createRootRoute({ component: () => <Outlet /> });
+    const route = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/findings',
+      validateSearch: (raw) => findingsSearchSchema.parse(raw),
+      component: FindingsListPage,
+    });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([route]),
+      history: createMemoryHistory({ initialEntries: [initialPath] }),
+    });
+    // Router matches load asynchronously; load first so the page is painted
+    // synchronously and the existing sync assertions below stay untouched.
+    await router.load();
+    return render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+  }
 
-    render(<FindingsListPage />);
+  it('renders finding rows from the list hook', async () => {
+    await renderFindingsPage();
 
     expect(screen.getByText('Findings')).toBeInTheDocument();
     expect(screen.getByTestId('finding-row-FND-101')).toHaveTextContent('결제 실패 반복');
@@ -175,21 +207,20 @@ describe('FindingsListPage', () => {
   });
 
   it('renders the selected finding in the detail panel', async () => {
-    const { FindingsListPage } = await import('../index');
-
-    render(<FindingsListPage />);
+    await renderFindingsPage();
     fireEvent.click(screen.getByTestId('finding-row-FND-101'));
 
-    expect(screen.getByTestId('finding-detail-panel')).toHaveTextContent(
-      'finding:11111111-1111-1111-1111-111111111111',
+    // Selection is a router navigation now (?selected=…), which lands async.
+    await waitFor(() =>
+      expect(screen.getByTestId('finding-detail-panel')).toHaveTextContent(
+        'finding:11111111-1111-1111-1111-111111111111',
+      ),
     );
     expect(screen.getByTestId('finding-row-FND-101')).toHaveAttribute('data-selected', 'true');
   });
 
   it('renders severity, confidence, and owner enrichment in finding rows', async () => {
-    const { FindingsListPage } = await import('../index');
-
-    render(<FindingsListPage />);
+    await renderFindingsPage();
 
     const richRow = screen.getByTestId('finding-row-FND-101');
     expect(richRow.querySelector('[data-token="--severity-high"]')).toBeInTheDocument();
@@ -214,9 +245,7 @@ describe('FindingsListPage', () => {
         message: 'finding.read capability required',
       }),
     });
-    const { FindingsListPage } = await import('../index');
-
-    render(<FindingsListPage />);
+    await renderFindingsPage();
 
     expect(screen.getByTestId('permission-blocked')).toHaveAttribute('data-state', 'denied');
     expect(screen.queryByTestId('finding-list-error')).not.toBeInTheDocument();
@@ -231,9 +260,7 @@ describe('FindingsListPage', () => {
       isSuccess: false,
       error: new ApiError(500, { code: 'internal.unexpected', message: 'server failed' }),
     });
-    const { FindingsListPage } = await import('../index');
-
-    render(<FindingsListPage />);
+    await renderFindingsPage();
 
     expect(screen.getByTestId('finding-list-error')).toHaveTextContent(
       '데이터를 불러오지 못했습니다.',
