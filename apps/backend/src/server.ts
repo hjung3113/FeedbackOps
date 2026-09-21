@@ -644,6 +644,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     db: dbHandle.db,
     auditService,
     checkService,
+    idempotencyService,
     // #168 (ADR-0034 D6). Disabled provider → the enqueuer is a no-op, so a
     // key-less environment creates no embedding jobs at all.
     embeddingEnqueuer: createVocEmbeddingEnqueuer({
@@ -658,8 +659,10 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     entityLinksService,
   });
   const conversationService = createConversationService({
+    db: dbHandle.db,
     auditService,
     checkService,
+    idempotencyService,
     vocReadService,
   });
   const publicUpdateReviewCandidateService = createPublicUpdateReviewCandidateService({
@@ -752,7 +755,6 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
   await app.register(vocRoutes, {
-    db: dbHandle.db,
     sessionService,
     vocService,
     vocReadService,
@@ -760,7 +762,6 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     taskRequestsService,
     conversationService,
     publicUpdateReviewCandidateService,
-    idempotencyService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
@@ -775,13 +776,12 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     storage: attachmentsStorage,
     auditService,
     db: dbHandle.db,
+    idempotencyService,
     vocReadService,
   });
   await app.register(attachmentsRoutes, {
-    db: dbHandle.db,
     sessionService,
     attachmentsService,
-    idempotencyService,
     workspaceId,
     rateLimitConfig: {
       attachmentMutation: app.rateLimitConfig.attachmentMutation,

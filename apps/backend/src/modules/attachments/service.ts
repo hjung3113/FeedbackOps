@@ -16,9 +16,11 @@
 //   6. Return the response envelope: `{ id, name, size_bytes, mime_type,
 //      uploaded_by_actor_id, created_at }`.
 //
-// Layer rule: the route's idempotency frame opens the transaction and calls
-// this service inside it. The storage put runs BEFORE the DB INSERT so we
-// never persist a row that points at missing bytes.
+// Layer rule: `uploadAttachmentCommand` owns the transaction + ADR-0015
+// idempotency frame the POST /attachments route used to own (#393, same
+// shape as the VOC application commands); `uploadAttachment` stays the
+// Tx-aware internal invoked inside the frame. The storage put runs BEFORE
+// the DB INSERT so we never persist a row that points at missing bytes.
 
 import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
@@ -31,6 +33,8 @@ import { StorageUnavailableError } from '../../lib/storage/index.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
+import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
+import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { VocReadService } from '../voc/read-service.js';
 import { insertAttachment } from './repo.js';
 
@@ -60,6 +64,7 @@ export interface AttachmentsServiceDeps {
   storage: StorageBackend;
   auditService: AuditService;
   db: Db;
+  idempotencyService: IdempotencyService;
   vocReadService: VocReadService;
 }
 
@@ -145,6 +150,33 @@ export function createAttachmentsService(deps: AttachmentsServiceDeps) {
       uploaded_by_actor_id: row.uploaded_by_actor_id,
       created_at: row.created_at.toISOString(),
     };
+  }
+
+  // ── uploadAttachmentCommand (#393) ──────────────────────────────────────
+  //
+  // Application command owning the full atomic frame for POST /attachments
+  // (and non-HTTP callers): transaction, advisory lock, idempotency
+  // lookup/replay/record — statement order identical to the route frame it
+  // replaces. Returns exactly what the route used to assemble
+  // (`{ status, body }`); replay replays the stored status + envelope.
+  async function uploadAttachmentCommand(args: {
+    actor: UploadAttachmentActor;
+    bytes: Buffer;
+    mimeType: string;
+    filename: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: AttachmentEnvelope }> {
+    const { actor, bytes, mimeType, filename, idempotencyKey, requestHash } = args;
+    return runIdempotentCommand({
+      db: deps.db,
+      idempotencyService: deps.idempotencyService,
+      actorId: actor.actor_id,
+      idempotencyKey,
+      requestHash,
+      status: 201,
+      work: (tx) => uploadAttachment({ tx, actor, bytes, mimeType, filename }),
+    });
   }
 
   // ── downloadAttachment — PLAN-22 C4a ────────────────────────────────────
@@ -296,7 +328,7 @@ export function createAttachmentsService(deps: AttachmentsServiceDeps) {
     };
   }
 
-  return { uploadAttachment, downloadAttachment };
+  return { uploadAttachment, uploadAttachmentCommand, downloadAttachment };
 }
 
 export type AttachmentsService = ReturnType<typeof createAttachmentsService>;

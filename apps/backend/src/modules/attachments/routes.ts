@@ -1,10 +1,11 @@
 // POST /attachments controller — PLAN-22 C3a (validation) + C3b (happy path).
 //
 // Layer rule (apps/backend/AGENTS.md): controller parses HTTP, validates,
-// then opens a single transaction that runs the ADR-0015 idempotency frame
-// + the upload-then-INSERT application service inside it. The route layer
-// also maps `StorageUnavailableError` from the storage lib (already mapped
-// to HttpError inside the service) onto the ADR-0012 envelope.
+// hashes the request, then hands off to `attachmentsService.
+// uploadAttachmentCommand`, which owns the single transaction running the
+// ADR-0015 idempotency frame + the upload-then-INSERT service (#393).
+// `StorageUnavailableError` from the storage lib is already mapped to
+// HttpError('storage.unavailable', 502) inside the service.
 //
 // Validation order (deliberately early-rejects cheapest first):
 //   1. Idempotency-Key header present + UUIDv4 shape.
@@ -17,13 +18,10 @@
 // Rate-limit: 20/min per actor (admin bypass follow-up — server.ts already
 // carries a TODO for the admin-role helper).
 
-import { sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 
-import type { Db } from '../../db/client.js';
 import { HttpError, sendError } from '../../lib/errors.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
-import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -38,10 +36,8 @@ const IDEMPOTENCY_KEY_REGEX =
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 export interface AttachmentsRoutesOptions {
-  db: Db;
   sessionService: SessionService;
   attachmentsService: AttachmentsService;
-  idempotencyService: IdempotencyService;
   workspaceId: string;
   rateLimitConfig?: {
     attachmentMutation: Record<string, unknown>;
@@ -52,7 +48,7 @@ export const attachmentsRoutes: FastifyPluginAsync<AttachmentsRoutesOptions> = a
   app,
   opts,
 ) => {
-  const { db, sessionService, attachmentsService, idempotencyService, workspaceId, rateLimitConfig } = opts;
+  const { sessionService, attachmentsService, workspaceId, rateLimitConfig } = opts;
 
   function requireIdempotencyKey(headers: Record<string, unknown>): string {
     const raw = headers['idempotency-key'];
@@ -171,11 +167,12 @@ export const attachmentsRoutes: FastifyPluginAsync<AttachmentsRoutesOptions> = a
         });
       }
 
-      // 6. Idempotency frame + service in one transaction (ADR-0015).
-      //    Hash binds idempotency to (route, filename, mime, size). The raw
+      // 6. Hash binds idempotency to (route, filename, mime, size). The raw
       //    bytes are NOT hashed — a 25MB SHA over the body on every request
       //    would dominate p99. Same-key + different size/mime/name returns
-      //    409 conflict.idempotency_key_reuse.
+      //    409 conflict.idempotency_key_reuse. The frame itself (transaction
+      //    + advisory lock + lookup/record) lives in uploadAttachmentCommand
+      //    (#393), mirroring the VOC application commands.
       const hash = hashRequestBody({
         route: 'attachment.create',
         filename: sanitized,
@@ -183,46 +180,15 @@ export const attachmentsRoutes: FastifyPluginAsync<AttachmentsRoutesOptions> = a
         size_bytes: bytes.byteLength,
       });
 
-      try {
-        const result = await db.transaction(async (tx) => {
-          // Serialise concurrent first-time retries with the same
-          // (actor_id, key) so the loser blocks until the winner commits.
-          // Mirrors voc/routes.ts:137-139.
-          await tx.execute(
-            sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
-          );
-          const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
-          if (hit.kind === 'match') {
-            return { status: hit.status, body: hit.body };
-          }
-          if (hit.kind === 'mismatch') {
-            throw new HttpError(
-              'conflict.idempotency_key_reuse',
-              'Idempotency-Key reused with different request body',
-            );
-          }
-          const envelope = await attachmentsService.uploadAttachment({
-            tx,
-            actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id },
-            bytes,
-            mimeType,
-            filename: sanitized,
-          });
-          await idempotencyService.record(
-            tx,
-            sess.actor_id,
-            idempotencyKey,
-            hash,
-            201,
-            envelope,
-          );
-          return { status: 201, body: envelope };
-        });
-        return reply.code(result.status).send(result.body);
-      } catch (err) {
-        if (err instanceof HttpError) throw err;
-        throw err;
-      }
+      const result = await attachmentsService.uploadAttachmentCommand({
+        actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id },
+        bytes,
+        mimeType,
+        filename: sanitized,
+        idempotencyKey,
+        requestHash: hash,
+      });
+      return reply.code(result.status).send(result.body);
     },
   });
 
