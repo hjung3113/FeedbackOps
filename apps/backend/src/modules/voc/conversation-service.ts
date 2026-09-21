@@ -6,8 +6,9 @@
 //   - postReporterReply  (VOC reporter only)
 //   - postInternalComment (admin / voc.triage actors; reporter identity NOT a deny)
 //
-// Per AGENTS.md layer rules, the public API accepts a `Tx` so the route
-// handler's idempotency frame owns the transaction boundary.
+// Per AGENTS.md layer rules (#392): the `*Command` entry points own the
+// transaction + idempotency frame; the Tx-aware functions are internals
+// shared with cluster candidate-apply and review-candidate resolution.
 //
 // Spec: .review/SLICE-3-16-PLAN.md §C3
 
@@ -16,6 +17,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { actors } from '../../db/schema/core.js';
 import { HttpError } from '../../lib/errors.js';
 import { sanitizeTipTap, type RichContentError } from '../../lib/rich-content/sanitize.js';
+import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import type {
   InternalCommentRequest,
@@ -25,8 +27,10 @@ import type {
 } from '@fops/shared';
 
 import type { AuditService } from '../core/audit/audit-service.js';
+import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { RoleLevel } from '../auth/session-service.js';
+import { runIdempotentCommand } from './idempotent-command.js';
 import {
   insertInternalComment,
   insertPublicUpdate,
@@ -198,8 +202,12 @@ function sanitizeOrThrow(
 // ── Service factory ───────────────────────────────────────────────────────────
 
 export function createConversationService(deps: {
+  /** #392 — required by the `*Command` entry points, which own the transaction. */
+  db: Db;
   auditService: AuditService;
   checkService: CheckService;
+  /** #392 — required: commands own the idempotency frame per Layer Rules. */
+  idempotencyService: IdempotencyService;
   vocReadService: VocReadService;
 }) {
   // ── postPublicUpdate ──────────────────────────────────────────────────────
@@ -685,10 +693,78 @@ export function createConversationService(deps: {
     return null;
   }
 
+  // ── Application commands (#392) ───────────────────────────────────────────
+  // Caller contract for HTTP and non-HTTP entry: each command owns the
+  // complete atomic frame (transaction + advisory lock + idempotency
+  // lookup/replay/record) and returns exactly what the routes used to
+  // assemble. The Tx-aware functions above are internals — cluster
+  // candidate-apply and public-update-review-candidates delegate to them
+  // with the CALLER's tx.
+
+  async function postPublicUpdateCommand(args: {
+    actor: ConversationActor;
+    vocId: string;
+    input: PublicUpdateRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: PublicUpdateEnvelope }> {
+    const { actor, vocId, input, idempotencyKey, requestHash } = args;
+    return runIdempotentCommand({
+      db: deps.db,
+      idempotencyService: deps.idempotencyService,
+      actorId: actor.actor_id,
+      idempotencyKey,
+      requestHash,
+      status: 201,
+      work: (tx) => postPublicUpdate({ tx, actor, vocId, input }),
+    });
+  }
+
+  async function postReporterReplyCommand(args: {
+    actor: ConversationActor;
+    vocId: string;
+    input: ReporterReplyRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: ReporterReplyEnvelope }> {
+    const { actor, vocId, input, idempotencyKey, requestHash } = args;
+    return runIdempotentCommand({
+      db: deps.db,
+      idempotencyService: deps.idempotencyService,
+      actorId: actor.actor_id,
+      idempotencyKey,
+      requestHash,
+      status: 201,
+      work: (tx) => postReporterReply({ tx, actor, vocId, input }),
+    });
+  }
+
+  async function postInternalCommentCommand(args: {
+    actor: ConversationActor;
+    vocId: string;
+    input: InternalCommentRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: InternalCommentEnvelope }> {
+    const { actor, vocId, input, idempotencyKey, requestHash } = args;
+    return runIdempotentCommand({
+      db: deps.db,
+      idempotencyService: deps.idempotencyService,
+      actorId: actor.actor_id,
+      idempotencyKey,
+      requestHash,
+      status: 201,
+      work: (tx) => postInternalComment({ tx, actor, vocId, input }),
+    });
+  }
+
   return {
     postPublicUpdate,
     postReporterReply,
     postInternalComment,
+    postPublicUpdateCommand,
+    postReporterReplyCommand,
+    postInternalCommentCommand,
     evaluateReporterStatusGate,
   };
 }

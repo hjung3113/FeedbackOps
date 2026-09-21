@@ -1,9 +1,9 @@
 // apps/backend/src/modules/voc/service.ts
 // VOC application service. Owns transactions, sanitization,
 // FOR-UPDATE-guarded parent checks, INSERT, and audit emission per
-// ADR-0008 + ADR-0019. Per apps/backend/AGENTS.md Layer Rules, the public
-// API accepts a `Tx` so the controller's idempotency frame can own the
-// transaction.
+// ADR-0008 + ADR-0019. Per apps/backend/AGENTS.md Layer Rules (#392), the
+// `*Command` entry points own the transaction + idempotency frame; the
+// Tx-aware functions are internals shared with cluster candidate-apply.
 
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -25,9 +25,11 @@ import {
   toAttachmentRefForAudit,
 } from '../attachments/repo.js';
 import type { AuditService } from '../core/audit/audit-service.js';
+import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { RoleLevel } from '../auth/session-service.js';
 import type { CreateVocRequest, EditDescriptionRequest, PatchVocRequest } from '@fops/shared';
+import { runIdempotentCommand } from './idempotent-command.js';
 
 export interface CreateVocActor {
   actor_id: string;
@@ -70,6 +72,12 @@ export interface VocServiceDeps {
   db: Db;
   auditService: AuditService;
   checkService: CheckService;
+  /**
+   * #392 — required: the `*Command` entry points own the transaction +
+   * idempotency frame (apps/backend AGENTS.md Layer Rules), so every
+   * constructor must wire the core idempotency service.
+   */
+  idempotencyService: IdempotencyService;
   /**
    * #168 (ADR-0034 D6) — enqueue-on-write for VOC embeddings. Optional so
    * callers booted without pg-boss stay wired; absent means no enqueue, and
@@ -902,7 +910,82 @@ export function createVocService(deps: VocServiceDeps) {
     return composeEnvelope(updatedRow, nextStates);
   }
 
-  return { createVoc, updateVoc, editVocDescription };
+  // ── Application commands (#392) ───────────────────────────────────────────
+  // Caller contract for HTTP and non-HTTP entry: each command owns the
+  // complete atomic frame — transaction, advisory lock, idempotency
+  // lookup/replay/record — and returns exactly what the routes used to
+  // assemble (`{ status, body }`). The Tx-aware functions above are
+  // internals shared with cluster candidate-apply and existing tests.
+
+  async function createVocCommand(args: {
+    actor: CreateVocActor;
+    input: CreateVocRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: VocEnvelope }> {
+    const { actor, input, idempotencyKey, requestHash } = args;
+    return deps.db.transaction(async (tx) =>
+      deps.idempotencyService.runIdempotent(
+        tx,
+        actor.actor_id,
+        idempotencyKey,
+        requestHash,
+        async () => {
+          const envelope = await createVoc({ tx, actor, input });
+          return { status: 201, body: envelope };
+        },
+      ),
+    );
+  }
+
+  async function updateVocCommand(args: {
+    actor: { actor_id: string; workspace_id: string; role_level: RoleLevel };
+    vocId: string;
+    ifMatch: string;
+    input: PatchVocRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: VocEnvelope }> {
+    const { actor, vocId, ifMatch, input, idempotencyKey, requestHash } = args;
+    return runIdempotentCommand({
+      db: deps.db,
+      idempotencyService: deps.idempotencyService,
+      actorId: actor.actor_id,
+      idempotencyKey,
+      requestHash,
+      status: 200,
+      work: (tx) => updateVoc({ tx, actor, vocId, ifMatch, input }),
+    });
+  }
+
+  async function editVocDescriptionCommand(args: {
+    actor: { actor_id: string; workspace_id: string };
+    vocId: string;
+    ifMatch: string;
+    input: EditDescriptionRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: VocEnvelope }> {
+    const { actor, vocId, ifMatch, input, idempotencyKey, requestHash } = args;
+    return runIdempotentCommand({
+      db: deps.db,
+      idempotencyService: deps.idempotencyService,
+      actorId: actor.actor_id,
+      idempotencyKey,
+      requestHash,
+      status: 200,
+      work: (tx) => editVocDescription({ tx, actor, vocId, ifMatch, input }),
+    });
+  }
+
+  return {
+    createVoc,
+    updateVoc,
+    editVocDescription,
+    createVocCommand,
+    updateVocCommand,
+    editVocDescriptionCommand,
+  };
 }
 
 export type VocService = ReturnType<typeof createVocService>;

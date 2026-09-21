@@ -1,8 +1,8 @@
-// POST /vocs controller. Thin per apps/backend/AGENTS.md Layer Rules:
-// HTTP parsing + forbidden-field stripping + idempotency frame; the
-// service owns business rules + audit + transactions.
+// VOC module controller. Thin per apps/backend/AGENTS.md Layer Rules (#392):
+// HTTP parsing + forbidden-field stripping + request-hash computation; the
+// application commands own the transaction, the idempotency frame, business
+// rules + audit.
 
-import { sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 
 import {
@@ -31,7 +31,6 @@ import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
-import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { FindingsService } from '../findings/index.js';
 import type { TaskRequestsService } from '../task-requests/index.js';
 import type { ConversationService } from './conversation-service.js';
@@ -51,7 +50,6 @@ export interface VocRoutesOptions {
   vocReadService: VocReadService;
   findingsService: FindingsService;
   taskRequestsService: TaskRequestsService;
-  idempotencyService: IdempotencyService;
   conversationService: ConversationService;
   publicUpdateReviewCandidateService: PublicUpdateReviewCandidateService;
   workspaceId: string;
@@ -70,7 +68,6 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
     vocReadService,
     findingsService,
     taskRequestsService,
-    idempotencyService,
     conversationService,
     publicUpdateReviewCandidateService,
     workspaceId,
@@ -218,23 +215,14 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       }
       const input: CreateVocRequest = parsed.data;
 
-      // 4. Idempotency + service in one transaction (ADR-0015 protocol).
+      // 4. Idempotent command (ADR-0015 protocol) — the transaction +
+      // idempotency frame are owned by the application command.
       const hash = hashRequestBody(rawBody);
-      const result = await db.transaction(async (tx) => {
-        return idempotencyService.runIdempotent(
-          tx,
-          sess.actor_id,
-          idempotencyKey,
-          hash,
-          async () => {
-            const envelope = await vocService.createVoc({
-              tx,
-              actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id },
-              input,
-            });
-            return { status: 201, body: envelope };
-          },
-        );
+      const result = await vocService.createVocCommand({
+        actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id },
+        input,
+        idempotencyKey,
+        requestHash: hash,
       });
       return reply.code(result.status).send(result.body);
     },
@@ -370,7 +358,9 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
 
-      // 5. Idempotency frame (same pattern as POST /vocs).
+      // 5. Idempotent command — the frame (advisory lock → lookup →
+      // replay/mismatch → work → record, recorded status 200) is owned by
+      // the application command.
       // F6: include ifMatch in the hash so that a retry after a client-side
       // refetch (new If-Match value) is NOT deduplicated against the original
       // request — different If-Match semantically represents a different intent.
@@ -388,37 +378,17 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       // "reused key for different intent" from "same intent, new concurrency
       // token". Filed as a follow-up concern; no action needed until then.
       const hash = hashRequestBody({ vocId, ifMatch, ...rawBody });
-      const result = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
-        );
-        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
-        if (hit.kind === 'match') {
-          return { status: hit.status, body: hit.body };
-        }
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with different request body',
-          );
-        }
-
-        // 6. Delegate to service.
-        const envelope = await vocService.updateVoc({
-          tx,
-          actor: {
-            actor_id: sess.actor_id,
-            workspace_id: sess.workspace_id,
-            role_level: sess.role_level,
-          },
-          vocId,
-          ifMatch,
-          input: parsed.data,
-        });
-
-        // 7. Record idempotency result and return 200.
-        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 200, envelope);
-        return { status: 200, body: envelope };
+      const result = await vocService.updateVocCommand({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        vocId,
+        ifMatch,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
       });
       return reply.code(result.status).send(result.body);
     },
@@ -482,39 +452,21 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
         });
       }
 
-      // 5. Idempotency frame (same pattern as PATCH /vocs/:id).
+      // 5. Idempotent command — the frame (advisory lock → lookup →
+      // replay/mismatch → work → record, recorded status 200) is owned by
+      // the application command.
       // ifMatch included in hash — different If-Match = different intent.
       const hash = hashRequestBody({ vocId, ifMatch, route: 'voc.description_edit', ...rawBody });
-      const result = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
-        );
-        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
-        if (hit.kind === 'match') {
-          return { status: hit.status, body: hit.body };
-        }
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with different request body',
-          );
-        }
-
-        // 6. Delegate to service.
-        const envelope = await vocService.editVocDescription({
-          tx,
-          actor: {
-            actor_id: sess.actor_id,
-            workspace_id: sess.workspace_id,
-          },
-          vocId,
-          ifMatch,
-          input: parsed.data,
-        });
-
-        // 7. Record idempotency result and return 200.
-        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 200, envelope);
-        return { status: 200, body: envelope };
+      const result = await vocService.editVocDescriptionCommand({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+        },
+        vocId,
+        ifMatch,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
       });
       return reply.code(result.status).send(result.body);
     },
@@ -666,30 +618,16 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       // different conversation endpoints produces distinct hashes (no spurious
       // idempotency replay across routes).
       const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.public_update' });
-      const result = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
-        );
-        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
-        if (hit.kind === 'match') return { status: hit.status, body: hit.body };
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with different request body',
-          );
-        }
-        const envelope = await conversationService.postPublicUpdate({
-          tx,
-          actor: {
-            actor_id: sess.actor_id,
-            workspace_id: sess.workspace_id,
-            role_level: sess.role_level,
-          },
-          vocId,
-          input: parsed.data,
-        });
-        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
-        return { status: 201, body: envelope };
+      const result = await conversationService.postPublicUpdateCommand({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        vocId,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
       });
       return reply.code(result.status).send(result.body);
     },
@@ -725,30 +663,16 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       }
 
       const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.reporter_reply' });
-      const result = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
-        );
-        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
-        if (hit.kind === 'match') return { status: hit.status, body: hit.body };
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with different request body',
-          );
-        }
-        const envelope = await conversationService.postReporterReply({
-          tx,
-          actor: {
-            actor_id: sess.actor_id,
-            workspace_id: sess.workspace_id,
-            role_level: sess.role_level,
-          },
-          vocId,
-          input: parsed.data,
-        });
-        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
-        return { status: 201, body: envelope };
+      const result = await conversationService.postReporterReplyCommand({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        vocId,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
       });
       return reply.code(result.status).send(result.body);
     },
@@ -784,30 +708,16 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       }
 
       const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.internal_comment' });
-      const result = await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${sess.actor_id}), hashtext(${idempotencyKey}))`,
-        );
-        const hit = await idempotencyService.lookup(tx, sess.actor_id, idempotencyKey, hash);
-        if (hit.kind === 'match') return { status: hit.status, body: hit.body };
-        if (hit.kind === 'mismatch') {
-          throw new HttpError(
-            'conflict.idempotency_key_reuse',
-            'Idempotency-Key reused with different request body',
-          );
-        }
-        const envelope = await conversationService.postInternalComment({
-          tx,
-          actor: {
-            actor_id: sess.actor_id,
-            workspace_id: sess.workspace_id,
-            role_level: sess.role_level,
-          },
-          vocId,
-          input: parsed.data,
-        });
-        await idempotencyService.record(tx, sess.actor_id, idempotencyKey, hash, 201, envelope);
-        return { status: 201, body: envelope };
+      const result = await conversationService.postInternalCommentCommand({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        vocId,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hash,
       });
       return reply.code(result.status).send(result.body);
     },
