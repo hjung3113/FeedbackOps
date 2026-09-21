@@ -77,7 +77,7 @@ function validateRedirectUri(value: string, nodeEnv: string): string | null {
   }
   // The token request's redirect_uri is sent without the callback's query, so
   // a configured query string can never match what the IdP registered.
-  if (url.search.length > 0) {
+  if (url.search.length > 0 || value.includes('?')) {
     return 'OIDC_REDIRECT_URI must not contain a query string';
   }
   if (url.pathname !== '/auth/callback') {
@@ -120,7 +120,9 @@ export function validateOidcConfig(input: OidcEnvInput): OidcConfigIssue[] | nul
   const redirectIssue = validateRedirectUri(input.redirectUri as string, input.nodeEnv);
   if (redirectIssue) issues.push({ path: 'OIDC_REDIRECT_URI', message: redirectIssue });
 
-  const scopes = (input.scopes ?? '').trim();
+  // Validate the EXACT value that is sent to the IdP (no trimming): a trailing
+  // newline or space would otherwise pass here and break every login.
+  const scopes = input.scopes ?? '';
   // RFC 6749 §3.3: single-space-separated scope-tokens of printable ASCII
   // without '"' or '\\'. Anything else (newline, tab, double spaces) would be
   // sent verbatim to the IdP and break every login.

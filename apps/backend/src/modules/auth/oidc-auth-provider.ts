@@ -62,7 +62,7 @@ import {
  * `/<TAB>/evil.example` or `/\\evil.example` would become `//evil.example`
  * (protocol-relative, off-site) after redirect. The resolved URL must also
  * stay on the same origin, which catches encoded and exotic forms. */
-const RETURN_TO_SAFE = /^\/[^\s\\\u0000-\u001f\u007f]*$/;
+const RETURN_TO_SAFE = /^\/[^\s\\\u0000-\u001f\u007f-\u009f]*$/;
 function sanitizeReturnTo(raw: string | undefined): string {
   if (raw === undefined) return '/';
   if (raw.length > 2048 || !RETURN_TO_SAFE.test(raw) || raw.startsWith('//')) return '/';

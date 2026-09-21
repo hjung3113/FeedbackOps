@@ -475,6 +475,7 @@ describe.skipIf(!runIntegration)('OIDC provider flow (#390)', () => {
     ['/\t/evil.example', '/'],
     ['/ /evil.example', '/'],
     ['/\u0000evil', '/'],
+    ['/\u0085evil', '/'],
     ['/vocs', '/vocs'],
     ['/vocs?tab=high', '/vocs?tab=high'],
   ])('return_to %s redirects to %s', async (returnTo, expectedLocation) => {

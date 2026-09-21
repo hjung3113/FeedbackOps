@@ -139,6 +139,7 @@ describe('validateOidcConfig via loadConfig', () => {
     ['https://feedbackops.example.com/auth/callback#f', 'fragment'],
     ['https://feedbackops.example.com/auth/callback/extra', 'extra path segment'],
     ['https://feedbackops.example.com/auth/callback?tenant=x', 'query string'],
+    ['https://feedbackops.example.com/auth/callback?', 'empty query delimiter'],
   ])('rejects redirect_uri with %s', (redirectUri) => {
     const issues = oidcIssues(oidcEnv({ OIDC_REDIRECT_URI: redirectUri }));
     expect(issues?.[0]?.path).toBe('OIDC_REDIRECT_URI');
@@ -181,6 +182,8 @@ describe('validateOidcConfig via loadConfig', () => {
     ['openid  email', 'double space'],
     ['openid "email"', 'double quote'],
     ['openid email\\profile', 'backslash'],
+    ['openid email\n', 'trailing newline'],
+    [' openid email', 'leading space'],
   ])('rejects scope list with %j (%s): it would be sent verbatim to the IdP', (scopes) => {
     // Positive twin: the default scope list is accepted by the same helper.
     expect(oidcIssues(oidcEnv({ OIDC_SCOPES: 'openid email profile' }))).toEqual([]);
