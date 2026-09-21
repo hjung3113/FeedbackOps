@@ -12,6 +12,7 @@ import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 
 import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
@@ -25,6 +26,7 @@ import { checkFindingManage, hasElevatedFindingRole } from '../findings/authoriz
 import { lockFindingById, updateFindingLinkedTask } from '../findings/repo.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
+import { lockAnalyticsArea } from '../voc/repo.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,
@@ -78,6 +80,31 @@ function assertApproved(taskRequest: TaskRequestRow): void {
   if (taskRequest.status !== 'approved') {
     throw new HttpError('validation.failed', 'task request must be approved before conversion', {
       fields: [{ path: ['status'], code: 'not_approved' }],
+    });
+  }
+}
+
+// Validates the analytics_area_id passed to task conversion (issue #389). The
+// DB FK alone cannot scope the area, so mirror assertTargetAnalyticsArea from
+// voc-clusters: the area must exist in this workspace, belong to the task
+// request's managed system, and not be archived.
+async function assertConversionAnalyticsArea(args: {
+  tx: Tx;
+  workspaceId: string;
+  analyticsAreaId: string | null | undefined;
+  managedSystemId: string;
+}): Promise<void> {
+  if (!args.analyticsAreaId) return;
+  const aa = await lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
+  if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
+  if (aa.managed_system_id !== args.managedSystemId) {
+    throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
+      fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
+    });
+  }
+  if (aa.archived_at !== null) {
+    throw new HttpError('conflict.parent_archived', 'analytics area archived', {
+      fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
     });
   }
 }
@@ -258,6 +285,13 @@ export function createTasksService(deps: TasksServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
           assertApproved(taskRequest);
+
+          await assertConversionAnalyticsArea({
+            tx,
+            workspaceId: args.actor.workspace_id,
+            analyticsAreaId: args.input.analytics_area_id,
+            managedSystemId: taskRequest.primary_managed_system_id,
+          });
 
           const task = await insertTask(tx, {
             workspaceId: args.actor.workspace_id,

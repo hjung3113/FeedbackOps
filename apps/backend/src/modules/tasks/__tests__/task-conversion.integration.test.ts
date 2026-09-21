@@ -223,6 +223,63 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     return row.id;
   }
 
+  async function seedAnalyticsArea(input: {
+    msId: string;
+    workspaceId?: string;
+    archived?: boolean;
+  }): Promise<string> {
+    const workspaceId = input.workspaceId ?? WORKSPACE_ID;
+    const row = await dbHandle.pool.query<{ id: string }>(
+      `insert into core.analytics_areas (workspace_id, managed_system_id, slug, name)
+        values ($1, $2, $3, $4)
+        returning id`,
+      [workspaceId, input.msId, uid(`${SLUG_PREFIX}-aa`), 'Task Convert analytics area'],
+    );
+    const id = row.rows[0]?.id;
+    if (!id) throw new Error('analytics area seed failed');
+    if (input.archived) {
+      await dbHandle.pool.query(
+        'update core.analytics_areas set archived_at = now(), archived_by_actor_id = $2 where id = $1',
+        [id, adminActorId],
+      );
+    }
+    return id;
+  }
+
+  // Asserts a rejected conversion left nothing behind (#389): no task row, no
+  // entity link pointing at such a task (or converted_to from the request),
+  // no audit row, and the task request still approved.
+  async function expectNoConversionSideEffects(taskRequestId: string): Promise<void> {
+    const counts = await dbHandle.pool.query<{ tasks: number; links: number; audits: number }>(
+      `select
+          (select count(*)::int from task.tasks
+            where workspace_id = $1 and source_task_request_id = $2) as tasks,
+          (select count(*)::int from core.entity_links
+            where workspace_id = $1
+              and (
+                (target_type = 'task' and target_id in (
+                  select id from task.tasks
+                   where workspace_id = $1 and source_task_request_id = $2))
+                or (source_type = 'task_request' and source_id = $2
+                    and relation_type = 'converted_to')
+              )) as links,
+          (select count(*)::int from core.audit_log
+            where workspace_id = $1
+              and event_type in ('task_created_from_request', 'task_linked_to_request')
+              and (subject_id = $2 or subject_id in (
+                select id from task.tasks
+                 where workspace_id = $1 and source_task_request_id = $2))) as audits`,
+      [WORKSPACE_ID, taskRequestId],
+    );
+    expect(counts.rows[0]).toMatchObject({ tasks: 0, links: 0, audits: 0 });
+
+    const request = await dbHandle.pool.query<{ status: string }>(
+      'select status from task_request.task_requests where id = $1',
+      [taskRequestId],
+    );
+    expect(request.rows[0]?.status).toBe('approved');
+  }
+
   function convert(
     cookie: string,
     taskRequestId: string,
@@ -1062,5 +1119,158 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
 
     const denied = await listTasks(userCookie);
     expect(denied.statusCode).toBe(403);
+  });
+
+  it('convert rejects an analytics area from another managed system with out_of_scope and persists nothing (#389)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const otherMsId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Other MS analytics area',
+    );
+    const areaId = await seedAnalyticsArea({ msId: otherMsId });
+    const actor = await seedConversionActor('aa-xms');
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.manage',
+      request.msId,
+      adminActorId,
+    );
+
+    try {
+      const res = await convert(actor.cookie, request.id, {
+        title: 'Cross-MS analytics area conversion',
+        priority: 'medium',
+        analytics_area_id: areaId,
+      });
+
+      expect(res.statusCode).toBe(422);
+      expect(res.json()).toMatchObject({
+        code: 'validation.failed',
+        detail: { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
+      });
+      await expectNoConversionSideEffects(request.id);
+    } finally {
+      await dbHandle.pool.query('delete from core.analytics_areas where id = $1', [areaId]);
+      await dbHandle.pool.query('delete from core.managed_systems where id = $1', [otherMsId]);
+    }
+  });
+
+  it('convert rejects an analytics area from another workspace with not_found and persists nothing (#389)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const otherWs = await dbHandle.pool.query<{ id: string }>(
+      'insert into core.workspaces (name) values ($1) returning id',
+      ['Task convert other workspace'],
+    );
+    const otherWsId = otherWs.rows[0]?.id;
+    if (!otherWsId) throw new Error('workspace seed failed');
+    const otherWsMsId = await insertMsDirectly(
+      dbHandle,
+      otherWsId,
+      uid(SLUG_PREFIX),
+      'Cross-workspace MS',
+    );
+    const areaId = await seedAnalyticsArea({ msId: otherWsMsId, workspaceId: otherWsId });
+    const actor = await seedConversionActor('aa-xws');
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.manage',
+      request.msId,
+      adminActorId,
+    );
+
+    try {
+      const res = await convert(actor.cookie, request.id, {
+        title: 'Cross-workspace analytics area conversion',
+        priority: 'medium',
+        analytics_area_id: areaId,
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json<{ code: string }>().code).toBe('not_found.record');
+      await expectNoConversionSideEffects(request.id);
+    } finally {
+      await dbHandle.pool.query('delete from core.analytics_areas where id = $1', [areaId]);
+      await dbHandle.pool.query('delete from core.managed_systems where id = $1', [otherWsMsId]);
+      await dbHandle.pool.query('delete from core.workspaces where id = $1', [otherWsId]);
+    }
+  });
+
+  it('convert rejects an archived analytics area of the same managed system with parent_archived and persists nothing (#389)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const areaId = await seedAnalyticsArea({ msId: request.msId, archived: true });
+    const actor = await seedConversionActor('aa-arch');
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.manage',
+      request.msId,
+      adminActorId,
+    );
+
+    try {
+      const res = await convert(actor.cookie, request.id, {
+        title: 'Archived analytics area conversion',
+        priority: 'medium',
+        analytics_area_id: areaId,
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({
+        code: 'conflict.parent_archived',
+        detail: { fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }] },
+      });
+      await expectNoConversionSideEffects(request.id);
+    } finally {
+      await dbHandle.pool.query('delete from core.analytics_areas where id = $1', [areaId]);
+    }
+  });
+
+  it('convert accepts an active same-managed-system analytics area and replays idempotently (#389)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const areaId = await seedAnalyticsArea({ msId: request.msId });
+    const actor = await seedConversionActor('aa-valid');
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      actor.id,
+      'finding.manage',
+      request.msId,
+      adminActorId,
+    );
+
+    // No finally delete here: the converted task references the area, so the
+    // shared FK-safe cleanup (tasks before analytics_areas) removes it.
+    const key = randomUUID();
+    const payload = {
+      title: 'Same-MS analytics area conversion',
+      priority: 'medium',
+      analytics_area_id: areaId,
+    };
+
+    const first = await convert(actor.cookie, request.id, payload, key);
+    expect(first.statusCode).toBe(201);
+    expect(first.json()).toMatchObject({
+      analytics_area_id: areaId,
+      primary_managed_system_id: request.msId,
+      source_task_request_id: request.id,
+    });
+
+    const second = await convert(actor.cookie, request.id, payload, key);
+    expect(second.statusCode).toBe(201);
+    expect(second.json()).toEqual(first.json());
+
+    const count = await dbHandle.pool.query<{ n: number }>(
+      `select count(*)::int as n from task.tasks
+        where workspace_id = $1 and source_task_request_id = $2`,
+      [WORKSPACE_ID, request.id],
+    );
+    expect(count.rows[0]?.n).toBe(1);
   });
 });
