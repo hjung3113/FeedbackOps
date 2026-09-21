@@ -821,18 +821,17 @@ export function createVocReadService(deps: VocReadServiceDeps) {
         readScope,
       }),
     ]);
-    // ADR-0047: listLinks throws 404 not_found.record unless the actor can
-    // fully read the focus VOC (voc.read or reporter). This post-write path
-    // also serves triage-only writers (e.g. public updates), so only fetch
-    // links under the same full-read predicate the GET detail path enforces;
-    // otherwise omit them rather than 404-ing the write's response envelope.
-    const links: VocDetailEnvelope['links'] =
-      msInScope(readScope, primaryMs) || isReporter
-        ? await deps.entityLinksService.listLinks({
-            actor,
-            endpoint: { type: 'voc', id: vocId },
-          })
-        : [];
+    // ADR-0047: listLinks is the single read authority on the focus VOC
+    // (voc.read deny-first, or reporter). This post-write path also serves
+    // triage-only writers (e.g. public updates), so an unreadable focus must
+    // yield no links rather than 404-ing the write's response envelope —
+    // duplicating the read check here would fork the authority (repo-read's
+    // admin 'all' scope ignores explicit voc.read denies; listLinks does not).
+    const links = await deps.entityLinksService.listLinks({
+      actor,
+      endpoint: { type: 'voc', id: vocId },
+      onUnreadableFocus: 'empty',
+    });
 
     const conversationTimeline = mapConversationRowsWithAttachments(
       convResult.entries,

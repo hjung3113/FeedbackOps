@@ -57,7 +57,7 @@ Only `entity-links.integration.test.ts:845-884` ("GET by VOC source accepts
 managed-system scoped voc.triage without voc.read") asserts the opposite: a
 triage-only actor gets the **full** `visibility_state: 'allowed'` link,
 including `source_id` and `target_id` — the same result a `voc.read` holder
-gets. That test currently passes because it was written to match the
+gets. That test passed because it was written to match the
 undocumented fallback, not the contract.
 
 ## Decision
@@ -110,8 +110,8 @@ target_id, or synthesized endpoint summaries" —
 ## Follow-up implementation
 
 #423 landed: the `voc.triage` fallback was removed from `assertVocReadScope`,
-and the post-write `composeDetailEnvelope` now skips `listLinks` for actors
-without full VOC read (otherwise triage-only writes would 404).
+and the post-write `composeDetailEnvelope` now calls `listLinks` with
+`onUnreadableFocus: 'empty'` (otherwise triage-only writers would 404).
 
 ## Non-goals
 
