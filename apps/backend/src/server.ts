@@ -17,6 +17,7 @@ import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
 import { type HealthCheckName, type InFlightProbe, runReadinessChecks } from './lib/health.js';
+import { reqLogSerializer } from './lib/logger.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import { getStorage } from './lib/storage/factory.js';
@@ -30,7 +31,9 @@ import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/i
 import { createAttachmentsService } from './modules/attachments/service.js';
 import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
 import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
+import type { AuthProvider } from './modules/auth/auth-provider.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
+import { createOidcAuthProvider } from './modules/auth/oidc-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
@@ -148,6 +151,10 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
               ],
               remove: true,
             },
+            // Issue #390: req.url carries the one-time OIDC authorization
+            // code on /auth/callback — same req serializer as
+            // createRootLogger (redactSensitiveQuery on the url value only).
+            serializers: { req: reqLogSerializer },
           },
         }),
     disableRequestLogging: config.NODE_ENV === 'test',
@@ -444,18 +451,28 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   });
 
   // ADR-0006:16 — the two providers are swapped by the AUTH_PROVIDER env
-  // var. Slice 1 ships only the mock provider; `oidc` is reserved for the
-  // slice that lands real OIDC. We refuse to boot rather than silently
-  // serve mock when the operator asked for oidc.
-  let authProvider: ReturnType<typeof createMockAuthProvider>;
+  // var. createOidcAuthProvider performs IdP discovery at boot and rejects
+  // on failure, so an unreachable/misconfigured issuer fails buildServer
+  // BEFORE the HTTP listener starts (issue #390 fail-closed boot).
+  let authProvider: AuthProvider;
   switch (config.AUTH_PROVIDER) {
     case 'mock':
       authProvider = createMockAuthProvider({ db: dbHandle.db, workspaceId });
       break;
     case 'oidc':
-      throw new Error(
-        'OidcAuthProvider not yet implemented (ADR-0006). Set AUTH_PROVIDER=mock or wait for the OIDC slice.',
-      );
+      // All OIDC_* fields are present by construction — config.ts superRefine
+      // requires them when AUTH_PROVIDER=oidc.
+      authProvider = await createOidcAuthProvider({
+        oidc: {
+          issuerUrl: config.OIDC_ISSUER_URL ?? '',
+          clientId: config.OIDC_CLIENT_ID ?? '',
+          clientSecret: config.OIDC_CLIENT_SECRET ?? '',
+          redirectUri: config.OIDC_REDIRECT_URI ?? '',
+          scopes: config.OIDC_SCOPES,
+        },
+        nodeEnv: config.NODE_ENV,
+      });
+      break;
     default:
       throw new Error(`Unknown AUTH_PROVIDER value: ${String(config.AUTH_PROVIDER)}`);
   }

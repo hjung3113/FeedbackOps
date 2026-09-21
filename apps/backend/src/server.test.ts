@@ -55,12 +55,17 @@ describe.skipIf(!runIntegration)('buildServer AUTH_PROVIDER switch', () => {
     }
   });
 
-  test('AUTH_PROVIDER=oidc throws Error mentioning ADR-0006', async () => {
+  // F-006 + #390: AUTH_PROVIDER=oidc now boots a real OidcAuthProvider. With
+  // the OIDC_* env contract absent, the provider factory refuses (curated
+  // error) instead of the old "not yet implemented" rejection.
+  test('AUTH_PROVIDER=oidc without OIDC env contract refuses to boot', async () => {
     process.env.NODE_ENV = 'test';
     const dbHandle = createDb(APP_URL);
     try {
       const cfg = { ...loadConfig(), AUTH_PROVIDER: 'oidc' as const };
-      await expect(buildServer({ config: cfg, dbHandle })).rejects.toThrow(/ADR-0006/);
+      await expect(buildServer({ config: cfg, dbHandle })).rejects.toThrow(
+        /AUTH_PROVIDER=oidc requires OIDC_ISSUER_URL/,
+      );
     } finally {
       await dbHandle.close();
     }

@@ -40,6 +40,7 @@ function config(): AppConfig {
     TRUSTED_PROXY_HOPS: 0,
     EMBEDDING_PROVIDER: 'disabled',
     EMBEDDING_VERSION: 1,
+    OIDC_SCOPES: 'openid email profile',
   };
 }
 
