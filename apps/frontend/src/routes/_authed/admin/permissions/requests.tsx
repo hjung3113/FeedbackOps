@@ -98,7 +98,6 @@ function PermissionRequestsConsole() {
   // Tab + selection are URL state; `pending` is the default tab (omitted).
   const activeTab: ReviewTab = search.tab ?? "pending";
   const selectedId = search.selected ?? null;
-  const previousActiveTab = React.useRef<ReviewTab | null>(null);
   const hasAppliedInitialSelection = React.useRef(false);
   const allRequests = query.data?.requests ?? [];
   const visibleRequests =
@@ -144,51 +143,42 @@ function PermissionRequestsConsole() {
   }
 
   React.useEffect(() => {
-    // Reconcile only against loaded data; never clear the URL selection
-    // while the list is still loading.
-    if (query.isPending) return;
-    const tabChanged = previousActiveTab.current !== activeTab;
-    previousActiveTab.current = activeTab;
-
-    if (tabChanged) {
-      const selectionIsVisible =
-        selectedId !== null && visibleRequests.some((request) => request.id === selectedId);
-      if (!selectionIsVisible) {
-        const firstVisibleId = visibleRequests[0]?.id ?? null;
-        void navigate({
-          to: "/admin/permissions/requests",
-          replace: true,
-          search: (prev) => {
-            const { selected: _selected, ...rest } = prev;
-            return firstVisibleId === null ? rest : { ...rest, selected: firstVisibleId };
-          },
-        });
-      }
-      return;
-    }
+    // Reconcile only against successfully loaded data: a failed/loading list
+    // must never clear a deep-linked selection. Tab-change selection is decided
+    // in handleTabChange (atomic push); URL-driven tab changes (Back, deep
+    // links) are NOT re-selected here so history restores the exact prior UI.
+    if (!query.isSuccess) return;
 
     if (selectedId !== null && !visibleRequests.some((request) => request.id === selectedId)) {
+      // Stale/mismatched selection. On the very first reconcile (a deep link
+      // whose selection is not in the tab) fall back to the first visible
+      // request like the original UI; afterwards (e.g. a decided request left
+      // the tab) just drop it.
+      const fallbackId = hasAppliedInitialSelection.current
+        ? null
+        : (visibleRequests[0]?.id ?? null);
+      hasAppliedInitialSelection.current = true;
       void navigate({
         to: "/admin/permissions/requests",
         replace: true,
-        search: ({ selected: _selected, ...rest }) => rest,
+        search: ({ selected: _selected, ...rest }) =>
+          fallbackId === null ? rest : { ...rest, selected: fallbackId },
       });
       return;
     }
 
-    if (!hasAppliedInitialSelection.current && visibleRequests[0]) {
+    if (!hasAppliedInitialSelection.current) {
       hasAppliedInitialSelection.current = true;
-      if (selectedId === null) {
-        const firstVisibleId = visibleRequests[0].id;
+      const firstVisibleId = visibleRequests[0]?.id;
+      if (selectedId === null && firstVisibleId !== undefined) {
         void navigate({
           to: "/admin/permissions/requests",
           replace: true,
           search: (prev) => ({ ...prev, selected: firstVisibleId }),
         });
       }
-      return;
     }
-  }, [activeTab, navigate, query.isPending, selectedId, visibleRequests]);
+  }, [navigate, query.isSuccess, selectedId, visibleRequests]);
 
   return (
     <ListShell

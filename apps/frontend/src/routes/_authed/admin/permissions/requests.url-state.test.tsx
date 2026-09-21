@@ -20,7 +20,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type React from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -315,5 +315,72 @@ describe('/admin/permissions/requests URL state', () => {
     expect(
       within(screen.getByTestId('permission-requests-list')).getByText('workspace.admin'),
     ).toBeInTheDocument();
+  });
+
+  test('closing a restored selection on ?tab=all stays closed (no re-open)', async () => {
+    const router = renderUrlState(`/admin/permissions/requests?tab=all&selected=${APPROVED_ID}`);
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-request-detail-panel')).toHaveTextContent(
+        'workspace.admin',
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    await waitFor(() =>
+      expect(screen.queryByTestId('permission-request-detail-panel')).not.toBeInTheDocument(),
+    );
+    // Give any stray reconcile effect a chance to re-select before asserting.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(router.state.location.search).toEqual({ tab: 'all' });
+    expect(screen.queryByTestId('permission-request-detail-panel')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+    ).toBeInTheDocument();
+  });
+
+  test('Back to a deliberately closed pending panel keeps it closed', async () => {
+    const router = renderUrlState('/admin/permissions/requests');
+    await waitFor(() =>
+      expect(screen.getByTestId('permission-request-detail-panel')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    await waitFor(() =>
+      expect(screen.queryByTestId('permission-request-detail-panel')).not.toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /승인됨 \(1\)/ }));
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ tab: 'approved', selected: APPROVED_ID }),
+    );
+    act(() => router.history.back());
+    await waitFor(() => expect(router.state.location.search).toEqual({}));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(router.state.location.search).toEqual({});
+    expect(screen.queryByTestId('permission-request-detail-panel')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('permission-requests-list')).getByText('workspace.read'),
+    ).toBeInTheDocument();
+  });
+
+  test('a failed list fetch does not clear a deep-linked selection', async () => {
+    installFetch();
+    const base = globalThis.fetch;
+    let listCalls = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/permissions/requests?status=all') {
+        listCalls += 1;
+        return response({ code: 'internal.unexpected', message: 'boom' }, 500);
+      }
+      return base(input, init);
+    }) as typeof globalThis.fetch;
+    const { router, queryClient } = buildHarness({
+      initialPath: `/admin/permissions/requests?selected=${PENDING_ID}`,
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(listCalls).toBeGreaterThan(0));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(router.state.location.search).toEqual({ selected: PENDING_ID });
   });
 });
