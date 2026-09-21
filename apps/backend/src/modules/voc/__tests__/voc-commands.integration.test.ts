@@ -454,7 +454,21 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
           settled = true;
         });
 
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Wait until Postgres actually reports a session blocked on an advisory
+      // lock (pg_locks, not granted) — proof the command reached the lock —
+      // instead of trusting a fixed sleep. A frame without the lock never
+      // shows up here and fails this poll.
+      const deadline = Date.now() + 5000;
+      let waiting = 0;
+      while (Date.now() < deadline && waiting === 0) {
+        const res = await migrateHandle.pool.query<{ n: number }>(
+          "select count(*)::int as n from pg_locks where locktype = 'advisory' and not granted",
+        );
+        waiting = res.rows[0]?.n ?? 0;
+        if (waiting === 0) await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      }
+      expect(waiting, 'command must be blocked on the advisory lock').toBeGreaterThan(0);
+      // Still blocked after the lock wait is confirmed:
       expect(settled, 'command must wait for the advisory lock').toBe(false);
       expect(await internalCommentCount(voc.id)).toBe(0);
 
