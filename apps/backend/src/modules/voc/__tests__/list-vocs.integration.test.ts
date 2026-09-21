@@ -313,12 +313,13 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(ids).not.toContain(triVoc.id);
   });
 
-  // ── AC11: tab=high filters to severity high ───────────────────────────────
+  // ── AC11: tab=high returns severity high and critical ─────────────────────
 
-  it('AC11: tab=high filters to severity=high only (current repo behavior)', async () => {
+  it('AC11: tab=high returns severity high and critical (#411, ref #419)', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-tab-high`, 'Tab High MS');
 
     const highVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'High VOC', { severity: 'high' });
+    const criticalVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Critical VOC', { severity: 'critical' });
     const lowVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Low VOC', { severity: 'low' });
 
     const res = await app.inject({
@@ -329,10 +330,11 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ items: { id: string; severity: string }[] }>();
     for (const item of body.items) {
-      expect(item.severity).toBe('high');
+      expect(['high', 'critical']).toContain(item.severity);
     }
     const ids = body.items.map((i) => i.id);
     expect(ids).toContain(highVoc.id);
+    expect(ids).toContain(criticalVoc.id);
     expect(ids).not.toContain(lowVoc.id);
   });
 

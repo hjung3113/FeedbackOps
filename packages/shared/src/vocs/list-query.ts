@@ -45,6 +45,12 @@ export const listVocsQuerySchema = z.object({
     .union([z.string().uuid(), z.literal('all')])
     .optional(),
   tab: vocTabEnumSchema.optional(),
+  // Re-triage deep link (#383). view=triage only — the triage queue predicate
+  // excludes already-triaged VOCs, so the VOC detail panel's "트리아지에서 변경"
+  // link needs an explicit way to carry its target into the queue. Honoured
+  // only inside the caller's existing triage scope; out-of-scope or unknown
+  // ids are dropped silently (never 403/404 — that would be an existence probe).
+  pin_voc_id: z.string().uuid().optional(),
   // Dot-key filter fields — Fastify query params are flat strings.
   'filter.severity': commaListOf(severityEnumSchema).optional(),
   'filter.reporter_facing_status': commaListOf(reporterFacingStatusEnumSchema).optional(),

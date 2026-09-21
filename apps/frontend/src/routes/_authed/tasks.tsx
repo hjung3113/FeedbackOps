@@ -8,6 +8,7 @@ const tasksSearchSchema = z
   .object({
     view: z.enum(['requests', 'backlog', 'board', 'my', 'inbox']).optional(),
     param: z.string().optional(),
+    managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
   })
   .strict();
 
@@ -16,14 +17,16 @@ export const Route = createFileRoute('/_authed/tasks')({
   component: TasksRouteShell,
 });
 
-export function TasksRouteView({ search }: { search: { view?: 'requests' | 'backlog' | 'board' | 'my' | 'inbox'; param?: string } }) {
+export function TasksRouteView({ search }: { search: { view?: 'requests' | 'backlog' | 'board' | 'my' | 'inbox'; param?: string; managedSystem?: string } }) {
+  const managedSystemProps = search.managedSystem !== undefined ? { managedSystem: search.managedSystem } : {};
+  const selectedParamProps = search.param !== undefined ? { selectedParam: search.param } : {};
   if (search.view === 'requests') {
-    return <TaskRequestsRoute {...(search.param !== undefined ? { selectedParam: search.param } : {})} />;
+    return <TaskRequestsRoute {...managedSystemProps} {...selectedParamProps} />;
   }
   if (search.view === 'board') {
-    return <TaskBoardRoute {...(search.param !== undefined ? { selectedParam: search.param } : {})} />;
+    return <TaskBoardRoute {...managedSystemProps} {...selectedParamProps} />;
   }
-  return <TaskListRoute {...(search.param !== undefined ? { selectedParam: search.param } : {})} />;
+  return <TaskListRoute {...managedSystemProps} {...selectedParamProps} />;
 }
 
 function TasksRouteShell() {

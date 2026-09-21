@@ -419,6 +419,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
+      sensitive: app.rateLimitConfig.sensitive,
     },
   });
 

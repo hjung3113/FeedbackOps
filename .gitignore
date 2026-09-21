@@ -36,3 +36,7 @@ scripts/codex-safe.sh
 # install-into.sh --mode symlink output: absolute machine-local links
 .agent-workflow/
 .claude/skills/agent-workflow
+# 2026-08-29 generic toolkit install: added runtime-mirror leaves for codex/opencode
+.agents/skills/agent-workflow
+.opencode/agents/agent-workflow.md
+opencode.json

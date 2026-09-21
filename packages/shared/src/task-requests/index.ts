@@ -31,6 +31,7 @@ export type CreateTaskRequestFromVocClusterRequest = CreateTaskRequestRequest;
 export const listTaskRequestsQuerySchema = z
   .object({
     status: taskRequestStatusSchema.optional(),
+    managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
   })
   .strict();
 export type ListTaskRequestsQuery = z.infer<typeof listTaskRequestsQuerySchema>;

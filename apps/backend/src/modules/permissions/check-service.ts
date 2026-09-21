@@ -217,6 +217,9 @@ export function createCheckService(deps: CheckServiceDeps) {
     if (actor.workspace_id !== scope.workspace_id)
       return { kind: 'scoped', managed_system_ids: [] };
 
+    const bypass = actor.role_level === 'admin' ? adminModuleBypassFor(capability) : 'none';
+    if (bypass === 'always') return { kind: 'all' };
+
     const denyRows = await db
       .select({ managedSystemId: permissionDenies.managedSystemId })
       .from(permissionDenies)
@@ -258,7 +261,8 @@ export function createCheckService(deps: CheckServiceDeps) {
       (row.expiresAt === null || row.expiresAt.getTime() > rightNow.getTime());
     const broadAllow =
       grantRows.some((row) => row.managedSystemId === null && isActive(row)) ||
-      roleSatisfies(actor.role_level, capability);
+      roleSatisfies(actor.role_level, capability) ||
+      bypass === 'unless_denied';
     if (broadAllow && deniedIds.size === 0) return { kind: 'all' };
 
     const allowedIds = broadAllow

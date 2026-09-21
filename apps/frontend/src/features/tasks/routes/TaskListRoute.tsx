@@ -239,12 +239,22 @@ export function TaskDetailPanel({
   );
 }
 
-export function TaskListRoute({ selectedParam }: { selectedParam?: string | undefined }) {
+export function TaskListRoute({
+  selectedParam,
+  managedSystem,
+}: {
+  selectedParam?: string | undefined;
+  managedSystem?: string;
+}) {
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
   const tasksQuery = useQuery({
-    queryKey: ['tasks'] as const,
-    queryFn: ({ signal }) => listTasks({ signal }),
+    queryKey: ['tasks', managedSystem] as const,
+    queryFn: ({ signal }) =>
+      listTasks({
+        signal,
+        ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
+      }),
     staleTime: 30 * 1000,
   });
   const { actors } = useWorkspaceActors();

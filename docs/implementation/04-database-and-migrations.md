@@ -198,6 +198,16 @@ Examples:
 `drizzle-kit generate` assigns the 4-digit sequence. Timestamp prefixes are not
 used in the current migrations directory.
 
+`apps/backend/migrations/meta/*.json` files are Drizzle-generated metadata and
+must not be hand-edited. Commit them with their generated SQL migration. The
+root `pnpm gate:db-migration-drift` gate mechanically verifies that every
+`migrations/*.sql` file has exactly one `_journal.json` registration (and vice
+versa), then runs `drizzle-kit check` against the committed migration history.
+`check` only validates migration-history/journal consistency — it does **not**
+diff the live TS schema against committed migrations, so a schema-only change
+with no corresponding migration currently passes this gate silently (tracked
+in #422, which also covers why `drizzle-kit generate` itself is broken here).
+
 ## Issue #165: released Task review candidates
 
 `voc.public_update_review_candidates` is a VOC-owned durable queue of human

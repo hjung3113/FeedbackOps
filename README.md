@@ -65,6 +65,8 @@ Run both apps:
 pnpm dev            # frontend on :3010, backend on :3011
 ```
 
+`routeTree.gen.ts` is gitignored and generated deterministically by `pnpm gen:routes`; frontend typecheck and test scripts run it first.
+
 Sign in from `/login`. Authentication is mock in local development; pick a persona by its external id (`mock-admin-1`, `mock-developer-1`, `mock-user-1`, …).
 
 > **Serving to other machines on your network?** The dev server binds `0.0.0.0`, so a colleague can reach it by IP — but that origin is not a *secure context*, and browsers withhold `crypto.randomUUID` and `navigator.clipboard` there. Both are handled, but any new browser API you reach for should be checked against that constraint, because it will never reproduce on `localhost`.

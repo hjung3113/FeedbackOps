@@ -453,14 +453,20 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
   async function listTaskRequests(args: {
     actor: TaskRequestsActor;
     status?: TaskRequestStatus;
+    managed_system_id?: string;
   }): Promise<{ items: TaskRequestDto[] }> {
     if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
 
+    const managedSystemId =
+      args.managed_system_id && args.managed_system_id !== 'all'
+        ? args.managed_system_id
+        : undefined;
     const rows = await listTaskRequestsByWorkspace(deps.db, {
       workspaceId: args.actor.workspace_id,
       ...(args.status !== undefined ? { status: args.status } : {}),
+      ...(managedSystemId !== undefined ? { managedSystemId } : {}),
     });
     const items: TaskRequestDto[] = [];
     for (const row of rows) {

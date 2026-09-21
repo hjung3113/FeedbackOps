@@ -11,6 +11,13 @@ export interface UseVocListParams {
   cursor?: string;
   limit?: number;
   /**
+   * #383: carries the re-triage deep link's target into the triage queue.
+   * The queue predicate excludes already-triaged VOCs, so without this the
+   * "트리아지에서 변경" link lands on a queue that cannot show what it points at.
+   * view='triage' only — the backend rejects it on other views.
+   */
+  pinVocId?: string;
+  /**
    * REV-2 #9: when false the query stays in 'pending' status and does not
    * fire its queryFn. Used by TriageRoute to avoid fetching the queue
    * before the capability gate decides.
@@ -28,10 +35,12 @@ export interface VocListPage {
 }
 
 export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage> {
-  const { view, managedSystemId, tab, filters, sort, cursor, limit, enabled } = params;
+  const { view, managedSystemId, tab, filters, sort, cursor, limit, pinVocId, enabled } = params;
 
   return useQuery({
-    queryKey: ['vocs', view, managedSystemId, tab, filters, sort, cursor] as const,
+    // pinVocId belongs in the key: two deep links differing only by target must
+    // not share a cached queue (#383).
+    queryKey: ['vocs', view, managedSystemId, tab, filters, sort, cursor, pinVocId] as const,
     enabled: enabled !== false,
     queryFn: async ({ signal }) => {
       const qs = new URLSearchParams();
@@ -53,6 +62,7 @@ export function useVocList(params: UseVocListParams): UseQueryResult<VocListPage
           }
         }
       }
+      if (pinVocId) qs.set('pin_voc_id', pinVocId);
       if (sort) qs.set('sort', sort);
       if (cursor) qs.set('cursor', cursor);
       if (limit !== undefined) qs.set('limit', String(limit));

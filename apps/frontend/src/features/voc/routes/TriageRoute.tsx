@@ -57,10 +57,15 @@ export function TriageRoute(): React.ReactElement {
   // Fetch triage queue — server-pinned sort, no sort param sent (D-1.2).
   // REV-2 #9: gate BEFORE fetch via enabled:false so a blocked actor doesn't
   // trigger a queue query (and doesn't see a flash of queue chrome).
+  // #383: a deep link from the VOC detail panel ("트리아지에서 변경") carries its
+  // target as `selected`. Already-triaged VOCs are excluded by the queue
+  // predicate, so the target must be pinned explicitly or the queue cannot show
+  // it. Out-of-scope / unknown ids are dropped server-side.
   const { data, isLoading } = useVocList({
     view: 'triage',
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     tab: activeTab,
+    ...(search.selected !== undefined ? { pinVocId: search.selected } : {}),
     enabled: isApproved,
   });
 

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { ERROR_CODES, type ErrorCode } from '@fops/shared';
-import { errorMapper, GENERIC_ERROR_MESSAGE } from '../errorMapper';
+import {
+  CATALOG,
+  errorMapper,
+  GENERIC_ERROR_MESSAGE,
+  RETIRED_OR_SERVER_ONLY_CODES,
+} from '../errorMapper';
 
 const VALID_TONES = new Set(['error', 'warning', 'info']);
 
@@ -22,6 +27,12 @@ const SLICE_3_OWNER_CODES_EXACT: ReadonlyArray<ErrorCode> = [
 // now empty — no FE-mapping-suppression special-case is needed.
 const RETIRING_CODES: ReadonlyArray<ErrorCode> = [];
 
+function findUnclassifiedCodes(codes: readonly ErrorCode[]): ErrorCode[] {
+  return codes.filter(
+    (code) => !(code in CATALOG) && !RETIRED_OR_SERVER_ONLY_CODES.has(code),
+  );
+}
+
 function isSlice3OwnerCode(code: ErrorCode): boolean {
   if (RETIRING_CODES.includes(code)) return false;
   return (
@@ -31,8 +42,22 @@ function isSlice3OwnerCode(code: ErrorCode): boolean {
 }
 
 describe('errorMapper — ERROR_CODES coverage', () => {
-  it('every ERROR_CODES code maps to a non-empty Korean message', () => {
+  it('AC-2 classifies every shared code in the catalog or explicit server-only exclusions', () => {
+    expect(findUnclassifiedCodes(ERROR_CODES)).toEqual([]);
+  });
+
+  it('AC-2 detects a newly introduced shared code with no classification', () => {
+    const unclassified = findUnclassifiedCodes([
+      ...ERROR_CODES,
+      'test.new_shared_code' as ErrorCode,
+    ]);
+
+    expect(unclassified).toEqual(['test.new_shared_code']);
+  });
+
+  it('every mapped ERROR_CODES code maps to a non-empty Korean message', () => {
     for (const code of ERROR_CODES) {
+      if (RETIRED_OR_SERVER_ONLY_CODES.has(code)) continue;
       const mapped = errorMapper({ code, message: '' });
       expect(mapped.message, `code ${code}`).toBeTruthy();
       expect(mapped.message.length, `code ${code}`).toBeGreaterThan(0);
@@ -41,6 +66,7 @@ describe('errorMapper — ERROR_CODES coverage', () => {
 
   it('every code has tone in {error, warning, info}', () => {
     for (const code of ERROR_CODES) {
+      if (RETIRED_OR_SERVER_ONLY_CODES.has(code)) continue;
       const mapped = errorMapper({ code, message: '' });
       expect(VALID_TONES.has(mapped.tone), `code ${code} tone=${mapped.tone}`).toBe(true);
     }
@@ -55,6 +81,23 @@ describe('errorMapper — ERROR_CODES coverage', () => {
         `Slice 3 owner code ${code} must not fall back to generic`,
       ).not.toBe(GENERIC_ERROR_MESSAGE);
     }
+  });
+
+  it.each([
+    ['conflict.capability_already_denied', 'info'],
+    ['conflict.saved_view_name_taken', 'error'],
+    ['conflict.survey_not_open', 'error'],
+    ['conflict.survey_response_already_submitted', 'info'],
+    ['conflict.survey_results_unavailable', 'error'],
+  ] as const)('AC-1 maps %s to non-generic %s copy', (code, tone) => {
+    const mapped = errorMapper({ code, message: '' });
+
+    expect(mapped).toMatchObject({ tone });
+    expect(mapped.message).not.toBe(GENERIC_ERROR_MESSAGE);
+  });
+
+  it('AC-1 explicitly excludes the server-only not_implemented tombstone', () => {
+    expect(RETIRED_OR_SERVER_ONLY_CODES.has('not_implemented.todo')).toBe(true);
   });
 
   it('conflict.stale_write maps to warning + retry action when onRetry provided', () => {
@@ -111,7 +154,7 @@ describe('errorMapper — ERROR_CODES coverage', () => {
     expect(mapped.message).not.toBe(GENERIC_ERROR_MESSAGE);
   });
 
-  it('unknown code falls back to generic error', () => {
+  it('AC-3 unknown external code falls back to generic error', () => {
     const mapped = errorMapper({ code: 'made.up.code' as ErrorCode, message: '' });
     expect(mapped.message).toBe(GENERIC_ERROR_MESSAGE);
     expect(mapped.tone).toBe('error');
