@@ -88,16 +88,18 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     // Execution tasks / task requests / findings / their links live on this
     // suite's MS slug prefix; VOC-domain tables are handled by the shared
     // read-test cleanup afterwards.
-    for (const table of [
-      'core.entity_links',
-      'task.tasks',
-      'task_request.task_requests',
-      'finding.findings',
-    ]) {
+    // core.entity_links scopes by `managed_system_id`; the other tables by
+    // `primary_managed_system_id`.
+    for (const [table, msColumn] of [
+      ['core.entity_links', 'managed_system_id'],
+      ['task.tasks', 'primary_managed_system_id'],
+      ['task_request.task_requests', 'primary_managed_system_id'],
+      ['finding.findings', 'primary_managed_system_id'],
+    ] as const) {
       await migrateHandle.pool.query(
         `delete from ${table}
           where workspace_id = $1
-            and primary_managed_system_id in (
+            and ${msColumn} in (
               select id from core.managed_systems where workspace_id = $1 and slug like $2
             )`,
         [WORKSPACE_ID, `${SLUG_PREFIX}%`],
@@ -179,6 +181,20 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
       reviewerActorId: adminActorId,
       decided: true,
     });
+    if (findingId !== undefined) {
+      // resolveTaskSource finds the source Finding ONLY through this active
+      // finding -> task_request `requested_task` link (same seed as
+      // task-detail-and-finding-link.integration.test.ts).
+      await migrateHandle.pool.query(
+        `insert into core.entity_links (
+            workspace_id, source_type, source_id, target_type, target_id,
+            relation_type, visibility, status, managed_system_id, created_by
+          )
+         values ($1, 'finding', $2, 'task_request', $3, 'requested_task',
+                 'internal_only', 'active', $4, $5)`,
+        [WORKSPACE_ID, findingId, taskRequest.id, msId, adminActorId],
+      );
+    }
     const task = await insertTaskRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: msId,
