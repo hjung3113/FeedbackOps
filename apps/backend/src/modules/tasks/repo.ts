@@ -216,16 +216,3 @@ export async function resolveTaskSource(
   }
   return source;
 }
-
-export async function markTaskRequestConverted(
-  tx: Tx,
-  input: { workspaceId: string; taskRequestId: string },
-): Promise<void> {
-  await tx.execute(sql`
-    UPDATE task_request.task_requests
-       SET status = 'converted',
-           updated_at = now()
-     WHERE id = ${input.taskRequestId}
-       AND workspace_id = ${input.workspaceId}
-  `);
-}

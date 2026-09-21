@@ -1,5 +1,4 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { z } from 'zod';
 
 import {
   addEvidenceHighlightRequestSchema,
@@ -13,17 +12,12 @@ import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
+import { listFindingsQuerySchema } from './list-query.js';
 import type { FindingsService } from './service.js';
 
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const IDEMPOTENCY_KEY_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export const listFindingsQuerySchema = z
-  .object({
-    managed_system_id: z.string().uuid().optional(),
-  })
-  .strict();
 
 export interface FindingsRoutesOptions {
   sessionService: SessionService;
