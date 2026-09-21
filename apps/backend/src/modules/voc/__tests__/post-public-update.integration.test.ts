@@ -708,6 +708,67 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     expect(limited.headers['retry-after']).toBeDefined();
   });
 
+  // ── ADR-0047: post-write envelope omits links for triage-only writers ────
+  // A voc.triage-only actor cannot read the VOC, so composeDetailEnvelope
+  // must not call listLinks (it 404s); the envelope's voc.links comes back
+  // empty even though an active link exists on the VOC.
+
+  it.skipIf(!MIGRATE_URL)(
+    'triage-only actor → 201 and envelope voc.links is [] despite an active link (ADR-0047)',
+    async () => {
+      const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-trilnk`, 'Triage Links MS');
+      // Fresh actor holding only voc.triage on the MS (no voc.read, not reporter).
+      const { externalId: devExtId, id: devId } = await insertDevActor(dbHandle, WORKSPACE_ID, `pubupd-trilnk-${randomUUID().slice(0, 8)}`);
+      await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
+      const devCookie = await loginAs(app, devExtId);
+
+      const voc = await insertVoc(msId, 'Triage Links VOC');
+      const otherVoc = await insertVoc(msId, 'Triage Links Target VOC');
+
+      // core.entity_links is append-only to fops_app: seed and clean via the
+      // migrate role (same pattern as the review-candidate tests).
+      const ops = createDb(MIGRATE_URL);
+      try {
+        await ops.pool.query(
+          `insert into core.entity_links (workspace_id, source_type, source_id, target_type, target_id,
+            relation_type, visibility, status, managed_system_id, created_by)
+           values ($1, 'voc', $2, 'voc', $3, 'related_to', 'internal_only', 'active', $4, $5)`,
+          [WORKSPACE_ID, voc.id, otherVoc.id, msId, adminActorId],
+        );
+
+        const res = await postPublicUpdate(devCookie, voc.id, {
+          skip_public_update: false,
+          body_rich_content: paragraphDoc('triage-only update'),
+          next_reporter_facing_status: 'received',
+        });
+        expect(res.statusCode).toBe(201);
+        const body = res.json<{ voc: { links?: Array<unknown> } }>();
+        expect(body.voc.links).toEqual([]);
+
+        // Positive control: a full reader's post-write envelope still carries the link.
+        const adminRes = await postPublicUpdate(adminCookie, voc.id, {
+          skip_public_update: false,
+          body_rich_content: paragraphDoc('admin update'),
+          next_reporter_facing_status: 'received',
+        });
+        expect(adminRes.statusCode).toBe(201);
+        expect(adminRes.json<{ voc: { links?: Array<unknown> } }>().voc.links).toHaveLength(1);
+      } finally {
+        // Remove the link row so the shared MS/VOC cleanup is not blocked by
+        // the entity_links → managed_systems FK.
+        await ops.pool.query(
+          `delete from core.entity_links
+            where workspace_id = $1
+              and managed_system_id in (
+                select id from core.managed_systems where workspace_id = $1 and slug like $2
+              )`,
+          [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+        );
+        await ops.close();
+      }
+    },
+  );
+
   // ── PLAN-22 C7b — attachment_ids linking on body shape ──────────────────
 
   it('attachment_ids on body shape → 201 + linked to public_update (PLAN-22 C7b)', async () => {

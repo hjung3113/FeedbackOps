@@ -842,7 +842,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     }
   });
 
-  it('GET by VOC source accepts managed-system scoped voc.triage without voc.read', async () => {
+  it('GET by VOC source is not found for managed-system scoped voc.triage without voc.read (ADR-0047)', async () => {
     const msA = await insertMsDirectly(
       dbHandle,
       WORKSPACE_ID,
@@ -867,13 +867,33 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(create.statusCode).toBe(201);
     const linkId = create.json<{ id: string }>().id;
 
-    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('triage'));
-    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msA, adminActorId);
-    const devCookie = await loginAs(app, externalId);
+    // Triage-only actor (no voc.read, not reporter): the focus VOC is
+    // unreadable, so the endpoint-scoped GET is a 404 — never an allowed row.
+    const { id: triageDevId, externalId: triageExtId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('triage'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, triageDevId, 'voc.triage', msA, adminActorId);
+    const triageCookie = await loginAs(app, triageExtId);
 
-    const res = await getEntityLinks(devCookie, `?source_type=voc&source_id=${sourceVoc.id}`);
-    expect(res.statusCode).toBe(200);
-    const body = res.json<{ items: Array<Record<string, unknown>> }>();
+    const res = await getEntityLinks(triageCookie, `?source_type=voc&source_id=${sourceVoc.id}`);
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ code: string }>().code).toBe('not_found.record');
+
+    // Positive control with a distinct actor holding only voc.read on the
+    // same MS (one actor with both grants would make the 404 vacuous).
+    const { id: readDevId, externalId: readExtId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('readctl'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, readDevId, 'voc.read', msA, adminActorId);
+    const readCookie = await loginAs(app, readExtId);
+
+    const allowed = await getEntityLinks(readCookie, `?source_type=voc&source_id=${sourceVoc.id}`);
+    expect(allowed.statusCode).toBe(200);
+    const body = allowed.json<{ items: Array<Record<string, unknown>> }>();
     expect(body.items).toHaveLength(1);
     expect(body.items[0]).toMatchObject({
       id: linkId,
@@ -881,6 +901,41 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       source_id: sourceVoc.id,
       target_id: targetVoc.id,
     });
+  });
+
+  it('POST from an unreadable voc source is permission.denied for voc.triage without voc.read (ADR-0047)', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-post-tri`,
+      'Links POST Triage MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'POST Triage Source VOC',
+    );
+    const targetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'POST Triage Target VOC',
+    );
+
+    const { id: devId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('post-tri'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const res = await postEntityLink(devCookie, sourceVoc.id, targetVoc.id);
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ code: string }>().code).toBe('permission.denied');
   });
 
   it('VOC detail returns active outbound related_to links on the Links tab payload', async () => {
@@ -1107,6 +1162,57 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       source_id: visibleSource.id,
       target_id: visibleTarget.id,
     });
+    expect(hiddenRow).toMatchObject({
+      visibility_state: 'hidden',
+      status: 'active',
+      relation_type: 'related_to',
+    });
+    expect(hiddenRow?.source_id).toBeUndefined();
+    expect(hiddenRow?.target_id).toBeUndefined();
+  });
+
+  it('GET workspace inventory hides voc↔voc rows from a triage-only actor (ADR-0047)', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-inv-tri`,
+      'Links Inventory Triage MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Inventory Triage Source VOC',
+    );
+    const targetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Inventory Triage Target VOC',
+    );
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    // The workspace inventory route needs no capability beyond a session
+    // (routes.ts gates on requireSession/requireWorkspace only), so a plain
+    // voc.triage actor can call it; per ADR-0047 the voc↔voc row must come
+    // back hidden with no endpoint ids.
+    const { id: devId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('inv-tri'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const res = await getEntityLinks(devCookie, '?scope=workspace');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: Array<Record<string, unknown>> }>();
+    const hiddenRow = body.items.find((item) => item.id === linkId);
+    expect(hiddenRow).toBeDefined();
     expect(hiddenRow).toMatchObject({
       visibility_state: 'hidden',
       status: 'active',
@@ -1748,6 +1854,53 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
     const res = await patchEntityLink(devCookie, linkId, { reason: 'No target scope' });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('PATCH detach is not found for voc.triage-only actor and leaves the link active (ADR-0047)', async () => {
+    const msA = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-patch-tri`,
+      'Links PATCH Triage MS',
+    );
+    const sourceVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'PATCH Triage Source VOC',
+    );
+    const targetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'PATCH Triage Target VOC',
+    );
+    const create = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(create.statusCode).toBe(201);
+    const linkId = create.json<{ id: string }>().id;
+
+    const { id: devId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('patch-tri'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msA, adminActorId);
+    const devCookie = await loginAs(app, externalId);
+
+    const res = await patchEntityLink(devCookie, linkId, { reason: 'Triage-only detach' });
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ code: string }>().code).toBe('not_found.record');
+
+    // The 404 must prove authorization, not a missing id: the row is still
+    // active afterwards.
+    const linkRows = await dbHandle.pool.query<{ status: string }>(
+      `select status from core.entity_links where id = $1`,
+      [linkId],
+    );
+    expect(linkRows.rowCount).toBe(1);
+    expect(linkRows.rows[0]?.status).toBe('active');
   });
 
   it('PATCH rejects missing or empty detach reason', async () => {

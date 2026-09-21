@@ -225,13 +225,7 @@ async function assertVocReadScope(
     workspace_id: actor.workspace_id,
     managed_system_id: subject.managed_system_id,
   });
-  if (readDecision.allow) return true;
-
-  const triageDecision = await deps.checkService.checkCapability(actor, 'voc.triage', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: subject.managed_system_id,
-  });
-  return triageDecision.allow;
+  return readDecision.allow;
 }
 
 async function assertFindingReadScope(
