@@ -67,19 +67,19 @@ export function VocClusterListPage(): React.ReactElement {
     [navigate],
   );
 
-  // The shell calls this for BOTH a user close and its stale-selection
-  // reconcile (selected id left the loaded list): a genuine close pushes so
-  // Back re-opens the panel, a stale drop replaces so history does not grow.
-  const closeDetail = React.useCallback((): void => {
-    const items = listQuery.data?.items ?? [];
-    const stale =
-      selectedId !== null && listQuery.isSuccess && !items.some((cluster) => cluster.id === selectedId);
-    void navigate({
-      to: "/voc-clusters",
-      replace: stale,
-      search: ({ selected: _selected, ...rest }) => rest,
-    });
-  }, [listQuery.data, listQuery.isSuccess, navigate, selectedId]);
+  // The shell reports whether it is reconciling a selection that left the
+  // VISIBLE list (tab filter or refetch) or the user closed the panel. A
+  // reconcile replaces (no Back trap); a genuine close pushes so Back re-opens.
+  const closeDetail = React.useCallback(
+    (opts?: { reconcile?: boolean }): void => {
+      void navigate({
+        to: "/voc-clusters",
+        replace: opts?.reconcile === true,
+        search: ({ selected: _selected, ...rest }) => rest,
+      });
+    },
+    [navigate],
+  );
 
   // First-row defaulting (original UI behavior): only on the FIRST successful
   // load, only when the URL carries no explicit `selected`, via replace so a

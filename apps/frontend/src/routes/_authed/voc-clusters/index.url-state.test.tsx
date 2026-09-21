@@ -311,4 +311,32 @@ describe('/voc-clusters URL state', () => {
       managedSystem: 'all',
     });
   });
+
+  test('a selection excluded by the tab filter is reconciled with replace (no Back trap)', async () => {
+    const router = renderUrlState({ requested: [] }, `/voc-clusters?selected=${C1_ID}`);
+    await waitFor(() => expect(screen.getByTestId('cluster-detail-panel')).toBeInTheDocument());
+    const lengthBefore = router.history.length;
+
+    // C1 is a draft; the "confirmed" tab hides it.
+    fireEvent.click(screen.getByTestId('cluster-tab-confirmed'));
+
+    await waitFor(() => expect(router.state.location.search).toEqual({}));
+    expect(screen.queryByTestId('cluster-detail-panel')).not.toBeInTheDocument();
+    // Replaced, not pushed: history did not grow, so Back cannot re-select it.
+    expect(router.history.length).toBe(lengthBefore);
+    // The confirmed cluster is still listed (non-vacuous).
+    expect(screen.getByRole('button', { name: /CLU-32/ })).toBeInTheDocument();
+  });
+
+  test('a selection outside the narrower scope is replaced away after load', async () => {
+    // C2 belongs to MS_2, the scoped list (MS_1) does not contain it.
+    const router = renderUrlState(
+      { requested: [] },
+      `/voc-clusters?managedSystem=${MS_1}&selected=${C2_ID}`,
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: /CLU-31/ })).toBeInTheDocument());
+    await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_1 }));
+    expect(router.history.length).toBe(1);
+    expect(screen.queryByTestId('cluster-detail-panel')).not.toBeInTheDocument();
+  });
 });

@@ -294,4 +294,18 @@ describe('/findings URL state', () => {
       managedSystem: 'all',
     });
   });
+
+  test('a selection outside the narrower scope is replaced away after load', async () => {
+    // F2 belongs to MS_2; the scoped list (MS_1) does not contain it.
+    const router = renderUrlState(
+      { requested: [] },
+      `/findings?managedSystem=${MS_1}&selected=${F2_ID}`,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument(),
+    );
+    await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_1 }));
+    expect(router.history.length).toBe(1);
+    expect(screen.queryByTestId('finding-detail-panel')).not.toBeInTheDocument();
+  });
 });

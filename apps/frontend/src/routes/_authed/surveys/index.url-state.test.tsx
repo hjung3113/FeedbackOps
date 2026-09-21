@@ -272,4 +272,16 @@ describe('/surveys URL state', () => {
       managedSystem: 'all',
     });
   });
+
+  test('a selection outside the narrower scope is replaced away after load', async () => {
+    // S2 belongs to MS_2; the scoped list (MS_1) does not contain it.
+    const router = renderUrlState(
+      { requested: [] },
+      `/surveys?managedSystem=${MS_1}&selected=${S2_ID}`,
+    );
+    await waitFor(() => expect(screen.getByTestId(`survey-row-${S1_ID}`)).toBeInTheDocument());
+    await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_1 }));
+    expect(router.history.length).toBe(1);
+    expect(screen.queryByTestId('survey-detail')).not.toBeInTheDocument();
+  });
 });
