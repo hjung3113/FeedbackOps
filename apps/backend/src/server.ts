@@ -15,7 +15,7 @@ import { z } from 'zod';
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
-import { type HealthCheckName, runReadinessChecks } from './lib/health.js';
+import { type HealthCheckName, type InFlightProbe, runReadinessChecks } from './lib/health.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import { getStorage } from './lib/storage/factory.js';
@@ -404,7 +404,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     pg_boss: z.enum(['ok', 'fail']),
     storage: z.enum(['ok', 'fail']),
   });
-  const readinessInFlight = new Map<HealthCheckName, Promise<unknown>>();
+  const readinessInFlight = new Map<HealthCheckName, InFlightProbe>();
   app.route({
     method: 'GET',
     url: '/health/ready',

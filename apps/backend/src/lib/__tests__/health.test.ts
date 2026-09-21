@@ -15,6 +15,7 @@ import {
   DEFAULT_HEALTH_PROBE_TIMEOUT_MS,
   DependencyUnavailableError,
   HealthProbeTimeoutError,
+  type InFlightProbe,
   type ReadinessCheckOptions,
   runReadinessChecks,
   withTimeout,
@@ -258,7 +259,7 @@ describe('runReadinessChecks', () => {
         });
       },
     } as unknown as pg.Pool;
-    const inFlight = new Map<'database' | 'pg_boss' | 'storage', Promise<unknown>>();
+    const inFlight = new Map<'database' | 'pg_boss' | 'storage', InFlightProbe>();
     const opts = { ...healthyOpts(), pool, timeoutMs: 20, inFlight };
 
     const first = await runReadinessChecks(opts);
@@ -279,5 +280,25 @@ describe('runReadinessChecks', () => {
     const recovered = await runReadinessChecks(opts);
     expect(calls).toBe(2);
     expect(recovered.checks.database).toBe('ok');
+  });
+
+  it('after one timeout, later probes on a hung dependency attach no further reactions', async () => {
+    let attached = 0;
+    const hung = new Promise<never>(() => {});
+    // Count reaction attachments on the shared pending promise.
+    const realThen = hung.then.bind(hung);
+    hung.then = ((...args: Parameters<typeof realThen>) => {
+      attached += 1;
+      return realThen(...args);
+    }) as typeof hung.then;
+    const pool = { query: () => hung } as unknown as pg.Pool;
+    const inFlight = new Map<'database' | 'pg_boss' | 'storage', InFlightProbe>();
+    const opts = { ...healthyOpts(), pool, timeoutMs: 10, inFlight };
+
+    await runReadinessChecks(opts); // owner probe: release observer + one race
+    const afterFirst = attached;
+    expect(afterFirst).toBeGreaterThan(0);
+    for (let i = 0; i < 50; i += 1) await runReadinessChecks(opts);
+    expect(attached).toBe(afterFirst);
   });
 });

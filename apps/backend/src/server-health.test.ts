@@ -7,7 +7,7 @@
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import type { PgBoss } from 'pg-boss';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import { loadConfig } from './config.js';
 import { type DbHandle, createDb } from './db/client.js';
@@ -224,20 +224,30 @@ describe.skipIf(!runIntegration)('health probes (ADR-0013)', () => {
     expect(statuses.every((status) => status === 200)).toBe(true);
   });
 
-  test('probes opt out of the limiter per route: no rate-limit headers, even with a session cookie', async () => {
+  test('probe routes never run the limiter session lookup, even with a session cookie', async () => {
     const app = await buildApp();
-    for (const url of ['/health/live', '/health/ready']) {
-      const res = await app.inject({
-        method: 'GET',
-        url,
-        headers: { cookie: 'fops_session=not-a-real-session' },
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['x-ratelimit-limit']).toBeUndefined();
-    }
-    // Control: a normal route DOES carry limiter headers, so the absence above is meaningful.
-    const control = await app.inject({ method: 'GET', url: '/me' });
-    expect(control.headers['x-ratelimit-limit']).toBeDefined();
+    const querySpy = vi.spyOn(sharedDbHandle.pool, 'query');
+    const textOf = (call: unknown[]): string => {
+      const first = call[0];
+      return typeof first === 'string' ? first : String((first as { text?: string })?.text ?? '');
+    };
+    const headers = { cookie: 'fops_session=not-a-real-session-token' };
+
+    // Control: a normal route with the same cookie DOES hit the DB for the
+    // session lookup, so a zero below is meaningful (not a broken spy).
+    await app.inject({ method: 'GET', url: '/me', headers });
+    expect(querySpy.mock.calls.length).toBeGreaterThan(0);
+
+    querySpy.mockClear();
+    const live = await app.inject({ method: 'GET', url: '/health/live', headers });
+    expect(live.statusCode).toBe(200);
+    expect(querySpy.mock.calls.length).toBe(0);
+
+    const ready = await app.inject({ method: 'GET', url: '/health/ready', headers });
+    expect(ready.statusCode).toBe(200);
+    // Only the readiness probe's own `select 1` — no session/actor lookup.
+    expect(querySpy.mock.calls.map(textOf).every((text) => text.trim() === 'select 1')).toBe(true);
+    querySpy.mockRestore();
   });
 
   test('a missing bucket (exists=false, ping rejects) is not ready', async () => {
