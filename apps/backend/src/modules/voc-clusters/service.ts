@@ -21,17 +21,19 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
+  createEntityLink,
   detachEntityLink,
-  insertActiveEntityLink,
-  selectActiveEntityLink,
-} from '../entity-links/repo.js';
+  findActiveEntityLink,
+} from '../entity-links/commands.js';
 import {
   actorFindingReadScope,
   checkFindingManage,
   isFindingInReadScope,
 } from '../findings/authorization.js';
-import { insertFinding } from '../findings/repo.js';
-import { lockFindingById } from '../findings/repo.js';
+import {
+  createFindingFromVocCluster,
+  lockFindingForUpdate,
+} from '../findings/commands.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { ConversationService } from '../voc/conversation-service.js';
 import { type Scope, actorReadScope } from '../voc/repo-read.js';
@@ -787,12 +789,11 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             managedSystemId: targetManagedSystemId,
           });
 
-          const finding = await insertFinding(tx, {
+          const finding = await createFindingFromVocCluster(tx, {
             workspaceId: args.actor.workspace_id,
             primaryManagedSystemId: targetManagedSystemId,
             title: args.input.title,
             summary: args.input.summary,
-            sourceType: 'voc_cluster',
             sourceId: cluster.id,
             severity: args.input.severity,
             confidence: args.input.confidence ?? null,
@@ -806,7 +807,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             relation_type: 'created_finding',
           });
 
-          const link = await insertActiveEntityLink(tx, {
+          const link = await createEntityLink(tx, {
             workspaceId: args.actor.workspace_id,
             sourceType: createdFindingTuple.source_type,
             sourceId: cluster.id,
@@ -912,7 +913,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             throw new HttpError('not_found.record', 'record not found');
           }
 
-          const finding = await lockFindingById(tx, {
+          const finding = await lockFindingForUpdate(tx, {
             workspaceId: args.actor.workspace_id,
             findingId: args.input.finding_id,
           });
@@ -964,7 +965,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             target_type: 'finding',
             relation_type: 'evidence_of',
           });
-          const link = await insertActiveEntityLink(tx, {
+          const link = await createEntityLink(tx, {
             workspaceId: args.actor.workspace_id,
             sourceType: evidenceTuple.source_type,
             sourceId: cluster.id,
@@ -1042,7 +1043,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             throw new HttpError('not_found.record', 'record not found');
           }
 
-          const finding = await lockFindingById(tx, {
+          const finding = await lockFindingForUpdate(tx, {
             workspaceId: args.actor.workspace_id,
             findingId: args.input.finding_id,
           });
@@ -1094,7 +1095,7 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             }
           }
 
-          const activeLink = await selectActiveEntityLink(tx, {
+          const activeLink = await findActiveEntityLink(tx, {
             workspaceId: args.actor.workspace_id,
             sourceType: 'voc_cluster',
             sourceId: cluster.id,
