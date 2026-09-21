@@ -231,10 +231,12 @@ drift and the newest journal entry has no snapshot.
 Known limits of the TS-derived baseline: constraint and index *names* in
 hand-written migrations (for example unnamed `REFERENCES`, which PostgreSQL names
 `<table>_<column>_fkey`) differ from the names drizzle derives, and the TS schema
-does not model every SQL-only object (functional `COALESCE` unique indexes on
-`permission.*`, extra indexes/FKs, `voc.workspace_display_counters`; the
-`core.saved_views` unique is `(actor_id, surface, name)` in TS but
-`(workspace_id, actor_id, surface, name)` in the database). A generated
+does not model every SQL-only object. These are intentionally SQL-only (#433):
+functional `COALESCE` unique indexes on `permission.permission_grants|denies|requests`
+(drizzle cannot express them), the 14 hand-written FKs on `permission.*`, the extra
+indexes on those tables, and `voc.workspace_display_counters` (migration 0017).
+`core.saved_views` is modeled: its unique is the 4-column
+`saved_views_workspace_id_actor_id_surface_name_key` constraint, matching 0045. A generated
 `DROP CONSTRAINT`/`DROP INDEX` for such an object must be hand-checked against
 the real name before use.
 
