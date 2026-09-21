@@ -8,6 +8,7 @@ import type pg from 'pg';
 import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
+import type { JobLog } from '../../../lib/job-log.js';
 import type { StorageBackend } from '../../../lib/storage/index.js';
 import { registerIdempotencyPurge } from './idempotency-purge.js';
 import { registerAttachmentsPurge } from './purge-unlinked-attachments.js';
@@ -19,30 +20,22 @@ export interface CoreJobDeps {
   pool?: pg.Pool;
   /** Optional — only required to enable the attachments_purge job (PLAN-22 C4b). */
   storage?: StorageBackend;
-  log?: {
-    info: (msg: string, meta?: unknown) => void;
-    error: (msg: string, meta?: unknown) => void;
-  };
+  /** Structured job logger (ADR-0013, amended 2026-09-22). Required in prod wiring. */
+  log: JobLog;
 }
 
 export async function registerCoreJobs(boss: PgBoss, deps: CoreJobDeps): Promise<void> {
-  // Idempotency + rate-limits siblings only need a single `info`-shaped logger;
-  // narrow the type here so existing callers without `error` keep typechecking.
-  const baseDeps: { db: Db; log?: { info: (msg: string, meta?: unknown) => void } } = deps.log
-    ? { db: deps.db, log: { info: deps.log.info } }
-    : { db: deps.db };
-  await registerIdempotencyPurge(boss, baseDeps);
-  await registerRateLimitsPurge(boss, baseDeps);
+  await registerIdempotencyPurge(boss, { db: deps.db, log: deps.log });
+  await registerRateLimitsPurge(boss, { db: deps.db, log: deps.log });
   // Attachments-purge needs raw pool (size_bytes is bigint → easier as text via pg)
   // plus the storage backend. Skip cleanly if either is absent so callers that
   // only need idempotency/rate-limits don't have to wire stub storage.
   if (deps.pool && deps.storage) {
-    await registerAttachmentsPurge(
-      boss,
-      deps.log
-        ? { pool: deps.pool, storage: deps.storage, log: deps.log }
-        : { pool: deps.pool, storage: deps.storage },
-    );
+    await registerAttachmentsPurge(boss, {
+      pool: deps.pool,
+      storage: deps.storage,
+      log: deps.log,
+    });
   }
 }
 

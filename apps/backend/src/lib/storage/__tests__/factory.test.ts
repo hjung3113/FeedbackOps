@@ -2,11 +2,12 @@
 //
 // Covers (a) env parsing returns a fully-populated config and the singleton
 // is the same instance across `getStorage()` calls; (b) the secret access key
-// never appears in `redactConfig()` output, the boot log line, or any
-// JSON-stringified view of the config.
+// never appears in `redactConfig()` output, the structured
+// `storage: materialized` line, or any JSON-stringified view of the config.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { JobLog } from '../../job-log.js';
 import {
   __resetStorageForTests,
   getStorage,
@@ -45,7 +46,6 @@ describe('factory', () => {
       forcePathStyle: true,
     });
 
-    vi.spyOn(console, 'info').mockImplementation(() => {});
     const a = getStorage(VALID_ENV);
     const b = getStorage(VALID_ENV);
     expect(a).toBe(b);
@@ -79,20 +79,64 @@ describe('factory', () => {
     expect(redacted.secretAccessKey).toBe('***REDACTED***');
   });
 
-  it('boot log line includes bucket + endpoint but never the secret', async () => {
-    const calls: string[] = [];
-    vi.spyOn(console, 'info').mockImplementation((...args: unknown[]) => {
-      calls.push(args.map((a) => String(a)).join(' '));
-    });
-    const backend = getStorage(VALID_ENV);
-    // Lazy init: log fires only on first method call.
+  it('logs storage: materialized ONCE with endpoint_origin, never the secret or userinfo', async () => {
+    const calls: Array<{ msg: string; meta: Record<string, unknown> }> = [];
+    const log: JobLog = {
+      info: (msg, meta) => calls.push({ msg, meta: meta ?? {} }),
+      warn: () => {},
+      error: () => {},
+    };
+    const consoleInfo = vi.spyOn(console, 'info');
+    const env: StorageEnv = {
+      ...VALID_ENV,
+      STORAGE_S3_ENDPOINT: 'http://user:pw@minio:9000/x',
+    };
+    const backend = getStorage(env, { log });
+    // Lazy init: the line fires on the first method call — and only then.
     await backend.exists('any-key').catch(() => {
       /* expected: no MinIO running in unit tests */
     });
-    const joined = calls.join('\n');
-    expect(joined).toContain('bucket=fops-attachments');
-    expect(joined).toContain('endpoint=http://localhost:9000');
-    expect(joined).not.toContain('super-secret-key-do-not-log');
+    await backend.exists('other-key').catch(() => {});
+
+    const materialized = calls.filter((c) => c.msg === 'storage: materialized');
+    expect(materialized).toHaveLength(1);
+    const meta = materialized[0]?.meta;
+    expect(meta?.endpoint_origin).toBe('http://minio:9000');
+    expect(meta?.bucket).toBe('fops-attachments');
+    expect(meta?.region).toBe('us-east-1');
+    expect(meta?.force_path_style).toBe(true);
+
+    // No secret keys or values, no userinfo from the endpoint, no key names.
+    const blob = JSON.stringify(calls);
+    expect(blob).not.toContain('super-secret-key-do-not-log');
+    expect(blob).not.toContain('pw');
+    expect(blob).not.toContain('user:');
+    expect('accessKeyId' in (meta ?? {})).toBe(false);
+    expect('secretAccessKey' in (meta ?? {})).toBe(false);
+    expect(consoleInfo).not.toHaveBeenCalled();
+  });
+
+  it('logs the literal invalid origin for an endpoint that does not parse', async () => {
+    const calls: Array<{ msg: string; meta: Record<string, unknown> }> = [];
+    const log: JobLog = {
+      info: (msg, meta) => calls.push({ msg, meta: meta ?? {} }),
+      warn: () => {},
+      error: () => {},
+    };
+    const backend = getStorage({ ...VALID_ENV, STORAGE_S3_ENDPOINT: 'not-a-url' }, { log });
+    await backend.exists('k').catch(() => {});
+
+    const meta = calls.find((c) => c.msg === 'storage: materialized')?.meta;
+    expect(meta?.endpoint_origin).toBe('invalid');
+  });
+
+  it('without a logger logs nothing and never touches console.info', async () => {
+    const consoleInfo = vi.spyOn(console, 'info');
+    const backend = getStorage(VALID_ENV);
+    await backend.exists('any-key').catch(() => {
+      /* expected: no MinIO running in unit tests */
+    });
+    expect(consoleInfo).not.toHaveBeenCalled();
   });
 
   // ─── Lazy init (Slice 3 #22 hotfix) ──────────────────────────────────────

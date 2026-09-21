@@ -14,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
+import { type JobLog, JOB_WORK_OPTIONS, withJobLogging } from '../../../lib/job-log.js';
 
 /** Queue name. Format: `<module>.<action>` per ADR-0009. */
 export const IDEMPOTENCY_PURGE_QUEUE = 'core.idempotency_purge';
@@ -54,7 +55,7 @@ export async function purgeExpiredIdempotencyKeys(deps: {
  */
 export function __purgeHandler(deps: {
   db: Db;
-  log?: { info: (msg: string, meta?: unknown) => void };
+  log?: JobLog;
 }) {
   return async (jobs: Array<{ id: string; data: IdempotencyPurgePayload }>) => {
     for (const job of jobs) {
@@ -77,7 +78,7 @@ export function __purgeHandler(deps: {
  */
 export async function registerIdempotencyPurge(
   boss: PgBoss,
-  deps: { db: Db; log?: { info: (msg: string, meta?: unknown) => void } },
+  deps: { db: Db; log: JobLog },
 ): Promise<void> {
   // F-010: fops_app no longer holds EXECUTE on `pgboss.create_queue` (per
   // migration 0003) because that function performs DDL (CREATE TABLE,
@@ -92,7 +93,11 @@ export async function registerIdempotencyPurge(
     );
   }
 
-  await boss.work<IdempotencyPurgePayload>(IDEMPOTENCY_PURGE_QUEUE, __purgeHandler(deps));
+  await boss.work<IdempotencyPurgePayload>(
+    IDEMPOTENCY_PURGE_QUEUE,
+    JOB_WORK_OPTIONS,
+    withJobLogging(deps.log, IDEMPOTENCY_PURGE_QUEUE, __purgeHandler(deps)),
+  );
 
   // Schedule the hourly run. pg-boss `schedule` is idempotent on (name, key)
   // — calling it on every boot is safe and converges to the same row in

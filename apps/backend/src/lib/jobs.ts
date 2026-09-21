@@ -12,19 +12,18 @@
 
 import { PgBoss } from 'pg-boss';
 
+import type { JobLog } from './job-log.js';
+
 export type Boss = PgBoss;
 
 export interface InitBossOptions {
   connectionString: string;
   /**
-   * Optional logger. pg-boss emits 'error' and 'warning' events; we surface
-   * them through the host logger so errors are not swallowed.
+   * Structured logger (ADR-0013, amended 2026-09-22). Required: pg-boss
+   * emits 'error' and 'warning' events; they must reach the process root
+   * logger instead of being swallowed.
    */
-  log?: {
-    info: (msg: string, meta?: unknown) => void;
-    warn: (msg: string, meta?: unknown) => void;
-    error: (msg: string, meta?: unknown) => void;
-  };
+  log: JobLog;
 }
 
 export async function initBoss(opts: InitBossOptions): Promise<Boss> {
@@ -43,10 +42,8 @@ export async function initBoss(opts: InitBossOptions): Promise<Boss> {
     schedule: true,
   });
 
-  if (opts.log) {
-    boss.on('error', (err: unknown) => opts.log?.error('pg-boss error', { err }));
-    boss.on('warning', (warning: unknown) => opts.log?.warn('pg-boss warning', { warning }));
-  }
+  boss.on('error', (err: unknown) => opts.log.error('pg-boss error', { err }));
+  boss.on('warning', (warning: unknown) => opts.log.warn('pg-boss warning', { warning }));
 
   await boss.start();
   return boss;

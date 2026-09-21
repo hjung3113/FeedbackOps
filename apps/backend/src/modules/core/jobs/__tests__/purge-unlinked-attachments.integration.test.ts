@@ -179,7 +179,7 @@ describe.skipIf(!runIntegration)('core.attachments_purge handler', () => {
         if (key === badKey) throw new Error('boom');
       },
     });
-    const log = { info: vi.fn(), error: vi.fn() };
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     // Must not throw — job survives the failure.
     const result = await purgeUnlinkedAttachments({ pool: appHandle.pool, storage, log });
@@ -210,7 +210,7 @@ describe.skipIf(!runIntegration)('core.attachments_purge handler', () => {
     await insertAttachment({ storageKey: key, sizeBytes: 4096, ageInterval: '25 hours' });
 
     const storage = makeStubStorage();
-    const log = { info: vi.fn(), error: vi.fn() };
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const result = await purgeUnlinkedAttachments({ pool: appHandle.pool, storage, log });
 

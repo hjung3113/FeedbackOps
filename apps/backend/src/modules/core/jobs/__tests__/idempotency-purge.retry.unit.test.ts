@@ -14,7 +14,10 @@ describe('idempotency-purge handler retry behavior (H6)', () => {
     const execute = vi.fn().mockRejectedValue(new Error('db down'));
     const failingDb = { execute } as unknown as Db;
 
-    const handler = __purgeHandler({ db: failingDb, log: { info: vi.fn() } });
+    const handler = __purgeHandler({
+      db: failingDb,
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    });
 
     await expect(
       handler([{ id: 'job-1', data: { correlation_id: 'test-1' } }]),

@@ -21,6 +21,7 @@
 import type pg from 'pg';
 import type { PgBoss } from 'pg-boss';
 
+import { type JobLog, JOB_WORK_OPTIONS, withJobLogging } from '../../../lib/job-log.js';
 import type { StorageBackend } from '../../../lib/storage/index.js';
 
 /** Queue name. Format: `<module>.<action>` per ADR-0009. */
@@ -45,10 +46,7 @@ export interface AttachmentsPurgeResult {
 export interface PurgeUnlinkedAttachmentsDeps {
   pool: pg.Pool;
   storage: StorageBackend;
-  log?: {
-    info: (msg: string, meta?: unknown) => void;
-    error: (msg: string, meta?: unknown) => void;
-  };
+  log?: JobLog;
 }
 
 interface AttachmentRow {
@@ -129,10 +127,7 @@ export async function registerAttachmentsPurge(
   deps: {
     pool: pg.Pool;
     storage: StorageBackend;
-    log?: {
-      info: (msg: string, meta?: unknown) => void;
-      error: (msg: string, meta?: unknown) => void;
-    };
+    log: JobLog;
   },
 ): Promise<void> {
   const queues = await boss.getQueues([ATTACHMENTS_PURGE_QUEUE]);
@@ -142,22 +137,26 @@ export async function registerAttachmentsPurge(
     );
   }
 
+  const handler = async (jobs: Array<{ id: string; data: AttachmentsPurgePayload }>) => {
+    for (const job of jobs) {
+      const correlationId = job.data?.correlation_id ?? job.id;
+      const result = await purgeUnlinkedAttachments({
+        pool: deps.pool,
+        storage: deps.storage,
+        log: deps.log,
+      });
+      deps.log?.info('core.attachments_purge complete', {
+        correlation_id: correlationId,
+        job_id: job.id,
+        ...result,
+      });
+    }
+  };
+
   await boss.work<AttachmentsPurgePayload>(
     ATTACHMENTS_PURGE_QUEUE,
-    async (jobs: Array<{ id: string; data: AttachmentsPurgePayload }>) => {
-      for (const job of jobs) {
-        const correlationId = job.data?.correlation_id ?? job.id;
-        const handlerDeps: PurgeUnlinkedAttachmentsDeps = deps.log
-          ? { pool: deps.pool, storage: deps.storage, log: deps.log }
-          : { pool: deps.pool, storage: deps.storage };
-        const result = await purgeUnlinkedAttachments(handlerDeps);
-        deps.log?.info('core.attachments_purge complete', {
-          correlation_id: correlationId,
-          job_id: job.id,
-          ...result,
-        });
-      }
-    },
+    JOB_WORK_OPTIONS,
+    withJobLogging(deps.log, ATTACHMENTS_PURGE_QUEUE, handler),
   );
 
   await boss.schedule(ATTACHMENTS_PURGE_QUEUE, ATTACHMENTS_PURGE_CRON, {
