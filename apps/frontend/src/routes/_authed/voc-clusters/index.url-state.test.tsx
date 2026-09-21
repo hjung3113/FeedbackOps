@@ -75,6 +75,7 @@ const C1 = {
   created_by: '22222222-2222-4222-8222-222222222222',
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-02T00:00:00.000Z',
+  member_count: 0,
   members: [],
   linked_findings: [],
 };
@@ -115,7 +116,7 @@ function installFetch(c: FetchCase): void {
       const items = msFilter
         ? CLUSTERS.filter((cluster) => cluster.primary_managed_system_id === msFilter)
         : CLUSTERS;
-      return jsonResponse({ items, total: items.length });
+      return jsonResponse({ items });
     }
     if (path.pathname.startsWith('/voc-clusters/')) {
       const cluster = CLUSTERS.find((entry) => entry.id === path.pathname.split('/')[2]);

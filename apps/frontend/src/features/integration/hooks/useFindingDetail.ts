@@ -1,11 +1,9 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
 import { findingDtoSchema } from '@fops/shared';
 import type { FindingDto } from '@fops/shared';
+import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 
-export function useFindingDetail(
-  id: string | null | undefined,
-): UseQueryResult<FindingDto> {
+export function useFindingDetail(id: string | null | undefined): UseQueryResult<FindingDto> {
   return useQuery({
     queryKey: ['finding', id] as const,
     queryFn: async ({ signal }) => {

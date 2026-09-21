@@ -54,12 +54,7 @@ const MAX_PARSE_ISSUES = 5;
  * and no parser messages that could echo them — only issue paths and codes.
  */
 export class ApiParseError extends ApiError {
-  constructor(
-    status: number,
-    endpoint: string,
-    issues: ApiParseIssue[],
-    requestId?: string,
-  ) {
+  constructor(status: number, endpoint: string, issues: ApiParseIssue[], requestId?: string) {
     super(
       status,
       {

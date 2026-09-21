@@ -3,11 +3,11 @@
 // malformed cases so the error assertions cannot pass vacuously.
 
 import { ApiParseError } from '@/lib/api/types';
-import type { Survey } from '../../types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Survey } from '../../types';
 import { useSurvey, useSurveys } from '../useSurveys';
 
 const originalFetch = global.fetch;
@@ -24,14 +24,15 @@ type MockFetchArgs = {
 
 function mockFetch(response: MockFetchArgs): typeof fetch {
   const headers = new Headers(response.headers);
-  return vi.fn(async () =>
-    ({
-      ok: response.status >= 200 && response.status < 300,
-      status: response.status,
-      headers,
-      text: async () =>
-        response.jsonBody !== undefined ? JSON.stringify(response.jsonBody) : '',
-    } as Response),
+  return vi.fn(
+    async () =>
+      ({
+        ok: response.status >= 200 && response.status < 300,
+        status: response.status,
+        headers,
+        text: async () =>
+          response.jsonBody !== undefined ? JSON.stringify(response.jsonBody) : '',
+      }) as Response,
   ) as unknown as typeof fetch;
 }
 

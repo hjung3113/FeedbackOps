@@ -24,14 +24,15 @@ type MockFetchArgs = {
 
 function mockFetch(response: MockFetchArgs): typeof fetch {
   const headers = new Headers(response.headers);
-  return vi.fn(async () =>
-    ({
-      ok: response.status >= 200 && response.status < 300,
-      status: response.status,
-      headers,
-      text: async () =>
-        response.jsonBody !== undefined ? JSON.stringify(response.jsonBody) : '',
-    } as Response),
+  return vi.fn(
+    async () =>
+      ({
+        ok: response.status >= 200 && response.status < 300,
+        status: response.status,
+        headers,
+        text: async () =>
+          response.jsonBody !== undefined ? JSON.stringify(response.jsonBody) : '',
+      }) as Response,
   ) as unknown as typeof fetch;
 }
 

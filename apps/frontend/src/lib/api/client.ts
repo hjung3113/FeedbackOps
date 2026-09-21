@@ -1,8 +1,8 @@
 import { mintIdempotencyKey } from './idempotency';
 import {
   ApiError,
-  ApiParseError,
   type ApiErrorEnvelope,
+  ApiParseError,
   type ApiParseIssue,
   type RateLimitInfo,
 } from './types';
@@ -133,7 +133,12 @@ async function sendRequest(
 }
 
 function rawToResponse<T>(raw: RawApiResponse, data: T): ApiResponse<T> {
-  const base: ApiResponse<T> = { status: raw.status, data, etag: raw.etag, requestId: raw.requestId };
+  const base: ApiResponse<T> = {
+    status: raw.status,
+    data,
+    etag: raw.etag,
+    requestId: raw.requestId,
+  };
   if (raw.rateLimit) base.rateLimit = raw.rateLimit;
   if (raw.retryAfterSeconds !== undefined) base.retryAfterSeconds = raw.retryAfterSeconds;
   return base;
@@ -182,8 +187,7 @@ export async function apiRequest<T>(
   const raw = await sendRequest(method, path, opts);
   if (raw.notModified) return rawToResponse(raw, undefined as T);
 
-  const parse =
-    typeof parser === 'function' ? parser : (input: unknown) => parser.parse(input);
+  const parse = typeof parser === 'function' ? parser : (input: unknown) => parser.parse(input);
   const query = path.indexOf('?');
   const endpoint = `${method.toUpperCase()} ${query === -1 ? path : path.slice(0, query)}`;
   let data: T;

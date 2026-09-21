@@ -118,14 +118,11 @@ describe('unparsed apiClient endpoints allowlist', () => {
       const pinned = allowed.get(file);
       if (pinned === undefined) {
         failures.push(
-          `${file}: ${count} unparsed apiClient call(s) but the file is not in ` +
-            'api-unparsed-allowlist.txt — migrate to apiRequest with a shared schema, ' +
-            'or add an audited allowlist entry.',
+          `${file}: ${count} unparsed apiClient call(s) but the file is not in api-unparsed-allowlist.txt — migrate to apiRequest with a shared schema, or add an audited allowlist entry.`,
         );
       } else if (count > pinned) {
         failures.push(
-          `${file}: ${count} unparsed apiClient call(s) > allowlisted ${pinned} — ` +
-            'audit the new call(s) and update the entry (shrink, never grow, overall).',
+          `${file}: ${count} unparsed apiClient call(s) > allowlisted ${pinned} — audit the new call(s) and update the entry (shrink, never grow, overall).`,
         );
       } else if (count < pinned) {
         failures.push(

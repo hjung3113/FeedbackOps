@@ -4,11 +4,7 @@
 // unknown fields are stripped, never fatal.
 
 import { describe, expect, it } from 'vitest';
-import {
-  listSurveysResponseSchema,
-  surveyDtoSchema,
-  surveyQuestionDtoSchema,
-} from '../dto.js';
+import { listSurveysResponseSchema, surveyDtoSchema, surveyQuestionDtoSchema } from '../dto.js';
 
 const QUESTION = {
   id: '6f1c2b3a-1111-4222-8333-444455556666',
