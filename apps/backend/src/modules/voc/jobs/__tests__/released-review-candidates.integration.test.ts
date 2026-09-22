@@ -10,7 +10,7 @@ import {
   insertVocDirectly,
   uid,
 } from "../../../voc/__tests__/_seed-helpers.js";
-import { insertTaskRow } from "../../__tests__/_seed-helpers.js";
+import { insertTaskRow } from "../../../tasks/__tests__/_seed-helpers.js";
 import { releasedReviewCandidatesHandler } from "../released-review-candidates.js";
 import { createPublicUpdateReviewCandidatesService } from "../../../voc/public-update-review-candidates/service.js";
 

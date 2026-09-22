@@ -44,7 +44,7 @@ import { lockAnalyticsArea, lockManagedSystem } from '../voc/repo.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,
-} from './jobs/released-review-candidates.js';
+} from '../voc/jobs/released-review-candidates.js';
 import {
   type TaskCommentRow,
   type TaskRow,

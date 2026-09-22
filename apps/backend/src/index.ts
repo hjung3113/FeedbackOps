@@ -20,7 +20,6 @@ import { createRootLogger } from './lib/logger.js';
 import { getStorage } from './lib/storage/factory.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { registerCoreJobs } from './modules/core/jobs/index.js';
-import { registerTasksJobs } from './modules/tasks/index.js';
 import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
 import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
 import { registerVocJobs } from './modules/voc/jobs/index.js';
@@ -68,14 +67,6 @@ await registerCoreJobs(boss, {
   storage: getStorage(undefined, { log: jobLog }),
   log: jobLog,
 });
-await registerTasksJobs(boss, {
-  db: dbHandle.db,
-  publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
-    db: dbHandle.db,
-    auditService: createAuditService(),
-  }),
-  log: jobLog,
-});
 // #168 (ADR-0034 D6). Registered even when the provider is disabled: the
 // backfill cron row must exist so enabling a provider is a config change, not
 // a queue-registration change. Both handlers no-op while disabled.
@@ -84,6 +75,10 @@ await registerVocJobs(boss, {
   provider: createEmbeddingProvider(config),
   embeddingVersion: config.EMBEDDING_VERSION,
   embeddingEnabled: isEmbeddingEnabled(config),
+  publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
+    db: dbHandle.db,
+    auditService: createAuditService(),
+  }),
   log: jobLog,
 });
 
