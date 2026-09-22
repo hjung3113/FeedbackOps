@@ -314,32 +314,39 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     );
   });
 
-  it('PATCH /tasks/:id returns the same source without a voc verdict (only GET carries it)', async () => {
+  it('PATCH /tasks/:id returns the same source.voc verdict as GET, on both the change and no-op paths', async () => {
     const chain = await seedChain({
       vocTitle: `SrcVoc VOC ${uid('patch')}`,
       findingSource: 'voc',
       taskRequestSource: 'finding',
     });
     const got = await getTask(adminCookie, chain.taskId);
-    const detail = got.json<{ updated_at: string; source: { voc?: unknown } }>();
-    // Positive twin: GET carries the verdict.
-    expect(detail.source.voc).toBeDefined();
+    const detail = got.json<{ updated_at: string; source: { voc?: { visibility_state: string } } }>();
+    // Positive twin: GET carries the verdict, so equality below is not vacuous.
+    expect(detail.source.voc?.visibility_state).toBe('allowed');
 
-    const patched = await app.inject({
-      method: 'PATCH',
-      url: `/tasks/${chain.taskId}`,
-      headers: {
-        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
-        'content-type': 'application/json',
-        'idempotency-key': randomUUID(),
-        'if-match': detail.updated_at,
-      },
-      payload: { status: 'doing' },
-    });
-    expect(patched.statusCode, JSON.stringify(patched.json())).toBe(200);
-    const body = patched.json<{ source: Record<string, unknown> | null }>();
-    expect(body.source).not.toBeNull();
-    expect(body.source).not.toHaveProperty('voc');
+    const patch = (ifMatch: string, status: string) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/tasks/${chain.taskId}`,
+        headers: {
+          cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+          'content-type': 'application/json',
+          'idempotency-key': randomUUID(),
+          'if-match': ifMatch,
+        },
+        payload: { status },
+      });
+
+    const changed = await patch(detail.updated_at, 'doing');
+    expect(changed.statusCode, JSON.stringify(changed.json())).toBe(200);
+    const changedBody = changed.json<{ updated_at: string; source: typeof detail.source }>();
+    expect(changedBody.source.voc).toEqual(detail.source.voc);
+
+    // No-op path (same status) is a separate return in the service.
+    const noop = await patch(changedBody.updated_at, 'doing');
+    expect(noop.statusCode, JSON.stringify(noop.json())).toBe(200);
+    expect(noop.json<{ source: typeof detail.source }>().source.voc).toEqual(detail.source.voc);
   });
 
   it('developer with voc.read on the Managed System also gets the allowed verdict', async () => {
