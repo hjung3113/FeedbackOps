@@ -10,7 +10,7 @@ Screen mapping lives in `docs/frontend/ui-design-system.md`.
 ## Token Governance
 
 ```text
-- DESIGN.md provides raw visual token seed.
+- docs/frontend/tokens.md provides raw visual token seed.
 - Frontend components consume semantic tokens from the design system layer.
 - Screen code must not hard-code colors, radii, or shadows.
 - New tokens require updating this document or docs/frontend/ui-design-system.md.

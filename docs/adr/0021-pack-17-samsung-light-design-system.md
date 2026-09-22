@@ -24,7 +24,7 @@ ADR-0016 locked "dark-only in MVP" with the explicit reopen clause: "Introducing
 
 2. **Token format in runtime CSS = R G B triple** (decimal, space-separated). `tokens.css` declares `--color-pitch-black: 243 247 254;` so Tailwind utilities can compose alpha via `rgb(var(--color-pitch-black) / <alpha-value>)`. This preserves spec voc.md opacity utilities like `bg-severity-high/15`.
 
-3. **DESIGN.md and `token-fidelity.fixture.ts` keep hex notation** for human readability and snapshot comparison against `docs/design-prototype/styles.css`. The two-format split is explicit: hex for docs/fixtures, R G B for runtime tokens.
+3. **DESIGN.md and `token-fidelity.fixture.ts` keep hex notation** for human readability and snapshot comparison against `docs/design-prototype/styles.css`. The hex seed file is now `docs/frontend/tokens.md`; root `DESIGN.md` only points there. The two-format split is explicit: hex for docs/fixtures, R G B for runtime tokens.
 
 4. **WCAG 2.2 AA target inherited from ADR-0016** continues to apply — but contrast pairs must be re-validated for the inverted palette. Dark-theme contrast guarantees do NOT transfer.
 

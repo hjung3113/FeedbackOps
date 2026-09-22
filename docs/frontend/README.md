@@ -28,7 +28,7 @@ Actor surface contracts live in `docs/frontend/specs/actors.md`.
 
 ## Visual Input
 
-`DESIGN.md` is a raw visual token seed. It does not own component behavior,
+`docs/frontend/tokens.md` is a raw visual token seed. It does not own component behavior,
 route behavior, workflow states, accessibility behavior, or frontend source
 paths.
 

@@ -179,7 +179,7 @@ Use this when handing the Open Design prototype back to the linked `FeedbackOps`
 
 ## 4. Design system mapping
 
-Source of truth: [`DESIGN.md`](../DESIGN.md). Implementation contract: [`docs/frontend/ui-design-system.md`](../docs/frontend/ui-design-system.md).
+Source of truth: [`docs/frontend/tokens.md`](../frontend/tokens.md). Implementation contract: [`docs/frontend/ui-design-system.md`](../docs/frontend/ui-design-system.md).
 
 ### Raw tokens (DESIGN.md → CSS custom properties)
 

@@ -108,7 +108,7 @@ Implementation agents should read these required documents in order:
 Reference and draft documents:
 
 ```text
-- DESIGN.md: visual token seed only; not a component or route contract.
+- docs/frontend/tokens.md: visual token seed only; not a component or route contract.
 - 15-data-contracts.md: design-level data vocabulary until superseded by migrations.
 - docs/design/archive/14-api-draft.md: archived historical input. Not required reading. Not endpoint authority.
 ```

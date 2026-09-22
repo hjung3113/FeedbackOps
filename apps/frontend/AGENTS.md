@@ -6,7 +6,7 @@
 - Use `docs/frontend/ui-design-system.md` for component behavior and layout contracts.
 - Use `docs/frontend/component-inventory.md` before creating a new shared component.
 - Use `docs/frontend/routes-and-layout.md` for URL state, list/detail behavior, and responsive navigation.
-- Use `DESIGN.md` only as the raw token seed.
+- Use `docs/frontend/tokens.md` only as the raw token seed.
 - Use `apps/frontend/src/features/*/AGENTS.md` for route-specific ownership before adding screens.
 - New endpoints must use `apiRequest(method, path, parser, opts)` with a response schema from `@fops/shared`; legacy unparsed calls are tracked in `apps/frontend/src/lib/api/api-unparsed-allowlist.txt`.
 
