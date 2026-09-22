@@ -6,6 +6,7 @@ import {
   linkEvidenceRequestSchema,
   linkTaskRequestSchema,
   listFindingCommentsQuerySchema,
+  listFindingsQuerySchema,
   patchFindingRequestSchema,
 } from '@fops/shared';
 
@@ -15,7 +16,6 @@ import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
-import { listFindingsQuerySchema } from './list-query.js';
 import type { FindingsService } from './service.js';
 
 export interface FindingsRoutesOptions {

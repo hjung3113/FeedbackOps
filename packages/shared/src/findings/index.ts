@@ -262,4 +262,11 @@ export const linkEvidenceRequestSchema = z
   .strict();
 export type LinkEvidenceRequest = z.infer<typeof linkEvidenceRequestSchema>;
 
+export const listFindingsQuerySchema = z
+  .object({
+    managed_system_id: z.string().uuid().optional(),
+  })
+  .strict();
+export type ListFindingsQuery = z.infer<typeof listFindingsQuerySchema>;
+
 export * from './comments.js';
