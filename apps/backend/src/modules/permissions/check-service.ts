@@ -32,7 +32,7 @@ import { type Capability, adminModuleBypassFor } from '@fops/shared';
 import type { Db } from '../../db/client.js';
 import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 import type { Tx } from '../../db/tx.js';
-import { allManagedSystemIds } from '../core/managed-systems/read-projections.js';
+import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Decision shape — locked verbatim by issue #4. Do not extend without an

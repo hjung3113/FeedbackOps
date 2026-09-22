@@ -16,7 +16,7 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
-import { allManagedSystemIds } from '../core/managed-systems/read-projections.js';
+import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import { permissionDenies, permissionGrants } from '../../db/schema/permission.js';
 
 export type Scope = { kind: 'all' } | { kind: 'scoped'; managedSystemIds: string[] };
