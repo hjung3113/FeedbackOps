@@ -2,8 +2,8 @@
 // (ADR-0013 "Health endpoints", amended 2026-09-22).
 //
 // Contract:
-//   * `GET /health/live` depends on NOTHING downstream — it is handled
-//     inline in server.ts; this module only serves readiness.
+//   * `GET /health/live` depends on NOTHING downstream — the route lives in
+//     modules/core/health/routes.ts; this module only serves readiness.
 //   * `GET /health/ready` probes Postgres, pg-boss, and attachment storage
 //     in parallel, each bounded by its own timeout (default 2000 ms), so a
 //     hanging dependency yields 503 within roughly the timeout instead of

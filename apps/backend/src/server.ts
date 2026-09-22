@@ -2,7 +2,6 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
-import { errorCodeSchema } from '@fops/shared';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import {
   type ZodTypeProvider,
@@ -11,15 +10,14 @@ import {
 } from 'fastify-type-provider-zod';
 import type { PgBoss } from 'pg-boss';
 import type { Logger as PinoLogger } from 'pino';
-import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
-import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
-import { type HealthCheckName, type InFlightProbe, runReadinessChecks } from './lib/health.js';
+import { registerHttpErrorHandler } from './lib/http-error-handler.js';
 import { reqLogSerializer } from './lib/logger.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
+import { buildRateLimitTiers } from './lib/rate-limit-tiers.js';
 import { getStorage } from './lib/storage/factory.js';
 import type { StorageBackend } from './lib/storage/index.js';
 import { SESSION_COOKIE_NAME } from './middleware/require-session.js';
@@ -37,6 +35,7 @@ import { createOidcAuthProvider } from './modules/auth/oidc-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
+import { healthRoutes } from './modules/core/health/routes.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
 import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
 import { createFindingsService, findingsRoutes } from './modules/findings/index.js';
@@ -277,177 +276,32 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  // Per-route tiers (ADR-0015:11-13). Registered as helper factories the
-  // mutation handlers will attach in later slices. Slice 1 #3 has no
-  // consumer of the sensitive tier — the plumbing is in place so #4/#5
-  // pick it up without touching server.ts again.
-  app.decorate('rateLimitConfig', {
-    mutation: {
-      max: 10,
-      timeWindow: '1 minute',
-      keyGenerator: actorAwareKeyGenerator,
-      routeGroup: 'mutation',
-    },
-    sensitive: {
-      max: 5,
-      timeWindow: '1 minute',
-      keyGenerator: actorAwareKeyGenerator,
-      routeGroup: 'sensitive',
-    },
-    // TODO(F18 follow-up): add admin bypass for the read tier once the
-    // admin-role detection helper lands (see plan §C3 follow-up F18).
-    read: {
-      max: 300,
-      timeWindow: '1 minute',
-      keyGenerator: actorAwareKeyGenerator,
-      routeGroup: 'read',
-    },
-    // Slice 3 #17 — Reporter pre-triage edit (PATCH /vocs/:id/description).
-    // 30/min per actor (more permissive than generic `mutation: 10/min` because
-    // a single edit session can produce several saves; less than read tier).
-    // Plan §spec issue #17.
-    reporterEdit: {
-      max: 30,
-      timeWindow: '1 minute',
-      keyGenerator: actorAwareKeyGenerator,
-      routeGroup: 'reporter_edit',
-    },
-    // PLAN-22 C3a — POST /attachments. 20/min per actor. Admin bypass is a
-    // documented follow-up: it depends on the same admin-role helper called
-    // out for the read tier above; once that lands, both tiers gain `skip`.
-    attachmentMutation: {
-      max: 20,
-      timeWindow: '1 minute',
-      keyGenerator: actorAwareKeyGenerator,
-      routeGroup: 'attachment_mutation',
-    },
-  });
+  // Per-route tiers (ADR-0015:11-13) — lib/rate-limit-tiers.ts. The actor
+  // key generator stays here: it closes over sessionService and the
+  // rate-limit actor cache, both wired above.
+  app.decorate('rateLimitConfig', buildRateLimitTiers(actorAwareKeyGenerator));
 
-  // ── Error handler ─ ADR-0012 envelope ────────────────────────────────
-  app.setErrorHandler((err, req, reply) => {
-    // HttpError instances carry an ADR-0012 code. Use the zod enum schema
-    // (closed ErrorCode union from @fops/shared) so an unknown code like
-    // `internal.something_new` falls through to the generic 500 branch
-    // below instead of being silently widened by a regex+`as never` cast.
-    const rawCode = (err as { code?: string }).code;
-    if (typeof rawCode === 'string') {
-      const parsed = errorCodeSchema.safeParse(rawCode);
-      if (parsed.success) {
-        const status = statusForCode(parsed.data);
-        const errDetail = (err as { detail?: Record<string, unknown> }).detail;
-        // F3: `requestable_permission` belongs at the top level of ErrorEnvelope
-        // (ADR-0012 / packages/shared/src/errors/codes.ts:67-71). Hoist it out
-        // of `detail` when present so the wire format matches the typed contract.
-        let hoisted: Record<string, unknown> | undefined;
-        let cleanDetail: Record<string, unknown> | undefined = errDetail;
-        if (errDetail && 'requestable_permission' in errDetail) {
-          const { requestable_permission, ...rest } = errDetail;
-          hoisted = requestable_permission as Record<string, unknown>;
-          cleanDetail = Object.keys(rest).length > 0 ? rest : undefined;
-        }
-        const envelope: Record<string, unknown> = {
-          code: parsed.data,
-          message: err.message,
-          detail: cleanDetail,
-        };
-        if (hoisted !== undefined) envelope.requestable_permission = hoisted;
-        return reply.code(status).send(envelope);
-      }
-    }
-    // Zod validation errors surface via fastify-type-provider-zod with
-    // statusCode 400; remap to ADR-0012 envelope. Review HTTP-M-1:
-    // fastify-type-provider-zod returns the raw ZodIssue array in
-    // `err.validation`. Slim each entry to `{path, code}` so internal
-    // field paths and discriminator codes are not exposed (CWE-209).
-    const validation = (err as { validation?: unknown }).validation;
-    if (validation) {
-      const issues = Array.isArray(validation) ? (validation as ZodIssueShape[]) : [];
-      return reply.code(422).send({
-        code: 'validation.failed',
-        message: err.message,
-        detail: { fields: fieldsFromZodIssues(issues) },
-      });
-    }
-    req.log.error({ err }, 'unhandled error');
-    return reply.code(500).send({ code: 'internal.unexpected', message: 'internal server error' });
-  });
+  // ── Error handler ─ ADR-0012 envelope (lib/http-error-handler.ts) ────
+  // Registered on the ROOT instance: a plugin-scoped setErrorHandler would
+  // not cover sibling product routes.
+  // Same pino-logger variance as `return app as unknown as FastifyInstance`
+  // below: the concrete instance satisfies the default contract at runtime.
+  registerHttpErrorHandler(app as unknown as FastifyInstance);
 
-  // ── Routes ───────────────────────────────────────────────────────────
-  app.route({
-    method: 'GET',
-    url: '/health',
-    schema: {
-      response: {
-        200: z.object({
-          status: z.literal('ok'),
-          ts: z.string().datetime(),
-        }),
-      },
-    },
-    handler: async () => ({ status: 'ok' as const, ts: new Date().toISOString() }),
-  });
-
-  // ── Health probes — ADR-0013 "Health endpoints" (amended 2026-09-22) ──
+  // ── Health routes ─ ADR-0013 (modules/core/health/routes.ts) ────────
   // Resolved once and shared with the attachments module below. This is the
   // same `opts.storage ?? getStorage()` instance attachment routes already
   // use. `getStorage()` is a lazy proxy: env errors surface on the first
   // `.exists()` call and count as a readiness-check failure there, never a
   // boot crash.
   const attachmentsStorage = opts.storage ?? getStorage();
-
-  // Liveness: the process is up. Depends on NOTHING downstream (no DB, no
-  // boss, no storage) so it never flaps with dependency blips.
-  // Probe routes opt out of @fastify/rate-limit at the ROUTE level
-  // (`config.rateLimit: false`). The global `allowList` runs only AFTER the
-  // plugin's `keyGenerator`, which resolves the session cookie via a DB
-  // lookup — a hung DB would hang even liveness. Route-level opt-out skips
-  // the key generator entirely.
-  app.route({
-    method: 'GET',
-    url: '/health/live',
-    config: { rateLimit: false },
-    schema: {
-      response: {
-        200: z.object({ status: z.literal('ok') }),
-      },
-    },
-    handler: async () => ({ status: 'ok' as const }),
-  });
-
-  // Readiness: Postgres answers, pg-boss is usable, storage is reachable.
-  // Checks run in parallel, each bounded by `healthProbeTimeoutMs` (default
-  // 2000 ms; ADR-0013). Bodies are fixed-shape and never carry error text —
-  // DSN-bearing messages stay server-side, logged as `{ check, errName }`.
-  const healthChecksSchema = z.object({
-    database: z.enum(['ok', 'fail']),
-    pg_boss: z.enum(['ok', 'fail']),
-    storage: z.enum(['ok', 'fail']),
-  });
-  const readinessInFlight = new Map<HealthCheckName, InFlightProbe>();
-  app.route({
-    method: 'GET',
-    url: '/health/ready',
-    config: { rateLimit: false },
-    schema: {
-      response: {
-        200: z.object({ status: z.literal('ok'), checks: healthChecksSchema }),
-        503: z.object({ status: z.literal('unavailable'), checks: healthChecksSchema }),
-      },
-    },
-    handler: async (req, reply) => {
-      const result = await runReadinessChecks({
-        pool: dbHandle.pool,
-        boss,
-        storage: attachmentsStorage,
-        timeoutMs: opts.healthProbeTimeoutMs,
-        log: req.log,
-        inFlight: readinessInFlight,
-      });
-      if (!result.ok) {
-        return reply.code(503).send({ status: 'unavailable', checks: result.checks });
-      }
-      return reply.code(200).send({ status: 'ok' as const, checks: result.checks });
-    },
+  await app.register(healthRoutes, {
+    pool: dbHandle.pool,
+    boss,
+    storage: attachmentsStorage,
+    ...(opts.healthProbeTimeoutMs !== undefined
+      ? { healthProbeTimeoutMs: opts.healthProbeTimeoutMs }
+      : {}),
   });
 
   // ADR-0006:16 — the two providers are swapped by the AUTH_PROVIDER env
