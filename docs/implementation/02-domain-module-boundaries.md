@@ -153,7 +153,7 @@ Entity Linking uses providers to enforce:
 - packages/ui implements reusable visual and interaction primitives.
 - apps/frontend/src/features/{home,my-work,voc,voc-cluster,surveys,tasks,integration,admin} own route and screen composition.
 - Findings, Evidence, Coverage, and Links are Integration feature surfaces.
-- Finding detail composes `FindingDetailPanel` → `FullFindingDetail` → `useFindingDetailController` under `apps/frontend/src/features/integration`; shared UI and hooks are under `apps/frontend/src/features/cross-system` and `apps/frontend/src/lib/cross-system`.
+- Finding detail composes `FindingDetailPanel` → `FullFindingDetail` → `useFindingDetailController` under `apps/frontend/src/features/findings`; shared UI and hooks are under `apps/frontend/src/features/cross-system` and `apps/frontend/src/lib/cross-system`.
 - Analytics Areas, Permission Requests, Managed System Registry, and settings are Admin feature surfaces.
 - Frontend features represent UI surfaces for product systems; they do not own domain rules or writes.
 - Feature screens compose UI primitives and call typed API hooks.

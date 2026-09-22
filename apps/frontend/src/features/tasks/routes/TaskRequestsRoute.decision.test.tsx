@@ -53,7 +53,7 @@ vi.mock('@fops/ui', async () => {
     ),
   };
 });
-vi.mock('@/features/integration/hooks/useFindingDetail', () => ({
+vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
   useFindingDetail: () => ({ data: null }),
 }));
 vi.mock('@/lib/api/analytics-areas', () => ({

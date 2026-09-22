@@ -47,7 +47,7 @@ Route naming rules:
 
 ```text
 - Home is the user-facing navigation label for `/`.
-- Findings routes at top-level `/findings`, while Integration retains feature ownership.
+- Findings routes at top-level `/findings`. Feature code lives in `features/findings/`, not under Integration.
 - Evidence, Coverage, and Links stay under `/integration/*`.
 - Task Requests are Tasks intake routes, not top-level routes.
 - Analytics Areas and Permission Requests are Admin routes, not top-level work routes.

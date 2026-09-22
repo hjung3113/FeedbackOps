@@ -362,7 +362,7 @@ vi.mock(
   }),
 );
 
-vi.mock("@/features/integration/hooks/useFindingsList", () => ({
+vi.mock("@/features/findings/hooks/useFindingsList", () => ({
   useFindingsList: () => ({
     data: {
       items: [

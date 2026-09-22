@@ -10,10 +10,10 @@ features/admin/permissions/permission-state-view.tsx 2
 features/admin/settings/use-workspace-settings.ts 3
 features/cross-system/create-finding/useCreateFindingFromVocMutation.ts 2
 features/integration/hooks/useEntityLinkInventory.ts 2
-features/integration/hooks/useEvidenceHighlights.ts 2
-features/integration/hooks/useEvidenceMutations.ts 3
-features/integration/hooks/useFindingStatusMutation.ts 2
-features/integration/hooks/useRequestTaskFromFinding.ts 2
+features/findings/hooks/useEvidenceHighlights.ts 2
+features/findings/hooks/useEvidenceMutations.ts 3
+features/findings/hooks/useFindingStatusMutation.ts 2
+features/findings/hooks/useRequestTaskFromFinding.ts 2
 features/surveys/hooks/useCreateFindingFromSurveyResponse.ts 2
 features/surveys/hooks/useSurveys.ts 9
 features/voc-cluster/hooks/useAddClusterMember.ts 2

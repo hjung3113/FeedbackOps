@@ -89,8 +89,8 @@ Authority follows subject; there is no universal conflict ladder.
 - Repositories write only tables owned by their module.
 - Source-shaped routes do not grant write ownership to the source module.
 - Frontend screens compose typed API hooks and shared components; they do not enforce backend permissions as truth.
-- Frontend feature folders follow top-level route ownership: `home`, `my-work`, `voc`, `voc-cluster`, `surveys`, `tasks`, `integration`, `admin`.
-- Integration owns Findings, Evidence, Coverage, and Links feature code. Findings routes at top-level `/findings`; Evidence, Coverage, and Links stay under `/integration/*`. VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
+- Frontend feature folders follow top-level route ownership: `home`, `my-work`, `voc`, `findings`, `voc-cluster`, `surveys`, `tasks`, `integration`, `admin`.
+- Findings feature code lives in `features/findings/` and is mounted at top-level `/findings`. Integration keeps Evidence, Coverage, and Links feature code. Evidence, Coverage, and Links stay under `/integration/*`. VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
 - Managed System Registry, Analytics Areas, Permission Requests, and workspace settings live under Admin routes.
 - `packages/shared` must not import either app. `packages/ui` must not call APIs or own domain mutations.
 

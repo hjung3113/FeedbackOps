@@ -22,7 +22,7 @@
 - Right detail panels preserve list context on desktop; they become drill-in panels on mobile.
 - Permission-limited content must show an approved summary or a request path, not a blank failure.
 - Top-level feature folders and route ownership follow root `AGENTS.md` → Implementation Boundaries (canonical list, includes `voc-cluster`).
-- Integration owns component/hook code for Findings (mounted at top-level `/findings`, `/findings/$findingId`); it owns both code and URL for Links (`/integration/links`). Evidence and Coverage routes are planned, not yet built. See `apps/frontend/src/features/integration/AGENTS.md`.
+- Finding code lives in `apps/frontend/src/features/findings/` (mounted at top-level `/findings`, `/findings/$findingId`). Integration owns Links code and URL (`/integration/links`). Evidence and Coverage routes are planned, not yet built. See `apps/frontend/src/features/findings/AGENTS.md` and `apps/frontend/src/features/integration/AGENTS.md`.
 - Managed System scope is a filter/defaulting context, not duplicated navigation.
 - Use Role Level labels: Admin, Developer, and User. Backend capability checks remain authoritative.
 - Keep Public Update, Reporter Reply, and Internal Comment as separate communication surfaces.
