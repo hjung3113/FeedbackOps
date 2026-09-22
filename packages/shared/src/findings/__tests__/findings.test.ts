@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   approvedExcerptDtoSchema,
   createFindingFromSurveyResponseRequestSchema,
+  surveyResponseExcerptCandidateDtoSchema,
+} from '../../surveys/create-finding.js';
+import {
   createFindingRequestSchema,
   evidenceHighlightDtoSchema,
   findingDtoSchema,
@@ -10,7 +13,6 @@ import {
   findingStatusSchema,
   linkTaskRequestSchema,
   patchFindingRequestSchema,
-  surveyResponseExcerptCandidateDtoSchema,
 } from '../index.js';
 
 const U1 = '01919b8c-0000-7000-8000-000000000001';
