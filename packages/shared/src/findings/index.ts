@@ -1,13 +1,9 @@
 import { z } from 'zod';
 
-export const findingStatusSchema = z.enum([
-  'draft',
-  'active',
-  'not_actionable',
-  'converted',
-  'archived',
-]);
-export type FindingStatus = z.infer<typeof findingStatusSchema>;
+import { findingStatusSchema } from './status.js';
+
+export { findingStatusSchema } from './status.js';
+export type { FindingStatus } from './status.js';
 
 export const findingSeveritySchema = z.enum(['low', 'medium', 'high', 'critical']);
 export type FindingSeverity = z.infer<typeof findingSeveritySchema>;
@@ -265,3 +261,5 @@ export const linkEvidenceRequestSchema = z
   })
   .strict();
 export type LinkEvidenceRequest = z.infer<typeof linkEvidenceRequestSchema>;
+
+export * from './comments.js';

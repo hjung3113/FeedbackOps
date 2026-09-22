@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 
-import type { TaskDetailSource, TaskPriority, TaskStatus } from '@fops/shared';
+import type { TaskCommentKind, TaskDetailSource, TaskPriority, TaskStatus } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -44,6 +44,31 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     created_by: row.created_by as string,
     created_at: toDate(row.created_at as Date | string),
     updated_at: toDate(row.updated_at as Date | string),
+  };
+}
+
+export interface TaskCommentRow {
+  id: string;
+  task_id: string;
+  actor_id: string;
+  kind: TaskCommentKind;
+  from_status: TaskStatus | null;
+  to_status: TaskStatus | null;
+  body_rich_content: unknown;
+  created_at: Date;
+}
+
+function mapTaskCommentRow(row: Record<string, unknown>): TaskCommentRow {
+  return {
+    id: row.id as string,
+    task_id: row.task_id as string,
+    actor_id: row.actor_id as string,
+    kind: row.kind as TaskCommentKind,
+    from_status: (row.from_status as TaskStatus | null) ?? null,
+    to_status: (row.to_status as TaskStatus | null) ?? null,
+    body_rich_content: row.body_rich_content,
+    created_at:
+      row.created_at instanceof Date ? row.created_at : new Date(row.created_at as string),
   };
 }
 
@@ -126,6 +151,67 @@ export async function updateTaskStatus(
   const row = result.rows[0];
   if (!row) throw new Error('updateTaskStatus returned no row');
   return mapTaskRow(row);
+}
+
+export async function insertTaskComment(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    taskId: string;
+    actorId: string;
+    kind: TaskCommentKind;
+    fromStatus: TaskStatus | null;
+    toStatus: TaskStatus | null;
+    bodyRichContent: unknown;
+  },
+): Promise<TaskCommentRow> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    INSERT INTO task.task_comments (
+      workspace_id, task_id, actor_id, kind, from_status, to_status, body_rich_content
+    )
+    VALUES (
+      ${input.workspaceId}, ${input.taskId}, ${input.actorId}, ${input.kind},
+      ${input.fromStatus}, ${input.toStatus},
+      ${JSON.stringify(input.bodyRichContent)}::jsonb
+    )
+    RETURNING id, task_id, actor_id, kind, from_status, to_status, body_rich_content, created_at
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('insertTaskComment returned no row');
+  return mapTaskCommentRow(row);
+}
+
+export async function listTaskComments(
+  db: Db | Tx,
+  input: {
+    workspaceId: string;
+    taskId: string;
+    cursor?: { createdAt: string; id: string };
+    limit: number;
+  },
+): Promise<{ rows: TaskCommentRow[]; hasMore: boolean }> {
+  const cursorPredicate = input.cursor
+    ? sql`
+        AND (
+          created_at < ${input.cursor.createdAt}::timestamptz
+          OR (created_at = ${input.cursor.createdAt}::timestamptz AND id < ${input.cursor.id}::uuid)
+        )
+      `
+    : sql``;
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT id, task_id, actor_id, kind, from_status, to_status, body_rich_content, created_at
+    FROM task.task_comments
+    WHERE workspace_id = ${input.workspaceId}
+      AND task_id = ${input.taskId}
+      ${cursorPredicate}
+    ORDER BY created_at DESC, id DESC
+    LIMIT ${input.limit + 1}
+  `);
+  const hasMore = result.rows.length > input.limit;
+  return {
+    rows: result.rows.slice(0, input.limit).map(mapTaskCommentRow),
+    hasMore,
+  };
 }
 
 export async function findTaskById(

@@ -1,5 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { check, date, index, pgSchema, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  date,
+  index,
+  jsonb,
+  pgSchema,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { actors, analyticsAreas, managedSystems, workspaces } from './core.js';
 import { taskRequests } from './task-request.js';
@@ -54,6 +64,46 @@ export const tasks = taskSchema.table(
     priorityCheck: check(
       'tasks_priority_check',
       sql`${t.priority} in ('low','medium','high','urgent')`,
+    ),
+  }),
+);
+
+export const taskComments = taskSchema.table(
+  'task_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    kind: text('kind').notNull().default('note'),
+    fromStatus: text('from_status'),
+    toStatus: text('to_status'),
+    bodyRichContent: jsonb('body_rich_content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    taskCreatedIdx: index('task_comments_task_created_idx').on(
+      t.taskId,
+      t.createdAt.desc(),
+      t.id.desc(),
+    ),
+    kindCheck: check('task_comments_kind_check', sql`${t.kind} in ('note','status_change')`),
+    statusPairCheck: check(
+      'task_comments_status_pair_check',
+      sql`(
+        (${t.kind} = 'note' and ${t.fromStatus} is null and ${t.toStatus} is null)
+        or (
+          ${t.kind} = 'status_change'
+          and ${t.fromStatus} in ('backlog','todo','doing','review','done','released','reopened')
+          and ${t.toStatus} in ('backlog','todo','doing','review','done','released','reopened')
+        )
+      )`,
     ),
   }),
 );
