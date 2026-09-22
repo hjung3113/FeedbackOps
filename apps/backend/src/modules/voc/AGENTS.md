@@ -154,9 +154,9 @@ and requires that changing the default updates the fixture in the same change.
 
 **Where it lives.**
 
-- `recommendations/eval/fixture.ts` — the labelled corpus: VOC texts, a vector
+- `src/test-support/recommendations-eval/fixture.ts` — the labelled corpus: VOC texts, a vector
   per item, and `(source, candidate, expected: related | unrelated)` pairs.
-- `recommendations/eval/harness.ts` — pure precision/recall/F1 at a given cut.
+- `src/test-support/recommendations-eval/harness.ts` — pure precision/recall/F1 at a given cut.
   No database, no provider; it scores whatever vectors the fixture carries.
 - `recommendations/eval/__tests__/` — harness arithmetic, and the coupling to
   the constant.

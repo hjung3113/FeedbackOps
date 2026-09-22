@@ -32,7 +32,7 @@
 // `pairs[].expectedSimilarity`, `vectorSource` and `expectedAtPin` are all
 // derived artifacts of whatever produced the vectors. To re-tune with real
 // embeddings, replace exactly those four and leave the harness, the tests and
-// the corpus alone. See `../../AGENTS.md` for the full procedure.
+// the corpus alone. See `../../modules/voc/AGENTS.md` for the full procedure.
 //
 // The fixture is a TypeScript module rather than JSON on purpose: the backend
 // build does not emit non-`.ts` files from `src/`, and a JSON fixture reached
@@ -45,7 +45,8 @@ export type PairLabel = 'related' | 'unrelated';
 /**
  * `near_boundary` marks pairs deliberately placed within a few points of the
  * pin. They are the only pairs a small change to the cut moves, so they are
- * what makes the coupling in `__tests__/fixture-pins-threshold.test.ts` bite.
+ * what makes the coupling in
+ * `src/modules/voc/recommendations/eval/__tests__/fixture-pins-threshold.test.ts` bite.
  */
 export type PairBand = 'clear' | 'near_boundary';
 

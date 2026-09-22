@@ -12,7 +12,8 @@
  *
  * Pinned at 0.75 as the initial value. **This number is still unvalidated.**
  * Step 5 added the ADR-0034 D5 evaluation fixture
- * (`eval/fixture.ts`, `eval/harness.ts`) and it does pin real behaviour — the
+ * (`src/test-support/recommendations-eval/fixture.ts`,
+ * `src/test-support/recommendations-eval/harness.ts`) and it does pin real behaviour — the
  * distance-to-similarity conversion, the comparison direction, the metric
  * arithmetic — but its vectors are hand-authored, not embeddings. Validating a
  * cut needs vectors from the provider that actually ships (ADR-0034 D1), which

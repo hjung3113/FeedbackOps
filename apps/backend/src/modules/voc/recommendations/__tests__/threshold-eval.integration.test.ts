@@ -29,8 +29,8 @@ import { createIdempotencyService } from '../../../core/idempotency/idempotency-
 import { createCheckService } from '../../../permissions/check-service.js';
 import { createVocClustersService } from '../../../voc-clusters/service.js';
 import { VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from '../constants.js';
-import { THRESHOLD_EVAL_FIXTURE, assertFixtureWellFormed } from '../eval/fixture.js';
-import { cosineSimilarity, evaluateFixture } from '../eval/harness.js';
+import { THRESHOLD_EVAL_FIXTURE, assertFixtureWellFormed } from '../../../../test-support/recommendations-eval/fixture.js';
+import { cosineSimilarity, evaluateFixture } from '../../../../test-support/recommendations-eval/harness.js';
 import {
   type VocRecommendationsActor,
   type VocRecommendationsService,
