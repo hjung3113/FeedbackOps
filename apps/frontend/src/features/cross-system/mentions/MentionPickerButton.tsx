@@ -1,7 +1,8 @@
-// MentionPickerButton — Combobox-backed @mention picker for InternalCommentComposer.
+// MentionPickerButton — Combobox-backed @mention picker.
 //
-// C5.4 (slice3 #21)
-// Spec: PLAN-21-SUBCHUNKS.md C5.4
+// Originally built for the VOC internal-comment composer (slice3 #21, PLAN-21-SUBCHUNKS.md);
+// moved to features/cross-system in #377 so progress-note composers can reuse it
+// without a voc → cross-system feature edge. Behavior unchanged.
 // Spec §3.5: Combobox click only — NOT inline @-autocomplete.
 //
 // Renders a small "@" trigger button. On click, opens a Combobox popover listing
@@ -11,7 +12,7 @@
 // Does NOT directly manipulate the editor — editor insertion is owned by the composer
 // so the picker can be tested without a live TipTap instance.
 
-import { type WorkspaceActor, useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
+import { type WorkspaceActor, useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { Popover, PopoverContent, PopoverTrigger } from '@fops/ui';
 import { cn } from '@fops/ui';
 import { AtSign } from 'lucide-react';

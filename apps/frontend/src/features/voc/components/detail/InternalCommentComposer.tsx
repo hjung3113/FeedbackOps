@@ -26,8 +26,9 @@
 //   - @Mention via MentionPickerButton (Combobox click only — NOT inline @-autocomplete, spec §3.5).
 //   - On 200: invalidate ['voc', voc.id], clear draft, toast 내부 코멘트가 추가되었습니다.
 
+import { MentionPickerButton } from '@/features/cross-system/mentions/MentionPickerButton';
+import { extractMentions } from '@/features/cross-system/mentions/extractMentions';
 import { useVocInternalCommentMutation } from '@/features/voc/hooks/useVocInternalCommentMutation';
-import { extractMentions } from '@/features/voc/lib/extractMentions';
 import { uploadAttachment } from '@/lib/api/attachments';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
@@ -38,7 +39,6 @@ import * as React from 'react';
 import { toast } from 'sonner';
 import { ComposerAttachmentDropzone } from './ComposerAttachmentDropzone';
 import { ComposerFooter } from './ComposerFooter';
-import { MentionPickerButton } from './MentionPickerButton';
 import { InternalCommentToolbar } from './rich-toolbars/InternalCommentToolbar';
 
 // ── Props ─────────────────────────────────────────────────────────────────────

@@ -1,23 +1,32 @@
 import {
   type AddEvidenceHighlightRequest,
+  type CreateFindingCommentRequest,
   type CreateFindingFromSurveyResponseRequest,
   type CreateFindingRequest,
   type EvidenceHighlightDto,
+  type FindingCommentDto,
   type FindingDto,
   type FindingStatus,
   type LinkEvidenceRequest,
   type LinkTaskRequest,
   type ListEvidenceHighlightsResponse,
+  type ListFindingCommentsQuery,
+  type ListFindingCommentsResponse,
   type PatchFindingRequest,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
+import { and, eq, inArray } from 'drizzle-orm';
+import { z } from 'zod';
 
 import type { Db } from '../../db/client.js';
+import { actors } from '../../db/schema/core.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { insertActiveEntityLink, resolveVocEndpoint } from '../entity-links/repo.js';
+import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import type { EntityLinksService } from '../entity-links/service.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
@@ -36,11 +45,14 @@ import {
 } from './repo-read.js';
 import {
   type EvidenceHighlightRow,
+  type FindingCommentRow,
   findVocSourceMeta,
   incrementFindingEvidenceCount,
   insertEvidenceHighlight,
   insertFinding,
+  insertFindingComment,
   listEvidenceHighlightsByFinding,
+  listFindingComments as listFindingCommentRows,
   listVocSourceMeta,
   lockFindingById,
   updateFindingLinkedTask,
@@ -77,6 +89,166 @@ function isUserDirectedStatusTarget(
   return USER_DIRECTED_STATUS_TARGETS.includes(
     status as (typeof USER_DIRECTED_STATUS_TARGETS)[number],
   );
+}
+
+const commentCursorSchema = z
+  .object({
+    createdAt: z.string().datetime({ offset: true }),
+    id: z.string().uuid(),
+  })
+  .strict();
+type CommentCursor = z.infer<typeof commentCursorSchema>;
+
+function decodeCommentCursor(raw: string): CommentCursor {
+  const fail = () =>
+    new HttpError('validation.failed', 'invalid cursor', {
+      fields: [{ path: ['cursor'], code: 'invalid_cursor' }],
+    });
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+  } catch {
+    throw fail();
+  }
+  const result = commentCursorSchema.safeParse(parsed);
+  if (!result.success) throw fail();
+  return result.data;
+}
+
+// WHY: input.createdAt is the raw postgres text cast (microsecond precision),
+// not a JS Date's toISOString() (millisecond precision) — two comments in the
+// same millisecond would otherwise collide on the cursor boundary and the
+// second one would be silently skipped on the next page. Mirrors
+// voc/repo-read.ts's _created_at_raw handling.
+//
+// Normalize the postgres text format to ISO 8601 so it validates against
+// z.string().datetime() in decodeCommentCursor: swap the space separator for
+// "T" and add a ":" to the zone offset ("...T...160586+09" -> "...+09:00",
+// not just the "+00" case voc/repo-read.ts assumes — this DB's default
+// session timezone is UTC, but nothing pins it, so a "+00"-only regex would
+// 422 every cursor the day that changes) (astra medium review, PR #449).
+export function normalizePgTimestampToIso(raw: string): string {
+  const isoLike = raw.replace(' ', 'T');
+  const match = isoLike.match(/^(.*)([+-]\d{2})(:?(\d{2}))?$/);
+  if (!match) return isoLike;
+  const [, base, offsetHours, , offsetMinutes] = match;
+  return `${base}${offsetHours}:${offsetMinutes ?? '00'}`;
+}
+
+function encodeCommentCursor(input: { createdAt: string; id: string }): string {
+  const createdAt = normalizePgTimestampToIso(input.createdAt);
+  return Buffer.from(JSON.stringify({ createdAt, id: input.id }), 'utf8').toString('base64');
+}
+
+function findingCommentToDto(row: FindingCommentRow): FindingCommentDto {
+  return {
+    id: row.id,
+    finding_id: row.finding_id,
+    actor_id: row.actor_id,
+    kind: row.kind,
+    from_status: row.from_status,
+    to_status: row.to_status,
+    body_rich_content: row.body_rich_content,
+    created_at: row.created_at.toISOString(),
+  };
+}
+
+function richContentFieldCode(error: RichContentError): string {
+  if (error.code === 'rich_content.external_image_forbidden') return 'external_image_forbidden';
+  return error.fields_code ?? 'disallowed_node';
+}
+
+function sanitizeCommentBody(doc: unknown): unknown {
+  const result = sanitizeTipTap({
+    surface: 'internal-comment',
+    doc: doc as Parameters<typeof sanitizeTipTap>[0]['doc'],
+  });
+  if (!result.ok) {
+    throw new HttpError(result.error.code, result.error.reason, {
+      fields: [{ path: ['body_rich_content'], code: richContentFieldCode(result.error) }],
+      hint: result.error.path,
+    });
+  }
+  return result.doc;
+}
+
+interface MentionNode {
+  attrs?: Record<string, unknown>;
+}
+
+function findNodesOfType(doc: unknown, type: string): MentionNode[] {
+  const results: MentionNode[] = [];
+  const stack: MentionNode[] = [doc as MentionNode];
+  while (stack.length > 0) {
+    const node = stack.pop() as MentionNode & { type?: string; content?: unknown[] };
+    if (!node || typeof node !== 'object') continue;
+    if (node.type === type) results.push(node);
+    if (Array.isArray(node.content)) {
+      for (const child of node.content) stack.push(child as MentionNode);
+    }
+  }
+  return results;
+}
+
+function dedupe(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function setsEqual(left: Set<string>, right: Set<string>): boolean {
+  if (left.size !== right.size) return false;
+  for (const value of left) if (!right.has(value)) return false;
+  return true;
+}
+
+async function validateCommentMentions(
+  tx: Tx,
+  workspaceId: string,
+  sanitizedBody: unknown,
+  mentions: string[] | undefined,
+): Promise<string[]> {
+  const mentionNodes = findNodesOfType(sanitizedBody, 'mention');
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  for (const node of mentionNodes) {
+    const actorId = node.attrs?.actor_id;
+    if (typeof actorId !== 'string' || !uuidRegex.test(actorId)) {
+      throw new HttpError('validation.failed', 'mention node attrs.actor_id must be a valid UUID', {
+        fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }],
+      });
+    }
+  }
+
+  const bodyMentionIds = dedupe(mentionNodes.map((node) => node.attrs?.actor_id as string));
+  const requestMentionIds = dedupe(mentions ?? []);
+  if (!setsEqual(new Set(bodyMentionIds), new Set(requestMentionIds))) {
+    throw new HttpError(
+      'validation.failed',
+      'mentions[] must exactly match the set of actor_ids referenced by mention nodes in body_rich_content',
+      { fields: [{ path: ['mentions'], code: 'invalid' }] },
+    );
+  }
+
+  if (requestMentionIds.length > 0) {
+    const foundRows = await tx
+      .select({ id: actors.id })
+      .from(actors)
+      .where(and(eq(actors.workspaceId, workspaceId), inArray(actors.id, requestMentionIds)));
+    if (foundRows.length !== requestMentionIds.length) {
+      throw new HttpError(
+        'validation.failed',
+        'one or more mention actor_ids do not belong to this workspace',
+        { fields: [{ path: ['mentions'], code: 'cross_workspace' }] },
+      );
+    }
+  }
+  return requestMentionIds;
+}
+
+function statusChangeBody(reason: string | undefined): unknown {
+  if (reason === undefined) return { type: 'doc', content: [{ type: 'paragraph' }] };
+  return sanitizeCommentBody({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: reason }] }],
+  });
 }
 
 function toDto(
@@ -264,6 +436,14 @@ export function createFindingsService(deps: FindingsServiceDeps) {
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
+
+          assertLinkManagedSystemCompatibility(
+            sourceVoc.primaryManagedSystemId,
+            targetManagedSystemId,
+            {
+              path: ['primary_managed_system_id'],
+            },
+          );
 
           if (input.analytics_area_id) {
             const aa = await lockAnalyticsArea(tx, actor.workspace_id, input.analytics_area_id);
@@ -566,6 +746,124 @@ export function createFindingsService(deps: FindingsServiceDeps) {
       findingId: row.id,
     });
     return toDto(row, source);
+  }
+
+  async function getFindingComments(args: {
+    actor: FindingsActor;
+    findingId: string;
+    query: ListFindingCommentsQuery;
+  }): Promise<ListFindingCommentsResponse> {
+    const finding = await findFindingById(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      findingId: args.findingId,
+    });
+    if (!finding) throw new HttpError('not_found.record', 'finding not found');
+
+    const readable = await canReadFinding(deps, args.actor, finding.primary_managed_system_id);
+    if (!readable) throw new HttpError('permission.denied', 'finding.read capability required');
+
+    const cursor = args.query.cursor ? decodeCommentCursor(args.query.cursor) : undefined;
+    const result = await listFindingCommentRows(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      findingId: finding.id,
+      ...(cursor ? { cursor } : {}),
+      limit: args.query.limit,
+    });
+    const last = result.rows[result.rows.length - 1];
+    return {
+      items: result.rows.map(findingCommentToDto),
+      page: {
+        ...(result.hasMore && last
+          ? { cursor: encodeCommentCursor({ createdAt: last.created_at_raw, id: last.id }) }
+          : {}),
+        has_more: result.hasMore,
+      },
+    };
+  }
+
+  async function createFindingComment(args: {
+    actor: FindingsActor;
+    findingId: string;
+    input: CreateFindingCommentRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: { comment: FindingCommentDto } }> {
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const finding = await lockFindingById(tx, {
+            workspaceId: args.actor.workspace_id,
+            findingId: args.findingId,
+          });
+          if (!finding) throw new HttpError('not_found.record', 'finding not found');
+
+          const managedSystem = await lockManagedSystem(
+            tx,
+            args.actor.workspace_id,
+            finding.primary_managed_system_id,
+          );
+          if (!managedSystem) throw new HttpError('not_found.record', 'managed system not found');
+          if (managedSystem.archived_at !== null) {
+            throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
+              fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
+            });
+          }
+
+          const canManage = await canManageFinding(
+            deps,
+            args.actor,
+            finding.primary_managed_system_id,
+            { tx },
+          );
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          const sanitizedBody = sanitizeCommentBody(args.input.body_rich_content);
+          const mentionIds = await validateCommentMentions(
+            tx,
+            args.actor.workspace_id,
+            sanitizedBody,
+            args.input.mentions,
+          );
+          if (findNodesOfType(sanitizedBody, 'attachmentRef').length > 0) {
+            throw new HttpError('validation.failed', 'attachments are not supported for comments', {
+              fields: [{ path: ['body_rich_content'], code: 'attachment_not_supported' }],
+            });
+          }
+
+          const row = await insertFindingComment(tx, {
+            workspaceId: args.actor.workspace_id,
+            findingId: finding.id,
+            actorId: args.actor.actor_id,
+            kind: 'note',
+            fromStatus: null,
+            toStatus: null,
+            bodyRichContent: sanitizedBody,
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'finding_comment_created',
+            subject_type: 'finding',
+            subject_id: finding.id,
+            summary: 'Finding comment created',
+            detail: {
+              finding_id: finding.id,
+              comment_id: row.id,
+              actor_id: args.actor.actor_id,
+              mentions: mentionIds,
+            },
+          });
+
+          return { status: 201, body: { comment: findingCommentToDto(row) } };
+        },
+      );
+    });
   }
 
   async function assertHighlightSourceReadableForWrite(args: {
@@ -928,6 +1226,16 @@ export function createFindingsService(deps: FindingsServiceDeps) {
             status: input.status,
           });
 
+          await insertFindingComment(tx, {
+            workspaceId: actor.workspace_id,
+            findingId: finding.id,
+            actorId: actor.actor_id,
+            kind: 'status_change',
+            fromStatus: finding.status,
+            toStatus: updated.status,
+            bodyRichContent: statusChangeBody(input.reason),
+          });
+
           const detail: Record<string, unknown> = {
             finding_id: finding.id,
             from_status: finding.status,
@@ -1093,6 +1401,8 @@ export function createFindingsService(deps: FindingsServiceDeps) {
     createFindingFromVoc,
     createFindingFromSurveyResponse,
     getFinding,
+    getFindingComments,
+    createFindingComment,
     listFindings,
     addEvidenceHighlight,
     listEvidenceHighlights,

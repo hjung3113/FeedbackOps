@@ -1,5 +1,7 @@
 import { sql } from 'drizzle-orm';
 
+import type { FindingCommentKind, FindingStatus } from '@fops/shared';
+
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import type { FindingReadRow } from './repo-read.js';
@@ -66,6 +68,35 @@ export interface EvidenceHighlightRow {
 
 function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
+}
+
+export interface FindingCommentRow {
+  id: string;
+  finding_id: string;
+  actor_id: string;
+  kind: FindingCommentKind;
+  from_status: FindingStatus | null;
+  to_status: FindingStatus | null;
+  body_rich_content: unknown;
+  created_at: Date;
+  // Postgres text-cast timestamp (microsecond precision) — JS Date only
+  // keeps millisecond precision, which silently drops comments across a
+  // cursor page boundary when two rows share the same millisecond.
+  created_at_raw: string;
+}
+
+function mapFindingCommentRow(row: Record<string, unknown>): FindingCommentRow {
+  return {
+    id: row.id as string,
+    finding_id: row.finding_id as string,
+    actor_id: row.actor_id as string,
+    kind: row.kind as FindingCommentKind,
+    from_status: (row.from_status as FindingStatus | null) ?? null,
+    to_status: (row.to_status as FindingStatus | null) ?? null,
+    body_rich_content: row.body_rich_content,
+    created_at: toDate(row.created_at as Date | string),
+    created_at_raw: String(row.created_at_raw ?? row.created_at),
+  };
 }
 
 function sqlUuidArray(ids: string[]): ReturnType<typeof sql> {
@@ -185,6 +216,69 @@ export async function updateFindingStatus(
   const row = result.rows[0];
   if (!row) throw new Error('updateFindingStatus returned no row');
   return mapFindingRow(row);
+}
+
+export async function insertFindingComment(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    findingId: string;
+    actorId: string;
+    kind: FindingCommentKind;
+    fromStatus: FindingStatus | null;
+    toStatus: FindingStatus | null;
+    bodyRichContent: unknown;
+  },
+): Promise<FindingCommentRow> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    INSERT INTO finding.finding_comments (
+      workspace_id, finding_id, actor_id, kind, from_status, to_status, body_rich_content
+    )
+    VALUES (
+      ${input.workspaceId}, ${input.findingId}, ${input.actorId}, ${input.kind},
+      ${input.fromStatus}, ${input.toStatus},
+      ${JSON.stringify(input.bodyRichContent)}::jsonb
+    )
+    RETURNING id, finding_id, actor_id, kind, from_status, to_status, body_rich_content,
+      created_at, created_at::text AS created_at_raw
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('insertFindingComment returned no row');
+  return mapFindingCommentRow(row);
+}
+
+export async function listFindingComments(
+  db: Db | Tx,
+  input: {
+    workspaceId: string;
+    findingId: string;
+    cursor?: { createdAt: string; id: string };
+    limit: number;
+  },
+): Promise<{ rows: FindingCommentRow[]; hasMore: boolean }> {
+  const cursorPredicate = input.cursor
+    ? sql`
+        AND (
+          created_at < ${input.cursor.createdAt}::timestamptz
+          OR (created_at = ${input.cursor.createdAt}::timestamptz AND id < ${input.cursor.id}::uuid)
+        )
+      `
+    : sql``;
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT id, finding_id, actor_id, kind, from_status, to_status, body_rich_content,
+      created_at, created_at::text AS created_at_raw
+    FROM finding.finding_comments
+    WHERE workspace_id = ${input.workspaceId}
+      AND finding_id = ${input.findingId}
+      ${cursorPredicate}
+    ORDER BY created_at DESC, id DESC
+    LIMIT ${input.limit + 1}
+  `);
+  const hasMore = result.rows.length > input.limit;
+  return {
+    rows: result.rows.slice(0, input.limit).map(mapFindingCommentRow),
+    hasMore,
+  };
 }
 
 export async function updateFindingLinkedTask(

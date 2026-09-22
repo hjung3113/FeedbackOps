@@ -387,7 +387,9 @@ export async function installMockApi(
 
     if (options.vocCreate && isRequest(route, 'GET', '/vocs/pre-submit-peers')) {
       const managedSystemId = url.searchParams.get('managed_system_id');
-      await json(route, 200, { items: vocCreatePeersByManagedSystem.get(managedSystemId ?? '')?.items ?? [] });
+      await json(route, 200, {
+        items: vocCreatePeersByManagedSystem.get(managedSystemId ?? '')?.items ?? [],
+      });
       return;
     }
 
@@ -720,16 +722,25 @@ export async function installMockApi(
         options.vocCreate
           ? vocCreateManagedSystems
           : options.managedSystemOwner
-          ? managedSystemOwnerList
-          : options.railScope
-            ? railScopeManagedSystems
-            : managedSystems,
+            ? managedSystemOwnerList
+            : options.railScope
+              ? railScopeManagedSystems
+              : managedSystems,
       );
       return;
     }
 
     if (isRequest(route, 'GET', '/findings')) {
       await json(route, 200, { items: scenario.findings });
+      return;
+    }
+
+    // #377: the progress-note timeline reads comments on every Finding/Task
+    // detail render. Every scenario must answer this read or the fail-closed
+    // default below kills the spec — serve an empty first page unconditionally.
+    const commentsMatch = url.pathname.match(/^\/(findings|tasks)\/[^/]+\/comments$/);
+    if (request.method() === 'GET' && commentsMatch) {
+      await json(route, 200, { items: [], page: { has_more: false } });
       return;
     }
 

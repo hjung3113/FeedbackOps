@@ -1,19 +1,26 @@
 import { randomUUID } from 'node:crypto';
 import {
   type ConvertTaskRequestRequest,
+  type CreateTaskCommentRequest,
   type LinkExistingTaskRequest,
+  type ListTaskCommentsQuery,
+  type ListTaskCommentsResponse,
   type ListTasksQuery,
   type PatchTaskStatusRequest,
+  type TaskCommentDto,
   type TaskDetailDto,
   type TaskDto,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
-import { sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
+import { z } from 'zod';
 
 import type { Db } from '../../db/client.js';
+import { actors } from '../../db/schema/core.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
@@ -22,6 +29,7 @@ import {
   selectActiveLinksForEndpoint,
   selectEligibleVocLinksForReleasedTask,
 } from '../entity-links/commands.js';
+import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { linkTaskToFinding } from '../findings/commands.js';
 import type { CheckService } from '../permissions/check-service.js';
@@ -37,9 +45,12 @@ import {
   type TaskReleasedReviewCandidatesPayload,
 } from './jobs/released-review-candidates.js';
 import {
+  type TaskCommentRow,
   type TaskRow,
   findTaskById,
   insertTask,
+  insertTaskComment,
+  listTaskComments as listTaskCommentRows,
   listTasksByWorkspace,
   lockTaskById,
   resolveTaskSource,
@@ -82,6 +93,166 @@ function taskToDto(row: TaskRow): TaskDto {
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
+}
+
+const commentCursorSchema = z
+  .object({
+    createdAt: z.string().datetime({ offset: true }),
+    id: z.string().uuid(),
+  })
+  .strict();
+type CommentCursor = z.infer<typeof commentCursorSchema>;
+
+function decodeCommentCursor(raw: string): CommentCursor {
+  const fail = () =>
+    new HttpError('validation.failed', 'invalid cursor', {
+      fields: [{ path: ['cursor'], code: 'invalid_cursor' }],
+    });
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+  } catch {
+    throw fail();
+  }
+  const result = commentCursorSchema.safeParse(parsed);
+  if (!result.success) throw fail();
+  return result.data;
+}
+
+// WHY: input.createdAt is the raw postgres text cast (microsecond precision),
+// not a JS Date's toISOString() (millisecond precision) — two comments in the
+// same millisecond would otherwise collide on the cursor boundary and the
+// second one would be silently skipped on the next page. Mirrors
+// voc/repo-read.ts's _created_at_raw handling.
+//
+// Normalize the postgres text format to ISO 8601 so it validates against
+// z.string().datetime() in decodeCommentCursor: swap the space separator for
+// "T" and add a ":" to the zone offset ("...T...160586+09" -> "...+09:00",
+// not just the "+00" case voc/repo-read.ts assumes — this DB's default
+// session timezone is UTC, but nothing pins it, so a "+00"-only regex would
+// 422 every cursor the day that changes) (astra medium review, PR #449).
+export function normalizePgTimestampToIso(raw: string): string {
+  const isoLike = raw.replace(' ', 'T');
+  const match = isoLike.match(/^(.*)([+-]\d{2})(:?(\d{2}))?$/);
+  if (!match) return isoLike;
+  const [, base, offsetHours, , offsetMinutes] = match;
+  return `${base}${offsetHours}:${offsetMinutes ?? '00'}`;
+}
+
+function encodeCommentCursor(input: { createdAt: string; id: string }): string {
+  const createdAt = normalizePgTimestampToIso(input.createdAt);
+  return Buffer.from(JSON.stringify({ createdAt, id: input.id }), 'utf8').toString('base64');
+}
+
+function taskCommentToDto(row: TaskCommentRow): TaskCommentDto {
+  return {
+    id: row.id,
+    task_id: row.task_id,
+    actor_id: row.actor_id,
+    kind: row.kind,
+    from_status: row.from_status,
+    to_status: row.to_status,
+    body_rich_content: row.body_rich_content,
+    created_at: row.created_at.toISOString(),
+  };
+}
+
+function richContentFieldCode(error: RichContentError): string {
+  if (error.code === 'rich_content.external_image_forbidden') return 'external_image_forbidden';
+  return error.fields_code ?? 'disallowed_node';
+}
+
+function sanitizeCommentBody(doc: unknown): unknown {
+  const result = sanitizeTipTap({
+    surface: 'internal-comment',
+    doc: doc as Parameters<typeof sanitizeTipTap>[0]['doc'],
+  });
+  if (!result.ok) {
+    throw new HttpError(result.error.code, result.error.reason, {
+      fields: [{ path: ['body_rich_content'], code: richContentFieldCode(result.error) }],
+      hint: result.error.path,
+    });
+  }
+  return result.doc;
+}
+
+interface MentionNode {
+  attrs?: Record<string, unknown>;
+}
+
+function findNodesOfType(doc: unknown, type: string): MentionNode[] {
+  const results: MentionNode[] = [];
+  const stack: MentionNode[] = [doc as MentionNode];
+  while (stack.length > 0) {
+    const node = stack.pop() as MentionNode & { type?: string; content?: unknown[] };
+    if (!node || typeof node !== 'object') continue;
+    if (node.type === type) results.push(node);
+    if (Array.isArray(node.content)) {
+      for (const child of node.content) stack.push(child as MentionNode);
+    }
+  }
+  return results;
+}
+
+function dedupe(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function setsEqual(left: Set<string>, right: Set<string>): boolean {
+  if (left.size !== right.size) return false;
+  for (const value of left) if (!right.has(value)) return false;
+  return true;
+}
+
+async function validateCommentMentions(
+  tx: Tx,
+  workspaceId: string,
+  sanitizedBody: unknown,
+  mentions: string[] | undefined,
+): Promise<string[]> {
+  const mentionNodes = findNodesOfType(sanitizedBody, 'mention');
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  for (const node of mentionNodes) {
+    const actorId = node.attrs?.actor_id;
+    if (typeof actorId !== 'string' || !uuidRegex.test(actorId)) {
+      throw new HttpError('validation.failed', 'mention node attrs.actor_id must be a valid UUID', {
+        fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }],
+      });
+    }
+  }
+
+  const bodyMentionIds = dedupe(mentionNodes.map((node) => node.attrs?.actor_id as string));
+  const requestMentionIds = dedupe(mentions ?? []);
+  if (!setsEqual(new Set(bodyMentionIds), new Set(requestMentionIds))) {
+    throw new HttpError(
+      'validation.failed',
+      'mentions[] must exactly match the set of actor_ids referenced by mention nodes in body_rich_content',
+      { fields: [{ path: ['mentions'], code: 'invalid' }] },
+    );
+  }
+
+  if (requestMentionIds.length > 0) {
+    const foundRows = await tx
+      .select({ id: actors.id })
+      .from(actors)
+      .where(and(eq(actors.workspaceId, workspaceId), inArray(actors.id, requestMentionIds)));
+    if (foundRows.length !== requestMentionIds.length) {
+      throw new HttpError(
+        'validation.failed',
+        'one or more mention actor_ids do not belong to this workspace',
+        { fields: [{ path: ['mentions'], code: 'cross_workspace' }] },
+      );
+    }
+  }
+  return requestMentionIds;
+}
+
+function statusChangeBody(reason: string | undefined): unknown {
+  if (reason === undefined) return { type: 'doc', content: [{ type: 'paragraph' }] };
+  return sanitizeCommentBody({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: reason }] }],
+  });
 }
 
 function assertApproved(taskRequest: TaskRequestRow): void {
@@ -157,6 +328,15 @@ async function preserveSourceLinks(args: {
     (link) => link.source_type === 'finding' && link.relation_type === 'requested_task',
   );
   if (findingLink) {
+    // #388: a legacy finding->task_request link created before cross-MS
+    // enforcement can still carry a different Managed System than the task
+    // it is now being converted into. Refuse to propagate it as a new
+    // canonical link rather than silently writing a mismatched MS.
+    assertLinkManagedSystemCompatibility(
+      findingLink.managed_system_id,
+      args.task.primary_managed_system_id,
+      { path: ['task_id'] },
+    );
     const findingTuple = registeredEntityLinkPairSchema.parse({
       source_type: 'finding',
       target_type: 'task',
@@ -185,6 +365,13 @@ async function preserveSourceLinks(args: {
       if (evidenceLink.source_type !== 'voc' || evidenceLink.relation_type !== 'evidence_of') {
         continue;
       }
+      // #388: same rationale as the finding->task link above — a legacy
+      // voc->finding evidence link may predate cross-MS enforcement.
+      assertLinkManagedSystemCompatibility(
+        evidenceLink.managed_system_id,
+        args.task.primary_managed_system_id,
+        { path: ['task_id'] },
+      );
       const evidenceTuple = registeredEntityLinkPairSchema.parse({
         source_type: 'voc',
         target_type: 'task',
@@ -208,6 +395,14 @@ async function preserveSourceLinks(args: {
 
   for (const sourceLink of sourceLinks) {
     if (sourceLink.source_type !== 'voc' || sourceLink.relation_type !== 'requested_task') continue;
+    // #388 review follow-up: this direct voc->task_request link (no Finding
+    // in between) can also predate cross-MS enforcement — same rationale as
+    // the finding->task and voc->finding propagation checks above.
+    assertLinkManagedSystemCompatibility(
+      sourceLink.managed_system_id,
+      args.task.primary_managed_system_id,
+      { path: ['task_id'] },
+    );
     const tuple = registeredEntityLinkPairSchema.parse({
       source_type: 'voc',
       target_type: 'task',
@@ -263,6 +458,140 @@ export function createTasksService(deps: TasksServiceDeps) {
       : null;
     await attachSourceVoc(args.actor, resolved);
     return { ...taskToDto(row), source: resolved?.source ?? null };
+  }
+
+  async function getTaskComments(args: {
+    actor: TasksActor;
+    taskId: string;
+    query: ListTaskCommentsQuery;
+  }): Promise<ListTaskCommentsResponse> {
+    if (!hasElevatedFindingRole(args.actor)) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+
+    const task = await findTaskById(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      taskId: args.taskId,
+    });
+    if (!task) throw new HttpError('not_found.record', 'task not found');
+
+    const canManage = (
+      await checkFindingManage(deps.checkService, args.actor, task.primary_managed_system_id, {
+        requireElevatedRole: true,
+      })
+    ).allow;
+    if (!canManage) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+
+    const cursor = args.query.cursor ? decodeCommentCursor(args.query.cursor) : undefined;
+    const result = await listTaskCommentRows(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      taskId: task.id,
+      ...(cursor ? { cursor } : {}),
+      limit: args.query.limit,
+    });
+    const last = result.rows[result.rows.length - 1];
+    return {
+      items: result.rows.map(taskCommentToDto),
+      page: {
+        ...(result.hasMore && last
+          ? { cursor: encodeCommentCursor({ createdAt: last.created_at_raw, id: last.id }) }
+          : {}),
+        has_more: result.hasMore,
+      },
+    };
+  }
+
+  async function createTaskComment(args: {
+    actor: TasksActor;
+    taskId: string;
+    input: CreateTaskCommentRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: { comment: TaskCommentDto } }> {
+    if (!hasElevatedFindingRole(args.actor)) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const task = await lockTaskById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: args.taskId,
+          });
+          if (!task) throw new HttpError('not_found.record', 'task not found');
+
+          const managedSystem = await lockManagedSystem(
+            tx,
+            args.actor.workspace_id,
+            task.primary_managed_system_id,
+          );
+          if (!managedSystem) throw new HttpError('not_found.record', 'managed system not found');
+          if (managedSystem.archived_at !== null) {
+            throw new HttpError('conflict.parent_archived', 'parent managed system is archived', {
+              fields: [{ path: ['primary_managed_system_id'], code: 'parent_archived' }],
+            });
+          }
+
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              task.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          const sanitizedBody = sanitizeCommentBody(args.input.body_rich_content);
+          const mentionIds = await validateCommentMentions(
+            tx,
+            args.actor.workspace_id,
+            sanitizedBody,
+            args.input.mentions,
+          );
+          if (findNodesOfType(sanitizedBody, 'attachmentRef').length > 0) {
+            throw new HttpError('validation.failed', 'attachments are not supported for comments', {
+              fields: [{ path: ['body_rich_content'], code: 'attachment_not_supported' }],
+            });
+          }
+
+          const row = await insertTaskComment(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: task.id,
+            actorId: args.actor.actor_id,
+            kind: 'note',
+            fromStatus: null,
+            toStatus: null,
+            bodyRichContent: sanitizedBody,
+          });
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_comment_created',
+            subject_type: 'task',
+            subject_id: task.id,
+            summary: 'Task comment created',
+            detail: {
+              task_id: task.id,
+              comment_id: row.id,
+              actor_id: args.actor.actor_id,
+              mentions: mentionIds,
+            },
+          });
+
+          return { status: 201, body: { comment: taskCommentToDto(row) } };
+        },
+      );
+    });
   }
 
   // #378: the source VOC ships only as a backend visibility verdict
@@ -520,6 +849,15 @@ export function createTasksService(deps: TasksServiceDeps) {
             taskId: task.id,
             status: args.input.status,
           });
+          await insertTaskComment(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: task.id,
+            actorId: args.actor.actor_id,
+            kind: 'status_change',
+            fromStatus: task.status,
+            toStatus: updatedTask.status,
+            bodyRichContent: statusChangeBody(args.input.reason),
+          });
           if (task.status !== 'released' && updatedTask.status === 'released') {
             if (!deps.boss) {
               throw new Error('pg-boss is required to publish released Task review candidates');
@@ -545,6 +883,11 @@ export function createTasksService(deps: TasksServiceDeps) {
               });
             }
           }
+          const detail: Record<string, unknown> = {
+            from: task.status,
+            to: updatedTask.status,
+          };
+          if (args.input.reason !== undefined) detail.reason = args.input.reason;
           await deps.auditService.record(tx, {
             workspace_id: args.actor.workspace_id,
             actor_id: args.actor.actor_id,
@@ -552,7 +895,7 @@ export function createTasksService(deps: TasksServiceDeps) {
             subject_type: 'task',
             subject_id: task.id,
             summary: 'Task status changed',
-            detail: { from: task.status, to: updatedTask.status },
+            detail,
           });
           const resolved = updatedTask.source_task_request_id
             ? await resolveTaskSource(tx, {
@@ -604,6 +947,8 @@ export function createTasksService(deps: TasksServiceDeps) {
 
   return {
     getTask,
+    getTaskComments,
+    createTaskComment,
     convertTaskRequest,
     linkExistingTask,
     patchTaskStatus,

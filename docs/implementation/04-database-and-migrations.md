@@ -79,9 +79,11 @@ voc_cluster
 finding
 - findings
 - evidence_highlights
+- finding_comments
 
 task
 - tasks
+- task_comments
 - work_initiatives / projects when future execution grouping is introduced
 - milestones when future execution grouping is introduced
 
