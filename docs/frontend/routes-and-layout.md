@@ -11,7 +11,6 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 
 ```text
 /
-/my-work
 /vocs?view=triage&triage=unassigned&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=inbox&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=my&selected=:vocId
@@ -57,6 +56,7 @@ Route naming rules:
 - `managedSystem=all` means the actor's effective Managed System scope union. It is workspace-wide only for Admin.
 - Work Initiatives may group execution work after triage, but they are not VOC scope owners.
 - Work Initiative routes are future routes and are not part of the MVP route contract.
+- `/my-work` is not an MVP route (ADR-0038, ADR-0040). No route is registered. `apps/frontend/src/features/my-work/` is the future implementation location only.
 ```
 
 VOC route views:
@@ -67,6 +67,14 @@ VOC route views:
 - Inbox and Triage share the `/vocs` route family and list/detail mechanics, but Triage must not be implemented as only an Inbox filter.
 - `/vocs?view=list` or saved list views may support broader browsing after the Inbox and Triage workspaces are defined.
 - `/voc-clusters` owns cluster-specific list/detail behavior.
+```
+
+Task route views:
+
+```text
+- `/tasks?view=requests` is Task Requests. `/tasks?view=board` is the board.
+- `/tasks?view=backlog`, `/tasks?view=inbox`, `/tasks?view=my`, and `/tasks` with no `view` all render `TaskListRoute`. `view=my` does not filter `assignee=me`. It is an unfiltered backlog alias (ADR-0040). The Tasks rail still labels that URL "My Tasks".
+- `managedSystem` and `param` on that URL are the list's scope and selection, not a personal filter.
 ```
 
 ## Role Level Navigation Contract
@@ -80,7 +88,7 @@ User:
 - Home may show only backend-provided user-safe queues.
 
 Developer:
-- Primary nav: Home, My Work, VOC Triage, Tasks intake, Tasks, Integration, Surveys when assigned.
+- Primary nav: Home, VOC Triage, Tasks intake, Tasks, Integration, Surveys when assigned. My Work is not a nav entry (ADR-0038).
 - Linked VOC/Finding context appears only as backend-approved summaries.
 - Managed System scope controls which work is visible and actionable.
 
