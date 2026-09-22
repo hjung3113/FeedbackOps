@@ -1,5 +1,6 @@
 // Root is an entry-only route. Authenticated actors enter the real product
-// shell at /home; unauthenticated actors enter the dev-only login picker.
+// shell at /home; unauthenticated actors enter /login (OIDC in production,
+// mock-login picker in development).
 
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { UnauthenticatedError, fetchMe } from '../lib/api';

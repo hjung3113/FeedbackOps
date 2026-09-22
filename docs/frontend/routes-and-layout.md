@@ -92,6 +92,8 @@ Current sidebar entries live in `SIDEBAR_ENTRIES` (`apps/frontend/src/routes/_au
 
 The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login also clears that cache before routing so a new Actor never sees prior Actor data.
 
+In production (`import.meta.env.PROD`), `/login` performs one full-page replace to `/auth/login?return_to=…`, preserving a safe internal `redirectTo` (what the `_authed` guard sends on a 401; `return_to` or `redirect` when absent) unchanged after validation against the backend OIDC rules, with `/home` as the fallback. Non-production keeps the mock-login picker; callback failures return backend JSON errors rather than redirecting to `/login`.
+
 Count badges and global Managed System scope selection are still absent — they are the scope of #143 (GlobalRail multi-domain IA).
 
 Routes may exist without being visible in navigation. Direct route access must restore AppShell and render allowed content, summary-visible content, request-access state, not_found, or permission_denied according to backend response.
