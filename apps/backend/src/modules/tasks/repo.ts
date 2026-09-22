@@ -56,6 +56,9 @@ export interface TaskCommentRow {
   to_status: TaskStatus | null;
   body_rich_content: unknown;
   created_at: Date;
+  // Postgres text-cast timestamp (microsecond precision) — see
+  // findings/repo.ts FindingCommentRow.created_at_raw for the rationale.
+  created_at_raw: string;
 }
 
 function mapTaskCommentRow(row: Record<string, unknown>): TaskCommentRow {
@@ -69,6 +72,7 @@ function mapTaskCommentRow(row: Record<string, unknown>): TaskCommentRow {
     body_rich_content: row.body_rich_content,
     created_at:
       row.created_at instanceof Date ? row.created_at : new Date(row.created_at as string),
+    created_at_raw: String(row.created_at_raw ?? row.created_at),
   };
 }
 
@@ -174,7 +178,8 @@ export async function insertTaskComment(
       ${input.fromStatus}, ${input.toStatus},
       ${JSON.stringify(input.bodyRichContent)}::jsonb
     )
-    RETURNING id, task_id, actor_id, kind, from_status, to_status, body_rich_content, created_at
+    RETURNING id, task_id, actor_id, kind, from_status, to_status, body_rich_content,
+      created_at, created_at::text AS created_at_raw
   `);
   const row = result.rows[0];
   if (!row) throw new Error('insertTaskComment returned no row');
@@ -199,7 +204,8 @@ export async function listTaskComments(
       `
     : sql``;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
-    SELECT id, task_id, actor_id, kind, from_status, to_status, body_rich_content, created_at
+    SELECT id, task_id, actor_id, kind, from_status, to_status, body_rich_content,
+      created_at, created_at::text AS created_at_raw
     FROM task.task_comments
     WHERE workspace_id = ${input.workspaceId}
       AND task_id = ${input.taskId}

@@ -79,6 +79,10 @@ export interface FindingCommentRow {
   to_status: FindingStatus | null;
   body_rich_content: unknown;
   created_at: Date;
+  // Postgres text-cast timestamp (microsecond precision) — JS Date only
+  // keeps millisecond precision, which silently drops comments across a
+  // cursor page boundary when two rows share the same millisecond.
+  created_at_raw: string;
 }
 
 function mapFindingCommentRow(row: Record<string, unknown>): FindingCommentRow {
@@ -91,6 +95,7 @@ function mapFindingCommentRow(row: Record<string, unknown>): FindingCommentRow {
     to_status: (row.to_status as FindingStatus | null) ?? null,
     body_rich_content: row.body_rich_content,
     created_at: toDate(row.created_at as Date | string),
+    created_at_raw: String(row.created_at_raw ?? row.created_at),
   };
 }
 
@@ -234,7 +239,8 @@ export async function insertFindingComment(
       ${input.fromStatus}, ${input.toStatus},
       ${JSON.stringify(input.bodyRichContent)}::jsonb
     )
-    RETURNING id, finding_id, actor_id, kind, from_status, to_status, body_rich_content, created_at
+    RETURNING id, finding_id, actor_id, kind, from_status, to_status, body_rich_content,
+      created_at, created_at::text AS created_at_raw
   `);
   const row = result.rows[0];
   if (!row) throw new Error('insertFindingComment returned no row');
@@ -259,7 +265,8 @@ export async function listFindingComments(
       `
     : sql``;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
-    SELECT id, finding_id, actor_id, kind, from_status, to_status, body_rich_content, created_at
+    SELECT id, finding_id, actor_id, kind, from_status, to_status, body_rich_content,
+      created_at, created_at::text AS created_at_raw
     FROM finding.finding_comments
     WHERE workspace_id = ${input.workspaceId}
       AND finding_id = ${input.findingId}

@@ -114,11 +114,16 @@ function decodeCommentCursor(raw: string): CommentCursor {
   return result.data;
 }
 
-function encodeCommentCursor(input: { createdAt: Date; id: string }): string {
-  return Buffer.from(
-    JSON.stringify({ createdAt: input.createdAt.toISOString(), id: input.id }),
-    'utf8',
-  ).toString('base64');
+// WHY: input.createdAt is the raw postgres text cast (microsecond precision),
+// not a JS Date's toISOString() (millisecond precision) — two comments in the
+// same millisecond would otherwise collide on the cursor boundary and the
+// second one would be silently skipped on the next page. Mirrors
+// voc/repo-read.ts's _created_at_raw handling. Normalize the postgres text
+// format ("... .160586+00") to ISO 8601 ("...T...160586+00:00") so it
+// validates against z.string().datetime() in decodeCommentCursor.
+function encodeCommentCursor(input: { createdAt: string; id: string }): string {
+  const createdAt = input.createdAt.replace(' ', 'T').replace(/\+00$/, '+00:00');
+  return Buffer.from(JSON.stringify({ createdAt, id: input.id }), 'utf8').toString('base64');
 }
 
 function findingCommentToDto(row: FindingCommentRow): FindingCommentDto {
@@ -747,7 +752,7 @@ export function createFindingsService(deps: FindingsServiceDeps) {
       items: result.rows.map(findingCommentToDto),
       page: {
         ...(result.hasMore && last
-          ? { cursor: encodeCommentCursor({ createdAt: last.created_at, id: last.id }) }
+          ? { cursor: encodeCommentCursor({ createdAt: last.created_at_raw, id: last.id }) }
           : {}),
         has_more: result.hasMore,
       },

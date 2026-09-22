@@ -316,6 +316,42 @@ describe.skipIf(!runIntegration)('Task progress comments API (#377)', () => {
     expect(invalidCursor.statusCode).toBe(422);
   });
 
+  it('review follow-up: cursor pagination does not skip a row sharing the same millisecond as the cursor boundary', async () => {
+    // Regression for astra medium's review of PR #449 — see the matching
+    // Finding test for the full rationale (millisecond-truncated cursors
+    // drop rows that share a millisecond with the boundary row).
+    const task = await seedTask();
+    const microA = '2026-01-01 00:00:00.500900+00';
+    const microB = '2026-01-01 00:00:00.500100+00';
+    const idA = randomUUID();
+    const idB = randomUUID();
+    const body = JSON.stringify(paragraphDoc('same-millisecond row'));
+    await migrateHandle.pool.query(
+      `insert into task.task_comments
+         (id, workspace_id, task_id, actor_id, kind, body_rich_content, created_at)
+       values
+         ($1, $2, $3, $4, 'note', $5::jsonb, $6::timestamptz),
+         ($7, $2, $3, $4, 'note', $5::jsonb, $8::timestamptz)`,
+      [idA, WORKSPACE_ID, task.id, manageActor.id, body, microA, idB, microB],
+    );
+
+    const firstPage = await commentsRequest(manageCookie, 'GET', task.id, undefined, 'limit=1');
+    expect(firstPage.json().items).toHaveLength(1);
+    expect(firstPage.json().items[0].id).toBe(idA);
+    expect(firstPage.json().page.has_more).toBe(true);
+    const cursor = firstPage.json().page.cursor as string;
+
+    const nextPage = await commentsRequest(
+      manageCookie,
+      'GET',
+      task.id,
+      undefined,
+      `limit=1&cursor=${encodeURIComponent(cursor)}`,
+    );
+    expect(nextPage.statusCode).toBe(200);
+    expect(nextPage.json().items.map((c: { id: string }) => c.id)).toEqual([idB]);
+  });
+
   it('writes status_change rows with optional reasons and leaves no-op transitions empty', async () => {
     const task = await seedTask();
     const changed = await patchTask(manageCookie, task.id, { status: 'doing' }, task.updatedAt);

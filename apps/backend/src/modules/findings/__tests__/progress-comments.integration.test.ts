@@ -311,6 +311,50 @@ describe.skipIf(!runIntegration)('Finding progress comments API (#377)', () => {
     expect(invalidCursor.statusCode).toBe(422);
   });
 
+  it('review follow-up: cursor pagination does not skip a row sharing the same millisecond as the cursor boundary', async () => {
+    // Regression for astra medium's review of PR #449: encoding the cursor
+    // from a JS Date (millisecond precision) instead of the raw postgres
+    // timestamp (microsecond precision) drops a row whenever two comments
+    // share a millisecond, because the truncated cursor's `<` predicate
+    // matches both the earlier row's rounded-down millisecond AND the
+    // colliding row. Force the collision with an explicit same-millisecond
+    // insert (natural timing between two API calls essentially never
+    // collides on its own, so this must be seeded directly).
+    const finding = await seedFinding();
+    const microA = '2026-01-01 00:00:00.500900+00'; // later within the same ms
+    const microB = '2026-01-01 00:00:00.500100+00'; // earlier within the same ms
+    const idA = randomUUID();
+    const idB = randomUUID();
+    const body = JSON.stringify(paragraphDoc('same-millisecond row'));
+    await migrateHandle.pool.query(
+      `insert into finding.finding_comments
+         (id, workspace_id, finding_id, actor_id, kind, body_rich_content, created_at)
+       values
+         ($1, $2, $3, $4, 'note', $5::jsonb, $6::timestamptz),
+         ($7, $2, $3, $4, 'note', $5::jsonb, $8::timestamptz)`,
+      [idA, WORKSPACE_ID, finding.id, manageActor.id, body, microA, idB, microB],
+    );
+
+    const firstPage = await commentsRequest(manageCookie, 'GET', finding.id, undefined, 'limit=1');
+    expect(firstPage.json().items).toHaveLength(1);
+    expect(firstPage.json().items[0].id).toBe(idA); // later microsecond sorts first (DESC)
+    expect(firstPage.json().page.has_more).toBe(true);
+    const cursor = firstPage.json().page.cursor as string;
+
+    const nextPage = await commentsRequest(
+      manageCookie,
+      'GET',
+      finding.id,
+      undefined,
+      `limit=1&cursor=${encodeURIComponent(cursor)}`,
+    );
+    expect(nextPage.statusCode).toBe(200);
+    // Before the fix: idB (same millisecond, earlier microsecond) was silently
+    // skipped because the millisecond-truncated cursor's `<` predicate treated
+    // idB's row as not-earlier-than the (rounded-down) cursor boundary.
+    expect(nextPage.json().items.map((c: { id: string }) => c.id)).toEqual([idB]);
+  });
+
   it('writes a status_change row and reason audit atomically, but not for a no-op', async () => {
     const finding = await seedFinding();
     const changed = await patchFinding(manageCookie, finding.id, {
