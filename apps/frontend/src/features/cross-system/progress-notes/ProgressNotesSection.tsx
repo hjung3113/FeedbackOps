@@ -81,8 +81,12 @@ export function ProgressNotesSection(props: ProgressNotesSectionProps): React.Re
   // fetching an older page prepends it above, matching the VOC InternalTimeline.
   const entries = (query.data?.pages ?? []).flatMap((page) => page.items).reverse();
 
-  // The section narrows by resource.kind; the entry renders either status
-  // vocabulary, so the two typed badge renderers merge on one internal signature.
+  // NOT a type-narrowing cast (astra medium review, PR #450): TS does not
+  // narrow renderStatusBadge's type from resource.kind here. Safety instead
+  // comes from the caller: FindingNotesProps/TaskNotesProps are constructed
+  // together at each call site (props.resource.kind and
+  // props.renderStatusBadge always come from the same typed union member),
+  // so the two per-kind badge renderers never cross with the wrong resource.
   const statusBadge = props.renderStatusBadge as RenderStatusBadge;
 
   return (
