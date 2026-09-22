@@ -15,6 +15,7 @@ import {
   rejectPermissionRequestSchema,
 } from '@fops/shared';
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+import { IDEMPOTENCY_KEY_REGEX } from '../../lib/http-headers.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -39,11 +40,6 @@ export interface PermissionsRoutesOptions {
     sensitive: Record<string, unknown>;
   };
 }
-
-// ADR-0015:72 — UUIDv4 client-generated. The version nibble at position 14
-// is `4` and the variant nibble at position 19 is one of [8,9,a,b].
-const IDEMPOTENCY_KEY_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
 const createRequestBodySchema = z.object({
   requested_capability: z.string().min(1),

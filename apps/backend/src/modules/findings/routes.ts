@@ -9,7 +9,8 @@ import {
   patchFindingRequestSchema,
 } from '@fops/shared';
 
-import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+import { fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+import { requireIdempotencyKey, UUID_REGEX } from '../../lib/http-headers.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -17,29 +18,11 @@ import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import { listFindingsQuerySchema } from './list-query.js';
 import type { FindingsService } from './service.js';
 
-const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-const IDEMPOTENCY_KEY_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 export interface FindingsRoutesOptions {
   sessionService: SessionService;
   findingsService: FindingsService;
   workspaceId: string;
   rateLimitConfig?: { mutation?: Record<string, unknown>; read?: Record<string, unknown> };
-}
-
-function requireIdempotencyKey(headers: Record<string, unknown>): string {
-  const raw = headers['idempotency-key'];
-  const headerKey = Array.isArray(raw) ? raw[0] : raw;
-  if (typeof headerKey !== 'string' || headerKey.length === 0) {
-    throw new HttpError('validation.failed', 'Idempotency-Key header required', {
-      fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }],
-    });
-  }
-  if (!IDEMPOTENCY_KEY_REGEX.test(headerKey)) {
-    throw new HttpError('validation.malformed_idempotency_key', 'Idempotency-Key must be a UUIDv4');
-  }
-  return headerKey;
 }
 
 export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (app, opts) => {

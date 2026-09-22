@@ -21,6 +21,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 
 import { HttpError, sendError } from '../../lib/errors.js';
+import { requireIdempotencyKey, RFC4122_UUID_REGEX as UUID_REGEX } from '../../lib/http-headers.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
@@ -29,9 +30,6 @@ import type { AttachmentsService } from './service.js';
 import { FilenameSanitizeError, sanitizeFilename } from './filename-sanitize.js';
 import { MIME_ALLOWLIST } from './mime-allowlist.js';
 import { asciiFallback, encodeRfc5987 } from './rfc5987.js';
-
-const IDEMPOTENCY_KEY_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
@@ -49,23 +47,6 @@ export const attachmentsRoutes: FastifyPluginAsync<AttachmentsRoutesOptions> = a
   opts,
 ) => {
   const { sessionService, attachmentsService, workspaceId, rateLimitConfig } = opts;
-
-  function requireIdempotencyKey(headers: Record<string, unknown>): string {
-    const raw = headers['idempotency-key'];
-    const headerKey = Array.isArray(raw) ? raw[0] : raw;
-    if (typeof headerKey !== 'string' || headerKey.length === 0) {
-      throw new HttpError('validation.failed', 'Idempotency-Key header required', {
-        fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }],
-      });
-    }
-    if (!IDEMPOTENCY_KEY_REGEX.test(headerKey)) {
-      throw new HttpError(
-        'validation.malformed_idempotency_key',
-        'Idempotency-Key must be a UUIDv4',
-      );
-    }
-    return headerKey;
-  }
 
   app.route({
     method: 'POST',
@@ -202,9 +183,6 @@ export const attachmentsRoutes: FastifyPluginAsync<AttachmentsRoutesOptions> = a
   //      piping the body. Fastify's `reply.send(readable)` auto-pipes.
   //   4. RFC 5987 filename* per RFC 6266 §5 so Korean / emoji filenames
   //      survive header transport. ASCII fallback uses asciiFallback().
-  const UUID_REGEX =
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
-
   app.route({
     method: 'GET',
     url: '/attachments/:id/download',
