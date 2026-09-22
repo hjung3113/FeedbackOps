@@ -24,15 +24,13 @@
 - Release grouping and recommended success flow.
 
 15-data-contracts.md
-- Field and enum draft until superseded by docs/implementation/04-database-and-migrations.md.
+- Field and enum authority. Not a draft, and not replaced by migrations.
 
 archive/
 - Historical design inputs. Not required reading. Not authority.
 ```
 
 `docs/design/archive/` is not required reading.
-`15-data-contracts.md` is not a final contract when it conflicts with
-`docs/implementation/04-database-and-migrations.md` or applied migrations.
 Endpoint behavior has one authority: `docs/implementation/03-api-contracts.md`.
 
 ## Drift Control
@@ -40,7 +38,7 @@ Endpoint behavior has one authority: `docs/implementation/03-api-contracts.md`.
 ```text
 - System documents may explain local behavior, but must not redefine canonical entity names.
 - Schema blocks in system documents are explanatory drafts.
-- Implementation-facing database details belong in docs/implementation/04-database-and-migrations.md.
+- Field and enum contracts belong in docs/design/15-data-contracts.md. docs/implementation/04-database-and-migrations.md owns migration mechanism only.
 - Implementation-facing endpoint contracts belong in docs/implementation/03-api-contracts.md.
 - Scope changes must update docs/design/02-requirements-matrix.md before roadmap prose.
 ```

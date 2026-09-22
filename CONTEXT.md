@@ -2,6 +2,8 @@
 
 FeedbackOps is an internal AD-gated operating system for connecting submitted VOC, survey results, findings, execution work, and outcome validation without forcing every record through one rigid workflow.
 
+Entity ownership and per-entity boundaries: `docs/design/01-domain-model.md`. Field and enum lists: `docs/design/15-data-contracts.md`. This file owns terms and invariants.
+
 ## Language
 
 **Workspace**:

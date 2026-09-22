@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This is the canonical glossary and entity ownership map for FeedbackOps Suite.
+Terms and invariants: `CONTEXT.md`. Field and enum lists: `docs/design/15-data-contracts.md`. This file owns which system owns each entity and the boundary around it.
 
 System documents must not redefine these concepts differently. They may add local behavior only.
 
