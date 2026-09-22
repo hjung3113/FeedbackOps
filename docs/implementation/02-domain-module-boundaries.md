@@ -43,6 +43,7 @@ VOC owns:
 Finding owns:
 - Finding
 - Evidence Highlight
+- Finding comments
 
 Task owns:
 - Task Request

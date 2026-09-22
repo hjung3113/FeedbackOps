@@ -87,8 +87,12 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // Migration 0020 uses Finding status transitions (including archived) rather
   // than application hard deletes.
   'finding.findings': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0048 makes Finding progress notes append-only.
+  'finding.finding_comments': ['SELECT', 'INSERT'],
   // Migration 0025 models Task lifecycle through status updates, not deletion.
   'task.tasks': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0048 makes Task progress notes append-only.
+  'task.task_comments': ['SELECT', 'INSERT'],
   // Migration 0023 preserves Task Request review/conversion history through
   // status transitions rather than application hard deletes.
   'task_request.task_requests': ['SELECT', 'INSERT', 'UPDATE'],

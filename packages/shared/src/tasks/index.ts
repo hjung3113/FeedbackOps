@@ -1,15 +1,9 @@
 import { z } from 'zod';
 
-export const taskStatusSchema = z.enum([
-  'backlog',
-  'todo',
-  'doing',
-  'review',
-  'done',
-  'released',
-  'reopened',
-]);
-export type TaskStatus = z.infer<typeof taskStatusSchema>;
+import { taskStatusSchema } from './status.js';
+
+export { taskStatusSchema } from './status.js';
+export type { TaskStatus } from './status.js';
 
 export const taskPrioritySchema = z.enum(['low', 'medium', 'high', 'urgent']);
 export type TaskPriority = z.infer<typeof taskPrioritySchema>;
@@ -94,6 +88,7 @@ export type TaskDetailDto = z.infer<typeof taskDetailDtoSchema>;
 export const patchTaskStatusRequestSchema = z
   .object({
     status: taskStatusSchema,
+    reason: z.string().trim().min(1).max(1000).optional(),
   })
   .strict();
 export type PatchTaskStatusRequest = z.infer<typeof patchTaskStatusRequestSchema>;
@@ -125,3 +120,5 @@ export const listTasksQuerySchema = z
   })
   .strict();
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;
+
+export * from './comments.js';

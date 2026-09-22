@@ -23,11 +23,11 @@ import {
   surveyQuestionCreatedDetailSchema,
   surveyQuestionDeletedDetailSchema,
   surveyQuestionUpdatedDetailSchema,
+  surveyQuestionsReorderedDetailSchema,
   surveyResponseExcerptApprovedDetailSchema,
   surveyResponseExcerptRevokedDetailSchema,
   surveyResponsePersonalReadDetailSchema,
   surveyResponseSubmittedDetailSchema,
-  surveyQuestionsReorderedDetailSchema,
   surveyUpdatedDetailSchema,
 } from '../audit/survey.js';
 import {
@@ -95,6 +95,7 @@ export const AUDIT_EVENT_TYPES = [
   'evidence_highlight_added',
   // Slice 6 #131: Finding status machine.
   'finding_status_changed',
+  'finding_comment_created',
   // Slice 6 #132: Task Request tracer from Finding.
   'task_request_created_from_finding',
   // Slice 6 #136: Task Request sources from VOC and VOC Cluster.
@@ -112,6 +113,7 @@ export const AUDIT_EVENT_TYPES = [
   'finding_task_linked',
   // Slice 7 #138: Task board status transition.
   'task_status_changed',
+  'task_comment_created',
   'public_update_review_candidate_created',
   'public_update_review_candidate_dismissed',
   // Slice 8 #191: Survey lifecycle and question structure events.
@@ -590,6 +592,14 @@ export const findingStatusChangedDetailSchema = z.object({
 });
 export type FindingStatusChangedDetail = z.infer<typeof findingStatusChangedDetailSchema>;
 
+export const findingCommentCreatedDetailSchema = z.object({
+  finding_id: z.string().uuid(),
+  comment_id: z.string().uuid(),
+  actor_id: z.string().uuid(),
+  mentions: z.array(z.string().uuid()),
+});
+export type FindingCommentCreatedDetail = z.infer<typeof findingCommentCreatedDetailSchema>;
+
 export const taskRequestCreatedFromFindingDetailSchema = z.object({
   task_request_id: z.string().uuid(),
   source_finding_id: z.string().uuid(),
@@ -675,9 +685,18 @@ export const taskStatusChangedDetailSchema = z
   .object({
     from: z.enum(['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']),
     to: z.enum(['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']),
+    reason: z.string().min(1).max(1000).optional(),
   })
   .strict();
 export type TaskStatusChangedDetail = z.infer<typeof taskStatusChangedDetailSchema>;
+
+export const taskCommentCreatedDetailSchema = z.object({
+  task_id: z.string().uuid(),
+  comment_id: z.string().uuid(),
+  actor_id: z.string().uuid(),
+  mentions: z.array(z.string().uuid()),
+});
+export type TaskCommentCreatedDetail = z.infer<typeof taskCommentCreatedDetailSchema>;
 
 export const publicUpdateReviewCandidateCreatedDetailSchema = z
   .object({
@@ -802,6 +821,7 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   evidence_highlight_added: evidenceHighlightAddedDetailSchema,
   // Slice 6 #131.
   finding_status_changed: findingStatusChangedDetailSchema,
+  finding_comment_created: findingCommentCreatedDetailSchema,
   // Slice 6 #132.
   task_request_created_from_finding: taskRequestCreatedFromFindingDetailSchema,
   // Slice 6 #136.
@@ -819,6 +839,7 @@ export const AUDIT_EVENT_DETAIL_SCHEMAS = {
   finding_task_linked: findingTaskLinkedDetailSchema,
   // Slice 7 #138.
   task_status_changed: taskStatusChangedDetailSchema,
+  task_comment_created: taskCommentCreatedDetailSchema,
   public_update_review_candidate_created: publicUpdateReviewCandidateCreatedDetailSchema,
   public_update_review_candidate_dismissed: publicUpdateReviewCandidateDismissedDetailSchema,
   // Slice 8 #191: Survey lifecycle and question structure events.
