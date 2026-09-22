@@ -82,7 +82,7 @@ Switching to JWT, batch AD sync, or AD-group-driven Role mapping each warrants a
 `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URI` are required when `AUTH_PROVIDER=oidc` (one validation issue per missing variable, at that variable's path) and ignored when `AUTH_PROVIDER=mock`. `OIDC_SCOPES` defaults to `openid email profile` and must include `openid`. Rules, all enforced at config load (`config-oidc.ts`), with messages that never echo a value — only variable names and rule descriptions:
 
 - `OIDC_ISSUER_URL`: absolute URL, no query, no fragment, no credentials; https, except plain `http://localhost[:port]` / `http://127.0.0.1[:port]` outside production.
-- `OIDC_REDIRECT_URI`: absolute URL, no fragment, path exactly `/auth/callback`; https in production (http localhost/127.0.0.1 allowed otherwise).
+- `OIDC_REDIRECT_URI`: absolute URL, no query string (including a bare `?`) or fragment, path exactly `/auth/callback`; https in production (http localhost/127.0.0.1 allowed otherwise).
 - `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`: non-empty after trimming.
 
 ### Endpoints

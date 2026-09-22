@@ -708,11 +708,12 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
   /**
    * Narrow cross-module read interface (Task detail source trail): maps the
-   * ONE VOC read-authority decision (`resolveVocAccess`, the same function
-   * getVocDetail uses) onto the entity-link visibility vocabulary, without
+   * VOC access decision plus the full-read endpoint gate (as getVocDetail
+   * does through listLinks) onto the entity-link visibility vocabulary, without
    * assembling the full detail envelope:
-   *   kind 'full'      → 'allowed' (id/display_id/title from the VOC row)
-   *   kind 'summary'   → 'summary_visible' (no identifiers forwarded)
+   *   kind 'full' + readable endpoint → 'allowed' (id/display_id/title from the VOC row)
+   *   kind 'full' + unreadable endpoint → 'hidden'
+   *   kind 'summary'   → 'summary_visible' (no endpoint gate or identifiers forwarded)
    *   HttpError not_found.record (missing/archived/foreign-workspace row OR the
    *                    out-of-effective-scope 404 anti-probe) → 'hidden'
    *   HttpError permission.denied → 'denied' (defensive: the access matrix
@@ -725,11 +726,17 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     vocId: string;
   }): Promise<VocReferenceResolution> {
     try {
-      // Same authority as getVocDetail (resolveVocAccess) but WITHOUT
+      // Same access decision as getVocDetail (resolveVocAccess) but WITHOUT
       // assembling the full envelope (conversation, attachments, similar VOCs,
       // links): a Task read must not depend on unrelated VOC reads succeeding.
       const access = await resolveVocAccess(args);
       if (access.kind === 'full') {
+        // Admin 'all' scope ignores explicit voc.read denies; the endpoint gate does not.
+        const canRead = await deps.entityLinksService.canReadEndpoint({
+          actor: args.actor,
+          endpoint: { type: 'voc', id: args.vocId },
+        });
+        if (!canRead) return { visibility_state: 'hidden' };
         return {
           visibility_state: 'allowed',
           id: access.row.id,

@@ -31,7 +31,9 @@ const actor: ReadActorContext = {
 const vocReadService = createVocReadService({
   db: {} as Db,
   checkService: {} as CheckService,
-  entityLinksService: {} as EntityLinksService,
+  entityLinksService: {
+    canReadEndpoint: vi.fn().mockResolvedValue(true),
+  } as unknown as EntityLinksService,
 });
 
 describe('resolveVocReference error mapping (#378)', () => {

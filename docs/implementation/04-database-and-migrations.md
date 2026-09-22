@@ -236,7 +236,7 @@ functional `COALESCE` unique indexes on `permission.permission_grants|denies|req
 (drizzle cannot express them), the 14 hand-written FKs on `permission.*`, the extra
 indexes on those tables, and `voc.workspace_display_counters` (migration 0017).
 `core.saved_views` is modeled: its unique is the 4-column
-`saved_views_workspace_id_actor_id_surface_name_key` constraint, matching 0045. A generated
+`saved_views_workspace_actor_surface_name_uq` constraint, exactly as named in 0045. A generated
 `DROP CONSTRAINT`/`DROP INDEX` for such an object must be hand-checked against
 the real name before use.
 

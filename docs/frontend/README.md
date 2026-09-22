@@ -2,6 +2,8 @@
 
 Frontend docs translate product intent into implementable UI contracts.
 
+Actor surface contracts live in `docs/frontend/specs/actors.md`.
+
 ## Precedence
 
 ```text
@@ -30,11 +32,13 @@ Frontend docs translate product intent into implementable UI contracts.
 route behavior, workflow states, accessibility behavior, or frontend source
 paths.
 
-External design prompts, generated HTML files, screenshots, and prototype
-references are visual references only. They may inform density, spacing, layout
-feel, interaction inspiration, and visual polish, but they must not override
-domain terminology, route contracts, workflow states, permission rules, API
-contracts, accessibility behavior, or component behavior contracts.
+External design prompts, generated HTML files, and external screenshots are
+visual references only. The `docs/design-prototype/` files follow the root `AGENTS.md`
+`Prototype Is The Spec` rule and are the functional, visual, and copy
+specification for user-facing surfaces. External references may inform density,
+spacing, layout feel, interaction inspiration, and visual polish, but they must
+not override domain terminology, route contracts, workflow states, permission
+rules, API contracts, accessibility behavior, or component behavior contracts.
 
 ## Domain Terminology
 

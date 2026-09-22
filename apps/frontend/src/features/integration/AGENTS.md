@@ -25,6 +25,7 @@ Code ownership and URL mount are not the same thing here:
 ## Rules
 
 - Finding detail is evidence-first and keeps execution links visible.
+- Finding detail composes `FindingDetailPanel` → `FullFindingDetail` → `useFindingDetailController`; shared UI and hooks are under `apps/frontend/src/features/cross-system/` and `apps/frontend/src/lib/cross-system/`.
 - Coverage must be labeled as partial integration coverage.
 - Link views must not imply arbitrary graph editing beyond approved relation types.
 - Cross-system creation flows must preserve source context and return users to the original work surface when appropriate.

@@ -25,6 +25,8 @@ External destinations (Loki, ElasticSearch, S3) were rejected for MVP. The audit
 
 Append-only is enforced by **database role separation**, not by application code or trigger:
 
+The executable entry point `apps/backend/src/index.ts` adds a boot guard by calling `assertRuntimeDbRole` from `apps/backend/src/db/runtime-role.ts`. Boot stops unless both `current_user` and `session_user` are `fops_app`, and it also stops for unsafe role attributes or privileged-role membership. Migration and seed CLIs use the separate `DATABASE_URL_MIGRATE` path; `buildServer` itself does not perform this check.
+
 - The application connects as a role with `INSERT, SELECT` only on `core.audit_log`. `UPDATE` and `DELETE` are revoked.
 - A separate admin role (used only by migrations and explicit, audited operator scripts) retains `UPDATE`/`DELETE`. Operator scripts that touch this table must themselves emit an audit row identifying the operator and reason.
 - Migrations enforce the grant in code so a future schema change cannot silently widen access.
