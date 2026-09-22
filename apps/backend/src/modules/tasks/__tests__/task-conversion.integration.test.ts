@@ -798,6 +798,70 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     expect(outOfScope.statusCode).toBe(404);
   });
 
+  it('#388 review follow-up: conversion rejects a legacy direct voc->task_request link whose stored MS mismatches the task, and persists nothing', async () => {
+    const taskMsId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Direct VOC conversion task MS',
+    );
+    const linkMsId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Direct VOC conversion mismatched link MS',
+    );
+    const voc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      taskMsId,
+      userActorId,
+      'Cross-MS direct task-request VOC',
+    );
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceId: voc.id,
+      primaryManagedSystemId: taskMsId,
+      evidenceSummary: 'Cross-MS direct VOC evidence',
+      requestedOutcome: 'Reject stale cross-MS link',
+      requesterActorId: userActorId,
+      status: 'approved',
+      reviewerActorId: adminActorId,
+      decisionReason: 'Approved in seed',
+      decided: true,
+    });
+    // Simulate a link created before #388's create-time enforcement: the
+    // stored managed_system_id (linkMsId) does not match the task_request's
+    // (and therefore the converted task's) Managed System (taskMsId).
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (
+        workspace_id, source_type, source_id, target_type, target_id,
+        relation_type, visibility, status, managed_system_id, created_by
+      ) values ($1, 'voc', $2, 'task_request', $3, 'requested_task',
+                'internal_only', 'active', $4, $5)`,
+      [WORKSPACE_ID, voc.id, request.id, linkMsId, adminActorId],
+    );
+
+    const key = randomUUID();
+    const payload = { title: 'Should not be created', priority: 'medium' };
+    const res = await convert(adminCookie, request.id, payload, key);
+
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(422);
+    expect(res.json<{ code: string }>().code).toBe('validation.failed');
+
+    const tasks = await dbHandle.pool.query<{ n: number }>(
+      'select count(*)::int as n from task.tasks where source_task_request_id = $1',
+      [request.id],
+    );
+    expect(tasks.rows[0]?.n).toBe(0);
+
+    const requestRow = await dbHandle.pool.query<{ status: string }>(
+      'select status from task_request.task_requests where id = $1',
+      [request.id],
+    );
+    expect(requestRow.rows[0]?.status).toBe('approved');
+  });
+
   it('0035 backfill flips only audit-provenance conversion evidence links', async () => {
     const msId = await insertMsDirectly(
       migrateHandle,

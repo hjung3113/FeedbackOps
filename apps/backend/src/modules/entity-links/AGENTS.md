@@ -12,7 +12,7 @@ Entity Links owns link behavior even when link tables live in the `core` databas
 - `internal_only` links are hidden from Reporter.
 - Cross-workspace links are rejected.
 - Source and target endpoints must resolve to the same Managed System; the create-time check in `createLink` (`assertLinkManagedSystemCompatibility`) and the domain create-finding/link-finding paths are the authoritative enforcement seam. No DB constraint exists because `core.entity_links` is polymorphic (`source_type`/`target_type` pick the owning table; a CHECK cannot subquery and per-type triggers would duplicate authorization in SQL).
-- `registeredEntityLinkPairs` in `packages/shared/src/entity-links.ts` is the canonical tuple registry (currently 14 tuples). The DB `entity_links_tuple_check` CHECK constraint must be kept in sync via migration; adding a relation type requires both a shared-list entry and a migration extending the CHECK.
+- `registeredEntityLinkPairs` in `packages/shared/src/entity-links.ts` is the canonical tuple registry (currently 13 tuples). The DB `entity_links_tuple_check` CHECK constraint must be kept in sync via migration; adding a relation type requires both a shared-list entry and a migration extending the CHECK.
 
 ## Provider Contract
 

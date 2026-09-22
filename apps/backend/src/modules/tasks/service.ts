@@ -225,6 +225,14 @@ async function preserveSourceLinks(args: {
 
   for (const sourceLink of sourceLinks) {
     if (sourceLink.source_type !== 'voc' || sourceLink.relation_type !== 'requested_task') continue;
+    // #388 review follow-up: this direct voc->task_request link (no Finding
+    // in between) can also predate cross-MS enforcement — same rationale as
+    // the finding->task and voc->finding propagation checks above.
+    assertLinkManagedSystemCompatibility(
+      sourceLink.managed_system_id,
+      args.task.primary_managed_system_id,
+      { path: ['task_id'] },
+    );
     const tuple = registeredEntityLinkPairSchema.parse({
       source_type: 'voc',
       target_type: 'task',
