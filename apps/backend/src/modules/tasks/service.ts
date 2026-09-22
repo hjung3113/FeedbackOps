@@ -12,19 +12,26 @@ import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 
 import type { Db } from '../../db/client.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
   type EntityLinkRow,
-  insertActiveEntityLink,
+  createEntityLink,
   selectActiveLinksForEndpoint,
   selectEligibleVocLinksForReleasedTask,
-} from '../entity-links/repo.js';
+} from '../entity-links/commands.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
-import { lockFindingById, updateFindingLinkedTask } from '../findings/repo.js';
+import { linkTaskToFinding } from '../findings/commands.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { type TaskRequestRow, lockTaskRequestById } from '../task-requests/repo.js';
+import {
+  type TaskRequestRow,
+  lockTaskRequestForUpdate,
+  markTaskRequestConverted,
+} from '../task-requests/commands.js';
+import type { VocReadService } from '../voc/read-service.js';
+import { lockAnalyticsArea, lockManagedSystem } from '../voc/repo.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,
@@ -35,7 +42,6 @@ import {
   insertTask,
   listTasksByWorkspace,
   lockTaskById,
-  markTaskRequestConverted,
   resolveTaskSource,
   updateTaskStatus,
 } from './repo.js';
@@ -51,6 +57,10 @@ export interface TasksServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  /** Narrow read seam (#378): Task detail resolves its source VOC's visibility
+   *  verdict through the canonical VOC read-authority path — never a copied
+   *  predicate (see #423) and never a VOC repo import (module-seams guard). */
+  vocReadService: Pick<VocReadService, 'resolveVocReference'>;
   boss?: PgBoss;
 }
 
@@ -82,6 +92,35 @@ function assertApproved(taskRequest: TaskRequestRow): void {
   }
 }
 
+// Validates the analytics_area_id passed to task conversion (issue #389). The
+// DB FK alone cannot scope the area, so mirror assertTargetAnalyticsArea from
+// voc-clusters: the area must exist in this workspace, belong to the task
+// request's managed system, and not be archived.
+async function assertConversionAnalyticsArea(args: {
+  tx: Tx;
+  workspaceId: string;
+  analyticsAreaId: string | null | undefined;
+  managedSystemId: string;
+}): Promise<void> {
+  if (!args.analyticsAreaId) return;
+  // Lock order MS -> AA, same as AA archive (ADR-0019 E) and VOC create; the
+  // Task insert's FK also takes a KEY SHARE on the MS, so locking the AA first
+  // would invert the order and can deadlock against a concurrent AA archive.
+  await lockManagedSystem(args.tx, args.workspaceId, args.managedSystemId);
+  const aa = await lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
+  if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
+  if (aa.managed_system_id !== args.managedSystemId) {
+    throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
+      fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
+    });
+  }
+  if (aa.archived_at !== null) {
+    throw new HttpError('conflict.parent_archived', 'analytics area archived', {
+      fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
+    });
+  }
+}
+
 async function preserveSourceLinks(args: {
   tx: Parameters<TasksServiceDeps['auditService']['record']>[0];
   actor: TasksActor;
@@ -95,7 +134,7 @@ async function preserveSourceLinks(args: {
     target_type: 'task',
     relation_type: 'converted_to',
   });
-  const requestLink = await insertActiveEntityLink(args.tx, {
+  const requestLink = await createEntityLink(args.tx, {
     workspaceId: args.actor.workspace_id,
     sourceType: requestTuple.source_type,
     sourceId: args.taskRequest.id,
@@ -123,7 +162,7 @@ async function preserveSourceLinks(args: {
       target_type: 'task',
       relation_type: 'requested_task',
     });
-    const taskFindingLink = await insertActiveEntityLink(args.tx, {
+    const taskFindingLink = await createEntityLink(args.tx, {
       workspaceId: args.actor.workspace_id,
       sourceType: findingTuple.source_type,
       sourceId: findingLink.source_id,
@@ -151,7 +190,7 @@ async function preserveSourceLinks(args: {
         target_type: 'task',
         relation_type: 'evidence_of',
       });
-      const taskEvidenceLink = await insertActiveEntityLink(args.tx, {
+      const taskEvidenceLink = await createEntityLink(args.tx, {
         workspaceId: args.actor.workspace_id,
         sourceType: evidenceTuple.source_type,
         sourceId: evidenceLink.source_id,
@@ -174,7 +213,7 @@ async function preserveSourceLinks(args: {
       target_type: 'task',
       relation_type: 'evidence_of',
     });
-    const taskEvidenceLink = await insertActiveEntityLink(args.tx, {
+    const taskEvidenceLink = await createEntityLink(args.tx, {
       workspaceId: args.actor.workspace_id,
       sourceType: tuple.source_type,
       sourceId: sourceLink.source_id,
@@ -216,13 +255,34 @@ export function createTasksService(deps: TasksServiceDeps) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
 
-    const source = row.source_task_request_id
+    const resolved = row.source_task_request_id
       ? await resolveTaskSource(deps.db, {
           workspaceId: args.actor.workspace_id,
           sourceTaskRequestId: row.source_task_request_id,
         })
       : null;
-    return { ...taskToDto(row), source };
+    await attachSourceVoc(args.actor, resolved);
+    return { ...taskToDto(row), source: resolved?.source ?? null };
+  }
+
+  // #378: the source VOC ships only as a backend visibility verdict
+  // (ADR-0023). Seeing the Task does not imply seeing its source VOC; a
+  // `hidden` verdict omits the key entirely so existence is not revealed.
+  // Unexpected read failures propagate — they carry no id and must not be
+  // swallowed into a synthetic state. Shared by GET and PATCH so both
+  // responses carry the same source projection.
+  async function attachSourceVoc(
+    actor: TasksActor,
+    resolved: Awaited<ReturnType<typeof resolveTaskSource>> | null,
+  ): Promise<void> {
+    if (!resolved?.vocId) return;
+    const voc = await deps.vocReadService.resolveVocReference({
+      actor,
+      vocId: resolved.vocId,
+    });
+    if (voc.visibility_state !== 'hidden') {
+      resolved.source.voc = voc;
+    }
   }
 
   async function convertTaskRequest(args: {
@@ -239,7 +299,7 @@ export function createTasksService(deps: TasksServiceDeps) {
         args.idempotencyKey,
         args.requestHash,
         async () => {
-          const taskRequest = await lockTaskRequestById(tx, {
+          const taskRequest = await lockTaskRequestForUpdate(tx, {
             workspaceId: args.actor.workspace_id,
             taskRequestId: args.taskRequestId,
           });
@@ -258,6 +318,13 @@ export function createTasksService(deps: TasksServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
           assertApproved(taskRequest);
+
+          await assertConversionAnalyticsArea({
+            tx,
+            workspaceId: args.actor.workspace_id,
+            analyticsAreaId: args.input.analytics_area_id,
+            managedSystemId: taskRequest.primary_managed_system_id,
+          });
 
           const task = await insertTask(tx, {
             workspaceId: args.actor.workspace_id,
@@ -280,17 +347,11 @@ export function createTasksService(deps: TasksServiceDeps) {
           });
 
           if (taskRequest.source_type === 'finding') {
-            const finding = await lockFindingById(tx, {
+            await linkTaskToFinding(tx, {
               workspaceId: args.actor.workspace_id,
               findingId: taskRequest.source_id,
+              taskId: task.id,
             });
-            if (finding?.linked_task_id === null) {
-              await updateFindingLinkedTask(tx, {
-                workspaceId: args.actor.workspace_id,
-                findingId: finding.id,
-                taskId: task.id,
-              });
-            }
           }
 
           await markTaskRequestConverted(tx, {
@@ -333,7 +394,7 @@ export function createTasksService(deps: TasksServiceDeps) {
         args.idempotencyKey,
         args.requestHash,
         async () => {
-          const taskRequest = await lockTaskRequestById(tx, {
+          const taskRequest = await lockTaskRequestForUpdate(tx, {
             workspaceId: args.actor.workspace_id,
             taskRequestId: args.taskRequestId,
           });
@@ -367,7 +428,7 @@ export function createTasksService(deps: TasksServiceDeps) {
             target_type: 'task',
             relation_type: 'converted_to',
           });
-          await insertActiveEntityLink(tx, {
+          await createEntityLink(tx, {
             workspaceId: args.actor.workspace_id,
             sourceType: tuple.source_type,
             sourceId: taskRequest.id,
@@ -444,13 +505,14 @@ export function createTasksService(deps: TasksServiceDeps) {
           }
 
           if (task.status === args.input.status) {
-            const source = task.source_task_request_id
+            const resolved = task.source_task_request_id
               ? await resolveTaskSource(tx, {
                   workspaceId: args.actor.workspace_id,
                   sourceTaskRequestId: task.source_task_request_id,
                 })
               : null;
-            return { status: 200, body: { ...taskToDto(task), source } };
+            await attachSourceVoc(args.actor, resolved);
+            return { status: 200, body: { ...taskToDto(task), source: resolved?.source ?? null } };
           }
 
           const updatedTask = await updateTaskStatus(tx, {
@@ -492,13 +554,17 @@ export function createTasksService(deps: TasksServiceDeps) {
             summary: 'Task status changed',
             detail: { from: task.status, to: updatedTask.status },
           });
-          const source = updatedTask.source_task_request_id
+          const resolved = updatedTask.source_task_request_id
             ? await resolveTaskSource(tx, {
                 workspaceId: args.actor.workspace_id,
                 sourceTaskRequestId: updatedTask.source_task_request_id,
               })
             : null;
-          return { status: 200, body: { ...taskToDto(updatedTask), source } };
+          await attachSourceVoc(args.actor, resolved);
+          return {
+            status: 200,
+            body: { ...taskToDto(updatedTask), source: resolved?.source ?? null },
+          };
         },
       );
     });

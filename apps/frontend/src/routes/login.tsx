@@ -1,4 +1,5 @@
-// /login — mock-auth picker. Two hard-coded cards (Admin / User) per the
+// /login — OIDC entry in production; mock-auth picker otherwise.
+// Two hard-coded cards (Admin / User) per the
 // orchestrator's "keep this minimal, design system reference HTML pending"
 // instruction. Card labels mirror the seed roster; the matching backend
 // route still gates the actual session issuance and the dev-only check.
@@ -11,15 +12,17 @@
 //
 // F-015 prod guard: the backend `/auth/mock-login` 404s in production
 // (`isProd || authProvider.name !== 'mock'`). This page therefore must
-// disappear in prod so it cannot leak seed external_ids or invite
-// probing. Detection: Vite's `import.meta.env.PROD` (true in `vite build`
+// hide the picker in prod and start `/auth/login` instead. Detection:
+// Vite's `import.meta.env.PROD` (true in `vite build`
 // production bundle; false in `vite dev` and during vitest runs).
 
 import { ROLE_LEVEL_LABELS, type RoleLevel } from '@fops/shared';
 import { Button } from '@fops/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Navigate, createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useEffect, useRef } from 'react';
 import { mockLogin } from '../lib/api';
+import { sanitizeLoginReturnTo } from '../lib/login-return-to';
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -71,9 +74,25 @@ const SEED_ACTORS: ReadonlyArray<{
 
 export function LoginPage() {
   if (import.meta.env.PROD) {
-    return <Navigate to="/" />;
+    return <OidcLoginRedirect />;
   }
   return <MockLoginPicker />;
+}
+
+function OidcLoginRedirect() {
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const search = new URLSearchParams(window.location.search);
+    const returnTo = sanitizeLoginReturnTo(
+      // `redirectTo` is what the _authed guard sends when a deep link hits a 401.
+      search.get('redirectTo') ?? search.get('return_to') ?? search.get('redirect'),
+    );
+    window.location.replace(`/auth/login?return_to=${encodeURIComponent(returnTo)}`);
+  }, []);
+
+  return <p>로그인 페이지로 이동 중…</p>;
 }
 
 function MockLoginPicker() {

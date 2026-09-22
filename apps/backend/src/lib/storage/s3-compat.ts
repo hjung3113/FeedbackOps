@@ -22,6 +22,7 @@ import { Readable } from 'node:stream';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   S3Client,
   type S3ClientConfig,
@@ -177,6 +178,16 @@ export class S3CompatStorageBackend implements StorageBackend {
         throw new StorageUnavailableError(`storage: delete failed for key=${key}`, err);
       }
       throw err;
+    }
+  }
+
+  // HeadBucket distinguishes a missing/unreachable bucket (throws) from a
+  // reachable one; HeadObject 404s are ambiguous between key and bucket.
+  async ping(): Promise<void> {
+    try {
+      await this.#client.send(new HeadBucketCommand({ Bucket: this.#bucket }));
+    } catch (err) {
+      throw new StorageUnavailableError('storage: bucket not reachable', err);
     }
   }
 

@@ -6,6 +6,33 @@ These modules are bounded product-system implementations inside
 `apps/backend/src/modules/*`. They are not separate deployable services in the
 MVP architecture.
 
+## Logical Domains → Backend Module Directories
+
+The following directories are the server-registered module surfaces (with
+`core` also providing shared services used during server assembly):
+
+| Logical domain | Actual module directory |
+| --- | --- |
+| Analytics Area | `apps/backend/src/modules/analytics-areas` |
+| Attachments | `apps/backend/src/modules/attachments` |
+| Authentication | `apps/backend/src/modules/auth` |
+| Core services | `apps/backend/src/modules/core` |
+| Dashboard | `apps/backend/src/modules/dashboard` |
+| Entity Linking | `apps/backend/src/modules/entity-links` |
+| Finding | `apps/backend/src/modules/findings` |
+| Managed System Registry | `apps/backend/src/modules/managed-systems` |
+| Navigation | `apps/backend/src/modules/nav` |
+| Permission | `apps/backend/src/modules/permissions` |
+| Saved Views | `apps/backend/src/modules/saved-views` |
+| Survey | `apps/backend/src/modules/surveys` |
+| Task Request | `apps/backend/src/modules/task-requests` |
+| Task | `apps/backend/src/modules/tasks` |
+| VOC | `apps/backend/src/modules/voc` |
+| VOC Recommendations | `apps/backend/src/modules/voc/recommendations` |
+| Pre-submit VOC Peers | `apps/backend/src/modules/voc/pre-submit-peers` |
+| VOC Cluster | `apps/backend/src/modules/voc-clusters` |
+| Workspace Settings | `apps/backend/src/modules/workspace-settings` |
+
 ```text
 VOC owns:
 - VOC
@@ -125,6 +152,7 @@ Entity Linking uses providers to enforce:
 - packages/ui implements reusable visual and interaction primitives.
 - apps/frontend/src/features/{home,my-work,voc,voc-cluster,surveys,tasks,integration,admin} own route and screen composition.
 - Findings, Evidence, Coverage, and Links are Integration feature surfaces.
+- Finding detail composes `FindingDetailPanel` → `FullFindingDetail` → `useFindingDetailController` under `apps/frontend/src/features/integration`; shared UI and hooks are under `apps/frontend/src/features/cross-system` and `apps/frontend/src/lib/cross-system`.
 - Analytics Areas, Permission Requests, Managed System Registry, and settings are Admin feature surfaces.
 - Frontend features represent UI surfaces for product systems; they do not own domain rules or writes.
 - Feature screens compose UI primitives and call typed API hooks.

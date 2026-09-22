@@ -24,7 +24,7 @@ Log lines include:
 ```text
 - timestamp
 - level
-- request_id (per HTTP request and per pg-boss job; same id flows through every line)
+- request_id (per HTTP request; same id flows through every line); pg-boss jobs use `queue` + `job_id` and optional `correlation_id` for identification
 - actor_id (when a session is present)
 - workspace_id (when known)
 - event (short verb, e.g. 'voc.created', 'task_request.approved', 'sensitive_permission.used')
@@ -48,7 +48,7 @@ To keep that follow-up cheap, MVP code:
 
 ## Secrets and config
 
-- All non-secret config comes from env vars defined in `apps/backend/src/config/env.ts` (parsed by Zod, fail-fast on missing required values).
+- All non-secret config comes from the settings entrypoint `apps/backend/src/config.ts`, with OIDC and attachment-origin validation in `config-oidc.ts` and `config-attachment-origin.ts` (parsed by Zod, fail-fast on missing required values).
 - Secrets (`DATABASE_URL`, `OIDC_CLIENT_SECRET`, `S3_SECRET_ACCESS_KEY`, etc.) come from k8s `Secret` objects mounted as env vars.
 - No secret is logged. The env parser explicitly redacts known secret keys in any startup-time config-dump log.
 - `.env` files are used only in local dev; CI never reads `.env`.
@@ -66,12 +66,13 @@ Neither endpoint requires authentication; both refuse to disclose internal versi
 
 ## Amended 2026-07-13
 
-The `/health/live` and `/health/ready` split above is the deployment
-target-state, not the current MVP implementation. The current backend exposes
-unauthenticated `GET /health` as a simple process-health endpoint; k8s
-deployment work must implement the target-state split before using these probes
-for production readiness. `/health/ready` remains the chosen readiness name, and
-the legacy `/healthz` wording in ADR-0011 is not the canonical endpoint name.
+At the time of this amendment the `/health/live` and `/health/ready` split
+above was not yet implemented; the backend exposed unauthenticated `GET /health`
+as a simple process-health endpoint, and k8s deployment work had to implement
+the split before these probes could be used for production readiness. The split
+is now implemented — see "Amended 2026-09-22" below. `/health/ready` remains
+the chosen readiness name, and the legacy `/healthz` wording in ADR-0011 is not
+the canonical endpoint name.
 
 ## What this ADR locks
 
@@ -84,3 +85,89 @@ the legacy `/healthz` wording in ADR-0011 is not the canonical endpoint name.
 ## Reopening
 
 Adding metrics, tracing, an APM agent, or switching deployment target each warrants a new ADR. Adding new log event types is *not* a reopen — it is the normal way new features make themselves observable.
+
+## Amended 2026-09-22
+
+The `/health/live` + `/health/ready` split is now implemented
+(`apps/backend/src/lib/health.ts`, registered in `apps/backend/src/server.ts`).
+
+- `GET /health/live` → `200 { status: 'ok' }`. Depends on nothing downstream
+  (no Postgres, no pg-boss, no storage).
+- `GET /health/ready` → `200` only if Postgres answers, pg-boss is usable, and
+  attachment storage is reachable; `503` otherwise. Unauthenticated, like
+  `/health`, and exempt from the global rate limit so probes never see 429.
+- Response bodies are fixed-shape and never carry error details (no error
+  messages, DSNs, bucket/endpoint names, credentials, or stack traces):
+
+```text
+{ status: 'ok' | 'unavailable',
+  checks: { database: 'ok' | 'fail', pg_boss: 'ok' | 'fail', storage: 'ok' | 'fail' } }
+```
+
+- Every dependency check has its own timeout (default 2000 ms, overridable via
+  the `healthProbeTimeoutMs` build-server option for tests) and all three
+  checks run in parallel, so a hanging dependency yields 503 within roughly
+  the timeout instead of hanging the probe. Timers are always cleared, but a
+  timed-out call keeps running (and holds its connection). If the original
+  call is still unsettled, subsequent probes fail immediately; after it
+  settles, the next probe retries it. Before timeout, concurrent probes are
+  coalesced (single-flight), so a hung dependency pins at most one connection
+  per check.
+- Both probe routes opt out of the rate limiter at the route level
+  (`config.rateLimit: false`), so the limiter's session-cookie DB lookup never
+  runs for them; liveness therefore stays independent of every dependency.
+- pg-boss and storage fail closed: a missing pg-boss handle, a thrown error,
+  or a timeout all report `'fail'`. The storage probe is
+  the backend's bucket-level `ping()` (S3 `HeadBucket`, so a deleted bucket
+  fails); backends without `ping()` fall back to `exists('__readiness_probe__')`,
+  where a resolved `false` means the store answered. The same `opts.storage ?? getStorage()`
+  instance used for attachments is probed.
+- Failures are logged server-side only, with the error NAME and no message or
+  cause: `req.log.warn({ check, errName })` — messages can embed DSNs.
+- Recommended probe wiring: `livenessProbe` httpGet `/health/live`
+  (`periodSeconds: 10`, `failureThreshold: 3`); `readinessProbe` httpGet
+  `/health/ready` (`periodSeconds: 10`, `timeoutSeconds: 5`,
+  `failureThreshold: 3`).
+- `GET /health` (200 with `{ status: 'ok', ts }`) remains as a legacy process
+  check.
+
+## Amended 2026-09-22 (jobs)
+
+Background jobs and the storage factory now emit the same structured Pino
+stdout stream as request logs. `apps/backend/src/index.ts` creates ONE root
+logger per process (`createRootLogger`) and hands it both to Fastify
+(`loggerInstance`) and to every job queue, so job logs and request logs share
+level and redaction.
+
+Job lifecycle events (emitted by `withJobLogging`,
+`apps/backend/src/lib/job-log.ts`) — one line per job:
+
+- `job.start` — `queue`, `job_id`, `correlation_id` (when the payload carries
+  a string `correlation_id`), plus queue-specific allowlisted id fields
+  (e.g. `task_id`, `release_event_id` for
+  `tasks.create_public_update_review_candidates`).
+- `job.retry` — start fields plus `retry_count`; emitted instead of
+  `job.start` when the pg-boss job carries `retry_count > 0`. pg-boss v12
+  attaches `retryCount` only to `JobWithMetadata`, so every `boss.work`
+  registration passes `{ includeMetadata: true }` (`JOB_WORK_OPTIONS`);
+  without it `job.retry` could never fire. The field is omitted, never
+  invented, when a job does not carry it.
+- `job.success` — start fields plus `duration_ms`.
+- `job.failure` — start fields plus `duration_ms`, `err_name`, and
+  `err_code` (only when the error carries a string/number `code`).
+
+No-message rule: failure lines NEVER include the error message, cause, or
+stack (messages can embed DSNs). The same projection (`errorFields`:
+`err_name`, `err_code`) applies to every caught error logged by a job path —
+pg-boss `error` events, the embedding backfill enqueue failure, the attachment
+purge storage failure — and pg-boss `warning` events log no payload fields at all
+(`warningFields`: their `{ message, data }` can carry SQL and parameters); raw `err`/`warning` objects are never passed to the logger.
+Job payload data is never logged —
+bounded, allowlisted fields only. Handler errors are always RETHROWN after
+the `job.failure` line so pg-boss retry config (ADR-0009:35) still applies.
+
+Storage (`apps/backend/src/lib/storage/factory.ts`) logs exactly one
+`storage: materialized` line on first materialization with `bucket`,
+`endpoint_origin` (origin only — the raw endpoint may carry userinfo and
+never reaches the log), `region`, and `force_path_style`. No credentials;
+without a logger nothing is logged.

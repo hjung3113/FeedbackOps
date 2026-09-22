@@ -40,6 +40,13 @@ export interface StorageBackend {
   delete(key: string): Promise<void>;
   /** Existence probe via HEAD. Returns false for missing key. */
   exists(key: string): Promise<boolean>;
+  /**
+   * Optional reachability probe for the bucket itself (readiness, #401).
+   * `exists()` cannot tell a missing key from a missing bucket (both 404), so
+   * backends that can (S3 HeadBucket) implement this; it throws when the
+   * store or bucket is unreachable/missing.
+   */
+  ping?(): Promise<void>;
 }
 
 /**

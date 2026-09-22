@@ -51,6 +51,15 @@ src/modules/{module}/
 - __tests__/           # module tests
 ```
 
+Cross-module calls use the owning command seams in `entity-links/commands.ts`,
+`findings/commands.ts`, and `task-requests/commands.ts`. HTTP-facing VOC and
+attachment commands live in `voc/service.ts`, `voc/conversation-service.ts`, and
+`attachments/service.ts` (`uploadAttachmentCommand`), with the shared
+transaction and idempotency frame in `core/idempotency/idempotent-command.ts`.
+`createVocCommand` is the exception: it keeps a direct `deps.db.transaction`
+around `idempotencyService.runIdempotent` to preserve its detailed mismatch
+error.
+
 This is a flat-file convention. Do not introduce layered directories such as
 `controller/`, `application/`, `domain/`, or `repository/`; service/repository
 splits are expressed with file suffixes. The `core` module is the current

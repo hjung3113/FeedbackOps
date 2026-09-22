@@ -15,8 +15,8 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /vocs?view=triage&triage=unassigned&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=inbox&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=my&selected=:vocId
-/voc-clusters?selected=:clusterId
-/surveys
+/voc-clusters?managedSystem=:managedSystemId|all&selected=:clusterId
+/surveys?managedSystem=:managedSystemId|all&selected=:surveyId
 /surveys/:surveyId
 /surveys/:surveyId?builder=true
 /surveys/:surveyId/results
@@ -32,10 +32,17 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /integration/coverage?managedSystem=:managedSystemId|all
 /integration/links?managedSystem=:managedSystemId|all
 /admin/managed-systems
-/admin/analytics-areas?selected=:analyticsAreaId
-/admin/permissions/requests?selected=:requestId
+/admin/analytics-areas?managedSystem=:managedSystemId&includeArchived=true&selected=:analyticsAreaId
+/admin/permissions/requests?tab=:tab&selected=:requestId
 /admin/settings
 ```
+
+| Deep-link route | Search keys | Omitted defaults |
+|---|---|---|
+| `/surveys` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
+| `/voc-clusters` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
+| `/admin/analytics-areas` | `managedSystem`, `includeArchived`, `selected` | `managedSystem` for all Managed Systems; `includeArchived` when archived records are hidden; `selected` when none is selected |
+| `/admin/permissions/requests` | `tab`, `selected` | `tab` for the pending tab; `selected` when none is selected |
 
 Route naming rules:
 
@@ -84,6 +91,8 @@ Admin:
 Current sidebar entries live in `SIDEBAR_ENTRIES` (`apps/frontend/src/routes/_authed.tsx`) — that array is authoritative; this paragraph describes it. Entries are grouped under the section labels `VOC` (Inbox, Triage, My VOCs, Clusters, Findings, New VOC), `TASKS` (Task Requests, Tasks, My Tasks), and `MANAGED SYSTEMS` (Managed Systems, Analytics Areas). Per the AGENTS.md two-consumer rule, each feature adds its entry in the slice that owns it.
 
 The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login also clears that cache before routing so a new Actor never sees prior Actor data.
+
+In production (`import.meta.env.PROD`), `/login` performs one full-page replace to `/auth/login?return_to=…`, preserving a safe internal `redirectTo` (what the `_authed` guard sends on a 401; `return_to` or `redirect` when absent) unchanged after validation against the backend OIDC rules, with `/home` as the fallback. Non-production keeps the mock-login picker; callback failures return backend JSON errors rather than redirecting to `/login`.
 
 Count badges and global Managed System scope selection are still absent — they are the scope of #143 (GlobalRail multi-domain IA).
 

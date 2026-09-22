@@ -202,11 +202,43 @@ used in the current migrations directory.
 must not be hand-edited. Commit them with their generated SQL migration. The
 root `pnpm gate:db-migration-drift` gate mechanically verifies that every
 `migrations/*.sql` file has exactly one `_journal.json` registration (and vice
-versa), then runs `drizzle-kit check` against the committed migration history.
+versa), runs `drizzle-kit check` against the committed migration history, then
+diffs the live TS schema against a throwaway copy of the committed migrations:
 `check` only validates migration-history/journal consistency — it does **not**
-diff the live TS schema against committed migrations, so a schema-only change
-with no corresponding migration currently passes this gate silently (tracked
-in #422, which also covers why `drizzle-kit generate` itself is broken here).
+diff the schema, so the gate also runs `db:generate` with its output redirected
+to the throwaway copy (via `DRIZZLE_OUT`) and fails if generate would add or
+rewrite any SQL/journal/snapshot file. (`db:generate` first bundles
+`src/db/schema/index.ts` with esbuild to the gitignored
+`.drizzle-schema/schema.cjs` because drizzle-kit 0.30.1's CJS loader cannot
+resolve the NodeNext `.js` specifiers the schema's cross-file imports require.)
+
+`drizzle-kit generate` diffs against the newest snapshot under `migrations/meta`
+(only the newest one matters). Migrations 0027-0047 were hand-written without
+snapshots, so #422 added `meta/0047_snapshot.json`, generated from the TS
+schema and checked against a database built by applying all 48 migrations
+(tables, columns and nullability match; `voc.workspace_display_counters`,
+created by raw SQL in 0017, is intentionally not modeled in the TS schema).
+When a hand-written migration lands, the newest snapshot must be refreshed, but
+only after the migration and the TS schema agree: apply all migrations to a
+scratch database and compare it with the TS-derived snapshot (tables, columns,
+nullability, defaults, indexes, FKs) *before* adopting a newly generated snapshot
+as the baseline — otherwise a TS change the migration never applied is silently
+blessed. Then run `pnpm --filter backend db:generate` into a scratch copy, keep
+only the new meta snapshot renamed to the latest journal index, and discard the
+generated SQL/journal change. The gate prints this instruction when it detects
+drift and the newest journal entry has no snapshot.
+
+Known limits of the TS-derived baseline: constraint and index *names* in
+hand-written migrations (for example unnamed `REFERENCES`, which PostgreSQL names
+`<table>_<column>_fkey`) differ from the names drizzle derives, and the TS schema
+does not model every SQL-only object. These are intentionally SQL-only (#433):
+functional `COALESCE` unique indexes on `permission.permission_grants|denies|requests`
+(drizzle cannot express them), the 14 hand-written FKs on `permission.*`, the extra
+indexes on those tables, and `voc.workspace_display_counters` (migration 0017).
+`core.saved_views` is modeled: its unique is the 4-column
+`saved_views_workspace_actor_surface_name_uq` constraint, exactly as named in 0045. A generated
+`DROP CONSTRAINT`/`DROP INDEX` for such an object must be hand-checked against
+the real name before use.
 
 ## Issue #165: released Task review candidates
 

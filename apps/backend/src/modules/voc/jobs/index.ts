@@ -5,6 +5,7 @@
 import type { PgBoss } from 'pg-boss';
 
 import type { Db } from '../../../db/client.js';
+import type { JobLog } from '../../../lib/job-log.js';
 import type { EmbeddingProvider } from '../embedding/port.js';
 import { registerEmbedVoc } from './embed-voc.js';
 import { registerVocEmbeddingBackfill } from './embedding-backfill.js';
@@ -14,11 +15,8 @@ export interface VocJobDeps {
   provider: EmbeddingProvider;
   embeddingVersion: number;
   embeddingEnabled: boolean;
-  log?: {
-    info: (msg: string, meta?: unknown) => void;
-    warn: (msg: string, meta?: unknown) => void;
-    error: (msg: string, meta?: unknown) => void;
-  };
+  /** Structured job logger (ADR-0013, amended 2026-09-22). Required in prod wiring. */
+  log: JobLog;
 }
 
 export async function registerVocJobs(boss: PgBoss, deps: VocJobDeps): Promise<void> {
@@ -27,13 +25,13 @@ export async function registerVocJobs(boss: PgBoss, deps: VocJobDeps): Promise<v
     provider: deps.provider,
     embeddingVersion: deps.embeddingVersion,
     embeddingEnabled: deps.embeddingEnabled,
-    ...(deps.log ? { log: { info: deps.log.info, warn: deps.log.warn } } : {}),
+    log: deps.log,
   });
   await registerVocEmbeddingBackfill(boss, {
     db: deps.db,
     embeddingVersion: deps.embeddingVersion,
     embeddingEnabled: deps.embeddingEnabled,
-    ...(deps.log ? { log: { info: deps.log.info, error: deps.log.error } } : {}),
+    log: deps.log,
   });
 }
 

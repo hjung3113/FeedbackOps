@@ -1,6 +1,7 @@
 import {
   addVocClusterMemberRequestSchema,
   approvePermissionRequestSchema,
+  createTaskRequestFromFindingRequestSchema,
   dashboardSummarySchema,
   denyPermissionRequestSchema,
   linkExistingFindingToVocClusterRequestSchema,
@@ -28,6 +29,18 @@ import {
   adminSettingsFixtureSchema,
   adminSettingsPatchSchema,
 } from '../fixtures/admin-settings';
+import {
+  FINDING_DETAIL_IDS,
+  evidenceHighlights,
+  findingActors,
+  findingAnalyticsAreas,
+  findingList,
+  findingManagedSystems,
+  findingSourceVoc,
+  linkedTask,
+  populatedFinding,
+  requestTaskSuccess,
+} from '../fixtures/finding-detail';
 import {
   homeMyWorkRequestsFixture,
   homeMyWorkTasksFixture,
@@ -123,6 +136,8 @@ interface InstallOptions {
   triageAreaScenario?: TriageAreaVisualScenario;
   /** VOC creation with a selected Managed System and pre-submit peers. */
   vocCreate?: boolean;
+  /** Issue #399 Finding detail baseline surface; schemas validate fixtures at import. */
+  findingDetail?: boolean;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -466,6 +481,11 @@ export async function installMockApi(
       return;
     }
 
+    if (options.findingDetail && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, findingActors);
+      return;
+    }
+
     if (isRequest(route, 'GET', '/actors')) {
       await json(
         route,
@@ -512,6 +532,68 @@ export async function installMockApi(
           updated_at: '2026-08-03T09:30:00.000Z',
         }),
       );
+      return;
+    }
+
+    // Finding detail surface (#399 baseline): FindingDetailPanel fans out to the
+    // source VOC, linked Task, Managed Systems, Analytics Areas, actors and the
+    // finding.manage permission check on mount. Every route the visited states
+    // touch is answered here so the fail-closed default below never fires.
+    if (options.findingDetail && isRequest(route, 'GET', `/vocs/${FINDING_DETAIL_IDS.voc}`)) {
+      await json(route, 200, findingSourceVoc);
+      return;
+    }
+
+    if (options.findingDetail && isRequest(route, 'GET', `/tasks/${FINDING_DETAIL_IDS.task}`)) {
+      await json(route, 200, linkedTask);
+      return;
+    }
+
+    if (options.findingDetail && isRequest(route, 'GET', '/managed-systems')) {
+      await json(route, 200, findingManagedSystems);
+      return;
+    }
+
+    if (options.findingDetail && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, findingAnalyticsAreas);
+      return;
+    }
+
+    // The list route (`/findings?selected=…`) needs the deep-linked Finding to
+    // be present, otherwise it replaces-drops the URL selection on load.
+    if (options.findingDetail && isRequest(route, 'GET', '/findings')) {
+      await json(route, 200, findingList);
+      return;
+    }
+
+    if (
+      options.findingDetail &&
+      isRequest(route, 'GET', `/findings/${FINDING_DETAIL_IDS.finding}`)
+    ) {
+      await json(route, 200, populatedFinding);
+      return;
+    }
+
+    if (
+      options.findingDetail &&
+      isRequest(route, 'GET', `/findings/${FINDING_DETAIL_IDS.finding}/evidence-highlights`)
+    ) {
+      await json(route, 200, evidenceHighlights);
+      return;
+    }
+
+    if (
+      options.findingDetail &&
+      isRequest(route, 'POST', `/findings/${FINDING_DETAIL_IDS.finding}/request-task`)
+    ) {
+      const body = createTaskRequestFromFindingRequestSchema.parse(request.postDataJSON());
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      await json(route, 201, requestTaskSuccess);
       return;
     }
 

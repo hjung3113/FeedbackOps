@@ -8,12 +8,14 @@
 // `__resetStorageForTests()` clears the cache so unit tests can re-exercise
 // env parsing without leaking instances across files.
 //
-// Logging: when the singleton is first materialized (first method call) we
-// emit one informational line `storage: bucket=<name> endpoint=<endpoint>`
-// (no creds). The secret access key is **never** logged and is omitted from
-// `toString()` on the config object — see `redact()` and the
-// `Symbol.for('nodejs.util.inspect.custom')` hook below.
+// Logging (ADR-0013, amended 2026-09-22): when the singleton is first
+// materialized (first method call) we emit ONE structured line through the
+// optional `JobLog` passed by the caller — `storage: materialized` with the
+// bucket, endpoint ORIGIN, region, and force_path_style. The raw endpoint is
+// never logged (it may carry userinfo) and keys are never logged. Without a
+// logger, nothing is logged — no console fallback on a product path.
 
+import type { JobLog } from '../job-log.js';
 import type { StorageBackend } from './index.js';
 import { type S3CompatConfig, S3CompatStorageBackend } from './s3-compat.js';
 
@@ -90,6 +92,18 @@ export function redactConfig(cfg: S3CompatConfig): Record<string, unknown> {
 
 let cachedBackend: StorageBackend | null = null;
 
+export interface GetStorageOptions {
+  /**
+   * Structured job log (ADR-0013). Honored only on the call that CREATES the
+   * cached singleton — later `getStorage()` calls return the same proxy and
+   * ignore their opts. Production wiring (src/index.ts) therefore passes
+   * `{ log: jobLog }` on the FIRST call (before buildServer's bare
+   * `getStorage()`), so the `storage: materialized` line lands on the root
+   * logger.
+   */
+  log?: JobLog;
+}
+
 /**
  * Returns a lazy proxy over the real storage backend. The proxy defers env
  * parsing + `S3Client` construction until the first method call so that boot
@@ -100,7 +114,10 @@ let cachedBackend: StorageBackend | null = null;
  * thrown error preserves the existing `storage: missing required env: ...`
  * message so callers / tests can match on it.
  */
-export function getStorage(env: StorageEnv = process.env as StorageEnv): StorageBackend {
+export function getStorage(
+  env: StorageEnv = process.env as StorageEnv,
+  opts?: GetStorageOptions,
+): StorageBackend {
   if (cachedBackend) return cachedBackend;
 
   // Materialize on demand. Memoized inside the proxy so we only parse env +
@@ -109,10 +126,24 @@ export function getStorage(env: StorageEnv = process.env as StorageEnv): Storage
   const materialize = (): StorageBackend => {
     if (real) return real;
     const cfg = parseStorageEnv(env);
-    // Audit-friendly: log bucket + endpoint only. No creds.
-    // Using stderr-bound console.info keeps it out of stdout pipelines while
-    // remaining visible to the standard fastify logger.
-    console.info(`storage: bucket=${cfg.bucket} endpoint=${cfg.endpoint}`);
+    // Log the endpoint ORIGIN only: the raw endpoint may carry userinfo
+    // (`http://user:pw@host`). An endpoint that does not parse logs the
+    // literal 'invalid'.
+    let endpointOrigin = cfg.endpoint;
+    try {
+      endpointOrigin = new URL(cfg.endpoint).origin;
+    } catch {
+      endpointOrigin = 'invalid';
+    }
+    // One structured line per process. Bucket + origin only — no creds, no
+    // raw endpoint. `opts.log` is undefined on non-product paths (server.ts
+    // reuse, tests): log nothing, never console.
+    opts?.log?.info('storage: materialized', {
+      bucket: cfg.bucket,
+      endpoint_origin: endpointOrigin,
+      region: cfg.region,
+      force_path_style: cfg.forcePathStyle,
+    });
     real = new S3CompatStorageBackend(cfg);
     return real;
   };
@@ -126,6 +157,7 @@ export function getStorage(env: StorageEnv = process.env as StorageEnv): Storage
     get: async (key) => materialize().get(key),
     delete: async (key) => materialize().delete(key),
     exists: async (key) => materialize().exists(key),
+    ping: async () => materialize().ping?.(),
   };
 
   cachedBackend = proxy;

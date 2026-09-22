@@ -1,5 +1,11 @@
 import { mintIdempotencyKey } from './idempotency';
-import { ApiError, type ApiErrorEnvelope, type RateLimitInfo } from './types';
+import {
+  ApiError,
+  type ApiErrorEnvelope,
+  ApiParseError,
+  type ApiParseIssue,
+  type RateLimitInfo,
+} from './types';
 
 export interface ApiClientOptions {
   body?: unknown;
@@ -29,11 +35,40 @@ export interface ApiResponse<T> {
 // only for POST/PATCH/DELETE. Include PUT explicitly if a future endpoint opts in.
 const MUTATION_METHODS = new Set(['POST', 'PATCH', 'DELETE']);
 
-export async function apiClient<T = unknown>(
+/**
+ * Structural parser contract for {@link apiRequest}: any Zod schema satisfies
+ * it (its `parse` method matches), and plain `(data: unknown) => T` functions
+ * work too.
+ */
+export type ApiParser<T> = ((data: unknown) => T) | { parse(data: unknown): T };
+
+/** Raw transport outcome before any success-payload typing is applied. */
+interface RawApiResponse {
+  status: number;
+  /** 304: body was not sent; `text` is undefined and must not be parsed. */
+  notModified: boolean;
+  /**
+   * Unparsed success body. JSON decoding is deferred to the adapters so a
+   * non-JSON 2xx body can surface as a TYPED error from `apiRequest` while
+   * `apiClient` keeps its historical behavior.
+   */
+  text: string | undefined;
+  etag: string | undefined;
+  requestId: string | undefined;
+  rateLimit?: RateLimitInfo;
+  retryAfterSeconds?: number;
+}
+
+/**
+ * The one place that talks to the network: headers, idempotency, fetch,
+ * 304 short-circuit, error-envelope handling. Both {@link apiClient} and
+ * {@link apiRequest} are thin adapters over this.
+ */
+async function sendRequest(
   method: string,
   path: string,
-  opts: ApiClientOptions = {},
-): Promise<ApiResponse<T>> {
+  opts: ApiClientOptions,
+): Promise<RawApiResponse> {
   const upper = method.toUpperCase();
   const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers };
 
@@ -67,27 +102,133 @@ export async function apiClient<T = unknown>(
   const { rateLimit, retryAfterSeconds } = parseRateLimitHeaders(res.headers);
 
   if (res.status === 304) {
-    const base: ApiResponse<T> = { status: 304, data: undefined as T, etag, requestId };
+    const base: RawApiResponse = {
+      status: 304,
+      notModified: true,
+      text: undefined,
+      etag,
+      requestId,
+    };
     if (rateLimit) base.rateLimit = rateLimit;
     if (retryAfterSeconds !== undefined) base.retryAfterSeconds = retryAfterSeconds;
     return base;
   }
 
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : undefined;
 
   if (!res.ok) {
+    // Error envelopes are decoded here, exactly as before (a non-JSON error
+    // body still throws the raw SyntaxError — unchanged legacy behavior).
+    const errorData = text ? (JSON.parse(text) as unknown) : undefined;
     const envelope: ApiErrorEnvelope =
-      data && typeof data === 'object' && 'code' in data
-        ? (data as ApiErrorEnvelope)
+      errorData && typeof errorData === 'object' && 'code' in errorData
+        ? (errorData as ApiErrorEnvelope)
         : { code: 'internal.unexpected', message: `HTTP ${res.status}` };
     throw new ApiError(res.status, envelope, requestId, rateLimit, retryAfterSeconds);
   }
 
-  const base: ApiResponse<T> = { status: res.status, data: data as T, etag, requestId };
+  const base: RawApiResponse = {
+    status: res.status,
+    notModified: false,
+    text,
+    etag,
+    requestId,
+  };
   if (rateLimit) base.rateLimit = rateLimit;
   if (retryAfterSeconds !== undefined) base.retryAfterSeconds = retryAfterSeconds;
   return base;
+}
+
+function rawToResponse<T>(raw: RawApiResponse, data: T): ApiResponse<T> {
+  const base: ApiResponse<T> = {
+    status: raw.status,
+    data,
+    etag: raw.etag,
+    requestId: raw.requestId,
+  };
+  if (raw.rateLimit) base.rateLimit = raw.rateLimit;
+  if (raw.retryAfterSeconds !== undefined) base.retryAfterSeconds = raw.retryAfterSeconds;
+  return base;
+}
+
+/**
+ * Extracts only issue paths and machine codes from a parser failure. Zod
+ * issues carry the offending values inside their messages, so the messages
+ * themselves are dropped — response payload values never surface in the
+ * thrown error. Non-Zod parser exceptions yield an empty issue list.
+ */
+function parseIssuesFrom(cause: unknown): ApiParseIssue[] {
+  if (!(cause instanceof Error)) return [];
+  const issues = (cause as { issues?: unknown }).issues;
+  if (!Array.isArray(issues)) return [];
+  const out: ApiParseIssue[] = [];
+  for (const issue of issues) {
+    if (issue && typeof issue === 'object') {
+      const { path, code } = issue as { path?: unknown; code?: unknown };
+      out.push({
+        path: Array.isArray(path) ? path.map(String) : [],
+        code: typeof code === 'string' ? code : 'custom',
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * GET/POST/... with REQUIRED runtime validation of the success payload.
+ * Performs the same request, headers, and error-envelope handling as
+ * {@link apiClient}; on a 2xx non-304 response it runs `parser.parse(data)`
+ * and throws {@link ApiParseError} (a subclass of ApiError) when the payload
+ * does not match. 304 responses skip parsing (`data` undefined, as today).
+ * A Zod schema satisfies `parser` structurally; plain functions work too.
+ *
+ * New product endpoints MUST use this (see
+ * `lib/api/api-unparsed-allowlist.txt` for the audited legacy exceptions).
+ */
+export async function apiRequest<T>(
+  method: string,
+  path: string,
+  parser: ApiParser<T>,
+  opts: ApiClientOptions = {},
+): Promise<ApiResponse<T>> {
+  const raw = await sendRequest(method, path, opts);
+  if (raw.notModified) return rawToResponse(raw, undefined as T);
+
+  const parse = typeof parser === 'function' ? parser : (input: unknown) => parser.parse(input);
+  const query = path.indexOf('?');
+  const endpoint = `${method.toUpperCase()} ${query === -1 ? path : path.slice(0, query)}`;
+  let json: unknown;
+  try {
+    json = raw.text ? (JSON.parse(raw.text) as unknown) : undefined;
+  } catch {
+    // A 2xx body that is not JSON (HTML error page, truncated body): typed
+    // error, no body text in the message.
+    throw new ApiParseError(raw.status, endpoint, [], raw.requestId);
+  }
+  let data: T;
+  try {
+    data = parse(json);
+  } catch (cause) {
+    throw new ApiParseError(raw.status, endpoint, parseIssuesFrom(cause), raw.requestId);
+  }
+  return rawToResponse(raw, data);
+}
+
+/**
+ * @deprecated Use {@link apiRequest} with a shared schema; see
+ * `lib/api/api-unparsed-allowlist.txt`. Kept only for legacy endpoints that
+ * have not migrated yet — it trusts the network (`data as T`) and MUST NOT be
+ * called from new product endpoints.
+ */
+export async function apiClient<T = unknown>(
+  method: string,
+  path: string,
+  opts: ApiClientOptions = {},
+): Promise<ApiResponse<T>> {
+  const raw = await sendRequest(method, path, opts);
+  if (raw.notModified) return rawToResponse(raw, undefined as T);
+  const data = raw.text ? (JSON.parse(raw.text) as unknown) : undefined;
+  return rawToResponse(raw, data as T);
 }
 
 // Parses fastify @fastify/rate-limit response headers.

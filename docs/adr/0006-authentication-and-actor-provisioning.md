@@ -72,3 +72,38 @@ The Workspace glossary entry (CONTEXT.md) is multi-tenant first-class because th
 ## Reopening
 
 Switching to JWT, batch AD sync, or AD-group-driven Role mapping each warrants a new ADR with a migration story for existing sessions, actors, and audit records. Adding a real `OidcAuthProvider` configuration is *not* a reopen — it is the expected outcome of the procurement and slots into the abstraction this ADR defines.
+
+## Amended 2026-09-22
+
+`OidcAuthProvider` is implemented (issue #390), still behind the same seam: application code and route handlers never branch on provider type; only the pre-existing mock-only routes (`/auth/mock-login`) and the mock-only `/auth/callback` 404 guard name a provider.
+
+### Env contract
+
+`OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URI` are required when `AUTH_PROVIDER=oidc` (one validation issue per missing variable, at that variable's path) and ignored when `AUTH_PROVIDER=mock`. `OIDC_SCOPES` defaults to `openid email profile` and must include `openid`. Rules, all enforced at config load (`config-oidc.ts`), with messages that never echo a value — only variable names and rule descriptions:
+
+- `OIDC_ISSUER_URL`: absolute URL, no query, no fragment, no credentials; https, except plain `http://localhost[:port]` / `http://127.0.0.1[:port]` outside production.
+- `OIDC_REDIRECT_URI`: absolute URL, no query string (including a bare `?`) or fragment, path exactly `/auth/callback`; https in production (http localhost/127.0.0.1 allowed otherwise).
+- `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`: non-empty after trimming.
+
+### Endpoints
+
+`GET /auth/login` (provider-agnostic, optional `?return_to=`) starts a login; the mock provider keeps serving its dev-only HTML picker through it (still 404 in production), the OIDC provider returns a 302 to the IdP. `GET /auth/callback` receives the IdP authorization response and issues the session exactly like `POST /auth/mock-login` (same provisioning path, same cookie options), then redirects to the sanitized `return_to` or `/`. `/auth/logout` and `/me` are unchanged.
+
+### Flow security
+
+- Authorization code flow with **PKCE S256**, plus `state` and `nonce` on every authorization request.
+- Per-login `state`/`nonce`/PKCE verifier ride in a signed short-lived transaction cookie `fops_oidc_tx` (Path=/auth, HttpOnly, SameSite=Lax, Secure in production, Max-Age 600). Value: `base64url(JSON payload) + '.' + base64url(HMAC-SHA256(key, "oidc-tx-v1." + payloadB64))`, with the key derived from the client secret via `createHmac('sha256', clientSecret)` over the `fops-oidc-tx-v1` domain-separation label. Signature compared with `timingSafeEqual`. Single use: cleared on every callback attempt, success or failure.
+- `return_to` is honored only if it starts with a single `/` (no protocol-relative `//`, no backslash, no CR/LF); anything else falls back to `/`.
+- ID Token verification is delegated to `openid-client` (`authorizationCodeGrant` with `expectedState`, `expectedNonce`, `pkceCodeVerifier`, `idTokenExpected`), which validates issuer, audience, expiry, signature against the discovered JWKS, and the code/PKCE binding at the token endpoint. The IdP's `error`/`error_description` response parameters are rejected generically — never echoed.
+
+### Claims mapping and audit bounds
+
+`sub` and `email` are required string claims. `display_name = name ?? preferred_username ?? email local-part`. `raw_claims` — the only provider payload persisted — is bounded to the allowlist `{sub, iss, aud, email, email_verified, name, preferred_username}`; access/refresh tokens and the full ID Token payload never leave the provider.
+
+### Fail-closed boot
+
+IdP discovery runs inside `buildServer`'s provider switch, before the HTTP listener starts; a discovery failure rejects boot with a curated error naming the issuer host only — never the URL's credentials, the secret, or the IdP response body. Production continues to refuse `AUTH_PROVIDER=mock` at boot (unchanged).
+
+### Log redaction
+
+`req.url` carries the one-time authorization code on `/auth/callback`, so both logger constructions (the process root logger and Fastify's inline logger options) serialize requests through `redactSensitiveQuery`, which replaces the values of the query keys `code`, `state`, `id_token`, `access_token`, `refresh_token`, `session_state`, `error_description`, `client_secret` with `[redacted]` while keeping keys and order.

@@ -194,14 +194,18 @@ export function VocClusterListShell({
   toolbarActions,
   onCloseDetail,
   defaultToFirst = false,
+  managedSystemId,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
   toolbarActions?: React.ReactNode;
-  onCloseDetail: () => void;
+  /** `reconcile: true` = the shell dropped a selection that fell out of the visible list (not a user close). */
+  onCloseDetail: (opts?: { reconcile?: boolean }) => void;
   defaultToFirst?: boolean;
+  /** Optional scope from the list route's `managedSystem` URL param (undefined = caller's scope union). */
+  managedSystemId?: string | undefined;
 }): React.ReactElement {
-  const listQuery = useVocClusterList();
+  const listQuery = useVocClusterList(managedSystemId);
   const clusters = listQuery.data?.items ?? [];
   const [activeTab, setActiveTab] = useState<
     "all" | "confirmed" | "no-finding"
@@ -224,7 +228,7 @@ export function VocClusterListShell({
       selectedId !== null &&
       !visibleClusters.some((cluster) => cluster.id === selectedId)
     ) {
-      onCloseDetail();
+      onCloseDetail({ reconcile: true });
     }
   }, [listQuery.isSuccess, onCloseDetail, selectedId, visibleClusters]);
 
@@ -252,7 +256,7 @@ export function VocClusterListShell({
         visibleClusters.some((cluster) => cluster.id === selectedId) ? (
           <VocClusterDetailPanel
             clusterId={selectedId}
-            onClose={onCloseDetail}
+            onClose={() => onCloseDetail()}
           />
         ) : undefined
       }

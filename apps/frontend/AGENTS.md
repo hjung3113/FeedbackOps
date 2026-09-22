@@ -8,6 +8,7 @@
 - Use `docs/frontend/routes-and-layout.md` for URL state, list/detail behavior, and responsive navigation.
 - Use `DESIGN.md` only as the raw token seed.
 - Use `apps/frontend/src/features/*/AGENTS.md` for route-specific ownership before adding screens.
+- New endpoints must use `apiRequest(method, path, parser, opts)` with a response schema from `@fops/shared`; legacy unparsed calls are tracked in `apps/frontend/src/lib/api/api-unparsed-allowlist.txt`.
 
 ## Design Consistency Rules
 
@@ -25,7 +26,7 @@
 - Managed System scope is a filter/defaulting context, not duplicated navigation.
 - Use Role Level labels: Admin, Developer, and User. Backend capability checks remain authoritative.
 - Keep Public Update, Reporter Reply, and Internal Comment as separate communication surfaces.
-- `WorkbenchShell.toolbar` is optional. High-density screens (e.g. VOC Triage) may omit it and express route identity via an inline kicker as the first child of the route-owned toolbar. When doing so, the inner toolbar MUST remain 50px (ADR-0020 §2 rhythm). See ADR-0020 §Amendment and `.review/PROTOTYPE-TO-PACK17.md §toolbar-kicker`.
+- `WorkbenchShell.toolbar` is optional. High-density screens (e.g. VOC Triage) may omit it and express route identity via an inline kicker as the first child of the route-owned toolbar. When doing so, the inner toolbar MUST remain 50px (ADR-0020 §2 rhythm). See ADR-0020 §Amendment for the toolbar-kicker rule.
 
 ## Component Intake
 

@@ -49,6 +49,17 @@ export interface ReadActorContext {
   role_level: 'admin' | 'developer' | 'user';
 }
 
+/**
+ * Visibility verdict for a single VOC reference, in the entity-link vocabulary
+ * (#378). Computed ONLY by mapping the canonical getVocDetail outcome — no
+ * duplicated permission predicates (see #423 regression).
+ */
+export type VocReferenceResolution =
+  | { visibility_state: 'allowed'; id: string; display_id: string; title: string }
+  | { visibility_state: 'summary_visible' }
+  | { visibility_state: 'denied' }
+  | { visibility_state: 'hidden' };
+
 /** Count queries use the same predicates as the list, without list-only fields. */
 export type CountVocsQuery = Pick<
   ListVocsQuery,
@@ -487,15 +498,14 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     };
   }
 
-  // ── getVocDetail ──────────────────────────────────────────────────────────
+  // ── resolveVocAccess ──────────────────────────────────────────────────────
+  //
+  // The ONE VOC read-authority decision (fetch + scopes + access matrix),
+  // shared by getVocDetail and resolveVocReference so a Task-detail reference
+  // can never disagree with the VOC detail read. Throws `not_found.record` when
+  // the actor may not see the VOC at all (existence is not revealed).
 
-  async function getVocDetail(args: {
-    actor: ReadActorContext;
-    vocId: string;
-  }): Promise<
-    | { kind: 'full'; envelope: VocDetailEnvelope; etag: string }
-    | { kind: 'summary'; envelope: VocSummaryEnvelope; etag: string }
-  > {
+  async function resolveVocAccess(args: { actor: ReadActorContext; vocId: string }) {
     const { actor, vocId } = args;
 
     // ── 1. Fetch VOC ────────────────────────────────────────────────────────
@@ -525,7 +535,27 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       throw new HttpError('not_found.record', 'VOC not found');
     }
 
-    if (!msInReadScope && !isReporter && msInEffectiveScope) {
+    const kind: 'full' | 'summary' =
+      !msInReadScope && !isReporter && msInEffectiveScope ? 'summary' : 'full';
+
+    return { kind, row, readScope, canTriage, isReporter, isReporterArm, primaryMs, etag };
+  }
+
+  // ── getVocDetail ──────────────────────────────────────────────────────────
+
+  async function getVocDetail(args: {
+    actor: ReadActorContext;
+    vocId: string;
+  }): Promise<
+    | { kind: 'full'; envelope: VocDetailEnvelope; etag: string }
+    | { kind: 'summary'; envelope: VocSummaryEnvelope; etag: string }
+  > {
+    const { actor, vocId } = args;
+
+    const { kind, row, readScope, canTriage, isReporter, isReporterArm, primaryMs, etag } =
+      await resolveVocAccess({ actor, vocId });
+
+    if (kind === 'summary') {
       // ── SUMMARY path ────────────────────────────────────────────────────
       const decision = await deps.checkService.checkCapability(
         { actor_id: actor.actor_id, workspace_id: actor.workspace_id, role_level: actor.role_level },
@@ -672,6 +702,58 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     };
 
     return { kind: 'full', envelope, etag };
+  }
+
+  // ── resolveVocReference (#378) ────────────────────────────────────────────
+
+  /**
+   * Narrow cross-module read interface (Task detail source trail): maps the
+   * VOC access decision plus the full-read endpoint gate (as getVocDetail
+   * does through listLinks) onto the entity-link visibility vocabulary, without
+   * assembling the full detail envelope:
+   *   kind 'full' + readable endpoint → 'allowed' (id/display_id/title from the VOC row)
+   *   kind 'full' + unreadable endpoint → 'hidden'
+   *   kind 'summary'   → 'summary_visible' (no endpoint gate or identifiers forwarded)
+   *   HttpError not_found.record (missing/archived/foreign-workspace row OR the
+   *                    out-of-effective-scope 404 anti-probe) → 'hidden'
+   *   HttpError permission.denied → 'denied' (defensive: the access matrix
+   *                    currently never raises it, but the mapping keeps the
+   *                    vocabulary complete)
+   *   anything else    → rethrown (callers must not degrade silently)
+   */
+  async function resolveVocReference(args: {
+    actor: ReadActorContext;
+    vocId: string;
+  }): Promise<VocReferenceResolution> {
+    try {
+      // Same access decision as getVocDetail (resolveVocAccess) but WITHOUT
+      // assembling the full envelope (conversation, attachments, similar VOCs,
+      // links): a Task read must not depend on unrelated VOC reads succeeding.
+      const access = await resolveVocAccess(args);
+      if (access.kind === 'full') {
+        // Admin 'all' scope ignores explicit voc.read denies; the endpoint gate does not.
+        const canRead = await deps.entityLinksService.canReadEndpoint({
+          actor: args.actor,
+          endpoint: { type: 'voc', id: args.vocId },
+        });
+        if (!canRead) return { visibility_state: 'hidden' };
+        return {
+          visibility_state: 'allowed',
+          id: access.row.id,
+          display_id: access.row.displayId,
+          title: access.row.title,
+        };
+      }
+      return { visibility_state: 'summary_visible' };
+    } catch (error) {
+      if (error instanceof HttpError && error.code === 'not_found.record') {
+        return { visibility_state: 'hidden' };
+      }
+      if (error instanceof HttpError && error.code === 'permission.denied') {
+        return { visibility_state: 'denied' };
+      }
+      throw error;
+    }
   }
 
   // ── getConversation ───────────────────────────────────────────────────────
@@ -821,9 +903,16 @@ export function createVocReadService(deps: VocReadServiceDeps) {
         readScope,
       }),
     ]);
+    // ADR-0047: listLinks is the single read authority on the focus VOC
+    // (voc.read deny-first, or reporter). This post-write path also serves
+    // triage-only writers (e.g. public updates), so an unreadable focus must
+    // yield no links rather than 404-ing the write's response envelope —
+    // duplicating the read check here would fork the authority (repo-read's
+    // admin 'all' scope ignores explicit voc.read denies; listLinks does not).
     const links = await deps.entityLinksService.listLinks({
       actor,
       endpoint: { type: 'voc', id: vocId },
+      onUnreadableFocus: 'empty',
     });
 
     const conversationTimeline = mapConversationRowsWithAttachments(
@@ -887,7 +976,14 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     };
   }
 
-  return { listVocs, countVocs, getVocDetail, getConversation, composeDetailEnvelope };
+  return {
+    listVocs,
+    countVocs,
+    getVocDetail,
+    resolveVocReference,
+    getConversation,
+    composeDetailEnvelope,
+  };
 }
 
 export type VocReadService = ReturnType<typeof createVocReadService>;

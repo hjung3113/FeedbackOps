@@ -22,6 +22,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -144,7 +145,9 @@ export const savedViews = coreSchema.table(
       t.actorId,
       t.surface,
     ),
-    actorSurfaceNameUq: uniqueIndex('saved_views_actor_surface_name_uq').on(
+    // Mirrors the named UNIQUE constraint in migration 0045.
+    workspaceActorSurfaceNameUq: unique('saved_views_workspace_actor_surface_name_uq').on(
+      t.workspaceId,
       t.actorId,
       t.surface,
       t.name,

@@ -152,7 +152,18 @@ export function createPublicUpdateReviewCandidateService(deps: {
     return { candidate_id: args.input.candidate_id, action: 'dismiss' as const };
   }
 
-  return { list, resolve };
+  // Application command (#392): owns the transaction the HTTP route used to
+  // open, so non-HTTP callers get the same atomicity. `resolve` stays
+  // Tx-aware for internal callers.
+  async function resolveCommand(args: {
+    actor: ReviewCandidateActor;
+    vocId: string;
+    input: ResolvePublicUpdateReviewCandidateRequest;
+  }): Promise<ResolvePublicUpdateReviewCandidateResponse> {
+    return deps.db.transaction((tx) => resolve({ tx, ...args }));
+  }
+
+  return { list, resolve, resolveCommand };
 }
 
 export type PublicUpdateReviewCandidateService = ReturnType<

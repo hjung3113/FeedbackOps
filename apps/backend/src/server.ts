@@ -10,11 +10,14 @@ import {
   validatorCompiler,
 } from 'fastify-type-provider-zod';
 import type { PgBoss } from 'pg-boss';
+import type { Logger as PinoLogger } from 'pino';
 import { z } from 'zod';
 
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
 import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './lib/errors.js';
+import { type HealthCheckName, type InFlightProbe, runReadinessChecks } from './lib/health.js';
+import { reqLogSerializer } from './lib/logger.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
 import { createPgRateLimitStore } from './lib/rate-limit-pg-store.js';
 import { getStorage } from './lib/storage/factory.js';
@@ -28,7 +31,9 @@ import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/i
 import { createAttachmentsService } from './modules/attachments/service.js';
 import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
 import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
+import type { AuthProvider } from './modules/auth/auth-provider.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
+import { createOidcAuthProvider } from './modules/auth/oidc-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
@@ -84,11 +89,24 @@ export interface BuildServerOptions {
    */
   boss?: PgBoss;
   /**
+   * Optional process root logger (ADR-0013, amended 2026-09-22). When given,
+   * Fastify attaches it via `loggerInstance` so request logs share the ONE
+   * pino config the job logs use. Omitted (route tests): the inline logger
+   * options below apply, byte-for-byte as before.
+   */
+  logger?: PinoLogger;
+  /**
    * Optional storage backend override. Used by integration tests to inject a
    * mock instead of constructing the real S3-compat backend from env. In
    * production this is undefined and `getStorage()` builds the singleton.
    */
   storage?: StorageBackend;
+  /**
+   * Per-check budget in ms for the `GET /health/ready` dependency probes
+   * (ADR-0013, amended 2026-09-22). Tests shrink it to keep
+   * hanging-dependency cases fast; production uses the 2000 ms default.
+   */
+  healthProbeTimeoutMs?: number;
   /** Route-test seam; production constructs the navigation read model below. */
   navCountsService?: NavCountsService;
 }
@@ -114,23 +132,31 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   const workspaceId = config.WORKSPACE_ID;
 
   const app = Fastify({
-    logger: {
-      level: config.NODE_ENV === 'test' ? 'silent' : 'info',
-      // ADR-0013: logs-first observability via stdout JSON.
-      // Review HTTP-M-3: redact request-header lines that carry secrets
-      // (cookie holds the session id; idempotency-key correlates a single
-      // actor's retries). Without this, anyone with log access can lift a
-      // live session out of stdout (CWE-532).
-      redact: {
-        paths: [
-          'req.headers.cookie',
-          'req.headers["set-cookie"]',
-          'req.headers.authorization',
-          'req.headers["idempotency-key"]',
-        ],
-        remove: true,
-      },
-    },
+    ...(opts.logger
+      ? { loggerInstance: opts.logger }
+      : {
+          logger: {
+            level: config.NODE_ENV === 'test' ? 'silent' : 'info',
+            // ADR-0013: logs-first observability via stdout JSON.
+            // Review HTTP-M-3: redact request-header lines that carry secrets
+            // (cookie holds the session id; idempotency-key correlates a single
+            // actor's retries). Without this, anyone with log access can lift a
+            // live session out of stdout (CWE-532).
+            redact: {
+              paths: [
+                'req.headers.cookie',
+                'req.headers["set-cookie"]',
+                'req.headers.authorization',
+                'req.headers["idempotency-key"]',
+              ],
+              remove: true,
+            },
+            // Issue #390: req.url carries the one-time OIDC authorization
+            // code on /auth/callback — same req serializer as
+            // createRootLogger (redactSensitiveQuery on the url value only).
+            serializers: { req: reqLogSerializer },
+          },
+        }),
     disableRequestLogging: config.NODE_ENV === 'test',
     // F-009 + Review HTTP-H-2: `trustProxy: true` is too permissive — it
     // trusts the entire X-Forwarded-For chain, so any client can spoof
@@ -186,7 +212,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   // Postgres-backed via our custom store. The global tier is per-Actor when
   // authenticated (100/min) or per-IP when not (50/min); the route-level
   // mutation and sensitive tiers are registered as named groups on the
-  // routes that need them. `/health` is exempt via `allowList`.
+  // routes that need them. `/health`, `/health/live`, and `/health/ready`
+  // are exempt via `allowList` — k8s probes must never see 429.
   const sessionService = createSessionService({ db: dbHandle.db, workspaceId });
 
   // Adversarial review API-C-2: `@fastify/rate-limit` runs as an
@@ -228,7 +255,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     global: true,
     max: (req, key) => (key === req.ip ? 50 : 100),
     timeWindow: '1 minute',
-    allowList: (req) => req.url === '/health',
+    allowList: (req) =>
+      req.url === '/health' || req.url === '/health/live' || req.url === '/health/ready',
     keyGenerator: actorAwareKeyGenerator,
     store: createPgRateLimitStore(dbHandle.pool, 'global') as never,
     errorResponseBuilder: (_req, ctx) => ({
@@ -359,19 +387,92 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     handler: async () => ({ status: 'ok' as const, ts: new Date().toISOString() }),
   });
 
+  // ── Health probes — ADR-0013 "Health endpoints" (amended 2026-09-22) ──
+  // Resolved once and shared with the attachments module below. This is the
+  // same `opts.storage ?? getStorage()` instance attachment routes already
+  // use. `getStorage()` is a lazy proxy: env errors surface on the first
+  // `.exists()` call and count as a readiness-check failure there, never a
+  // boot crash.
+  const attachmentsStorage = opts.storage ?? getStorage();
+
+  // Liveness: the process is up. Depends on NOTHING downstream (no DB, no
+  // boss, no storage) so it never flaps with dependency blips.
+  // Probe routes opt out of @fastify/rate-limit at the ROUTE level
+  // (`config.rateLimit: false`). The global `allowList` runs only AFTER the
+  // plugin's `keyGenerator`, which resolves the session cookie via a DB
+  // lookup — a hung DB would hang even liveness. Route-level opt-out skips
+  // the key generator entirely.
+  app.route({
+    method: 'GET',
+    url: '/health/live',
+    config: { rateLimit: false },
+    schema: {
+      response: {
+        200: z.object({ status: z.literal('ok') }),
+      },
+    },
+    handler: async () => ({ status: 'ok' as const }),
+  });
+
+  // Readiness: Postgres answers, pg-boss is usable, storage is reachable.
+  // Checks run in parallel, each bounded by `healthProbeTimeoutMs` (default
+  // 2000 ms; ADR-0013). Bodies are fixed-shape and never carry error text —
+  // DSN-bearing messages stay server-side, logged as `{ check, errName }`.
+  const healthChecksSchema = z.object({
+    database: z.enum(['ok', 'fail']),
+    pg_boss: z.enum(['ok', 'fail']),
+    storage: z.enum(['ok', 'fail']),
+  });
+  const readinessInFlight = new Map<HealthCheckName, InFlightProbe>();
+  app.route({
+    method: 'GET',
+    url: '/health/ready',
+    config: { rateLimit: false },
+    schema: {
+      response: {
+        200: z.object({ status: z.literal('ok'), checks: healthChecksSchema }),
+        503: z.object({ status: z.literal('unavailable'), checks: healthChecksSchema }),
+      },
+    },
+    handler: async (req, reply) => {
+      const result = await runReadinessChecks({
+        pool: dbHandle.pool,
+        boss,
+        storage: attachmentsStorage,
+        timeoutMs: opts.healthProbeTimeoutMs,
+        log: req.log,
+        inFlight: readinessInFlight,
+      });
+      if (!result.ok) {
+        return reply.code(503).send({ status: 'unavailable', checks: result.checks });
+      }
+      return reply.code(200).send({ status: 'ok' as const, checks: result.checks });
+    },
+  });
+
   // ADR-0006:16 — the two providers are swapped by the AUTH_PROVIDER env
-  // var. Slice 1 ships only the mock provider; `oidc` is reserved for the
-  // slice that lands real OIDC. We refuse to boot rather than silently
-  // serve mock when the operator asked for oidc.
-  let authProvider: ReturnType<typeof createMockAuthProvider>;
+  // var. createOidcAuthProvider performs IdP discovery at boot and rejects
+  // on failure, so an unreachable/misconfigured issuer fails buildServer
+  // BEFORE the HTTP listener starts (issue #390 fail-closed boot).
+  let authProvider: AuthProvider;
   switch (config.AUTH_PROVIDER) {
     case 'mock':
       authProvider = createMockAuthProvider({ db: dbHandle.db, workspaceId });
       break;
     case 'oidc':
-      throw new Error(
-        'OidcAuthProvider not yet implemented (ADR-0006). Set AUTH_PROVIDER=mock or wait for the OIDC slice.',
-      );
+      // All OIDC_* fields are present by construction — config.ts superRefine
+      // requires them when AUTH_PROVIDER=oidc.
+      authProvider = await createOidcAuthProvider({
+        oidc: {
+          issuerUrl: config.OIDC_ISSUER_URL ?? '',
+          clientId: config.OIDC_CLIENT_ID ?? '',
+          clientSecret: config.OIDC_CLIENT_SECRET ?? '',
+          redirectUri: config.OIDC_REDIRECT_URI ?? '',
+          scopes: config.OIDC_SCOPES,
+        },
+        nodeEnv: config.NODE_ENV,
+      });
+      break;
     default:
       throw new Error(`Unknown AUTH_PROVIDER value: ${String(config.AUTH_PROVIDER)}`);
   }
@@ -536,12 +637,21 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
+  // #378: constructed before the Tasks module so Task detail can resolve its
+  // source VOC's visibility through the canonical VOC read-authority path.
+  const vocReadService = createVocReadService({
+    db: dbHandle.db,
+    checkService,
+    entityLinksService,
+  });
+
   // ── Tasks module — Slice 6 issue #134 ────────────────────────────────────
   const tasksService = createTasksService({
     db: dbHandle.db,
     auditService,
     checkService,
     idempotencyService,
+    vocReadService,
     ...(boss ? { boss } : {}),
   });
   await app.register(tasksRoutes, {
@@ -560,6 +670,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     db: dbHandle.db,
     auditService,
     checkService,
+    idempotencyService,
     // #168 (ADR-0034 D6). Disabled provider → the enqueuer is a no-op, so a
     // key-less environment creates no embedding jobs at all.
     embeddingEnqueuer: createVocEmbeddingEnqueuer({
@@ -568,14 +679,11 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       log: { error: (msg, meta) => app.log.error(meta ?? {}, msg) },
     }),
   });
-  const vocReadService = createVocReadService({
-    db: dbHandle.db,
-    checkService,
-    entityLinksService,
-  });
   const conversationService = createConversationService({
+    db: dbHandle.db,
     auditService,
     checkService,
+    idempotencyService,
     vocReadService,
   });
   const publicUpdateReviewCandidateService = createPublicUpdateReviewCandidateService({
@@ -668,7 +776,6 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   // ── VOC module — Slice 3 issue #13 / #14 / #15 / #16 ──────────────────────
   await app.register(vocRoutes, {
-    db: dbHandle.db,
     sessionService,
     vocService,
     vocReadService,
@@ -676,7 +783,6 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     taskRequestsService,
     conversationService,
     publicUpdateReviewCandidateService,
-    idempotencyService,
     workspaceId,
     rateLimitConfig: {
       mutation: app.rateLimitConfig.mutation,
@@ -686,23 +792,26 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   });
 
   // ── Attachments module — Slice 3 #22 / PLAN-22 C3a + C3b ────────────────
-  const attachmentsStorage = opts.storage ?? getStorage();
+  // `attachmentsStorage` is resolved once above the health probes.
   const attachmentsService = createAttachmentsService({
     storage: attachmentsStorage,
     auditService,
     db: dbHandle.db,
+    idempotencyService,
     vocReadService,
   });
   await app.register(attachmentsRoutes, {
-    db: dbHandle.db,
     sessionService,
     attachmentsService,
-    idempotencyService,
     workspaceId,
     rateLimitConfig: {
       attachmentMutation: app.rateLimitConfig.attachmentMutation,
     },
   });
 
-  return app;
+  // When `loggerInstance` is supplied, Fastify types the instance with the
+  // concrete pino `Logger`; TS cannot prove it satisfies the default
+  // FastifyBaseLogger-typed `FastifyInstance` contract, but at runtime the
+  // pino logger IS a superset of that contract — hence the unknown cast.
+  return app as unknown as FastifyInstance;
 }

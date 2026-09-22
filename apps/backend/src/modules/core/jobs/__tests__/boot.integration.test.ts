@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../../config.js';
 import { type DbHandle, createDb } from '../../../../db/client.js';
+import type { JobLog } from '../../../../lib/job-log.js';
 import { initBoss, shutdownBoss } from '../../../../lib/jobs.js';
 import type { StorageBackend, StorageGetResult } from '../../../../lib/storage/index.js';
 import { buildServer } from '../../../../server.js';
@@ -47,6 +48,10 @@ const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
 
+// Harness-only silent JobLog: these suites pin cron/queue/shutdown wiring,
+// not log output.
+const silentLog: JobLog = { info: () => {}, warn: () => {}, error: () => {} };
+
 describe.skipIf(!runIntegration)('pg-boss boot wiring', () => {
   let dbHandle: DbHandle;
   let boss: Awaited<ReturnType<typeof initBoss>>;
@@ -54,11 +59,12 @@ describe.skipIf(!runIntegration)('pg-boss boot wiring', () => {
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
-    boss = await initBoss({ connectionString: APP_URL });
+    boss = await initBoss({ connectionString: APP_URL, log: silentLog });
     await registerCoreJobs(boss, {
       db: dbHandle.db,
       pool: dbHandle.pool,
       storage: stubStorage,
+      log: silentLog,
     });
   });
 
@@ -144,11 +150,12 @@ describe.skipIf(!runIntegration)('graceful shutdown ordering', () => {
   it('stops pg-boss before closing the Fastify app', async () => {
     process.env.NODE_ENV = 'test';
     const dbHandle = createDb(APP_URL);
-    const boss = await initBoss({ connectionString: APP_URL });
+    const boss = await initBoss({ connectionString: APP_URL, log: silentLog });
     await registerCoreJobs(boss, {
       db: dbHandle.db,
       pool: dbHandle.pool,
       storage: stubStorage,
+      log: silentLog,
     });
     const app = await buildServer({ config: loadConfig(), dbHandle, boss, storage: stubStorage });
     await app.ready();

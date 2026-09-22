@@ -54,9 +54,10 @@ import {
   UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { Filter, Layers, Plus, Settings, Shield } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { z } from 'zod';
 
 import { scopeMark } from '../../../features/admin/lib/scopeMark.js';
 import { PermissionGate } from '../../../features/admin/permissions/permission-gate.js';
@@ -75,7 +76,22 @@ import {
   updateAnalyticsArea,
 } from '../../../lib/api';
 
+// List filters + selection are URL state (docs/frontend/routes-and-layout.md
+// §URL State Rules): /admin/analytics-areas?managedSystem=:uuid&includeArchived=true&selected=:uuid.
+// Defaults (all MS / archived hidden / nothing selected) are omitted from the
+// URL. Keys are camelCase URL keys; the API keeps its own snake_case params.
+export const analyticsAreasSearchSchema = z
+  .object({
+    managedSystem: z.string().uuid().optional(),
+    includeArchived: z.boolean().optional(),
+    selected: z.string().uuid().optional(),
+  })
+  .strict();
+
+type AnalyticsAreasSearch = z.infer<typeof analyticsAreasSearchSchema>;
+
 export const Route = createFileRoute('/_authed/admin/analytics-areas')({
+  validateSearch: (raw) => analyticsAreasSearchSchema.parse(raw),
   component: AnalyticsAreasAdminPage,
 });
 
@@ -93,12 +109,60 @@ const GUARDRAIL_BODY =
   'AA 는 Managed System 안에서의 분류·집계 단위로만 사용됩니다. AA 별 권한 분기는 MVP 범위 밖이며, scope 결정은 Managed System 만으로 이루어집니다.';
 
 export function AnalyticsAreasAdminPage() {
+  const search = useSearch({ strict: false }) as AnalyticsAreasSearch;
+  const navigate = useNavigate({ from: '/admin/analytics-areas' });
   const [registerCtx, setRegisterCtx] = useState<{ open: boolean; msId: string | null }>({
     open: false,
     msId: null,
   });
-  const [managedSystemId, setManagedSystemId] = useState<string | undefined>();
-  const [includeArchived, setIncludeArchived] = useState(false);
+  const managedSystemId = search.managedSystem;
+  const includeArchived = search.includeArchived ?? false;
+
+  // Filter changes drop `selected` in the same navigation; defaults are omitted
+  // from the URL (never write undefined/false values).
+  function handleManagedSystemChange(value: string | undefined): void {
+    void navigate({
+      to: '/admin/analytics-areas',
+      search: (prev) => {
+        const { selected: _dropped, ...rest } = prev;
+        if (value === undefined) {
+          const { managedSystem: _managedSystem, ...restWithoutMs } = rest;
+          return restWithoutMs;
+        }
+        return { ...rest, managedSystem: value };
+      },
+    });
+  }
+
+  function handleIncludeArchivedChange(value: boolean): void {
+    void navigate({
+      to: '/admin/analytics-areas',
+      search: (prev) => {
+        const { selected: _dropped, ...rest } = prev;
+        if (!value) {
+          const { includeArchived: _includeArchived, ...restWithoutArchived } = rest;
+          return restWithoutArchived;
+        }
+        return { ...rest, includeArchived: true };
+      },
+    });
+  }
+
+  function handleClearFilters(): void {
+    void navigate({
+      to: '/admin/analytics-areas',
+      search: (prev) => {
+        const {
+          managedSystem: _managedSystem,
+          includeArchived: _includeArchived,
+          selected: _selected,
+          ...rest
+        } = prev;
+        return rest;
+      },
+    });
+  }
+
   return (
     <PageShell
       header={{
@@ -109,8 +173,8 @@ export function AnalyticsAreasAdminPage() {
             <AnalyticsAreasFilter
               includeArchived={includeArchived}
               managedSystemId={managedSystemId}
-              onIncludeArchivedChange={setIncludeArchived}
-              onManagedSystemIdChange={setManagedSystemId}
+              onIncludeArchivedChange={handleIncludeArchivedChange}
+              onManagedSystemIdChange={handleManagedSystemChange}
             />
             <Button
               variant="primary"
@@ -129,10 +193,8 @@ export function AnalyticsAreasAdminPage() {
         <AnalyticsAreasBody
           includeArchived={includeArchived}
           managedSystemId={managedSystemId}
-          onClearFilters={() => {
-            setManagedSystemId(undefined);
-            setIncludeArchived(false);
-          }}
+          selectedId={search.selected}
+          onClearFilters={handleClearFilters}
           registerCtx={registerCtx}
           setRegisterCtx={setRegisterCtx}
         />
@@ -158,18 +220,20 @@ function groupByMs(
 export function AnalyticsAreasBody({
   includeArchived,
   managedSystemId,
+  selectedId,
   onClearFilters,
   registerCtx,
   setRegisterCtx,
 }: {
   includeArchived: boolean;
   managedSystemId: string | undefined;
+  selectedId: string | undefined;
   onClearFilters: () => void;
   registerCtx: { open: boolean; msId: string | null };
   setRegisterCtx: (v: { open: boolean; msId: string | null }) => void;
 }) {
   const qc = useQueryClient();
-  const [detail, setDetail] = useState<AnalyticsAreaDto | null>(null);
+  const navigate = useNavigate({ from: '/admin/analytics-areas' });
   const [editTarget, setEditTarget] = useState<AnalyticsAreaDto | null>(null);
 
   const msQuery = useQuery({
@@ -194,6 +258,37 @@ export function AnalyticsAreasBody({
     [managedSystemId, systems],
   );
   const areas = useMemo(() => aaQuery.data?.items ?? [], [aaQuery.data]);
+  // The open detail is derived from the URL `selected` + the loaded list.
+  const detail = useMemo(
+    () => (selectedId === undefined ? null : (areas.find((a) => a.id === selectedId) ?? null)),
+    [areas, selectedId],
+  );
+
+  function selectArea(id: string): void {
+    void navigate({ to: '/admin/analytics-areas', search: (prev) => ({ ...prev, selected: id }) });
+  }
+
+  function closeDetail(): void {
+    void navigate({
+      to: '/admin/analytics-areas',
+      search: ({ selected: _selected, ...rest }) => rest,
+    });
+  }
+
+  // Stale/invalid `selected` (archived, deleted, or filtered away): once the
+  // list has loaded, replace-drop it so Back is not trapped in the invalid URL.
+  // While loading the selection is kept.
+  useEffect(() => {
+    if (aaQuery.data === undefined) return;
+    if (selectedId !== undefined && !areas.some((a) => a.id === selectedId)) {
+      void navigate({
+        to: '/admin/analytics-areas',
+        replace: true,
+        search: ({ selected: _selected, ...rest }) => rest,
+      });
+    }
+  }, [aaQuery.data, areas, navigate, selectedId]);
+
   const areasByMs = useMemo(
     () => groupByMs(areas, includeArchived),
     [areas, includeArchived],
@@ -284,7 +379,7 @@ export function AnalyticsAreasBody({
                 ms={m}
                 areas={areasByMs.get(m.id) ?? []}
                 resolved={resolveQuery.data}
-                onRowClick={setDetail}
+                onRowClick={(a) => selectArea(a.id)}
                 onAddArea={() => setRegisterCtx({ open: true, msId: m.id })}
               />
             ))}
@@ -307,10 +402,10 @@ export function AnalyticsAreasBody({
         ms={detail ? (msById.get(detail.managed_system_id) ?? null) : null}
         resolved={resolveQuery.data}
         onOpenChange={(open) => {
-          if (!open) setDetail(null);
+          if (!open) closeDetail();
         }}
         onEdit={(area) => {
-          setDetail(null);
+          closeDetail();
           setEditTarget(area);
         }}
       />

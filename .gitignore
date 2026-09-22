@@ -21,6 +21,9 @@ report/
 # MinIO local data volume (docker-compose.dev.yml)
 minio_data/
 
+# Pre-bundled Drizzle schema consumed by drizzle-kit (apps/backend/scripts/bundle-schema.mjs)
+apps/backend/.drizzle-schema/
+
 # CodeGraph local index (per-developer)
 .codegraph/
 

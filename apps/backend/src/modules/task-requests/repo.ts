@@ -183,3 +183,17 @@ export async function updateTaskRequestDecision(
   if (!row) throw new Error('updateTaskRequestDecision returned no row');
   return mapTaskRequestRow(row);
 }
+
+// Moved from tasks/repo.ts (#391): task-requests owns task_request.task_requests.
+export async function markTaskRequestConverted(
+  tx: Tx,
+  input: { workspaceId: string; taskRequestId: string },
+): Promise<void> {
+  await tx.execute(sql`
+    UPDATE task_request.task_requests
+       SET status = 'converted',
+           updated_at = now()
+     WHERE id = ${input.taskRequestId}
+       AND workspace_id = ${input.workspaceId}
+  `);
+}
