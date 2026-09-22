@@ -37,7 +37,7 @@ Implementation should not start until these are reviewed for the target slice:
 - 03-api-contracts.md owns endpoint behavior.
 - 04-database-and-migrations.md owns migration mechanism only.
 - docs/design/15-data-contracts.md is the field and enum authority.
-- docs/design/11-entity-linking.md owns relation type meaning and visibility rules.
+- docs/implementation/06-entity-linking-contract.md owns relation type meaning and visibility rules.
 - 03-api-contracts.md is the only endpoint authority.
 ```
 
