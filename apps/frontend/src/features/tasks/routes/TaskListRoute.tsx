@@ -1,8 +1,11 @@
+import { ProgressNotesSection } from '@/features/cross-system/progress-notes/ProgressNotesSection';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { getTask, listTasks } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';
-import type { TaskDetailDto, TaskDto } from '@fops/shared';
+import { useMe } from '@/lib/auth/useMe';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import type { TaskDetailDto, TaskDto, TaskStatus } from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
@@ -39,6 +42,7 @@ const SECTIONS: PanelSection[] = [
   { id: 'properties', label: 'Properties' },
   { id: 'source', label: 'Source' },
   { id: 'context', label: 'Context' },
+  { id: 'notes', label: 'Progress notes' },
 ];
 
 function dot() {
@@ -84,6 +88,19 @@ export function TaskDetailPanel({
     queryFn: ({ signal }) => getTask(taskId, signal),
     staleTime: 30 * 1000,
   });
+  const { data: me } = useMe();
+  // #377: backend gates Task comment GET+POST behind finding.manage + elevated
+  // role on the Task's Managed System — same gate drives the composer hint.
+  // Key resolves once the task loads; until then the check runs workspace-wide
+  // and is superseded by the scoped key (display hint only, backend authoritative).
+  const notesManageQuery = usePermissionCheck({
+    capability: 'finding.manage',
+    ...(taskQuery.data !== undefined
+      ? { managedSystemId: taskQuery.data.primary_managed_system_id }
+      : {}),
+  });
+  const canManageNotes =
+    me?.actor.role_level === 'admin' || notesManageQuery.data?.state === 'approved';
 
   if (taskQuery.isLoading) {
     return <div className="p-4 text-sm text-text-muted">Loading Task...</div>;
@@ -245,6 +262,18 @@ export function TaskDetailPanel({
                   title: task.title,
                 },
               ]}
+            />
+          </div>
+        </div>
+
+        <div data-anchor="notes" className="border-t border-border-subtle px-4 py-4">
+          <PanelSectionTitle>Progress notes</PanelSectionTitle>
+          <div className="mt-2">
+            <ProgressNotesSection
+              resource={{ kind: 'task', id: task.id }}
+              canCompose={canManageNotes}
+              actorNamesById={actorNamesById}
+              renderStatusBadge={(status: TaskStatus) => <InternalTaskBadge status={status} />}
             />
           </div>
         </div>

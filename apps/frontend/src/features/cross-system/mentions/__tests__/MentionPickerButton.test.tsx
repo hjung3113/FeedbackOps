@@ -6,14 +6,14 @@
 // C5.4 of slice3 #21.
 // Spec: PLAN-21-SUBCHUNKS.md C5.4 — Combobox click only (NOT inline @-autocomplete)
 
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen } from '@testing-library/react';
 import * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
-vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: vi.fn(() => ({
     actors: [
       { id: 'actor-uuid-1', display_name: '홍길동', kind: 'user' },

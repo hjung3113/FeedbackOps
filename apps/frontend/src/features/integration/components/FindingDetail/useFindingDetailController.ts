@@ -45,6 +45,7 @@ const DETAIL_SECTIONS = [
   { id: 'managed-system', label: 'Managed System' },
   { id: 'analytics-area', label: 'Analytics Area' },
   { id: 'links', label: '연결' },
+  { id: 'notes', label: '진행 메모' },
 ];
 
 export function useFindingDetailController(finding: FindingDto): FindingDetailController {

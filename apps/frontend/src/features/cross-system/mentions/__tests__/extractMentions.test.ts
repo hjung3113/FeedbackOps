@@ -5,8 +5,8 @@
 //
 // C5.4 of slice3 #21.
 
-import { describe, it, expect } from 'vitest';
 import type { TipTapDoc } from '@fops/ui';
+import { describe, expect, it } from 'vitest';
 
 // Named import after implementation ships.
 import { extractMentions } from '../extractMentions';
