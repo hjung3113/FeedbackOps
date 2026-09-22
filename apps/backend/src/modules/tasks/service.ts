@@ -261,21 +261,28 @@ export function createTasksService(deps: TasksServiceDeps) {
           sourceTaskRequestId: row.source_task_request_id,
         })
       : null;
-    // #378: the source VOC ships only as a backend visibility verdict
-    // (ADR-0023). Seeing the Task does not imply seeing its source VOC; a
-    // `hidden` verdict omits the key entirely so existence is not revealed.
-    // Unexpected read failures propagate — they carry no id and must not be
-    // swallowed into a synthetic state.
-    if (resolved?.vocId) {
-      const voc = await deps.vocReadService.resolveVocReference({
-        actor: args.actor,
-        vocId: resolved.vocId,
-      });
-      if (voc.visibility_state !== 'hidden') {
-        resolved.source.voc = voc;
-      }
-    }
+    await attachSourceVoc(args.actor, resolved);
     return { ...taskToDto(row), source: resolved?.source ?? null };
+  }
+
+  // #378: the source VOC ships only as a backend visibility verdict
+  // (ADR-0023). Seeing the Task does not imply seeing its source VOC; a
+  // `hidden` verdict omits the key entirely so existence is not revealed.
+  // Unexpected read failures propagate — they carry no id and must not be
+  // swallowed into a synthetic state. Shared by GET and PATCH so both
+  // responses carry the same source projection.
+  async function attachSourceVoc(
+    actor: TasksActor,
+    resolved: Awaited<ReturnType<typeof resolveTaskSource>> | null,
+  ): Promise<void> {
+    if (!resolved?.vocId) return;
+    const voc = await deps.vocReadService.resolveVocReference({
+      actor,
+      vocId: resolved.vocId,
+    });
+    if (voc.visibility_state !== 'hidden') {
+      resolved.source.voc = voc;
+    }
   }
 
   async function convertTaskRequest(args: {
@@ -504,6 +511,7 @@ export function createTasksService(deps: TasksServiceDeps) {
                   sourceTaskRequestId: task.source_task_request_id,
                 })
               : null;
+            await attachSourceVoc(args.actor, resolved);
             return { status: 200, body: { ...taskToDto(task), source: resolved?.source ?? null } };
           }
 
@@ -552,6 +560,7 @@ export function createTasksService(deps: TasksServiceDeps) {
                 sourceTaskRequestId: updatedTask.source_task_request_id,
               })
             : null;
+          await attachSourceVoc(args.actor, resolved);
           return {
             status: 200,
             body: { ...taskToDto(updatedTask), source: resolved?.source ?? null },
