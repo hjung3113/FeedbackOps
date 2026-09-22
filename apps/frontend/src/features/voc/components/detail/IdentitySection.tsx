@@ -3,7 +3,7 @@
 // compact metadata strip below the body card.
 // Reference: docs/design-prototype/screen-voc.jsx overview panel title.
 
-import { formatVocCreatedAt } from '@/features/voc/components/list/VocRow';
+import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
 import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
 import { useMe } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';

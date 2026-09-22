@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { Card, CardContent } from '@fops/ui';
 import type * as React from 'react';
 
-import { formatVocCreatedAt } from '@/features/voc/components/list/VocRow';
+import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
 import { useVocPreSubmitPeers } from '../../hooks/useVocPreSubmitPeers';
 
 export interface SimilarVocPanelProps {
