@@ -246,6 +246,48 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
     });
   });
 
+  it('a non-reporter admin loses source VOC visibility after an explicit voc.read deny', async () => {
+    const vocTitle = `SrcVoc VOC ${uid('deniedadmin')}`;
+    const chain = await seedChain({ vocTitle, findingSource: 'voc', taskRequestSource: 'finding' });
+    // Fresh actor isolates the rate-limit bucket and stays in the existing cleanup cohort.
+    const reader = await insertDevActor(dbHandle, WORKSPACE_ID, uid('srcvoc-admin'));
+    await migrateHandle.pool.query("update core.actors set role_level = 'admin' where id = $1", [
+      reader.id,
+    ]);
+    expect(reader.id).not.toBe(adminActorId);
+    const cookie = await loginAs(app, reader.externalId);
+
+    const before = await getTask(cookie, chain.taskId);
+    expect(before.statusCode).toBe(200);
+    expect(before.json<{ source: Record<string, unknown> }>().source.voc).toEqual({
+      visibility_state: 'allowed',
+      id: chain.voc?.id,
+      display_id: chain.voc?.displayId,
+      title: vocTitle,
+    });
+
+    await migrateHandle.pool.query(
+      `insert into permission.permission_denies
+         (workspace_id, actor_id, capability, managed_system_id, reason, created_by_actor_id)
+       values ($1, $2, 'voc.read', $3, 'test-deny', $4)`,
+      [WORKSPACE_ID, reader.id, chain.msId, adminActorId],
+    );
+
+    const after = await getTask(cookie, chain.taskId);
+    expect(after.statusCode).toBe(200);
+    expect(after.json<{ source: Record<string, unknown> }>().source).not.toHaveProperty('voc');
+    expect(after.body).not.toContain(chain.voc?.id ?? '');
+    expect(after.body).not.toContain(chain.voc?.displayId ?? '');
+    expect(after.body).not.toContain(vocTitle);
+
+    const vocDetail = await app.inject({
+      method: 'GET',
+      url: `/vocs/${chain.voc?.id}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${cookie}` },
+    });
+    expect(vocDetail.statusCode).toBe(404);
+  });
+
   it('an archived source VOC turns hidden: the key disappears and its title is gone from the body', async () => {
     const vocTitle = `SrcVoc VOC ${uid('archived')}`;
     const chain = await seedChain({ vocTitle, findingSource: 'voc', taskRequestSource: 'finding' });

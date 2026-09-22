@@ -4,6 +4,8 @@
 
 Entity Links are the canonical cross-system relationship layer.
 
+See [ADR-0047](../adr/0047-entity-link-voc-read-required-not-triage.md) for the accepted VOC entity-link visibility rule: `voc.read`, not `voc.triage`.
+
 ## Ownership
 
 Entity Linking owns:

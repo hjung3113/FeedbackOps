@@ -24,7 +24,7 @@ Log lines include:
 ```text
 - timestamp
 - level
-- request_id (per HTTP request and per pg-boss job; same id flows through every line)
+- request_id (per HTTP request; same id flows through every line); pg-boss jobs use `queue` + `job_id` and optional `correlation_id` for identification
 - actor_id (when a session is present)
 - workspace_id (when known)
 - event (short verb, e.g. 'voc.created', 'task_request.approved', 'sensitive_permission.used')
@@ -48,7 +48,7 @@ To keep that follow-up cheap, MVP code:
 
 ## Secrets and config
 
-- All non-secret config comes from env vars defined in `apps/backend/src/config/env.ts` (parsed by Zod, fail-fast on missing required values).
+- All non-secret config comes from the settings entrypoint `apps/backend/src/config.ts`, with OIDC and attachment-origin validation in `config-oidc.ts` and `config-attachment-origin.ts` (parsed by Zod, fail-fast on missing required values).
 - Secrets (`DATABASE_URL`, `OIDC_CLIENT_SECRET`, `S3_SECRET_ACCESS_KEY`, etc.) come from k8s `Secret` objects mounted as env vars.
 - No secret is logged. The env parser explicitly redacts known secret keys in any startup-time config-dump log.
 - `.env` files are used only in local dev; CI never reads `.env`.
@@ -108,10 +108,11 @@ The `/health/live` + `/health/ready` split is now implemented
   the `healthProbeTimeoutMs` build-server option for tests) and all three
   checks run in parallel, so a hanging dependency yields 503 within roughly
   the timeout instead of hanging the probe. Timers are always cleared, but a
-  timed-out call keeps running (and holds its connection), so each check is
-  coalesced (single-flight): while a call is unsettled, later probes await
-  that same call within their own timeout instead of issuing new ones, so a
-  hung dependency pins at most one connection per check.
+  timed-out call keeps running (and holds its connection). If the original
+  call is still unsettled, subsequent probes fail immediately; after it
+  settles, the next probe retries it. Before timeout, concurrent probes are
+  coalesced (single-flight), so a hung dependency pins at most one connection
+  per check.
 - Both probe routes opt out of the rate limiter at the route level
   (`config.rateLimit: false`), so the limiter's session-cookie DB lookup never
   runs for them; liveness therefore stays independent of every dependency.

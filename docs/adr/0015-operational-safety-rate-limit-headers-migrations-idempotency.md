@@ -54,8 +54,8 @@ Migrations are authored as **Drizzle Kit-generated SQL files** committed to `app
 
 ```text
 1. Edit the Drizzle schema in apps/backend/src/db/schema/*.ts.
-2. Run `pnpm drizzle-kit generate` to produce a new timestamped `.sql` migration.
-3. Read the generated SQL. Hand-edit if Drizzle's diff is wrong or unsafe (e.g. add `CONCURRENTLY`, split a one-line column rename into add+backfill+drop, declare an explicit `USING` for type changes).
+2. From the repository root, run `pnpm --filter backend db:generate` (bundle the schema, then run generate). The filename uses the four-digit `NNNN_slug.sql` form.
+3. Review the generated SQL, journal, and snapshot together. Hand-edit the SQL only if Drizzle's diff is wrong or unsafe (e.g. add `CONCURRENTLY`, split a one-line column rename into add+backfill+drop, declare an explicit `USING` for type changes).
 4. Commit the schema change and the SQL file together.
 5. The migration job (one k8s Job per release) runs `pnpm drizzle-kit migrate` against the target database.
 ```

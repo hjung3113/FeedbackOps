@@ -15,8 +15,8 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /vocs?view=triage&triage=unassigned&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=inbox&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=my&selected=:vocId
-/voc-clusters?selected=:clusterId
-/surveys
+/voc-clusters?managedSystem=:managedSystemId|all&selected=:clusterId
+/surveys?managedSystem=:managedSystemId|all&selected=:surveyId
 /surveys/:surveyId
 /surveys/:surveyId?builder=true
 /surveys/:surveyId/results
@@ -32,10 +32,17 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /integration/coverage?managedSystem=:managedSystemId|all
 /integration/links?managedSystem=:managedSystemId|all
 /admin/managed-systems
-/admin/analytics-areas?selected=:analyticsAreaId
-/admin/permissions/requests?selected=:requestId
+/admin/analytics-areas?managedSystem=:managedSystemId&includeArchived=true&selected=:analyticsAreaId
+/admin/permissions/requests?tab=:tab&selected=:requestId
 /admin/settings
 ```
+
+| Deep-link route | Search keys | Omitted defaults |
+|---|---|---|
+| `/surveys` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
+| `/voc-clusters` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
+| `/admin/analytics-areas` | `managedSystem`, `includeArchived`, `selected` | `managedSystem` for all Managed Systems; `includeArchived` when archived records are hidden; `selected` when none is selected |
+| `/admin/permissions/requests` | `tab`, `selected` | `tab` for the pending tab; `selected` when none is selected |
 
 Route naming rules:
 

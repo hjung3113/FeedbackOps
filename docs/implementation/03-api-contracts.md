@@ -365,6 +365,9 @@ auth and permission: Admin or Developer with finding.manage on the Task
   convention.
 validation errors:
   - non-approved Task Request: 422 validation.failed with not_approved on status
+  - unknown or cross-workspace Analytics Area: 404 not_found.record
+  - Analytics Area on another Managed System: 422 validation.failed with out_of_scope on analytics_area_id
+  - archived Analytics Area: 409 conflict.parent_archived with parent_archived on analytics_area_id
 side effects:
   - create task.tasks with status backlog and source_task_request_id
   - create active entity link (task_request, task, converted_to)
@@ -420,6 +423,12 @@ source resolution:
   - source.task_request = { id, status } when source_task_request_id resolves
   - source.finding = { id, title, summary, evidence_count } via active
     (finding, task_request, requested_task) when present
+  - source.voc is the backend's VOC visibility verdict (#378), never synthesized
+    by the FE: allowed = { visibility_state, id, display_id, title };
+    summary_visible and denied = { visibility_state } only; hidden = the key is
+    omitted. The verdict is the VOC detail read decision, so an actor whose
+    VOC detail read would be 404 (including a non-reporter Admin with an explicit
+    voc.read deny) gets no source.voc.
 errors:
   - unknown id: 404 not_found.record
   - User or Developer outside Managed System scope: 403 permission.denied
@@ -569,6 +578,7 @@ Request, but conversion must explicitly persist the final Task fields.
 These decisions pin the MVP endpoints that are easiest for implementation
 agents to misread. Detailed relation semantics live in
 `docs/design/11-entity-linking.md`.
+The entity-link VOC visibility requirement is recorded in `docs/adr/0047-entity-link-voc-read-required-not-triage.md`.
 
 Source-shaped routes may exist for clarity and discoverability. The source
 module may host request parsing for routes such as
@@ -628,19 +638,19 @@ POST /vocs/:id/internal-comments
 
 | Aspect | Contract |
 |---|---|
-| Purpose | Reporter-only edit of `title` / `description_rich_content` / `attachments` while VOC is in `triage_state='untriaged'`. Closes Slice 3 BE exit criterion (`docs/implementation/08-mvp-slice-plan.md`). |
+| Purpose | Reporter-only edit of `title` / `description_rich_content` / `attachment_ids` while VOC is in `triage_state='untriaged'`. Closes Slice 3 BE exit criterion (`docs/implementation/08-mvp-slice-plan.md`). |
 | Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · `Authorization: Bearer <session>` |
-| Body | `{ title?: 1..200, description_rich_content?: TipTapDoc, attachments?: AttachmentRef[] }` — at least one field; `.strict()` (zod) rejects unknown keys |
+| Body | `{ title?: 1..200, description_rich_content?: TipTapDoc, attachment_ids?: uuid[] }` — at least one field; `.strict()` (zod) rejects unknown keys |
 | Forbidden fields (UX-named) | `severity`, `owner_user_id`, `owner_team_id`, `analytics_area_id`, `triage_state`, `cluster_decision`, `reporter_facing_status`, `source_context`, `primary_managed_system_id`, `reporter_id`, `archived_at`, `workspace_id`, `display_id`, `id`, `created_at`, `updated_at` → 422 `validation.unexpected_field` |
 | Permission | `actor.actor_id === voc.reporter_id` — exclusive. Admin / Developer (with capability) / any non-reporter → 403 `permission.denied`. No admin elevation on this endpoint. |
 | State gate | `voc.triage_state === 'untriaged'` — else 409 `conflict.triage_already_committed` with `detail.current_triage_state` |
 | Optimistic concurrency | `If-Match` compared against `voc.updated_at`; mismatch → 409 `conflict.stale_write` with `detail.current_updated_at` |
-| Service ordering | `SELECT FOR UPDATE voc → reporter check → state gate → If-Match → SELECT FOR UPDATE managed_system → sanitize description (surface `voc-description`) → attachments rejection (non-empty → 422 `attachment.unsupported_pending_storage_slice`) → diff → UPDATE (only when diff is non-empty) → audit emit → refresh envelope` |
+| Service ordering | `SELECT FOR UPDATE voc → reporter check → state gate → If-Match → SELECT FOR UPDATE managed_system → sanitize description (surface `voc-description`) → link `attachment_ids` with `linkAttachments` in the same transaction → diff → UPDATE (only when diff is non-empty) → audit emit → refresh envelope` |
 | Empty-diff semantics | If sanitizer normalizes input to match current row (per-field check; description hashed via `stableStringify` → SHA-256) → 200 returns current envelope without bumping `updated_at` and without emitting an audit row. Idempotency cache still records the 200 envelope so replay is byte-equal. |
 | Audit event | `voc_description_edited` with `changes: { title?: {from, to}, description_rich_content?: {from_hash, to_hash}, attachments?: {from, to} }` (per-field shape; non-empty required). |
 | Idempotency hash | Includes `vocId`, `ifMatch`, route, and request body — a retry with a refreshed `If-Match` (post-409 refetch) produces a new hash; client must mint a fresh `Idempotency-Key` for each distinct `If-Match` value (same caveat as `PATCH /vocs/:id`). |
 | Rate limit | 30/min per actor — dedicated `reporterEdit` bucket, separate from the 10/min `mutation` tier. |
-| Error codes | `validation.failed` · `validation.unexpected_field` · `permission.denied` · `not_found.record` · `conflict.triage_already_committed` (new in #17) · `conflict.stale_write` · `conflict.record_archived` · `conflict.parent_archived` · `conflict.idempotency_key_reuse` · `rich_content.disallowed_node` · `rich_content.disallowed_attr` · `rich_content.invalid_attr_value` · `rich_content.missing_required_attr` · `rich_content.external_image_forbidden` · `attachment.unsupported_pending_storage_slice` · `rate_limited.actor` |
+| Error codes | `validation.failed` · `validation.unexpected_field` · `permission.denied` · `not_found.record` · `conflict.triage_already_committed` (new in #17) · `conflict.stale_write` · `conflict.record_archived` · `conflict.parent_archived` · `conflict.idempotency_key_reuse` · `rich_content.disallowed_node` · `rich_content.disallowed_attr` · `rich_content.invalid_attr_value` · `rich_content.missing_required_attr` · `rich_content.external_image_forbidden` · `rate_limited.actor` |
 
 ### VOC Cluster
 
@@ -786,10 +796,10 @@ POST /tasks    # deferred in issue #134
 | Optimistic concurrency | `If-Match` compared against `task.updated_at`; mismatch → 409 `conflict.stale_write` with `detail.current_updated_at`. |
 | Service ordering | `SELECT FOR UPDATE task → permission check → If-Match compare → same-status no-op check → UPDATE status + updated_at → audit emit → refresh Task Detail DTO`. |
 | Empty-diff semantics | A request whose `status` already equals the stored status returns 200 with the current Task Detail DTO. It performs no UPDATE and emits no audit row; the idempotency cache still records the 200 response. |
-| Response | 200 `TaskDetailDto`, with the same `source` projection as `GET /tasks/:id`. Missing task → 404 `not_found.record`. |
+| Response | 200 `TaskDetailDto`; PATCH currently returns the transaction-local `source` projection and does not include GET's `source.voc` visibility augmentation. Whether this is the intended contract is unresolved (미결정). Missing task → 404 `not_found.record`. |
 | Audit event | `task_status_changed` with strict detail `{ from: TaskStatus, to: TaskStatus }`, written in the same transaction as the UPDATE. |
 | Idempotency hash | Includes `taskId`, `ifMatch`, route, and request body. A retry after refetching a stale Task has a distinct hash; clients must mint a fresh `Idempotency-Key` for each distinct `If-Match` value. |
-| Released side effect | ADR-0005/0009's Public-Update review-candidate background job remains deferred. Moving a Task to `released` in this endpoint does not yet enqueue or emit that candidate. |
+| Released side effect | Implemented: when a Task changes into `released`, the service snapshots eligible active direct `voc -> task evidence_of` links and, when at least one eligible link exists, publishes `tasks.create_public_update_review_candidates` via `boss.send` in the same transaction. It does not automatically change VOC status or create a Public Update. |
 | Error codes | `validation.failed` · `validation.malformed_idempotency_key` · `permission.denied` · `not_found.record` · `conflict.stale_write` · `conflict.idempotency_key_reuse` · `rate_limited.actor` |
 
 Task Request is not independently created through `POST /task-requests` as of

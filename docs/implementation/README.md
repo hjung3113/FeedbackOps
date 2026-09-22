@@ -33,7 +33,7 @@ Implementation should not start until these are reviewed for the target slice:
 ## Authority Rules
 
 ```text
-- CONTEXT.md and docs/adr/*.md own resolved domain decisions until incorporated into design docs.
+- Follow the root `AGENTS.md` Source Of Truth rules: CONTEXT.md owns vocabulary and invariants, and docs/adr/*.md own architectural decisions; ADR authority does not end when a decision is incorporated into design docs.
 - 03-api-contracts.md owns endpoint behavior.
 - 04-database-and-migrations.md owns migration and storage rules.
 - docs/design/15-data-contracts.md owns design-level field and enum vocabulary until replaced by migrations.

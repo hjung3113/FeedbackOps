@@ -796,6 +796,17 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     };
   }
 
+  async function canReadEndpoint(args: {
+    actor: EntityLinksActor;
+    endpoint: EntityLinkRef;
+  }): Promise<boolean> {
+    const { actor, endpoint } = args;
+    const provider = providerFor(endpoint.type);
+    const focus = await provider.getPermissionSubject(deps.db, actor.workspace_id, endpoint.id);
+    if (!focus) return false;
+    return provider.canRead(deps, actor, focus);
+  }
+
   async function listLinks(args: {
     actor: EntityLinksActor;
     endpoint: EntityLinkRef;
@@ -984,7 +995,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     return toDetachedResponse(detached);
   }
 
-  return { createLink, listLinks, listInventoryLinks, detachLink };
+  return { createLink, canReadEndpoint, listLinks, listInventoryLinks, detachLink };
 }
 
 export type EntityLinksService = ReturnType<typeof createEntityLinksService>;
