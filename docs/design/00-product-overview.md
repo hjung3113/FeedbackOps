@@ -110,7 +110,7 @@ Reference and draft documents:
 ```text
 - DESIGN.md: visual token seed only; not a component or route contract.
 - 15-data-contracts.md: design-level data vocabulary until superseded by migrations.
-- 14-api-draft.md: historical API design input; not implementation authority.
+- docs/design/archive/14-api-draft.md: archived historical input. Not required reading. Not endpoint authority.
 ```
 
 Implementation-facing decisions live in `docs/implementation`.

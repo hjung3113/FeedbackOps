@@ -23,17 +23,17 @@
 13-mvp-roadmap.md
 - Release grouping and recommended success flow.
 
-14-api-draft.md
-- Design input for APIs. Not the final implementation authority.
-
 15-data-contracts.md
 - Field and enum draft until superseded by docs/implementation/04-database-and-migrations.md.
+
+archive/
+- Historical design inputs. Not required reading. Not authority.
 ```
 
-After implementation begins, agents must not treat `14-api-draft.md` or
-`15-data-contracts.md` as final contracts when they conflict with
-`docs/implementation/03-api-contracts.md`,
-`docs/implementation/04-database-and-migrations.md`, or applied migrations.
+`docs/design/archive/` is not required reading.
+`15-data-contracts.md` is not a final contract when it conflicts with
+`docs/implementation/04-database-and-migrations.md` or applied migrations.
+Endpoint behavior has one authority: `docs/implementation/03-api-contracts.md`.
 
 ## Drift Control
 

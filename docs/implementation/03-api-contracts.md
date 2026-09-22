@@ -2,8 +2,7 @@
 
 ## Purpose
 
-This document is the implementation-facing API contract.
-`docs/design/14-api-draft.md` is design input only where not restated here.
+This document is the only endpoint authority.
 
 Detailed endpoint schemas may later move into OpenAPI, but this document remains the behavioral contract.
 

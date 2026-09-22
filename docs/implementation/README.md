@@ -38,7 +38,7 @@ Implementation should not start until these are reviewed for the target slice:
 - 04-database-and-migrations.md owns migration and storage rules.
 - docs/design/15-data-contracts.md owns design-level field and enum vocabulary until replaced by migrations.
 - docs/design/11-entity-linking.md owns relation type meaning and visibility rules.
-- docs/design/14-api-draft.md is historical design input only where not restated here.
+- 03-api-contracts.md is the only endpoint authority.
 ```
 
 Current implementation alignment rules:
