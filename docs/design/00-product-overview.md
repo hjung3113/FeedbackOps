@@ -109,7 +109,7 @@ Reference and draft documents:
 
 ```text
 - docs/frontend/tokens.md: visual token seed only; not a component or route contract.
-- 15-data-contracts.md: design-level data vocabulary until superseded by migrations.
+- 15-data-contracts.md: field and enum authority (not superseded by migrations; see docs/design/README.md).
 - docs/design/archive/14-api-draft.md: archived historical input. Not required reading. Not endpoint authority.
 ```
 
