@@ -25,6 +25,7 @@ import {
   detachEntityLink,
   findActiveEntityLink,
 } from '../entity-links/commands.js';
+import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import {
   actorFindingReadScope,
   checkFindingManage,
@@ -130,7 +131,10 @@ async function canReadCluster(
   actor: VocClustersActor,
   managedSystemId: string,
 ): Promise<boolean> {
-  return isFindingInReadScope(await actorFindingReadScope(deps.db, actor, { requireElevatedRole: true }), managedSystemId);
+  return isFindingInReadScope(
+    await actorFindingReadScope(deps.db, actor, { requireElevatedRole: true }),
+    managedSystemId,
+  );
 }
 
 async function canManageCluster(
@@ -139,7 +143,13 @@ async function canManageCluster(
   managedSystemId: string,
   options?: Parameters<VocClustersServiceDeps['checkService']['checkCapability']>[3],
 ): Promise<boolean> {
-  const decision = await checkFindingManage(deps.checkService, actor, managedSystemId, { requireElevatedRole: true }, options);
+  const decision = await checkFindingManage(
+    deps.checkService,
+    actor,
+    managedSystemId,
+    { requireElevatedRole: true },
+    options,
+  );
   return decision.allow;
 }
 
@@ -304,7 +314,9 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       workspaceId: args.actor.workspace_id,
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
     });
-    const findingReadScope = await actorFindingReadScope(deps.db, args.actor, { requireElevatedRole: true });
+    const findingReadScope = await actorFindingReadScope(deps.db, args.actor, {
+      requireElevatedRole: true,
+    });
     const readableRows = rows.filter((row) =>
       isFindingInReadScope(findingReadScope, row.primary_managed_system_id),
     );
@@ -361,7 +373,9 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
       await listVocClusterMembers(deps.db, { clusterId: row.id }),
       row.primary_managed_system_id,
     );
-    const findingReadScope = await actorFindingReadScope(deps.db, args.actor, { requireElevatedRole: true });
+    const findingReadScope = await actorFindingReadScope(deps.db, args.actor, {
+      requireElevatedRole: true,
+    });
     const linkedFindings = await listCreatedFindingsForClusters(deps.db, {
       workspaceId: args.actor.workspace_id,
       clusterIds: [row.id],
@@ -782,6 +796,14 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
 
+          assertLinkManagedSystemCompatibility(
+            cluster.primary_managed_system_id,
+            targetManagedSystemId,
+            {
+              path: ['primary_managed_system_id'],
+            },
+          );
+
           await assertTargetAnalyticsArea({
             tx,
             workspaceId: args.actor.workspace_id,
@@ -908,7 +930,9 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
           });
           if (!cluster) throw new HttpError('not_found.record', 'record not found');
 
-          const findingReadScope = await actorFindingReadScope(tx, args.actor, { requireElevatedRole: true });
+          const findingReadScope = await actorFindingReadScope(tx, args.actor, {
+            requireElevatedRole: true,
+          });
           if (!isFindingInReadScope(findingReadScope, cluster.primary_managed_system_id)) {
             throw new HttpError('not_found.record', 'record not found');
           }
@@ -925,12 +949,24 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
           }
 
           const [clusterManageDecision, findingManageDecision] = await Promise.all([
-            checkFindingManage(deps.checkService, args.actor, cluster.primary_managed_system_id, { requireElevatedRole: true }, {
-              tx,
-            }),
-            checkFindingManage(deps.checkService, args.actor, finding.primary_managed_system_id, { requireElevatedRole: true }, {
-              tx,
-            }),
+            checkFindingManage(
+              deps.checkService,
+              args.actor,
+              cluster.primary_managed_system_id,
+              { requireElevatedRole: true },
+              {
+                tx,
+              },
+            ),
+            checkFindingManage(
+              deps.checkService,
+              args.actor,
+              finding.primary_managed_system_id,
+              { requireElevatedRole: true },
+              {
+                tx,
+              },
+            ),
           ]);
           if (!clusterManageDecision.allow || !findingManageDecision.allow) {
             const missingScope = [clusterManageDecision, findingManageDecision].some(
@@ -959,6 +995,12 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
             }
             throw new HttpError('permission.denied', 'finding.manage capability required');
           }
+
+          assertLinkManagedSystemCompatibility(
+            cluster.primary_managed_system_id,
+            finding.primary_managed_system_id,
+            { path: ['finding_id'] },
+          );
 
           const evidenceTuple = registeredEntityLinkPairSchema.parse({
             source_type: 'voc_cluster',
@@ -1038,7 +1080,9 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
           });
           if (!cluster) throw new HttpError('not_found.record', 'record not found');
 
-          const findingReadScope = await actorFindingReadScope(tx, args.actor, { requireElevatedRole: true });
+          const findingReadScope = await actorFindingReadScope(tx, args.actor, {
+            requireElevatedRole: true,
+          });
           if (!isFindingInReadScope(findingReadScope, cluster.primary_managed_system_id)) {
             throw new HttpError('not_found.record', 'record not found');
           }
@@ -1059,12 +1103,24 @@ export function createVocClustersService(deps: VocClustersServiceDeps) {
           // non-disclosing link-command authorization order.
           if (args.actor.role_level !== 'admin') {
             const [clusterManageDecision, findingManageDecision] = await Promise.all([
-              checkFindingManage(deps.checkService, args.actor, cluster.primary_managed_system_id, { requireElevatedRole: true }, {
-                tx,
-              }),
-              checkFindingManage(deps.checkService, args.actor, finding.primary_managed_system_id, { requireElevatedRole: true }, {
-                tx,
-              }),
+              checkFindingManage(
+                deps.checkService,
+                args.actor,
+                cluster.primary_managed_system_id,
+                { requireElevatedRole: true },
+                {
+                  tx,
+                },
+              ),
+              checkFindingManage(
+                deps.checkService,
+                args.actor,
+                finding.primary_managed_system_id,
+                { requireElevatedRole: true },
+                {
+                  tx,
+                },
+              ),
             ]);
             if (!clusterManageDecision.allow || !findingManageDecision.allow) {
               const missingScope = [clusterManageDecision, findingManageDecision].some(
