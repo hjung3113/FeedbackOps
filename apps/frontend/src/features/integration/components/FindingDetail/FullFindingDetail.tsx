@@ -1,7 +1,8 @@
 // FullFindingDetail — composition/rendering for a loaded Finding.
 // Pure view: all state, queries and handlers come from useFindingDetailController.
 
-import type { FindingDto } from '@fops/shared';
+import { ProgressNotesSection } from '@/features/cross-system/progress-notes/ProgressNotesSection';
+import type { FindingDto, FindingStatus } from '@fops/shared';
 import {
   Button,
   DetailPanelSectionNav,
@@ -200,6 +201,22 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
+          </div>
+
+          <SectionDivider />
+
+          {/* Progress notes (#377) — timeline visible to any finding reader;
+              composer gated to finding.manage (backend authoritative). */}
+          <div data-anchor="notes" className="flex flex-col gap-2">
+            <PanelSectionTitle>진행 메모</PanelSectionTitle>
+            <ProgressNotesSection
+              resource={{ kind: 'finding', id: finding.id }}
+              canCompose={canManage}
+              actorNamesById={actorsById}
+              renderStatusBadge={(status: FindingStatus) => (
+                <FitBadge>{FINDING_STATUS_LABEL[status]}</FitBadge>
+              )}
+            />
           </div>
         </div>
 

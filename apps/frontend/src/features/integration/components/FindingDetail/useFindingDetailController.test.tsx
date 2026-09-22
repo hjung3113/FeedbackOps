@@ -141,7 +141,9 @@ describe('useFindingDetailController', () => {
     const { result } = renderController(FINDING_LINKED);
     expect(result.current.canManage).toBe(true);
     expect(result.current.markNotActionableDisabled).toBe(false);
-    expect(result.current.sections).toHaveLength(6);
+    // #377: the progress-note section is the last detail section.
+    expect(result.current.sections).toHaveLength(7);
+    expect(result.current.sections[6]).toEqual({ id: 'notes', label: '진행 메모' });
   });
 
   it('permission denied: gated action flags go false (positive twin above proves the gate)', () => {
