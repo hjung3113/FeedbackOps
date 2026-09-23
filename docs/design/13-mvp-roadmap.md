@@ -4,6 +4,9 @@
 
 This document defines release scope. System documents describe behavior; this document decides when behavior ships.
 
+Implementation slice status is `docs/implementation/08-mvp-slice-plan.md`.
+This document only groups release scope. It is not an execution queue and it does not record what is already built.
+
 ## Alpha
 
 ```text

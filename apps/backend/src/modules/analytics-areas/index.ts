@@ -10,3 +10,4 @@ export {
   archiveAnalyticsAreaInTx,
 } from './analytics-area-service.js';
 export { analyticsAreasRoutes, type AnalyticsAreasRoutesOptions } from './routes.js';
+export { lockAnalyticsArea, type LockedAnalyticsArea } from './repo.js';

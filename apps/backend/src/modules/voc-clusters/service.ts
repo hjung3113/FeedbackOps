@@ -18,6 +18,7 @@ import {
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import { lockAnalyticsArea } from '../analytics-areas/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
@@ -35,10 +36,11 @@ import {
   createFindingFromVocCluster,
   lockFindingForUpdate,
 } from '../findings/commands.js';
+import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { ConversationService } from '../voc/conversation-service.js';
 import { type Scope, actorReadScope } from '../voc/repo-read.js';
-import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
+import { selectVocForUpdate } from '../voc/repo.js';
 import {
   type CreatedFindingForClusterRow,
   type SameManagedSystemCandidatePeerRow,

@@ -23,7 +23,7 @@ import { useVocClusterList } from "@/features/voc-cluster/hooks/useVocClusterLis
 import { useMe } from "@/lib/auth/useMe";
 import { fetchManagedSystems, errorMapper, type ApiError } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { VocClusterListShell } from "./$clusterId";
+import { VocClusterListShell } from "@/features/voc-cluster/components/detail/VocClusterListShell";
 import { z } from "zod";
 
 // Selection + Managed System scope are URL state (docs/frontend/routes-and-layout.md

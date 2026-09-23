@@ -7,7 +7,7 @@
 // `permission_requests` directly. AGENTS.md:65-66 ("Backend application
 // services own permissions") locks this boundary.
 //
-// Check order: docs/implementation/05-permission-policy.md:23-31 —
+// Check order: docs/implementation/05-permission-policy.md ## Permission Check Order —
 //   1. workspace context → workspace_mismatch
 //   2. explicit deny      → explicit_deny
 //   3. direct grant       → workspace-wide grants only (grant.managed_system_id IS NULL)

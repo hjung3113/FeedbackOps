@@ -4,7 +4,7 @@
 // remains scannable and the permission UI can group by module.
 //
 // Sensitive marker: certain capabilities require a reason on request per
-// docs/implementation/05-permission-policy.md:62-76 ("Sensitive Permissions").
+// docs/implementation/05-permission-policy.md ## Sensitive Permissions.
 // `workspace.admin` is the concrete Slice 1 implementation of the policy
 // doc's "Admin permission" entry and is therefore Sensitive — a request for
 // it must carry a non-empty reason and the audit detail must mark it

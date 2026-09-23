@@ -17,7 +17,8 @@ import { stableStringify } from '../../lib/json/stable-stringify.js';
 import { sanitizeTipTap, type RichContentError } from '../../lib/rich-content/sanitize.js';
 import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
 import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
-import { insertVoc, lockAnalyticsArea, lockManagedSystem, selectVocForUpdate, updateVocDescriptionFields } from './repo.js';
+import { insertVoc, selectVocForUpdate, updateVocDescriptionFields } from './repo.js';
+import { lockAnalyticsArea } from '../analytics-areas/index.js';
 import {
   LinkAttachmentsRejected,
   linkAttachments,
@@ -26,6 +27,7 @@ import {
 } from '../attachments/repo.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { RoleLevel } from '../auth/session-service.js';
 import type { CreateVocRequest, EditDescriptionRequest, PatchVocRequest } from '@fops/shared';

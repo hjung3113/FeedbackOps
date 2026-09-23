@@ -11,9 +11,12 @@ These documents convert product design into implementation constraints.
 4. 03-api-contracts.md
 5. 04-database-and-migrations.md
 6. 05-permission-policy.md
+   - Check order, audit event verbs, sensitive capabilities, decision endpoints.
+   - The capability matrix and default-user boundary are docs/design/09-permission-access.md. Do not duplicate the matrix here.
 7. 06-entity-linking-contract.md
 8. 07-testing-strategy.md
 9. 08-mvp-slice-plan.md
+   Shipped-slice record, not an open queue. Release grouping is docs/design/13-mvp-roadmap.md.
 ```
 
 ## Implementation Gates
@@ -39,6 +42,7 @@ Implementation should not start until these are reviewed for the target slice:
 - docs/design/15-data-contracts.md is the field and enum authority.
 - docs/implementation/06-entity-linking-contract.md owns relation type meaning and visibility rules.
 - 03-api-contracts.md is the only endpoint authority.
+- 05-permission-policy.md owns check order and audit event verbs. docs/design/09-permission-access.md owns the capability matrix and default-user UX.
 ```
 
 Current implementation alignment rules:

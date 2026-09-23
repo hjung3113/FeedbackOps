@@ -22,6 +22,7 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { encodeCommentCursor } from '../../lib/pg-timestamp.js';
 import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
+import { lockAnalyticsArea } from '../analytics-areas/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
@@ -33,6 +34,7 @@ import {
 import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { linkTaskToFinding } from '../findings/commands.js';
+import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   type TaskRequestRow,
@@ -40,7 +42,6 @@ import {
   markTaskRequestConverted,
 } from '../task-requests/commands.js';
 import type { VocReadService } from '../voc/read-service.js';
-import { lockAnalyticsArea, lockManagedSystem } from '../voc/repo.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,

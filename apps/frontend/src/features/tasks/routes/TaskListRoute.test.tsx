@@ -6,7 +6,8 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { TaskDetailPanel, TaskListRoute } from './TaskListRoute';
+import { TaskListRoute } from './TaskListRoute';
+import { TaskDetailPanel } from '../components/TaskDetailPanel';
 
 vi.mock('@fops/ui', async () => {
   const actual = await vi.importActual<typeof import('@fops/ui')>('@fops/ui');
@@ -33,7 +34,7 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
 }));
 
-vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({
     actors: [{ id: '20000000-0000-0000-0000-000000000002', display_name: '담당자' }],
   }),
