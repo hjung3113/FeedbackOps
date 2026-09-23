@@ -13,7 +13,6 @@
  *   .panel-footer handled by TriageActions component
  */
 
-import { ApiError, apiClient } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import type { VocListItem } from '@fops/shared';
 import {
@@ -27,19 +26,15 @@ import {
   UndoToast,
   cn,
 } from '@fops/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Maximize2, MoreHorizontal } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
+import { useTriageCommand } from '../../hooks/useTriageCommand';
 import { useTriagePanelState } from '../../hooks/useTriagePanelState';
-import { type CallToken, useUndoableMutation } from '../../hooks/useUndoableMutation';
-import {
-  type TriageInput,
-  type TriageOutput,
-  type TriageSnapshot,
-  executeCompensatingPatch,
-} from '../../hooks/useVocTriageMutation';
+import type { CallToken } from '../../hooks/useUndoableMutation';
 import { useWorkspaceActors } from '../../hooks/useWorkspaceActors';
+import type { TriageInput } from '../../lib/triage-types';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { type OwnerCandidate, OwnerPicker } from './OwnerPicker';
 import { type SeverityLevel, SeverityPicker } from './SeverityPicker';
@@ -90,12 +85,8 @@ export function TriagePanel({
 }: TriagePanelProps): React.ReactElement {
   const { panelState, dispatch, dirty } = useTriagePanelState(voc);
   const { actors } = useWorkspaceActors();
-  const queryClient = useQueryClient();
   // Ref for the scrollable body — used by DetailPanelSectionNav to observe anchors
   const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  // Panel-level lock for idempotency_key_reuse (per spec §5.3 + PLAN-21 §307)
-  const [panelLocked, setPanelLocked] = React.useState(false);
 
   // Build owner candidates from workspace actors list
   const candidates: OwnerCandidate[] = React.useMemo(() => {
@@ -145,6 +136,14 @@ export function TriagePanel({
 
   // ── mutation setup ──────────────────────────────────────────────────────────
 
+  // Undo state machine — HTTP adapter, compensation order, and the error
+  // matrix live in useTriageCommand (issue #481). The panel keeps panel state,
+  // input assembly, and the toast UI.
+  const { panelLocked, isSubmitting, commit, undoLast } = useTriageCommand({
+    voc,
+    onOptimisticRestore,
+  });
+
   // Keep a stable ref to undoLast so the toast closure always sees the latest version.
   // (The closure in toast.custom captures undoLast at call time; the ref stays current.)
   // REV-3 Cluster X: undoLast accepts an optional CallToken so toasts can bind
@@ -153,178 +152,8 @@ export function TriagePanel({
     /* no-op until mounted */
   });
 
-  // Stable ref so the hook callbacks always see the latest restore handler.
-  // We deliberately do NOT keep a ref to voc.id here: VocTriageScreen
-  // auto-advances the selected VOC after optimistic remove, so a vocIdRef would
-  // point at the NEXT row by the time onError/onAbort fires (REV-1 #5). All
-  // queue side-effects must close over the original mutation input instead.
-  const onOptimisticRestoreRef = React.useRef(onOptimisticRestore);
-  onOptimisticRestoreRef.current = onOptimisticRestore;
-
-  const {
-    mutate: undoableMutate,
-    undoLast,
-    state: mutationState,
-  } = useUndoableMutation<TriageInput, TriageOutput, TriageSnapshot>({
-    mutationFn: async (input: TriageInput, signal?: AbortSignal): Promise<TriageOutput> => {
-      const res = await apiClient<TriageOutput>('PATCH', `/vocs/${input.vocId}`, {
-        body: buildPayload(input),
-        ifMatch: input.ifMatch,
-        ...(signal !== undefined && { signal }),
-      });
-      return res.data;
-    },
-    snapshot: (input: TriageInput): TriageSnapshot => {
-      // REV-1 #3: snapshot from the PRIOR voc values (what compensate must
-      // restore the VOC to), NOT from staged panelState (the new values the
-      // user just chose). If we snapshot staged values, the compensating
-      // PATCH writes the new values back with triage_state='untriaged' and
-      // permanently mutates severity/owner/AA.
-      const isConfirm = input.kind === 'confirm' || input.kind === 'finding';
-      return {
-        vocId: input.vocId,
-        ifMatch: input.ifMatch,
-        severity: isConfirm ? voc.severity : null,
-        ownerUserId: isConfirm ? voc.owner_user_id : null,
-        ownerTeamId: isConfirm ? voc.owner_team_id : null,
-        analyticsAreaId: isConfirm ? voc.analytics_area_id : null,
-        wasConfirm: isConfirm,
-      };
-    },
-    compensateFn: async (snapshot: TriageSnapshot, output: TriageOutput | null) => {
-      // REV-1 #4: use the FRESH updated_at from the first PATCH response as
-      // the If-Match for the compensating PATCH. The original snapshot.ifMatch
-      // (voc.updated_at at confirm time) is stale once the first PATCH commits
-      // — reusing it self-fails with conflict.stale_write.
-      //
-      // REV-3 Cluster Y: `apiClient` returns `undefined` for an empty 200
-      // body. The prior guard checked `output !== null` and then dereferenced
-      // `output.updated_at`, which threw for `undefined`. When fresh
-      // `updated_at` is absent from the PATCH response, refetch
-      // ['voc', vocId] and pull the fresh `updated_at` off the refreshed
-      // envelope instead of falling back to the stale snapshot baseline.
-      let freshUpdatedAt: string | undefined =
-        output != null && typeof (output as { updated_at?: unknown }).updated_at === 'string'
-          ? (output as { updated_at: string }).updated_at
-          : undefined;
-
-      if (freshUpdatedAt === undefined) {
-        try {
-          // Use refetchQueries with type:'all' so we refetch even when there's
-          // no active observer (the detail panel may not be mounted while the
-          // triage queue panel runs the undo). If the query has never been
-          // populated, fall back to fetchQuery.
-          await queryClient.refetchQueries({
-            queryKey: ['voc', snapshot.vocId],
-            type: 'all',
-          });
-          let fresh = queryClient.getQueryData<{ updated_at?: unknown }>(['voc', snapshot.vocId]);
-          if (!fresh) {
-            fresh = await queryClient.fetchQuery<{ updated_at?: unknown }>({
-              queryKey: ['voc', snapshot.vocId],
-              queryFn: async ({ signal }) => {
-                const res = await apiClient<{ updated_at?: unknown }>(
-                  'GET',
-                  `/vocs/${snapshot.vocId}`,
-                  { signal },
-                );
-                return res.data;
-              },
-            });
-          }
-          if (fresh && typeof fresh.updated_at === 'string') {
-            freshUpdatedAt = fresh.updated_at;
-          }
-        } catch (refetchErr) {
-          // REV-4 P1: Refetch itself failed (network, etc.). Do NOT fall through
-          // to executeCompensatingPatch with a stale If-Match — that's a
-          // guaranteed 409 and provides no value to the user. Surface an error
-          // toast so the user knows compensation failed, and throw so undoLast's
-          // .catch handler can reset the hook state cleanly.
-          toast.error('VOC를 새로 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.');
-          // Tag so onCompensateError can skip double-toasting.
-          const tagged = Object.assign(
-            refetchErr instanceof Error ? refetchErr : new Error(String(refetchErr)),
-            { __refetchFailure: true as const },
-          );
-          throw tagged;
-        }
-      }
-
-      const freshSnapshot: TriageSnapshot =
-        freshUpdatedAt !== undefined ? { ...snapshot, ifMatch: freshUpdatedAt } : snapshot;
-      await executeCompensatingPatch(freshSnapshot);
-      // Re-insert into queue after successful compensate
-      onOptimisticRestoreRef.current?.(snapshot.vocId);
-    },
-    // REV-1 #1: when the user undoes while the PATCH is still in-flight,
-    // useUndoableMutation aborts the controller and fires onAbort with the
-    // original input. Restore the row to the queue using that input — never
-    // current props, which may already point at the auto-advanced VOC.
-    onAbort: (input: TriageInput) => {
-      onOptimisticRestoreRef.current?.(input.vocId);
-    },
-    // REV-4: surface a toast when compensateFn rejects. Two paths land here:
-    //   a) Refetch failure — the catch block above already toasted and tagged
-    //      the error with __refetchFailure; skip toasting again here.
-    //   b) Compensating PATCH failure (e.g. 409) — toast the generic undo error.
-    onCompensateError: (err: unknown) => {
-      if (err !== null && typeof err === 'object' && '__refetchFailure' in err) {
-        // Already toasted by the refetch catch block.
-        return;
-      }
-      toast.error('실행 취소 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
-    },
-    // Error matrix (PLAN-21 §302-307): handle via onError so we get the actual error object.
-    // REV-1 #5: use the original input.vocId (closure on the failing mutate call),
-    // never vocIdRef.current — VocTriageScreen auto-advances the selected VOC after
-    // optimistic remove, so vocIdRef.current points at the NEXT row, not the failed one.
-    onError: (err: unknown, input: TriageInput) => {
-      const vocId = input.vocId;
-      if (err instanceof ApiError) {
-        switch (err.code) {
-          case 'conflict.stale_write':
-            onOptimisticRestoreRef.current?.(vocId);
-            toast.warning('다른 사용자가 먼저 수정했습니다. 새로 불러왔습니다.');
-            break;
-          case 'conflict.record_archived':
-          case 'conflict.parent_archived':
-            // Permanent remove — no restore needed
-            toast.error('이 항목은 보관되어 변경할 수 없습니다.');
-            break;
-          case 'permission.denied':
-          case 'permission.scope_required':
-            onOptimisticRestoreRef.current?.(vocId);
-            toast.error('권한이 없습니다.');
-            break;
-          case 'rate_limited.actor':
-            onOptimisticRestoreRef.current?.(vocId);
-            toast.warning('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
-            break;
-          case 'conflict.idempotency_key_reuse':
-            // Lock the panel — user must switch VOC to unlock
-            setPanelLocked(true);
-            toast.error('이미 처리된 요청입니다.');
-            break;
-          default:
-            onOptimisticRestoreRef.current?.(vocId);
-            toast.error('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
-        }
-      } else {
-        onOptimisticRestoreRef.current?.(vocId);
-        toast.error('일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
-      }
-    },
-  });
-
   // Keep the ref current
   undoLastRef.current = undoLast;
-
-  // Unlock panel when voc changes (per spec: lock until VOC switch)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: voc.id is the reset trigger for switching panels.
-  React.useEffect(() => {
-    setPanelLocked(false);
-  }, [voc.id]);
 
   // ── handlers ───────────────────────────────────────────────────────────────
 
@@ -348,7 +177,7 @@ export function TriagePanel({
       // REV-3 Cluster X: capture the per-call token so the toast we issue
       // below binds its undo to THIS call only. Once a follow-up mutate
       // replaces the current call, this toast becomes inert.
-      const callToken: CallToken = undoableMutate(input);
+      const callToken: CallToken = commit(input);
 
       // Show UndoToast via sonner's toast.custom
       // Prototype ref: screen-voc-create.jsx:699-730 → UndoToast positioning
@@ -389,7 +218,7 @@ export function TriagePanel({
       panelState,
       onOptimisticRemove,
       onAct,
-      undoableMutate,
+      commit,
     ],
   );
 
@@ -405,7 +234,7 @@ export function TriagePanel({
     onOptimisticRemove?.(voc.id);
 
     // REV-3 Cluster X: capture per-call token and bind the toast's undo to it.
-    const callToken: CallToken = undoableMutate(input);
+    const callToken: CallToken = commit(input);
 
     const message = `${voc.display_id} 보류 처리됨`;
     toast.custom(
@@ -426,19 +255,9 @@ export function TriagePanel({
     );
 
     onAct?.('skip');
-  }, [
-    panelLocked,
-    voc.id,
-    voc.display_id,
-    voc.updated_at,
-    onOptimisticRemove,
-    onAct,
-    undoableMutate,
-  ]);
+  }, [panelLocked, voc.id, voc.display_id, voc.updated_at, onOptimisticRemove, onAct, commit]);
 
   // ── render ─────────────────────────────────────────────────────────────────
-
-  const isSubmitting = mutationState === 'pending';
 
   const triageSections = buildTriageSections(voc.similar_count);
 
@@ -593,18 +412,3 @@ export function TriagePanel({
 }
 
 TriagePanel.displayName = 'TriagePanel';
-
-// ── helpers ────────────────────────────────────────────────────────────────
-
-function buildPayload(input: TriageInput): Record<string, unknown> {
-  if (input.kind === 'skip') {
-    return { postpone_review: true };
-  }
-  return {
-    triage_state: 'triaged' as const,
-    severity: input.severity,
-    owner_user_id: input.ownerUserId,
-    owner_team_id: input.ownerTeamId,
-    analytics_area_id: input.analyticsAreaId,
-  };
-}

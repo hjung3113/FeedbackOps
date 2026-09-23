@@ -24,7 +24,6 @@ features/voc-cluster/hooks/useCreateVocCluster.ts 2
 features/voc-cluster/hooks/useLinkExistingFindingToVocCluster.ts 2
 features/voc-cluster/hooks/useRemoveClusterMember.ts 2
 features/voc-cluster/hooks/useRequestTaskFromCluster.ts 2
-features/voc/components/triage/TriagePanel.tsx 3
 features/voc/hooks/useConfirmVocRecommendation.ts 2
 features/voc/hooks/useDismissVocRecommendation.ts 2
 features/voc/hooks/usePublicUpdateReviewCandidates.ts 3
@@ -38,7 +37,7 @@ features/voc/hooks/useVocPreSubmitPeers.ts 2
 features/voc/hooks/useVocPublicUpdateMutation.ts 2
 features/voc/hooks/useVocRecommendations.ts 2
 features/voc/hooks/useVocReporterReplyMutation.ts 2
-features/voc/hooks/useVocTriageMutation.ts 3
+features/voc/lib/triage-transport.ts 4
 lib/api/attachments.ts 3
 lib/api/client.ts 1
 lib/api/dashboard.ts 2
