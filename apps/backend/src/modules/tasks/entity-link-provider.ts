@@ -1,17 +1,14 @@
-// Temporary home (#479) for the entity-link providers that have not yet moved
-// to their owning domain modules. Shrinks by one key per commit; deleted when
-// the `task` provider moves in commit 5.
 import { taskReporterSummarySchema, taskStatusSchema } from '@fops/shared';
 import type { EntityLinkTargetSummary, TaskStatus } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
-import { checkFindingManage, checkFindingRead } from '../findings/authorization.js';
-import { type TaskRow, findTaskById } from '../tasks/repo.js';
 import type {
-  EntityLinkProviderRegistry,
+  EntityLinkProvider,
   ReporterSummaryResult,
-} from './provider-types.js';
+} from '../entity-links/provider-types.js';
+import { checkFindingManage, checkFindingRead } from '../findings/authorization.js';
+import { type TaskRow, findTaskById } from './repo.js';
 
 function taskToInternalSummary(row: TaskRow): EntityLinkTargetSummary {
   return {
@@ -117,32 +114,27 @@ async function getTaskReporterSummaries(
   );
 }
 
-export const legacyEntityLinkProviders: Pick<EntityLinkProviderRegistry, 'task'> = {
-  task: {
-    entityType: 'task',
-    assertExists: resolveTask,
-    getPermissionSubject: resolveTask,
-    canRead: async (deps, actor, subject) => {
-      const decision = await checkFindingRead(deps.checkService, actor, subject.managed_system_id, {
-        requireElevatedRole: false,
-      });
-      return decision.allow;
-    },
-    canCreateTarget: async (deps, actor, subject) => {
-      const decision = await checkFindingManage(
-        deps.checkService,
-        actor,
-        subject.managed_system_id,
-        { requireElevatedRole: false },
-      );
-      return decision.allow;
-    },
-    getReporterSummary: getTaskReporterSummary,
-    getReporterSummaries: getTaskReporterSummaries,
-    getInternalSummary: async (db, workspaceId, id) => {
-      const task = await findTaskById(db, { workspaceId, taskId: id });
-      return task ? taskToInternalSummary(task) : null;
-    },
-    listExpectedLinks: async () => [],
+export const taskEntityLinkProvider: EntityLinkProvider = {
+  entityType: 'task',
+  assertExists: resolveTask,
+  getPermissionSubject: resolveTask,
+  canRead: async (deps, actor, subject) => {
+    const decision = await checkFindingRead(deps.checkService, actor, subject.managed_system_id, {
+      requireElevatedRole: false,
+    });
+    return decision.allow;
   },
+  canCreateTarget: async (deps, actor, subject) => {
+    const decision = await checkFindingManage(deps.checkService, actor, subject.managed_system_id, {
+      requireElevatedRole: false,
+    });
+    return decision.allow;
+  },
+  getReporterSummary: getTaskReporterSummary,
+  getReporterSummaries: getTaskReporterSummaries,
+  getInternalSummary: async (db, workspaceId, id) => {
+    const task = await findTaskById(db, { workspaceId, taskId: id });
+    return task ? taskToInternalSummary(task) : null;
+  },
+  listExpectedLinks: async () => [],
 };
