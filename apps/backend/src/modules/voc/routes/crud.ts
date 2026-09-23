@@ -12,132 +12,23 @@ import {
   FORBIDDEN_EDIT_DESCRIPTION_FIELD_ERROR_CODES,
   FORBIDDEN_PATCH_FIELDS,
   FORBIDDEN_PATCH_FIELD_ERROR_CODES,
-  createFindingRequestSchema,
-  createTaskRequestFromVocRequestSchema,
   createVocRequestSchema,
   editDescriptionRequestSchema,
   getConversationQuerySchema,
-  internalCommentRequestSchema,
   listVocsQuerySchema,
   patchVocRequestSchema,
-  publicUpdateRequestSchema,
-  reporterReplyRequestSchema,
-  resolvePublicUpdateReviewCandidateRequestSchema,
 } from '@fops/shared';
 
-import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
-import { requireIdempotencyKey, requireIfMatch, UUID_REGEX } from '../../lib/http-headers.js';
-import { requireSession } from '../../middleware/require-session.js';
-import { requireWorkspace } from '../../middleware/require-workspace.js';
-import type { SessionService } from '../auth/session-service.js';
-import { hashRequestBody } from '../core/idempotency/canonicalize.js';
-import type { FindingsService } from '../findings/index.js';
-import type { TaskRequestsService } from '../task-requests/index.js';
-import type { ConversationService } from './conversation-service.js';
-import type { PublicUpdateReviewCandidateService } from './public-update-review-candidates/review-service.js';
-import type { ReadActorContext, VocReadService } from './read-service.js';
-import type { VocService } from './service.js';
+import { HttpError, fieldsFromZodIssues, sendError } from '../../../lib/errors.js';
+import { requireIdempotencyKey, requireIfMatch, UUID_REGEX } from '../../../lib/http-headers.js';
+import { requireSession } from '../../../middleware/require-session.js';
+import { requireWorkspace } from '../../../middleware/require-workspace.js';
+import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
+import type { ReadActorContext } from '../read-service.js';
+import type { VocRoutesOptions } from './index.js';
 
-export interface VocRoutesOptions {
-  sessionService: SessionService;
-  vocService: VocService;
-  vocReadService: VocReadService;
-  findingsService: FindingsService;
-  taskRequestsService: TaskRequestsService;
-  conversationService: ConversationService;
-  publicUpdateReviewCandidateService: PublicUpdateReviewCandidateService;
-  workspaceId: string;
-  rateLimitConfig?: {
-    mutation: Record<string, unknown>;
-    read?: Record<string, unknown>;
-    reporterEdit?: Record<string, unknown>;
-  };
-}
-
-export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts) => {
-  const {
-    sessionService,
-    vocService,
-    vocReadService,
-    findingsService,
-    taskRequestsService,
-    conversationService,
-    publicUpdateReviewCandidateService,
-    workspaceId,
-    rateLimitConfig,
-  } = opts;
-
-  app.route({
-    method: 'GET',
-    url: '/vocs/:id/public-update-candidates',
-    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    ...(rateLimitConfig?.read ? { config: { rateLimit: rateLimitConfig.read as never } } : {}),
-    handler: async (req, reply) => {
-      const sess = req.session;
-      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-      const { id: vocId } = req.params as { id: string };
-      if (!UUID_REGEX.test(vocId)) {
-        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
-          fields: [{ path: ['id'], code: 'invalid' }],
-        });
-      }
-      const result = await publicUpdateReviewCandidateService.list({
-        actor: {
-          actor_id: sess.actor_id,
-          workspace_id: sess.workspace_id,
-          role_level: sess.role_level,
-        },
-        vocId,
-      });
-      return reply.header('cache-control', 'private, no-cache').code(200).send(result);
-    },
-  });
-
-  app.route({
-    method: 'POST',
-    url: '/vocs/:id/apply-public-update-candidate',
-    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
-    handler: async (req, reply) => {
-      const sess = req.session;
-      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-      const { id: vocId } = req.params as { id: string };
-      if (!UUID_REGEX.test(vocId)) {
-        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
-          fields: [{ path: ['id'], code: 'invalid' }],
-        });
-      }
-      const parsed = resolvePublicUpdateReviewCandidateRequestSchema.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        return sendError(reply, 'validation.failed', 'invalid request body', {
-          fields: fieldsFromZodIssues(parsed.error.issues),
-        });
-      }
-      try {
-        const result = await publicUpdateReviewCandidateService.resolveCommand({
-          actor: {
-            actor_id: sess.actor_id,
-            workspace_id: sess.workspace_id,
-            role_level: sess.role_level,
-          },
-          vocId,
-          input: parsed.data,
-        });
-        return reply.code(201).send(result);
-      } catch (error) {
-        if (
-          error !== null &&
-          typeof error === 'object' &&
-          'message' in error &&
-          typeof error.message === 'string' &&
-          error.message.includes('public update review candidate terminal state is immutable')
-        ) {
-          throw new HttpError('conflict.stale_write', 'review candidate is already resolved');
-        }
-        throw error;
-      }
-    },
-  });
+export const vocCrudRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts) => {
+  const { sessionService, vocService, vocReadService, workspaceId, rateLimitConfig } = opts;
 
   app.route({
     method: 'POST',
@@ -183,90 +74,6 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
       const result = await vocService.createVocCommand({
         actor: { actor_id: sess.actor_id, workspace_id: sess.workspace_id },
         input,
-        idempotencyKey,
-        requestHash: hash,
-      });
-      return reply.code(result.status).send(result.body);
-    },
-  });
-
-  app.route({
-    method: 'POST',
-    url: '/vocs/:id/create-finding',
-    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
-    handler: async (req, reply) => {
-      const sess = req.session;
-      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-
-      const params = req.params as { id: string };
-      const vocId = params.id;
-      if (!UUID_REGEX.test(vocId)) {
-        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
-          fields: [{ path: ['id'], code: 'invalid' }],
-        });
-      }
-
-      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
-      const rawBody = (req.body ?? {}) as Record<string, unknown>;
-      const parsed = createFindingRequestSchema.safeParse(rawBody);
-      if (!parsed.success) {
-        return sendError(reply, 'validation.failed', 'invalid request body', {
-          fields: fieldsFromZodIssues(parsed.error.issues),
-        });
-      }
-
-      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.create_finding' });
-      const result = await findingsService.createFindingFromVoc({
-        actor: {
-          actor_id: sess.actor_id,
-          workspace_id: sess.workspace_id,
-          role_level: sess.role_level,
-        },
-        vocId,
-        input: parsed.data,
-        idempotencyKey,
-        requestHash: hash,
-      });
-      return reply.code(result.status).send(result.body);
-    },
-  });
-
-  app.route({
-    method: 'POST',
-    url: '/vocs/:id/request-task',
-    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
-    handler: async (req, reply) => {
-      const sess = req.session;
-      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-
-      const params = req.params as { id: string };
-      const vocId = params.id;
-      if (!UUID_REGEX.test(vocId)) {
-        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
-          fields: [{ path: ['id'], code: 'invalid' }],
-        });
-      }
-
-      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
-      const rawBody = (req.body ?? {}) as Record<string, unknown>;
-      const parsed = createTaskRequestFromVocRequestSchema.safeParse(rawBody);
-      if (!parsed.success) {
-        return sendError(reply, 'validation.failed', 'invalid request body', {
-          fields: fieldsFromZodIssues(parsed.error.issues),
-        });
-      }
-
-      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.request_task' });
-      const result = await taskRequestsService.createFromVoc({
-        actor: {
-          actor_id: sess.actor_id,
-          workspace_id: sess.workspace_id,
-          role_level: sess.role_level,
-        },
-        vocId,
-        input: parsed.data,
         idempotencyKey,
         requestHash: hash,
       });
@@ -544,144 +351,6 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
 
       const result = await vocReadService.getConversation({ actor, vocId, query: parsed.data });
       return reply.header('cache-control', 'private, no-cache').code(200).send(result);
-    },
-  });
-
-  // ── POST /vocs/:id/public-updates — Slice 3 #16 C4 ───────────────────────
-  // TODO(F21 follow-up): dedicated 60/min rate-limit bucket (currently uses shared mutation tier)
-  app.route({
-    method: 'POST',
-    url: '/vocs/:id/public-updates',
-    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
-    handler: async (req, reply) => {
-      const sess = req.session;
-      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-
-      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
-      const params = req.params as { id: string };
-      const vocId = params.id;
-
-      if (!UUID_REGEX.test(vocId)) {
-        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
-          fields: [{ path: ['id'], code: 'invalid' }],
-        });
-      }
-
-      const rawBody = (req.body ?? {}) as Record<string, unknown>;
-      const parsed = publicUpdateRequestSchema.safeParse(rawBody);
-      if (!parsed.success) {
-        return sendError(reply, 'validation.failed', 'invalid request body', {
-          fields: fieldsFromZodIssues(parsed.error.issues),
-        });
-      }
-
-      // cycle-2 B1 fix: include endpoint discriminator so same key+body across
-      // different conversation endpoints produces distinct hashes (no spurious
-      // idempotency replay across routes).
-      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.public_update' });
-      const result = await conversationService.postPublicUpdateCommand({
-        actor: {
-          actor_id: sess.actor_id,
-          workspace_id: sess.workspace_id,
-          role_level: sess.role_level,
-        },
-        vocId,
-        input: parsed.data,
-        idempotencyKey,
-        requestHash: hash,
-      });
-      return reply.code(result.status).send(result.body);
-    },
-  });
-
-  // ── POST /vocs/:id/reporter-replies — Slice 3 #16 C4 ─────────────────────
-  // TODO(F21 follow-up): dedicated 60/min rate-limit bucket
-  app.route({
-    method: 'POST',
-    url: '/vocs/:id/reporter-replies',
-    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
-    handler: async (req, reply) => {
-      const sess = req.session;
-      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-
-      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
-      const params = req.params as { id: string };
-      const vocId = params.id;
-
-      if (!UUID_REGEX.test(vocId)) {
-        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
-          fields: [{ path: ['id'], code: 'invalid' }],
-        });
-      }
-
-      const rawBody = (req.body ?? {}) as Record<string, unknown>;
-      const parsed = reporterReplyRequestSchema.safeParse(rawBody);
-      if (!parsed.success) {
-        return sendError(reply, 'validation.failed', 'invalid request body', {
-          fields: fieldsFromZodIssues(parsed.error.issues),
-        });
-      }
-
-      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.reporter_reply' });
-      const result = await conversationService.postReporterReplyCommand({
-        actor: {
-          actor_id: sess.actor_id,
-          workspace_id: sess.workspace_id,
-          role_level: sess.role_level,
-        },
-        vocId,
-        input: parsed.data,
-        idempotencyKey,
-        requestHash: hash,
-      });
-      return reply.code(result.status).send(result.body);
-    },
-  });
-
-  // ── POST /vocs/:id/internal-comments — Slice 3 #16 C4 ────────────────────
-  // TODO(F21 follow-up): dedicated 60/min rate-limit bucket
-  app.route({
-    method: 'POST',
-    url: '/vocs/:id/internal-comments',
-    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
-    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
-    handler: async (req, reply) => {
-      const sess = req.session;
-      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
-
-      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
-      const params = req.params as { id: string };
-      const vocId = params.id;
-
-      if (!UUID_REGEX.test(vocId)) {
-        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
-          fields: [{ path: ['id'], code: 'invalid' }],
-        });
-      }
-
-      const rawBody = (req.body ?? {}) as Record<string, unknown>;
-      const parsed = internalCommentRequestSchema.safeParse(rawBody);
-      if (!parsed.success) {
-        return sendError(reply, 'validation.failed', 'invalid request body', {
-          fields: fieldsFromZodIssues(parsed.error.issues),
-        });
-      }
-
-      const hash = hashRequestBody({ ...rawBody, vocId, route: 'voc.internal_comment' });
-      const result = await conversationService.postInternalCommentCommand({
-        actor: {
-          actor_id: sess.actor_id,
-          workspace_id: sess.workspace_id,
-          role_level: sess.role_level,
-        },
-        vocId,
-        input: parsed.data,
-        idempotencyKey,
-        requestHash: hash,
-      });
-      return reply.code(result.status).send(result.body);
     },
   });
 };

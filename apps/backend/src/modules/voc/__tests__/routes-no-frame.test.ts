@@ -1,6 +1,6 @@
 // Source guard for #392 — VOC routes must not own mutation frames.
 //
-// modules/voc/routes.ts used to inline `db.transaction` + the advisory-lock
+// modules/voc/routes/ used to inline `db.transaction` + the advisory-lock
 // idempotency frame in six handlers (and one bare transaction in the
 // apply-public-update-candidate handler). All of that now lives in application
 // commands (vocService / conversationService / publicUpdateReviewCandidateService
@@ -9,7 +9,8 @@
 // and template literals, so a `//` inside a string neither hides code nor is
 // mistaken for a comment.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -58,9 +59,16 @@ export function findFrameOwnership(source: string): string[] {
   return hits;
 }
 
-const routesSource = readFileSync(fileURLToPath(new URL('../routes.ts', import.meta.url)), 'utf8');
+const ROUTES_DIR = fileURLToPath(new URL('../routes', import.meta.url));
+const ROUTES_FILES = [
+  'conversation.ts',
+  'conversion.ts',
+  'crud.ts',
+  'index.ts',
+  'public-updates.ts',
+];
 
-describe('voc routes.ts frame-ownership guard (#392)', () => {
+describe('voc routes/ frame-ownership guard (#392)', () => {
   it('scanner self-test: flags real frames, ignores comments, catches spacing/generic variants', () => {
     expect(findFrameOwnership('await db.transaction(async (tx) => {})')).toHaveLength(1);
     expect(findFrameOwnership('await db.transaction (async (tx) => {})')).toHaveLength(1);
@@ -80,7 +88,12 @@ describe('voc routes.ts frame-ownership guard (#392)', () => {
     ).toHaveLength(1);
   });
 
-  it('routes.ts owns no transaction, advisory lock, or idempotency frame', () => {
-    expect(findFrameOwnership(routesSource)).toEqual([]);
+  it('routes/ owns no transaction, advisory lock, or idempotency frame', () => {
+    const names = readdirSync(ROUTES_DIR).filter((n) => n.endsWith('.ts')).sort();
+    expect(names).toEqual(ROUTES_FILES);
+    for (const name of names) {
+      const source = readFileSync(join(ROUTES_DIR, name), 'utf8');
+      expect(findFrameOwnership(source), name).toEqual([]);
+    }
   });
 });
