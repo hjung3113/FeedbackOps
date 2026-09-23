@@ -25,12 +25,13 @@ import { useNavigate } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
 
-const PRIORITY_SEVERITY: Record<TaskDetailDto['priority'], 'low' | 'medium' | 'high' | 'critical'> = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  urgent: 'critical',
-};
+const PRIORITY_SEVERITY: Record<TaskDetailDto['priority'], 'low' | 'medium' | 'high' | 'critical'> =
+  {
+    low: 'low',
+    medium: 'medium',
+    high: 'high',
+    urgent: 'critical',
+  };
 
 const SECTIONS: PanelSection[] = [
   { id: 'overview', label: 'Overview' },

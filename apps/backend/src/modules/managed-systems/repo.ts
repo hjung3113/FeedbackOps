@@ -26,7 +26,5 @@ export async function lockManagedSystem(
     for update
   `);
   const row = rows.rows[0];
-  return row
-    ? { id: row.id, workspace_id: row.workspace_id, archived_at: row.archived_at }
-    : null;
+  return row ? { id: row.id, workspace_id: row.workspace_id, archived_at: row.archived_at } : null;
 }
