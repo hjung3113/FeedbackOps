@@ -59,11 +59,12 @@ import { Filter, Layers, Plus, Settings, Shield } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
+import { envelopeMessage } from '../../../features/admin/lib/envelopeMessage.js';
+import { groupAreasByMs } from '../../../features/admin/lib/groupAreasByMs.js';
 import { scopeMark } from '../../../features/admin/lib/scopeMark.js';
 import { PermissionGate } from '../../../features/admin/permissions/permission-gate.js';
 import {
   type AnalyticsAreaDto,
-  ApiError,
   type ManagedSystemDto,
   type RegisterAnalyticsAreaBody,
   type ResolveActorsResponse,
@@ -94,12 +95,6 @@ export const Route = createFileRoute('/_authed/admin/analytics-areas')({
   validateSearch: (raw) => analyticsAreasSearchSchema.parse(raw),
   component: AnalyticsAreasAdminPage,
 });
-
-function envelopeMessage(err: unknown): string {
-  if (err instanceof ApiError) return `${err.envelope.code}: ${err.envelope.message}`;
-  if (err instanceof Error) return err.message;
-  return 'unknown error';
-}
 
 const AA_KEY = ['analytics-areas'] as const;
 const SUBTITLE =
@@ -203,20 +198,6 @@ export function AnalyticsAreasAdminPage() {
   );
 }
 
-function groupByMs(
-  items: AnalyticsAreaDto[],
-  includeArchived: boolean,
-): Map<string, AnalyticsAreaDto[]> {
-  const out = new Map<string, AnalyticsAreaDto[]>();
-  for (const a of items) {
-    if (!includeArchived && a.archived_at !== null) continue;
-    const arr = out.get(a.managed_system_id) ?? [];
-    arr.push(a);
-    out.set(a.managed_system_id, arr);
-  }
-  return out;
-}
-
 export function AnalyticsAreasBody({
   includeArchived,
   managedSystemId,
@@ -290,7 +271,7 @@ export function AnalyticsAreasBody({
   }, [aaQuery.data, areas, navigate, selectedId]);
 
   const areasByMs = useMemo(
-    () => groupByMs(areas, includeArchived),
+    () => groupAreasByMs(areas, includeArchived),
     [areas, includeArchived],
   );
   const renderedAreaCount = useMemo(
