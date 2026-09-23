@@ -1,5 +1,5 @@
+import { resolveVocEndpoint } from '../entity-links/index.js';
 import type { EntityLinkProvider } from '../entity-links/provider-types.js';
-import { resolveVocEndpoint } from '../entity-links/repo.js';
 
 export const vocEntityLinkProvider: EntityLinkProvider = {
   entityType: 'voc',

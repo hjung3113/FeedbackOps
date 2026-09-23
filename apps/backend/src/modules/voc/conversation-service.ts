@@ -14,24 +14,30 @@
 
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { actors } from '../../db/schema/core.js';
-import { HttpError } from '../../lib/errors.js';
-import { sanitizeTipTap, type RichContentError } from '../../lib/rich-content/sanitize.js';
-import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
 import type {
   InternalCommentRequest,
   PublicUpdateRequest,
   ReporterReplyRequest,
   VocDetailEnvelope,
 } from '@fops/shared';
+import type { Db } from '../../db/client.js';
+import { actors } from '../../db/schema/core.js';
+import type { Tx } from '../../db/tx.js';
+import { HttpError } from '../../lib/errors.js';
+import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
 
+import {
+  LinkAttachmentsRejected,
+  linkAttachments,
+  linkRejectedFields,
+} from '../attachments/index.js';
+import type { RoleLevel } from '../auth/session-service.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
-import type { RoleLevel } from '../auth/session-service.js';
-import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
+import type { VocReadService } from './read-service.js';
 import {
   insertInternalComment,
   insertPublicUpdate,
@@ -39,13 +45,7 @@ import {
   selectVocForUpdate,
   updateVocReporterStatus,
 } from './repo.js';
-import {
-  LinkAttachmentsRejected,
-  linkAttachments,
-  linkRejectedFields,
-} from '../attachments/repo.js';
-import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
-import type { VocReadService } from './read-service.js';
+import { type ReporterFacingStatus, nextReporterStates } from './transitions.js';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -164,11 +164,7 @@ function mapTriageDenyToHttpError(
       },
     );
   }
-  return new HttpError(
-    'permission.denied',
-    `voc.triage denied: ${reason}`,
-    { reason },
-  );
+  return new HttpError('permission.denied', `voc.triage denied: ${reason}`, { reason });
 }
 
 // ── Sanitize helper ───────────────────────────────────────────────────────────
@@ -184,7 +180,10 @@ function sanitizeOrThrow(
   surface: 'public-update' | 'reporter-reply' | 'internal-comment',
   doc: unknown,
 ): unknown {
-  const result = sanitizeTipTap({ surface, doc: doc as Parameters<typeof sanitizeTipTap>[0]['doc'] });
+  const result = sanitizeTipTap({
+    surface,
+    doc: doc as Parameters<typeof sanitizeTipTap>[0]['doc'],
+  });
   if (!result.ok) {
     throw new HttpError(result.error.code, result.error.reason, {
       fields: [
@@ -242,11 +241,7 @@ export function createConversationService(deps: {
       row.primaryManagedSystemId,
     );
     if (decision.allow !== true) {
-      throw mapTriageDenyToHttpError(
-        decision.reason,
-        actor.role_level,
-        row.primaryManagedSystemId,
-      );
+      throw mapTriageDenyToHttpError(decision.reason, actor.role_level, row.primaryManagedSystemId);
     }
 
     const currentStatus = row.reporterFacingStatus as ReporterFacingStatus;
@@ -285,7 +280,10 @@ export function createConversationService(deps: {
       throw new HttpError(
         'reporter_facing_status.invalid_transition',
         `transition from ${currentStatus} to ${nextStatus} is forbidden: ${reason ?? 'see transition table'}`,
-        { fields: [{ path: ['next_reporter_facing_status'], code: 'invalid_transition' }], detail: { reason: reason ?? null } },
+        {
+          fields: [{ path: ['next_reporter_facing_status'], code: 'invalid_transition' }],
+          detail: { reason: reason ?? null },
+        },
       );
     } else {
       // nextStatus not in allowed OR forbidden — unknown transition.
@@ -324,9 +322,7 @@ export function createConversationService(deps: {
     // (skip_public_update=false) carries attachment_ids; the skip shape has
     // no body and rejects unknown keys at the schema layer.
     const attachmentIds: string[] =
-      !input.skip_public_update && input.attachment_ids
-        ? input.attachment_ids
-        : [];
+      !input.skip_public_update && input.attachment_ids ? input.attachment_ids : [];
     if (attachmentIds.length > 0) {
       try {
         await linkAttachments(tx, {
@@ -383,7 +379,11 @@ export function createConversationService(deps: {
     // 10. Refresh VocDetailEnvelope inside the same tx.
     const vocEnvelope = await deps.vocReadService.composeDetailEnvelope({
       tx,
-      actor: { actor_id: actor.actor_id, workspace_id: actor.workspace_id, role_level: actor.role_level },
+      actor: {
+        actor_id: actor.actor_id,
+        workspace_id: actor.workspace_id,
+        role_level: actor.role_level,
+      },
       vocId,
     });
 
@@ -428,11 +428,9 @@ export function createConversationService(deps: {
 
     // 2. Actor must be the reporter.
     if (actor.actor_id !== row.reporterId) {
-      throw new HttpError(
-        'permission.denied',
-        'only the reporter may post a reporter reply',
-        { reason: 'not_reporter' },
-      );
+      throw new HttpError('permission.denied', 'only the reporter may post a reporter reply', {
+        reason: 'not_reporter',
+      });
     }
 
     // 3. Sanitize body.
@@ -506,7 +504,11 @@ export function createConversationService(deps: {
     // 7. Refresh envelope.
     const vocEnvelope = await deps.vocReadService.composeDetailEnvelope({
       tx,
-      actor: { actor_id: actor.actor_id, workspace_id: actor.workspace_id, role_level: actor.role_level },
+      actor: {
+        actor_id: actor.actor_id,
+        workspace_id: actor.workspace_id,
+        role_level: actor.role_level,
+      },
       vocId,
     });
 
@@ -556,11 +558,7 @@ export function createConversationService(deps: {
       row.primaryManagedSystemId,
     );
     if (decision.allow !== true) {
-      throw mapTriageDenyToHttpError(
-        decision.reason,
-        actor.role_level,
-        row.primaryManagedSystemId,
-      );
+      throw mapTriageDenyToHttpError(decision.reason, actor.role_level, row.primaryManagedSystemId);
     }
 
     // 3. Sanitize body.
@@ -582,9 +580,7 @@ export function createConversationService(deps: {
         );
       }
     }
-    const bodyMentionIds = dedupe(
-      mentionNodes.map((n) => n.attrs!.actor_id as string),
-    );
+    const bodyMentionIds = dedupe(mentionNodes.map((n) => n.attrs!.actor_id as string));
 
     const requestMentionIds = dedupe(input.mentions ?? []);
 
@@ -603,10 +599,7 @@ export function createConversationService(deps: {
         .select({ id: actors.id })
         .from(actors)
         .where(
-          and(
-            eq(actors.workspaceId, actor.workspace_id),
-            inArray(actors.id, requestMentionIds),
-          ),
+          and(eq(actors.workspaceId, actor.workspace_id), inArray(actors.id, requestMentionIds)),
         );
       if (foundRows.length !== requestMentionIds.length) {
         throw new HttpError(
@@ -664,7 +657,11 @@ export function createConversationService(deps: {
     // 8. Refresh envelope.
     const vocEnvelope = await deps.vocReadService.composeDetailEnvelope({
       tx,
-      actor: { actor_id: actor.actor_id, workspace_id: actor.workspace_id, role_level: actor.role_level },
+      actor: {
+        actor_id: actor.actor_id,
+        workspace_id: actor.workspace_id,
+        role_level: actor.role_level,
+      },
       vocId,
     });
 
@@ -798,11 +795,17 @@ function isTriggerActorMismatchError(err: unknown): boolean {
   // pg-node surfaces the message on `message` and the sqlstate on `code`.
   // The trigger RAISE EXCEPTION message is 'voc_reporter_reply_actor_must_be_reporter'
   // (migration 0010 function voc_reporter_reply_actor_check).
-  if (typeof e.message === 'string' && e.message.includes('voc_reporter_reply_actor_must_be_reporter')) {
+  if (
+    typeof e.message === 'string' &&
+    e.message.includes('voc_reporter_reply_actor_must_be_reporter')
+  ) {
     return true;
   }
   // Belt-and-suspenders: also match on legacy message variant.
-  if (typeof e.message === 'string' && e.message.includes('voc_reporter_reply.actor_must_match_reporter')) {
+  if (
+    typeof e.message === 'string' &&
+    e.message.includes('voc_reporter_reply.actor_must_match_reporter')
+  ) {
     return true;
   }
   // Belt-and-suspenders: also match on routine / constraint name if present.

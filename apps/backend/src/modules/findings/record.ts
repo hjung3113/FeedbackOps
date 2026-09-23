@@ -6,8 +6,8 @@ import {
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
 import { HttpError } from '../../lib/errors.js';
-import { insertActiveEntityLink } from '../entity-links/repo.js';
-import { lockTaskById } from '../tasks/repo.js';
+import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
+import { lockTaskById } from '../tasks/index.js';
 import {
   findCreatedFindingSourceLink,
   findFindingById,

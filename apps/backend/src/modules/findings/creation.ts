@@ -6,14 +6,14 @@ import {
 } from '@fops/shared';
 import { HttpError } from '../../lib/errors.js';
 import { lockAnalyticsArea } from '../analytics-areas/index.js';
-import { insertActiveEntityLink } from '../entity-links/repo.js';
+import { createEntityLink as insertActiveEntityLink } from '../entity-links/index.js';
 import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import {
   resolveApprovedSurveyResponseExcerpts,
   resolveSurveyResponseEvidenceAccess,
 } from '../surveys/evidence-access.js';
-import { selectVocForUpdate } from '../voc/repo.js';
+import { selectVocForUpdate } from '../voc/index.js';
 import { incrementFindingEvidenceCount, insertEvidenceHighlight, insertFinding } from './repo.js';
 import { canManageFinding, canReadSourceVoc, toDto } from './service-shared.js';
 import type { FindingsActor, FindingsServiceDeps } from './service.js';
