@@ -26,6 +26,7 @@ import {
 } from '@fops/shared';
 
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+import { requireIdempotencyKey, requireIfMatch, UUID_REGEX } from '../../lib/http-headers.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -36,11 +37,6 @@ import type { ConversationService } from './conversation-service.js';
 import type { PublicUpdateReviewCandidateService } from './public-update-review-candidates/review-service.js';
 import type { ReadActorContext, VocReadService } from './read-service.js';
 import type { VocService } from './service.js';
-
-const IDEMPOTENCY_KEY_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
-
-const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export interface VocRoutesOptions {
   sessionService: SessionService;
@@ -70,34 +66,6 @@ export const vocRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts)
     workspaceId,
     rateLimitConfig,
   } = opts;
-
-  function requireIfMatch(headers: Record<string, unknown>): string {
-    const raw = headers['if-match'];
-    const value = Array.isArray(raw) ? raw[0] : raw;
-    if (typeof value !== 'string' || value.length === 0) {
-      throw new HttpError('validation.failed', 'If-Match header required', {
-        fields: [{ path: ['headers', 'if-match'], code: 'required' }],
-      });
-    }
-    return value;
-  }
-
-  function requireIdempotencyKey(headers: Record<string, unknown>): string {
-    const raw = headers['idempotency-key'];
-    const headerKey = Array.isArray(raw) ? raw[0] : raw;
-    if (typeof headerKey !== 'string' || headerKey.length === 0) {
-      throw new HttpError('validation.failed', 'Idempotency-Key header required', {
-        fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }],
-      });
-    }
-    if (!IDEMPOTENCY_KEY_REGEX.test(headerKey)) {
-      throw new HttpError(
-        'validation.malformed_idempotency_key',
-        'Idempotency-Key must be a UUIDv4',
-      );
-    }
-    return headerKey;
-  }
 
   app.route({
     method: 'GET',

@@ -22,7 +22,12 @@ It does not own source object lifecycle.
 
 ## Relation Types
 
-Allowed relation types are the registry from `docs/design/11-entity-linking.md`.
+Relation type meaning is owned by this contract, not by
+`docs/design/11-entity-linking.md`.
+
+Allowed `relation_type` values and registered source/target pairs are the
+runtime registry: `entityLinkRelationTypeSchema` and
+`registeredEntityLinkPairs` in `packages/shared/src/entity-links.ts`.
 
 Forbidden:
 

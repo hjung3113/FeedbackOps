@@ -2,15 +2,14 @@
 
 ## Ownership
 
-My Work owns actor-centered queues across assigned VOC triage, Task Requests, Tasks, Surveys, and review actions.
+Not implemented. ADR-0038 excludes a My Work view from MVP. ADR-0040 keeps this directory as the future implementation location only.
 
-It composes backend-provided summaries; it does not own VOC, Task Request, Task, Survey, Finding, Permission, Entity Link, or domain lifecycle rules.
+This folder does not own a screen. Home's assigned-work panel is `features/home/`, not this directory.
 
 ## Route Boundary
 
-- Owns `/my-work`.
-- May link to selected detail routes in VOC, Tasks, Surveys, and Integration.
-- Must preserve source-system route state when opening detail panels.
+- `/my-work` is not a registered route. Do not add one in MVP.
+- Do not treat `/tasks?view=my` as this feature. That search value is an unfiltered backlog alias of `TaskListRoute`.
 
 ## Rules
 
@@ -21,4 +20,4 @@ It composes backend-provided summaries; it does not own VOC, Task Request, Task,
 
 ## Verification
 
-- Test assigned-work filtering, permission-limited linked context, route restore, and cross-system pending/error states when touched.
+- No route tests until a route exists. A change that adds `/my-work` or makes `view=my` an assignee filter is out of MVP and needs an ADR reopen, not a silent route.

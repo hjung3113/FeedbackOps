@@ -1,7 +1,7 @@
 // /findings — ADR-0020 ListShell finding list + right detail panel.
 
-import { FindingDetailPanel } from '@/features/integration/components/FindingDetail';
-import { useFindingsList } from '@/features/integration/hooks/useFindingsList';
+import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
+import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { ApiError } from '@/lib/api/types';
 import type { FindingDto } from '@fops/shared';

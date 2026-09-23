@@ -5,7 +5,7 @@
  *   1. voc-clusters / tasks / saved-views must not import another module's
  *      repo (`findings/repo`, `findings/repo-read`, `entity-links/repo`,
  *      `task-requests/repo`) — cross-module access goes through the owning
- *      module's application seam (`commands.ts`, `list-query.ts`).
+ *      module's application seam (`commands.ts`) or the shared list contracts in `@fops/shared`.
  *   2. No application file under modules/ (anything but `routes.ts` and
  *      `index.ts` barrels) may import a `routes` module (HTTP modules are
  *      not contracts).

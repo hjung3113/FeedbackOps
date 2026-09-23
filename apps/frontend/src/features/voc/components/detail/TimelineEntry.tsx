@@ -11,7 +11,7 @@ import {
   type TipTapDoc,
 } from '@fops/ui';
 import { useMe } from '@/lib/auth/useMe';
-import { formatVocCreatedAt } from '@/features/voc/components/list/VocRow';
+import { formatVocCreatedAt } from '@/features/voc/lib/format-date';
 import { AttachmentChipList } from './AttachmentChip';
 
 // ── Korean labels ────────────────────────────────────────────────────────────

@@ -20,8 +20,7 @@ const GUARDED_FILES = [
   'modules/voc/jobs/embed-voc.ts',
   'modules/voc/jobs/embedding-backfill.ts',
   'modules/voc/jobs/index.ts',
-  'modules/tasks/jobs/released-review-candidates.ts',
-  'modules/tasks/jobs/index.ts',
+  'modules/voc/jobs/released-review-candidates.ts',
   'lib/jobs.ts',
   'lib/storage/factory.ts',
 ];

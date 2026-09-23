@@ -23,7 +23,7 @@ import {
   vocs,
 } from '../../db/schema/voc.js';
 import type { Tx } from '../../db/tx.js';
-import { allManagedSystemIds } from '../core/managed-systems/read-projections.js';
+import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
 import { actorScopeForCapability } from '../permissions/scope-service.js';
 import { SEVERITY_ORDINAL, SORT_CONFIG } from './cursor.js';

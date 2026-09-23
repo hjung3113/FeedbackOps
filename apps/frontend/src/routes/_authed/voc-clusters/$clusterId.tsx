@@ -57,7 +57,7 @@ import { useRequestTaskFromCluster } from "@/features/voc-cluster/hooks/useReque
 import { useVocClusterDetail } from "@/features/voc-cluster/hooks/useVocClusterDetail";
 import { useVocClusterList } from "@/features/voc-cluster/hooks/useVocClusterList";
 import { useManagedSystem } from "@/features/voc/hooks/useManagedSystem";
-import { useFindingsList } from "@/features/integration/hooks/useFindingsList";
+import { useFindingsList } from "@/features/findings/hooks/useFindingsList";
 import { EntityRelationRow } from "@/features/integration/components/EntityRelationRow";
 import { type ApiError, errorMapper, useIdempotencyKey } from "@/lib/api";
 import { useMe } from "@/lib/auth/useMe";

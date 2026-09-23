@@ -10,10 +10,6 @@
 //   (a) features/integration must not import features/voc|admin|tasks.
 //   (b) features/voc and features/tasks must not import
 //       features/integration/components/.
-//   (c) documented exception: tasks/routes/task-requests/TaskRequestPanel.tsx
-//       → '@/features/integration/hooks/useFindingDetail' (a read hook, not a
-//       presentation/command module) — and it must be the ONLY tasks file
-//       importing integration internals.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -278,16 +274,9 @@ describe('no cross-feature imports (#399)', () => {
     expect(fromVoc).toEqual([]);
   });
 
-  it('features/tasks imports integration internals only via the documented exception', () => {
+  it('features/tasks imports no integration internals', () => {
     const fromTasks = integrationImportsFromVocAndTasks().filter((e) => e.feature === 'tasks');
-    expect(fromTasks).toEqual([
-      {
-        feature: 'tasks',
-        rel: 'tasks/routes/task-requests/TaskRequestPanel.tsx',
-        spec: '@/features/integration/hooks/useFindingDetail',
-        target: 'features/integration/hooks/useFindingDetail',
-      },
-    ]);
+    expect(fromTasks).toEqual([]);
   });
 
   it('no voc/tasks file imports integration components', () => {

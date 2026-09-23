@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { formatVocCreatedAt } from '../VocRow';
+import { formatVocCreatedAt } from '../format-date';
 
 describe('formatVocCreatedAt', () => {
   const NOW = new Date('2026-01-15T12:00:00Z').getTime();

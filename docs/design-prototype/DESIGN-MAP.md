@@ -13,7 +13,7 @@
 
 | Symbol | Meaning |
 |---|---|
-| 🧱 | Shared primitive in `components.jsx` |
+| 🧱 | Shared primitive (primitives/badges/shells/panel/entities/live.jsx) |
 | 🧩 | Cross-cutting component in its own file (rich-editor, entity-preview, cmdk) |
 | 🪟 | Screen surface — usually `screen-*.jsx` |
 | 🏷️ | Pack 10 promotion / extraction |
@@ -114,7 +114,7 @@ Acceptance use:
 
 ## 3. Component inventory by file
 
-### `components.jsx` (shared primitives) 🧱
+### Shared primitives (primitives/badges/shells/panel/entities/live.jsx) 🧱
 
 | Component | First used | Promoted in | Backing spec |
 |---|---|---|---|

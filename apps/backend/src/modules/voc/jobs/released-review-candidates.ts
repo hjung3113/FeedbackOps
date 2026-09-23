@@ -1,7 +1,7 @@
 import type { Job, PgBoss } from "pg-boss";
 
 import { JOB_WORK_OPTIONS, withJobLogging, type JobLog } from "../../../lib/job-log.js";
-import type { PublicUpdateReviewCandidatesService } from "../../voc/public-update-review-candidates/service.js";
+import type { PublicUpdateReviewCandidatesService } from "../public-update-review-candidates/service.js";
 
 export const TASK_RELEASED_REVIEW_CANDIDATES_QUEUE =
   "tasks.create_public_update_review_candidates";

@@ -25,11 +25,11 @@ vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
   usePermissionCheck: () => ({ data: { state: 'approved' } }),
 }));
 
-vi.mock('@/features/integration/hooks/useEvidenceHighlights', () => ({
+vi.mock('@/features/findings/hooks/useEvidenceHighlights', () => ({
   useEvidenceHighlights: () => ({ data: [], isLoading: false, isError: false }),
 }));
 
-vi.mock('@/features/integration/hooks/useFindingDetail', () => ({
+vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
   useFindingDetail: () => ({
     data: {
       id: '10000000-0000-0000-0000-000000000001',
@@ -58,11 +58,11 @@ vi.mock('@/features/integration/hooks/useFindingDetail', () => ({
   }),
 }));
 
-vi.mock('@/features/integration/hooks/useFindingStatusMutation', () => ({
+vi.mock('@/features/findings/hooks/useFindingStatusMutation', () => ({
   useFindingStatusMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-vi.mock('@/features/integration/hooks/useRequestTaskFromFinding', () => ({
+vi.mock('@/features/findings/hooks/useRequestTaskFromFinding', () => ({
   useRequestTaskFromFinding: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
 }));
 

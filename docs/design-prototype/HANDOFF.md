@@ -87,8 +87,17 @@ Tweaks panel (bottom-right toggle in the toolbar) flips between screens, MS scop
 FeedbackOps.html         entry; loads scripts in this order:
   styles.css             all design tokens + utility classes (single source of truth)
   data.js                mock domain data (Vocs, Findings, Tasks, Users, ManagedSystems, ...)
-  components.jsx         primitives: Icon, Avatar, Button, badges, PageShell,
-                         LinkedEntityTrail, PermissionBlockedPanel, ListToolbar, ...
+  primitives.jsx         Icon (+ ICON_PATHS), Avatar, Button, SearchInput, HelpTip, priorityToSeverity
+  badges.jsx             ReporterStatusBadge, SeverityBadge, ConfidenceBadge, FindingStatusBadge,
+                         TaskRequestBadge, ManagedSystemPill, ClusterStatusBadge, SurveyStatusBadge,
+                         CoverageBar, SeverityIndicator, OutlineBadge, Sentiment/Importance chips
+  shells.jsx             PageShell, PageShellBackButton, ListToolbar, ListShell,
+                         WorkbenchShell, ShellTitle
+  panel.jsx              FieldRow, PanelSectionTitle, DetailPanelSectionNav, DetailPanelHeader,
+                         PanelTitleBlock, NestedTextBlock, UserChip, Callout, PermissionBlockedPanel
+  entities.jsx           EntityNode, LinkedEntityTrail, EntityIconBadge, SourceTypeIcon,
+                         EntityRelationRow, ObjectCard
+  live.jsx               useTicker, relativeFromNow, LiveTimestamp, LiveCount
   entity-preview.jsx     EntityHoverPreview — hover popover for entity refs (VOC/FIN/TASK ids)
   rich-editor.jsx        RichEditor — 4-surface contentEditable editor
                          (voc-description / reporter-reply / public-update / internal-comment)
@@ -179,7 +188,7 @@ Use this when handing the Open Design prototype back to the linked `FeedbackOps`
 
 ## 4. Design system mapping
 
-Source of truth: [`DESIGN.md`](../DESIGN.md). Implementation contract: [`docs/frontend/ui-design-system.md`](../docs/frontend/ui-design-system.md).
+Source of truth: [`docs/frontend/tokens.md`](../frontend/tokens.md). Implementation contract: [`docs/frontend/ui-design-system.md`](../docs/frontend/ui-design-system.md).
 
 ### Raw tokens (DESIGN.md → CSS custom properties)
 
@@ -296,7 +305,7 @@ The docs are sufficient for continuation, but only conditionally sufficient for 
 
 Aligned with `docs/frontend/component-inventory.md`. Source locations:
 
-### Primitives (`components.jsx`)
+### Primitives (`primitives.jsx` / `badges.jsx` / `shells.jsx`)
 - `<Icon>` — inline SVG, 45+ icon paths (`ICON_PATHS`)
 - `<Avatar>` — initials avatar w/ color
 - `<Button>` — variants: primary, secondary, subtle, ghost, danger; sizes sm/md/lg; supports `icon`
@@ -308,7 +317,7 @@ Aligned with `docs/frontend/component-inventory.md`. Source locations:
 - `<WorkbenchShell>` — unified route wrapper for work surfaces whose body is not a simple object list: Tasks board, Triage, Survey Builder, Survey Result. Owns the toolbar slot, optional below-toolbar content, body, and optional detail panel.
 - `<ShellTitle>` — shared icon + title + badge block for workbench/list headers. Tasks board and Triage currently use this so the title position and rhythm match.
 
-### Detail panel scaffolding (`components.jsx`)
+### Detail panel scaffolding (`panel.jsx`)
 - `<DetailPanelHeader kind id onClose extras>` — colored kind-badge + id + close + custom extras. `kind` ∈ {voc, finding, task, request, cluster, triage, survey, evidence, milestone, permission}; colors from `DETAIL_PANEL_KINDS`.
 - `<DetailPanelSectionNav sections scrollRef>` — sticky horizontal section jump bar for long drawer/detail panels. Tracks active anchors through `IntersectionObserver`, falls back to scroll math, and uses `data-anchor="<id>"` blocks inside `.panel-scroll`.
 - `<PanelTitleBlock title>{badges}</PanelTitleBlock>` — h2 + flex-wrap badge row.

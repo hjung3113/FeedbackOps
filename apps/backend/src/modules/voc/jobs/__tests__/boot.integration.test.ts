@@ -41,6 +41,9 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
       // Registration must not depend on the provider being enabled: enabling a
       // provider is a config change, never a queue-registration change.
       embeddingEnabled: false,
+      publicUpdateReviewCandidatesService: {
+        createForReleasedTask: async () => ({ inserted: 0 }),
+      },
       log: { info: () => {}, warn: () => {}, error: () => {} },
     });
   });

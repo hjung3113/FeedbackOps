@@ -8,7 +8,7 @@ It complements:
 
 ```text
 docs/frontend/ui-design-system.md
-DESIGN.md
+docs/frontend/tokens.md
 docs/design/12-ui-ux-principles.md
 ```
 
@@ -101,7 +101,7 @@ Rules:
 ```text
 - These components expose visual tokens and accessibility behavior.
 - They do not know FeedbackOps domain concepts.
-- They must be normalized to frontend semantic tokens derived from DESIGN.md.
+- They must be normalized to frontend semantic tokens derived from docs/frontend/tokens.md.
 - Feature screens should not import raw Radix primitives directly unless a wrapper does not exist yet.
 ```
 
@@ -547,7 +547,7 @@ Rules:
 Recommended order:
 
 ```text
-1. Implement semantic frontend tokens derived from DESIGN.md and the base theme.
+1. Implement semantic frontend tokens derived from docs/frontend/tokens.md and the base theme.
 2. Add shadcn/ui Radix-backed primitives.
 3. Build AppShell, Button, Badge, Field, Dialog, Sheet, Popover, Tooltip, Command, Toast.
 4. Build StatusBadge, SignalBadge, PermissionGate, RedactedValue, PermissionBlockedPanel.

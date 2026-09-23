@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { normalizePgTimestampToIso } from '../service.js';
+import { normalizePgTimestampToIso } from '../../../lib/pg-timestamp.js';
 
 describe('normalizePgTimestampToIso (#377 / #449 review)', () => {
   it('normalizes the UTC "+00" offset this DB currently uses', () => {

@@ -55,7 +55,7 @@ vi.mock('@fops/ui', async (importOriginal) => {
   };
 });
 
-vi.mock('@/features/integration/components/FindingDetail', () => ({
+vi.mock('@/features/findings/components/FindingDetail', () => ({
   FindingDetailPanel: ({ findingId }: { findingId: string }) => (
     <section data-testid="finding-detail-panel">finding:{findingId}</section>
   ),

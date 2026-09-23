@@ -9,7 +9,7 @@ vi.mock('@fops/ui', async (importOriginal) => {
     RichContentRenderer: () => <div data-testid="rce" />,
   };
 });
-vi.mock('@/features/voc/components/list/VocRow', () => ({
+vi.mock('@/features/voc/lib/format-date', () => ({
   formatVocCreatedAt: () => '방금 전',
 }));
 
