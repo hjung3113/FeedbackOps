@@ -27,6 +27,8 @@ Limit responses use the ADR-0012 envelope: `{ code: 'rate_limited.actor', messag
 
 Rate-limit decisions are **not** audited (volume; would drown the audit log). They are logged at `warn` level so spikes are still visible in the company log collector (per ADR-0013).
 
+Named per-route tiers are the `rateLimitConfig` object decorated on the app in `apps/backend/src/server.ts`. Pass the tier a plugin needs into that plugin's options, then set it on the one route with `config: { rateLimit: rateLimitConfig.<tier> }` (`apps/backend/src/modules/permissions/routes.ts` uses `sensitive`; `apps/backend/src/modules/attachments/routes.ts` uses `attachmentMutation`). The per-actor and per-IP defaults in the list above are the global plugin `max` in that same file, not keys on `rateLimitConfig`.
+
 ## Security headers
 
 `@fastify/helmet` is mounted with the defaults enabled (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Strict-Transport-Security`, `Referrer-Policy: strict-origin-when-cross-origin`) **plus** an explicit Content-Security-Policy:

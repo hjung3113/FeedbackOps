@@ -79,11 +79,11 @@ voc_cluster
 finding
 - findings
 - evidence_highlights
-- finding_comments
+- finding_comments (Finding progress notes; `docs/adr/0049-finding-task-progress-notes.md`)
 
 task
 - tasks
-- task_comments
+- task_comments (Task progress notes; `docs/adr/0049-finding-task-progress-notes.md`)
 - work_initiatives / projects when future execution grouping is introduced
 - milestones when future execution grouping is introduced
 

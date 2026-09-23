@@ -87,7 +87,8 @@ audit events:
 ```
 
 These endpoints do not create Task rows, convert to Task, or link existing
-Tasks. Conversion and link-existing-Task remain issue #134.
+Tasks. See "Task Conversion Contract" below (`POST /task-requests/:id/convert`)
+and `POST /task-requests/:id/link-task` for those — both shipped in issue #134.
 
 ## Task Conversion Contract
 

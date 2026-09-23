@@ -19,3 +19,7 @@ Reopening this means proposing a specific automatic mapping (with its audit stor
 ## Implementation note — Issue #165
 
 Task release now durably creates a VOC-owned Public-Update review candidate through a background job. It does not write `reporter_facing_status` and does not create a `voc_public_updates` row; a later reviewer command remains the only path to either action.
+
+## Implementation note — ADR-0010 amendment 2026-09-24
+
+The Korean strings above are the reporter-visible labels. `voc.vocs.reporter_facing_status` stores the English keys `received`, `reviewing`, `assigned`, `progress`, `prep`, `resolved`, `reopened`, `closed`. Two maps render those labels and must stay the same: `REPORTER_STATUS_LABELS` in `apps/frontend/src/lib/copy/reporter-status-labels.ts`, and `LABELS` in `packages/ui/src/badges/ReporterStatusBadge.tsx`. The no-automatic-mapping rules in this ADR are unchanged.

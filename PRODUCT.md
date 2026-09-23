@@ -77,7 +77,7 @@ Five strategic principles derived from `AGENTS.md`, `apps/frontend/AGENTS.md`, A
 ## Accessibility & Inclusion
 
 - **WCAG 2.2 AA target inherited from ADR-0016 and re-validated under ADR-0021.** Dark-theme contrast guarantees do NOT transfer to the inverted light palette; every component contrast pair must be re-verified. Slice 3 final review includes an axe-core scan against touched routes.
-- **Primary locale is Korean (`<html lang="ko">`) per ADR-0010** (single-locale-with-catalog), with English preserved verbatim for domain / role / system terms. No machine translation of either side.
+- **Primary locale is Korean (`<html lang="ko">`) per ADR-0010** (amended 2026-09-24: no i18next catalog; chrome is inline or `lib/copy/*`, API errors are `errorMapper.ts` `CATALOG`), with English preserved verbatim for domain / role / system terms. No machine translation of either side.
 - **Icon-only controls require accessible labels.** `lucide-react` is the icon set; every icon-only button carries an `aria-label` or visible adjacent text.
 - **Keyboard focus, hover, selected, active, disabled, loading, error, and permission-limited states are visually distinct** (per `apps/frontend/AGENTS.md`). Focus ring uses `--color-neon-lime` (now Samsung-blue `#1428a0`, name preserved for token continuity per ADR-0021).
 - **Permission-limited surfaces are first-class.** `<PermissionBlockedPanel>` renders `blocked_not_requestable`, `summary_visible`, and `denied` states — never a blank failure, never a stack trace.
