@@ -83,7 +83,32 @@ Dashboard owns:
 - action queues
 - coverage projections
 - missing-link projections
+
+Authentication owns:
+- AuthProvider seam (mock and OIDC)
+- server-side session issue and revoke
+- first-login Actor auto-provisioning
+Actor records and Role Level stay Core-owned. Permission decisions stay Permission-owned.
+
+Attachments owns:
+- the shared attachment storage seam and its upload/download commands
+- filename and MIME allowlist
+This is the implementation of Core's attachment-governance bullet, not a second owner. Other modules reference attachments; they do not own the storage seam.
+
+Navigation owns:
+- the read-only sidebar badge-count aggregation
+Navigation does not own Dashboard action queues, domain records, or navigation layout.
+
+Saved Views owns:
+- an actor's named list filters for the voc, tasks, task_requests, and findings surfaces
+Saved Views does not own the list queries those filters apply to.
+
+Workspace Settings owns:
+- workspace-level policy storage and its admin-only API
+Consumers read the barrel seam (`getResolvedWorkspaceSettings`, `getResolvedWorkspaceSettingsForUpdate`). Policy behavior stays in the consuming module.
 ```
+
+The fence above is ownership. The table above it is the directory. They differ where a domain is implemented outside the owner's folder: Core's Managed System Registry, Analytics Area, and attachment governance live in `managed-systems/`, `analytics-areas/`, and `attachments/`; VOC's clusters, recommendations, and pre-submit peers live in `voc-clusters/` and under `voc/recommendations/` and `voc/pre-submit-peers/`; Task's Task Request lives in `task-requests/`. Authentication, Navigation, Saved Views, and Workspace Settings match in both places.
 
 ## Cross-Module Access Rules
 
@@ -93,7 +118,26 @@ Dashboard owns:
 - Cross-system optional relationships use entity_links unless a direct foreign key is explicitly approved.
 - Direct cross-system columns such as linked_task_id or converted_task_id are convenience projections, not canonical history.
 - Dashboard must not mutate source records directly.
+- A row-lock helper is exported by the module that owns the row, from that module's public barrel (`index.ts`). Callers do not import another module's `repo.ts` to lock its rows.
+- `lockManagedSystem` is exported from `managed-systems/index.ts`. `lockAnalyticsArea` is exported from `analytics-areas/index.ts`. VOC keeps `selectVocForUpdate` for its own rows.
 ```
+
+M7 (cycle-1 review) rejected selecting `core.managed_systems` from inside the VOC repo. The approved read of non-archived Managed System ids for a workspace is `allManagedSystemIds`. That function moved from `core/managed-systems/read-projections.ts` to `managed-systems/read-projections.ts` (#462); the core file is gone. Foreign modules still must not select the table themselves. Callers import `managed-systems/read-projections.ts` directly. The function is not on the `managed-systems` barrel: that barrel loads `managed-system-service.ts`, and `permissions/check-service.ts` importing the barrel cycles. Do not re-export it from the barrel unless that cycle is removed first.
+
+### Approved cross-module surfaces
+
+Another module is reached only through one of these:
+
+- the target's application command, or a cross-system orchestration service named in `docs/implementation/00-architecture.md`
+- an approved read projection or read service (`read-projections.ts`, `read-service.ts`, a module list predicate)
+- an `authorization.ts` module
+- a symbol the owner exports from its public barrel (`index.ts`)
+
+Importing another module's `repo.ts` or `repo-read.ts` is not a surface. A module reading its own repo, including `voc/jobs` reading `voc/embedding/repo.ts`, is internal.
+
+These imports are read surfaces, not repo bypasses, and the future repo-import lint must leave them alone: Surveys importing `findings/authorization.ts`; Dashboard importing `findings/authorization.ts`, `surveys/authorization.ts`, and `voc/read-service.ts`.
+
+Wrapping the remaining cross-module `repo.js` imports, and adding the `check-boundaries.mjs` rule that fails closed on them, is #480. This document does not list those call sites. #480 re-measures them. `allManagedSystemIds` stays a direct `read-projections.ts` import until the barrel cycle above is gone.
 
 ## Core Boundary
 

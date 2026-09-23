@@ -32,7 +32,9 @@
 // `pairs[].expectedSimilarity`, `vectorSource` and `expectedAtPin` are all
 // derived artifacts of whatever produced the vectors. To re-tune with real
 // embeddings, replace exactly those four and leave the harness, the tests and
-// the corpus alone. See `../../modules/voc/AGENTS.md` for the full procedure.
+// the corpus alone. The procedure is this "DROPPING IN REAL VECTORS" note.
+// ADR-0034 D5 (amended 2026-07-27) is why this fixture does not validate the
+// cut.
 //
 // The fixture is a TypeScript module rather than JSON on purpose: the backend
 // build does not emit non-`.ts` files from `src/`, and a JSON fixture reached
