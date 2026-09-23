@@ -41,11 +41,11 @@ import {
   lockTaskRequestForUpdate,
   markTaskRequestConverted,
 } from '../task-requests/commands.js';
-import type { VocReadService } from '../voc/read-service.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,
 } from '../voc/jobs/released-review-candidates.js';
+import type { VocReadService } from '../voc/read-service.js';
 import {
   type TaskCommentRow,
   type TaskRow,

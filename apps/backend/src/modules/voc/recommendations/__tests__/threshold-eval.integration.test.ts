@@ -24,13 +24,19 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../../db/client.js';
+import {
+  THRESHOLD_EVAL_FIXTURE,
+  assertFixtureWellFormed,
+} from '../../../../test-support/recommendations-eval/fixture.js';
+import {
+  cosineSimilarity,
+  evaluateFixture,
+} from '../../../../test-support/recommendations-eval/harness.js';
 import { createAuditService } from '../../../core/audit/audit-service.js';
 import { createIdempotencyService } from '../../../core/idempotency/idempotency-service.js';
 import { createCheckService } from '../../../permissions/check-service.js';
 import { createVocClustersService } from '../../../voc-clusters/service.js';
 import { VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from '../constants.js';
-import { THRESHOLD_EVAL_FIXTURE, assertFixtureWellFormed } from '../../../../test-support/recommendations-eval/fixture.js';
-import { cosineSimilarity, evaluateFixture } from '../../../../test-support/recommendations-eval/harness.js';
 import {
   type VocRecommendationsActor,
   type VocRecommendationsService,
@@ -120,7 +126,7 @@ describe.skipIf(!runIntegration)('voc recommendation threshold evaluation (#168)
 
   async function insertMs(): Promise<string> {
     const res = await appHandle.pool.query<{ id: string }>(
-      `insert into core.managed_systems (workspace_id, slug, name) values ($1, $2, $3) returning id`,
+      'insert into core.managed_systems (workspace_id, slug, name) values ($1, $2, $3) returning id',
       [WORKSPACE_ID, `${SLUG_PREFIX}-${randomUUID().slice(0, 8)}`, 'Threshold eval system'],
     );
     return res.rows[0]?.id ?? '';
@@ -154,7 +160,8 @@ describe.skipIf(!runIntegration)('voc recommendation threshold evaluation (#168)
   /** Children before parents; fops_app holds no DELETE on the decision table. */
   async function cleanup(): Promise<void> {
     if (!ops) return;
-    const systems = `(select id from core.managed_systems where workspace_id = $1 and slug like $2)`;
+    const systems =
+      '(select id from core.managed_systems where workspace_id = $1 and slug like $2)';
     const fixtureVocs = `(select id from voc.vocs where workspace_id = $1 and primary_managed_system_id in ${systems})`;
     const args = [WORKSPACE_ID, `${SLUG_PREFIX}%`];
 
@@ -168,7 +175,7 @@ describe.skipIf(!runIntegration)('voc recommendation threshold evaluation (#168)
       args,
     );
     await ops.pool.query(
-      `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
+      'delete from core.managed_systems where workspace_id = $1 and slug like $2',
       args,
     );
   }

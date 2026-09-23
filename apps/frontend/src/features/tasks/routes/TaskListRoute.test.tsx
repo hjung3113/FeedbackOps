@@ -6,8 +6,8 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { TaskListRoute } from './TaskListRoute';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
+import { TaskListRoute } from './TaskListRoute';
 
 vi.mock('@fops/ui', async () => {
   const actual = await vi.importActual<typeof import('@fops/ui')>('@fops/ui');
