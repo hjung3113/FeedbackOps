@@ -7,7 +7,6 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { checkFindingManage, checkFindingRead } from '../findings/authorization.js';
-import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRow, findTaskById } from '../tasks/repo.js';
 import type {
@@ -16,21 +15,6 @@ import type {
   ReporterSummaryResult,
 } from './provider-types.js';
 import { type LinkEndpointRow, resolveVocEndpoint } from './repo.js';
-
-function findingToInternalSummary(row: FindingReadRow): EntityLinkTargetSummary {
-  return {
-    type: 'finding',
-    id: row.id,
-    display_id: row.display_id,
-    title: row.title,
-    summary: row.summary,
-    severity: row.severity,
-    confidence: row.confidence,
-    status: row.status,
-    primary_managed_system_id: row.primary_managed_system_id,
-    evidence_count: row.evidence_count,
-  };
-}
 
 function taskToInternalSummary(row: TaskRow): EntityLinkTargetSummary {
   return {
@@ -57,16 +41,6 @@ async function assertVocReadScope(
     managed_system_id: subject.managed_system_id,
   });
   return readDecision.allow;
-}
-
-async function resolveFinding(db: Db, workspaceId: string, id: string) {
-  const finding = await findFindingById(db, { workspaceId, findingId: id });
-  if (!finding) return null;
-  return {
-    workspace_id: finding.workspace_id,
-    managed_system_id: finding.primary_managed_system_id,
-    reporter_id: null,
-  };
 }
 
 async function resolveTask(db: Db, workspaceId: string, id: string) {
@@ -161,7 +135,7 @@ async function getTaskReporterSummaries(
 
 export const legacyEntityLinkProviders: Pick<
   EntityLinkProviderRegistry,
-  'voc' | 'finding' | 'task'
+  'voc' | 'task'
 > = {
   voc: {
     entityType: 'voc',
@@ -170,32 +144,6 @@ export const legacyEntityLinkProviders: Pick<
     canRead: assertVocReadScope,
     getReporterSummary: async () => ({ available: false }),
     getInternalSummary: async () => null,
-    listExpectedLinks: async () => [],
-  },
-  finding: {
-    entityType: 'finding',
-    assertExists: resolveFinding,
-    getPermissionSubject: resolveFinding,
-    canRead: async (deps, actor, subject) => {
-      const decision = await checkFindingRead(deps.checkService, actor, subject.managed_system_id, {
-        requireElevatedRole: false,
-      });
-      return decision.allow;
-    },
-    canCreateTarget: async (deps, actor, subject) => {
-      const decision = await checkFindingManage(
-        deps.checkService,
-        actor,
-        subject.managed_system_id,
-        { requireElevatedRole: false },
-      );
-      return decision.allow;
-    },
-    getReporterSummary: async () => ({ available: false }),
-    getInternalSummary: async (db, workspaceId, id) => {
-      const finding = await findFindingById(db, { workspaceId, findingId: id });
-      return finding ? findingToInternalSummary(finding) : null;
-    },
     listExpectedLinks: async () => [],
   },
   task: {
