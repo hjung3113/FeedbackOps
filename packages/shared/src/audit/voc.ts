@@ -204,3 +204,119 @@ export const vocDescriptionEditedDetailSchema = z
       ),
   });
 export type VocDescriptionEditedDetail = z.infer<typeof vocDescriptionEditedDetailSchema>;
+
+// ── public_update_review_candidate_created ────────────────────────────────
+// Slice 7 — written by apps/backend/src/modules/voc/public-update-review-
+// candidates/, so these are VOC events even though they sit next to task
+// events in the registry's event order (separate tuple keeps the spread in
+// the old position, after `task_comment_created`).
+export const publicUpdateReviewCandidateCreatedDetailSchema = z
+  .object({
+    candidate_id: z.string().uuid(),
+    voc_id: z.string().uuid(),
+    source_task_id: z.string().uuid(),
+    source_entity_link_id: z.string().uuid(),
+    release_event_id: z.string().uuid(),
+    correlation_id: z.string().uuid(),
+  })
+  .strict();
+
+export const publicUpdateReviewCandidateDismissedDetailSchema = z
+  .object({
+    candidate_id: z.string().uuid(),
+    dismissal_reason: z.string().trim().min(1).max(2000),
+  })
+  .strict();
+
+// #168 step 4 — embedding recommendation decisions (ADR-0034 D3).
+//
+// `embedding_version` and `scope_key` are on the audit row, not just the
+// decision row: the whole point of D3's suppression rules is that a decision
+// is scoped, and an audit trail that omits the scope cannot answer "why did
+// this pair come back" after a version bump.
+export const vocRecommendationDismissedDetailSchema = z
+  .object({
+    source_voc_id: z.string().uuid(),
+    candidate_voc_id: z.string().uuid(),
+    embedding_version: z.number().int().positive(),
+    scope_key: z.string().min(1),
+  })
+  .strict();
+export type VocRecommendationDismissedDetail = z.infer<
+  typeof vocRecommendationDismissedDetailSchema
+>;
+
+export const vocRecommendationConfirmedDetailSchema = z
+  .object({
+    source_voc_id: z.string().uuid(),
+    candidate_voc_id: z.string().uuid(),
+    embedding_version: z.number().int().positive(),
+    scope_key: z.string().min(1),
+    voc_cluster_id: z.string().uuid(),
+    // Whether this confirmation created the cluster or joined an existing one.
+    cluster_created: z.boolean(),
+    primary_managed_system_id: z.string().uuid(),
+  })
+  .strict();
+export type VocRecommendationConfirmedDetail = z.infer<
+  typeof vocRecommendationConfirmedDetailSchema
+>;
+
+export const VOC_AUDIT_EVENT_TYPES = [
+  'voc_created',
+  'voc_triage_committed',
+  'voc_severity_set',
+  'voc_owner_assigned',
+  'voc_analytics_area_linked',
+  'voc_cluster_decision_recorded',
+  'public_update_created',
+  'reporter_facing_status_changed',
+  'reporter_reply_created',
+  'internal_comment_created',
+  'voc_triage_postponed',
+  'voc_description_edited',
+] as const;
+
+export const VOC_REVIEW_CANDIDATE_AUDIT_EVENT_TYPES = [
+  'public_update_review_candidate_created',
+  'public_update_review_candidate_dismissed',
+] as const;
+
+export const VOC_RECOMMENDATION_AUDIT_EVENT_TYPES = [
+  'voc_recommendation_dismissed',
+  'voc_recommendation_confirmed',
+] as const;
+
+// One detail map per tuple: the registry spreads maps in the same order as
+// the tuples, which keeps Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS) in the
+// historical event order.
+export const VOC_AUDIT_EVENT_DETAIL_SCHEMAS = {
+  voc_created: vocCreatedDetailSchema,
+  voc_triage_committed: vocTriageCommittedDetailSchema,
+  voc_severity_set: vocSeveritySetDetailSchema,
+  voc_owner_assigned: vocOwnerAssignedDetailSchema,
+  voc_analytics_area_linked: vocAnalyticsAreaLinkedDetailSchema,
+  voc_cluster_decision_recorded: vocClusterDecisionRecordedDetailSchema,
+  public_update_created: publicUpdateCreatedDetailSchema,
+  reporter_facing_status_changed: reporterFacingStatusChangedDetailSchema,
+  reporter_reply_created: reporterReplyCreatedDetailSchema,
+  internal_comment_created: internalCommentCreatedDetailSchema,
+  voc_triage_postponed: vocTriagePostponedDetailSchema,
+  voc_description_edited: vocDescriptionEditedDetailSchema,
+} as const satisfies Record<(typeof VOC_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;
+
+export const VOC_REVIEW_CANDIDATE_AUDIT_EVENT_DETAIL_SCHEMAS = {
+  public_update_review_candidate_created: publicUpdateReviewCandidateCreatedDetailSchema,
+  public_update_review_candidate_dismissed: publicUpdateReviewCandidateDismissedDetailSchema,
+} as const satisfies Record<
+  (typeof VOC_REVIEW_CANDIDATE_AUDIT_EVENT_TYPES)[number],
+  z.ZodTypeAny
+>;
+
+export const VOC_RECOMMENDATION_AUDIT_EVENT_DETAIL_SCHEMAS = {
+  voc_recommendation_dismissed: vocRecommendationDismissedDetailSchema,
+  voc_recommendation_confirmed: vocRecommendationConfirmedDetailSchema,
+} as const satisfies Record<
+  (typeof VOC_RECOMMENDATION_AUDIT_EVENT_TYPES)[number],
+  z.ZodTypeAny
+>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { entityLinkCreatedDetailSchema } from '../../enums/audit-events.js';
+import { entityLinkCreatedDetailSchema } from '../entity-link.js';
 
 const LINK = '01919b8c-0000-7000-8000-000000000001';
 const RESPONSE = '01919b8c-0000-7000-8000-000000000002';

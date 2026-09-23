@@ -4,9 +4,11 @@ import { z } from 'zod';
 import {
   AUDIT_EVENT_DETAIL_SCHEMAS,
   AUDIT_EVENT_TYPES,
+} from '../../enums/audit-events.js';
+import {
   vocClusterCreatedDetailSchema,
   vocClusterUpdatedDetailSchema,
-} from '../../enums/audit-events.js';
+} from '../voc-cluster.js';
 import {
   internalCommentCreatedDetailSchema,
   publicUpdateCreatedDetailSchema,

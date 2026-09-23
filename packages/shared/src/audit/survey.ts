@@ -163,3 +163,36 @@ export const surveyResponseExcerptRevokedDetailSchema = z
 export type SurveyResponseExcerptRevokedDetail = z.infer<
   typeof surveyResponseExcerptRevokedDetailSchema
 >;
+
+export const SURVEY_AUDIT_EVENT_TYPES = [
+  'survey_created',
+  'survey_updated',
+  'survey_questions_reordered',
+  'survey_question_created',
+  'survey_question_updated',
+  'survey_question_deleted',
+  'survey_opened',
+  'survey_closed',
+  'survey_response_submitted',
+  'survey_response_personal_read',
+  'survey_response_excerpt_approved',
+  'survey_response_excerpt_revoked',
+] as const;
+
+export const SURVEY_AUDIT_EVENT_DETAIL_SCHEMAS = {
+  survey_created: surveyCreatedDetailSchema,
+  survey_updated: surveyUpdatedDetailSchema,
+  survey_questions_reordered: surveyQuestionsReorderedDetailSchema,
+  survey_question_created: surveyQuestionCreatedDetailSchema,
+  survey_question_updated: surveyQuestionUpdatedDetailSchema,
+  survey_question_deleted: surveyQuestionDeletedDetailSchema,
+  survey_opened: surveyOpenedDetailSchema,
+  survey_closed: surveyClosedDetailSchema,
+  survey_response_submitted: surveyResponseSubmittedDetailSchema,
+  survey_response_personal_read: surveyResponsePersonalReadDetailSchema,
+  survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
+  survey_response_excerpt_revoked: surveyResponseExcerptRevokedDetailSchema,
+} as const satisfies Record<
+  (typeof SURVEY_AUDIT_EVENT_TYPES)[number],
+  z.ZodTypeAny
+>;
