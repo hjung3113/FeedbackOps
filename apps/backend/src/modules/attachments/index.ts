@@ -8,3 +8,9 @@ export { attachmentsRoutes, MAX_ATTACHMENT_BYTES } from './routes.js';
 export { MIME_ALLOWLIST } from './mime-allowlist.js';
 export { sanitizeFilename, FilenameSanitizeError } from './filename-sanitize.js';
 export { createAttachmentsService, type AttachmentsService } from './service.js';
+export {
+  LinkAttachmentsRejected,
+  linkAttachments,
+  linkRejectedFields,
+  toAttachmentRefForAudit,
+} from './repo.js';

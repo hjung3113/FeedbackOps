@@ -18,3 +18,4 @@ export {
   type VocEmbeddingEnqueuer,
 } from './embedding/enqueue.js';
 export { registerVocJobs, type VocJobDeps } from './jobs/index.js';
+export { selectVocForUpdate } from './repo.js';

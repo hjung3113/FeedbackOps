@@ -24,7 +24,7 @@ import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { type Scope, actorReadScope } from '../voc/authorization.js';
 import type { ConversationService } from '../voc/conversation-service.js';
-import { selectVocForUpdate } from '../voc/repo.js';
+import { selectVocForUpdate } from '../voc/index.js';
 import { createVocClusterConversion } from './conversion.js';
 import {
   type CreatedFindingForClusterRow,

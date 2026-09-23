@@ -7,9 +7,9 @@ import type {
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { lockAnalyticsArea } from '../analytics-areas/index.js';
-import { resolveVocEndpoint } from '../entity-links/repo.js';
+import { resolveVocEndpoint } from '../entity-links/index.js';
 import { resolveSurveyResponseHighlightAccess } from '../surveys/evidence-access.js';
-import { selectVocForUpdate } from '../voc/repo.js';
+import { selectVocForUpdate } from '../voc/index.js';
 import { findFindingById } from './repo-read.js';
 import {
   type EvidenceHighlightRow,
