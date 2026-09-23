@@ -1,5 +1,6 @@
 // Audit event vocabulary. The canonical verb list is locked verbatim by
-// docs/implementation/05-permission-policy.md:146-156 (snake_case, single
+// docs/implementation/05-permission-policy.md audit verb list under
+// Permission Request self-approval policy (snake_case, single
 // token, no dot — e.g. `permission_requested`, `permission_approved`).
 // ADR-0008's older `subject_type.verb` convention is a non-binding stylistic
 // suggestion and explicitly defers to the policy doc's verb vocabulary for
@@ -145,7 +146,7 @@ export const auditEventTypeSchema = z.enum(AUDIT_EVENT_TYPES);
 // service step 3. Optional fields are explicitly nullable so the audit row
 // faithfully records what the request did or did not carry.
 // `sensitive` is true when the requested capability is marked sensitive in
-// CAPABILITY_META (per policy doc 05-permission-policy.md:62-76).
+// CAPABILITY_META (per policy doc 05-permission-policy.md ## Sensitive Permissions).
 export const permissionRequestedDetailSchema = z.object({
   capability: z.string().min(1),
   managed_system_id: z.string().uuid().nullable(),

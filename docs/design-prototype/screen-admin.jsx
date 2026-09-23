@@ -86,7 +86,7 @@ function AdminScreen({ onNavigate }) {
 // ============================================================
 // AdminAreasScreen — /admin/analytics-areas
 // AA is a secondary classification, not a permission boundary
-// (docs/design/09-permission-access.md §5.4 + routes-and-layout.md).
+// (docs/design/09-permission-access.md ## Capability Matrix notes + routes-and-layout.md).
 // ============================================================
 function AdminAreasScreen({ onNavigate }) {
   const totalAreas = window.AnalyticsAreas.length;
