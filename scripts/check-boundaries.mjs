@@ -94,6 +94,15 @@ function collectImportSpecifiers(file, content) {
         specifier: node.arguments[0].text,
         line: source.getLineAndCharacterOfPosition(node.arguments[0].getStart(source)).line + 1,
       });
+    } else if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteral(node.argument.literal)
+    ) {
+      out.push({
+        specifier: node.argument.literal.text,
+        line: source.getLineAndCharacterOfPosition(node.argument.literal.getStart(source)).line + 1,
+      });
     }
     ts.forEachChild(node, visit);
   };

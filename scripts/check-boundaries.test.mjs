@@ -43,10 +43,10 @@ function runCase(name, files, expectExit0, expectOutput) {
       assert.equal(exit, 1, `${name}: expected exit 1, got ${exit}\n${stdout}`);
     }
     if (expectOutput) {
-      assert.ok(
-        stdout.includes(expectOutput),
-        `${name}: output missing "${expectOutput}"\n${stdout}`,
-      );
+      const expected = Array.isArray(expectOutput) ? expectOutput : [expectOutput];
+      for (const fragment of expected) {
+        assert.ok(stdout.includes(fragment), `${name}: output missing "${fragment}"\n${stdout}`);
+      }
     }
     process.stdout.write(`ok - ${name}\n`);
   } catch (err) {
@@ -122,6 +122,23 @@ runCase(
   },
   true,
   'boundaries: OK',
+);
+
+runCase(
+  'import-type expressions referencing foreign repo files fail',
+  {
+    ...zero,
+    [join(MODULES, 'surveys', 'results.ts')]: [
+      "import { ok } from './helpers.js';",
+      "type Row = import('../findings/repo.js').FindingRow;",
+      "type Mod = typeof import('../tasks/repo-read.js');",
+    ].join('\n'),
+  },
+  false,
+  [
+    'apps/backend/src/modules/surveys/results.ts:2',
+    'apps/backend/src/modules/surveys/results.ts:3',
+  ],
 );
 
 if (failures > 0) {
