@@ -143,7 +143,7 @@ If another agent must continue or recreate the prototype, give it this whole bun
 - `HANDOFF.md` — operating rules, changelog, non-negotiables, remaining work.
 - `DESIGN-MAP.md` — route/file/spec map and final visual baselines.
 - `DESIGN.md`, `docs/design/*.md`, `docs/frontend/*.md` — source requirements, route contract, and UI contracts.
-- `docs/implementation/03-api-contracts.md`, `docs/design/15-data-contracts.md`, `docs/implementation/06-entity-linking-contract.md`, `docs/adr/0012-error-code-contract.md` — production API/data/error/linking contracts. Required for clean-room implementation, not just prototype continuation.
+- `docs/implementation/03-api-contracts.md` and `docs/implementation/api/`, `docs/design/15-data-contracts.md`, `docs/implementation/06-entity-linking-contract.md`, `docs/adr/0012-error-code-contract.md` — production API/data/error/linking contracts. Required for clean-room implementation, not just prototype continuation.
 
 **Required prototype files**
 - `FeedbackOps.html`, `app.jsx`, `styles.css`, `data.js`
@@ -171,7 +171,7 @@ Use this when handing the Open Design prototype back to the linked `FeedbackOps`
 - Treat `HANDOFF.md` as the operating constraints, known non-goals, and pass/fail contract.
 - Treat the curated screenshots in `DESIGN-MAP.md` §2 as the visual baseline, not the whole `screenshots/` folder.
 - Treat `FeedbackOps.html`, `app.jsx`, `styles.css`, `components.jsx`, `shell.jsx`, `affordances.jsx`, `cmdk.jsx`, `entity-preview.jsx`, `rich-editor.jsx`, `flow-drafts.jsx`, `data.js`, and `screen-*.jsx` as executable reference material for visual density and interaction behavior.
-- Treat `docs/implementation/03-api-contracts.md`, `docs/design/15-data-contracts.md`, `docs/implementation/06-entity-linking-contract.md`, and `docs/adr/0012-error-code-contract.md` as production truth for endpoints, payloads, linked-object workflows, and error handling.
+- Treat `docs/implementation/03-api-contracts.md` and `docs/implementation/api/`, `docs/design/15-data-contracts.md`, `docs/implementation/06-entity-linking-contract.md`, and `docs/adr/0012-error-code-contract.md` as production truth for endpoints, payloads, linked-object workflows, and error handling.
 
 **Spec output expected from the linked project**
 - Route matrix: route id, URL, React page/component owner, required params, panel behavior, loading/empty/error/permission states.
@@ -435,7 +435,7 @@ Replace these before shipping. Each item is a real wiring task, not a bug.
 | Domain glossary | `docs/design/01-domain-model.md` |
 | Non-negotiable rules | `docs/design/00-product-overview.md` |
 | Action traceability | `docs/design/12-ui-ux-principles.md` (UI Action → Requirement → API table) |
-| Production API contract | `docs/implementation/03-api-contracts.md` |
+| Production API contract | `docs/implementation/03-api-contracts.md` and `docs/implementation/api/` |
 | Production data contract | `docs/design/15-data-contracts.md` |
 | Entity linking backend contract | `docs/implementation/06-entity-linking-contract.md` |
 | Error response contract | `docs/adr/0012-error-code-contract.md` |

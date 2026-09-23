@@ -42,7 +42,7 @@ The `XOR-or-both-null` check on `managed_systems` forbids "owned by both actor X
 
 ## What Slice 2 does not ship
 
-- No `GET/POST/PATCH /teams` endpoints. `docs/implementation/03-api-contracts.md` does not list them in Slice 2's section; the placeholder respects that boundary.
+- No `GET/POST/PATCH /teams` endpoints. `docs/implementation/api/core.md` §Core / Managed System / Analytics Area does not list them in Slice 2's section; the placeholder respects that boundary.
 - No `/admin/teams` route or UI surface.
 - No seed rows. The Slice 2 seed populates managed_systems and analytics_areas with default_owner_actor_id pointed at the existing mock-admin-1 actor; no AA in the seed sets owner_team_id.
 - No audit events. The vocabulary added in ADR-0017 covers MS/AA only. When the future teams slice lands, it will introduce `team_registered` / `team_updated` / `team_archived` per the same naming convention.
