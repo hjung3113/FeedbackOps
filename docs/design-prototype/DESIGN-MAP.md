@@ -6,6 +6,7 @@
 > Maintain alongside every Pack so production handoff stays unambiguous.
 
 **Last updated:** 2026-05-17 (Pack 20 — Baseline QA + nested-button polish + screenshot cleanup)
+Route reconciliation: 2026-09-23 (#493, tree bf5f3c0). Prototype pack content remains Pack 20 (2026-05-17).
 
 ---
 
@@ -21,6 +22,7 @@
 Spec column references — short names map onto files:
 - `00 overview`     → `docs/design/00-product-overview.md`
 - `01 domain`       → `docs/design/01-domain-model.md`
+- `03 core`         → `docs/design/03-core-platform.md`
 - `04 voc`          → `docs/design/04-voc-system.md`
 - `05 finding`      → `docs/design/05-finding-insight-system.md`
 - `06 task`         → `docs/design/06-task-project-system.md`
@@ -32,7 +34,22 @@ Spec column references — short names map onto files:
 - `routes`          → `docs/frontend/routes-and-layout.md`
 - `inv`             → `docs/frontend/component-inventory.md`
 - `inter`           → `docs/frontend/interaction-patterns.md`
-- `api-contracts`   → `docs/implementation/03-api-contracts.md` and `docs/implementation/api/`
+- `api-contracts`   → `docs/implementation/03-api-contracts.md` is the **index only** (global rules, error codes, contract template); endpoint catalogs live in the domain file named per route in §1/§1b:
+
+  | Short | File | Owns |
+  |---|---|---|
+  | `api/navigation.md` | `docs/implementation/api/navigation.md` | Navigation counts |
+  | `api/dashboard.md` | `docs/implementation/api/dashboard.md` | `GET /dashboard/summary` (KPI, action queues, coverage projection) |
+  | `api/voc.md` | `docs/implementation/api/voc.md` | VOC create, list, `PATCH /vocs/:id`, conversation |
+  | `api/voc-clusters.md` | `docs/implementation/api/voc-clusters.md` | VOC Cluster |
+  | `api/findings.md` | `docs/implementation/api/findings.md` | Finding, nested evidence-highlight commands |
+  | `api/tasks.md` | `docs/implementation/api/tasks.md` | Task Request, Task, `PATCH /tasks/:id` |
+  | `api/surveys.md` | `docs/implementation/api/surveys.md` | Survey, `POST /surveys/:id/open` (not `/launch`) |
+  | `api/core.md` | `docs/implementation/api/core.md` | Managed Systems, Analytics Areas, `GET`/`PATCH /workspace/settings` |
+  | `api/permissions.md` | `docs/implementation/api/permissions.md` | Permission requests |
+  | `api/entity-links.md` | `docs/implementation/api/entity-links.md` | `POST`/`GET /entity-links`, detach via `PATCH /entity-links/:id` |
+  | `api/next-actions.md` | `docs/implementation/api/next-actions.md` | Next-action contract |
+  | `api/cross-system.md` | `docs/implementation/api/cross-system.md` | Reporter summary, cross-system decisions |
 - `data-contracts`  → `docs/design/15-data-contracts.md`
 - `link-contract`   → `docs/implementation/06-entity-linking-contract.md`
 - `error-contract`  → `docs/adr/0012-error-code-contract.md`
@@ -44,28 +61,74 @@ Spec column references — short names map onto files:
 | Route | Screen file | Backing spec | Detail panel | Notes |
 |---|---|---|---|---|
 | `home`, `my-work` | `screen-home.jsx` | 12 ux · routes (Home) | — | Action queues + KPI + My Work + Coverage |
-| `voc` (`inbox`/`my`) | `screen-voc.jsx` | 04 voc · inter (VOC list + detail) | ✓ | Reporter-status pill, internal task badge separation, trail CTA action panel |
-| `voc` (`triage`) | `screen-voc-create.jsx` | 04 voc §Triage Console | ✓ | Optimistic mutation + undo |
-| `voc-new` | `screen-voc-create.jsx` | 04 voc §VOC creation | — | RichEditor surface: `voc-description` |
-| `voc-clusters` | `screen-clusters.jsx` | 04 voc §FR-VOC-005 Cluster | ✓ | Confirmation requires Admin/Developer |
-| `findings` | `screen-findings.jsx` | 05 finding · inv (Finding) | ✓ | Evidence-first layout, execution CTA, trail CTA action panel |
-| `tasks` (`board`) | `screen-tasks.jsx` | 06 task · inter (Kanban) | ✓ | DnD on cards |
-| `tasks` (`inbox`/`my`) | `screen-tasks.jsx` | 06 task · routes | ✓ | Assignment-scoped views |
-| `tasks` (`requests`) | `screen-tasks.jsx` | 06 task §FR-TASK-002 Review | ✓ | Self-approval + capability gating |
-| `tasks` (`backlog`) | `screen-tasks.jsx` | 06 task §FR-TASK-003 Backlog | ✓ | Awaiting-execution language only |
+| `voc` (`inbox`/`my`) | `screen-voc.jsx` | 04 voc §VOC Inbox · inter §VOC Communication Surfaces | ✓ | Reporter-status pill, internal task badge separation, trail CTA action panel |
+| `voc` (`triage`) | `screen-voc-create.jsx` | 04 voc §FR-VOC-002 · §VOC Triage | ✓ | Optimistic mutation + undo |
+| `voc-new` | `screen-voc-create.jsx` | 04 voc §FR-VOC-001 Create VOC | — | RichEditor surface: `voc-description` |
+| `voc-clusters` | `screen-clusters.jsx` | 04 voc §FR-VOC-003 VOC Cluster | ✓ | Confirmation requires Admin/Developer |
+| `findings` | `screen-findings.jsx` | 05 finding §Finding Detail · inv (Finding detail block) | ✓ | Evidence-first layout, execution CTA, trail CTA action panel |
+| `tasks` (`board`) | `screen-tasks.jsx` | 06 task · ui-ds §Task Board · inter §Task Board Boundary | ✓ | DnD on cards |
+| `tasks` (`inbox`/`my`) | `screen-tasks-views.jsx` | 06 task · routes | ✓ | Assignment-scoped views |
+| `tasks` (`requests`) | `screen-tasks.jsx` | 06 task §FR-TASK-002 Approve Task Request | ✓ | Self-approval + capability gating |
+| `tasks` (`backlog`) | `screen-tasks.jsx` | 06 task §FR-TASK-003 Manage Task | ✓ | Awaiting-execution language only |
 | `tasks` (`milestones`) | `screen-milestones.jsx` + `screen-milestone-gantt.jsx` | 06 task §FR-TASK-004 | ✓ | Per-row mini-timeline + Detail Gantt |
-| `tasks` (`roadmap`) 🏷️ | `screen-tasks-roadmap.jsx` | 06 task §FR-TASK-005 + routes | — | Pack 10 — multi-milestone shared-axis Gantt |
-| `integration` | `screen-integration.jsx`·`IntegrationScreen` | 12 ux (Action Dashboard) | — | Live counts (Pack 10); Pack 19 split |
+| `tasks` (`roadmap`) 🏷️ | `screen-tasks-roadmap.jsx` | prototype-only — FR-TASK-005 is not in `06 task`; the route contract has no `/tasks/roadmap` and no `view=roadmap` | — | Pack 10 — multi-milestone shared-axis Gantt |
+| `integration` | `screen-integration.jsx`·`IntegrationScreen` | inter §Home And Integration Recovery Queues | — | Live counts (Pack 10); Pack 19 split |
 | `integration-evidence` | `screen-evidence.jsx` | 05 finding · ui-ds (EvidenceHighlight) | ✓ | Source · Linked Execution · Trail action panel |
-| `integration-coverage` | `screen-coverage.jsx` | 12 ux §Coverage signals | — | Threshold modal in-page |
+| `integration-coverage` | `screen-coverage.jsx` | api/dashboard.md (`GET /dashboard/summary` coverage projection); no `12 ux §Coverage signals` heading exists | — | Threshold modal in-page |
 | `integration-links` | `screen-entity-links.jsx` | 11 linking §FR-LINK-001..003 | ✓ | Bulk-detach + Last refreshed (Pack 10) |
 | `surveys` | `screen-surveys.jsx`·`SurveysScreen` | 07 survey · routes | ✓ | Follow-up = 5 allowed CTAs; Pack 19 split |
 | `survey-builder` | `screen-survey-builder.jsx` | 07 survey §FR-SURVEY-002 | — | One-level branch · option preservation · outline drag-reorder |
 | `survey-result` | `screen-survey-result.jsx` | 07 survey §FR-SURVEY-004 | — | Anonymity threshold reminder |
-| `admin` | `screen-admin.jsx`·`AdminScreen` | 09 permission · routes | — | MS registry + Permission teaser; Pack 19 split |
-| `admin-areas` | `screen-admin.jsx`·`AdminAreasScreen` | 09 permission §5.4 + routes | — | AA slide-over (Pack 10); Pack 19 split |
+| `admin` | `screen-admin.jsx`·`AdminScreen` | 03 core §FR-CORE-002 · api/core.md · routes | — | MS registry + Permission teaser; Pack 19 split |
+| `admin-areas` | `screen-admin.jsx`·`AdminAreasScreen` | 03 core §FR-CORE-003 · 01 domain §Analytics Area · routes | — | AA slide-over (Pack 10); Pack 19 split |
 | `admin-permissions` | `screen-permissions.jsx` | 09 permission §FR-PERM-002 | ✓ | Pending → Approved/Rejected/Expired/Revoked. Self-approval audit capture (Pack 8). |
-| `admin-settings` | `screen-admin-settings.jsx` (Pack 8) | 09 permission · ADR-0011 | — | Dirty save bar, locked SR→VOC row, cross-MS / self-approval retro warning. |
+| `admin-settings` | `screen-admin-settings.jsx` (Pack 8) | api/core.md `GET`/`PATCH /workspace/settings` (ADR-0011 is TipTap/attachment storage, not this screen) | — | Dirty save bar, locked SR→VOC row, cross-MS / self-approval retro warning. |
+
+---
+
+## 1b. Production reconciliation (2026-09-23)
+
+Prototype route ids stay in §1; this section records the production URL and registration status as measured at tree `bf5f3c0`. Disagreements with `docs/frontend/routes-and-layout.md` are recorded here, not resolved — that doc stays the route-contract authority. Contract source: routes doc lines 12–37 (route block) and the naming rules at lines 49 and 59. Production source: `createFileRoute` under `apps/frontend/src/routes/` plus `NAV_TREE` in `apps/frontend/src/routes/_authed.tsx`.
+
+Status vocabulary: `registered` — route file exists and renders the screen · `redirect` — route file exists but does not render the prototype screen · `contract-only` — named in the route block, no route file · `prototype-only` — prototype screen and baseline exist; not in the route contract and not registered · `registered-extra` — registered production route §1 does not have as its own row.
+
+| Prototype id | Screen file | Contract URL | Production route file | Production owner | Status | API file |
+|---|---|---|---|---|---|---|
+| `home` | `screen-home.jsx` | Doc says Home is the label for `/` (line 49); route block opens with `/` | `/` redirects to `/home` (`routes/index.tsx`); screen is `routes/_authed/home.tsx` | `features/home/HomeScreen.tsx` in `PageShell`. Search: `managedSystem` uuid only (schema rejects `all`) | `registered` at `/home`. Contract text still says `/` — recorded, contract not edited here | `api/dashboard.md` (`GET /dashboard/summary`). Counts: `api/navigation.md` |
+| `my-work` | `screen-home.jsx` (same screen) | Explicitly not an MVP route (ADR-0038, ADR-0040, routes doc line 59) | No route; `features/my-work/` is AGENTS.md only | — | `prototype-only` | — |
+| `voc` inbox / my | `screen-voc.jsx` | `/vocs?view=inbox`, `/vocs?view=my` | `routes/_authed/vocs.tsx` | `InboxRoute` inside `ListShell` | `registered` | `api/voc.md` |
+| `voc` triage | `screen-voc-create.jsx` | `/vocs?view=triage` | same file, `view=triage` | `TriageRoute` / `VocTriageScreen` inside `WorkbenchShell` | `registered` | `api/voc.md` (`PATCH /vocs/:id`, not `POST /vocs/:id/triage`) |
+| `voc-new` | `screen-voc-create.jsx` | No `voc-new` path; creation rules do not list a VOC full-page route | `/vocs?action=create` on the same vocs route (sidebar href is that URL) | `CreateRoute` / `VocCreateScreen` inside `PageShell` | `registered` under a different URL. Prototype id kept | `api/voc.md` (`POST /vocs`) |
+| `voc-clusters` | `screen-clusters.jsx` | `/voc-clusters?managedSystem&selected` | `routes/_authed/voc-clusters/index.tsx` | `VocClusterListShell` | `registered` | `api/voc-clusters.md` |
+| (no prototype id) | same shell | Not in the route block | `routes/_authed/voc-clusters/$clusterId.tsx` | `VocClusterListShell` with the path param as `selectedId` | `registered-extra` | `api/voc-clusters.md` |
+| `findings` | `screen-findings.jsx` | `/findings?managedSystem&selected` | `routes/_authed/findings/index.tsx` | `ListShell` + `FindingDetailPanel` | `registered` | `api/findings.md` |
+| (no prototype id) | no separate prototype screen | Not in the route block | `routes/_authed/findings/$findingId.tsx` | Full-page `FindingDetailPanel` (back link goes to VOC inbox, not the findings list) | `registered-extra` | `api/findings.md` |
+| `tasks` board | `screen-tasks.jsx` | `/tasks?view=board&selected=:taskId` | `routes/_authed/tasks.tsx` | `TaskBoardRoute` in `WorkbenchShell` | `registered`, with a search-key disagreement: contract says `selected`; zod allows `param`, not `selected`. `view` enum is `requests \| backlog \| board \| my \| inbox` | `api/tasks.md` |
+| `tasks` inbox | `screen-tasks-views.jsx` | `/tasks?view=inbox` | same tasks route | `TaskListRoute` in `ListShell` | `registered`. Not a distinct inbox component | `api/tasks.md` |
+| `tasks` my | `screen-tasks-views.jsx` | `/tasks?view=my` | same | `TaskListRoute` | `registered`. Contract line 76: `view=my` is an unfiltered backlog alias (ADR-0040), not `assignee=me`. Prototype treats it as its own list — drift recorded, prototype screen unchanged | `api/tasks.md` |
+| `tasks` requests | `screen-tasks.jsx` | `/tasks?view=requests` | same | `TaskRequestsRoute` in `ListShell` | `registered` (same `param` vs `selected` disagreement) | `api/tasks.md` |
+| `tasks` backlog | `screen-tasks.jsx` | `/tasks?view=backlog` renders `TaskListRoute` (same as inbox, my, and no view) | same | `TaskListRoute` | `registered`. Prototype has a distinct backlog surface; production shares the list route | `api/tasks.md` |
+| `tasks` milestones | `screen-milestones.jsx` + `screen-milestone-gantt.jsx` | `/tasks?view=milestones` is in the route block (line 27) and the milestone layout rules | Not in the zod enum (`.strict()` rejects it). No milestone route component under `features/tasks/` | — | `contract-only` | `api/tasks.md` has no milestone catalog (finding-to-milestone is called future in `api/findings.md`) |
+| `tasks` roadmap | `screen-tasks-roadmap.jsx` | Not in the route block | Not in the zod enum | — | `prototype-only` | — |
+| `integration` | `screen-integration.jsx` `IntegrationScreen` | `/integration` listed as its own route (line 28) | `routes/_authed/integration/index.tsx` `beforeLoad` redirects to `/integration/links` | none | `redirect`. Sidebar "Action dashboard" href is `/integration`, so the nav item lands on links. No integration action-dashboard endpoint in `api/*.md` — do not invent one; home summary is `api/dashboard.md` | — |
+| `integration-evidence` | `screen-evidence.jsx` | `/integration/evidence` | No route file; not in `NAV_TREE` | — | `contract-only` | No evidence list endpoint. Nested commands are `POST /findings/:id/evidence-highlights` and `POST /findings/:id/link-evidence` in `api/findings.md` |
+| `integration-coverage` | `screen-coverage.jsx` | `/integration/coverage` | No route file; not in `NAV_TREE` | — | `contract-only` | Coverage projection only, on `GET /dashboard/summary` |
+| `integration-links` | `screen-entity-links.jsx` | `/integration/links?managedSystem` | `routes/_authed/integration/links.tsx` | `LinksRoute` inside `ListShell` | `registered`. Search schema is `status`, `type`, `managedSystem` — no `selected`. Prototype detail panel has no URL selection key | `api/entity-links.md` |
+| `surveys` | `screen-surveys.jsx` | `/surveys?managedSystem&selected` | `routes/_authed/surveys/index.tsx` | `SurveyList` + `SurveyDetail` inside `ListShell` | `registered`. §4 lists Surveys as a `PageShell` consumer — §4 describes the prototype; the production list is `ListShell`. Shell drift recorded here only | `api/surveys.md` |
+| (folded into list) | `screen-surveys.jsx` detail | `/surveys/:surveyId` | `routes/_authed/surveys/$surveyId.tsx` | `SurveyDetail` inside `ListShell` when `builder` is absent | `registered-extra` — path form of the list's selected panel | `api/surveys.md` |
+| `survey-builder` | `screen-survey-builder.jsx` (+ `screen-survey-builder-preview.jsx`) | `/surveys/:surveyId?builder=true` | same `$surveyId.tsx`, `search.builder` | `SurveyBuilder`. Route file does not wrap `WorkbenchShell` | `registered` under the nested URL, not a top-level `survey-builder` path | `api/surveys.md` |
+| `survey-result` | `screen-survey-result.jsx` | `/surveys/:surveyId/results` | `routes/_authed/surveys/$surveyId.results.tsx` | `SurveyResultsSummary`. No `WorkbenchShell` in that route file; the parent returns `<Outlet />` for the results match | `registered` under the nested URL. §4 calling this `WorkbenchShell` stays a prototype fact | `api/surveys.md` (`GET` results section) |
+| `admin` | `screen-admin.jsx` `AdminScreen` | `/admin/managed-systems` | `routes/_authed/admin/managed-systems.tsx` | inline page, `PageShell` | `registered` | `api/core.md` |
+| `admin-areas` | `screen-admin.jsx` `AdminAreasScreen` | `/admin/analytics-areas` | `routes/_authed/admin/analytics-areas.tsx` | inline page, `PageShell` | `registered` | `api/core.md` |
+| `admin-permissions` | `screen-permissions.jsx` | `/admin/permissions/requests` | `routes/_authed/admin/permissions/requests.tsx` | inline page, `ListShell` | `registered` | `api/permissions.md` |
+| `admin-settings` | `screen-admin-settings.jsx` | `/admin/settings` | `routes/_authed/admin/settings.tsx` | `WorkspaceSettingsScreen` in `PageShell`, behind `PermissionGate` `workspace.admin` | `registered` | `api/core.md` |
+| (no prototype screen) | — | `/login` — behavior is the login paragraph in routes doc lines 101–103 | `routes/login.tsx` | `LoginPage` | `registered`. No prototype screen; do not invent a `screen-login.jsx` | — |
+
+`/dev-rich-editor` is a dev harness — excluded from this table.
+
+Do not build in this issue (gaps stay open): `my-work`, `view=milestones`, `tasks` roadmap, `/integration/evidence`, `/integration/coverage`, and an Integration action-dashboard page.
+
+Search-key disagreements to keep in mind on the tasks and links rows: tasks zod allows `param` where the contract says `selected`; links has no `selected` at all. Sidebar (`NAV_TREE`): rails are home, voc, findings, tasks, integration, surveys, admin. Integration entries are Action dashboard (`/integration`, which redirects), Findings (`/findings`), Entity links — no evidence, coverage, milestones, roadmap, backlog, or task-inbox items. The routes doc paragraph at line 99 (VOC section includes Findings; a MANAGED SYSTEMS group) does not match `NAV_TREE` — recorded; the routes doc is not fixed in this issue.
 
 ---
 
@@ -108,7 +171,7 @@ Pack 20 QA refresh: `screenshots/pack20-current/` (headless Chromium, 1440×960,
 Acceptance use:
 - For a continuation task, compare against these screenshots plus the live prototype.
 - For a clean-room implementation, compare against these screenshots only after the source docs and route contract are implemented.
-- Treat older PNGs directly under `screenshots/` as working evidence unless a later handoff promotes them into `screenshots/final-baselines/`.
+- Only `screenshots/final-baselines/`, `screenshots/pack20-current/`, and `screenshots/pack20-diff/` remain — Pack 20 deleted the loose PNGs directly under `screenshots/`, so there are no older PNGs to treat as working evidence.
 
 ---
 
@@ -285,8 +348,8 @@ For each canonical object in `01 domain`, which surfaces own its CRUD/review sto
 | `EntityRelationRow` extraction | `components.jsx`, `screen-entity-links.jsx`, `screen-clusters.jsx`, `screen-tasks-roadmap.jsx`, `screen-other.jsx` (AA slide-over) | 11 linking · inter | Rule 1 (component-first) |
 | `ObjectCard` generalisation | `components.jsx` (primitive available; Milestone card not yet refactored — see §9) | ui-ds | Rule 1 |
 | `SourceTypeIcon` / `SentimentChip` / `ImportanceChip` promotion | `components.jsx`, `screen-evidence.jsx` (consumer) | 05 finding · ui-ds | Rule 1 |
-| Multi-milestone TaskGantt roadmap (`/tasks/roadmap`) | `screen-tasks-roadmap.jsx`, `shell.jsx`, `app.jsx`, `cmdk.jsx`, `FeedbackOps.html` | 06 task §FR-TASK-005 · routes | Rule 2 (own file, < 900 lines) |
-| AnalyticsArea detail slide-over | `screen-other.jsx` (`AnalyticsAreaSlideOver`) | 09 permission §5.4 | Rule 3 (AA is filter, not boundary) |
+| Multi-milestone TaskGantt roadmap (`/tasks/roadmap`) | `screen-tasks-roadmap.jsx`, `shell.jsx`, `app.jsx`, `cmdk.jsx`, `FeedbackOps.html` | prototype-only — FR-TASK-005 is not in `06 task`; no route-contract row (see §1b) | Rule 2 (own file, < 900 lines) |
+| AnalyticsArea detail slide-over | `screen-other.jsx` (`AnalyticsAreaSlideOver`) | 03 core §FR-CORE-003 | Rule 3 (AA is filter, not boundary) |
 | Action Dashboard live counts | `components.jsx` (`LiveTimestamp`, `LiveCount`, `useTicker`), `screen-home.jsx`, `screen-other.jsx`, `styles.css` (`live-ping`) | 12 ux §Action queues are live | Rule 1 |
 | EntityLinks "Last refreshed at" | `screen-entity-links.jsx` (`LiveTimestamp` toolbar entry + Refresh button) | 11 linking · 12 ux | Rule 1 |
 | MilestoneDetail scroll-spy | `screen-milestones.jsx` (`IntersectionObserver` block) | inter §Anchored sections | — |
