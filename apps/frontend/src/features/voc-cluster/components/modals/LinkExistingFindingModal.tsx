@@ -1,7 +1,7 @@
 // Link an existing Finding to a VOC Cluster. Mounted only when the detail panel
-// is canMutate and the user opened it — useFindingsList has no `enabled` flag,
-// so an always-mounted modal would run the picker query behind every role and
-// loading state.
+// is canMutate (the `open` prop only toggles the dialog's own visibility) —
+// useFindingsList has no `enabled` flag, so mounting this for every role and
+// loading state would run the picker query for users who can never open it.
 
 import {
   Button,
