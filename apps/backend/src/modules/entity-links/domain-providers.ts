@@ -7,14 +7,11 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { checkFindingManage, checkFindingRead } from '../findings/authorization.js';
-import type { CheckService } from '../permissions/check-service.js';
 import { type TaskRow, findTaskById } from '../tasks/repo.js';
 import type {
   EntityLinkProviderRegistry,
-  EntityLinksActor,
   ReporterSummaryResult,
 } from './provider-types.js';
-import { type LinkEndpointRow, resolveVocEndpoint } from './repo.js';
 
 function taskToInternalSummary(row: TaskRow): EntityLinkTargetSummary {
   return {
@@ -28,19 +25,6 @@ function taskToInternalSummary(row: TaskRow): EntityLinkTargetSummary {
     assignee_actor_id: row.assignee_actor_id,
     due_date: row.due_date,
   };
-}
-
-async function assertVocReadScope(
-  deps: { checkService: CheckService },
-  actor: EntityLinksActor,
-  subject: LinkEndpointRow,
-): Promise<boolean> {
-  if (subject.reporter_id && actor.actor_id === subject.reporter_id) return true;
-  const readDecision = await deps.checkService.checkCapability(actor, 'voc.read', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: subject.managed_system_id,
-  });
-  return readDecision.allow;
 }
 
 async function resolveTask(db: Db, workspaceId: string, id: string) {
@@ -133,19 +117,7 @@ async function getTaskReporterSummaries(
   );
 }
 
-export const legacyEntityLinkProviders: Pick<
-  EntityLinkProviderRegistry,
-  'voc' | 'task'
-> = {
-  voc: {
-    entityType: 'voc',
-    assertExists: resolveVocEndpoint,
-    getPermissionSubject: resolveVocEndpoint,
-    canRead: assertVocReadScope,
-    getReporterSummary: async () => ({ available: false }),
-    getInternalSummary: async () => null,
-    listExpectedLinks: async () => [],
-  },
+export const legacyEntityLinkProviders: Pick<EntityLinkProviderRegistry, 'task'> = {
   task: {
     entityType: 'task',
     assertExists: resolveTask,
