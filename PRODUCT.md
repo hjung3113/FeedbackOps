@@ -56,7 +56,7 @@ What FeedbackOps deliberately is NOT, drawn from the locked decisions in `docs/a
 - **Hero-metric template** — the "big 96px number + tiny gray label + soft gradient" homepage card. The Dashboard is an **action queue surface, not a chart-only reporting page** (Product Invariant). Charts may exist; they never lead.
 - **Dark-mode-by-default tools** — Linear / Vercel / Raycast dark defaults. ADR-0021 supersedes ADR-0016 and chose light explicitly for the Samsung corporate environment. A future ADR may reintroduce a `[data-theme="dark"]` override; until then, light is canonical and dark is out of scope.
 - **Identical-card-grids** — Notion-template-gallery / Pinterest-style equal-weight cards. FeedbackOps is dense, list-first, and operational; equal-weight grids hide priority and bury the decision the Actor came to make.
-- **Decorative imagery, illustrations, oversized whitespace** — per DESIGN.md "Do's and Don'ts," the design is compact, leveraging an 8px element gap as a standard measurement. Empty states are terse Korean strings + one CTA, not full-bleed illustrated empty states.
+- **Decorative imagery, illustrations, oversized whitespace** — per docs/frontend/tokens.md "Do's and Don'ts," the design is compact, leveraging an 8px element gap as a standard measurement. Empty states are terse Korean strings + one CTA, not full-bleed illustrated empty states.
 
 **NOT to be used as an anti-reference:** the prototype in `docs/design-prototype/` itself. The prototype IS the source of truth for layout, hierarchy, density, spacing, and copy. Deviating from it requires an explicit ADR or a user-recorded OK in the PR body.
 
@@ -64,7 +64,7 @@ What FeedbackOps deliberately is NOT, drawn from the locked decisions in `docs/a
 
 Five strategic principles derived from `AGENTS.md`, `apps/frontend/AGENTS.md`, ADR-0020, ADR-0021, and `.review/PROTOTYPE-TO-PACK17.md`:
 
-1. **Pack 17 light tokens only — no raw hex, no raw px outside the scale.** Per ADR-0021, the canonical palette is Samsung-light (`#f3f7fe` canvas, `#1428a0` accent, `#101828` text). Implementations consume semantic tokens (`--text-primary`, `--surface-detail`, `--border-selected`); raw hex in feature screens is a review block. Spacing uses the fixed scale (4 / 8 / 12 / 16 / 20 / 24 / 28 / 32 / 36 / 40 / 48 / 64). Radii are 6px for cards/buttons/inputs, 2px for tags, 4px for badges. New tokens land in DESIGN.md and `packages/ui/src/styles/tokens.css` before broad use.
+1. **Pack 17 light tokens only — no raw hex, no raw px outside the scale.** Per ADR-0021, the canonical palette is Samsung-light (`#f3f7fe` canvas, `#1428a0` accent, `#101828` text). Implementations consume semantic tokens (`--text-primary`, `--surface-detail`, `--border-selected`); raw hex in feature screens is a review block. Spacing uses the fixed scale (4 / 8 / 12 / 16 / 20 / 24 / 28 / 32 / 36 / 40 / 48 / 64). Radii are 6px for cards/buttons/inputs, 2px for tags, 4px for badges. New tokens land in docs/frontend/tokens.md and `packages/ui/src/styles/tokens.css` before broad use.
 
 2. **Three-shell topology — `PageShell`, `ListShell`, `WorkbenchShell`, and nothing else.** ADR-0020 locks the route-layout vocabulary. Every screen classifies into one of the three. Backlog, Survey builder/result, and Roadmap are explicit *extensions* of those three, not new shells. All five header surfaces (sidebar system header, ListShell toolbar, WorkbenchShell toolbar, drawer panel header, Survey preview drawer header) share a single 50px baseline. Adding a fourth shell requires an ADR amendment.
 

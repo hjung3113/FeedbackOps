@@ -34,9 +34,15 @@
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  THRESHOLD_EVAL_FIXTURE,
+  assertFixtureWellFormed,
+} from '../../../../../test-support/recommendations-eval/fixture.js';
+import {
+  cosineSimilarity,
+  evaluateFixture,
+} from '../../../../../test-support/recommendations-eval/harness.js';
 import { VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from '../../constants.js';
-import { THRESHOLD_EVAL_FIXTURE, assertFixtureWellFormed } from '../fixture.js';
-import { cosineSimilarity, evaluateFixture } from '../harness.js';
 
 const fixture = THRESHOLD_EVAL_FIXTURE;
 

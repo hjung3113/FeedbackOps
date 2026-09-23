@@ -98,7 +98,7 @@ export function createRequestService(deps: RequestServiceDeps) {
     }
     const capability: Capability = body.requested_capability;
     const sensitive = isSensitiveCapability(capability);
-    // Sensitive capabilities (docs/implementation/05-permission-policy.md:62-76)
+    // Sensitive capabilities (docs/implementation/05-permission-policy.md ## Sensitive Permissions)
     // require a non-empty `reason`. The route Zod schema already requires
     // `reason.min(1)`, but we re-check here so the service emits a distinct
     // ADR-0012 code that downstream UIs can surface specifically.

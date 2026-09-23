@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { Scope } from '../../repo-read.js';
+import type { Scope } from '../../authorization.js';
 import { dismissalScopeKey } from '../scope.js';
 
 const MS_A = '11111111-2222-3333-4444-555555555555';

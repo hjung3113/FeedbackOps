@@ -8,3 +8,4 @@ export {
   MS_SLUG_REGEX,
 } from './managed-system-service.js';
 export { managedSystemsRoutes, type ManagedSystemsRoutesOptions } from './routes.js';
+export { lockManagedSystem, type LockedManagedSystem } from './repo.js';

@@ -38,7 +38,7 @@
 
 import { sql } from 'drizzle-orm';
 
-import type { Scope } from '../repo-read.js';
+import type { Scope } from '../authorization.js';
 
 export function sqlUuidArray(ids: string[]): ReturnType<typeof sql> {
   if (ids.length === 0) return sql`ARRAY[]::uuid[]`;

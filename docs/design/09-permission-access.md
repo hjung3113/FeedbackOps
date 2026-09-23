@@ -6,6 +6,9 @@ Permission / Access controls who can see internal work, survey responses, export
 
 Default access should be low after AD login.
 
+This file owns permission UX and what each role can do, including the default user and the capability matrix.
+Check order and audit event verbs live in docs/implementation/05-permission-policy.md. Do not copy them here.
+
 ## Boundary
 
 Owns:
@@ -67,13 +70,7 @@ Role Level order is Admin > Developer > User. Reporter is not a role; it is the 
 
 Role Level and grants control authorization. Capabilities are the authoritative permission decision.
 
-Role Levels:
-
-```text
-- User: Submit VOC, My VOCs, assigned Surveys
-- Developer: My Work, assigned/scoped VOC triage, Task Requests, Tasks, Surveys, Integration queues
-- Admin: Admin, Permission Requests, all administrative functions
-```
+User submits and sees their own allowed work. Developer works inside granted Managed System scopes. Admin runs workspace administration. The matrix below is the action grid.
 
 The backend returns effective navigation and capability states for the current workspace and Managed System context. The frontend must not derive authorization from display labels.
 
@@ -121,7 +118,7 @@ Permission scope shape:
 
 List endpoints for Tasks, Task Requests, Managed Systems, Findings, VOC triage, and Dashboard queues must accept managed_system_id filters where scoped data can appear. Backend responses must exclude objects outside the actor's effective Managed System scopes.
 
-managed_system_id=all means the actor's effective Managed System scope union. Workspace Admin receives true workspace-wide results. A Developer with multiple Managed System scopes receives the union of those scopes. A Developer with one scope receives the same result as that single scope. User-facing views should not expose all as a workspace-wide bypass.
+List-filter meaning of managed_system_id=all: docs/implementation/05-permission-policy.md, Permission Check Order.
 
 ## Default Owner / Reviewer Resolution
 

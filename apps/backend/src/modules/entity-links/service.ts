@@ -1,4 +1,3 @@
-import { taskReporterSummarySchema, taskStatusSchema } from '@fops/shared';
 import type {
   DetachedEntityLinkResponse,
   EntityLinkDto,
@@ -9,131 +8,38 @@ import type {
   EntityLinkTargetSummary,
   EntityLinkVisibilityState,
   TaskReporterSummary,
-  TaskStatus,
 } from '@fops/shared';
 import { isRegisteredEntityLinkPair, registeredEntityLinkPairs } from '@fops/shared';
-import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
-import { checkFindingManage, checkFindingRead } from '../findings/authorization.js';
-import { type FindingReadRow, findFindingById } from '../findings/repo-read.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { type TaskRequestRow, findTaskRequestById } from '../task-requests/repo.js';
-import { type TaskRow, findTaskById } from '../tasks/index.js';
-import { type VocClusterRow, findVocClusterById } from '../voc-clusters/repo.js';
 import { type LinkVisibilityDecision, evaluateLinkVisibility } from './evaluate-visibility.js';
+import type {
+  EntityLinkProvider,
+  EntityLinkProviderRegistry,
+  EntityLinksActor,
+  ReporterSummaryResult,
+} from './provider-types.js';
 import {
   type EntityLinkRow,
   type LinkEndpointRow,
   detachEntityLink,
   insertActiveEntityLink,
-  resolveVocEndpoint,
   selectActiveLinksForEndpoint,
   selectEntityLinkById,
   selectLinksByWorkspace,
 } from './repo.js';
 
-export interface EntityLinksActor {
-  actor_id: string;
-  workspace_id: string;
-  role_level: 'admin' | 'developer' | 'user';
-}
+export type { EntityLinksActor, ReporterSummaryResult } from './provider-types.js';
 
 export interface EntityLinksServiceDeps {
   db: Db;
   checkService: CheckService;
   auditService: AuditService;
-}
-
-export type ReporterSummaryResult =
-  | { available: false }
-  | { available: true; summary: TaskReporterSummary };
-
-interface EntityLinkProvider {
-  entityType: EntityLinkEntityType;
-  assertExists(db: Db, workspaceId: string, id: string): Promise<LinkEndpointRow | null>;
-  getPermissionSubject(db: Db, workspaceId: string, id: string): Promise<LinkEndpointRow | null>;
-  canRead(
-    deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
-    actor: EntityLinksActor,
-    subject: LinkEndpointRow,
-  ): Promise<boolean>;
-  canCreateTarget?(
-    deps: Pick<EntityLinksServiceDeps, 'checkService'>,
-    actor: EntityLinksActor,
-    subject: LinkEndpointRow,
-  ): Promise<boolean>;
-  getReporterSummary(db: Db, workspaceId: string, id: string): Promise<ReporterSummaryResult>;
-  getReporterSummaries?(
-    db: Db,
-    workspaceId: string,
-    ids: readonly string[],
-  ): Promise<Map<string, ReporterSummaryResult>>;
-  getInternalSummary(
-    db: Db,
-    workspaceId: string,
-    id: string,
-  ): Promise<EntityLinkTargetSummary | null>;
-  listExpectedLinks(id: string): Promise<EntityLinkRef[]>;
-}
-
-function findingToInternalSummary(row: FindingReadRow): EntityLinkTargetSummary {
-  return {
-    type: 'finding',
-    id: row.id,
-    display_id: row.display_id,
-    title: row.title,
-    summary: row.summary,
-    severity: row.severity,
-    confidence: row.confidence,
-    status: row.status,
-    primary_managed_system_id: row.primary_managed_system_id,
-    evidence_count: row.evidence_count,
-  };
-}
-
-function taskRequestToInternalSummary(row: TaskRequestRow): EntityLinkTargetSummary {
-  return {
-    type: 'task_request',
-    id: row.id,
-    display_id: row.display_id,
-    source_type: row.source_type,
-    source_id: row.source_id,
-    evidence_summary: row.evidence_summary,
-    requested_outcome: row.requested_outcome,
-    status: row.status,
-    primary_managed_system_id: row.primary_managed_system_id,
-    requester_actor_id: row.requester_actor_id,
-  };
-}
-
-function taskToInternalSummary(row: TaskRow): EntityLinkTargetSummary {
-  return {
-    type: 'task',
-    id: row.id,
-    display_id: row.display_id,
-    title: row.title,
-    status: row.status,
-    priority: row.priority,
-    primary_managed_system_id: row.primary_managed_system_id,
-    assignee_actor_id: row.assignee_actor_id,
-    due_date: row.due_date,
-  };
-}
-
-function clusterToInternalSummary(row: VocClusterRow): EntityLinkTargetSummary {
-  return {
-    type: 'voc_cluster',
-    id: row.id,
-    display_id: row.display_id,
-    title: row.title,
-    summary: row.summary,
-    status: row.status,
-    primary_managed_system_id: row.primary_managed_system_id,
-  };
+  providers: EntityLinkProviderRegistry;
 }
 
 function toAllowedDto(row: EntityLinkRow, targetSummary?: EntityLinkTargetSummary): EntityLinkDto {
@@ -236,279 +142,11 @@ export function assertLinkManagedSystemCompatibility(
   }
 }
 
-async function assertVocReadScope(
-  deps: Pick<EntityLinksServiceDeps, 'checkService'>,
-  actor: EntityLinksActor,
-  subject: LinkEndpointRow,
-): Promise<boolean> {
-  if (subject.reporter_id && actor.actor_id === subject.reporter_id) return true;
-  const readDecision = await deps.checkService.checkCapability(actor, 'voc.read', {
-    workspace_id: actor.workspace_id,
-    managed_system_id: subject.managed_system_id,
-  });
-  return readDecision.allow;
-}
-
-async function assertFindingReadScope(
-  deps: Pick<EntityLinksServiceDeps, 'checkService'>,
-  actor: EntityLinksActor,
-  managedSystemId: string,
-): Promise<boolean> {
-  const decision = await checkFindingRead(deps.checkService, actor, managedSystemId, {
-    requireElevatedRole: false,
-  });
-  return decision.allow;
-}
-
-async function assertFindingManageScope(
-  deps: Pick<EntityLinksServiceDeps, 'checkService'>,
-  actor: EntityLinksActor,
-  managedSystemId: string,
-): Promise<boolean> {
-  const decision = await checkFindingManage(deps.checkService, actor, managedSystemId, {
-    requireElevatedRole: false,
-  });
-  return decision.allow;
-}
-
-const unavailableReporterSummary = async (
-  _db: Db,
-  _workspaceId: string,
-  _id: string,
-): Promise<ReporterSummaryResult> => ({
-  available: false,
-});
-
-function assertNever(value: never): never {
-  throw new Error(`unrecognized Task status in reporter summary: ${String(value)}`);
-}
-
-function projectTaskStatusForReporter(status: TaskStatus): string {
-  switch (status) {
-    case 'backlog':
-    case 'todo':
-      return '진행 예정';
-    case 'doing':
-    case 'review':
-      return '진행 중';
-    case 'done':
-      return '해결 준비 중';
-    case 'released':
-      return '반영됨';
-    case 'reopened':
-      return '다시 처리 중';
-    default:
-      return assertNever(status);
-  }
-}
-
-export function toTaskReporterSummaryResult(task: {
-  title: string;
-  status: unknown;
-}): ReporterSummaryResult {
-  const parsedStatus = taskStatusSchema.safeParse(task.status);
-  if (!parsedStatus.success) return { available: false };
-  return {
-    available: true,
-    summary: taskReporterSummarySchema.parse({
-      target_type: 'task',
-      public_title: task.title,
-      reporter_facing_status: projectTaskStatusForReporter(parsedStatus.data),
-    }),
-  };
-}
-
-async function getTaskReporterSummary(
-  db: Db,
-  workspaceId: string,
-  taskId: string,
-): Promise<ReporterSummaryResult> {
-  const result = await db.execute<{ title: string; status: unknown }>(sql`
-    SELECT title, status
-      FROM task.tasks
-     WHERE id = ${taskId}
-       AND workspace_id = ${workspaceId}
-     LIMIT 1
-  `);
-  const task = result.rows[0];
-  if (!task) return { available: false };
-
-  return toTaskReporterSummaryResult(task);
-}
-
-async function getTaskReporterSummaries(
-  db: Db,
-  workspaceId: string,
-  taskIds: readonly string[],
-): Promise<Map<string, ReporterSummaryResult>> {
-  if (taskIds.length === 0) return new Map();
-
-  const result = await db.execute<{ id: string; title: string; status: unknown }>(sql`
-    SELECT id, title, status
-      FROM task.tasks
-     WHERE workspace_id = ${workspaceId}
-       AND id IN (${sql.join(
-         taskIds.map((id) => sql`${id}`),
-         sql`, `,
-       )})
-  `);
-  return new Map(
-    result.rows.map((task) => {
-      return [task.id, toTaskReporterSummaryResult(task)];
-    }),
-  );
-}
-
-const entityLinkProviders: Record<EntityLinkEntityType, EntityLinkProvider> = {
-  voc: {
-    entityType: 'voc',
-    assertExists: resolveVocEndpoint,
-    getPermissionSubject: resolveVocEndpoint,
-    canRead: assertVocReadScope,
-    getReporterSummary: unavailableReporterSummary,
-    getInternalSummary: async () => null,
-    listExpectedLinks: async () => [],
-  },
-  survey_response: {
-    entityType: 'survey_response',
-    // Survey-response links are created and revoked only by C4 domain commands.
-    // Generic entity-link surfaces must not resolve or disclose response IDs.
-    assertExists: async () => null,
-    getPermissionSubject: async () => null,
-    canRead: async () => false,
-    getReporterSummary: unavailableReporterSummary,
-    getInternalSummary: async () => null,
-    listExpectedLinks: async () => [],
-  },
-  finding: {
-    entityType: 'finding',
-    assertExists: async (db, workspaceId, id) => {
-      const finding = await findFindingById(db, { workspaceId, findingId: id });
-      if (!finding) return null;
-      return {
-        workspace_id: finding.workspace_id,
-        managed_system_id: finding.primary_managed_system_id,
-        reporter_id: null,
-      };
-    },
-    getPermissionSubject: async (db, workspaceId, id) => {
-      const finding = await findFindingById(db, { workspaceId, findingId: id });
-      if (!finding) return null;
-      return {
-        workspace_id: finding.workspace_id,
-        managed_system_id: finding.primary_managed_system_id,
-        reporter_id: null,
-      };
-    },
-    canRead: (deps, actor, subject) =>
-      assertFindingReadScope(deps, actor, subject.managed_system_id),
-    canCreateTarget: (deps, actor, subject) =>
-      assertFindingManageScope(deps, actor, subject.managed_system_id),
-    getReporterSummary: unavailableReporterSummary,
-    getInternalSummary: async (db, workspaceId, id) => {
-      const finding = await findFindingById(db, { workspaceId, findingId: id });
-      return finding ? findingToInternalSummary(finding) : null;
-    },
-    listExpectedLinks: async () => [],
-  },
-  voc_cluster: {
-    entityType: 'voc_cluster',
-    assertExists: async (db, workspaceId, id) => {
-      const cluster = await findVocClusterById(db, { workspaceId, clusterId: id });
-      if (!cluster) return null;
-      return {
-        workspace_id: cluster.workspace_id,
-        managed_system_id: cluster.primary_managed_system_id,
-        reporter_id: null,
-      };
-    },
-    getPermissionSubject: async (db, workspaceId, id) => {
-      const cluster = await findVocClusterById(db, { workspaceId, clusterId: id });
-      if (!cluster) return null;
-      return {
-        workspace_id: cluster.workspace_id,
-        managed_system_id: cluster.primary_managed_system_id,
-        reporter_id: null,
-      };
-    },
-    canRead: (deps, actor, subject) =>
-      assertFindingReadScope(deps, actor, subject.managed_system_id),
-    canCreateTarget: (deps, actor, subject) =>
-      assertFindingManageScope(deps, actor, subject.managed_system_id),
-    getReporterSummary: unavailableReporterSummary,
-    getInternalSummary: async (db, workspaceId, id) => {
-      const cluster = await findVocClusterById(db, { workspaceId, clusterId: id });
-      return cluster ? clusterToInternalSummary(cluster) : null;
-    },
-    listExpectedLinks: async () => [],
-  },
-  task_request: {
-    entityType: 'task_request',
-    assertExists: async (db, workspaceId, id) => {
-      const request = await findTaskRequestById(db, { workspaceId, taskRequestId: id });
-      if (!request) return null;
-      return {
-        workspace_id: request.workspace_id,
-        managed_system_id: request.primary_managed_system_id,
-        reporter_id: null,
-      };
-    },
-    getPermissionSubject: async (db, workspaceId, id) => {
-      const request = await findTaskRequestById(db, { workspaceId, taskRequestId: id });
-      if (!request) return null;
-      return {
-        workspace_id: request.workspace_id,
-        managed_system_id: request.primary_managed_system_id,
-        reporter_id: null,
-      };
-    },
-    canRead: (deps, actor, subject) =>
-      assertFindingReadScope(deps, actor, subject.managed_system_id),
-    canCreateTarget: (deps, actor, subject) =>
-      assertFindingManageScope(deps, actor, subject.managed_system_id),
-    getReporterSummary: unavailableReporterSummary,
-    getInternalSummary: async (db, workspaceId, id) => {
-      const request = await findTaskRequestById(db, { workspaceId, taskRequestId: id });
-      return request ? taskRequestToInternalSummary(request) : null;
-    },
-    listExpectedLinks: async () => [],
-  },
-  task: {
-    entityType: 'task',
-    assertExists: async (db, workspaceId, id) => {
-      const task = await findTaskById(db, { workspaceId, taskId: id });
-      if (!task) return null;
-      return {
-        workspace_id: task.workspace_id,
-        managed_system_id: task.primary_managed_system_id,
-        reporter_id: null,
-      };
-    },
-    getPermissionSubject: async (db, workspaceId, id) => {
-      const task = await findTaskById(db, { workspaceId, taskId: id });
-      if (!task) return null;
-      return {
-        workspace_id: task.workspace_id,
-        managed_system_id: task.primary_managed_system_id,
-        reporter_id: null,
-      };
-    },
-    canRead: (deps, actor, subject) =>
-      assertFindingReadScope(deps, actor, subject.managed_system_id),
-    canCreateTarget: (deps, actor, subject) =>
-      assertFindingManageScope(deps, actor, subject.managed_system_id),
-    getReporterSummary: getTaskReporterSummary,
-    getReporterSummaries: getTaskReporterSummaries,
-    getInternalSummary: async (db, workspaceId, id) => {
-      const task = await findTaskById(db, { workspaceId, taskId: id });
-      return task ? taskToInternalSummary(task) : null;
-    },
-    listExpectedLinks: async () => [],
-  },
-};
-
-function providerFor(type: EntityLinkEntityType): EntityLinkProvider {
-  return entityLinkProviders[type];
+function providerFor(
+  providers: EntityLinkProviderRegistry,
+  type: EntityLinkEntityType,
+): EntityLinkProvider {
+  return providers[type];
 }
 
 // The registry is the DB/audit allowlist. Some registered tuples are written only by
@@ -573,21 +211,21 @@ function isListVisibleTuple(input: {
 }
 
 async function resolveEndpointForRow(
-  deps: Pick<EntityLinksServiceDeps, 'db'>,
+  deps: Pick<EntityLinksServiceDeps, 'db' | 'providers'>,
   actor: EntityLinksActor,
   endpoint: EntityLinkRef,
   resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
 ): Promise<LinkEndpointRow | null> {
   const key = `${endpoint.type}:${endpoint.id}`;
   if (resolvedByEndpoint.has(key)) return resolvedByEndpoint.get(key) ?? null;
-  const provider = providerFor(endpoint.type);
+  const provider = providerFor(deps.providers, endpoint.type);
   const row = await provider.getPermissionSubject(deps.db, actor.workspace_id, endpoint.id);
   resolvedByEndpoint.set(key, row);
   return row;
 }
 
 async function evaluateRowVisibility(
-  deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
+  deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService' | 'providers'>,
   actor: EntityLinksActor,
   row: EntityLinkRow,
   resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
@@ -600,7 +238,7 @@ async function evaluateRowVisibility(
     resolveEndpointForRow(deps, actor, sourceRef, resolvedByEndpoint),
     resolveEndpointForRow(deps, actor, targetRef, resolvedByEndpoint),
   ]);
-  const sourceProvider = providerFor(row.source_type);
+  const sourceProvider = providerFor(deps.providers, row.source_type);
   const targetSummary: ReporterSummaryResult = reporterSummaries.get(
     `${row.target_type}:${row.target_id}`,
   ) ?? { available: false };
@@ -608,7 +246,7 @@ async function evaluateRowVisibility(
   const cachedSourceReadable = sourceReadabilityByEndpoint.get(sourceKey);
   const [sourceReadable, targetReadable] = await Promise.all([
     cachedSourceReadable ?? (source ? sourceProvider.canRead(deps, actor, source) : false),
-    target ? providerFor(row.target_type).canRead(deps, actor, target) : false,
+    target ? providerFor(deps.providers, row.target_type).canRead(deps, actor, target) : false,
   ]);
   sourceReadabilityByEndpoint.set(sourceKey, sourceReadable);
 
@@ -628,7 +266,7 @@ async function evaluateRowVisibility(
 }
 
 async function preloadReporterSummaries(
-  deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService'>,
+  deps: Pick<EntityLinksServiceDeps, 'db' | 'checkService' | 'providers'>,
   actor: EntityLinksActor,
   rows: readonly EntityLinkRow[],
   resolvedByEndpoint: Map<string, LinkEndpointRow | null>,
@@ -661,7 +299,7 @@ async function preloadReporterSummaries(
     [...sourceRefs].map(async ([key, sourceRef]) => {
       const source = await resolveEndpointForRow(deps, actor, sourceRef, resolvedByEndpoint);
       const readable = source
-        ? await providerFor(sourceRef.type).canRead(deps, actor, source)
+        ? await providerFor(deps.providers, sourceRef.type).canRead(deps, actor, source)
         : false;
       return [key, readable] as const;
     }),
@@ -675,7 +313,7 @@ async function preloadReporterSummaries(
         .map((row) => row.target_id),
     ),
   ];
-  const summaries = await entityLinkProviders.task.getReporterSummaries?.(
+  const summaries = await deps.providers.task.getReporterSummaries?.(
     deps.db,
     actor.workspace_id,
     taskIds,
@@ -692,11 +330,12 @@ async function preloadReporterSummaries(
 }
 
 async function getTargetInternalSummary(
+  providers: EntityLinkProviderRegistry,
   db: Db | Tx,
   actor: EntityLinksActor,
   row: Pick<EntityLinkRow, 'target_type' | 'target_id'>,
 ): Promise<EntityLinkTargetSummary | undefined> {
-  const summary = await providerFor(row.target_type).getInternalSummary(
+  const summary = await providerFor(providers, row.target_type).getInternalSummary(
     db,
     actor.workspace_id,
     row.target_id,
@@ -747,8 +386,8 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     }
 
     const db = args.tx ?? deps.db;
-    const sourceProvider = providerFor(source.type);
-    const targetProvider = providerFor(target.type);
+    const sourceProvider = providerFor(deps.providers, source.type);
+    const targetProvider = providerFor(deps.providers, target.type);
     const [sourceRow, targetRow] = await Promise.all([
       sourceProvider.assertExists(db, actor.workspace_id, source.id),
       targetProvider.assertExists(db, actor.workspace_id, target.id),
@@ -811,7 +450,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
 
     const result = args.tx ? await persist(args.tx) : await deps.db.transaction(persist);
 
-    const targetSummary = await getTargetInternalSummary(db, actor, result.row);
+    const targetSummary = await getTargetInternalSummary(deps.providers, db, actor, result.row);
 
     return {
       link: toAllowedDto(result.row, targetSummary),
@@ -824,7 +463,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     endpoint: EntityLinkRef;
   }): Promise<boolean> {
     const { actor, endpoint } = args;
-    const provider = providerFor(endpoint.type);
+    const provider = providerFor(deps.providers, endpoint.type);
     const focus = await provider.getPermissionSubject(deps.db, actor.workspace_id, endpoint.id);
     if (!focus) return false;
     return provider.canRead(deps, actor, focus);
@@ -838,7 +477,7 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     onUnreadableFocus?: 'not_found' | 'empty';
   }): Promise<EntityLinkDto[]> {
     const { actor, endpoint, side } = args;
-    const provider = providerFor(endpoint.type);
+    const provider = providerFor(deps.providers, endpoint.type);
     const focus = await provider.getPermissionSubject(deps.db, actor.workspace_id, endpoint.id);
     if (!focus) {
       throw new HttpError('not_found.record', 'entity link endpoint not found');
@@ -890,7 +529,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         sourceReadabilityByEndpoint,
       );
       const targetSummary =
-        decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
+        decision === 'allowed'
+          ? await getTargetInternalSummary(deps.providers, deps.db, actor, row)
+          : undefined;
       items.push(toDtoForDecision(row, decision, summary, targetSummary));
     }
     return items;
@@ -937,7 +578,9 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         sourceReadabilityByEndpoint,
       );
       const targetSummary =
-        decision === 'allowed' ? await getTargetInternalSummary(deps.db, actor, row) : undefined;
+        decision === 'allowed'
+          ? await getTargetInternalSummary(deps.providers, deps.db, actor, row)
+          : undefined;
       items.push(toDtoForDecision(row, decision, summary, targetSummary));
     }
     return items;
@@ -964,8 +607,8 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
     ) {
       throw new HttpError('not_found.record', 'entity link not found');
     }
-    const sourceProvider = providerFor(link.source_type);
-    const targetProvider = providerFor(link.target_type);
+    const sourceProvider = providerFor(deps.providers, link.source_type);
+    const targetProvider = providerFor(deps.providers, link.target_type);
     const [sourceRow, targetRow] = await Promise.all([
       sourceProvider.getPermissionSubject(deps.db, actor.workspace_id, link.source_id),
       targetProvider.getPermissionSubject(deps.db, actor.workspace_id, link.target_id),

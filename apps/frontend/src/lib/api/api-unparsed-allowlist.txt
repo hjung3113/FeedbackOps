@@ -6,14 +6,15 @@
 # lib/api/client.ts, which defines it, is pinned too).
 # The unparsed-endpoints test fails when a file's count differs in EITHER
 # direction, so migrated endpoints must shrink their entry.
+features/admin/managed-systems/useManagedSystemsRegistry.ts 2
 features/admin/permissions/permission-state-view.tsx 2
 features/admin/settings/use-workspace-settings.ts 3
 features/cross-system/create-finding/useCreateFindingFromVocMutation.ts 2
 features/integration/hooks/useEntityLinkInventory.ts 2
-features/integration/hooks/useEvidenceHighlights.ts 2
-features/integration/hooks/useEvidenceMutations.ts 3
-features/integration/hooks/useFindingStatusMutation.ts 2
-features/integration/hooks/useRequestTaskFromFinding.ts 2
+features/findings/hooks/useEvidenceHighlights.ts 2
+features/findings/hooks/useEvidenceMutations.ts 3
+features/findings/hooks/useFindingStatusMutation.ts 2
+features/findings/hooks/useRequestTaskFromFinding.ts 2
 features/surveys/hooks/useCreateFindingFromSurveyResponse.ts 2
 features/surveys/hooks/useSurveys.ts 9
 features/voc-cluster/hooks/useAddClusterMember.ts 2
@@ -24,7 +25,6 @@ features/voc-cluster/hooks/useCreateVocCluster.ts 2
 features/voc-cluster/hooks/useLinkExistingFindingToVocCluster.ts 2
 features/voc-cluster/hooks/useRemoveClusterMember.ts 2
 features/voc-cluster/hooks/useRequestTaskFromCluster.ts 2
-features/voc/components/triage/TriagePanel.tsx 3
 features/voc/hooks/useConfirmVocRecommendation.ts 2
 features/voc/hooks/useDismissVocRecommendation.ts 2
 features/voc/hooks/usePublicUpdateReviewCandidates.ts 3
@@ -38,7 +38,7 @@ features/voc/hooks/useVocPreSubmitPeers.ts 2
 features/voc/hooks/useVocPublicUpdateMutation.ts 2
 features/voc/hooks/useVocRecommendations.ts 2
 features/voc/hooks/useVocReporterReplyMutation.ts 2
-features/voc/hooks/useVocTriageMutation.ts 3
+features/voc/lib/triage-transport.ts 4
 lib/api/attachments.ts 3
 lib/api/client.ts 1
 lib/api/dashboard.ts 2
@@ -48,4 +48,3 @@ lib/api/task-requests.ts 5
 lib/api/tasks.ts 7
 lib/cross-system/useVocDetail.ts 2
 lib/cross-system/useWorkspaceActors.ts 2
-routes/_authed/admin/managed-systems.tsx 2

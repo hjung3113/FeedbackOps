@@ -1,863 +1,119 @@
 // Audit event vocabulary. The canonical verb list is locked verbatim by
-// docs/implementation/05-permission-policy.md:146-156 (snake_case, single
-// token, no dot — e.g. `permission_requested`, `permission_approved`).
+// the "Audit events" list in docs/implementation/05-permission-policy.md
+// under the heading "### Permission Request self-approval policy"
+// (snake_case, single token, no dot — e.g. `permission_requested`,
+// `permission_approved`).
 // ADR-0008's older `subject_type.verb` convention is a non-binding stylistic
 // suggestion and explicitly defers to the policy doc's verb vocabulary for
 // any event listed there. New events MUST take their name from that list,
 // or — if no policy-doc entry exists — adopt the same snake_case style.
 //
-// Both apps import the canonical list from `@fops/shared`. Slice 1 (#5)
-// ships exactly one event: `permission_requested`.
+// Both apps import the canonical list from `@fops/shared`.
 //
-// New events MUST add (a) the event_type string to AUDIT_EVENT_TYPES and (b)
-// a zod schema for the `detail` payload in AUDIT_EVENT_DETAIL_SCHEMAS so the
-// audit service can validate the call site at write time.
+// This file is the registry only. Each domain module under `src/audit/`
+// owns its event-type strings, detail schemas, and inferred types, and is
+// spread in below. New events MUST add (a) the event_type string to the
+// owning domain module's `*_AUDIT_EVENT_TYPES` tuple and (b) a zod schema
+// for the `detail` payload to that module's detail map, so the audit
+// service can validate the call site at write time. Never add a new
+// string literal directly here.
 
 import { z } from 'zod';
 
-import { attachmentUploadedDetailSchema } from '../audit/attachments.js';
 import {
-  surveyClosedDetailSchema,
-  surveyCreatedDetailSchema,
-  surveyOpenedDetailSchema,
-  surveyQuestionCreatedDetailSchema,
-  surveyQuestionDeletedDetailSchema,
-  surveyQuestionUpdatedDetailSchema,
-  surveyQuestionsReorderedDetailSchema,
-  surveyResponseExcerptApprovedDetailSchema,
-  surveyResponseExcerptRevokedDetailSchema,
-  surveyResponsePersonalReadDetailSchema,
-  surveyResponseSubmittedDetailSchema,
-  surveyUpdatedDetailSchema,
-} from '../audit/survey.js';
+  ANALYTICS_AREA_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ANALYTICS_AREA_AUDIT_EVENT_TYPES,
+} from '../audit/analytics-area.js';
 import {
-  internalCommentCreatedDetailSchema,
-  publicUpdateCreatedDetailSchema,
-  reporterFacingStatusChangedDetailSchema,
-  reporterReplyCreatedDetailSchema,
-  vocAnalyticsAreaLinkedDetailSchema,
-  vocClusterDecisionRecordedDetailSchema,
-  vocCreatedDetailSchema,
-  vocDescriptionEditedDetailSchema,
-  vocOwnerAssignedDetailSchema,
-  vocSeveritySetDetailSchema,
-  vocTriageCommittedDetailSchema,
-  vocTriagePostponedDetailSchema,
+  ATTACHMENT_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ATTACHMENT_AUDIT_EVENT_TYPES,
+} from '../audit/attachments.js';
+import {
+  ENTITY_LINK_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ENTITY_LINK_AUDIT_EVENT_TYPES,
+} from '../audit/entity-link.js';
+import {
+  FINDING_FROM_SURVEY_RESPONSE_AUDIT_EVENT_DETAIL_SCHEMAS,
+  FINDING_FROM_SURVEY_RESPONSE_AUDIT_EVENT_TYPES,
+  FINDING_FROM_VOC_AUDIT_EVENT_DETAIL_SCHEMAS,
+  FINDING_FROM_VOC_AUDIT_EVENT_TYPES,
+  FINDING_LIFECYCLE_AUDIT_EVENT_DETAIL_SCHEMAS,
+  FINDING_LIFECYCLE_AUDIT_EVENT_TYPES,
+  FINDING_TASK_LINKED_AUDIT_EVENT_DETAIL_SCHEMAS,
+  FINDING_TASK_LINKED_AUDIT_EVENT_TYPES,
+} from '../audit/finding.js';
+import {
+  MANAGED_SYSTEM_AUDIT_EVENT_DETAIL_SCHEMAS,
+  MANAGED_SYSTEM_AUDIT_EVENT_TYPES,
+} from '../audit/managed-system.js';
+import {
+  PERMISSION_AUDIT_EVENT_DETAIL_SCHEMAS,
+  PERMISSION_AUDIT_EVENT_TYPES,
+} from '../audit/permission.js';
+import { SURVEY_AUDIT_EVENT_DETAIL_SCHEMAS, SURVEY_AUDIT_EVENT_TYPES } from '../audit/survey.js';
+import {
+  TASK_REQUEST_AUDIT_EVENT_DETAIL_SCHEMAS,
+  TASK_REQUEST_AUDIT_EVENT_TYPES,
+} from '../audit/task-request.js';
+import { TASK_AUDIT_EVENT_DETAIL_SCHEMAS, TASK_AUDIT_EVENT_TYPES } from '../audit/task.js';
+import {
+  VOC_CLUSTER_AUDIT_EVENT_DETAIL_SCHEMAS,
+  VOC_CLUSTER_AUDIT_EVENT_TYPES,
+} from '../audit/voc-cluster.js';
+import {
+  VOC_AUDIT_EVENT_DETAIL_SCHEMAS,
+  VOC_AUDIT_EVENT_TYPES,
+  VOC_RECOMMENDATION_AUDIT_EVENT_DETAIL_SCHEMAS,
+  VOC_RECOMMENDATION_AUDIT_EVENT_TYPES,
+  VOC_REVIEW_CANDIDATE_AUDIT_EVENT_DETAIL_SCHEMAS,
+  VOC_REVIEW_CANDIDATE_AUDIT_EVENT_TYPES,
 } from '../audit/voc.js';
-import { findingConfidenceSchema, findingSeveritySchema } from '../findings/index.js';
+import {
+  WORKSPACE_SETTINGS_AUDIT_EVENT_DETAIL_SCHEMAS,
+  WORKSPACE_SETTINGS_AUDIT_EVENT_TYPES,
+} from '../audit/workspace-settings.js';
 
+// Spread order preserves the historical AUDIT_EVENT_TYPES order byte-for-byte
+// (Zod's enum option list is order-sensitive). Do not reorder or re-group.
 export const AUDIT_EVENT_TYPES = [
-  'permission_requested',
-  'permission_approved',
-  'permission_rejected',
-  'permission_needs_more_info',
-  'permission_denied',
-  // Slice 2 #10: Managed System Registry write path (ADR-0017 audit detail).
-  'managed_system_registered',
-  'managed_system_updated',
-  'managed_system_archived',
-  // Slice 2 #11: Analytics Area write path + cascade tracking.
-  'analytics_area_registered',
-  'analytics_area_updated',
-  'analytics_area_archived',
-  // Slice 3 #12: VOC domain events (ADR-0017 audit detail).
-  'voc_created',
-  'voc_triage_committed',
-  'voc_severity_set',
-  'voc_owner_assigned',
-  'voc_analytics_area_linked',
-  'voc_cluster_decision_recorded',
-  'public_update_created',
-  'reporter_facing_status_changed',
-  'reporter_reply_created',
-  'internal_comment_created',
-  // Slice 3 #14: 보류 path audit event.
-  'voc_triage_postponed',
-  // Slice 3 #17: Reporter pre-triage description edit.
-  'voc_description_edited',
-  // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
-  'attachment_uploaded',
-  // Slice 4.1 #112: canonical entity link creation tracer.
-  'entity_link.created',
-  // Slice 4.2 #113: audited soft detach lifecycle.
-  'entity_link.detached',
-  // Slice 5 #121: Finding created from a source VOC.
-  'finding_created_from_voc',
-  // Slice 5 #126: VOC Cluster membership and cluster-created Finding.
-  'voc_cluster_created',
-  'voc_cluster_updated',
-  'voc_cluster_member_added',
-  'voc_cluster_member_removed',
-  'finding_created_from_voc_cluster',
-  'finding_linked_to_voc_cluster',
-  'finding_unlinked_from_voc_cluster',
-  // Slice 5 #124: Evidence preserved on a Finding.
-  'evidence_highlight_added',
-  // Slice 6 #131: Finding status machine.
-  'finding_status_changed',
-  'finding_comment_created',
-  // Slice 6 #132: Task Request tracer from Finding.
-  'task_request_created_from_finding',
-  // Slice 6 #136: Task Request sources from VOC and VOC Cluster.
-  'task_request_created_from_voc',
-  'task_request_created_from_voc_cluster',
-  // Slice 6 #133: Task Request review queue decisions.
-  'task_request_approved',
-  'task_request_rejected',
-  'task_request_needs_more_evidence',
-  'task_request_self_approval_denied',
-  // Slice 6 #134: Task conversion/link-existing decisions.
-  'task_created_from_request',
-  'task_linked_to_request',
-  // Slice 6 #135: Finding links an existing Task directly.
-  'finding_task_linked',
-  // Slice 7 #138: Task board status transition.
-  'task_status_changed',
-  'task_comment_created',
-  'public_update_review_candidate_created',
-  'public_update_review_candidate_dismissed',
-  // Slice 8 #191: Survey lifecycle and question structure events.
-  'survey_created',
-  'survey_updated',
-  'survey_questions_reordered',
-  'survey_question_created',
-  'survey_question_updated',
-  'survey_question_deleted',
-  'survey_opened',
-  'survey_closed',
-  'survey_response_submitted',
-  // Slice 8 #187: audited personal candidate read and approval lifecycle.
-  'survey_response_personal_read',
-  'survey_response_excerpt_approved',
-  'survey_response_excerpt_revoked',
-  'finding_created_from_survey_response',
-  // Slice 9 #195: workspace-level policy singleton mutation.
-  'workspace_settings_updated',
-  // #168 step 4: embedding recommendation decisions (ADR-0034 D3).
-  'voc_recommendation_dismissed',
-  'voc_recommendation_confirmed',
+  ...PERMISSION_AUDIT_EVENT_TYPES,
+  ...MANAGED_SYSTEM_AUDIT_EVENT_TYPES,
+  ...ANALYTICS_AREA_AUDIT_EVENT_TYPES,
+  ...VOC_AUDIT_EVENT_TYPES,
+  ...ATTACHMENT_AUDIT_EVENT_TYPES,
+  ...ENTITY_LINK_AUDIT_EVENT_TYPES,
+  ...FINDING_FROM_VOC_AUDIT_EVENT_TYPES,
+  ...VOC_CLUSTER_AUDIT_EVENT_TYPES,
+  ...FINDING_LIFECYCLE_AUDIT_EVENT_TYPES,
+  ...TASK_REQUEST_AUDIT_EVENT_TYPES,
+  ...FINDING_TASK_LINKED_AUDIT_EVENT_TYPES,
+  ...TASK_AUDIT_EVENT_TYPES,
+  ...VOC_REVIEW_CANDIDATE_AUDIT_EVENT_TYPES,
+  ...SURVEY_AUDIT_EVENT_TYPES,
+  ...FINDING_FROM_SURVEY_RESPONSE_AUDIT_EVENT_TYPES,
+  ...WORKSPACE_SETTINGS_AUDIT_EVENT_TYPES,
+  ...VOC_RECOMMENDATION_AUDIT_EVENT_TYPES,
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
 export const auditEventTypeSchema = z.enum(AUDIT_EVENT_TYPES);
 
-// `permission_requested` detail shape — locked by issue #5 application
-// service step 3. Optional fields are explicitly nullable so the audit row
-// faithfully records what the request did or did not carry.
-// `sensitive` is true when the requested capability is marked sensitive in
-// CAPABILITY_META (per policy doc 05-permission-policy.md:62-76).
-export const permissionRequestedDetailSchema = z.object({
-  capability: z.string().min(1),
-  managed_system_id: z.string().uuid().nullable(),
-  reason: z.string().min(1),
-  sensitive: z.boolean(),
-  source_object_type: z.string().nullable(),
-  source_object_id: z.string().uuid().nullable(),
-  source_action_id: z.string().nullable(),
-});
-export type PermissionRequestedDetail = z.infer<typeof permissionRequestedDetailSchema>;
-
-export const permissionApprovedDetailSchema = z
-  .object({
-    capability: z.string().min(1),
-    managed_system_id: z.string().uuid().nullable(),
-    requester_actor_id: z.string().uuid(),
-    reason: z.string().min(1).nullable(),
-    grant_id: z.string().uuid(),
-    self_approval: z
-      .object({
-        policy_citation: z.string().min(1),
-        peer_reviewer_absence: z.string().min(1),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
-export type PermissionApprovedDetail = z.infer<typeof permissionApprovedDetailSchema>;
-
-export const permissionRejectedDetailSchema = z
-  .object({
-    capability: z.string().min(1),
-    managed_system_id: z.string().uuid().nullable(),
-    requester_actor_id: z.string().uuid(),
-    reason: z.string().min(1),
-  })
-  .strict();
-export type PermissionRejectedDetail = z.infer<typeof permissionRejectedDetailSchema>;
-
-export const permissionNeedsMoreInfoDetailSchema = z
-  .object({
-    capability: z.string().min(1),
-    managed_system_id: z.string().uuid().nullable(),
-    requester_actor_id: z.string().uuid(),
-    note: z.string().min(1),
-  })
-  .strict();
-export type PermissionNeedsMoreInfoDetail = z.infer<typeof permissionNeedsMoreInfoDetailSchema>;
-
-export const permissionDeniedDetailSchema = z
-  .object({
-    capability: z.string().min(1),
-    managed_system_id: z.string().uuid().nullable(),
-    requester_actor_id: z.string().uuid(),
-    reason: z.string().min(1),
-    deny_id: z.string().uuid(),
-  })
-  .strict();
-export type PermissionDeniedDetail = z.infer<typeof permissionDeniedDetailSchema>;
-
-// ──────────────────────────────────────────────────────────────────────
-// Managed System Registry audit events (ADR-0017 audit-detail section).
-// `_registered` snapshots row state at creation; `_updated` records a
-// change diff (`changes: { field: { from, to } }`); `_archived` records
-// the id list of cascaded Analytics Areas (empty until Slice 2 #11
-// activates the AA write path).
-// ──────────────────────────────────────────────────────────────────────
-export const managedSystemRegisteredDetailSchema = z.object({
-  slug: z.string().min(1),
-  name: z.string().min(1),
-  external_key: z.string().nullable(),
-  default_owner_actor_id: z.string().uuid().nullable(),
-  default_owner_team_id: z.string().uuid().nullable(),
-});
-export type ManagedSystemRegisteredDetail = z.infer<typeof managedSystemRegisteredDetailSchema>;
-
-// `changes` is a map of field → { from, to }; values are JSON-compatible.
-// At least one field is present — a PATCH that changes nothing returns 200
-// without writing an audit row, so this schema rejects an empty `changes`.
-const changeEntrySchema = z.object({
-  from: z.union([z.string(), z.null()]),
-  to: z.union([z.string(), z.null()]),
-});
-export const managedSystemUpdatedDetailSchema = z.object({
-  managed_system_id: z.string().uuid(),
-  changes: z.record(z.string(), changeEntrySchema).refine((c) => Object.keys(c).length > 0, {
-    message: 'changes must include at least one field',
-  }),
-});
-export type ManagedSystemUpdatedDetail = z.infer<typeof managedSystemUpdatedDetailSchema>;
-
-export const managedSystemArchivedDetailSchema = z.object({
-  managed_system_id: z.string().uuid(),
-  cascaded_analytics_area_ids: z.array(z.string().uuid()),
-});
-export type ManagedSystemArchivedDetail = z.infer<typeof managedSystemArchivedDetailSchema>;
-
-// ──────────────────────────────────────────────────────────────────────
-// Analytics Area audit events (ADR-0017 audit-detail section, Slice 2 #11).
-// `_archived` carries `cascade_source_managed_system_id` so a single BI
-// query can join from either direction (MS archive → child AAs, or AA
-// row → parent cascade event).
-// ──────────────────────────────────────────────────────────────────────
-export const analyticsAreaRegisteredDetailSchema = z.object({
-  workspace_id: z.string().uuid(),
-  managed_system_id: z.string().uuid(),
-  slug: z.string().min(1),
-  name: z.string().min(1),
-  owner_team_id: z.string().uuid().nullable(),
-});
-export type AnalyticsAreaRegisteredDetail = z.infer<typeof analyticsAreaRegisteredDetailSchema>;
-
-export const analyticsAreaUpdatedDetailSchema = z.object({
-  analytics_area_id: z.string().uuid(),
-  changes: z.record(z.string(), changeEntrySchema).refine((c) => Object.keys(c).length > 0, {
-    message: 'changes must include at least one field',
-  }),
-});
-export type AnalyticsAreaUpdatedDetail = z.infer<typeof analyticsAreaUpdatedDetailSchema>;
-
-export const analyticsAreaArchivedDetailSchema = z.object({
-  analytics_area_id: z.string().uuid(),
-  cascade_source_managed_system_id: z.string().uuid().nullable(),
-});
-export type AnalyticsAreaArchivedDetail = z.infer<typeof analyticsAreaArchivedDetailSchema>;
-
-const vocRefDetailSchema = z.object({
-  type: z.literal('voc'),
-  id: z.string().uuid(),
-});
-
-// Entity-link audits are internal-only operational records.  Like the VOC
-// variants above they identify the source by UUID, but never carry response
-// content or respondent fields.
-const surveyResponseRefDetailSchema = z.object({
-  type: z.literal('survey_response'),
-  id: z.string().uuid(),
-});
-
-const vocClusterRefDetailSchema = z.object({
-  type: z.literal('voc_cluster'),
-  id: z.string().uuid(),
-});
-
-const findingRefDetailSchema = z.object({
-  type: z.literal('finding'),
-  id: z.string().uuid(),
-});
-
-const taskRequestRefDetailSchema = z.object({
-  type: z.literal('task_request'),
-  id: z.string().uuid(),
-});
-
-const taskRefDetailSchema = z.object({
-  type: z.literal('task'),
-  id: z.string().uuid(),
-});
-
-export const entityLinkCreatedDetailSchema = z.union([
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocRefDetailSchema,
-    target: vocRefDetailSchema,
-    relation_type: z.literal('related_to'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocClusterRefDetailSchema,
-    target: findingRefDetailSchema,
-    relation_type: z.literal('evidence_of'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocRefDetailSchema,
-    target: findingRefDetailSchema,
-    relation_type: z.literal('created_finding'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocRefDetailSchema,
-    target: findingRefDetailSchema,
-    relation_type: z.literal('evidence_of'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocClusterRefDetailSchema,
-    target: findingRefDetailSchema,
-    relation_type: z.literal('created_finding'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: findingRefDetailSchema,
-    target: taskRequestRefDetailSchema,
-    relation_type: z.literal('requested_task'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocRefDetailSchema,
-    target: taskRequestRefDetailSchema,
-    relation_type: z.literal('requested_task'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocClusterRefDetailSchema,
-    target: taskRequestRefDetailSchema,
-    relation_type: z.literal('requested_task'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: taskRequestRefDetailSchema,
-    target: taskRefDetailSchema,
-    relation_type: z.literal('converted_to'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: findingRefDetailSchema,
-    target: taskRefDetailSchema,
-    relation_type: z.literal('requested_task'),
-    visibility: z.literal('internal_only'),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocRefDetailSchema,
-    target: taskRefDetailSchema,
-    relation_type: z.literal('evidence_of'),
-    visibility: z.literal('internal_only'),
-  }),
-  z
-    .object({
-      link_id: z.string().uuid(),
-      source: surveyResponseRefDetailSchema,
-      target: findingRefDetailSchema,
-      relation_type: z.literal('generated_finding'),
-      visibility: z.literal('internal_only'),
-    })
-    .strict(),
-  z
-    .object({
-      link_id: z.string().uuid(),
-      source: surveyResponseRefDetailSchema,
-      target: findingRefDetailSchema,
-      relation_type: z.literal('evidence_of'),
-      visibility: z.literal('internal_only'),
-    })
-    .strict(),
-]);
-export type EntityLinkCreatedDetail = z.infer<typeof entityLinkCreatedDetailSchema>;
-
-export const entityLinkDetachedDetailSchema = z.union([
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocRefDetailSchema,
-    target: vocRefDetailSchema,
-    relation_type: z.literal('related_to'),
-    reason: z.string().min(1),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocRefDetailSchema,
-    target: findingRefDetailSchema,
-    relation_type: z.literal('created_finding'),
-    reason: z.string().min(1),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocRefDetailSchema,
-    target: findingRefDetailSchema,
-    relation_type: z.literal('evidence_of'),
-    reason: z.string().min(1),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocClusterRefDetailSchema,
-    target: findingRefDetailSchema,
-    relation_type: z.literal('created_finding'),
-    reason: z.string().min(1),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: vocClusterRefDetailSchema,
-    target: findingRefDetailSchema,
-    relation_type: z.literal('evidence_of'),
-    reason: z.string().min(1),
-  }),
-  z.object({
-    link_id: z.string().uuid(),
-    source: findingRefDetailSchema,
-    target: taskRequestRefDetailSchema,
-    relation_type: z.literal('requested_task'),
-    reason: z.string().min(1),
-  }),
-]);
-export type EntityLinkDetachedDetail = z.infer<typeof entityLinkDetachedDetailSchema>;
-
-export const findingCreatedFromVocDetailSchema = z.object({
-  finding_id: z.string().uuid(),
-  source_voc_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  source_type: z.literal('voc'),
-});
-export type FindingCreatedFromVocDetail = z.infer<typeof findingCreatedFromVocDetailSchema>;
-
-export const findingCreatedFromSurveyResponseDetailSchema = z
-  .object({
-    finding_id: z.string().uuid(),
-    source_survey_response_id: z.string().uuid(),
-    source_survey_id: z.string().uuid(),
-    primary_managed_system_id: z.string().uuid(),
-    identity_protected: z.boolean(),
-    source_type: z.literal('survey_response'),
-  })
-  .strict();
-export type FindingCreatedFromSurveyResponseDetail = z.infer<
-  typeof findingCreatedFromSurveyResponseDetailSchema
->;
-
-export const findingCreatedFromVocClusterDetailSchema = z.object({
-  finding_id: z.string().uuid(),
-  source_voc_cluster_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  source_type: z.literal('voc_cluster'),
-});
-export type FindingCreatedFromVocClusterDetail = z.infer<
-  typeof findingCreatedFromVocClusterDetailSchema
->;
-
-export const findingLinkedToVocClusterDetailSchema = z.object({
-  finding_id: z.string().uuid(),
-  voc_cluster_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  relation_type: z.literal('evidence_of'),
-});
-export type FindingLinkedToVocClusterDetail = z.infer<typeof findingLinkedToVocClusterDetailSchema>;
-
-export const findingUnlinkedFromVocClusterDetailSchema = z.object({
-  link_id: z.string().uuid(),
-  finding_id: z.string().uuid(),
-  voc_cluster_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  relation_type: z.literal('evidence_of'),
-  reason: z.string().min(1),
-});
-export type FindingUnlinkedFromVocClusterDetail = z.infer<
-  typeof findingUnlinkedFromVocClusterDetailSchema
->;
-
-const vocClusterStatusDetailSchema = z.enum(['draft', 'confirmed']);
-
-export const vocClusterCreatedDetailSchema = z.object({
-  voc_cluster_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  title: z.string().min(1),
-  summary_present: z.boolean(),
-  status: vocClusterStatusDetailSchema,
-});
-export type VocClusterCreatedDetail = z.infer<typeof vocClusterCreatedDetailSchema>;
-
-export const vocClusterUpdatedDetailSchema = z.object({
-  voc_cluster_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  changes: z
-    .object({
-      title: z.object({ from: z.string().min(1), to: z.string().min(1) }).optional(),
-      summary: z
-        .object({
-          from: z.string().nullable(),
-          to: z.string().nullable(),
-        })
-        .optional(),
-      severity: z
-        .object({
-          from: findingSeveritySchema.nullable(),
-          to: findingSeveritySchema.nullable(),
-        })
-        .optional(),
-      confidence: z
-        .object({
-          from: findingConfidenceSchema.nullable(),
-          to: findingConfidenceSchema.nullable(),
-        })
-        .optional(),
-      rationale: z.object({ from: z.string().nullable(), to: z.string().nullable() }).optional(),
-      owner_user_id: z
-        .object({ from: z.string().uuid().nullable(), to: z.string().uuid().nullable() })
-        .optional(),
-      status: z
-        .object({
-          from: vocClusterStatusDetailSchema,
-          to: vocClusterStatusDetailSchema,
-        })
-        .optional(),
-      confirmed_by: z
-        .object({ from: z.string().uuid().nullable(), to: z.string().uuid().nullable() })
-        .optional(),
-      confirmed_at: z
-        .object({ from: z.string().datetime().nullable(), to: z.string().datetime().nullable() })
-        .optional(),
-    })
-    .refine((changes) => Object.keys(changes).length > 0, {
-      message: 'at least one cluster field change is required',
-    }),
-});
-export type VocClusterUpdatedDetail = z.infer<typeof vocClusterUpdatedDetailSchema>;
-
-export const vocClusterMemberAddedDetailSchema = z.object({
-  voc_cluster_id: z.string().uuid(),
-  voc_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-});
-export type VocClusterMemberAddedDetail = z.infer<typeof vocClusterMemberAddedDetailSchema>;
-
-export const vocClusterMemberRemovedDetailSchema = z.object({
-  voc_cluster_id: z.string().uuid(),
-  voc_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-});
-export type VocClusterMemberRemovedDetail = z.infer<typeof vocClusterMemberRemovedDetailSchema>;
-
-export const evidenceHighlightAddedDetailSchema = z.object({
-  finding_id: z.string().uuid(),
-  evidence_highlight_id: z.string().uuid(),
-  source_type: z.enum(['voc', 'survey_response', 'note']),
-  source_id: z.string().uuid().nullable(),
-  primary_managed_system_id: z.string().uuid(),
-});
-export type EvidenceHighlightAddedDetail = z.infer<typeof evidenceHighlightAddedDetailSchema>;
-
-export const findingStatusChangedDetailSchema = z.object({
-  finding_id: z.string().uuid(),
-  from_status: z.enum(['draft', 'active', 'not_actionable', 'converted', 'archived']),
-  to_status: z.enum(['draft', 'active', 'not_actionable', 'converted', 'archived']),
-  primary_managed_system_id: z.string().uuid(),
-  reason: z.string().min(1).max(1000).optional(),
-});
-export type FindingStatusChangedDetail = z.infer<typeof findingStatusChangedDetailSchema>;
-
-export const findingCommentCreatedDetailSchema = z.object({
-  finding_id: z.string().uuid(),
-  comment_id: z.string().uuid(),
-  actor_id: z.string().uuid(),
-  mentions: z.array(z.string().uuid()),
-});
-export type FindingCommentCreatedDetail = z.infer<typeof findingCommentCreatedDetailSchema>;
-
-export const taskRequestCreatedFromFindingDetailSchema = z.object({
-  task_request_id: z.string().uuid(),
-  source_finding_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  source_type: z.literal('finding'),
-});
-export type TaskRequestCreatedFromFindingDetail = z.infer<
-  typeof taskRequestCreatedFromFindingDetailSchema
->;
-
-export const taskRequestCreatedFromVocDetailSchema = z.object({
-  task_request_id: z.string().uuid(),
-  source_voc_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  source_type: z.literal('voc'),
-});
-export type TaskRequestCreatedFromVocDetail = z.infer<typeof taskRequestCreatedFromVocDetailSchema>;
-
-export const taskRequestCreatedFromVocClusterDetailSchema = z.object({
-  task_request_id: z.string().uuid(),
-  source_voc_cluster_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  source_type: z.literal('voc_cluster'),
-});
-export type TaskRequestCreatedFromVocClusterDetail = z.infer<
-  typeof taskRequestCreatedFromVocClusterDetailSchema
->;
-
-const taskRequestStatusDetailSchema = z.enum([
-  'pending_review',
-  'approved',
-  'rejected',
-  'needs_more_evidence',
-  'converted',
-]);
-
-export const taskRequestDecisionDetailSchema = z.object({
-  task_request_id: z.string().uuid(),
-  from_status: taskRequestStatusDetailSchema,
-  to_status: taskRequestStatusDetailSchema,
-  reviewer_actor_id: z.string().uuid(),
-  reason: z.string().min(1).max(4000).optional(),
-  note: z.string().min(1).max(4000).optional(),
-  self_approval: z.boolean().optional(),
-  sensitive: z.boolean().optional(),
-});
-export type TaskRequestDecisionDetail = z.infer<typeof taskRequestDecisionDetailSchema>;
-
-export const taskRequestSelfApprovalDeniedDetailSchema = z.object({
-  task_request_id: z.string().uuid(),
-  requester_actor_id: z.string().uuid(),
-  reason_present: z.boolean(),
-  capability_present: z.boolean(),
-});
-export type TaskRequestSelfApprovalDeniedDetail = z.infer<
-  typeof taskRequestSelfApprovalDeniedDetailSchema
->;
-
-export const taskCreatedFromRequestDetailSchema = z.object({
-  task_id: z.string().uuid(),
-  source_task_request_id: z.string().uuid(),
-  primary_managed_system_id: z.string().uuid(),
-  preserved_links: z.array(z.string().uuid()),
-});
-export type TaskCreatedFromRequestDetail = z.infer<typeof taskCreatedFromRequestDetailSchema>;
-
-export const taskLinkedToRequestDetailSchema = z.object({
-  task_id: z.string().uuid(),
-  task_request_id: z.string().uuid(),
-});
-export type TaskLinkedToRequestDetail = z.infer<typeof taskLinkedToRequestDetailSchema>;
-
-export const findingTaskLinkedDetailSchema = z
-  .object({
-    finding_id: z.string().uuid(),
-    task_id: z.string().uuid(),
-    primary_managed_system_id: z.string().uuid(),
-  })
-  .strict();
-export type FindingTaskLinkedDetail = z.infer<typeof findingTaskLinkedDetailSchema>;
-
-export const taskStatusChangedDetailSchema = z
-  .object({
-    from: z.enum(['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']),
-    to: z.enum(['backlog', 'todo', 'doing', 'review', 'done', 'released', 'reopened']),
-    reason: z.string().min(1).max(1000).optional(),
-  })
-  .strict();
-export type TaskStatusChangedDetail = z.infer<typeof taskStatusChangedDetailSchema>;
-
-export const taskCommentCreatedDetailSchema = z.object({
-  task_id: z.string().uuid(),
-  comment_id: z.string().uuid(),
-  actor_id: z.string().uuid(),
-  mentions: z.array(z.string().uuid()),
-});
-export type TaskCommentCreatedDetail = z.infer<typeof taskCommentCreatedDetailSchema>;
-
-export const publicUpdateReviewCandidateCreatedDetailSchema = z
-  .object({
-    candidate_id: z.string().uuid(),
-    voc_id: z.string().uuid(),
-    source_task_id: z.string().uuid(),
-    source_entity_link_id: z.string().uuid(),
-    release_event_id: z.string().uuid(),
-    correlation_id: z.string().uuid(),
-  })
-  .strict();
-
-export const publicUpdateReviewCandidateDismissedDetailSchema = z
-  .object({
-    candidate_id: z.string().uuid(),
-    dismissal_reason: z.string().trim().min(1).max(2000),
-  })
-  .strict();
-
-export const workspaceSettingsUpdatedDetailSchema = z
-  .object({
-    changes: z
-      .object({
-        permission_self_approval: z
-          .object({
-            from: z.enum(['allowed', 'forbidden']),
-            to: z.enum(['allowed', 'forbidden']),
-          })
-          .strict()
-          .optional(),
-        survey_anonymity_threshold: z
-          .object({ from: z.number().int().min(5).max(50), to: z.number().int().min(5).max(50) })
-          .strict()
-          .optional(),
-      })
-      .strict()
-      .refine((changes) => Object.keys(changes).length > 0, {
-        message: 'changes must include at least one field',
-      }),
-  })
-  .strict();
-export type WorkspaceSettingsUpdatedDetail = z.infer<typeof workspaceSettingsUpdatedDetailSchema>;
-
-// #168 step 4 — embedding recommendation decisions (ADR-0034 D3).
-//
-// `embedding_version` and `scope_key` are on the audit row, not just the
-// decision row: the whole point of D3's suppression rules is that a decision
-// is scoped, and an audit trail that omits the scope cannot answer "why did
-// this pair come back" after a version bump.
-export const vocRecommendationDismissedDetailSchema = z
-  .object({
-    source_voc_id: z.string().uuid(),
-    candidate_voc_id: z.string().uuid(),
-    embedding_version: z.number().int().positive(),
-    scope_key: z.string().min(1),
-  })
-  .strict();
-export type VocRecommendationDismissedDetail = z.infer<
-  typeof vocRecommendationDismissedDetailSchema
->;
-
-export const vocRecommendationConfirmedDetailSchema = z
-  .object({
-    source_voc_id: z.string().uuid(),
-    candidate_voc_id: z.string().uuid(),
-    embedding_version: z.number().int().positive(),
-    scope_key: z.string().min(1),
-    voc_cluster_id: z.string().uuid(),
-    // Whether this confirmation created the cluster or joined an existing one.
-    cluster_created: z.boolean(),
-    primary_managed_system_id: z.string().uuid(),
-  })
-  .strict();
-export type VocRecommendationConfirmedDetail = z.infer<
-  typeof vocRecommendationConfirmedDetailSchema
->;
-
 export const AUDIT_EVENT_DETAIL_SCHEMAS = {
-  permission_requested: permissionRequestedDetailSchema,
-  permission_approved: permissionApprovedDetailSchema,
-  permission_rejected: permissionRejectedDetailSchema,
-  permission_needs_more_info: permissionNeedsMoreInfoDetailSchema,
-  permission_denied: permissionDeniedDetailSchema,
-  managed_system_registered: managedSystemRegisteredDetailSchema,
-  managed_system_updated: managedSystemUpdatedDetailSchema,
-  managed_system_archived: managedSystemArchivedDetailSchema,
-  analytics_area_registered: analyticsAreaRegisteredDetailSchema,
-  analytics_area_updated: analyticsAreaUpdatedDetailSchema,
-  analytics_area_archived: analyticsAreaArchivedDetailSchema,
-  // Slice 3 #12: VOC domain events.
-  voc_created: vocCreatedDetailSchema,
-  voc_triage_committed: vocTriageCommittedDetailSchema,
-  voc_severity_set: vocSeveritySetDetailSchema,
-  voc_owner_assigned: vocOwnerAssignedDetailSchema,
-  voc_analytics_area_linked: vocAnalyticsAreaLinkedDetailSchema,
-  voc_cluster_decision_recorded: vocClusterDecisionRecordedDetailSchema,
-  public_update_created: publicUpdateCreatedDetailSchema,
-  reporter_facing_status_changed: reporterFacingStatusChangedDetailSchema,
-  reporter_reply_created: reporterReplyCreatedDetailSchema,
-  internal_comment_created: internalCommentCreatedDetailSchema,
-  // Slice 3 #14: 보류 path audit event.
-  voc_triage_postponed: vocTriagePostponedDetailSchema,
-  // Slice 3 #17: Reporter pre-triage description edit.
-  voc_description_edited: vocDescriptionEditedDetailSchema,
-  // Slice 3 #22 / PLAN-22 C3a: attachment upload commit.
-  attachment_uploaded: attachmentUploadedDetailSchema,
-  // Slice 4.1 #112.
-  'entity_link.created': entityLinkCreatedDetailSchema,
-  // Slice 4.2 #113.
-  'entity_link.detached': entityLinkDetachedDetailSchema,
-  // Slice 5 #121.
-  finding_created_from_voc: findingCreatedFromVocDetailSchema,
-  // Slice 5 #126.
-  voc_cluster_created: vocClusterCreatedDetailSchema,
-  voc_cluster_updated: vocClusterUpdatedDetailSchema,
-  voc_cluster_member_added: vocClusterMemberAddedDetailSchema,
-  voc_cluster_member_removed: vocClusterMemberRemovedDetailSchema,
-  finding_created_from_voc_cluster: findingCreatedFromVocClusterDetailSchema,
-  finding_linked_to_voc_cluster: findingLinkedToVocClusterDetailSchema,
-  finding_unlinked_from_voc_cluster: findingUnlinkedFromVocClusterDetailSchema,
-  // Slice 5 #124.
-  evidence_highlight_added: evidenceHighlightAddedDetailSchema,
-  // Slice 6 #131.
-  finding_status_changed: findingStatusChangedDetailSchema,
-  finding_comment_created: findingCommentCreatedDetailSchema,
-  // Slice 6 #132.
-  task_request_created_from_finding: taskRequestCreatedFromFindingDetailSchema,
-  // Slice 6 #136.
-  task_request_created_from_voc: taskRequestCreatedFromVocDetailSchema,
-  task_request_created_from_voc_cluster: taskRequestCreatedFromVocClusterDetailSchema,
-  // Slice 6 #133.
-  task_request_approved: taskRequestDecisionDetailSchema,
-  task_request_rejected: taskRequestDecisionDetailSchema,
-  task_request_needs_more_evidence: taskRequestDecisionDetailSchema,
-  task_request_self_approval_denied: taskRequestSelfApprovalDeniedDetailSchema,
-  // Slice 6 #134.
-  task_created_from_request: taskCreatedFromRequestDetailSchema,
-  task_linked_to_request: taskLinkedToRequestDetailSchema,
-  // Slice 6 #135.
-  finding_task_linked: findingTaskLinkedDetailSchema,
-  // Slice 7 #138.
-  task_status_changed: taskStatusChangedDetailSchema,
-  task_comment_created: taskCommentCreatedDetailSchema,
-  public_update_review_candidate_created: publicUpdateReviewCandidateCreatedDetailSchema,
-  public_update_review_candidate_dismissed: publicUpdateReviewCandidateDismissedDetailSchema,
-  // Slice 8 #191: Survey lifecycle and question structure events.
-  survey_created: surveyCreatedDetailSchema,
-  survey_updated: surveyUpdatedDetailSchema,
-  survey_questions_reordered: surveyQuestionsReorderedDetailSchema,
-  survey_question_created: surveyQuestionCreatedDetailSchema,
-  survey_question_updated: surveyQuestionUpdatedDetailSchema,
-  survey_question_deleted: surveyQuestionDeletedDetailSchema,
-  survey_opened: surveyOpenedDetailSchema,
-  survey_closed: surveyClosedDetailSchema,
-  survey_response_submitted: surveyResponseSubmittedDetailSchema,
-  survey_response_personal_read: surveyResponsePersonalReadDetailSchema,
-  survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
-  survey_response_excerpt_revoked: surveyResponseExcerptRevokedDetailSchema,
-  finding_created_from_survey_response: findingCreatedFromSurveyResponseDetailSchema,
-  workspace_settings_updated: workspaceSettingsUpdatedDetailSchema,
-  // #168 step 4.
-  voc_recommendation_dismissed: vocRecommendationDismissedDetailSchema,
-  voc_recommendation_confirmed: vocRecommendationConfirmedDetailSchema,
+  ...PERMISSION_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...MANAGED_SYSTEM_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...ANALYTICS_AREA_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...VOC_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...ATTACHMENT_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...ENTITY_LINK_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...FINDING_FROM_VOC_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...VOC_CLUSTER_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...FINDING_LIFECYCLE_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...TASK_REQUEST_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...FINDING_TASK_LINKED_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...TASK_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...VOC_REVIEW_CANDIDATE_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...SURVEY_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...FINDING_FROM_SURVEY_RESPONSE_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...WORKSPACE_SETTINGS_AUDIT_EVENT_DETAIL_SCHEMAS,
+  ...VOC_RECOMMENDATION_AUDIT_EVENT_DETAIL_SCHEMAS,
 } as const satisfies Record<AuditEventType, z.ZodTypeAny>;

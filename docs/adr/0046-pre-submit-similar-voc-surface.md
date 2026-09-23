@@ -245,7 +245,7 @@ No local authority justifies that additional surface in this design-only issue.
 - `docs/design/04-voc-system.md` — **FR-VOC-004, Implementation status**:
   describe the pre-submit heuristic as distinct from the saved embedding
   recommendation resource; do not claim semantic preview.
-- `docs/implementation/03-api-contracts.md` — **VOC endpoints**: document the
+- `docs/implementation/api/voc.md` — **VOC Similarity Projection**: document the
   new authenticated, read-only pre-submit peers endpoint and its zero-result/
   authorization behavior.
 - `docs/adr/0031-similar-voc-same-managed-system-heuristic.md` — **Decision /

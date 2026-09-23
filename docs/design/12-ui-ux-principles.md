@@ -151,8 +151,10 @@ Dashboard:
 ## UI Action Traceability
 
 Every primary CTA should map to a requirement ID and, when applicable, an
-implementation API contract. Endpoint behavior is owned by
-`docs/implementation/03-api-contracts.md`.
+implementation API contract. Endpoint authority is
+`docs/implementation/03-api-contracts.md` (index, global rules, error codes,
+contract template) together with `docs/implementation/api/*.md` (behavior and
+catalog in the same domain file). No other document is an endpoint authority.
 
 | UI Action | Requirement | Implementation API Contract |
 | --- | --- | --- |

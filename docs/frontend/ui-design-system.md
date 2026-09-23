@@ -9,7 +9,7 @@ It is limited to UI design, component behavior, states, layout, responsive behav
 Visual foundation:
 
 ```text
-DESIGN.md
+docs/frontend/tokens.md
 ```
 
 Product UI intent:
@@ -18,9 +18,9 @@ Product UI intent:
 docs/design/12-ui-ux-principles.md
 ```
 
-## Relationship To DESIGN.md
+## Relationship To The Token Seed
 
-`DESIGN.md` is the visual reference and token seed:
+`docs/frontend/tokens.md` is the visual reference and token seed:
 
 ```text
 - light Samsung One UI aesthetic
@@ -35,7 +35,7 @@ docs/design/12-ui-ux-principles.md
 Implementation precedence:
 
 ```text
-- DESIGN.md owns raw visual token seed.
+- docs/frontend/tokens.md owns raw visual token seed.
 - docs/frontend/ui-design-system.md owns reusable UI pattern contracts.
 - docs/frontend/component-inventory.md owns component inventory and required states.
 - docs/frontend/routes-and-layout.md owns route and URL state behavior.
@@ -801,7 +801,7 @@ Rules:
 - On failure, rollback visual state and show retry.
 ```
 
-## Semantic Tokens To Add On Top Of DESIGN.md
+## Semantic Tokens To Add On Top Of The Token Seed
 
 Text:
 
@@ -973,5 +973,5 @@ Admin review detail:
 - Build reusable components from this document before building domain screens.
 - Prefer composition over one-off screen-specific components.
 - If a screen needs a new status, signal, or row pattern, add it here before implementing.
-- Keep DESIGN.md as the visual token reference; do not duplicate full token tables here.
+- Keep docs/frontend/tokens.md as the visual token reference; do not duplicate full token tables here.
 ```

@@ -10,7 +10,7 @@ import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
 import type { AuditService } from '../../core/audit/audit-service.js';
 import type { VocClustersService } from '../../voc-clusters/service.js';
-import { type Scope, actorReadScope } from '../repo-read.js';
+import { type Scope, actorReadScope } from '../authorization.js';
 
 import { VOC_RECOMMENDATION_LIMIT, VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from './constants.js';
 import {

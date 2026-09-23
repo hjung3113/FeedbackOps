@@ -1,5 +1,5 @@
-import { TaskDetailPanel } from './TaskListRoute';
-import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
+import { TaskDetailPanel } from '../components/TaskDetailPanel';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { updateTaskStatus, listTasks } from '@/lib/api/tasks';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';

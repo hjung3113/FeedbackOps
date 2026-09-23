@@ -27,7 +27,7 @@ import { insertTaskRow } from "./_seed-helpers.js";
 import {
   releasedReviewCandidatesHandler,
   type TaskReleasedReviewCandidatesPayload,
-} from "../jobs/released-review-candidates.js";
+} from "../../voc/jobs/released-review-candidates.js";
 import { createPublicUpdateReviewCandidatesService } from "../../voc/public-update-review-candidates/service.js";
 
 const APP_URL = process.env.DATABASE_URL ?? "";

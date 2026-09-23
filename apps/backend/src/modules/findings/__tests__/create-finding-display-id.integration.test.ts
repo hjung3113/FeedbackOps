@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
+import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
 import { createEntityLinksService } from '../../entity-links/service.js';
 import { createCheckService } from '../../permissions/check-service.js';
@@ -42,6 +43,7 @@ describe.skipIf(!runIntegration)('finding display_id assignment (#142)', () => {
         db: dbHandle.db,
         checkService,
         auditService,
+        providers: buildEntityLinkProviders(),
       }),
     });
 

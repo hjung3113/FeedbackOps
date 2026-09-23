@@ -37,7 +37,7 @@ These surfaces shipped in later slices and are governed by their ADRs plus the c
 | Domain shapes | `docs/design/01-domain-model.md`, `docs/design/15-data-contracts.md` |
 | Routes / URL state | `docs/frontend/routes-and-layout.md` |
 | UI contract | `docs/frontend/ui-design-system.md`, `docs/frontend/component-inventory.md`, `docs/frontend/interaction-patterns.md` |
-| API contract | `docs/implementation/03-api-contracts.md` §VOC Create And Conversation |
+| API contract | `docs/implementation/api/voc.md` §VOC Create And Conversation Contract |
 | Permission policy | `docs/design/09-permission-access.md`, `docs/implementation/05-permission-policy.md` |
 | Entity linking | `docs/implementation/06-entity-linking-contract.md`, `docs/design/11-entity-linking.md` |
 | Error envelope | `docs/adr/0012-error-code-contract.md` |
@@ -212,7 +212,7 @@ Prototype mock entity → production DTO. **snake_case at HTTP boundary, camelCa
 | `similarCount` | `similar_count: integer` (from `GET /vocs/:id?include=similar_count`) | `similarCount: number` | **GAP:** API contract does not yet specify whether `similar_count` is inlined on list rows or fetched via `GET /vocs/:id/similar`. Spec assumes inline for inbox row scanning; flag as S3-002 contract decision. |
 | `linkedFindingId`, `linkedTaskId` | derived from `entity_links` per `docs/implementation/06-entity-linking-contract.md` | `links?: EntityLinkDto[]` on `GET /vocs/:id` | VOC detail consumes the backend-projected `links` read DTO already included in its detail response; it does not issue a separate entity-links request. Reporter-facing Task UI must never synthesize a summary from an `allowed` DTO. |
 | `sourceContext` (display string) | `source_context: enum(direct_use\|proxy_report\|operational_discovery\|stakeholder_request)` | `sourceContext: SourceContext` | Prototype uses display strings (`'Direct Use'`); production uses the enum + i18n label catalog. |
-| `nextAction` (single string) | `next_actions: NextAction[]` per `docs/implementation/03-api-contracts.md` §Next Action Contract | `nextActions: NextAction[]` | Render the highest-priority `available` action in the sticky footer; surface the rest in `<DetailPanelHeaderActions>` More menu. Frontend MUST NOT infer eligibility. |
+| `nextAction` (single string) | `next_actions: NextAction[]` per `docs/implementation/api/next-actions.md` §Next Action Contract | `nextActions: NextAction[]` | Render the highest-priority `available` action in the sticky footer; surface the rest in `<DetailPanelHeaderActions>` More menu. Frontend MUST NOT infer eligibility. |
 | `cluster` (cluster id) | `cluster_id: uuid \| null` (TBD per VOC Cluster spec) | `clusterId: string \| null` | Cluster confirmation/dismissal lives in VOC Cluster spec; this spec only consumes presence. |
 | `permissionDecisions: { linkedFinding, … }` | `permission_decisions: Record<DecisionKey, PermissionDecision>` per `docs/implementation/05-permission-policy.md` §3 Permission Envelope | `permissionDecisions: Record<DecisionKey, PermissionDecision>` | See §7. |
 
@@ -238,7 +238,7 @@ interface PermissionDecision {
 
 ### 4.3 Conversation entries (public_updates, reporter_replies, internal_comments)
 
-Each entry is append-only (per `docs/implementation/03-api-contracts.md` §VOC Conversation).
+Each entry is append-only (per `docs/implementation/api/voc.md` §VOC Create And Conversation Contract).
 
 | Field | Type | Notes |
 |---|---|---|
@@ -248,7 +248,7 @@ Each entry is append-only (per `docs/implementation/03-api-contracts.md` §VOC C
 | `body_rich_content: TipTapDoc` (jsonb) | required | sanitized server-side per ADR-0011 |
 | `created_at: timestamp` | required | |
 | `visibility: enum('public_update' \| 'reporter_reply' \| 'internal_comment')` | required | also implicit from endpoint, but persisted for unified `conversation_timeline` queries |
-| (public_updates only) `reporter_facing_status_before: enum`, `reporter_facing_status_after: enum`, `skip_public_update: bool`, `skip_reason: text \| null` | per status-change paired-write rule (`docs/implementation/03-api-contracts.md:176-179`) | |
+| (public_updates only) `reporter_facing_status_before: enum`, `reporter_facing_status_after: enum`, `skip_public_update: bool`, `skip_reason: text \| null` | per status-change paired-write rule (`docs/implementation/api/voc.md` §VOC Create And Conversation Contract (`skip_public_update`)) | |
 
 **GAP:** `docs/design/15-data-contracts.md` lists VOC but does not enumerate the conversation tables. The shapes above are the minimum surface the frontend consumes; the migration spec lives in backend issue S3-001.
 

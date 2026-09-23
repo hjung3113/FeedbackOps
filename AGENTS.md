@@ -69,7 +69,7 @@ Authority follows subject; there is no universal conflict ladder.
 2. `docs/frontend/specs/*.md` when prototype is silent
 3. `CONTEXT.md` when neither has a verbatim string
 
-**Per-domain pointers:** endpoint behavior → `docs/implementation/03-api-contracts.md`; DB + migrations → `04-database-and-migrations.md`; module ownership → `02-domain-module-boundaries.md`; permissions → `05-permission-policy.md`; entity links → `06-entity-linking-contract.md`; frontend routes → `docs/frontend/routes-and-layout.md`; component contracts → `docs/frontend/ui-design-system.md` + `component-inventory.md`. Visual token seed: `DESIGN.md` (Pack 17 light tokens / ADR-0021 supersede Pack 20 prototype dark tokens for impl).
+**Per-domain pointers:** endpoint behavior → `docs/implementation/03-api-contracts.md` and `docs/implementation/api/`; DB + migrations → `04-database-and-migrations.md`; module ownership → `02-domain-module-boundaries.md`; permissions → `05-permission-policy.md`; entity links → `06-entity-linking-contract.md`; frontend routes → `docs/frontend/routes-and-layout.md`; component contracts → `docs/frontend/ui-design-system.md` + `component-inventory.md`. Visual token seed: `docs/frontend/tokens.md` (Pack 17 light tokens / ADR-0021 supersede Pack 20 prototype dark tokens for impl).
 
 ## Product Invariants
 
@@ -89,8 +89,8 @@ Authority follows subject; there is no universal conflict ladder.
 - Repositories write only tables owned by their module.
 - Source-shaped routes do not grant write ownership to the source module.
 - Frontend screens compose typed API hooks and shared components; they do not enforce backend permissions as truth.
-- Frontend feature folders follow top-level route ownership: `home`, `my-work`, `voc`, `voc-cluster`, `surveys`, `tasks`, `integration`, `admin`.
-- Integration owns Findings, Evidence, Coverage, and Links feature code. Findings routes at top-level `/findings`; Evidence, Coverage, and Links stay under `/integration/*`. VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
+- Frontend feature folders follow top-level route ownership: `home`, `my-work`, `voc`, `findings`, `voc-cluster`, `surveys`, `tasks`, `integration`, `admin`.
+- Findings feature code lives in `features/findings/` and is mounted at top-level `/findings`. Integration keeps Evidence, Coverage, and Links feature code. Evidence, Coverage, and Links stay under `/integration/*`. VOC Clusters are implemented in `features/voc-cluster/` and mounted at the top-level `/voc-clusters` route.
 - Managed System Registry, Analytics Areas, Permission Requests, and workspace settings live under Admin routes.
 - `packages/shared` must not import either app. `packages/ui` must not call APIs or own domain mutations.
 
@@ -118,20 +118,6 @@ Test code is a liability. Fewer, sharper tests beat more tests.
 Execution playbook (roles, model tiers, task sizing, review/verify cycles, conductor conduct): see the `/agent-workflow` skill (external toolkit). The toolkit installs here via `install-into.sh <target>`, which **copies** four managed leaves as a self-contained snapshot: `.agent-workflow/{scripts,schemas,docs/agents}` + `.claude/skills/agent-workflow`. Existing installs upgrade with `--upgrade`; `--mode`/`--force` no longer exist and are rejected.
 
 The four leaves are gitignored here, and **git worktrees do not inherit ignored files** — a fresh worktree has no `.agent-workflow/`, so a relative `.agent-workflow/scripts/...` call from inside one fails with `No such file or directory`. Until toolkit issue #62 lands, call the scripts by absolute path from the main checkout, or install into the worktree.
-
-### Model Routing (temporary — pending toolkit issue #84)
-
-The toolkit installs its allocation policy but nothing surfaces it: `.agent-workflow/**` is gitignored and referenced by no tracked doc, and the `/agent-workflow` skill only loads when explicitly invoked. This block is a hand-maintained stand-in for the installer-managed pointer requested in toolkit issue #84 — delete it once `install-into.sh` writes its own marked block here.
-
-**Read before any dispatch** (do not work from recall):
-
-- `.agent-workflow/model-alloc.json` — the project-owned allocation contract.
-- `.agent-workflow/docs/agents/multi-agent-workflow.md` → Model Allocation.
-- `.agent-workflow/docs/agents/conductor-persona.md` §2 — the conductor is **READ-ONLY on product code**.
-
-Defaults: CONDUCTOR Opus · implementation terra (luna for trivial touch sets) · REVIEWER and contract gate Opus.
-
-**The split is artifact vs verdict.** Work that produces an artifact — implementation, fixes, documentation, planning, reconnaissance, broad file reads — is dispatched to codex. Work that produces a verdict — review, verification, audit, contract decisions — and the session's own orchestration stay with the conductor. Never let the writer grade its own output. A gate script, a fixture fix, or a doc edit is an artifact even when it looks small enough to type inline; scope it as a chunk instead.
 
 ### Target Profile (toolkit adapter answers for THIS repo)
 

@@ -20,6 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
 import {
   type StorageBackend,
   type StorageGetResult,
@@ -176,6 +177,7 @@ describe.skipIf(!runIntegration)('uploadAttachmentCommand (#393)', () => {
         db: dbHandle.db,
         checkService,
         auditService,
+        providers: buildEntityLinkProviders(),
       }),
     });
     attachmentsService = createAttachmentsService({

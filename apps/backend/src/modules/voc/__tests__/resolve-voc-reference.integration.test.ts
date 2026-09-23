@@ -21,6 +21,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { createEntityLinksService } from '../../entity-links/index.js';
 import { createCheckService } from '../../permissions/check-service.js';
@@ -60,6 +61,7 @@ describe.skipIf(!runIntegration)('resolveVocReference mapping (#378)', () => {
       db: dbHandle.db,
       checkService,
       auditService: createAuditService(),
+      providers: buildEntityLinkProviders(),
     });
     vocReadService = createVocReadService({
       db: dbHandle.db,

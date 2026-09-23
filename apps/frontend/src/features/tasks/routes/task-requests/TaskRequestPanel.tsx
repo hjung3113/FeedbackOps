@@ -1,4 +1,4 @@
-import { useFindingDetail } from '@/features/integration/hooks/useFindingDetail';
+import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
 import type { TaskPriority, TaskRequestDto } from '@fops/shared';
 import {
   Button,

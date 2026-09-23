@@ -1,12 +1,12 @@
 /* ============================================================
    FeedbackOps Suite — Design System Tokens & Base Styles
-   Source: DESIGN.md (Linear-inspired Midnight Command Center)
+   Source: docs/frontend/tokens.md (Linear-inspired Midnight Command Center)
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* --- Raw color tokens (DESIGN.md) --- */
+  /* --- Raw color tokens (docs/frontend/tokens.md) --- */
   --color-pitch-black: #f3f7fe;
   --color-graphite: #fbfdff;
   --color-deep-slate: #edf3fb;
@@ -103,7 +103,7 @@
   --icon-size-md: 16px;
   --icon-size-lg: 20px;
 
-  /* --- Spacing (DESIGN.md scale) --- */
+  /* --- Spacing (docs/frontend/tokens.md scale) --- */
   --spacing-4: 4px;
   --spacing-8: 8px;
   --spacing-12: 12px;

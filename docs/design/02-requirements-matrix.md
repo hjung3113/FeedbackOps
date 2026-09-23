@@ -47,7 +47,7 @@ OUT: explicitly excluded
 | FOP-PERM-002 | Decide Permission Request | MVP | Permission / Access | FOP-PERM-001, FOP-CORE-004 | `09-permission-access.md` |
 | FOP-PERM-003 | Enforce Explicit Deny | MVP | Permission / Access | FOP-PERM-002 | `09-permission-access.md`, `11-entity-linking.md` |
 | FOP-X-001 | Preserve Source Context | MVP | Cross-System | FOP-LINK-001 | `10-cross-system-workflows.md` |
-| FOP-X-002 | Prevent Invalid Conversions | MVP | Cross-System | FOP-SURVEY-003 | `10-cross-system-workflows.md`, `14-api-draft.md` |
+| FOP-X-002 | Prevent Invalid Conversions | MVP | Cross-System | FOP-SURVEY-003 | `10-cross-system-workflows.md`, `archive/14-api-draft.md` |
 | FOP-X-003 | Next Action Continuity | MVP | Cross-System | FOP-X-001 | `10-cross-system-workflows.md`, `12-ui-ux-principles.md` |
 | FOP-LINK-001 | Create Entity Link | MVP | Entity Linking | FOP-CORE-001 | `11-entity-linking.md` |
 | FOP-LINK-002 | Enforce Visibility | MVP | Entity Linking | FOP-PERM-003 | `11-entity-linking.md` |

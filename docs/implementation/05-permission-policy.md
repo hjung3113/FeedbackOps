@@ -2,22 +2,15 @@
 
 ## Purpose
 
-This document defines implementation rules for authorization, permission requests, and safe linked-object visibility.
+This file owns permission check order, audit event verbs, sensitive-capability rules, and permission-request decision mechanics.
+What the default user can do, and the capability matrix, live in docs/design/09-permission-access.md. Do not copy that matrix here.
 
 ## Role Level And Capability
 
-```text
-Role Levels:
-- Admin
-- Developer
-- User
-```
-
 Role Level controls authority; backend capability checks are authoritative.
-Admin is workspace-level in MVP. Developer is granted per Managed System
-Permission Scope. User is the lowest role level and may submit VOC and access
-their own allowed work. Reporter is the Actor who submitted a specific VOC, not
-a separate role level.
+Reporter is the Actor who submitted a specific VOC, not a separate role level.
+
+Role meanings, the default-user boundary, and the capability matrix: docs/design/09-permission-access.md (AD Principle, Default User Can / Cannot, Capability Matrix).
 
 Capability vocabulary is module-prefixed (`{module}.{action}`,
 `packages/shared/src/enums/capabilities.ts`). Slice 5 (ADR-0024) adds
@@ -76,9 +69,9 @@ returns `kind: all` only when there are no active Managed-System-scoped denies.
 When such denies exist, the scope is the workspace Managed System list minus
 the denied ids so its membership remains identical to point checks.
 
-Managed System Permission Scope is the MVP authorization boundary for
-Developer access. Access to one Managed System does not grant access to sibling
-Managed Systems. Analytics Area is not an MVP permission boundary.
+Managed System is the MVP authorization boundary below workspace Admin. Sibling
+Managed Systems and Analytics Area are not grant sources. See the 09 Capability
+Matrix notes.
 
 Permission scope shape:
 
@@ -93,15 +86,17 @@ Developer grants must include managed_system_id for scoped VOC triage,
 Findings, Task Requests, Tasks, Surveys, Dashboard queues, Public Updates, and
 Internal Comments. Analytics Area filters may narrow a list query but must not be
 used as the source of authorization.
-Analytics Area owner_team_id may route or prefill ownership, but it does not
-grant Managed System scope. Assignment to an owner or reviewer that lacks the
+Assignment to an owner or reviewer that lacks the
 required Managed System permission must fail validation or enter the permission
-request flow.
+request flow. Resolution order: docs/design/09-permission-access.md,
+Default Owner / Reviewer Resolution.
 
 For list filters, managed_system_id=all means the actor's effective Managed
 System scope union. Workspace Admin can receive true workspace-wide results.
 Developers receive only records in their granted Managed System scopes, even
-when the frontend URL says all.
+when the frontend URL says all. A Developer with one scope receives the same
+result as that single scope. User-facing views should not expose all as a
+workspace-wide bypass.
 
 ## Sensitive Permissions
 

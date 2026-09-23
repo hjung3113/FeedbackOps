@@ -17,12 +17,15 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
-import { insertActiveEntityLink, selectActiveLinksForEndpoint } from '../entity-links/repo.js';
+import {
+  createEntityLink as insertActiveEntityLink,
+  selectActiveLinksForEndpoint,
+} from '../entity-links/index.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
-import { lockFindingById } from '../findings/repo.js';
+import { lockFindingForUpdate as lockFindingById } from '../findings/index.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { lockVocClusterById } from '../voc-clusters/repo.js';
-import { selectVocForUpdate } from '../voc/repo.js';
+import { lockVocClusterById } from '../voc-clusters/index.js';
+import { selectVocForUpdate } from '../voc/index.js';
 import {
   type TaskRequestRow,
   findTaskRequestById,

@@ -1,13 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 
 import { sendError } from '../../../lib/errors.js';
+import { UUID_REGEX } from '../../../lib/http-headers.js';
 import { requireSession } from '../../../middleware/require-session.js';
 import { requireWorkspace } from '../../../middleware/require-workspace.js';
 import type { SessionService } from '../../auth/session-service.js';
 
 import type { PreSubmitVocPeersService } from './service.js';
-
-const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export interface PreSubmitVocPeersRoutesOptions {
   sessionService: SessionService;

@@ -2,17 +2,19 @@
 
 ## Ownership
 
-Integration owns frontend route composition for Findings, Evidence, Coverage, Links, and integration recovery queues.
+Integration owns frontend route composition for Evidence, Coverage, Links, and integration recovery queues.
 
 It is the UI home for FeedbackOps linking behavior, but it does not own source object lifecycles or backend authorization truth.
+
+Finding screens and hooks live in `apps/frontend/src/features/findings/`.
 
 ## Route Boundary
 
 Code ownership and URL mount are not the same thing here:
 
-- Owns component/hook implementation for Findings, but Findings is mounted at the **top-level** `/findings` and `/findings/$findingId` routes (route files live in `apps/frontend/src/routes/_authed/findings/`), not under `/integration`.
 - Owns both code and URL for Links, at `/integration/links`.
 - `/integration/evidence` and `/integration/coverage` are planned, not yet built.
+- Findings is mounted at the top-level `/findings` and `/findings/$findingId` routes and owned by `apps/frontend/src/features/findings/` (route files live in `apps/frontend/src/routes/_authed/findings/`).
 - Home may link into Integration-owned surfaces with selected object and action intent.
 
 ## Invariants
@@ -24,12 +26,10 @@ Code ownership and URL mount are not the same thing here:
 
 ## Rules
 
-- Finding detail is evidence-first and keeps execution links visible.
-- Finding detail composes `FindingDetailPanel` → `FullFindingDetail` → `useFindingDetailController`; shared UI and hooks are under `apps/frontend/src/features/cross-system/` and `apps/frontend/src/lib/cross-system/`.
 - Coverage must be labeled as partial integration coverage.
 - Link views must not imply arbitrary graph editing beyond approved relation types.
 - Cross-system creation flows must preserve source context and return users to the original work surface when appropriate.
 
 ## Verification
 
-- Test Finding action CTAs, evidence summaries, missing-link queue behavior, coverage labels, link visibility states, and deep-link action restore when touched.
+- Test missing-link queue behavior, coverage labels, link visibility states, and deep-link action restore when touched.

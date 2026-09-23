@@ -12,14 +12,15 @@
  *
  * Pinned at 0.75 as the initial value. **This number is still unvalidated.**
  * Step 5 added the ADR-0034 D5 evaluation fixture
- * (`eval/fixture.ts`, `eval/harness.ts`) and it does pin real behaviour — the
+ * (`src/test-support/recommendations-eval/fixture.ts`,
+ * `src/test-support/recommendations-eval/harness.ts`) and it does pin real behaviour — the
  * distance-to-similarity conversion, the comparison direction, the metric
  * arithmetic — but its vectors are hand-authored, not embeddings. Validating a
  * cut needs vectors from the provider that actually ships (ADR-0034 D1), which
- * needs an API key and network the development environment does not have. Read
- * `../AGENTS.md` § Recommendation Threshold Evaluation before quoting any
- * precision or recall figure out of that fixture: they are properties of the
- * chosen vectors, not of the recommender.
+ * needs an API key and network the development environment does not have. Per
+ * ADR-0034 D5 this constant is still unvalidated (see the note above); any
+ * precision or recall figure out of that fixture is a property of the chosen
+ * vectors, not of the recommender.
  *
  * What *is* decided is the shape: one constant, one cut, applied in SQL before
  * anything is counted.

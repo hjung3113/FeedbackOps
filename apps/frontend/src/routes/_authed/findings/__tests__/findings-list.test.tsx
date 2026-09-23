@@ -138,11 +138,11 @@ const findings = [
 
 const useFindingsListMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/features/integration/hooks/useFindingsList', () => ({
+vi.mock('@/features/findings/hooks/useFindingsList', () => ({
   useFindingsList: useFindingsListMock,
 }));
 
-vi.mock('@/features/integration/components/FindingDetail', () => ({
+vi.mock('@/features/findings/components/FindingDetail', () => ({
   FindingDetailPanel: ({ findingId }: { findingId: string }) => (
     <section data-testid="finding-detail-panel">finding:{findingId}</section>
   ),

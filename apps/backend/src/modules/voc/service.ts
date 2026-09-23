@@ -9,27 +9,29 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { and, eq, sql } from 'drizzle-orm';
 
+import type { CreateVocRequest, EditDescriptionRequest, PatchVocRequest } from '@fops/shared';
 import type { Db } from '../../db/client.js';
-import type { Tx } from '../../db/tx.js';
 import { vocs } from '../../db/schema/voc.js';
+import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { stableStringify } from '../../lib/json/stable-stringify.js';
-import { sanitizeTipTap, type RichContentError } from '../../lib/rich-content/sanitize.js';
-import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
-import { nextReporterStates, type ReporterFacingStatus } from './transitions.js';
-import { insertVoc, lockAnalyticsArea, lockManagedSystem, selectVocForUpdate, updateVocDescriptionFields } from './repo.js';
+import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
+import { lockAnalyticsArea } from '../analytics-areas/index.js';
 import {
   LinkAttachmentsRejected,
   linkAttachments,
   linkRejectedFields,
   toAttachmentRefForAudit,
-} from '../attachments/repo.js';
+} from '../attachments/index.js';
+import type { RoleLevel } from '../auth/session-service.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
-import type { CheckService } from '../permissions/check-service.js';
-import type { RoleLevel } from '../auth/session-service.js';
-import type { CreateVocRequest, EditDescriptionRequest, PatchVocRequest } from '@fops/shared';
 import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
+import { lockManagedSystem } from '../managed-systems/index.js';
+import type { CheckService } from '../permissions/check-service.js';
+import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
+import { insertVoc, selectVocForUpdate, updateVocDescriptionFields } from './repo.js';
+import { type ReporterFacingStatus, nextReporterStates } from './transitions.js';
 
 export interface CreateVocActor {
   actor_id: string;
@@ -109,9 +111,13 @@ export function createVocService(deps: VocServiceDeps) {
       const aa = await lockAnalyticsArea(tx, actor.workspace_id, input.analytics_area_id);
       if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
       if (aa.managed_system_id !== ms.id) {
-        throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
-          fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
-        });
+        throw new HttpError(
+          'validation.failed',
+          'analytics_area does not belong to managed_system',
+          {
+            fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
+          },
+        );
       }
       if (aa.archived_at) {
         throw new HttpError('conflict.parent_archived', 'analytics area archived', {
@@ -285,11 +291,9 @@ export function createVocService(deps: VocServiceDeps) {
         );
       }
       // explicit_deny / grant_revoked / grant_expired → generic denied.
-      throw new HttpError(
-        'permission.denied',
-        `voc.triage denied: ${decision.reason}`,
-        { reason: decision.reason },
-      );
+      throw new HttpError('permission.denied', `voc.triage denied: ${decision.reason}`, {
+        reason: decision.reason,
+      });
     }
 
     // 3. Optimistic concurrency check (after permission — C3: no current_updated_at
@@ -318,9 +322,13 @@ export function createVocService(deps: VocServiceDeps) {
       const aa = await lockAnalyticsArea(tx, workspaceId, input.analytics_area_id);
       if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
       if (aa.managed_system_id !== row.primaryManagedSystemId) {
-        throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
-          fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
-        });
+        throw new HttpError(
+          'validation.failed',
+          'analytics_area does not belong to managed_system',
+          {
+            fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }],
+          },
+        );
       }
       if (aa.archived_at !== null) {
         throw new HttpError('conflict.parent_archived', 'analytics area archived', {
@@ -332,14 +340,22 @@ export function createVocService(deps: VocServiceDeps) {
     // 6. Mutex: both owner fields non-null simultaneously (belt-and-suspenders;
     //    patchVocRequestSchema refine already catches this in the route layer).
     if (input.owner_user_id != null && input.owner_team_id != null) {
-      throw new HttpError('validation.failed', 'owner_user_id and owner_team_id are mutually exclusive', {
-        fields: [{ path: ['owner_team_id'], code: 'invalid' }],
-      });
+      throw new HttpError(
+        'validation.failed',
+        'owner_user_id and owner_team_id are mutually exclusive',
+        {
+          fields: [{ path: ['owner_team_id'], code: 'invalid' }],
+        },
+      );
     }
     if (input.postpone_review === true && input.triage_state !== undefined) {
-      throw new HttpError('validation.failed', 'postpone_review and triage_state cannot be set together', {
-        fields: [{ path: ['postpone_review'], code: 'invalid' }],
-      });
+      throw new HttpError(
+        'validation.failed',
+        'postpone_review and triage_state cannot be set together',
+        {
+          fields: [{ path: ['postpone_review'], code: 'invalid' }],
+        },
+      );
     }
 
     // 7a. postpone_review path — set postponed_at and emit a single audit row.
@@ -351,11 +367,9 @@ export function createVocService(deps: VocServiceDeps) {
       // triage_state_review_postponed_at column is only meaningful for untriaged
       // VOCs. Guard here so the audit log stays clean.
       if (row.triageState !== 'untriaged') {
-        throw new HttpError(
-          'validation.failed',
-          'postpone_review only applies to untriaged VOCs',
-          { fields: [{ path: ['postpone_review'], code: 'invalid_state' }] },
-        );
+        throw new HttpError('validation.failed', 'postpone_review only applies to untriaged VOCs', {
+          fields: [{ path: ['postpone_review'], code: 'invalid_state' }],
+        });
       }
       // Build the diff for any accompanying field changes.
       type VocPostponePatch = {
@@ -376,24 +390,33 @@ export function createVocService(deps: VocServiceDeps) {
         postponePatch.severity = input.severity;
         pSeverityChanged = true;
       }
-      const pNewOwnerUser = input.owner_user_id !== undefined ? (input.owner_user_id ?? null) : row.ownerUserId;
-      const pNewOwnerTeam = input.owner_team_id !== undefined ? (input.owner_team_id ?? null) : row.ownerTeamId;
+      const pNewOwnerUser =
+        input.owner_user_id !== undefined ? (input.owner_user_id ?? null) : row.ownerUserId;
+      const pNewOwnerTeam =
+        input.owner_team_id !== undefined ? (input.owner_team_id ?? null) : row.ownerTeamId;
       // C2: the input-level mutex (step 6 above) only catches the case where
       // both owner fields are present in the payload. But if the row already
       // has one owner set and the client sends only the OTHER owner, the
       // resolved values end up both non-null → DB CHECK violation → 500.
       // Check the resolved pair here so the rejection is a clean 422.
       if (pNewOwnerUser != null && pNewOwnerTeam != null) {
-        throw new HttpError('validation.failed', 'cannot have both owner_user_id and owner_team_id set; explicitly clear the other owner in the same PATCH', {
-          fields: [{ path: ['owner_team_id'], code: 'invalid' }],
-        });
+        throw new HttpError(
+          'validation.failed',
+          'cannot have both owner_user_id and owner_team_id set; explicitly clear the other owner in the same PATCH',
+          {
+            fields: [{ path: ['owner_team_id'], code: 'invalid' }],
+          },
+        );
       }
       if (pNewOwnerUser !== row.ownerUserId || pNewOwnerTeam !== row.ownerTeamId) {
         postponePatch.ownerUserId = pNewOwnerUser;
         postponePatch.ownerTeamId = pNewOwnerTeam;
         pOwnerChanged = true;
       }
-      if (input.analytics_area_id !== undefined && input.analytics_area_id !== row.analyticsAreaId) {
+      if (
+        input.analytics_area_id !== undefined &&
+        input.analytics_area_id !== row.analyticsAreaId
+      ) {
         postponePatch.analyticsAreaId = input.analytics_area_id ?? null;
         pAaChanged = true;
       }
@@ -480,7 +503,10 @@ export function createVocService(deps: VocServiceDeps) {
         createdAt: pUpdated.createdAt,
         updatedAt: pUpdated.updatedAt,
       };
-      const pNextStates = await nextReporterStates(pUpdated.reporterFacingStatus as ReporterFacingStatus, tx);
+      const pNextStates = await nextReporterStates(
+        pUpdated.reporterFacingStatus as ReporterFacingStatus,
+        tx,
+      );
       return composeEnvelope(pLockedVoc, pNextStates);
     }
 
@@ -505,16 +531,22 @@ export function createVocService(deps: VocServiceDeps) {
     }
 
     // Owner fields treated as a unit.
-    const newOwnerUser = input.owner_user_id !== undefined ? (input.owner_user_id ?? null) : row.ownerUserId;
-    const newOwnerTeam = input.owner_team_id !== undefined ? (input.owner_team_id ?? null) : row.ownerTeamId;
+    const newOwnerUser =
+      input.owner_user_id !== undefined ? (input.owner_user_id ?? null) : row.ownerUserId;
+    const newOwnerTeam =
+      input.owner_team_id !== undefined ? (input.owner_team_id ?? null) : row.ownerTeamId;
     // C2: resolved-value mutex — catches the case where the row already has
     // one owner and the client sends only the other without clearing the first.
     // The input-level mutex (step 6) only fires when both fields appear in the
     // payload; this guard fires on the resolved (input ?? row) pair.
     if (newOwnerUser != null && newOwnerTeam != null) {
-      throw new HttpError('validation.failed', 'cannot have both owner_user_id and owner_team_id set; explicitly clear the other owner in the same PATCH', {
-        fields: [{ path: ['owner_team_id'], code: 'invalid' }],
-      });
+      throw new HttpError(
+        'validation.failed',
+        'cannot have both owner_user_id and owner_team_id set; explicitly clear the other owner in the same PATCH',
+        {
+          fields: [{ path: ['owner_team_id'], code: 'invalid' }],
+        },
+      );
     }
     if (newOwnerUser !== row.ownerUserId || newOwnerTeam !== row.ownerTeamId) {
       patch.ownerUserId = newOwnerUser;
@@ -542,7 +574,10 @@ export function createVocService(deps: VocServiceDeps) {
 
     // 8. Empty diff — return current state without any writes.
     if (!severityChanged && !ownerChanged && !aaChanged && !triageStateChanged) {
-      const nextStates = await nextReporterStates(row.reporterFacingStatus as ReporterFacingStatus, tx);
+      const nextStates = await nextReporterStates(
+        row.reporterFacingStatus as ReporterFacingStatus,
+        tx,
+      );
       return composeEnvelope(row, nextStates);
     }
 
@@ -678,7 +713,10 @@ export function createVocService(deps: VocServiceDeps) {
       createdAt: Date;
       updatedAt: Date;
     },
-    nextStates: { allowed: ReporterFacingStatus[]; forbidden: Partial<Record<ReporterFacingStatus, string>> },
+    nextStates: {
+      allowed: ReporterFacingStatus[];
+      forbidden: Partial<Record<ReporterFacingStatus, string>>;
+    },
   ): VocEnvelope {
     return {
       id: row.id,
@@ -817,8 +855,20 @@ export function createVocService(deps: VocServiceDeps) {
       title?: { from: string; to: string };
       description_rich_content?: { from_hash: string; to_hash: string };
       attachments?: {
-        from: ReadonlyArray<{ id: string; name: string; size_bytes: number; mime_type: string; storage_uri: string }>;
-        to: ReadonlyArray<{ id: string; name: string; size_bytes: number; mime_type: string; storage_uri: string }>;
+        from: ReadonlyArray<{
+          id: string;
+          name: string;
+          size_bytes: number;
+          mime_type: string;
+          storage_uri: string;
+        }>;
+        to: ReadonlyArray<{
+          id: string;
+          name: string;
+          size_bytes: number;
+          mime_type: string;
+          storage_uri: string;
+        }>;
       };
     };
     const changes: DescChanges = {};
@@ -833,9 +883,7 @@ export function createVocService(deps: VocServiceDeps) {
       const fromHash = createHash('sha256')
         .update(stableStringify(row.descriptionRichContent))
         .digest('hex');
-      const toHash = createHash('sha256')
-        .update(stableStringify(sanitizedDoc.doc))
-        .digest('hex');
+      const toHash = createHash('sha256').update(stableStringify(sanitizedDoc.doc)).digest('hex');
       if (fromHash !== toHash) {
         changes.description_rich_content = { from_hash: fromHash, to_hash: toHash };
       }

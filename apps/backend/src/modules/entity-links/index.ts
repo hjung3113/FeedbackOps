@@ -6,6 +6,7 @@ export {
   type EntityLinksActor,
 } from './service.js';
 export type { EntityLinkRow, LinkEndpointRow } from './repo.js';
+export { resolveVocEndpoint } from './repo.js';
 export {
   createEntityLink,
   detachEntityLink,

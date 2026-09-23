@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import {
-  AUDIT_EVENT_DETAIL_SCHEMAS,
-  AUDIT_EVENT_TYPES,
-  vocClusterCreatedDetailSchema,
-  vocClusterUpdatedDetailSchema,
-} from '../../enums/audit-events.js';
+import { AUDIT_EVENT_DETAIL_SCHEMAS, AUDIT_EVENT_TYPES } from '../../enums/audit-events.js';
+import { vocClusterCreatedDetailSchema, vocClusterUpdatedDetailSchema } from '../voc-cluster.js';
 import {
   internalCommentCreatedDetailSchema,
   publicUpdateCreatedDetailSchema,

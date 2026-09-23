@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../../db/client.js';
-import { type Scope, similarVocVisibilityPredicate } from '../repo-read.js';
+import { type Scope, similarVocVisibilityPredicate } from '../authorization.js';
 
 export interface PreSubmitVocPeerRow extends Record<string, unknown> {
   id: string;

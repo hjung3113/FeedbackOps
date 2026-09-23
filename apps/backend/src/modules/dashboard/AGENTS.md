@@ -13,7 +13,7 @@ Dashboard is not a passive reporting helper.
 - Each actionable row must explain why it appears and what the next action is.
 - Dashboard must not mutate source records directly.
 - Dashboard completeness indicators must account for missing links and permission limits.
-- Missing-link queues are policy-driven by workspace policy, Managed System policy, Product Area policy, severity rules, or explicit workflow configuration.
+- Missing-link queues are policy-driven by workspace policy, Managed System policy, Analytics Area policy, severity rules, or explicit workflow configuration.
 
 ## Cross-System Rules
 

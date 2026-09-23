@@ -18,11 +18,9 @@ Root `AGENTS.md` → "Required Reading" and "Source Of Truth" decide what to rea
 docs/design/
 - Product intent, domain language, ownership, requirements, and roadmap.
 
-DESIGN.md
-- Visual reference and raw token seed only.
-
 docs/frontend/
 - Frontend UI contracts, reusable component rules, routes, layout, and interactions.
+- tokens.md is the hex visual token seed.
 
 docs/tech-stack/
 - Approved implementation stack and third-party library governance.

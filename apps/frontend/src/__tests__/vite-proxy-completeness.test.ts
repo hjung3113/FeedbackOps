@@ -61,13 +61,26 @@ function collectBackendRoutes(): string[] {
   const urls: string[] = [];
   urls.push(...extractRouteUrls(fs.readFileSync(SERVER_TS, 'utf8')));
   // Walk apps/backend/src/modules/*/routes.ts AND *-routes.ts naming variants
-  // (e.g. `auth/list-actors-routes.ts`), matching the twin check's discovery.
+  // (e.g. `auth/list-actors-routes.ts`), plus the direct `*.ts` children of
+  // `modules/<name>/routes/` (e.g. `voc/routes/`) — no recursion, matching the
+  // twin check's discovery.
   for (const entry of fs.readdirSync(MODULES_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const moduleDir = path.join(MODULES_DIR, entry.name);
     for (const fileEntry of fs.readdirSync(moduleDir, { withFileTypes: true })) {
       if (!fileEntry.isFile() || !fileEntry.name.endsWith('routes.ts')) continue;
       urls.push(...extractRouteUrls(fs.readFileSync(path.join(moduleDir, fileEntry.name), 'utf8')));
+    }
+    // Split modules keep their routes in a routes/ directory; read its direct
+    // children only — do not recurse.
+    const routesDir = path.join(moduleDir, 'routes');
+    if (fs.existsSync(routesDir) && fs.statSync(routesDir).isDirectory()) {
+      for (const routesEntry of fs.readdirSync(routesDir, { withFileTypes: true })) {
+        if (!routesEntry.isFile() || !routesEntry.name.endsWith('.ts')) continue;
+        urls.push(
+          ...extractRouteUrls(fs.readFileSync(path.join(routesDir, routesEntry.name), 'utf8')),
+        );
+      }
     }
   }
   return urls;

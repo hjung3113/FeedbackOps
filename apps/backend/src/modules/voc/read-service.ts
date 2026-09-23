@@ -30,8 +30,14 @@ import { HttpError } from '../../lib/errors.js';
 import type { EntityLinksService } from '../entity-links/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 
+import {
+  type Scope,
+  actorEffectiveScope,
+  actorReadScope,
+  actorTriageScope,
+} from './authorization.js';
 import { decodeCursor, encodeCursor } from './cursor.js';
-import type { ConversationRow, Scope, VocReadRow } from './repo-read.js';
+import type { ConversationRow, VocReadRow } from './repo-read.js';
 import * as repoRead from './repo-read.js';
 import { type ReporterFacingStatus, nextReporterStates } from './transitions.js';
 
@@ -306,8 +312,8 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       });
     }
     const [readScope, triageScope] = await Promise.all([
-      repoRead.actorReadScope(deps.db, actor),
-      view === 'triage' ? repoRead.actorTriageScope(deps.db, actor) : Promise.resolve(undefined),
+      actorReadScope(deps.db, actor),
+      view === 'triage' ? actorTriageScope(deps.db, actor) : Promise.resolve(undefined),
     ]);
     const { scopeFilter, actorIdForMyFilter } = resolveVocListScope({ actor, query, readScope, triageScope });
     return repoRead.countVocsForRead(deps.db, {
@@ -391,14 +397,14 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
     if (view === 'triage') {
       [readScope, effectiveScope, triageScope] = await Promise.all([
-        repoRead.actorReadScope(deps.db, actor),
-        repoRead.actorEffectiveScope(deps.db, actor),
-        repoRead.actorTriageScope(deps.db, actor),
+        actorReadScope(deps.db, actor),
+        actorEffectiveScope(deps.db, actor),
+        actorTriageScope(deps.db, actor),
       ]);
     } else {
       [readScope, effectiveScope] = await Promise.all([
-        repoRead.actorReadScope(deps.db, actor),
-        repoRead.actorEffectiveScope(deps.db, actor),
+        actorReadScope(deps.db, actor),
+        actorEffectiveScope(deps.db, actor),
       ]);
     }
 
@@ -514,9 +520,9 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
     // ── 2. Resolve scopes in parallel ───────────────────────────────────────
     const [readScope, effectiveScope, triageScope] = await Promise.all([
-      repoRead.actorReadScope(deps.db, actor),
-      repoRead.actorEffectiveScope(deps.db, actor),
-      repoRead.actorTriageScope(deps.db, actor),
+      actorReadScope(deps.db, actor),
+      actorEffectiveScope(deps.db, actor),
+      actorTriageScope(deps.db, actor),
     ]);
 
     // ── 3. Compute access flags ──────────────────────────────────────────────
@@ -771,9 +777,9 @@ export function createVocReadService(deps: VocReadServiceDeps) {
 
     // ── 2. Resolve scopes in parallel ───────────────────────────────────────
     const [readScope, effectiveScope, triageScope] = await Promise.all([
-      repoRead.actorReadScope(deps.db, actor),
-      repoRead.actorEffectiveScope(deps.db, actor),
-      repoRead.actorTriageScope(deps.db, actor),
+      actorReadScope(deps.db, actor),
+      actorEffectiveScope(deps.db, actor),
+      actorTriageScope(deps.db, actor),
     ]);
 
     // ── 3. Compute access flags ──────────────────────────────────────────────
@@ -865,8 +871,8 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     // Resolve triage scope inside the tx (permissions may have changed if this
     // is ever used post-grant; belt-and-suspenders).
     const [triageScope, readScope] = await Promise.all([
-      repoRead.actorTriageScope(tx, actor),
-      repoRead.actorReadScope(tx, actor),
+      actorTriageScope(tx, actor),
+      actorReadScope(tx, actor),
     ]);
     const canTriage = msInScope(triageScope, primaryMs);
     const isReporterArm = isReporter && !msInScope(readScope, primaryMs) && !canTriage;

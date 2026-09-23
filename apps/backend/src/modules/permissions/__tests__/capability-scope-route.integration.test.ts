@@ -6,7 +6,7 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
-import { allManagedSystemIds } from '../../core/managed-systems/read-projections.js';
+import { allManagedSystemIds } from '../../managed-systems/read-projections.js';
 import { createCheckService } from '../check-service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';

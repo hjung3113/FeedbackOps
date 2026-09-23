@@ -20,7 +20,9 @@ import type { Db } from '../../db/client.js';
 import { actors } from '../../db/schema/core.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import { encodeCommentCursor } from '../../lib/pg-timestamp.js';
 import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
+import { lockAnalyticsArea } from '../analytics-areas/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
@@ -32,18 +34,18 @@ import {
 import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { linkTaskToFinding } from '../findings/commands.js';
+import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   type TaskRequestRow,
   lockTaskRequestForUpdate,
   markTaskRequestConverted,
 } from '../task-requests/commands.js';
-import type { VocReadService } from '../voc/read-service.js';
-import { lockAnalyticsArea, lockManagedSystem } from '../voc/repo.js';
 import {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,
-} from './jobs/released-review-candidates.js';
+} from '../voc/jobs/released-review-candidates.js';
+import type { VocReadService } from '../voc/read-service.js';
 import {
   type TaskCommentRow,
   type TaskRow,
@@ -117,31 +119,6 @@ function decodeCommentCursor(raw: string): CommentCursor {
   const result = commentCursorSchema.safeParse(parsed);
   if (!result.success) throw fail();
   return result.data;
-}
-
-// WHY: input.createdAt is the raw postgres text cast (microsecond precision),
-// not a JS Date's toISOString() (millisecond precision) — two comments in the
-// same millisecond would otherwise collide on the cursor boundary and the
-// second one would be silently skipped on the next page. Mirrors
-// voc/repo-read.ts's _created_at_raw handling.
-//
-// Normalize the postgres text format to ISO 8601 so it validates against
-// z.string().datetime() in decodeCommentCursor: swap the space separator for
-// "T" and add a ":" to the zone offset ("...T...160586+09" -> "...+09:00",
-// not just the "+00" case voc/repo-read.ts assumes — this DB's default
-// session timezone is UTC, but nothing pins it, so a "+00"-only regex would
-// 422 every cursor the day that changes) (astra medium review, PR #449).
-export function normalizePgTimestampToIso(raw: string): string {
-  const isoLike = raw.replace(' ', 'T');
-  const match = isoLike.match(/^(.*)([+-]\d{2})(:?(\d{2}))?$/);
-  if (!match) return isoLike;
-  const [, base, offsetHours, , offsetMinutes] = match;
-  return `${base}${offsetHours}:${offsetMinutes ?? '00'}`;
-}
-
-function encodeCommentCursor(input: { createdAt: string; id: string }): string {
-  const createdAt = normalizePgTimestampToIso(input.createdAt);
-  return Buffer.from(JSON.stringify({ createdAt, id: input.id }), 'utf8').toString('base64');
 }
 
 function taskCommentToDto(row: TaskCommentRow): TaskCommentDto {

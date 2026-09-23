@@ -7,8 +7,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type EvalFixture, assertFixtureWellFormed } from '../fixture.js';
-import { cosineSimilarity, evaluateFixture, metricsFrom, predictLabel } from '../harness.js';
+import { type EvalFixture, assertFixtureWellFormed } from '../../../../../test-support/recommendations-eval/fixture.js';
+import { cosineSimilarity, evaluateFixture, metricsFrom, predictLabel } from '../../../../../test-support/recommendations-eval/harness.js';
 
 describe('cosineSimilarity (#168)', () => {
   it('returns 1 for identical direction and 0 for orthogonal vectors', () => {

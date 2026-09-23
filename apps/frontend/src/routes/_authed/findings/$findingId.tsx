@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronLeft } from 'lucide-react';
-import { FindingDetailPanel } from '@/features/integration/components/FindingDetail';
+import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
 
 export const Route = createFileRoute('/_authed/findings/$findingId')({
   component: FindingDetailRoute,

@@ -4,14 +4,12 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+import { IDEMPOTENCY_KEY_REGEX } from '../../lib/http-headers.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
 import type { ActorContext } from '../permissions/check-service.js';
 import type { AnalyticsAreaService } from './analytics-area-service.js';
-
-const IDEMPOTENCY_KEY_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
 const createBodySchema = z.object({
   managed_system_id: z.string().uuid(),
