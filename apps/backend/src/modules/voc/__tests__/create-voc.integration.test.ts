@@ -1006,7 +1006,7 @@ describe.skipIf(!runIntegration)('POST /vocs (#13)', () => {
   });
 
   // ── 18. Concurrent archive race ───────────────────────────────────────
-  // Drives the SELECT … FOR UPDATE race in voc/repo.ts:lockManagedSystem
+  // Drives the SELECT … FOR UPDATE race in managed-systems/repo.ts:lockManagedSystem
   // deterministically: a dedicated pg client opens a transaction and UPDATEs
   // the managed_systems row (acquiring FOR NO KEY UPDATE), then we issue
   // POST /vocs in parallel — the create handler reaches lockManagedSystem

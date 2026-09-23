@@ -5,78 +5,14 @@
 
 import { sql } from 'drizzle-orm';
 
-import { analyticsAreas, managedSystems } from '../../db/schema/core.js';
 import { vocInternalComments, vocPublicUpdates, vocReporterReplies, vocs } from '../../db/schema/voc.js';
 import type { Tx } from '../../db/tx.js';
 import type { ReporterFacingStatus } from './transitions.js';
 
-export interface LockedManagedSystem {
-  id: string;
-  workspace_id: string;
-  archived_at: Date | null;
-}
-
-export interface LockedAnalyticsArea {
-  id: string;
-  workspace_id: string;
-  managed_system_id: string;
-  archived_at: Date | null;
-}
-
-export async function lockManagedSystem(
-  tx: Tx,
-  workspaceId: string,
-  managedSystemId: string,
-): Promise<LockedManagedSystem | null> {
-  const rows = await tx.execute<{
-    id: string;
-    workspace_id: string;
-    archived_at: Date | null;
-  }>(sql`
-    select id, workspace_id, archived_at
-    from ${managedSystems}
-    where id = ${managedSystemId}
-      and workspace_id = ${workspaceId}
-    for update
-  `);
-  const row = rows.rows[0];
-  return row
-    ? { id: row.id, workspace_id: row.workspace_id, archived_at: row.archived_at }
-    : null;
-}
-
-export async function lockAnalyticsArea(
-  tx: Tx,
-  workspaceId: string,
-  analyticsAreaId: string,
-): Promise<LockedAnalyticsArea | null> {
-  const rows = await tx.execute<{
-    id: string;
-    workspace_id: string;
-    managed_system_id: string;
-    archived_at: Date | null;
-  }>(sql`
-    select id, workspace_id, managed_system_id, archived_at
-    from ${analyticsAreas}
-    where id = ${analyticsAreaId}
-      and workspace_id = ${workspaceId}
-    for update
-  `);
-  const row = rows.rows[0];
-  return row
-    ? {
-        id: row.id,
-        workspace_id: row.workspace_id,
-        managed_system_id: row.managed_system_id,
-        archived_at: row.archived_at,
-      }
-    : null;
-}
-
 // ── selectVocForUpdate ─────────────────────────────────────────────────────
 // Acquires a FOR UPDATE row lock on voc.vocs for the PATCH triage flow.
 // Returns null when no matching row exists (caller throws not_found).
-// Mirrors lockManagedSystem / lockAnalyticsArea style.
+// Same SELECT … FOR UPDATE shape; those two lock helpers live in their owning modules.
 
 export interface LockedVoc {
   id: string;

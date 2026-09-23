@@ -24,11 +24,13 @@ import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { encodeCommentCursor } from '../../lib/pg-timestamp.js';
 import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
+import { lockAnalyticsArea } from '../analytics-areas/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { insertActiveEntityLink, resolveVocEndpoint } from '../entity-links/repo.js';
 import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js';
 import type { EntityLinksService } from '../entity-links/service.js';
+import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   resolveApprovedSurveyResponseExcerpts,
@@ -36,7 +38,7 @@ import {
   resolveSurveyResponseHighlightAccess,
 } from '../surveys/service.js';
 import { lockTaskById } from '../tasks/repo.js';
-import { lockAnalyticsArea, lockManagedSystem, selectVocForUpdate } from '../voc/repo.js';
+import { selectVocForUpdate } from '../voc/repo.js';
 import { checkFindingManage, checkFindingRead } from './authorization.js';
 import {
   type FindingReadRow,
