@@ -87,7 +87,7 @@ function collectImportSpecifiers(file, content) {
     } else if (
       ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-      node.arguments.length === 1 &&
+      node.arguments.length >= 1 &&
       ts.isStringLiteral(node.arguments[0])
     ) {
       out.push({

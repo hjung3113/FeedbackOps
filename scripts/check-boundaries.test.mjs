@@ -141,6 +141,19 @@ runCase(
   ],
 );
 
+runCase(
+  'dynamic import with options argument targeting foreign repo fails',
+  {
+    ...zero,
+    [join(MODULES, 'surveys', 'results.ts')]: [
+      "import { ok } from './helpers.js';",
+      "const mod = await import('../tasks/repo.js', { with: { type: 'json' } });",
+    ].join('\n'),
+  },
+  false,
+  'apps/backend/src/modules/surveys/results.ts:2',
+);
+
 if (failures > 0) {
   console.error(`\n${failures} test case(s) failed`);
   process.exit(1);
