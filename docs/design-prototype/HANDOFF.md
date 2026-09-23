@@ -4,6 +4,7 @@
 > Bridge between design exploration (here) and production implementation.
 
 **Last updated:** 2026-05-17 (session 19 — Pack 20: Baseline QA + nested-button polish + screenshot cleanup)
+Route reconciliation: 2026-09-23 (#493, tree bf5f3c0). Prototype pack content remains Pack 20 (2026-05-17).
 **Author:** Design (Claude session)
 **Entry point:** [`FeedbackOps.html`](./FeedbackOps.html)
 **Page · Component · Spec map:** [`DESIGN-MAP.md`](./DESIGN-MAP.md)
@@ -133,6 +134,8 @@ FeedbackOps.html         entry; loads scripts in this order:
   app.jsx                Top-level App: route state, scope, role, breadcrumb, URL sync, Tweaks
 ```
 
+Pack notes that still say `components.jsx` mean the pre-split shared file; its symbols now live in `primitives.jsx`, `badges.jsx`, `shells.jsx`, `panel.jsx`, `entities.jsx`, and `live.jsx` above.
+
 `screen-*.jsx` files publish components to `window` at the bottom. Prototype convenience — production replaces with proper ESM imports.
 
 ### Agent input bundle
@@ -142,12 +145,12 @@ If another agent must continue or recreate the prototype, give it this whole bun
 **Required context**
 - `HANDOFF.md` — operating rules, changelog, non-negotiables, remaining work.
 - `DESIGN-MAP.md` — route/file/spec map and final visual baselines.
-- `DESIGN.md`, `docs/design/*.md`, `docs/frontend/*.md` — source requirements, route contract, and UI contracts.
-- `docs/implementation/03-api-contracts.md` and `docs/implementation/api/`, `docs/design/15-data-contracts.md`, `docs/implementation/06-entity-linking-contract.md`, `docs/adr/0012-error-code-contract.md` — production API/data/error/linking contracts. Required for clean-room implementation, not just prototype continuation.
+- `docs/frontend/tokens.md` (token spec; root `DESIGN.md` is only a pointer to it), `docs/design/*.md`, `docs/frontend/*.md` — source requirements, route contract, and UI contracts.
+- `docs/implementation/03-api-contracts.md` (index) plus the domain file named in DESIGN-MAP §1b, `docs/design/15-data-contracts.md`, `docs/implementation/06-entity-linking-contract.md`, `docs/adr/0012-error-code-contract.md` — production API/data/error/linking contracts. Required for clean-room implementation, not just prototype continuation.
 
 **Required prototype files**
 - `FeedbackOps.html`, `app.jsx`, `styles.css`, `data.js`
-- `components.jsx`, `shell.jsx`, `affordances.jsx`, `cmdk.jsx`, `entity-preview.jsx`, `rich-editor.jsx`, `flow-drafts.jsx`
+- `primitives.jsx`, `badges.jsx`, `shells.jsx`, `panel.jsx`, `entities.jsx`, `live.jsx`, `shell.jsx`, `affordances.jsx`, `cmdk.jsx`, `entity-preview.jsx`, `rich-editor.jsx`, `flow-drafts.jsx`
 - every `screen-*.jsx` file in the project root
 
 **Required visual evidence**
@@ -170,8 +173,8 @@ Use this when handing the Open Design prototype back to the linked `FeedbackOps`
 - Treat `DESIGN-MAP.md` as the route-to-screen-to-source-doc index.
 - Treat `HANDOFF.md` as the operating constraints, known non-goals, and pass/fail contract.
 - Treat the curated screenshots in `DESIGN-MAP.md` §2 as the visual baseline, not the whole `screenshots/` folder.
-- Treat `FeedbackOps.html`, `app.jsx`, `styles.css`, `components.jsx`, `shell.jsx`, `affordances.jsx`, `cmdk.jsx`, `entity-preview.jsx`, `rich-editor.jsx`, `flow-drafts.jsx`, `data.js`, and `screen-*.jsx` as executable reference material for visual density and interaction behavior.
-- Treat `docs/implementation/03-api-contracts.md` and `docs/implementation/api/`, `docs/design/15-data-contracts.md`, `docs/implementation/06-entity-linking-contract.md`, and `docs/adr/0012-error-code-contract.md` as production truth for endpoints, payloads, linked-object workflows, and error handling.
+- Treat `FeedbackOps.html`, `app.jsx`, `styles.css`, `primitives.jsx`, `badges.jsx`, `shells.jsx`, `panel.jsx`, `entities.jsx`, `live.jsx`, `shell.jsx`, `affordances.jsx`, `cmdk.jsx`, `entity-preview.jsx`, `rich-editor.jsx`, `flow-drafts.jsx`, `data.js`, and `screen-*.jsx` as executable reference material for visual density and interaction behavior.
+- Treat `docs/implementation/03-api-contracts.md` (index) plus the domain file named in DESIGN-MAP §1b, `docs/design/15-data-contracts.md`, `docs/implementation/06-entity-linking-contract.md`, and `docs/adr/0012-error-code-contract.md` as production truth for endpoints, payloads, linked-object workflows, and error handling.
 
 **Spec output expected from the linked project**
 - Route matrix: route id, URL, React page/component owner, required params, panel behavior, loading/empty/error/permission states.
@@ -188,7 +191,7 @@ Use this when handing the Open Design prototype back to the linked `FeedbackOps`
 
 ## 4. Design system mapping
 
-Source of truth: [`docs/frontend/tokens.md`](../frontend/tokens.md). Implementation contract: [`docs/frontend/ui-design-system.md`](../docs/frontend/ui-design-system.md).
+Source of truth: [`docs/frontend/tokens.md`](../frontend/tokens.md). Implementation contract: [`docs/frontend/ui-design-system.md`](../frontend/ui-design-system.md).
 
 ### Raw tokens (DESIGN.md → CSS custom properties)
 
@@ -250,11 +253,12 @@ Route contract from `docs/frontend/routes-and-layout.md`. Implementation in `app
 | `voc-clusters` | VOC Clusters | ✓ | `screen-clusters.jsx` |
 | `findings` | Findings list | ✓ | `screen-findings.jsx` |
 | `tasks` (view=`board`) | Task Kanban (drag-drop) | ✓ | `screen-tasks.jsx` |
-| `tasks` (view=`inbox`) | Task activity inbox | ✓ | `screen-tasks.jsx` |
-| `tasks` (view=`my`) | My Tasks | ✓ | `screen-tasks.jsx` |
+| `tasks` (view=`inbox`) | Task activity inbox | ✓ | `screen-tasks-views.jsx` |
+| `tasks` (view=`my`) | My Tasks | ✓ | `screen-tasks-views.jsx` |
 | `tasks` (view=`requests`) | Task Request review console | ✓ | `screen-tasks.jsx` |
 | `tasks` (view=`backlog`) | Task Backlog list | ✓ | `screen-tasks.jsx` |
 | `tasks` (view=`milestones`) | Milestones list + mini-timeline + Task Gantt panel | ✓ | `screen-milestones.jsx` |
+| `tasks` (view=`roadmap`) | Roadmap — multi-milestone shared-axis Gantt (prototype-only, no detail panel) | – | `screen-tasks-roadmap.jsx` |
 | `integration` | Integration Action Dashboard | – | `screen-integration.jsx` |
 | `integration-evidence` | Evidence highlights list | ✓ | `screen-evidence.jsx` |
 | `integration-coverage` | Coverage signals + missing-link queries + threshold modal | – | `screen-coverage.jsx` |
@@ -268,6 +272,8 @@ Route contract from `docs/frontend/routes-and-layout.md`. Implementation in `app
 | `admin-settings` | Workspace settings (controlled + dirty save bar) | – | `screen-admin-settings.jsx` |
 
 `hasPanelByRoute` in `app.jsx` controls the 3- vs 4-column grid. When `:has(aside.detail-panel)` doesn't match, the grid auto-collapses to 3 columns — a closed detail panel doesn't leave a blank column.
+
+Production URLs and registration status are recorded in DESIGN-MAP §1b. Prototype route ids in this table are not production paths: the flat ids `voc-new`, `survey-builder`, `survey-result`, `admin`, and `admin-areas` map onto production URLs as §1b says.
 
 ### Reproduction acceptance contract
 
@@ -386,12 +392,12 @@ Replace these before shipping. Each item is a real wiring task, not a bug.
 - **All data is mock** (`data.js` + per-screen fixtures) — replace with API/store.
 - **Permission decisions are a unified envelope.** Every restricted reference reads `entity.permissionDecisions[<key>]` (Pack 8). Keys today: `linkedFinding` (VOC), `execution` (Finding), `linkedVoc` (Task), `source` (Evidence). Each carries `state`/`category`/`reason`/`requiredScope`/`summary`/`decisionId`/`evaluatedAt`. Production wires `permissionDecisions` off the backend `permission_decision` envelope returned with each linked-object reference. Use `window.getPermissionDecision(entity, key)` as the read-through helper.
 - **No real form submission** — Create VOC doesn't POST; only validates required fields. RichEditor uses `document.execCommand` — replace with TipTap per ADR-0002.
-- **Triage mutation** is optimistic local-state only with 4s undo toast. Wire to `POST /vocs/:id/triage` with rollback on error.
-- **Admin · Settings save** is local state — wire to `PATCH /admin/settings`.
-- **Coverage thresholds** persist to `window.COVERAGE_THRESHOLDS` (in-memory). Wire to workspace policy endpoint.
-- **Entity Links bulk-detach** mutates local state. Wire to `POST /entity_links/:id/detach` (audited per FR-LINK-001A — never hard-delete).
-- **Task Kanban drag-drop** updates local `statusOverrides`. Wire to `POST /tasks/:id/status`.
-- **Survey Builder Launch** is a stub — validation runs but no `POST /surveys/:id/launch`.
+- **Triage mutation** is optimistic local-state only with 4s undo toast. Wire to `PATCH /vocs/:id` (`api/voc.md` — no `POST /vocs/:id/triage` endpoint exists) with rollback on error.
+- **Admin · Settings save** is local state — wire to `PATCH /workspace/settings` (`api/core.md`; body is `permission_self_approval` and `survey_anonymity_threshold` only).
+- **Coverage thresholds** persist to `window.COVERAGE_THRESHOLDS` (in-memory). No coverage-threshold endpoint exists in the catalog — `api/core.md` settings has no such field, so wiring one would be a new contract, not a wiring task.
+- **Entity Links bulk-detach** mutates local state. Wire to `PATCH /entity-links/:id` (`api/entity-links.md`; hyphenated path, no hard-delete — audited per FR-LINK-001A).
+- **Task Kanban drag-drop** updates local `statusOverrides`. Wire to `PATCH /tasks/:id` (`api/tasks.md`).
+- **Survey Builder Launch** is a stub — validation runs but no `POST /surveys/:id/open` (`api/surveys.md`).
 - **Survey Builder Preview** renders the respondent UI live but doesn't persist responses.
 - **Survey Builder Outline drag-reorder** mutates local draft only.
 - **Attachments** (Create VOC + RichEditor) — file picker accepts files but no upload. Wire to ADR-0011 storage.
@@ -426,7 +432,7 @@ Replace these before shipping. Each item is a real wiring task, not a bug.
 
 | Topic | Source doc |
 |---|---|
-| Visual tokens | `DESIGN.md` |
+| Visual tokens | `docs/frontend/tokens.md` (root `DESIGN.md` is only a pointer to it) |
 | Route URLs | `docs/frontend/routes-and-layout.md` |
 | Component contract | `docs/frontend/ui-design-system.md` |
 | Required components | `docs/frontend/component-inventory.md` |
@@ -435,7 +441,7 @@ Replace these before shipping. Each item is a real wiring task, not a bug.
 | Domain glossary | `docs/design/01-domain-model.md` |
 | Non-negotiable rules | `docs/design/00-product-overview.md` |
 | Action traceability | `docs/design/12-ui-ux-principles.md` (UI Action → Requirement → API table) |
-| Production API contract | `docs/implementation/03-api-contracts.md` and `docs/implementation/api/` |
+| Production API contract | `docs/implementation/03-api-contracts.md` (index) plus the domain file named in DESIGN-MAP §1b |
 | Production data contract | `docs/design/15-data-contracts.md` |
 | Entity linking backend contract | `docs/implementation/06-entity-linking-contract.md` |
 | Error response contract | `docs/adr/0012-error-code-contract.md` |
@@ -661,7 +667,7 @@ Pack 10 (Polish & component extraction) followed immediately by Pack 11 (Pack 10
 - `LiveTimestamp` / `LiveCount` / `useTicker` / `relativeFromNow` — used by Home KPI strip, Home + Integration action cards, and Entity Links toolbar.  Prototype drives counts off a synthetic ~6s ticker; production replaces with the SSE channel.  `@keyframes live-ping` added to `styles.css`.
 
 **Screens / surfaces**
-- **Tasks · Roadmap** (`screen-tasks-roadmap.jsx`, new) — multi-milestone Gantt on a shared horizontal axis.  Group by Managed System / Status / None; toggle hide-released.  Reuses `milestoneTaskRows`, `TASK_BAR_COLORS`, `TASK_GANTT_TODAY` from `screen-milestone-gantt.jsx` so visual vocabulary doesn't fork.  Spec: FR-TASK-005 + `routes-and-layout.md` `/tasks/roadmap`.  Wired into `app.jsx`, `shell.jsx`, `cmdk.jsx`, Tweaks panel.
+- **Tasks · Roadmap** (`screen-tasks-roadmap.jsx`, new) — multi-milestone Gantt on a shared horizontal axis.  Group by Managed System / Status / None; toggle hide-released.  Reuses `milestoneTaskRows`, `TASK_BAR_COLORS`, `TASK_GANTT_TODAY` from `screen-milestone-gantt.jsx` so visual vocabulary doesn't fork.  Spec: FR-TASK-005 + `routes-and-layout.md` `/tasks/roadmap`. (Footnote, 2026-09-23: that path is not in the current route contract and FR-TASK-005 is not in `docs/design/06-task-project-system.md` — see DESIGN-MAP §1b.)  Wired into `app.jsx`, `shell.jsx`, `cmdk.jsx`, Tweaks panel.
 - **Analytics Area slide-over** (`screen-other.jsx · AnalyticsAreaSlideOver`) — read-only detail surface from the Admin Areas catalog.  Reiterates "AA is not a permission boundary"; shows definition, workload signal, recent findings (via `EntityRelationRow`), and "Used by" surfaces.
 - **Milestone Detail scroll-spy** (`screen-milestones.jsx`) — replaced click-only active-section tracking with `IntersectionObserver` watching the five `data-anchor` blocks.  Click handler now flags a `programmaticRef` so smooth-scrolling doesn't fight the observer.
 - **Entity Links · "Last refreshed at"** (`screen-entity-links.jsx`) — `LiveTimestamp` + `Refresh` button in the toolbar; manual refresh bumps the timestamp so the relative string ticks.
