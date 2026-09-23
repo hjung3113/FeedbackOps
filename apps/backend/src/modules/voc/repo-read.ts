@@ -3,13 +3,9 @@
 // Read repo layer for the VOC module. Pure SQL/drizzle reads on voc.* tables.
 // No route handlers, no service-layer logic.
 //
-// Cross-module dependency note:
-//   Scope resolution (actorEffectiveScope / actorReadScope / actorTriageScope)
-//   reads permission.permission_grants. Per AGENTS.md layer rules, repos may
-//   not reach into tables owned by another module. We delegate to
-//   permissions/scope-service.ts which owns that cross-module read. This file
-//   calls actorScopeForCapability() from scope-service.ts; it MUST NOT import
-//   from permission.ts schema directly.
+// Scope resolution and similarVocVisibilityPredicate live in ./authorization.ts;
+// this file is read SQL on voc.* plus the managed-system id projection
+// outOfScopeSummary already uses. Do not import permission schema here either.
 
 import { sql } from 'drizzle-orm';
 
@@ -23,72 +19,10 @@ import {
   vocs,
 } from '../../db/schema/voc.js';
 import type { Tx } from '../../db/tx.js';
+import { normalizePgTimestampToIso } from '../../lib/pg-timestamp.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
-import type { Scope, ScopeActorContext } from '../permissions/scope-service.js';
-import { actorScopeForCapability } from '../permissions/scope-service.js';
+import { type Scope, similarVocVisibilityPredicate } from './authorization.js';
 import { SEVERITY_ORDINAL, SORT_CONFIG } from './cursor.js';
-
-// Re-export Scope so callers only need one import.
-export type { Scope };
-
-// ── Actor context ─────────────────────────────────────────────────────────────
-
-export interface ActorContextLite {
-  actor_id: string;
-  workspace_id: string;
-  role_level: 'admin' | 'developer' | 'user';
-}
-
-// ── Scope resolvers ───────────────────────────────────────────────────────────
-
-/**
- * Effective scope: union of voc.read and voc.triage grants for the actor.
- * Admin role → 'all'. MS-scoped grants → union of both capability MS lists.
- *
- * WHY: using undefined (any capability) let future non-VOC capabilities
- * widen VOC summary visibility, creating an unintended existence-probe
- * surface. Restricting to voc.read ∪ voc.triage bounds the effective
- * scope to capabilities that are semantically relevant to VOC reads (M1).
- *
- * Used for out_of_scope_summary visibility and detail-existence-probe defense.
- */
-export async function actorEffectiveScope(
-  db: Db | Tx,
-  actor: ActorContextLite,
-): Promise<Scope> {
-  if (actor.role_level === 'admin') {
-    return { kind: 'all' };
-  }
-  const [readScope, triageScope] = await Promise.all([
-    actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read'),
-    actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage'),
-  ]);
-  // Union: if either is 'all', effective scope is 'all'.
-  if (readScope.kind === 'all' || triageScope.kind === 'all') {
-    return { kind: 'all' };
-  }
-  const unionIds = [...new Set([...readScope.managedSystemIds, ...triageScope.managedSystemIds])];
-  return { kind: 'scoped', managedSystemIds: unionIds };
-}
-
-/**
- * voc.read scope. Admin → 'all'. Otherwise: workspace-wide voc.read grant →
- * 'all'; MS-scoped voc.read grants → scoped list. Empty list → scoped:[].
- */
-export async function actorReadScope(
-  db: Db | Tx,
-  actor: ActorContextLite,
-): Promise<Scope> {
-  return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read');
-}
-
-/** voc.triage scope. Same shape as actorReadScope; admin → 'all'. */
-export async function actorTriageScope(
-  db: Db | Tx,
-  actor: ActorContextLite,
-): Promise<Scope> {
-  return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage');
-}
 
 // ── SQL array helpers ─────────────────────────────────────────────────────────
 // Drizzle's sql`` tag serializes JS arrays as postgres row/record literals, not
@@ -741,14 +675,13 @@ export async function selectConversationPage(
   let nextCursor: { createdAt: string; id: string } | null = null;
   if (hasMore && sliced.length > 0) {
     const last = sliced[sliced.length - 1]!;
-    // WHY: normalize postgres text format to ISO 8601 (replace space with T,
-    // keep microsecond precision) so the cursor: (a) validates with
+    // WHY: normalize postgres text format to ISO 8601 so the cursor: (a) validates with
     // z.string().datetime() in decodeConversationCursor, and (b) preserves
     // full microsecond precision for correct tie-breaking in the cursor predicate.
     // Postgres text format: "2026-05-18 17:19:45.160586+00"
     // ISO 8601 format:      "2026-05-18T17:19:45.160586+00:00"
     const rawCreatedAt = (last._created_at_raw as string | undefined)
-      ? String(last._created_at_raw).replace(' ', 'T').replace(/\+00$/, '+00:00')
+      ? normalizePgTimestampToIso(String(last._created_at_raw))
       : toDate(last.created_at as Date | string).toISOString();
     nextCursor = {
       createdAt: rawCreatedAt,
@@ -963,39 +896,6 @@ export interface SimilarVocReadItem {
   title: string;
   reporterFacingStatus: string;
   severity: 'low' | 'medium' | 'high' | 'critical' | null;
-}
-
-/**
- * The ADR-0031 VOC visibility rule, and the only copy of it.
- *
- * A VOC other than the actor's own source is visible when its Managed System
- * is in the actor's `voc.read` scope, or the actor reported it. Both the
- * ADR-0031 similar-peer projections below and the ADR-0034 recommendation read
- * model (`recommendations/repo.ts`) call this one function; ADR-0034 D4 says
- * the recommendation surface *reuses* this rule rather than deriving one of
- * its own, and reuse means calling it, not restating it.
- *
- * It was briefly restated in `recommendations/scope.ts` because that query
- * aliases the VOC differently — which is why the alias is a parameter now. A
- * second body is not worth an aliasing difference: a future change to the
- * scope semantics (a team-based arm, a different resolution of `kind: 'all'`)
- * would be made in one copy, the other would keep authorizing under the old
- * rule, and the divergence would leak VOC existence with nothing failing.
- *
- * `vocAlias` is a table alias, not a value — callers supply e.g. sql`p`.
- * `__tests__/voc-visibility-predicate.integration.test.ts` pins the verdict
- * matrix and asserts both surfaces admit the same VOCs on one fixture.
- */
-export function similarVocVisibilityPredicate(
-  readScope: Scope,
-  actorId: string,
-  vocAlias: ReturnType<typeof sql>,
-): ReturnType<typeof sql> {
-  if (readScope.kind === 'all') return sql`true`;
-  return sql`(
-    ${vocAlias}.primary_managed_system_id = ANY(${sqlUuidArray(readScope.managedSystemIds)})
-    OR ${vocAlias}.reporter_id = ${actorId}
-  )`;
 }
 
 /** Bulk count for a list page. One query covers every returned source VOC. */

@@ -19,14 +19,15 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
 import { createEntityLinksService } from '../../entity-links/service.js';
 import { createCheckService } from '../../permissions/check-service.js';
-import { createConversationService, type ConversationService } from '../conversation-service.js';
+import { type ConversationService, createConversationService } from '../conversation-service.js';
 import { createVocReadService } from '../read-service.js';
-import { createVocService, type VocService } from '../service.js';
+import { type VocService, createVocService } from '../service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -136,6 +137,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
         db: dbHandle.db,
         checkService,
         auditService,
+        providers: buildEntityLinkProviders(),
       }),
     });
     vocService = createVocService({

@@ -3,7 +3,7 @@
 ## Required Docs
 
 - Read `docs/implementation/README.md` before backend changes.
-- Use `docs/implementation/03-api-contracts.md` for endpoint behavior.
+- Use `docs/implementation/03-api-contracts.md` and `docs/implementation/api/` for endpoint behavior.
 - Use `docs/implementation/04-database-and-migrations.md` for storage.
 - Use `docs/implementation/05-permission-policy.md` for access control.
 - Use `docs/implementation/06-entity-linking-contract.md` for links.

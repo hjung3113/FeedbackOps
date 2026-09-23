@@ -38,8 +38,8 @@ import {
 } from '../findings/commands.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { type Scope, actorReadScope } from '../voc/authorization.js';
 import type { ConversationService } from '../voc/conversation-service.js';
-import { type Scope, actorReadScope } from '../voc/repo-read.js';
 import { selectVocForUpdate } from '../voc/repo.js';
 import {
   type CreatedFindingForClusterRow,

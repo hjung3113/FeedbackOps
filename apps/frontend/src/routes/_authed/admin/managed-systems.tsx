@@ -41,11 +41,12 @@ import { Link, createFileRoute } from '@tanstack/react-router';
 import { ArrowRight, Filter, Plus, Shield } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
+import { envelopeMessage } from '../../../features/admin/lib/envelopeMessage.js';
+import { groupAreasByMs } from '../../../features/admin/lib/groupAreasByMs.js';
 import { scopeMark } from '../../../features/admin/lib/scopeMark.js';
 import { PermissionGate } from '../../../features/admin/permissions/permission-gate.js';
 import {
   type AnalyticsAreaDto,
-  ApiError,
   type ManagedSystemDto,
   type RegisterManagedSystemBody,
   type ResolveActorsResponse,
@@ -63,12 +64,6 @@ import {
 export const Route = createFileRoute('/_authed/admin/managed-systems')({
   component: ManagedSystemsAdminPage,
 });
-
-function envelopeMessage(err: unknown): string {
-  if (err instanceof ApiError) return `${err.envelope.code}: ${err.envelope.message}`;
-  if (err instanceof Error) return err.message;
-  return 'unknown error';
-}
 
 const MANAGED_SYSTEMS_KEY = ['managed-systems'] as const;
 const SUBTITLE =
@@ -192,20 +187,6 @@ export function ManagedSystemsAdminPage() {
       </PermissionGate>
     </PageShell>
   );
-}
-
-function groupAreasByMs(
-  items: AnalyticsAreaDto[],
-  includeArchived: boolean,
-): Map<string, AnalyticsAreaDto[]> {
-  const out = new Map<string, AnalyticsAreaDto[]>();
-  for (const a of items) {
-    if (!includeArchived && a.archived_at !== null) continue;
-    const arr = out.get(a.managed_system_id) ?? [];
-    arr.push(a);
-    out.set(a.managed_system_id, arr);
-  }
-  return out;
 }
 
 export function ManagedSystemsBody({

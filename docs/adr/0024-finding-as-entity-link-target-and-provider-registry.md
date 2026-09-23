@@ -10,7 +10,7 @@ ADR-0023 locked the entity-link visibility decision table, the `hidden`/`denied`
 
 Two facts from the signed contracts shape this ADR:
 
-- `docs/implementation/03-api-contracts.md:346` pins the VOC→Finding creation path: endpoint `POST /vocs/:id/create-finding`, relation_type **`created_finding`**, audit event `finding_created_from_voc`. The casual phrasing "evidence_of VOC→Finding" in prior handoffs was imprecise; `evidence_of` is the *separate* relation used by `POST /findings/:id/link-evidence` (03:427) to attach additional evidence to an existing Finding, and is out of scope for the Slice 5 create tracer.
+- `docs/implementation/api/cross-system.md` §Cross-System Endpoint Decisions (the `POST /vocs/:id/create-finding` row) pins the VOC→Finding creation path: endpoint `POST /vocs/:id/create-finding`, relation_type **`created_finding`**, audit event `finding_created_from_voc`. The casual phrasing "evidence_of VOC→Finding" in prior handoffs was imprecise; `evidence_of` is the *separate* relation used by `POST /findings/:id/link-evidence` (`docs/implementation/api/findings.md` §Finding, path `POST /findings/:id/link-evidence`) to attach additional evidence to an existing Finding, and is out of scope for the Slice 5 create tracer.
 - `docs/implementation/06-entity-linking-contract.md:47-58` and `docs/implementation/02-domain-module-boundaries.md:99-120` mandate an **entity-link provider registry** (`assertExists`, `getPermissionSubject`, `getReporterSummary`, `getInternalSummary`, `listExpectedLinks`). The Slice 4.1 tracer (#112) satisfied this contract for `voc` by **hard-coding** VOC resolution and `voc.read` authz throughout the entity-links service rather than building the registry abstraction. Slice 5 is the first multi-type slice, so the registry must now exist for real.
 
 A four-persona adversarial review (`.review/SLICE-5-REVIEW-A.md`, `-B.md`, `SLICE-5-CODEX-C-DATA.out`, `-D-SECURITY.out`) drove the decisions below.
@@ -19,7 +19,7 @@ A four-persona adversarial review (`.review/SLICE-5-REVIEW-A.md`, `-B.md`, `SLIC
 
 ### Section A — `created_finding`, not a renamed relation
 
-The VOC→Finding link created by `POST /vocs/:id/create-finding` uses relation_type **`created_finding`** (the registry member already listed in `docs/design/11-entity-linking.md` VOC relations and pinned by `03:346`). No relation is renamed or dropped. The Survey `generated_finding` relation (Slice 8) and the common `evidence_of` relation (used by `link-evidence`, later) are untouched.
+The VOC→Finding link created by `POST /vocs/:id/create-finding` uses relation_type **`created_finding`** (the registry member already listed in `docs/design/11-entity-linking.md` VOC relations and pinned by `docs/implementation/api/cross-system.md` §Cross-System Endpoint Decisions (the `POST /vocs/:id/create-finding` row)). No relation is renamed or dropped. The Survey `generated_finding` relation (Slice 8) and the common `evidence_of` relation (used by `link-evidence`, later) are untouched.
 
 **Provenance vs evidence hierarchy are two distinct, non-redundant facts:**
 
@@ -185,7 +185,7 @@ The link command hides an unreadable cluster or target as `404`, and requires
 
 ## Alternatives rejected
 
-- **Rename `created_finding` → `evidence_of`** — rejected: reverses the signed `03:346` behavioral contract and conflates two distinct relations.
+- **Rename `created_finding` → `evidence_of`** — rejected: reverses the signed cross-system behavioral contract (`docs/implementation/api/cross-system.md` §Cross-System Endpoint Decisions, the `POST /vocs/:id/create-finding` row) and conflates two distinct relations.
 - **Add a second hard-coded `finding` branch instead of the registry** — rejected: accrues the same debt #112 left, and forces cluster/survey/task to re-touch the same code (delivery-persona finding).
 - **Independent value CHECKs on entity_links** — rejected: would admit invalid tuples (`voc→voc evidence_of`, `finding→voc`, `finding→finding`).
 - **Compute `evidence_count` instead of storing** — rejected: `15:135` makes it a required stored field; drift is handled by same-transaction maintenance instead.

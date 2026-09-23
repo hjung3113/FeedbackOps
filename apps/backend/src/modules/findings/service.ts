@@ -36,7 +36,7 @@ import {
   resolveApprovedSurveyResponseExcerpts,
   resolveSurveyResponseEvidenceAccess,
   resolveSurveyResponseHighlightAccess,
-} from '../surveys/service.js';
+} from '../surveys/evidence-access.js';
 import { lockTaskById } from '../tasks/repo.js';
 import { selectVocForUpdate } from '../voc/repo.js';
 import { checkFindingManage, checkFindingRead } from './authorization.js';

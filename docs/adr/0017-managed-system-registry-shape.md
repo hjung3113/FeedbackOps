@@ -2,7 +2,7 @@
 
 **ADR-0019 (Sections A, B, D, E) amends the archived-row mutation policy, cascade-race recovery, and concurrency lock for this ADR. The decisions below remain in force; consult ADR-0019 for the additions.**
 
-`docs/implementation/04-database-and-migrations.md:104-110` locks the existence of `core.managed_systems` + `core.analytics_areas`, the AA→MS belonging rule, the workspace-plus-MS uniqueness intent for AA, and the "archive over hard delete" mandate. `docs/implementation/03-api-contracts.md:450-460` locks the eight Slice 2 endpoints. `CONTEXT.md` (Managed System / Managed System Registry / Analytics Area / Default Owner) locks the domain vocabulary.
+`docs/implementation/04-database-and-migrations.md:104-110` locks the existence of `core.managed_systems` + `core.analytics_areas`, the AA→MS belonging rule, the workspace-plus-MS uniqueness intent for AA, and the "archive over hard delete" mandate. `docs/implementation/api/core.md` §Core / Managed System / Analytics Area locks the eight Slice 2 endpoints: `GET /managed-systems`, `POST /managed-systems`, `PATCH /managed-systems/:id`, `POST /managed-systems/:id/archive`, `GET /analytics-areas`, `POST /analytics-areas`, `PATCH /analytics-areas/:id`, `POST /analytics-areas/:id/archive`. Routes added later in that same section (`GET /actors`, `GET /actors/resolve`, `GET /workspace/settings`, `PATCH /workspace/settings`) are not part of those eight. `CONTEXT.md` (Managed System / Managed System Registry / Analytics Area / Default Owner) locks the domain vocabulary.
 
 This ADR locks the three shape decisions those documents leave open: the identifier columns on `managed_systems`, the cascade semantics when a Managed System is archived, and the audit-event detail payload that records what happened.
 
@@ -68,7 +68,7 @@ Slug reuse after archive is permitted by the partial unique indexes (`WHERE arch
 
 ## Audit detail: state-snapshot for create, change-diff for update, cascade-tracking for archive
 
-Six events are added to `AUDIT_EVENT_TYPES` (`packages/shared/src/enums/audit-events.ts`). Names follow the snake-case single-token convention that Slice 1's F-001 fix pinned and that `audit-events.ts:1-7` documents (CONTEXT.md "Managed System Registry" supplies the `registered` verb):
+Six events are added to `AUDIT_EVENT_TYPES` (`packages/shared/src/enums/audit-events.ts`). Names follow the snake-case single-token convention that Slice 1's F-001 fix pinned and that the registry header in `packages/shared/src/enums/audit-events.ts` documents (CONTEXT.md "Managed System Registry" supplies the `registered` verb):
 
 ```text
 managed_system_registered
@@ -103,7 +103,7 @@ Detail payload conventions:
 }
 ```
 
-Per-event detail schemas live alongside the type list in `audit-events.ts` (`AUDIT_EVENT_DETAIL_SCHEMAS`), mirroring the `permission_requested` pattern Slice 1 established.
+Per-event detail schemas live in the domain modules `packages/shared/src/audit/managed-system.ts` and `packages/shared/src/audit/analytics-area.ts` and are registered by spread into `AUDIT_EVENT_DETAIL_SCHEMAS` in `audit-events.ts`, mirroring the `permission_requested` pattern Slice 1 established.
 
 ## Reopening triggers
 

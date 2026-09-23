@@ -69,7 +69,7 @@ Authority follows subject; there is no universal conflict ladder.
 2. `docs/frontend/specs/*.md` when prototype is silent
 3. `CONTEXT.md` when neither has a verbatim string
 
-**Per-domain pointers:** endpoint behavior → `docs/implementation/03-api-contracts.md`; DB + migrations → `04-database-and-migrations.md`; module ownership → `02-domain-module-boundaries.md`; permissions → `05-permission-policy.md`; entity links → `06-entity-linking-contract.md`; frontend routes → `docs/frontend/routes-and-layout.md`; component contracts → `docs/frontend/ui-design-system.md` + `component-inventory.md`. Visual token seed: `docs/frontend/tokens.md` (Pack 17 light tokens / ADR-0021 supersede Pack 20 prototype dark tokens for impl).
+**Per-domain pointers:** endpoint behavior → `docs/implementation/03-api-contracts.md` and `docs/implementation/api/`; DB + migrations → `04-database-and-migrations.md`; module ownership → `02-domain-module-boundaries.md`; permissions → `05-permission-policy.md`; entity links → `06-entity-linking-contract.md`; frontend routes → `docs/frontend/routes-and-layout.md`; component contracts → `docs/frontend/ui-design-system.md` + `component-inventory.md`. Visual token seed: `docs/frontend/tokens.md` (Pack 17 light tokens / ADR-0021 supersede Pack 20 prototype dark tokens for impl).
 
 ## Product Invariants
 

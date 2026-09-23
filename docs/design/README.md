@@ -36,7 +36,7 @@ archive/
 ```
 
 `docs/design/archive/` is not required reading.
-Endpoint behavior has one authority: `docs/implementation/03-api-contracts.md`.
+Endpoint authority is `docs/implementation/03-api-contracts.md` (index, global rules, error codes, contract template) together with `docs/implementation/api/*.md` (behavior and catalog in the same domain file). No other document is an endpoint authority.
 
 ## Drift Control
 
@@ -44,7 +44,7 @@ Endpoint behavior has one authority: `docs/implementation/03-api-contracts.md`.
 - System documents may explain local behavior, but must not redefine canonical entity names.
 - Schema blocks in system documents are explanatory drafts.
 - Field and enum contracts belong in docs/design/15-data-contracts.md. docs/implementation/04-database-and-migrations.md owns migration mechanism only.
-- Implementation-facing endpoint contracts belong in docs/implementation/03-api-contracts.md.
+- Endpoint authority is docs/implementation/03-api-contracts.md (index, global rules, error codes, contract template) together with docs/implementation/api/*.md (behavior and catalog in the same domain file). No other document is an endpoint authority.
 - Scope changes must update docs/design/02-requirements-matrix.md before roadmap prose.
 - Do not copy the 09 capability matrix into docs/implementation/05-permission-policy.md, and do not copy check order or audit verbs back into 09.
 ```

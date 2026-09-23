@@ -1,6 +1,6 @@
 // tasks-comments.ts — Task progress-note timeline reads/writes (#377).
 //
-// Contract: docs/implementation/03-api-contracts.md → Task
+// Contract: docs/implementation/api/tasks.md §Task
 //   GET/POST /tasks/:id/comments — same shape as the Finding endpoints; the
 //   backend gates both behind finding.manage + elevated role.
 //   POST requires an Idempotency-Key (apiRequest auto-mints one per call).

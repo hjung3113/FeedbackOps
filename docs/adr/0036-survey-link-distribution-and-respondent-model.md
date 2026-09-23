@@ -10,8 +10,9 @@ Proposed
 
 The Survey design acceptance criterion says “Survey supports link distribution”
 at `docs/design/07-survey-system.md:95`, but the implemented API contract at
-`docs/implementation/03-api-contracts.md:846` and `:853` defines the current
-form and response routes for authenticated Actors in the same Workspace only.
+`docs/implementation/api/surveys.md` §Survey (`GET /surveys/:id/form`,
+`POST /surveys/:id/responses`) defines the current form and response routes for
+authenticated Actors in the same Workspace only.
 ADR-0035 establishes the anonymous response and public-scope boundary needed
 for a separate link surface.
 
@@ -45,7 +46,8 @@ It does not grant an Actor session, any Survey management capability, personal
 response access, results access, or access to the existing
 `/surveys/:id/form` and `/surveys/:id/responses` endpoints. Those endpoints
 remain authenticated exactly as pinned by
-`docs/implementation/03-api-contracts.md:846` and `:853`.
+`docs/implementation/api/surveys.md` §Survey (`GET /surveys/:id/form`,
+`POST /surveys/:id/responses`).
 
 ### D4 — Delivery channels are out of scope
 

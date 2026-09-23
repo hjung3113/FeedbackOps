@@ -25,3 +25,9 @@ export const attachmentUploadedDetailSchema = z
   })
   .strict();
 export type AttachmentUploadedDetail = z.infer<typeof attachmentUploadedDetailSchema>;
+
+export const ATTACHMENT_AUDIT_EVENT_TYPES = ['attachment_uploaded'] as const;
+
+export const ATTACHMENT_AUDIT_EVENT_DETAIL_SCHEMAS = {
+  attachment_uploaded: attachmentUploadedDetailSchema,
+} as const satisfies Record<(typeof ATTACHMENT_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

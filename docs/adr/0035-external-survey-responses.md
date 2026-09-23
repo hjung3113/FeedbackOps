@@ -35,9 +35,9 @@ a reopening trigger at
 `docs/adr/0033-survey-evidence-anonymity-safe-summary-contract.md:74`.
 
 `docs/design/07-survey-system.md:95` says that Survey supports link
-distribution, while `docs/implementation/03-api-contracts.md:846` and `:853`
-limit the existing form and response endpoints to an authenticated Actor in the
-same Workspace. The API contract remains authoritative for those existing
+distribution, while `docs/implementation/api/surveys.md` §Survey
+(`GET /surveys/:id/form`, `POST /surveys/:id/responses`) limit the existing
+form and response endpoints to an authenticated Actor in the same Workspace. The API contract remains authoritative for those existing
 endpoints; this ADR and ADR-0036 define separate public-link endpoints rather
 than silently widening them.
 

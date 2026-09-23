@@ -162,3 +162,23 @@ apps/backend/src/modules/tasks/__tests__/create-task-display-id.integration.test
 apps/backend/src/modules/tasks/__tests__/create-task-display-id.integration.test.ts format -- pre-existing on develop
 apps/backend/src/server.ts organizeImports -- pre-existing on develop (module import list predates biome); this branch only hoists the vocReadService construction and passes it to createTasksService
 apps/backend/src/server.ts format -- pre-existing on develop
+# Added for wave2 (#473/#475/#478/#479/#485/#490/#492). Counts measured on
+# develop e57326b per file with the gate's own invocation, one file at a time
+# (biome check --reporter=json --max-diagnostics=500 <file>) and reproduce
+# exactly against this branch.
+apps/backend/src/__tests__/fe-call-endpoints-exist.test.ts format -- pre-existing on develop (1x, unchanged)
+apps/backend/src/__tests__/fe-call-endpoints-exist.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged)
+apps/backend/src/__tests__/fe-call-endpoints-exist.test.ts lint/style/useTemplate -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/attachments/__tests__/upload-command.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (9x, unchanged)
+apps/backend/src/modules/findings/__tests__/create-finding-display-id.integration.test.ts format -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/findings/__tests__/create-finding-display-id.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (10x, unchanged)
+apps/backend/src/modules/findings/__tests__/create-finding-display-id.integration.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/backend/src/modules/voc/__tests__/voc-commands.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (12x, unchanged)
+apps/backend/src/modules/voc/__tests__/voc-visibility-predicate.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (4x, unchanged)
+apps/backend/src/modules/voc-clusters/service.ts format -- pre-existing on develop (1x, unchanged); measured against `git show develop:` of the same file
+apps/frontend/src/__tests__/vite-proxy-completeness.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged)
+apps/frontend/src/__tests__/vite-proxy-completeness.test.ts lint/style/useTemplate -- pre-existing on develop (1x, unchanged)
+packages/shared/src/audit/voc.ts format -- pre-existing on develop (1x, unchanged)
+apps/backend/src/modules/voc/routes/crud.ts organizeImports -- pre-existing on develop as voc/routes.ts (1x, unchanged); #478 renames the file, does not touch the import block
+apps/backend/src/modules/voc/__tests__/routes-no-frame.test.ts lint/suspicious/noExportsInTest -- pre-existing on develop (2x, unchanged); the design (#478) explicitly keeps `stripComments`/`findFrameOwnership` exported for the file's own self-test, do not un-export
+packages/shared/src/audit/__tests__/survey-audit-schemas.test.ts organizeImports -- pre-existing on develop (1x, unchanged); import order predates biome

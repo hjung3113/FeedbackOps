@@ -42,9 +42,12 @@ const FE_SRC = path.join(REPO_ROOT, 'apps/frontend/src');
 const BE_SRC = path.join(REPO_ROOT, 'apps/backend/src');
 
 // ─── BE-side route discovery ───────────────────────────────────────────────
-// Walk server.ts + every `routes.ts` AND every `*-routes.ts` (the latter so
-// file naming variants — e.g. `list-actors-routes.ts` — are not silently
-// missed).
+// Walk server.ts + every top-level `routes.ts` / `*-routes.ts` in each module
+// (the latter so file naming variants — e.g. `list-actors-routes.ts` — are not
+// silently missed), plus the direct `*.ts` children of `modules/<name>/routes/`
+// when a module splits its routes into a directory (e.g. `voc/routes/`). No
+// recursion: nested plugin files (e.g. `voc/recommendations/routes.ts`) and
+// `modules/core/health/routes.ts` stay out of this walker.
 //
 // Fastify accepts two registration forms and this repo uses both: the object
 // form `app.route({ url: '/x' })` (71 declarations) and the method shorthand
@@ -82,6 +85,18 @@ function collectBackendRoutes(): Set<string> {
       // Match routes.ts AND list-actors-routes.ts / foo-routes.ts variants.
       if (!fileEntry.name.endsWith('routes.ts')) continue;
       urls.push(...extractRouteUrls(fs.readFileSync(path.join(moduleDir, fileEntry.name), 'utf8')));
+    }
+    // Split modules keep their routes in a routes/ directory (e.g.
+    // voc/routes/{index,crud,conversation,conversion,public-updates}.ts);
+    // read its direct children only — do not recurse.
+    const routesDir = path.join(moduleDir, 'routes');
+    if (fs.existsSync(routesDir) && fs.statSync(routesDir).isDirectory()) {
+      for (const routesEntry of fs.readdirSync(routesDir, { withFileTypes: true })) {
+        if (!routesEntry.isFile() || !routesEntry.name.endsWith('.ts')) continue;
+        urls.push(
+          ...extractRouteUrls(fs.readFileSync(path.join(routesDir, routesEntry.name), 'utf8')),
+        );
+      }
     }
   }
   return new Set(urls.map(rootPrefix));

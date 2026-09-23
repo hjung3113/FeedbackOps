@@ -1,7 +1,7 @@
 import type { VocPreSubmitPeersResponse } from '@fops/shared';
 
 import type { Db } from '../../../db/client.js';
-import { actorReadScope } from '../repo-read.js';
+import { actorReadScope } from '../authorization.js';
 
 import { selectPreSubmitVocPeers } from './repo.js';
 

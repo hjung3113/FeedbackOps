@@ -1,6 +1,6 @@
 // findings-comments.ts — Finding progress-note timeline reads/writes (#377).
 //
-// Contract: docs/implementation/03-api-contracts.md → Finding
+// Contract: docs/implementation/api/findings.md §Finding
 //   GET  /findings/:id/comments — finding.read only
 //   POST /findings/:id/comments — finding.manage; Idempotency-Key required
 //         (apiRequest auto-mints one per POST call).

@@ -110,7 +110,7 @@ Reference and draft documents:
 ```text
 - docs/frontend/tokens.md: visual token seed only; not a component or route contract.
 - 15-data-contracts.md: field and enum authority (not superseded by migrations; see docs/design/README.md).
-- docs/design/archive/14-api-draft.md: archived historical input. Not required reading. Not endpoint authority.
+- docs/design/archive/14-api-draft.md: archived historical input. Not required reading. Not endpoint authority. Endpoint authority is docs/implementation/03-api-contracts.md plus docs/implementation/api/*.md.
 ```
 
 Implementation-facing decisions live in `docs/implementation`.

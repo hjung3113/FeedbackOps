@@ -32,7 +32,7 @@ Spec column references — short names map onto files:
 - `routes`          → `docs/frontend/routes-and-layout.md`
 - `inv`             → `docs/frontend/component-inventory.md`
 - `inter`           → `docs/frontend/interaction-patterns.md`
-- `api-contracts`   → `docs/implementation/03-api-contracts.md`
+- `api-contracts`   → `docs/implementation/03-api-contracts.md` and `docs/implementation/api/`
 - `data-contracts`  → `docs/design/15-data-contracts.md`
 - `link-contract`   → `docs/implementation/06-entity-linking-contract.md`
 - `error-contract`  → `docs/adr/0012-error-code-contract.md`

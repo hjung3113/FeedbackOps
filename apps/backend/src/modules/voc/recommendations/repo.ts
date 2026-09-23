@@ -8,7 +8,7 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../../db/client.js';
 import type { Tx } from '../../../db/tx.js';
-import { type Scope, similarVocVisibilityPredicate } from '../repo-read.js';
+import { type Scope, similarVocVisibilityPredicate } from '../authorization.js';
 
 import { dismissalScopeKeySql } from './scope.js';
 
