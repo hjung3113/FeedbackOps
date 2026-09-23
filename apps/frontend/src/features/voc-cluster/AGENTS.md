@@ -4,6 +4,8 @@
 
 VOC Cluster owns frontend route composition and mutations for VOC Cluster list, detail, membership management, cluster-to-existing-Finding association, and cluster-originated Create Finding / Request Task flows (`useCreateVocCluster`, `useConfirmCluster`, `useAddClusterMember`, `useRemoveClusterMember`, `useVocClusterDetail`, `useVocClusterList`, `useCreateFindingFromCluster`, `useLinkExistingFindingToVocCluster`, `useRequestTaskFromCluster`).
 
+Screen components live in this feature folder: `components/detail/VocClusterListShell.tsx`, `components/detail/VocClusterDetailPanel.tsx`, and `components/modals/` (`AddVocModal`, `LinkExistingFindingModal`, `CreateFindingFromClusterModal`). The route files under `src/routes/_authed/voc-clusters/` own URL wiring only — path/search params in, shell callbacks out (plus `CreateClusterModal`, which stays in `index.tsx`).
+
 It does not own VOC record lifecycle, reporter-facing VOC status, or Finding/Task persistence — those belong to VOC, Integration, and Tasks respectively.
 
 ## Route Boundary

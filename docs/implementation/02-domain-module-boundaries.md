@@ -162,5 +162,6 @@ Entity Linking uses providers to enforce:
 ```
 
 `voc-cluster` is a VOC-owned subdomain assembled as a sibling feature folder
-(currently hooks only, with routes under `src/routes/_authed/voc-clusters/`), not
-a new top-level product domain.
+(screens under `src/features/voc-cluster/`, with route files under
+`src/routes/_authed/voc-clusters/` doing URL/shell wiring only), not a new
+top-level product domain.

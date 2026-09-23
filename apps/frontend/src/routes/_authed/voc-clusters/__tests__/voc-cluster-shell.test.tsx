@@ -525,7 +525,9 @@ describe("VOC cluster route shells", () => {
   });
 
   it("uses managed-system and VOC display labels instead of raw UUIDs in cluster detail", async () => {
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
 
     render(
       <VocClusterDetailPanel
@@ -548,7 +550,9 @@ describe("VOC cluster route shells", () => {
 
   it("keeps hook order stable when detail data changes from loading to loaded", async () => {
     detailQueryState.status = "loading";
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
     const { rerender } = render(
       <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
     );
@@ -596,7 +600,9 @@ describe("VOC cluster route shells", () => {
         ],
       },
     );
-    const { VocClusterListShell } = await import("../$clusterId");
+    const { VocClusterListShell } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterListShell"
+    );
 
     render(
       <VocClusterListShell
@@ -637,7 +643,9 @@ describe("VOC cluster route shells", () => {
     });
     const onSelect = vi.fn();
     const onCloseDetail = vi.fn();
-    const { VocClusterListShell } = await import("../$clusterId");
+    const { VocClusterListShell } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterListShell"
+    );
 
     render(
       <VocClusterListShell
@@ -662,7 +670,9 @@ describe("VOC cluster route shells", () => {
   it("keeps a deeplinked detail selection open while the list query is pending", async () => {
     const selectedId = clusters[0]!.id;
     const onCloseDetail = vi.fn();
-    const { VocClusterListShell } = await import("../$clusterId");
+    const { VocClusterListShell } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterListShell"
+    );
     listQueryState.status = "pending";
 
     const { rerender } = render(
@@ -706,7 +716,9 @@ describe("VOC cluster route shells", () => {
         title: "결제 안내 개선",
       },
     ];
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
 
     render(
       <VocClusterDetailPanel
@@ -732,7 +744,9 @@ describe("VOC cluster route shells", () => {
   });
 
   it("shows Execution create and link CTAs when no Finding is linked", async () => {
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
 
     render(
       <VocClusterDetailPanel
@@ -755,7 +769,9 @@ describe("VOC cluster route shells", () => {
 
   it("disables the link-existing-Finding CTA for non-mutating roles", async () => {
     currentRole.role_level = "user";
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
 
     render(
       <VocClusterDetailPanel
@@ -781,7 +797,9 @@ describe("VOC cluster route shells", () => {
       voc_id: `33333333-3333-3333-3333-33333333333${index}`,
       reporter_facing_status: "reviewing",
     }));
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
     const { container } = render(
       <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
     );
@@ -818,7 +836,9 @@ describe("VOC cluster route shells", () => {
     clusters[0]!.owner_user_id = null;
     clusters[0]!.confirmed_by = null;
     clusters[0]!.confirmed_at = null;
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
     render(
       <VocClusterDetailPanel clusterId={clusters[0]!.id} onClose={vi.fn()} />,
     );
@@ -840,7 +860,9 @@ describe("VOC cluster route shells", () => {
   });
 
   it("submits a selected existing Finding and closes the picker on success", async () => {
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
     linkFindingMutate.mockImplementation(
       (_variables: unknown, callbacks: { onSuccess: () => void }) =>
         callbacks.onSuccess(),
@@ -871,7 +893,9 @@ describe("VOC cluster route shells", () => {
   ] as const)(
     "surfaces the $1 / $2 non-disclosing link error",
     async (status, code, expectedMessage) => {
-      const { VocClusterDetailPanel } = await import("../$clusterId");
+      const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
       const error = new ApiError(status, { code, message: "backend detail" });
       expect(error.status).toBe(status);
       expect(error.envelope.code).toBe(code);
@@ -905,7 +929,9 @@ describe("VOC cluster route shells", () => {
   );
 
   it("AC-E10a keeps current members visible, disabled, and badged", async () => {
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
 
     render(
       <VocClusterDetailPanel
@@ -928,7 +954,9 @@ describe("VOC cluster route shells", () => {
   });
 
   it("AC-E10b keeps nonmembers selectable without an included badge", async () => {
-    const { VocClusterDetailPanel } = await import("../$clusterId");
+    const { VocClusterDetailPanel } = await import(
+      "@/features/voc-cluster/components/detail/VocClusterDetailPanel"
+    );
 
     render(
       <VocClusterDetailPanel
