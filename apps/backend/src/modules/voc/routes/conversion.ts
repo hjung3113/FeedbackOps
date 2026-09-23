@@ -8,20 +8,15 @@ import type { FastifyPluginAsync } from 'fastify';
 import { createFindingRequestSchema, createTaskRequestFromVocRequestSchema } from '@fops/shared';
 
 import { HttpError, fieldsFromZodIssues, sendError } from '../../../lib/errors.js';
-import { requireIdempotencyKey, UUID_REGEX } from '../../../lib/http-headers.js';
+import { UUID_REGEX, requireIdempotencyKey } from '../../../lib/http-headers.js';
 import { requireSession } from '../../../middleware/require-session.js';
 import { requireWorkspace } from '../../../middleware/require-workspace.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
 import type { VocRoutesOptions } from './index.js';
 
 export const vocConversionRoutes: FastifyPluginAsync<VocRoutesOptions> = async (app, opts) => {
-  const {
-    sessionService,
-    findingsService,
-    taskRequestsService,
-    workspaceId,
-    rateLimitConfig,
-  } = opts;
+  const { sessionService, findingsService, taskRequestsService, workspaceId, rateLimitConfig } =
+    opts;
 
   app.route({
     method: 'POST',

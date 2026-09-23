@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { AnalyticsAreaDto } from '../../../lib/api';
 import { groupAreasByMs } from './groupAreasByMs';
 
-function area(id: string, managed_system_id: string, archived_at: string | null = null): AnalyticsAreaDto {
+function area(
+  id: string,
+  managed_system_id: string,
+  archived_at: string | null = null,
+): AnalyticsAreaDto {
   return {
     id,
     workspace_id: 'ws-1',

@@ -12,7 +12,7 @@ import {
 } from '@fops/shared';
 
 import { HttpError, fieldsFromZodIssues, sendError } from '../../../lib/errors.js';
-import { requireIdempotencyKey, UUID_REGEX } from '../../../lib/http-headers.js';
+import { UUID_REGEX, requireIdempotencyKey } from '../../../lib/http-headers.js';
 import { requireSession } from '../../../middleware/require-session.js';
 import { requireWorkspace } from '../../../middleware/require-workspace.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';

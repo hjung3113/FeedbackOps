@@ -6,10 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  AUDIT_EVENT_DETAIL_SCHEMAS,
-  AUDIT_EVENT_TYPES,
-} from '../../enums/audit-events.js';
+import { AUDIT_EVENT_DETAIL_SCHEMAS, AUDIT_EVENT_TYPES } from '../../enums/audit-events.js';
 import { findingCreatedFromSurveyResponseDetailSchema } from '../finding.js';
 import { CAPABILITIES, CAPABILITY_META } from '../../enums/capabilities.js';
 import {

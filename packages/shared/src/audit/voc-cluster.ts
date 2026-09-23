@@ -128,7 +128,4 @@ export const VOC_CLUSTER_AUDIT_EVENT_DETAIL_SCHEMAS = {
   finding_created_from_voc_cluster: findingCreatedFromVocClusterDetailSchema,
   finding_linked_to_voc_cluster: findingLinkedToVocClusterDetailSchema,
   finding_unlinked_from_voc_cluster: findingUnlinkedFromVocClusterDetailSchema,
-} as const satisfies Record<
-  (typeof VOC_CLUSTER_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof VOC_CLUSTER_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

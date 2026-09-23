@@ -37,10 +37,7 @@ export interface ActorContextLite {
  *
  * Used for out_of_scope_summary visibility and detail-existence-probe defense.
  */
-export async function actorEffectiveScope(
-  db: Db | Tx,
-  actor: ActorContextLite,
-): Promise<Scope> {
+export async function actorEffectiveScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
   if (actor.role_level === 'admin') {
     return { kind: 'all' };
   }
@@ -60,18 +57,12 @@ export async function actorEffectiveScope(
  * voc.read scope. Admin → 'all'. Otherwise: workspace-wide voc.read grant →
  * 'all'; MS-scoped voc.read grants → scoped list. Empty list → scoped:[].
  */
-export async function actorReadScope(
-  db: Db | Tx,
-  actor: ActorContextLite,
-): Promise<Scope> {
+export async function actorReadScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
   return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.read');
 }
 
 /** voc.triage scope. Same shape as actorReadScope; admin → 'all'. */
-export async function actorTriageScope(
-  db: Db | Tx,
-  actor: ActorContextLite,
-): Promise<Scope> {
+export async function actorTriageScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
   return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage');
 }
 

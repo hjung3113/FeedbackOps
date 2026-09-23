@@ -5,9 +5,7 @@
 
 import { z } from 'zod';
 
-export const WORKSPACE_SETTINGS_AUDIT_EVENT_TYPES = [
-  'workspace_settings_updated',
-] as const;
+export const WORKSPACE_SETTINGS_AUDIT_EVENT_TYPES = ['workspace_settings_updated'] as const;
 
 export const workspaceSettingsUpdatedDetailSchema = z
   .object({
@@ -35,7 +33,4 @@ export type WorkspaceSettingsUpdatedDetail = z.infer<typeof workspaceSettingsUpd
 
 export const WORKSPACE_SETTINGS_AUDIT_EVENT_DETAIL_SCHEMAS = {
   workspace_settings_updated: workspaceSettingsUpdatedDetailSchema,
-} as const satisfies Record<
-  (typeof WORKSPACE_SETTINGS_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof WORKSPACE_SETTINGS_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

@@ -12,9 +12,7 @@
 
 import { z } from 'zod';
 
-export const FINDING_FROM_VOC_AUDIT_EVENT_TYPES = [
-  'finding_created_from_voc',
-] as const;
+export const FINDING_FROM_VOC_AUDIT_EVENT_TYPES = ['finding_created_from_voc'] as const;
 
 export const FINDING_LIFECYCLE_AUDIT_EVENT_TYPES = [
   'evidence_highlight_added',
@@ -22,9 +20,7 @@ export const FINDING_LIFECYCLE_AUDIT_EVENT_TYPES = [
   'finding_comment_created',
 ] as const;
 
-export const FINDING_TASK_LINKED_AUDIT_EVENT_TYPES = [
-  'finding_task_linked',
-] as const;
+export const FINDING_TASK_LINKED_AUDIT_EVENT_TYPES = ['finding_task_linked'] as const;
 
 export const FINDING_FROM_SURVEY_RESPONSE_AUDIT_EVENT_TYPES = [
   'finding_created_from_survey_response',
@@ -92,26 +88,17 @@ export type FindingTaskLinkedDetail = z.infer<typeof findingTaskLinkedDetailSche
 // historical event order.
 export const FINDING_FROM_VOC_AUDIT_EVENT_DETAIL_SCHEMAS = {
   finding_created_from_voc: findingCreatedFromVocDetailSchema,
-} as const satisfies Record<
-  (typeof FINDING_FROM_VOC_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof FINDING_FROM_VOC_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;
 
 export const FINDING_LIFECYCLE_AUDIT_EVENT_DETAIL_SCHEMAS = {
   evidence_highlight_added: evidenceHighlightAddedDetailSchema,
   finding_status_changed: findingStatusChangedDetailSchema,
   finding_comment_created: findingCommentCreatedDetailSchema,
-} as const satisfies Record<
-  (typeof FINDING_LIFECYCLE_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof FINDING_LIFECYCLE_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;
 
 export const FINDING_TASK_LINKED_AUDIT_EVENT_DETAIL_SCHEMAS = {
   finding_task_linked: findingTaskLinkedDetailSchema,
-} as const satisfies Record<
-  (typeof FINDING_TASK_LINKED_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof FINDING_TASK_LINKED_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;
 
 export const FINDING_FROM_SURVEY_RESPONSE_AUDIT_EVENT_DETAIL_SCHEMAS = {
   finding_created_from_survey_response: findingCreatedFromSurveyResponseDetailSchema,

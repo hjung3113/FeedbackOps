@@ -1,8 +1,4 @@
-import {
-  type SurveyResultDto,
-  getRatingBandForValue,
-  surveyResultDtoSchema,
-} from '@fops/shared';
+import { type SurveyResultDto, getRatingBandForValue, surveyResultDtoSchema } from '@fops/shared';
 import { HttpError } from '../../lib/errors.js';
 import {
   actorFindingReadScope,
@@ -220,15 +216,14 @@ export function createSurveyResults(deps: SurveysServiceDeps) {
         const exposed = new Map<string, { responseId: string; questionId: string }>();
         for (const question of result.questions)
           if ('excerpts' in question)
-            for (const excerpt of question.excerpts)
-              {
-                const rid = excerpt.response_id;
-                if (rid)
-                  exposed.set(`${rid}:${question.question_id}`, {
-                    responseId: rid,
+            for (const excerpt of question.excerpts) {
+              const rid = excerpt.response_id;
+              if (rid)
+                exposed.set(`${rid}:${question.question_id}`, {
+                  responseId: rid,
                   questionId: question.question_id,
-                  });
-              }
+                });
+            }
         for (const { responseId, questionId } of exposed.values())
           await deps.auditService.record(tx, {
             workspace_id: actor.workspace_id,

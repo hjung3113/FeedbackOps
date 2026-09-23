@@ -89,7 +89,9 @@ describe('voc routes/ frame-ownership guard (#392)', () => {
   });
 
   it('routes/ owns no transaction, advisory lock, or idempotency frame', () => {
-    const names = readdirSync(ROUTES_DIR).filter((n) => n.endsWith('.ts')).sort();
+    const names = readdirSync(ROUTES_DIR)
+      .filter((n) => n.endsWith('.ts'))
+      .sort();
     expect(names).toEqual(ROUTES_FILES);
     for (const name of names) {
       const source = readFileSync(join(ROUTES_DIR, name), 'utf8');

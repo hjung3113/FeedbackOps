@@ -3,10 +3,7 @@ import type { EntityLinkTargetSummary, TaskStatus } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
-import type {
-  EntityLinkProvider,
-  ReporterSummaryResult,
-} from '../entity-links/provider-types.js';
+import type { EntityLinkProvider, ReporterSummaryResult } from '../entity-links/provider-types.js';
 import { checkFindingManage, checkFindingRead } from '../findings/authorization.js';
 import { type TaskRow, findTaskById } from './repo.js';
 

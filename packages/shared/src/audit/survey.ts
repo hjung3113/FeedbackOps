@@ -192,7 +192,4 @@ export const SURVEY_AUDIT_EVENT_DETAIL_SCHEMAS = {
   survey_response_personal_read: surveyResponsePersonalReadDetailSchema,
   survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
   survey_response_excerpt_revoked: surveyResponseExcerptRevokedDetailSchema,
-} as const satisfies Record<
-  (typeof SURVEY_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof SURVEY_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

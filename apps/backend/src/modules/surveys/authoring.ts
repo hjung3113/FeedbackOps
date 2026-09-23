@@ -597,7 +597,8 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
           if (!s) throw new HttpError('not_found.record', 'survey not found');
           await requireManage(deps, tx, a.actor, s);
           draft(s);
-          const primaryManagedSystemId = a.input.primary_managed_system_id ?? s.primary_managed_system_id;
+          const primaryManagedSystemId =
+            a.input.primary_managed_system_id ?? s.primary_managed_system_id;
           const managedSystem = await tx.execute<{
             id: string;
             archived_at: Date | null;
@@ -704,9 +705,13 @@ export function createSurveyAuthoring(deps: SurveysServiceDeps) {
             questionIds.size !== questions.length ||
             questions.some((question) => !questionIds.has(question.id))
           )
-            throw new HttpError('validation.failed', 'question_ids must list every survey question once', {
-              fields: [{ path: ['question_ids'], code: 'invalid' }],
-            });
+            throw new HttpError(
+              'validation.failed',
+              'question_ids must list every survey question once',
+              {
+                fields: [{ path: ['question_ids'], code: 'invalid' }],
+              },
+            );
           await updateQuestionSortOrders(
             tx,
             a.actor.workspace_id,

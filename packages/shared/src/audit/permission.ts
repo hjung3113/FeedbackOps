@@ -84,7 +84,4 @@ export const PERMISSION_AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_rejected: permissionRejectedDetailSchema,
   permission_needs_more_info: permissionNeedsMoreInfoDetailSchema,
   permission_denied: permissionDeniedDetailSchema,
-} as const satisfies Record<
-  (typeof PERMISSION_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof PERMISSION_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

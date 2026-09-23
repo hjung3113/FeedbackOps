@@ -27,8 +27,8 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
-import { selectVocRecommendations } from '../recommendations/repo.js';
 import { type Scope, similarVocVisibilityPredicate } from '../authorization.js';
+import { selectVocRecommendations } from '../recommendations/repo.js';
 import { selectSimilarVocCount, selectSimilarVocItems } from '../repo-read.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';

@@ -1,4 +1,4 @@
-import { type AnalyticsAreaDto } from '../../../lib/api';
+import type { AnalyticsAreaDto } from '../../../lib/api';
 
 export function groupAreasByMs(
   items: AnalyticsAreaDto[],

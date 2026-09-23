@@ -6,10 +6,7 @@
 
 import { z } from 'zod';
 
-export const TASK_AUDIT_EVENT_TYPES = [
-  'task_status_changed',
-  'task_comment_created',
-] as const;
+export const TASK_AUDIT_EVENT_TYPES = ['task_status_changed', 'task_comment_created'] as const;
 
 export const taskStatusChangedDetailSchema = z
   .object({
@@ -31,7 +28,4 @@ export type TaskCommentCreatedDetail = z.infer<typeof taskCommentCreatedDetailSc
 export const TASK_AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_status_changed: taskStatusChangedDetailSchema,
   task_comment_created: taskCommentCreatedDetailSchema,
-} as const satisfies Record<
-  (typeof TASK_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof TASK_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

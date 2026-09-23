@@ -30,13 +30,13 @@ import { HttpError } from '../../lib/errors.js';
 import type { EntityLinksService } from '../entity-links/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 
-import { decodeCursor, encodeCursor } from './cursor.js';
 import {
+  type Scope,
   actorEffectiveScope,
   actorReadScope,
   actorTriageScope,
-  type Scope,
 } from './authorization.js';
+import { decodeCursor, encodeCursor } from './cursor.js';
 import type { ConversationRow, VocReadRow } from './repo-read.js';
 import * as repoRead from './repo-read.js';
 import { type ReporterFacingStatus, nextReporterStates } from './transitions.js';

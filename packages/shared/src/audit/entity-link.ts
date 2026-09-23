@@ -193,7 +193,4 @@ export type EntityLinkDetachedDetail = z.infer<typeof entityLinkDetachedDetailSc
 export const ENTITY_LINK_AUDIT_EVENT_DETAIL_SCHEMAS = {
   'entity_link.created': entityLinkCreatedDetailSchema,
   'entity_link.detached': entityLinkDetachedDetailSchema,
-} as const satisfies Record<
-  (typeof ENTITY_LINK_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof ENTITY_LINK_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

@@ -20,6 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
 import {
   type StorageBackend,
   type StorageGetResult,
@@ -28,7 +29,6 @@ import {
 } from '../../../lib/storage/index.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
-import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
 import { createEntityLinksService } from '../../entity-links/service.js';
 import { createCheckService } from '../../permissions/check-service.js';

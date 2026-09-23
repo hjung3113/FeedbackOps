@@ -47,7 +47,4 @@ export const MANAGED_SYSTEM_AUDIT_EVENT_DETAIL_SCHEMAS = {
   managed_system_registered: managedSystemRegisteredDetailSchema,
   managed_system_updated: managedSystemUpdatedDetailSchema,
   managed_system_archived: managedSystemArchivedDetailSchema,
-} as const satisfies Record<
-  (typeof MANAGED_SYSTEM_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof MANAGED_SYSTEM_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

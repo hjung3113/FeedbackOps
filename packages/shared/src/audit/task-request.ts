@@ -104,7 +104,4 @@ export const TASK_REQUEST_AUDIT_EVENT_DETAIL_SCHEMAS = {
   task_request_self_approval_denied: taskRequestSelfApprovalDeniedDetailSchema,
   task_created_from_request: taskCreatedFromRequestDetailSchema,
   task_linked_to_request: taskLinkedToRequestDetailSchema,
-} as const satisfies Record<
-  (typeof TASK_REQUEST_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof TASK_REQUEST_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

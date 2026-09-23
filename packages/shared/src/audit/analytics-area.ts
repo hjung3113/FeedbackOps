@@ -46,7 +46,4 @@ export const ANALYTICS_AREA_AUDIT_EVENT_DETAIL_SCHEMAS = {
   analytics_area_registered: analyticsAreaRegisteredDetailSchema,
   analytics_area_updated: analyticsAreaUpdatedDetailSchema,
   analytics_area_archived: analyticsAreaArchivedDetailSchema,
-} as const satisfies Record<
-  (typeof ANALYTICS_AREA_AUDIT_EVENT_TYPES)[number],
-  z.ZodTypeAny
->;
+} as const satisfies Record<(typeof ANALYTICS_AREA_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;
