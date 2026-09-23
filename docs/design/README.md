@@ -26,6 +26,7 @@
 
 13-mvp-roadmap.md
 - Release grouping and recommended success flow.
+- Not an execution queue; slice status is docs/implementation/08-mvp-slice-plan.md.
 
 15-data-contracts.md
 - Field and enum authority. Not a draft, and not replaced by migrations.

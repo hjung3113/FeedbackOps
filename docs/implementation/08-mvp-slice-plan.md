@@ -2,9 +2,28 @@
 
 ## Purpose
 
-This plan turns the MVP roadmap into implementation slices that preserve cross-system behavior.
+This file records how `docs/design/13-mvp-roadmap.md` was cut into implementation slices.
+Release grouping (Alpha / MVP / Phase 1 / Phase 2, MUST/SHOULD, exclusions) stays in that roadmap.
+This file is not an open execution queue. Open work is GitHub issues on `hjung3113/FeedbackOps`.
 
-## Slice 0: Product Foundation
+Slice 0–3 are folded below. Slice 4–9 bodies are unchanged historical exit criteria;
+each milestone is closed (see the status line under each heading). Do not re-implement a slice from this file.
+
+## Shipped — Slice 0–3
+
+DONE — do not re-execute. These slices shipped before the per-issue `develop` flow (root `AGENTS.md` Git Workflow). Evidence is closed issues and commits, not checkboxes in `docs/superpowers/`.
+
+- Slice 0 — done (2026-05-16, `a062062`). App shells, workspace tooling, boundary rules, migration runner. No GitHub milestone.
+- Slice 1 — done (issues #2, #3, #4, #5, #6, #7 closed 2026-05-17). Workspace, mock auth, actor/role, permission check, explicit deny, permission-request skeleton.
+- Slice 2 — done (issues #9, #10, #11 closed 2026-05-17). `managed_systems`, `analytics_areas`, APIs, pickers, archive. This slice does not add teams CRUD (ADR-0018).
+- Slice 3 — done (milestone “Slice 3: VOC Create And Inbox” closed, 42/0). VOC create, inbox, detail, triage severity, reporter-facing status. As-built spec: `docs/frontend/specs/voc.md`.
+
+<details>
+<summary>Slice 0–3 historical scope and exit criteria (not a TODO)</summary>
+
+DONE — do not re-execute. Original lists, kept so citations of this file still resolve.
+
+### Slice 0: Product Foundation
 
 ```text
 - repo structure
@@ -39,7 +58,7 @@ Exit criteria:
 - boundary checks prevent app imports from `packages/shared` and API calls from `packages/ui`
 ```
 
-## Slice 1: Workspace, Actor, Permission Baseline
+### Slice 1: Workspace, Actor, Permission Baseline
 
 ```text
 - workspace context
@@ -58,7 +77,7 @@ Exit criteria:
 - frontend can render allowed/blocked states
 ```
 
-## Slice 2: Managed System Registry And Analytics Area Catalog
+### Slice 2: Managed System Registry And Analytics Area Catalog
 
 ```text
 - core.managed_systems
@@ -79,7 +98,7 @@ Exit criteria:
 - archived Analytics Areas remain visible on historical records
 ```
 
-## Slice 3: VOC Create And Inbox
+### Slice 3: VOC Create And Inbox
 
 ```text
 - create VOC
@@ -103,7 +122,11 @@ Exit criteria:
 - Task status is not shown as reporter-facing status
 ```
 
+</details>
+
 ## Slice 4: Entity Links And Evidence
+
+Shipped. Milestone “Slice 4: Entity Links And Evidence” is closed (0 open). Historical exit criteria — not an open queue.
 
 ```text
 - entity link registry
@@ -121,6 +144,8 @@ Exit criteria:
 ```
 
 ## Slice 5: Finding From VOC
+
+Shipped. Milestone “Slice 5: Finding From VOC” is closed (0 open). Historical exit criteria — not an open queue.
 
 ```text
 - entity-link provider registry (real, replacing the #112 hard-coded VOC stub)
@@ -150,6 +175,8 @@ Exit criteria:
 
 ## Slice 6: Task Request Review And Conversion
 
+Shipped. Milestone “Slice 6: Task Request Review And Conversion” is closed (0 open). Historical exit criteria — not an open queue.
+
 ```text
 - create Task Request from VOC or Finding
 - review queue
@@ -170,6 +197,8 @@ Exit criteria:
 
 ## Slice 7: Action Dashboard
 
+Shipped. Milestone “Slice 7: Action Dashboard” is closed (0 open). Historical exit criteria — not an open queue.
+
 ```text
 - Unassigned VOC in configured Managed System scope
 - High Severity VOC eligible for follow-up and currently lacks Finding, Task Request, Task link, or authorized no-follow-up-needed decision
@@ -187,6 +216,8 @@ Exit criteria:
 ```
 
 ## Slice 7a: VOC Public Conversation
+
+Shipped. Milestone “Slice 7a: VOC Public Conversation” is closed (0 open). Historical exit criteria — not an open queue.
 
 ```text
 - Public Update by Admin or same-Managed-System Developer
@@ -206,6 +237,8 @@ Exit criteria:
 
 ## Slice 8: Survey To Finding
 
+Shipped. Milestone “Slice 8: Survey To Finding” is closed (0 open). Historical exit criteria — not an open queue.
+
 ```text
 - Survey creation
 - basic builder
@@ -222,6 +255,8 @@ Exit criteria:
 ```
 
 ## Slice 9: Admin Settings And Policy
+
+Shipped. Milestone “Slice 9: Admin Settings & Policy” is closed (0 open). Historical exit criteria — not an open queue.
 
 ```text
 - /admin/settings
