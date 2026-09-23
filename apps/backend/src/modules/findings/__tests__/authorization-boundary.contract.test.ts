@@ -10,6 +10,7 @@ import { SESSION_COOKIE_NAME } from "../../../middleware/require-session.js";
 import { buildServer } from "../../../server.js";
 import { createAuditService } from "../../core/audit/audit-service.js";
 import { createIdempotencyService } from "../../core/idempotency/idempotency-service.js";
+import { buildEntityLinkProviders } from "../../../entity-link-providers.js";
 import {
   createEntityLinksService,
   type EntityLinksService,
@@ -165,6 +166,7 @@ describe.skipIf(!runIntegration)(
         db: dbHandle.db,
         auditService,
         checkService,
+        providers: buildEntityLinkProviders(),
       });
       findingsService = createFindingsService({
         db: dbHandle.db,

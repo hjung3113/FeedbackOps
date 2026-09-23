@@ -13,6 +13,7 @@ import type { Logger as PinoLogger } from 'pino';
 
 import type { AppConfig } from './config.js';
 import type { DbHandle } from './db/client.js';
+import { buildEntityLinkProviders } from './entity-link-providers.js';
 import { registerHttpErrorHandler } from './lib/http-error-handler.js';
 import { reqLogSerializer } from './lib/logger.js';
 import { createRateLimitActorCache } from './lib/rate-limit-actor-cache.js';
@@ -430,6 +431,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     db: dbHandle.db,
     checkService,
     auditService,
+    providers: buildEntityLinkProviders(),
   });
   await app.register(entityLinksRoutes, {
     sessionService,

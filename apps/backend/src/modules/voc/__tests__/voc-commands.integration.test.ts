@@ -21,6 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
+import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
 import { createEntityLinksService } from '../../entity-links/service.js';
 import { createCheckService } from '../../permissions/check-service.js';
@@ -136,6 +137,7 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
         db: dbHandle.db,
         checkService,
         auditService,
+        providers: buildEntityLinkProviders(),
       }),
     });
     vocService = createVocService({

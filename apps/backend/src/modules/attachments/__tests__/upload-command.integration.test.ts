@@ -28,6 +28,7 @@ import {
 } from '../../../lib/storage/index.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
+import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
 import { createEntityLinksService } from '../../entity-links/service.js';
 import { createCheckService } from '../../permissions/check-service.js';
@@ -176,6 +177,7 @@ describe.skipIf(!runIntegration)('uploadAttachmentCommand (#393)', () => {
         db: dbHandle.db,
         checkService,
         auditService,
+        providers: buildEntityLinkProviders(),
       }),
     });
     attachmentsService = createAttachmentsService({

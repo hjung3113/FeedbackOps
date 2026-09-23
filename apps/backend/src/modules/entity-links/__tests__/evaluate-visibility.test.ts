@@ -4,7 +4,7 @@ import {
   type LinkVisibilityEvaluationInput,
   evaluateLinkVisibility,
 } from '../evaluate-visibility.js';
-import { toTaskReporterSummaryResult } from '../service.js';
+import { toTaskReporterSummaryResult } from '../domain-providers.js';
 
 const reporterId = '00000000-0000-4000-8000-000000000001';
 const otherReporterId = '00000000-0000-4000-8000-000000000002';
