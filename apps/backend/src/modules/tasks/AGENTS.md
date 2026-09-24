@@ -15,6 +15,7 @@ Managed System Registry belongs to Core. Task may consume Managed System scope a
 - Released Task creates a reporter-facing review candidate when required; it does not automatically resolve VOC.
 - Source evidence must remain visible or safely summarized in task detail.
 - Standalone Tasks are valid and do not require source evidence, Finding, VOC, or Survey links.
+- Task progress notes are the append-only `task.task_comments` timeline in `docs/adr/0049-finding-task-progress-notes.md`. Both `GET` and `POST /tasks/:id/comments` require Admin or Developer with `finding.manage`. Finding's read gate is not this one.
 
 ## Cross-System Rules
 

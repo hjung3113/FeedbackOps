@@ -10,7 +10,7 @@ The canonical term is "Analytics Area" (per `docs/design/03-core-platform.md` an
 
 ## Route Boundary
 
-- Owns `/admin/managed-systems`, `/admin/analytics-areas`, `/admin/permissions/requests`, and `/admin/settings` (planned — not yet built).
+- Owns `/admin/managed-systems`, `/admin/analytics-areas`, `/admin/permissions/requests`, and `/admin/settings` (implemented — `WorkspaceSettingsScreen`, see `apps/frontend/src/features/admin/settings/`).
 - Analytics Areas, Permission Requests, Managed System Registry, and workspace settings are Admin routes, not top-level work routes.
 
 ## Invariants

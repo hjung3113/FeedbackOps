@@ -14,7 +14,7 @@ core.notifications
 - event_type      text not null              -- e.g. 'task_request.assigned_to_me'
 - subject_type    text not null
 - subject_id      uuid not null
-- summary         text not null              -- short user-facing line, Korean (per ADR-0010 catalog lookup at insert time)
+- summary         text not null              -- short user-facing Korean line. ADR-0010's i18next catalog was not built (amended 2026-09-24); this insert-time lookup does not exist.
 - detail          jsonb not null default '{}'::jsonb
 - created_at      timestamptz not null default now()
 - read_at         timestamptz null
@@ -42,7 +42,7 @@ NotificationEnvelope
 - subject_type
 - subject_id
 - locale            // ko-KR in MVP per ADR-0010
-- summary           // rendered string from the i18next catalog
+- summary           // Korean user-facing line. No i18next catalog; see the ADR-0010 amendment.
 - body              // optional longer markdown/HTML for email
 - in_app            // boolean: also persist a row in core.notifications?
 - email             // boolean: also send via email channel?
@@ -62,13 +62,13 @@ Dispatch is **code-driven**, not DB-driven. A single `notificationCatalogue` map
 - recipients resolver (a function: `(event, deps) => Promise<actor_id[]>`)
 - `in_app: boolean`
 - `email: boolean`
-- summary catalogue key (resolved through ADR-0010 i18n catalog)
+- summary text (Korean). Do not add i18next to produce it; ADR-0010's catalog was not built.
 
 Modules that perform an audited action call `notify(event_type, subject)` from their application service inside the same transaction as the mutation and audit row. The dispatcher enqueues a pg-boss job (ADR-0009) per envelope so SMTP latency cannot block the request handler.
 
 Per-Actor preferences (opt-out per event_type, channel) are **not** in MVP. We accept the risk that a few event types may be noisy; if that becomes a real complaint, a follow-up ADR adds `core.notification_prefs` + UI without changing the dispatcher contract.
 
-DB-driven rules were rejected because they require an Admin UI to configure and an unfamiliar mental model for what is essentially a small fixed table. Adding a rule today is a code PR that updates the catalogue and the i18n catalog together — same as adding an error code under ADR-0012.
+DB-driven rules were rejected because they require an Admin UI to configure and an unfamiliar mental model for what is essentially a small fixed table. Adding a rule is a code PR that updates the catalogue. An error code's user-facing copy is `CATALOG` in `errorMapper.ts` (ADR-0012, ADR-0010 amendment), not an i18next file. This notification catalogue itself is not implemented.
 
 ## Initial catalogue (MVP)
 

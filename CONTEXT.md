@@ -66,6 +66,10 @@ _Avoid_: Restricted action, locked feature
 Internal execution work for one **Managed System**.
 _Avoid_: Reporter-facing VOC status
 
+**Progress note**:
+An append-only internal comment on one **Finding** or one **Task**. A person writes a `note`; a successful status change writes a `status_change`. Finding reads and Task reads do not use the same permission gate.
+_Avoid_: VOC Internal Comment, Public Update, Reporter Reply
+
 **My Work**:
 An actor-centered queue that gathers assigned VOC triage work, Task Requests, Tasks, Surveys, and review actions.
 _Avoid_: Domain owner, task board

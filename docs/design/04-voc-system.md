@@ -383,7 +383,7 @@ Views:
 - Reporter cannot see raw Task Status, internal comments, priorities, dev discussion, severity, or confidence through linked work.
 - Admin can read and manage VOC in workspace.
 - Developer can read and manage VOC within their Managed System scope.
-- Basic User cannot read Task internal comments through VOC links.
+- Basic User cannot read Task internal comments through VOC links. Those comments are Task progress notes (`docs/adr/0049-finding-task-progress-notes.md`), not VOC Internal Comments.
 ```
 
 ## Cross-System Dependencies

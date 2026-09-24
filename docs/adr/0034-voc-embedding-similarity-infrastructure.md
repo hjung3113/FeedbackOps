@@ -4,7 +4,7 @@ Date: 2026-07-26
 
 ## Status
 
-Proposed
+Accepted, implemented
 
 Supersedes the deferral clause of ADR-0031 (which points real similarity at
 epic #168 without deciding how it is built). ADR-0031's same-Managed-System
@@ -93,8 +93,9 @@ triage-only summary envelope continues to expose neither counts nor items.
 
 ### D5 — Threshold is configuration with a pinned default, and is evaluated
 
-Cosine similarity with a workspace-level threshold, default pinned in code (not
-in the database) so a fresh workspace behaves identically across environments.
+Cosine similarity with a single global threshold, pinned in code (not in the
+database, and with deliberately no workspace-settings column or environment
+variable) so every workspace and environment behaves identically.
 The threshold ships with a committed evaluation fixture: labelled VOC pairs and
 an assertion on precision/recall at the chosen cut, run offline and
 deterministically without a live provider. Changing the default requires

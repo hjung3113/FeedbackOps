@@ -16,8 +16,8 @@ This file owns global API rules, standard error codes, the endpoint contract tem
 | [`api/dashboard.md`](api/dashboard.md) | Dashboard Summary Contract |
 | [`api/voc.md`](api/voc.md) | VOC; VOC Create And Conversation Contract; PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17); VOC Similarity Projection; Task release side effect (Issue #165) |
 | [`api/voc-clusters.md`](api/voc-clusters.md) | VOC Cluster |
-| [`api/findings.md`](api/findings.md) | Finding |
-| [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; PATCH /tasks/:id — Task status transition (Slice 7 #138) |
+| [`api/findings.md`](api/findings.md) | Finding; Progress notes |
+| [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; Progress notes; PATCH /tasks/:id — Task status transition (Slice 7 #138) |
 | [`api/surveys.md`](api/surveys.md) | Survey; Forbidden Endpoint |
 | [`api/core.md`](api/core.md) | Core / Managed System / Analytics Area |
 | [`api/permissions.md`](api/permissions.md) | Permission |
@@ -54,21 +54,11 @@ This file owns global API rules, standard error codes, the endpoint contract tem
 
 ## Standard Error Codes
 
-```text
-validation_failed
-unauthorized
-permission_denied
-not_found
-workspace_mismatch
-conflict
-invalid_transition
-link_visibility_denied
-link_creation_failed
-audit_write_failed
-stale_object_version
-action_no_longer_available
-recovery_item_resolved
-```
+Error codes are `<subject>.<verb-or-state>`, lowercase dotted (e.g. `validation.failed`,
+`permission.denied`, `conflict.stale_write`) — not the underscore names this section used to list.
+The authoritative, currently-evolving list is the `ERROR_CODES` Zod enum in
+`packages/shared/src/errors/codes.ts`; do not hand-copy it here, it will drift. The stable
+family → HTTP status mapping and full envelope shape are in `docs/adr/0012-error-code-contract.md`.
 
 ## Endpoint Contract Template
 
