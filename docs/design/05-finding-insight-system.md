@@ -14,6 +14,7 @@ Owns:
 - Finding
 - Evidence Highlight
 - Evidence-to-execution judgment
+- Progress notes on that Finding (`docs/adr/0049-finding-task-progress-notes.md`)
 ```
 
 Does not own:
@@ -171,6 +172,7 @@ Acceptance Criteria:
 - converted is reserved for the Convert Finding To Task flow; archived is out of scope for this slice.
 - Same-status updates are safe no-ops and return the current Finding.
 - Status changes are audited with from/to status and optional reason.
+- A successful status change appends one `status_change` progress note in the same transaction. A same-status no-op does not.
 ```
 
 ### FR-FIND-003: Convert Finding To Execution Candidate
@@ -183,6 +185,21 @@ Acceptance Criteria:
 - Finding can create Task Request.
 - Authorized Admin or same-scope Developer can link existing Task or future execution grouping when appropriate.
 - Simple VOC follow-up may bypass Finding and go directly to Task Request.
+```
+
+### FR-FIND-004: Progress notes
+
+Priority: MUST
+
+Acceptance Criteria:
+
+```text
+- Finding Detail shows an append-only progress-note timeline titled 진행 메모.
+- A reader is Admin, or a Developer with finding.read on the Finding's Managed System. A User is denied. The section stays visible and shows a permission-blocked panel.
+- A writer needs finding.manage on that Managed System. The composer is only a display hint.
+- A person posts a note (TipTap, mentions allowed, no attachments). The client cannot post a status change.
+- Notes are not editable or deletable. An archived parent Managed System still lists history and rejects a new note.
+- This timeline is not the VOC Internal Comment timeline.
 ```
 
 ## UI / UX Requirements
@@ -208,6 +225,7 @@ Layout:
 - Linked VOC Cluster
 - Linked Survey Result
 - Linked Task Request / Task
+- Progress notes (진행 메모)
 ```
 
 Primary CTAs:
@@ -227,6 +245,7 @@ Existing Task.
 
 ```text
 - Reporter cannot read internal Finding details by default.
+- Finding progress notes follow FR-FIND-004. Task progress notes are not this gate: they require finding.manage.
 - Admin can create and manage Findings.
 - Developer can create and manage Findings within their Managed System scope.
 - Evidence visibility follows source visibility and entity_links.visibility.

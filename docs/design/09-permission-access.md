@@ -45,7 +45,7 @@ AD 로그인
 → 민감 기능과 Backstage 접근은 기본 차단
 ```
 
-Role Level order is Admin > Developer > User. Reporter is not a role; it is the Actor who submitted a specific VOC.
+Role Level order is Admin > Developer > User. Reporter is not a role; it is the Actor who submitted a specific VOC. Adding a fourth Role Level is not a matrix-cell edit; the wiring is `docs/adr/0048-role-level-extension.md`.
 
 ## Default User Can
 
@@ -88,7 +88,7 @@ The backend returns effective navigation and capability states for the current w
 | Approve Task Request | no | same Managed System scope | yes |
 | Self-approve own Task Request | no | explicit scoped capability | yes |
 | Create Task directly | no | scoped | yes |
-| Read Task internal comments | no | assigned/scoped | yes |
+| Read Task internal comments | no | `finding.manage` on that Task's Managed System | yes |
 | Create Survey | no | scoped | yes |
 | Answer assigned Survey | yes | yes | yes |
 | Read personal Survey responses | no | permission required | no — explicit capability required |
@@ -103,6 +103,7 @@ Notes:
 - Access to one Managed System does not grant access to sibling Managed Systems.
 - Analytics Area is not an MVP permission boundary.
 - Task Request self-approval is a sensitive scoped capability, not an automatic Developer permission.
+- Task internal comments are progress notes (`docs/adr/0049-finding-task-progress-notes.md`). Reading them is not "assigned". It is Admin, or Developer with `finding.manage` on that Task's Managed System. A User is denied before grants are consulted. Finding progress notes are a different gate: read is Admin or Developer with `finding.read` (a User is denied before grants, even with `finding.read`); write is `finding.manage`, and an explicit grant is enough for a User.
 - Explicit Deny overrides this matrix.
 - Source object visibility still applies through entity_links.
 ```

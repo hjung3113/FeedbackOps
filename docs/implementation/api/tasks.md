@@ -87,7 +87,8 @@ audit events:
 ```
 
 These endpoints do not create Task rows, convert to Task, or link existing
-Tasks. Conversion and link-existing-Task remain issue #134.
+Tasks. See "Task Conversion Contract" below (`POST /task-requests/:id/convert`)
+and `POST /task-requests/:id/link-task` for those — both shipped in issue #134.
 
 ## Task Conversion Contract
 
@@ -177,7 +178,7 @@ errors:
   - User or Developer outside Managed System scope: 403 permission.denied
 ```
 
-Standalone `POST /tasks` is deferred by issue #134 even though standalone Tasks
+Standalone `POST /tasks` is not yet implemented even though standalone Tasks
 are a valid nullable-source data shape.
 
 ## Task Request Create From VOC / VOC Cluster Contract
@@ -230,7 +231,132 @@ GET /tasks
 GET /tasks/:id
 GET /tasks/:id/comments
 POST /tasks/:id/comments
-POST /tasks    # deferred in issue #134
+POST /tasks    # not implemented
+```
+
+## Progress notes
+
+`GET /tasks/:id/comments` and `POST /tasks/:id/comments` are the Task
+progress-note timeline (`docs/adr/0049-finding-task-progress-notes.md`,
+FR-TASK-003). Rows live in `task.task_comments`. There is no edit or delete
+route. `fops_app` may only `SELECT` and `INSERT`. These are the internal
+comments this system means. They are not VOC Internal Comments, and they are
+not Finding progress notes ([findings.md](findings.md) §Progress notes).
+
+The read and write gates are the same capability and the same elevated-role
+rule. `finding.read` is not enough. A User is denied before the Task is
+loaded, so a missing Task is still `403 permission.denied` for a non-elevated
+actor. The screen keeps the section visible and treats that 403 as a
+permission-blocked panel.
+
+Shared DTO: `TaskCommentDto` in `packages/shared/src/tasks/comments.ts`.
+
+```text
+id uuid
+task_id uuid
+actor_id uuid
+kind: note | status_change
+from_status: Task status or null
+to_status: Task status or null
+body_rich_content: TipTap document
+created_at: ISO datetime
+```
+
+A `note` has both status columns null. A `status_change` has both set. GET
+returns both kinds, newest first (`created_at DESC`, `id DESC`). POST creates
+only `kind: note`. A `status_change` row is inserted by a successful Task
+status change, in the same transaction as `task_status_changed`, not by these
+routes. A same-status no-op writes neither the comment nor that audit.
+
+`GET /tasks/:id/comments`
+
+```text
+requirement_id: FR-TASK-003
+query:
+  cursor optional string. Base64 JSON { createdAt, id } taken from the raw
+    Postgres timestamp of the last returned row, not a millisecond Date.
+  limit optional integer 1..100, default 50
+response body: 200
+  { items: TaskCommentDto[], page: { cursor?: string, has_more: boolean } }
+  page.cursor is present only when has_more is true
+auth and permission:
+  authenticated Actor in the workspace
+  checkFindingManage with requireElevatedRole: true. Admin, or a Developer
+    with finding.manage on the Task Primary Managed System. finding.read is
+    not enough. A User is denied before the row is loaded.
+validation errors:
+  - id path param is not a UUID: 422 validation.failed
+  - invalid query: 422 validation.failed
+  - cursor that is not base64 JSON { createdAt, id }: 422 validation.failed,
+    field path cursor, code invalid_cursor
+auth errors, in check order:
+  - actor is not Admin or Developer: 403 permission.denied, including when
+    the Task does not exist
+  - missing Task, elevated actor: 404 not_found.record
+  - Task exists but the actor cannot manage it: 403 permission.denied
+side effects: none. An archived parent Managed System still allows GET.
+audit events: none
+entity_links: none
+dashboard queues: none
+idempotency behavior: none (read). Overload on the configured read bucket is
+  429 rate_limited.actor.
+```
+
+`POST /tasks/:id/comments`
+
+```text
+requirement_id: FR-TASK-003
+headers: Idempotency-Key UUIDv4 required
+request body: strict object
+  body_rich_content: non-blank TipTap document, sanitized on the
+    internal-comment surface
+  mentions: optional uuid array, max 50. When omitted, the body must contain
+    no mention nodes. When present, it must be exactly the set of mention-node
+    actor_id values in the body, and each id must be an Actor in this workspace.
+  The client does not send kind. The inserted row is always kind note, with
+    both status columns null. attachmentRef nodes are rejected.
+response body: 201 { comment: TaskCommentDto }
+auth and permission:
+  authenticated Actor in the workspace
+  The actor must already be Admin or Developer (hasElevatedFindingRole). A
+  User is denied before the write transaction opens, even with an explicit
+  finding.manage grant. Inside the transaction, checkFindingManage with
+  requireElevatedRole: true must allow on the Task Primary Managed System.
+validation errors:
+  - id path param is not a UUID: 422 validation.failed
+  - missing or empty Idempotency-Key: 422 validation.failed
+  - Idempotency-Key is not a UUIDv4: 422 validation.malformed_idempotency_key
+  - invalid or blank body, or unknown keys: 422 validation.failed
+  - mentions do not match the body's mention nodes: 422 validation.failed,
+    field path mentions, code invalid
+  - a mention actor_id is not in this workspace: 422 validation.failed,
+    field path mentions, code cross_workspace
+  - a mention node actor_id is not a UUID: 422 validation.failed,
+    field path body_rich_content, code invalid_mention_actor_id
+  - body contains an attachmentRef: 422 validation.failed,
+    field path body_rich_content, code attachment_not_supported
+  - sanitizer rejection: 422 rich_content.disallowed_node,
+    rich_content.disallowed_attr, rich_content.invalid_attr_value,
+    rich_content.missing_required_attr, or rich_content.external_image_forbidden
+auth and state errors, in check order:
+  - actor is not Admin or Developer: 403 permission.denied, before lookup,
+    including when the Task does not exist
+  - missing Task: 404 not_found.record
+  - parent Managed System row missing: 404 not_found.record
+  - parent Managed System archived: 409 conflict.parent_archived
+    (this is checked before the manage gate)
+  - actor cannot manage the Task: 403 permission.denied
+side effects: INSERT one task.task_comments row, kind note
+audit events: task_comment_created. Subject is the Task. Detail carries the
+  comment id, actor id, and mention ids. A status_change row does not write
+  this event.
+entity_links: none
+dashboard queues: none
+idempotency behavior: Idempotency-Key required. Replay of the same key and
+  hash returns the stored 201. The hash is the raw body plus the Task id and
+  the route identity task.comment. A reused key with a different hash is
+  409 conflict.idempotency_key_reuse. Overload on the configured mutation
+  bucket is 429 rate_limited.actor.
 ```
 
 ## PATCH /tasks/:id — Task status transition (Slice 7 #138)

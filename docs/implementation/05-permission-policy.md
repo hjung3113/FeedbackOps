@@ -10,7 +10,10 @@ What the default user can do, and the capability matrix, live in docs/design/09-
 Role Level controls authority; backend capability checks are authoritative.
 Reporter is the Actor who submitted a specific VOC, not a separate role level.
 
-Role meanings, the default-user boundary, and the capability matrix: docs/design/09-permission-access.md (AD Principle, Default User Can / Cannot, Capability Matrix).
+Role meanings, the default-user boundary, and the capability matrix: docs/design/09-permission-access.md (AD Principle, Default User Can / Cannot, Capability Matrix). Adding a Role Level follows
+`docs/adr/0048-role-level-extension.md`: the shared enum, the
+`actors_role_level_check` constraint, `roleSatisfies`, and the domain gates
+that compare `role_level` move together.
 
 Capability vocabulary is module-prefixed (`{module}.{action}`,
 `packages/shared/src/enums/capabilities.ts`). Slice 5 (ADR-0024) adds
@@ -235,6 +238,8 @@ self-approval. The envelope is rejected for an approval decided by another
 Admin. If the workspace setting is `forbidden`, self-approval returns
 `permission.denied` without changing the pending request; another Admin may
 approve the same request normally.
+
+The canonical event values (`AUDIT_EVENT_TYPES`), Zod enum (`auditEventTypeSchema`), and per-event detail schemas (`AUDIT_EVENT_DETAIL_SCHEMAS`) live in `packages/shared/src/enums/audit-events.ts`.
 
 Audit events:
 

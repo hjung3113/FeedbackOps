@@ -290,6 +290,9 @@ Acceptance Criteria:
 - Task supports title, status, assignee, priority, due date, Managed System, optional Milestone, and Analytics Area.
 - Task can link VOC, Survey, Finding, and Evidence.
 - Task Detail shows why the work exists.
+- Task Detail shows an append-only progress-note timeline titled Progress notes. Reading and writing both require Admin or Developer with finding.manage on the Task's Managed System. finding.read is not enough. A User is denied. The section stays visible and shows a permission-blocked panel.
+- A person posts a note. A successful status change appends a status_change note; a same-status no-op does not. Notes are not editable or deletable.
+- Task progress notes are the internal comments this system means. They are not VOC Internal Comments, and they are not Finding progress notes.
 ```
 
 ### FR-TASK-004: Manage Milestone
@@ -355,6 +358,7 @@ Always show:
 ```text
 - Basic Task fields
 - Primary Managed System
+- Progress notes
 ```
 
 Show when linked context exists:
@@ -397,7 +401,7 @@ Developer discussion from the Gantt.
 ## Permissions
 
 ```text
-- Reporter / default User cannot access Task internal comments or backstage detail.
+- Reporter / default User cannot access Task internal comments or backstage detail. Those internal comments are progress notes (`docs/adr/0049-finding-task-progress-notes.md`): GET and POST both require Admin or Developer with `finding.manage` on the Task's Managed System.
 - Admin can manage Task Requests and Tasks.
 - Developer can manage Task Requests and Tasks within their Managed System scope.
 - Access to one Managed System does not grant access to sibling Managed Systems unless permission scope explicitly includes them.
