@@ -10,7 +10,7 @@ Findings owns Finding records, evidence highlights, finding status, evidence-fir
 - Evidence source must remain traceable after conversion to Task Request, Task, or Milestone.
 - A Finding can be not actionable; do not force every Finding into execution.
 - Impact and confidence are decision inputs, not automatic priority engines.
-- Finding progress notes are the append-only `finding.finding_comments` timeline in `docs/adr/0049-finding-task-progress-notes.md`. `GET /findings/:id/comments` is `finding.read`; `POST` is `finding.manage`. Task progress notes are not this module's table.
+- Finding progress notes are the append-only `finding.finding_comments` timeline in `docs/adr/0049-finding-task-progress-notes.md`. `GET /findings/:id/comments` is Admin, or a Developer with `finding.read` (`requireElevatedRole: true`; a User is denied before grants, even with `finding.read`). `POST` is `finding.manage` with `requireElevatedRole: false`, so an explicit grant is enough, including for a User. Task progress notes are not this module's table.
 
 ## Cross-System Rules
 

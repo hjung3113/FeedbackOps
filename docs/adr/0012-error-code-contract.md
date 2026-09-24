@@ -15,7 +15,7 @@ Every non-2xx response carries this body:
 }
 ```
 
-- `code` — stable, dotted, lowercase. Lives in `packages/shared/src/errors/codes.ts` as a Zod enum. Both backend and frontend import it; adding a new code updates the enum and `CATALOG` in `apps/frontend/src/lib/api/errorMapper.ts` together (ADR-0010).
+- `code` — stable, dotted, lowercase. Lives in `packages/shared/src/errors/codes.ts` as a Zod enum. Both backend and frontend import it. Adding a new code updates the enum and classifies the code in `apps/frontend/src/lib/api/errorMapper.ts` in the same change (ADR-0010). A user-facing code adds a `CATALOG` entry. A code with no user copy is listed in `RETIRED_OR_SERVER_ONLY_CODES` instead. A code in neither fails `errorMapper.test.ts`.
 - `message` — internal English string for logs, audit summary lines, and developer-facing error overlays. `errorMapper` uses the `code` and `CATALOG` for user-visible copy when a screen calls it, **not** this string. `ApiError` still preserves it. `useTaskRequestLink` toasts `envelope.message`, and `useTaskRequestDecision` shows it in the decision dialog or a toast. That is debt. New screens use the mapper.
 - `detail` — code-specific structured payload. Schema for each `code` is defined alongside the enum so the frontend can narrow types. Backend emitters use a closed `DetailShape` union in `apps/backend/src/lib/errors.ts`; adding a new detail payload shape requires extending that union instead of passing arbitrary records.
 - `requestable_permission` — present only on permission-family errors when surfacing it is safe (see "Permission errors" below).

@@ -19,9 +19,12 @@ Wording still comes from the user-facing copy chain in root `AGENTS.md`
 (prototype, then `docs/frontend/specs/`, then `CONTEXT.md`). The code does
 not look that wording up in a catalog.
 
-- **A string the component owns** sits in that component. Finding progress
-  notes keep a `COPY` object in `ProgressNotesSection.tsx` (Korean on
-  Finding, English on Task). Source-context labels are the `LABELS` map in
+- **A string the component owns** sits in that component. The shared
+  progress-notes panel keeps a `COPY` object in
+  `apps/frontend/src/features/cross-system/progress-notes/ProgressNotesSection.tsx`
+  (Korean when the resource is a Finding, English when it is a Task). Finding
+  and Task both use that component. Source-context labels are the `LABELS`
+  map in
   `apps/frontend/src/features/voc/components/create/SourceContextSegmented.tsx`.
   A new label of this kind goes next to the component that renders it.
 - **A closed display set that already has a map** extends that map.
@@ -40,8 +43,11 @@ not look that wording up in a catalog.
   `toast.error(err.envelope.message)`, and `useTaskRequestDecision.ts`
   puts that string in the decision dialog, or in a toast when no dialog
   is open. Those screens are debt. A new screen uses `errorMapper`, not
-  the raw message. Adding a code (ADR-0012) still adds the catalog entry
-  in the same change.
+  the raw message. Adding a code (ADR-0012) classifies it in the same
+  change. A user-facing code adds a `CATALOG` entry. A code with no user
+  copy is listed in `RETIRED_OR_SERVER_ONLY_CODES` instead
+  (`not_implemented.todo` is the current member). Leaving it unclassified
+  fails the test.
 - **Data** is stored verbatim and rendered as-is: VOC titles, Public Update
   text, Internal Comment bodies, Reporter Reply content, Task titles.
 
@@ -81,9 +87,11 @@ rejected a render-time map, did not ship.
 - No i18next, no `apps/frontend/src/i18n/` tree, no JSON namespace catalogs.
 - Chrome is a literal at the component, or an existing map in
   `apps/frontend/src/lib/copy/`.
-- API error copy for new work is `CATALOG` in `errorMapper.ts`. The mapper
-  ignores the English `message` when called. Existing screens that toast or
-  render `envelope.message` directly are debt, not the rule.
+- API error copy for new user-facing work is a `CATALOG` entry in
+  `errorMapper.ts`. A code with no user copy is classified in
+  `RETIRED_OR_SERVER_ONLY_CODES` instead of `CATALOG`. The mapper ignores
+  the English `message` when called. Existing screens that toast or render
+  `envelope.message` directly are debt, not the rule.
 - Backend does not translate.
 - Reporter-Facing status keys stay English in the database. Korean labels
   stay in both `REPORTER_STATUS_LABELS` and `ReporterStatusBadge`'s

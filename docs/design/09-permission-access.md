@@ -103,7 +103,7 @@ Notes:
 - Access to one Managed System does not grant access to sibling Managed Systems.
 - Analytics Area is not an MVP permission boundary.
 - Task Request self-approval is a sensitive scoped capability, not an automatic Developer permission.
-- Task internal comments are progress notes (`docs/adr/0049-finding-task-progress-notes.md`). Reading them is not "assigned". It is Admin, or Developer with `finding.manage` on that Task's Managed System. Finding progress notes are a different gate: read is `finding.read`, write is `finding.manage`.
+- Task internal comments are progress notes (`docs/adr/0049-finding-task-progress-notes.md`). Reading them is not "assigned". It is Admin, or Developer with `finding.manage` on that Task's Managed System. A User is denied before grants are consulted. Finding progress notes are a different gate: read is Admin or Developer with `finding.read` (a User is denied before grants, even with `finding.read`); write is `finding.manage`, and an explicit grant is enough for a User.
 - Explicit Deny overrides this matrix.
 - Source object visibility still applies through entity_links.
 ```

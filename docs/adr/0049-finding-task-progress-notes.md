@@ -67,7 +67,12 @@ The read gates are not the same:
   cannot read is `403 permission.denied`.
 - Task: `checkFindingManage` with `requireElevatedRole: true`. Admin, or a
   Developer with `finding.manage` on the Task's Managed System. `finding.read`
-  is not enough. A User is denied. Missing Task is `404 not_found.record`.
+  is not enough. A User is denied before the Task is loaded, so a missing
+  Task is still `403 permission.denied` for a non-elevated actor. For an
+  Admin or Developer, a missing Task is `404 not_found.record`. An existing
+  Task the actor cannot manage is `403 permission.denied`. The shared panel
+  treats that 403 the same way it treats the Finding 403: the section stays
+  visible and shows a permission-blocked panel.
 
 **Write gates** are also not the same:
 
@@ -89,16 +94,17 @@ those events. It is covered by the existing `finding_status_changed` or
 `task_status_changed` row in the same transaction.
 
 **HTTP and UI** are specified in
-`docs/implementation/03-api-contracts.md` (Progress notes) and the Finding and
-Task design docs. Shared DTOs live in `packages/shared/src/findings/comments.ts`
+`docs/implementation/api/findings.md` (Progress notes) and
+`docs/implementation/api/tasks.md` (Progress notes), indexed from
+`docs/implementation/03-api-contracts.md`, and in the Finding and Task design
+docs. Shared DTOs live in `packages/shared/src/findings/comments.ts`
 and `packages/shared/src/tasks/comments.ts`. The screen is
 `apps/frontend/src/features/cross-system/progress-notes/`. Its resource union
 is `{ kind: 'finding' | 'task'; id }`. The client posts notes only. It
 flattens all loaded newest-first pages, then reverses the combined list into
 chronological order, so older pages appear above newer entries. It treats a
 `403` on the list as a permission-blocked panel rather than hiding the
-section. The
-composer is a display hint; the backend remains authoritative.
+section. The composer is a display hint; the backend remains authoritative.
 
 ## Alternatives rejected
 

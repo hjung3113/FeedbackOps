@@ -1,6 +1,6 @@
 # Dashboard Module Agent Guide
 
-Status: implemented (`GET /dashboard/summary`, see `docs/implementation/03-api-contracts.md`). This document is the current contract for this module, not a target for future work.
+Status: implemented (`GET /dashboard/summary`, see `docs/implementation/api/dashboard.md`). This document is the current contract for this module, not a target for future work.
 
 ## Ownership
 

@@ -16,8 +16,8 @@ This file owns global API rules, standard error codes, the endpoint contract tem
 | [`api/dashboard.md`](api/dashboard.md) | Dashboard Summary Contract |
 | [`api/voc.md`](api/voc.md) | VOC; VOC Create And Conversation Contract; PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17); VOC Similarity Projection; Task release side effect (Issue #165) |
 | [`api/voc-clusters.md`](api/voc-clusters.md) | VOC Cluster |
-| [`api/findings.md`](api/findings.md) | Finding |
-| [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; PATCH /tasks/:id — Task status transition (Slice 7 #138) |
+| [`api/findings.md`](api/findings.md) | Finding; Progress notes |
+| [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; Progress notes; PATCH /tasks/:id — Task status transition (Slice 7 #138) |
 | [`api/surveys.md`](api/surveys.md) | Survey; Forbidden Endpoint |
 | [`api/core.md`](api/core.md) | Core / Managed System / Analytics Area |
 | [`api/permissions.md`](api/permissions.md) | Permission |
