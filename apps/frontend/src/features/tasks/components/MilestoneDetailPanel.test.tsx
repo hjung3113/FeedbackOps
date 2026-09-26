@@ -141,6 +141,20 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(screen.getByText('From finding')).toBeInTheDocument();
     expect(screen.getByText('FIN-181')).toBeInTheDocument();
     expect(screen.getByText('Evidence · 7')).toBeInTheDocument();
+
+    // #514 CP-pixel finding 4 — Owner renders the shared UserChip
+    // (avatar initial + display name), not bare text.
+    expect(screen.getByText('박서연')).toBeInTheDocument();
+    expect(screen.getByText('박')).toBeInTheDocument();
+  });
+
+  it('keeps the em-dash Owner fallback when the actor is missing from the directory', async () => {
+    renderPanel({ ...linkedDetail, owner_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa9999' });
+
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    // Missing-actor handling is preserved: no chip, no fabricated name.
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('박서연')).not.toBeInTheDocument();
   });
 
   it('renders the standalone source copy and no Link source finding control when source_finding is null', async () => {
@@ -196,11 +210,15 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     renderPanel(linkedDetail);
 
     const why = await screen.findByText('SSO 세션 만료 후 재인증 흐름이 없습니다.');
-    // NestedTextBlock presentation (packages/ui NestedTextBlock): inset
-    // bordered canvas block, per the prototype's panel-section Why block.
+    // NestedTextBlock presentation (#514 CP-pixel finding 3 + coordinator
+    // correction): the shared bordered canvas block is preserved; only the
+    // type scale moves to the prototype 13px/1.55 at 12px padding.
     expect(why).toHaveClass('rounded-md');
     expect(why).toHaveClass('border-border-subtle');
     expect(why).toHaveClass('bg-surface-canvas');
+    expect(why).toHaveClass('p-3');
+    expect(why).toHaveClass('text-[13px]');
+    expect(why).toHaveClass('leading-[1.55]');
   });
 
   // B2d fixup finding 2 — the shared header chrome and close action stay

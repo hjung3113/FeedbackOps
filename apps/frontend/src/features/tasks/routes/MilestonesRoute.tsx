@@ -266,15 +266,27 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
       <ListShell
         list={
           <>
+            {/* CP-pixel finding 1 (.review/pixel-514-findings.md): with the
+                detail open the list column is 708px and the prototype-scale
+                content (tabs 335 + search + Filter + CTA, measured on the
+                rendered prototype at 1440) exceeds it — the prototype itself
+                clips its CTA there (scrollWidth 789 > 708). The tab strip is
+                compacted to the prototype's own .tab scale (13px label, 20px
+                side padding, bare 11px tab-count instead of a pill badge, via
+                feature-local overrides on this ListToolbar instance only) and
+                the search box yields width first, so all four tabs stay
+                unclipped and the New milestone CTA stays inside the column at
+                1440 with the detail open. No shared component changes. */}
             <ListToolbar
+              className="gap-2 [&>div:last-child]:min-w-0 [&>div:last-child]:shrink [&_[role=tablist]]:h-8 [&_[role=tablist]]:p-0.5 [&_[role=tab]]:h-7 [&_[role=tab]]:px-2.5 [&_[role=tab]]:text-[13px] [&_[role=tab]_div]:ml-1 [&_[role=tab]_div]:bg-transparent [&_[role=tab]_div]:px-0 [&_[role=tab]_div]:py-0 [&_[role=tab]_div]:text-[11px] [&_[role=tab]_div]:font-normal [&_[role=tab]_div]:leading-none [&_[role=tab]_div]:text-text-muted"
               tabs={tabs}
               activeTab={activeTab}
               onTabChange={(next) => setActiveTab(next as MilestoneTab)}
               action={
-                <div className="flex items-center gap-2">
-                  <div className="relative">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <div className="relative w-28 min-w-0">
                     <Search
-                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+                      className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
                       aria-hidden="true"
                     />
                     <Input
@@ -282,11 +294,11 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="Milestone 검색…"
-                      className="w-56 pl-9"
+                      className="w-full truncate pl-8"
                     />
                   </div>
                   {/* Filter intentionally opens no menu in this slice. */}
-                  <Button variant="subtle" size="sm" className="gap-1.5">
+                  <Button variant="subtle" size="sm" className="shrink-0 gap-1.5 px-2">
                     <Filter className="h-3.5 w-3.5" aria-hidden="true" />
                     Filter
                   </Button>
@@ -295,7 +307,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                   <Button
                     variant="primary"
                     size="sm"
-                    className="gap-1.5"
+                    className="shrink-0 gap-1.5 px-2"
                     onClick={() => setCreating(true)}
                   >
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -335,7 +347,10 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
               <SummaryCell
                 label="Released"
                 value={summary.released}
-                valueClassName="text-success"
+                // Prototype colors the Released KPI with the emerald token
+                // (screen-milestones.jsx); `text-success` is not a generated
+                // utility — the semantic class is `text-text-success`.
+                valueClassName="text-text-success"
                 testId="milestone-summary-released"
               />
               <div className="flex-1" />

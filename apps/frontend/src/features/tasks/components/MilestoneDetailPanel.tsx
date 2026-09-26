@@ -26,6 +26,7 @@ import {
   SeverityIndicator,
   Textarea,
   UserAvatar,
+  UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -87,7 +88,8 @@ function MilestoneTaskRow({
 }) {
   return (
     // G-columns (ADR-0050 choice a, design §7 item 12): the prototype's estimate slot renders the Task due_date; no estimate field exists.
-    <div className="flex items-center gap-2.5 rounded-sm border border-border-subtle bg-surface-canvas px-3 py-2.5">
+    // Nested card geometry per prototype .card-nested: radius 6, borderless, 10/12 padding.
+    <div className="flex items-center gap-2.5 rounded-md bg-surface-canvas px-3 py-2.5">
       <SeverityIndicator severity={PRIORITY_SEVERITY[task.priority]} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-1.5">
@@ -598,9 +600,22 @@ function MilestoneDetailContent({
         )}
         scrollRef={scrollRef}
       />
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto px-6 pt-7 pb-8"
+        data-testid="milestone-detail-scroll"
+      >
+        {/* CP-pixel finding 3 (.review/pixel-514-findings.md): the panel body
+            carries the prototype's density (styles.css): .panel-scroll padding
+            28/24/32 here, .panel-section 32px bottom rhythm (mb-8) on the
+            sections below, .panel-title-block margin-bottom 24 only (the
+            shared px-4 py-3 is neutralized — no extra inset), and 12px-pad
+            nested cards instead of the earlier 16px-padding bordered cards.
+            Feature-local classes only; shared panel components are consumed,
+            not redesigned. The 24px scroll padding owns all horizontal insets. */}
         <div data-anchor="overview">
           <PanelTitleBlock
+            className="mb-6 p-0"
             title={milestone.title}
             badges={
               <>
@@ -616,7 +631,7 @@ function MilestoneDetailContent({
               refetches and shows the server title. */}
           {editingTitle ? (
             <form
-              className="mx-4 mb-3 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3"
+              className="mb-4 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3"
               onSubmit={submitTitleEdit}
             >
               <div className="flex flex-col gap-1 text-xs text-text-muted">
@@ -648,7 +663,7 @@ function MilestoneDetailContent({
               </div>
             </form>
           ) : (
-            <div className="mx-4 mb-3 flex justify-end">
+            <div className="mb-4 flex justify-end">
               <Button variant="subtle" size="sm" className="gap-1.5" onClick={startTitleEdit}>
                 <Pencil className="h-3 w-3" aria-hidden="true" />
                 Edit title
@@ -657,8 +672,10 @@ function MilestoneDetailContent({
           )}
 
           {/* Progress strip — real child-Task buckets from progress (B1c);
-              no planned bucket, planned tasks are prototype-only. */}
-          <div className="mx-4 mb-3 flex flex-col gap-2.5 rounded-sm border border-border-subtle bg-surface-card p-3">
+              no planned bucket, planned tasks are prototype-only. Nested card
+              per finding 3: 12px pad, no extra horizontal inset (the 24px
+              scroll padding owns alignment). */}
+          <div className="mb-8 flex flex-col gap-2.5 rounded-md bg-surface-canvas p-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-text-primary">
                 {milestone.progress.released_done} of {milestone.progress.total} tasks released
@@ -702,14 +719,18 @@ function MilestoneDetailContent({
           </div>
 
           {/* Why this milestone exists — required by FR-TASK-004. The prototype
-              nests the plain-text why in NestedTextBlock (screen-milestones.jsx);
-              plain text, no rich content in the DTO. */}
-          <div className="border-t border-border-subtle px-4 py-4">
+              nests the plain-text why in NestedTextBlock (screen-milestones.jsx):
+              plain text, no rich content in the DTO. The shared block keeps its
+              border (shown in the reference baseline); only the type scale is
+              corrected to the prototype 13px/1.55 (finding 3). */}
+          <div className="mb-8">
             <PanelSectionTitle>Why this milestone exists</PanelSectionTitle>
-            <NestedTextBlock>{milestone.why}</NestedTextBlock>
+            <NestedTextBlock className="p-3 text-[13px] leading-[1.55] text-text-secondary">
+              {milestone.why}
+            </NestedTextBlock>
           </div>
 
-          <div className="border-t border-border-subtle px-4 py-4">
+          <div className="mb-8">
             {/* Title row carries the prototype's Open finding action when a
                 source Finding is linked (finding 3): navigation to the existing
                 Finding detail route only — no Finding → Milestone writer. */}
@@ -733,7 +754,7 @@ function MilestoneDetailContent({
               )}
             </div>
             {sourceFinding ? (
-              <div className="mt-2 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3">
+              <div className="mt-2 flex flex-col gap-2 rounded-md bg-surface-canvas p-3">
                 <span className="text-xs text-text-muted">From finding</span>
                 <div className="text-sm font-medium text-text-primary">
                   <span className="mr-2 font-mono text-xs text-text-muted">
@@ -741,7 +762,9 @@ function MilestoneDetailContent({
                   </span>
                   {sourceFinding.title}
                 </div>
-                <p className="text-sm text-text-muted">{sourceFinding.summary}</p>
+                {/* Prototype renders the finding summary at 12px (text-xs) with
+                    1.55 line height (screen-milestones.jsx Source block). */}
+                <p className="text-xs leading-[1.55] text-text-muted">{sourceFinding.summary}</p>
                 <div className="flex flex-wrap gap-2">
                   <OutlineBadge>Evidence · {sourceFinding.evidence_count}</OutlineBadge>
                 </div>
@@ -755,9 +778,12 @@ function MilestoneDetailContent({
             )}
           </div>
 
-          <div className="border-t border-border-subtle py-2">
-            <PanelSectionTitle className="px-4">Properties</PanelSectionTitle>
-            <FieldRow label="Status">
+          <div className="mb-8">
+            <PanelSectionTitle>Properties</PanelSectionTitle>
+            {/* FieldRow defaults carry px-4; the scroll container owns the
+                horizontal padding now (prototype .panel-scroll 24px), so rows
+                align with the section titles. */}
+            <FieldRow label="Status" className="px-0">
               {/* B2e-status (ADR-0050): the closed set is accepted, so the
                   control offers exactly these four values; PATCH is free
                   among them. The title-block badge above stays read-only. */}
@@ -781,33 +807,43 @@ function MilestoneDetailContent({
               </span>
             </FieldRow>
             {/* Managed System is create-only (A3/A8): read-only text, never an input. */}
-            <FieldRow label="Managed System">
+            <FieldRow label="Managed System" className="px-0">
               <ManagedSystemPill name={managedSystemName} />
             </FieldRow>
-            <FieldRow label="Analytics Area">
+            <FieldRow label="Analytics Area" className="px-0">
               {areaName !== undefined ? (
                 <OutlineBadge>{areaName}</OutlineBadge>
               ) : (
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
-            <FieldRow label="Owner">
-              {ownerName ?? <span className="text-text-muted">—</span>}
+            {/* Owner per finding 4: the prototype renders a UserChip here
+                (screen-milestones.jsx Properties). The shared chip composes the
+                avatar + display name; an actor missing from the directory keeps
+                the explicit — fallback (missing-actor handling preserved). */}
+            <FieldRow label="Owner" className="px-0">
+              {ownerName !== undefined ? (
+                <UserChip user={{ display_name: ownerName }} size="sm" />
+              ) : (
+                <span className="text-text-muted">—</span>
+              )}
             </FieldRow>
-            <FieldRow label="Start">
+            <FieldRow label="Start" className="px-0">
               <span className="font-mono text-xs text-text-secondary">{milestone.start_date}</span>
             </FieldRow>
-            <FieldRow label="Target">
+            <FieldRow label="Target" className="px-0">
               <span className="font-mono text-xs text-text-secondary">{milestone.target_date}</span>
             </FieldRow>
-            <FieldRow label="Created">{milestone.created_at.slice(0, 10)}</FieldRow>
+            <FieldRow label="Created" className="px-0">
+              {milestone.created_at.slice(0, 10)}
+            </FieldRow>
           </div>
         </div>
 
         {/* #514 B2d-tasks — flat child Task list (screen-milestones.jsx:402-416).
             The prototype's Add task action has no #514 writer behind it, so the
             section ships read-only; assign/unassign lives on the Task detail. */}
-        <div data-anchor="tasks" className="border-t border-border-subtle px-4 py-4">
+        <div data-anchor="tasks" className="mb-8">
           <PanelSectionTitle>
             {childTasks === undefined ? 'Tasks' : `Tasks · ${childTasks.length}`}
           </PanelSectionTitle>
@@ -824,9 +860,7 @@ function MilestoneDetailContent({
               />
             ) : (
               // Same terminal copy as the Tasks list route (TaskListRoute).
-              <div className="py-3 text-center text-xs text-text-muted">
-                Task list unavailable.
-              </div>
+              <div className="py-3 text-center text-xs text-text-muted">Task list unavailable.</div>
             )
           ) : childTasks !== undefined && childTasks.length === 0 ? (
             <div className="py-3 text-center text-xs text-text-muted">
@@ -853,7 +887,7 @@ function MilestoneDetailContent({
           ) : null}
         </div>
 
-        <div data-anchor="evidence" className="border-t border-border-subtle px-4 py-4">
+        <div data-anchor="evidence" className="mb-8 last:mb-0">
           <PanelSectionTitle>Evidence</PanelSectionTitle>
           {/* No evidence read path in these slices (manual linking is §7 item 14);
               empty copy only — no Outcome survey controls (FOP-OUT-014). */}
@@ -862,7 +896,7 @@ function MilestoneDetailContent({
           </div>
         </div>
 
-        <div data-anchor="activity" className="border-t border-border-subtle px-4 py-4">
+        <div data-anchor="activity" className="last:mb-0">
           <PanelSectionTitle>Activity</PanelSectionTitle>
           {/* No audit_log read path exists (§7 item 9); the empty copy ships. */}
           <div className="py-3 text-center text-xs text-text-muted">활동 기록이 없습니다.</div>
