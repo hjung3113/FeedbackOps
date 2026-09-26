@@ -15,6 +15,7 @@ import {
   insertVocClusterRow,
 } from '../../voc-clusters/__tests__/_seed-helpers.js';
 import {
+  denyCapability,
   grantCapability,
   insertDevActor,
   insertMsDirectly,
@@ -40,7 +41,12 @@ type SystemCoverageId =
   | 'high-followup'
   | 'released-update'
   | 'analytics-area';
-type CoverageCell = { value: number; total: number; percent: number; status: 'good' | 'warn' | 'bad' };
+type CoverageCell = {
+  value: number;
+  total: number;
+  percent: number;
+  status: 'good' | 'warn' | 'bad';
+};
 type SystemRow = {
   managed_system_id: string;
   coverage?: Partial<Record<SystemCoverageId, CoverageCell>>;
@@ -199,6 +205,12 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     await migrateHandle.pool.query(
       `delete from core.sessions where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
       [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
+    );
+    await migrateHandle.pool.query(
+      `delete from permission.permission_denies where actor_id = $1 and managed_system_id in (
+        select id from core.managed_systems where workspace_id = $2 and slug like $3
+      )`,
+      [adminActorId, WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
       `delete from core.audit_log where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
@@ -531,12 +543,17 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       systemRows(body).reduce((sum, row) => sum + (row.coverage?.['voc-task']?.total ?? 0), 0),
     ).toBe(body.kpis.open_voc);
     expect(
-      systemRows(body).reduce((sum, row) => sum + (row.action_queues?.['high-severity-unlinked'] ?? 0), 0),
+      systemRows(body).reduce(
+        (sum, row) => sum + (row.action_queues?.['high-severity-unlinked'] ?? 0),
+        0,
+      ),
     ).toBe(queue(body, 'high-severity-unlinked')?.count);
     // The workspace-level queue stays on the rollup only; the schema admits
     // the row key, the service must never emit it (#513 N6 risk).
     expect(
-      systemRows(body).every((row) => row.action_queues?.['permission-requests-pending'] === undefined),
+      systemRows(body).every(
+        (row) => row.action_queues?.['permission-requests-pending'] === undefined,
+      ),
     ).toBe(true);
     expect(seed.msA).not.toBe(seed.msB);
   });
@@ -547,7 +564,13 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       [WORKSPACE_ID],
     );
     const seed = await createDashboardScope();
-    await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'admin empty survey row');
+    await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'admin empty survey row',
+    );
     const response = await get(adminCookie);
     const body = response.json<Summary>();
 
@@ -556,9 +579,38 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(queue(body, 'bad-outcome-no-followup')).toMatchObject({ count: 0 });
     expect(systemRow(body, seed.msA)?.action_queues?.['bad-outcome-no-followup']).toBe(0);
     expect(systemRows(body).length).toBeGreaterThan(0);
-    expect(systemRows(body).every((row) => row.action_queues?.['bad-outcome-no-followup'] === 0)).toBe(true);
+    expect(
+      systemRows(body).every((row) => row.action_queues?.['bad-outcome-no-followup'] === 0),
+    ).toBe(true);
   });
 
+  it('keeps an admin-denied survey system row but omits its bad-outcome-no-followup', async () => {
+    const seed = await createDashboardScope();
+    await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msB,
+      reporterActorId,
+      'admin denied survey row VOC',
+    );
+    await seedSurveyGaps(seed.msB, 2);
+    await denyCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      adminActorId,
+      'survey.read',
+      seed.msB,
+      adminActorId,
+    );
+
+    const body = (await get(adminCookie)).json<Summary>();
+    const rowB = systemRow(body, seed.msB);
+
+    expect(rowB).toBeDefined();
+    expect(rowB?.coverage).toHaveProperty('voc-task');
+    expect(rowB?.action_queues).not.toHaveProperty('bad-outcome-no-followup');
+    expect(systemRow(body, seed.msA)?.action_queues?.['bad-outcome-no-followup']).toBe(0);
+  });
   it('limits a developer to their one Managed System and omits unavailable entries', async () => {
     const seed = await createDashboardScope();
     const before = (await get(seed.devCookie)).json<Summary>();
@@ -618,12 +670,31 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
   it('keeps finding-only rows while omitting VOC, task, and survey metrics outside their scopes', async () => {
     const seed = await createDashboardScope();
     await migrateHandle.pool.query(
-      'delete from permission.permission_grants where actor_id = $1 and capability in (\'finding.manage\', \'survey.read\')',
+      "delete from permission.permission_grants where actor_id = $1 and capability in ('finding.manage', 'survey.read')",
       [seed.devActorId],
     );
-    await grantCapability(migrateHandle, WORKSPACE_ID, seed.devActorId, 'finding.read', seed.msB, adminActorId);
-    const vocA = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'scoped VOC A');
-    const vocB = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msB, reporterActorId, 'hidden VOC B');
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'finding.read',
+      seed.msB,
+      adminActorId,
+    );
+    const vocA = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'scoped VOC A',
+    );
+    const vocB = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msB,
+      reporterActorId,
+      'hidden VOC B',
+    );
     await insertFindingRow(migrateHandle, {
       workspaceId: WORKSPACE_ID,
       primaryManagedSystemId: seed.msA,
@@ -669,8 +740,21 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
 
   it('includes Analytics Areas only for VOC area data and keeps assignment coverage on the system row', async () => {
     const seed = await createDashboardScope();
-    await grantCapability(migrateHandle, WORKSPACE_ID, seed.devActorId, 'voc.read', seed.msB, adminActorId);
-    await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'VOC with no Analytics Area');
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.devActorId,
+      'voc.read',
+      seed.msB,
+      adminActorId,
+    );
+    await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'VOC with no Analytics Area',
+    );
     const areaId = await analyticsArea(seed.msB);
     const areaVoc = await insertVocDirectly(
       migrateHandle,
@@ -679,7 +763,10 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       reporterActorId,
       'VOC in one Analytics Area',
     );
-    await migrateHandle.pool.query('update voc.vocs set analytics_area_id = $1 where id = $2', [areaId, areaVoc.id]);
+    await migrateHandle.pool.query('update voc.vocs set analytics_area_id = $1 where id = $2', [
+      areaId,
+      areaVoc.id,
+    ]);
 
     const body = (await get(seed.devCookie)).json<Summary>();
     const rowA = systemRow(body, seed.msA);
@@ -702,10 +789,26 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       `${SLUG_PREFIX}-${uid('survey-only')}`,
       'Survey-only Dashboard System',
     );
-    await grantCapability(migrateHandle, WORKSPACE_ID, reporterActorId, 'survey.read', managedSystemId, adminActorId);
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      reporterActorId,
+      'survey.read',
+      managedSystemId,
+      adminActorId,
+    );
     const areaId = await analyticsArea(managedSystemId);
-    const voc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, managedSystemId, reporterActorId, 'hidden survey-only VOC');
-    await migrateHandle.pool.query('update voc.vocs set analytics_area_id = $1 where id = $2', [areaId, voc.id]);
+    const voc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      managedSystemId,
+      reporterActorId,
+      'hidden survey-only VOC',
+    );
+    await migrateHandle.pool.query('update voc.vocs set analytics_area_id = $1 where id = $2', [
+      areaId,
+      voc.id,
+    ]);
 
     const reporterCookie = await loginAs(app, 'mock-user-1');
     const response = await get(reporterCookie);
@@ -721,8 +824,21 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
 
   it('omits Finding metrics from every row for a plain User', async () => {
     const seed = await createDashboardScope();
-    await grantCapability(migrateHandle, WORKSPACE_ID, reporterActorId, 'voc.read', seed.msA, adminActorId);
-    await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'plain User VOC');
+    await grantCapability(
+      migrateHandle,
+      WORKSPACE_ID,
+      reporterActorId,
+      'voc.read',
+      seed.msA,
+      adminActorId,
+    );
+    await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msA,
+      reporterActorId,
+      'plain User VOC',
+    );
 
     const reporterCookie = await loginAs(app, 'mock-user-1');
     const body = (await get(reporterCookie)).json<Summary>();
@@ -779,7 +895,12 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       [actor.id],
     );
     expect(response.statusCode).toBe(200);
-    expect(response.json<Summary>()).toEqual({ kpis: {}, action_queues: [], coverage: [], by_managed_system: [] });
+    expect(response.json<Summary>()).toEqual({
+      kpis: {},
+      action_queues: [],
+      coverage: [],
+      by_managed_system: [],
+    });
     expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
   });
 
