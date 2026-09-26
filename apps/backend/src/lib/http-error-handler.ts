@@ -1,7 +1,7 @@
 import { errorCodeSchema } from '@fops/shared';
 import type { FastifyInstance } from 'fastify';
 
-import { type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './errors.js';
+import { HttpError, type ZodIssueShape, fieldsFromZodIssues, statusForCode } from './errors.js';
 
 // ── Error handler ─ ADR-0012 envelope ────────────────────────────────
 // Runs on the ROOT Fastify instance, never inside app.register(): a
@@ -17,7 +17,10 @@ export function registerHttpErrorHandler(app: FastifyInstance): void {
     if (typeof rawCode === 'string') {
       const parsed = errorCodeSchema.safeParse(rawCode);
       if (parsed.success) {
-        const status = statusForCode(parsed.data);
+        const status =
+          err instanceof HttpError && err.statusOverride !== undefined
+            ? err.statusOverride
+            : statusForCode(parsed.data);
         const errDetail = (err as { detail?: Record<string, unknown> }).detail;
         // F3: `requestable_permission` belongs at the top level of ErrorEnvelope
         // (ADR-0012 / packages/shared/src/errors/codes.ts:67-71). Hoist it out

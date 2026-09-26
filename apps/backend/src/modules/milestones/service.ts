@@ -9,6 +9,7 @@ import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { lockAnalyticsArea } from '../analytics-areas/index.js';
+import { findWorkspaceActor } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
@@ -81,6 +82,44 @@ async function assertMilestoneAnalyticsArea(args: {
   }
 }
 
+async function assertMilestoneOwner(args: {
+  tx: Tx;
+  workspaceId: string;
+  ownerActorId: string;
+  managedSystemId: string;
+  checkService: CheckService;
+}): Promise<void> {
+  const owner = await findWorkspaceActor(args.tx, {
+    workspaceId: args.workspaceId,
+    actorId: args.ownerActorId,
+  });
+  if (!owner) throw new HttpError('not_found.record', 'owner actor not found');
+
+  const canOwnMilestone = (
+    await checkFindingManage(
+      args.checkService,
+      {
+        actor_id: owner.id,
+        workspace_id: args.workspaceId,
+        role_level: owner.role_level,
+      },
+      args.managedSystemId,
+      { requireElevatedRole: true },
+      { tx: args.tx },
+    )
+  ).allow;
+  if (!canOwnMilestone) {
+    throw new HttpError(
+      'validation.failed',
+      'owner actor lacks finding.manage on this managed system',
+      {
+        fields: [{ path: ['owner_actor_id'], code: 'out_of_scope' }],
+      },
+      400,
+    );
+  }
+}
+
 export function createMilestonesService(deps: MilestonesServiceDeps) {
   async function createMilestone(args: {
     actor: MilestonesActor;
@@ -121,6 +160,16 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
           ).allow;
           if (!canManage) {
             throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          if (args.input.owner_actor_id !== undefined) {
+            await assertMilestoneOwner({
+              tx,
+              workspaceId: args.actor.workspace_id,
+              ownerActorId: args.input.owner_actor_id,
+              managedSystemId: args.input.primary_managed_system_id,
+              checkService: deps.checkService,
+            });
           }
 
           await assertMilestoneAnalyticsArea({
@@ -261,6 +310,16 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
               'milestone updated_at does not match If-Match',
               { current_updated_at: milestone.updated_at.toISOString() },
             );
+          }
+
+          if (args.input.owner_actor_id !== undefined) {
+            await assertMilestoneOwner({
+              tx,
+              workspaceId: args.actor.workspace_id,
+              ownerActorId: args.input.owner_actor_id,
+              managedSystemId: milestone.primary_managed_system_id,
+              checkService: deps.checkService,
+            });
           }
 
           if (args.input.analytics_area_id) {
