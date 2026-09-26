@@ -91,6 +91,61 @@ const PRODUCT_USAGE = {
   updated_at: LOOKUP_TIMESTAMP,
 };
 
+// Astra finding 4 — create options must carry the ownership/archive metadata
+// the API validates on create: archived systems get 409 conflict.parent_archived,
+// areas of another system get 422 out_of_scope, archived areas get 409
+// parent_archived (docs/implementation/api/milestones.md).
+const IDS_F4 = {
+  msErp: 'cccccccc-cccc-4ccc-8ccc-cccccccc00c2',
+  msArchived: 'cccccccc-cccc-4ccc-8ccc-cccccccc00c3',
+  areaErp: 'dddddddd-dddd-4ddd-8ddd-dddddddd00a2',
+  areaArchived: 'dddddddd-dddd-4ddd-8ddd-dddddddd00a3',
+};
+
+const ERP = {
+  ...POWER_BI,
+  id: IDS_F4.msErp,
+  slug: 'erp',
+  name: 'ERP',
+};
+
+const ARCHIVED_MS = {
+  ...POWER_BI,
+  id: IDS_F4.msArchived,
+  slug: 'legacy-warehouse',
+  name: 'Legacy Warehouse',
+  archived_at: '2026-07-02T00:00:00.000Z',
+  archived_by_actor_id: IDS.ownerU1,
+};
+
+const ERP_USAGE = {
+  ...PRODUCT_USAGE,
+  id: IDS_F4.areaErp,
+  managed_system_id: IDS_F4.msErp,
+  slug: 'erp-usage',
+  name: 'ERP Usage',
+};
+
+const ARCHIVED_AREA = {
+  ...PRODUCT_USAGE,
+  id: IDS_F4.areaArchived,
+  slug: 'legacy-funnel',
+  name: 'Legacy Funnel',
+  archived_at: '2026-07-03T00:00:00.000Z',
+  archived_by_actor_id: IDS.ownerU1,
+};
+
+function mockLookupsForF4(): void {
+  vi.mocked(fetchManagedSystems).mockImplementation(async () => ({
+    items: [POWER_BI, ERP, ARCHIVED_MS],
+    total: 3,
+  }));
+  vi.mocked(fetchAnalyticsAreas).mockImplementation(async () => ({
+    items: [PRODUCT_USAGE, ERP_USAGE, ARCHIVED_AREA],
+    total: 3,
+  }));
+}
+
 const UPDATED_AT = '2026-07-21T08:30:00.000Z';
 
 const SSO_ROW: MilestoneDto = {
@@ -559,5 +614,138 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     expect(statusSelect()).toHaveValue('in_progress');
     expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Local draft');
     expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Astra finding 3 — an uncertain create (server committed the row but the
+// response was lost) leaves the form open with an error. Retrying the same
+// logical payload must reuse the Idempotency-Key so the server replays the
+// stored response (docs/implementation/api/milestones.md: a matching replay
+// returns the stored response, reuse with a different body is 409) instead of
+// creating a second Milestone; a changed payload rotates the key.
+describe('MilestonesRoute create retry (Astra finding 3)', () => {
+  function openCreateForm(): Promise<void> {
+    return (async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+      await screen.findByTestId('milestone-create-panel');
+      fillCreateForm(IDS.msPowerBi);
+    })();
+  }
+
+  it('retries a lost-response create under the same idempotency key and body', async () => {
+    vi.mocked(createMilestone)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue(createdRow());
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(createdRow(), 'Launch review hardening'));
+    renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+    await openCreateForm();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    expect(await screen.findByText('Failed to fetch')).toBeInTheDocument();
+
+    // Same logical payload, resubmitted by the user after the lost response.
+    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+
+    await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(2));
+    const firstCall = vi.mocked(createMilestone).mock.calls[0];
+    const secondCall = vi.mocked(createMilestone).mock.calls[1];
+    if (!firstCall || !secondCall) throw new Error('createMilestone calls missing');
+    expect(secondCall[1]).toBe(firstCall[1]);
+    expect(secondCall[1]).toMatch(UUID_KEY);
+    expect(secondCall[0]).toEqual(firstCall[0]);
+
+    // The replay resolves and hands over to the detail panel.
+    expect(
+      await screen.findByRole('heading', { name: 'Launch review hardening' }),
+    ).toBeInTheDocument();
+  });
+
+  it('rotates the idempotency key when the resubmitted payload changes', async () => {
+    vi.mocked(createMilestone)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue(createdRow());
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(createdRow(), 'Launch review hardening'));
+    renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+    await openCreateForm();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    expect(await screen.findByText('Failed to fetch')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Launch review hardening v2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+
+    await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(2));
+    const firstCall = vi.mocked(createMilestone).mock.calls[0];
+    const secondCall = vi.mocked(createMilestone).mock.calls[1];
+    if (!firstCall || !secondCall) throw new Error('createMilestone calls missing');
+    // A different logical creation is a new key: reuse would be 409
+    // conflict.idempotency_key_reuse.
+    expect(secondCall[1]).not.toBe(firstCall[1]);
+    expect(secondCall[0]).not.toEqual(firstCall[0]);
+  });
+});
+
+// Astra finding 4 — create options mirror the API's create checks: only
+// active Managed Systems are offered (archived → 409 parent_archived), and
+// only active areas of the selected system (foreign → 422 out_of_scope,
+// archived → 409 parent_archived). Selecting an incompatible system clears
+// the area selection. Archived entries stay in the display lookups for rows
+// that reference them.
+describe('MilestonesRoute create options (Astra finding 4)', () => {
+  it('offers only active systems and only active areas of the selected system', async () => {
+    mockLookupsForF4();
+    renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+
+    const systemSelect = screen.getByLabelText('Managed System') as HTMLSelectElement;
+    expect(Array.from(systemSelect.options).map((option) => option.textContent)).toEqual([
+      'Select…',
+      'Power BI',
+      'ERP',
+    ]);
+
+    // With no system selected, no area can be valid yet.
+    const areaSelect = screen.getByLabelText('Analytics Area') as HTMLSelectElement;
+    expect(Array.from(areaSelect.options).map((option) => option.textContent)).toEqual(['—']);
+
+    fireEvent.change(systemSelect, { target: { value: IDS.msPowerBi } });
+    expect(Array.from(areaSelect.options).map((option) => option.textContent)).toEqual([
+      '—',
+      'Product Usage',
+    ]);
+
+    fireEvent.change(systemSelect, { target: { value: IDS_F4.msErp } });
+    expect(Array.from(areaSelect.options).map((option) => option.textContent)).toEqual([
+      '—',
+      'ERP Usage',
+    ]);
+  });
+
+  it('clears the area selection when the system changes and the area no longer belongs', async () => {
+    mockLookupsForF4();
+    renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+
+    const systemSelect = screen.getByLabelText('Managed System') as HTMLSelectElement;
+    const areaSelect = screen.getByLabelText('Analytics Area') as HTMLSelectElement;
+    fireEvent.change(systemSelect, { target: { value: IDS.msPowerBi } });
+    fireEvent.change(areaSelect, { target: { value: IDS.areaProduct } });
+    expect(areaSelect).toHaveValue(IDS.areaProduct);
+
+    fireEvent.change(systemSelect, { target: { value: IDS_F4.msErp } });
+
+    // The stale selection cannot ride along: it would be a 422 out_of_scope
+    // create, and the user re-picks deliberately for the new system.
+    expect(areaSelect).toHaveValue('');
   });
 });

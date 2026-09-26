@@ -396,13 +396,20 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
         detailPanel={
           creating ? (
             <MilestoneCreatePanel
-              managedSystems={(managedSystemsQuery.data?.items ?? []).map(({ id, name }) => ({
-                id,
-                name,
-              }))}
-              analyticsAreas={(analyticsAreasQuery.data?.items ?? []).map(({ id, name }) => ({
-                id,
-                name,
+              // Astra finding 4 — create offers active Managed Systems only
+              // (an archived system is 409 conflict.parent_archived); the
+              // unfiltered list stays in the display lookups above.
+              managedSystems={(managedSystemsQuery.data?.items ?? [])
+                .filter((ms) => ms.archived_at === null)
+                .map(({ id, name }) => ({ id, name }))}
+              // Create options carry ownership/archive metadata; the panel
+              // filters to active areas of the selected system and clears an
+              // incompatible selection when the system changes.
+              analyticsAreas={(analyticsAreasQuery.data?.items ?? []).map((area) => ({
+                id: area.id,
+                name: area.name,
+                managed_system_id: area.managed_system_id,
+                archived: area.archived_at !== null,
               }))}
               actors={(actors ?? []).map(({ id, display_name }) => ({ id, display_name }))}
               defaultManagedSystemId={

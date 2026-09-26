@@ -2,6 +2,7 @@ import { createMilestone, getMilestone, updateMilestone } from '@/lib/api/milest
 import { listTasks } from '@/lib/api/tasks';
 import { ApiError } from '@/lib/api/types';
 import type {
+  CreateMilestoneRequest,
   MilestoneDetailDto,
   MilestoneDto,
   MilestoneStatusFilter,
@@ -223,7 +224,17 @@ export function MilestoneDetailPanel({
 
 export interface MilestoneCreatePanelProps {
   managedSystems: ReadonlyArray<{ id: string; name: string }>;
-  analyticsAreas: ReadonlyArray<{ id: string; name: string }>;
+  /** Astra finding 4 — create options carry ownership/archive metadata: the
+      API rejects an area of another Managed System (422 out_of_scope) and an
+      archived area (409 parent_archived), so the panel offers only active
+      areas of the selected system. Row display keeps its own lookups with
+      archived entries; this list is create-specific. */
+  analyticsAreas: ReadonlyArray<{
+    id: string;
+    name: string;
+    managed_system_id: string;
+    archived: boolean;
+  }>;
   actors: ReadonlyArray<{ id: string; display_name: string }>;
   /** Concrete Managed System uuid to preselect; the `all` scope passes null. */
   defaultManagedSystemId: string | null;
@@ -271,6 +282,30 @@ export function MilestoneCreatePanel({
     startDate !== '' ||
     targetDate !== '';
 
+  // Astra finding 4 — only active areas of the selected Managed System are
+  // creatable; with no system selected none can be valid yet. The raw list
+  // is kept for the change handler below so a selection can be checked
+  // against the newly chosen system.
+  const creatableAreas = React.useMemo(
+    () =>
+      analyticsAreas.filter((area) => !area.archived && area.managed_system_id === managedSystemId),
+    [analyticsAreas, managedSystemId],
+  );
+
+  function handleManagedSystemChange(nextSystemId: string): void {
+    setManagedSystemId(nextSystemId);
+    // An area tied to the previous system cannot ride along — the API would
+    // reject the create as out_of_scope — so an incompatible selection is
+    // cleared and the user re-picks for the new system.
+    const areaStillValid =
+      analyticsAreaId !== '' &&
+      analyticsAreas.some(
+        (area) =>
+          area.id === analyticsAreaId && !area.archived && area.managed_system_id === nextSystemId,
+      );
+    if (!areaStillValid) setAnalyticsAreaId('');
+  }
+
   React.useEffect(() => {
     onDirtyChange?.(dirty);
     // Unmount always reports clean (cancel, create success, confirmed switch).
@@ -285,24 +320,42 @@ export function MilestoneCreatePanel({
     onCancel();
   }
 
-  const createMutation = useMutation<MilestoneDto, Error, void>({
-    // Same idempotency style as useTaskRequestConversion: a fresh key per submit.
-    mutationFn: async () =>
-      createMilestone(
-        {
-          title: title.trim(),
-          why: why.trim(),
-          primary_managed_system_id: managedSystemId,
-          start_date: startDate,
-          target_date: targetDate,
-          // Optional fields stay off the body when unset: owner defaults to the
-          // creator, Analytics Area stays null server-side.
-          ...(ownerActorId !== '' ? { owner_actor_id: ownerActorId } : {}),
-          ...(analyticsAreaId !== '' ? { analytics_area_id: analyticsAreaId } : {}),
-        },
-        crypto.randomUUID(),
-      ),
-    onSuccess: (created) => onCreated(created.id),
+  // Astra finding 3 — an uncertain create (the server may have committed the
+  // row but the response was lost) leaves the form open with an error. The
+  // key and submitted payload survive for retries of the same logical
+  // creation, so the server replays the stored response instead of creating
+  // a second Milestone; a changed payload or a completed creation rotates
+  // the key (reuse with a different body would be 409
+  // conflict.idempotency_key_reuse).
+  const attemptRef = React.useRef<{ key: string; payload: CreateMilestoneRequest } | null>(null);
+
+  function buildCreatePayload(): CreateMilestoneRequest {
+    // Same literal field order every call, so retry equality below is sound.
+    return {
+      title: title.trim(),
+      why: why.trim(),
+      primary_managed_system_id: managedSystemId,
+      start_date: startDate,
+      target_date: targetDate,
+      // Optional fields stay off the body when unset: owner defaults to the
+      // creator, Analytics Area stays null server-side.
+      ...(ownerActorId !== '' ? { owner_actor_id: ownerActorId } : {}),
+      ...(analyticsAreaId !== '' ? { analytics_area_id: analyticsAreaId } : {}),
+    };
+  }
+
+  const createMutation = useMutation<
+    MilestoneDto,
+    Error,
+    { payload: CreateMilestoneRequest; idempotencyKey: string }
+  >({
+    mutationFn: ({ payload, idempotencyKey }) => createMilestone(payload, idempotencyKey),
+    onSuccess: (created) => {
+      // The creation completed: the form hands over to the detail panel, and
+      // any later session must not inherit this key.
+      attemptRef.current = null;
+      onCreated(created.id);
+    },
     onError: (err) => setFormError(err.message),
   });
 
@@ -319,7 +372,14 @@ export function MilestoneCreatePanel({
       return;
     }
     setFormError(null);
-    createMutation.mutate();
+    const payload = buildCreatePayload();
+    const attempt = attemptRef.current;
+    const idempotencyKey =
+      attempt !== null && JSON.stringify(attempt.payload) === JSON.stringify(payload)
+        ? attempt.key
+        : crypto.randomUUID();
+    attemptRef.current = { key: idempotencyKey, payload };
+    createMutation.mutate({ payload, idempotencyKey });
   }
 
   const dateClassName =
@@ -362,7 +422,7 @@ export function MilestoneCreatePanel({
               aria-label="Managed System"
               className={selectClassName}
               value={managedSystemId}
-              onChange={(event) => setManagedSystemId(event.target.value)}
+              onChange={(event) => handleManagedSystemChange(event.target.value)}
             >
               <option value="">Select…</option>
               {managedSystems.map((system) => (
@@ -380,7 +440,7 @@ export function MilestoneCreatePanel({
               onChange={(event) => setAnalyticsAreaId(event.target.value)}
             >
               <option value="">—</option>
-              {analyticsAreas.map((area) => (
+              {creatableAreas.map((area) => (
                 <option key={area.id} value={area.id}>
                   {area.name}
                 </option>
@@ -481,9 +541,14 @@ function MilestoneDetailContent({
 
   // B2e — title-only edit. Managed System is a create-only field (A3/A8) and
   // never becomes an input here; the PATCH carries the title and If-Match
-  // (the row's updated_at) with a fresh idempotency key, nothing else.
+  // with a fresh idempotency key, nothing else. The If-Match is the row's
+  // updated_at captured when editing starts (Astra finding 2): a background
+  // refetch that delivers a newer version must not rebase the unsaved draft
+  // onto it, or Save would silently overwrite the concurrent change instead
+  // of losing the race as a 409 conflict.stale_write.
   const [editingTitle, setEditingTitle] = React.useState(false);
   const [titleDraft, setTitleDraft] = React.useState('');
+  const [titleEditVersion, setTitleEditVersion] = React.useState<string | null>(null);
   const [titleError, setTitleError] = React.useState<string | null>(null);
   // B2e fixup — an open editor with a changed draft is unsaved work; a
   // touched-then-reverted draft equals the stored title and closes freely.
@@ -493,15 +558,16 @@ function MilestoneDetailContent({
     // Unmount (record switch via key=milestone.id) always reports clean.
     return () => onTitleDirtyChange(false);
   }, [titleDirty, onTitleDirtyChange]);
-  const titleMutation = useMutation<MilestoneDto, Error, void>({
-    mutationFn: async () =>
+  const titleMutation = useMutation<MilestoneDto, Error, { ifMatch: string }>({
+    mutationFn: async ({ ifMatch }) =>
       updateMilestone(
         milestone.id,
         { title: titleDraft.trim() },
-        { ifMatch: milestone.updated_at, idempotencyKey: crypto.randomUUID() },
+        { ifMatch, idempotencyKey: crypto.randomUUID() },
       ),
     onSuccess: async () => {
       setEditingTitle(false);
+      setTitleEditVersion(null);
       setTitleError(null);
       // Detail read returns the stored row; the list shows the new title too.
       await queryClient.invalidateQueries({ queryKey: ['milestone', milestone.id] });
@@ -513,6 +579,7 @@ function MilestoneDetailContent({
         // and show the stored title — never layer the draft over it.
         setEditingTitle(false);
         setTitleDraft('');
+        setTitleEditVersion(null);
         setTitleError(null);
         await queryClient.refetchQueries({ queryKey: ['milestone', milestone.id], exact: true });
       } else {
@@ -523,12 +590,16 @@ function MilestoneDetailContent({
 
   function startTitleEdit(): void {
     setTitleDraft(milestone.title);
+    // Astra finding 2 — the concurrency token is bound at edit start; a
+    // refetch while editing never moves it (see the titleEditVersion comment).
+    setTitleEditVersion(milestone.updated_at);
     setTitleError(null);
     setEditingTitle(true);
   }
 
   function cancelTitleEdit(): void {
     setEditingTitle(false);
+    setTitleEditVersion(null);
     setTitleError(null);
   }
 
@@ -538,7 +609,11 @@ function MilestoneDetailContent({
       setTitleError('Title is required.');
       return;
     }
-    titleMutation.mutate();
+    // Unreachable in practice — the editor only opens via startTitleEdit,
+    // which pins the version — but the stale-write contract must never
+    // silently fall back to the latest refetched token.
+    if (titleEditVersion === null) return;
+    titleMutation.mutate({ ifMatch: titleEditVersion });
   }
 
   // B2e-status (ADR-0050) — the Properties Status control. A change PATCHes
@@ -568,10 +643,11 @@ function MilestoneDetailContent({
         // concurrency token, so an open title draft composed against the old
         // row must not silently rebase onto it (the server could no longer
         // reject the stale draft). Same reconciliation as the title-409
-        // branch: discard the editor and draft before the refetch. A generic
-        // failure keeps the editor and draft untouched.
+        // branch: discard the editor, draft, and captured version before the
+        // refetch. A generic failure keeps the editor and draft untouched.
         setEditingTitle(false);
         setTitleDraft('');
+        setTitleEditVersion(null);
         setTitleError(null);
         await queryClient.refetchQueries({ queryKey: ['milestone', milestone.id], exact: true });
       } else {

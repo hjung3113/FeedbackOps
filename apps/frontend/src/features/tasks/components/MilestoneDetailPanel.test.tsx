@@ -3,7 +3,7 @@ import { listTasks } from '@/lib/api/tasks';
 import { ApiError } from '@/lib/api/types';
 import type { MilestoneDetailDto, TaskDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestoneDetailPanel } from './MilestoneDetailPanel';
@@ -619,5 +619,58 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(screen.queryByText('TASK-902')).not.toBeInTheDocument();
     expect(screen.queryByText('아직 연결된 Task 가 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
+  });
+});
+
+// Astra finding 2 — the title editor pins the row's concurrency token when
+// editing starts. A background refetch delivering a newer version must not
+// rebase the unsaved draft onto it: Save submits the captured token, so the
+// server can still reject the stale draft as conflict.stale_write instead of
+// silently overwriting the other actor's change.
+describe('MilestoneDetailPanel title edit concurrency (Astra finding 2)', () => {
+  it('submits the version captured at edit start, not a newer refetched one', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getMilestone).mockResolvedValue(linkedDetail);
+    vi.mocked(updateMilestone).mockResolvedValue(linkedDetail);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MilestoneDetailPanel
+          milestoneId={MILESTONE_ID}
+          onClose={() => {}}
+          actorNamesById={ACTOR_NAMES}
+          managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+          analyticsAreaNamesById={AREA_NAMES}
+        />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    await user.click(screen.getByRole('button', { name: 'Edit title' }));
+    await user.type(screen.getByRole('textbox', { name: 'Title' }), ' v2');
+
+    // Another actor's change lands through a background refetch while the
+    // draft is open. The draft itself survives — but it stays bound to the
+    // version it was composed against.
+    const REMOTE_UPDATED_AT = '2026-07-21T09:45:00.000Z';
+    vi.mocked(getMilestone).mockResolvedValue({
+      ...linkedDetail,
+      title: 'Renamed elsewhere',
+      updated_at: REMOTE_UPDATED_AT,
+    });
+    await queryClient.refetchQueries({ queryKey: ['milestone', MILESTONE_ID], exact: true });
+    expect(screen.getByRole('textbox', { name: 'Title' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
+    const patchCall = vi.mocked(updateMilestone).mock.calls[0];
+    if (!patchCall) throw new Error('updateMilestone call missing');
+    const [, body, options] = patchCall;
+    expect(body).toEqual({ title: 'SSO Stabilization v2' });
+    // The V1 token from edit start — not the refetched V2 token, which would
+    // let the stale draft overwrite the other actor's title without a 409.
+    expect(options.ifMatch).toBe('2026-07-21T08:30:00.000Z');
+    expect(options.ifMatch).not.toBe(REMOTE_UPDATED_AT);
   });
 });
