@@ -10,7 +10,7 @@ import { ApiError } from '@/lib/api/types';
 import type { MilestoneDetailDto, MilestoneDto } from '@fops/shared';
 import { DetailPanelSlotContext } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestonesRoute } from './MilestonesRoute';
@@ -1341,7 +1341,7 @@ describe('MilestonesRoute create session (R5)', () => {
         }),
     );
     vi.mocked(getMilestone).mockResolvedValue(detailFor(createdRow(), 'Launch review hardening'));
-    renderWithClient(<MilestonesRoute />);
+    const { queryClient } = renderWithClient(<MilestonesRoute />);
     await screen.findByText('MLS-1021');
 
     // Session A: fill and submit; the response stays pending.
@@ -1359,11 +1359,22 @@ describe('MilestonesRoute create session (R5)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
-    // A completes late: it must neither close B nor select the abandoned row.
-    resolveCreate(createdRow());
-    await Promise.resolve();
-    await Promise.resolve();
+    // A completes: flush the resolution through React and require ACTUAL
+    // completion — the mutation must reach 'success' in the client's cache,
+    // not merely pass a couple of microtask ticks (which previously masked
+    // whether hook-level callbacks still fire after unmount).
+    await act(async () => {
+      resolveCreate(createdRow());
+    });
+    await waitFor(() => {
+      const statuses = queryClient
+        .getMutationCache()
+        .getAll()
+        .map((m) => m.state.status);
+      expect(statuses).toContain('success');
+    });
 
+    // The stale session must neither close B nor select the abandoned row.
     expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
     expect(vi.mocked(navigateMock)).not.toHaveBeenCalledWith(
       expect.objectContaining({
