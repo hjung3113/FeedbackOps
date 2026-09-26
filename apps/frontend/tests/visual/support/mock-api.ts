@@ -61,8 +61,11 @@ import {
 } from '../fixtures/managed-system-owner';
 import {
   MILESTONE_IDS,
+  milestoneActorsFixture,
+  milestoneAnalyticsAreasFixture,
   milestoneDetailFixture,
   milestoneListFixture,
+  milestoneManagedSystemsFixture,
 } from '../fixtures/milestones';
 import {
   permissionRequestComposeBodySchema,
@@ -151,8 +154,12 @@ interface InstallOptions {
   vocCreate?: boolean;
   /** Issue #399 Finding detail baseline surface; schemas validate fixtures at import. */
   findingDetail?: boolean;
-  /** #514 Milestone shell surface; fixtures validate against shared DTO schemas at import. */
-  milestones?: boolean;
+  /**
+   * #514 Milestone list surface: `true` serves the prototype-mirrored list,
+   * `'empty'` serves an empty list; status-query params filter the fixture.
+   * Fixtures validate against shared DTO schemas at import.
+   */
+  milestones?: boolean | 'empty';
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -287,14 +294,38 @@ export async function installMockApi(
       return;
     }
 
-    // #514 B2a — Milestone list/detail. The B2a shell fetches nothing yet;
-    // these routes exist so later screen nodes (B2c/B2d) extend, not create.
+    // #514 B2a/B2c — Milestone list/detail plus the row-lookup endpoints the
+    // list screen fans out to (actors, Managed Systems, Analytics Areas).
+    // The status query param filters the fixture so the In progress tab
+    // renders server-filtered rows, faithfully to listMilestones.
     if (options.milestones && isRequest(route, 'GET', '/milestones')) {
-      await json(route, 200, { items: milestoneListFixture });
+      if (options.milestones === 'empty') {
+        await json(route, 200, { items: [] });
+        return;
+      }
+      const status = url.searchParams.get('status');
+      await json(route, 200, {
+        items:
+          status === null
+            ? milestoneListFixture
+            : milestoneListFixture.filter((milestone) => milestone.status === status),
+      });
       return;
     }
     if (options.milestones && isRequest(route, 'GET', `/milestones/${MILESTONE_IDS.sso}`)) {
       await json(route, 200, milestoneDetailFixture);
+      return;
+    }
+    if (options.milestones && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, milestoneActorsFixture);
+      return;
+    }
+    if (options.milestones && isRequest(route, 'GET', '/managed-systems')) {
+      await json(route, 200, milestoneManagedSystemsFixture);
+      return;
+    }
+    if (options.milestones && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, milestoneAnalyticsAreasFixture);
       return;
     }
 

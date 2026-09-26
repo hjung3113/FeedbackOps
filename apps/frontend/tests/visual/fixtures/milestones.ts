@@ -9,6 +9,7 @@
 import {
   type MilestoneDetailDto,
   type MilestoneDto,
+  listActorsResponseSchema,
   milestoneDetailDtoSchema,
   milestoneDtoSchema,
 } from '@fops/shared';
@@ -152,3 +153,180 @@ export const milestoneDetailFixture: MilestoneDetailDto = milestoneDetailDtoSche
     evidence_count: 7,
   },
 });
+
+// #514 B2c — row lookups for the visual harness: names mirror the prototype
+// data.js Users / ManagedSystems / AnalyticsAreas catalogue so rows resolve
+// owner avatars, Managed System pills, and Analytics Area badges instead of
+// raw UUIDs. Shapes match the frontend clients (managed-systems.ts,
+// analytics-areas.ts); actors validate against the shared schema.
+export const milestoneActorsFixture = listActorsResponseSchema.parse({
+  actors: [
+    {
+      id: MILESTONE_ACTOR_IDS.u1,
+      display_name: '김지원',
+      email: 'u1@example.test',
+      role_level: 'admin',
+    },
+    {
+      id: MILESTONE_ACTOR_IDS.u2,
+      display_name: '박서연',
+      email: 'u2@example.test',
+      role_level: 'developer',
+    },
+    {
+      id: MILESTONE_ACTOR_IDS.u3,
+      display_name: '이도윤',
+      email: 'u3@example.test',
+      role_level: 'developer',
+    },
+    {
+      id: MILESTONE_ACTOR_IDS.u5,
+      display_name: '정하늘',
+      email: 'u5@example.test',
+      role_level: 'developer',
+    },
+  ],
+});
+
+const LOOKUP_TIMESTAMP = '2026-07-01T00:00:00.000Z';
+
+export const milestoneManagedSystemsFixture: {
+  items: Array<{
+    id: string;
+    workspace_id: string;
+    slug: string;
+    name: string;
+    external_key: null;
+    default_owner_actor_id: null;
+    default_owner_team_id: null;
+    archived_at: null;
+    archived_by_actor_id: null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  total: number;
+} = {
+  items: [
+    {
+      id: MILESTONE_MANAGED_SYSTEM_IDS.tableau,
+      workspace_id: WORKSPACE_ID,
+      slug: 'tableau',
+      name: 'Tableau',
+      external_key: null,
+      default_owner_actor_id: null,
+      default_owner_team_id: null,
+      archived_at: null,
+      archived_by_actor_id: null,
+      created_at: LOOKUP_TIMESTAMP,
+      updated_at: LOOKUP_TIMESTAMP,
+    },
+    {
+      id: MILESTONE_MANAGED_SYSTEM_IDS.powerbi,
+      workspace_id: WORKSPACE_ID,
+      slug: 'powerbi',
+      name: 'Power BI',
+      external_key: null,
+      default_owner_actor_id: null,
+      default_owner_team_id: null,
+      archived_at: null,
+      archived_by_actor_id: null,
+      created_at: LOOKUP_TIMESTAMP,
+      updated_at: LOOKUP_TIMESTAMP,
+    },
+    {
+      id: MILESTONE_MANAGED_SYSTEM_IDS.looker,
+      workspace_id: WORKSPACE_ID,
+      slug: 'looker',
+      name: 'Looker',
+      external_key: null,
+      default_owner_actor_id: null,
+      default_owner_team_id: null,
+      archived_at: null,
+      archived_by_actor_id: null,
+      created_at: LOOKUP_TIMESTAMP,
+      updated_at: LOOKUP_TIMESTAMP,
+    },
+    {
+      id: MILESTONE_MANAGED_SYSTEM_IDS.metabase,
+      workspace_id: WORKSPACE_ID,
+      slug: 'metabase',
+      name: 'Metabase',
+      external_key: null,
+      default_owner_actor_id: null,
+      default_owner_team_id: null,
+      archived_at: null,
+      archived_by_actor_id: null,
+      created_at: LOOKUP_TIMESTAMP,
+      updated_at: LOOKUP_TIMESTAMP,
+    },
+  ],
+  total: 4,
+};
+
+export const milestoneAnalyticsAreasFixture: {
+  items: Array<{
+    id: string;
+    workspace_id: string;
+    managed_system_id: string;
+    slug: string;
+    name: string;
+    owner_team_id: null;
+    archived_at: null;
+    archived_by_actor_id: null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  total: number;
+} = {
+  items: [
+    {
+      id: MILESTONE_ANALYTICS_AREA_IDS.revenue,
+      workspace_id: WORKSPACE_ID,
+      managed_system_id: MILESTONE_MANAGED_SYSTEM_IDS.tableau,
+      slug: 'revenue',
+      name: 'Revenue',
+      owner_team_id: null,
+      archived_at: null,
+      archived_by_actor_id: null,
+      created_at: LOOKUP_TIMESTAMP,
+      updated_at: LOOKUP_TIMESTAMP,
+    },
+    {
+      id: MILESTONE_ANALYTICS_AREA_IDS.product,
+      workspace_id: WORKSPACE_ID,
+      managed_system_id: MILESTONE_MANAGED_SYSTEM_IDS.powerbi,
+      slug: 'product-usage',
+      name: 'Product Usage',
+      owner_team_id: null,
+      archived_at: null,
+      archived_by_actor_id: null,
+      created_at: LOOKUP_TIMESTAMP,
+      updated_at: LOOKUP_TIMESTAMP,
+    },
+    {
+      id: MILESTONE_ANALYTICS_AREA_IDS.marketing,
+      workspace_id: WORKSPACE_ID,
+      managed_system_id: MILESTONE_MANAGED_SYSTEM_IDS.looker,
+      slug: 'marketing-attribution',
+      name: 'Marketing Attribution',
+      owner_team_id: null,
+      archived_at: null,
+      archived_by_actor_id: null,
+      created_at: LOOKUP_TIMESTAMP,
+      updated_at: LOOKUP_TIMESTAMP,
+    },
+    {
+      id: MILESTONE_ANALYTICS_AREA_IDS.csOps,
+      workspace_id: WORKSPACE_ID,
+      managed_system_id: MILESTONE_MANAGED_SYSTEM_IDS.metabase,
+      slug: 'cs-operations',
+      name: 'CS Operations',
+      owner_team_id: null,
+      archived_at: null,
+      archived_by_actor_id: null,
+      created_at: LOOKUP_TIMESTAMP,
+      updated_at: LOOKUP_TIMESTAMP,
+    },
+  ],
+  total: 4,
+};
