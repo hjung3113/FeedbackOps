@@ -10,7 +10,7 @@ import { ApiError } from '@/lib/api/types';
 import type { MilestoneDetailDto, MilestoneDto } from '@fops/shared';
 import { DetailPanelSlotContext } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestonesRoute } from './MilestonesRoute';
@@ -311,5 +311,79 @@ describe('MilestonesRoute edit title (#514 B2e)', () => {
     expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'SSO Stabilization' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'My local rename' })).not.toBeInTheDocument();
+  });
+});
+
+// #514 B2e fixup — create mode must not mask selection, and dirty forms must
+// confirm before the header close discards them (ui-design-system dirty-form
+// rule). All other B2e create/edit behavior is covered above.
+describe('MilestonesRoute fixup (#514 B2e)', () => {
+  it('replaces create state with the selected record and keeps the Managed System scope', async () => {
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
+    renderWithClient(<MilestonesRoute managedSystem={IDS.msPowerBi} />);
+    await screen.findByText('MLS-1021');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+
+    // Selecting an existing row while create is open hands the slot over.
+    fireEvent.click(screen.getByText('SSO Stabilization'));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: '/tasks',
+          search: { view: 'milestones', param: IDS.sso, managedSystem: IDS.msPowerBi },
+        }),
+      );
+    });
+    expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
+    expect(screen.queryByTestId('milestone-create-panel')).not.toBeInTheDocument();
+  });
+
+  it('confirms before discarding dirty create and title-edit drafts on header close', async () => {
+    // Dirty create form: decline keeps the panel and draft, confirm discards.
+    renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Draft to discard' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+    expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Title')).toHaveValue('Draft to discard');
+
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    fireEvent.click(await screen.findByRole('button', { name: '이동' }));
+    await waitFor(() => {
+      expect(screen.queryByTestId('milestone-create-panel')).not.toBeInTheDocument();
+    });
+
+    cleanup();
+
+    // Dirty title edit: same confirm flow on the detail panel header close.
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'Draft rename' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Draft rename');
+
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    fireEvent.click(await screen.findByRole('button', { name: '이동' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'SSO Stabilization' })).not.toBeInTheDocument();
+    });
   });
 });

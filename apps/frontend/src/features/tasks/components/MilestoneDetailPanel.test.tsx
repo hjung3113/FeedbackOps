@@ -1,4 +1,4 @@
-import { getMilestone } from '@/lib/api/milestones';
+import { getMilestone, updateMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import type { MilestoneDetailDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import { MilestoneDetailPanel } from './MilestoneDetailPanel';
 
 vi.mock('@/lib/api/milestones', () => ({
   getMilestone: vi.fn(),
+  updateMilestone: vi.fn(),
 }));
 
 // The panel owns the only router usage in this tree; the hoisted mock mirrors
@@ -22,6 +23,7 @@ const MANAGED_SYSTEM_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccc00c1';
 const AREA_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddd00a1';
 const OWNER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0002';
 const MILESTONE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1021';
+const OTHER_MILESTONE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1022';
 const FINDING_ID = 'ffffffff-ffff-4fff-8fff-ffffffff0181';
 
 const linkedDetail: MilestoneDetailDto = {
@@ -310,5 +312,84 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
     expect(screen.queryByRole('button', { name: 'Open finding' })).not.toBeInTheDocument();
+  });
+
+  // B2e fixup S1/P1 — editor state is isolated to the selected record. With
+  // both details cached, a draft typed on A must not survive selecting B: the
+  // keyed remount closes the editor, so A's draft cannot be PATCHed against
+  // B's id and If-Match token.
+  it('drops the title draft when switching between two cached records', async () => {
+    const user = userEvent.setup();
+    const rowA: MilestoneDetailDto = { ...standaloneDetail, title: 'Alpha milestone' };
+    const rowB: MilestoneDetailDto = {
+      ...standaloneDetail,
+      id: OTHER_MILESTONE_ID,
+      display_id: 'MLS-1022',
+      title: 'Beta milestone',
+    };
+    vi.mocked(getMilestone).mockImplementation((id) =>
+      Promise.resolve(id === MILESTONE_ID ? rowA : rowB),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <MilestoneDetailPanel
+          milestoneId={MILESTONE_ID}
+          onClose={() => {}}
+          actorNamesById={ACTOR_NAMES}
+          managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+          analyticsAreaNamesById={AREA_NAMES}
+        />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole('heading', { name: 'Alpha milestone' });
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <MilestoneDetailPanel
+          milestoneId={OTHER_MILESTONE_ID}
+          onClose={() => {}}
+          actorNamesById={ACTOR_NAMES}
+          managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+          analyticsAreaNamesById={AREA_NAMES}
+        />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('heading', { name: 'Beta milestone' });
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <MilestoneDetailPanel
+          milestoneId={MILESTONE_ID}
+          onClose={() => {}}
+          actorNamesById={ACTOR_NAMES}
+          managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+          analyticsAreaNamesById={AREA_NAMES}
+        />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('heading', { name: 'Alpha milestone' });
+
+    await user.click(screen.getByRole('button', { name: 'Edit title' }));
+    await user.type(screen.getByRole('textbox', { name: 'Title' }), ' typed on A');
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <MilestoneDetailPanel
+          milestoneId={OTHER_MILESTONE_ID}
+          onClose={() => {}}
+          actorNamesById={ACTOR_NAMES}
+          managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+          analyticsAreaNamesById={AREA_NAMES}
+        />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('heading', { name: 'Beta milestone' });
+
+    // B renders with no editor, no Save control, and no trace of A's draft:
+    // the wrong-record submit path cannot even be reached.
+    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/typed on A/)).not.toBeInTheDocument();
+    expect(vi.mocked(updateMilestone)).not.toHaveBeenCalled();
   });
 });

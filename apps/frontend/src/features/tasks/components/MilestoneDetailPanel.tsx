@@ -6,6 +6,7 @@ import {
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
+  DirtyConfirmation,
   FieldRow,
   Input,
   ManagedSystemPill,
@@ -67,6 +68,20 @@ export function MilestoneDetailPanel({
   // hide retained identity, record actions, and body. Do not clear the cache.
   const milestone = error == null ? milestoneQuery.data : undefined;
 
+  // B2e fixup — a dirty title edit confirms before the header close discards
+  // it (ui-design-system: "Dirty forms warn before close"). Clean, loading,
+  // and failed-read states keep closing immediately.
+  const [titleDirty, setTitleDirty] = React.useState(false);
+  const [discardTitleOpen, setDiscardTitleOpen] = React.useState(false);
+
+  function handleHeaderClose(): void {
+    if (titleDirty) {
+      setDiscardTitleOpen(true);
+      return;
+    }
+    onClose();
+  }
+
   return (
     <aside className="flex h-full flex-col bg-surface-detail">
       {/* Panel chrome first: header and close stay mounted independently of the
@@ -75,7 +90,7 @@ export function MilestoneDetailPanel({
           read with no terminal error — never for cached data after 403/404. */}
       <DetailPanelHeader
         kind="milestone"
-        onClose={onClose}
+        onClose={handleHeaderClose}
         {...(milestone !== undefined
           ? {
               id: milestone.display_id,
@@ -106,13 +121,27 @@ export function MilestoneDetailPanel({
         </div>
       ) : (
         <MilestoneDetailContent
+          // B2e fixup — editor state is per record: the keyed remount drops
+          // editingTitle/titleDraft when the selected milestone changes, so a
+          // cached destination can never inherit another record's draft.
+          key={milestone.id}
           milestone={milestone}
           scrollRef={scrollRef}
           actorNamesById={actorNamesById}
           managedSystemNamesById={managedSystemNamesById}
           analyticsAreaNamesById={analyticsAreaNamesById}
+          onTitleDirtyChange={setTitleDirty}
         />
       )}
+      <DirtyConfirmation
+        open={discardTitleOpen}
+        onConfirm={() => {
+          setDiscardTitleOpen(false);
+          setTitleDirty(false);
+          onClose();
+        }}
+        onCancel={() => setDiscardTitleOpen(false)}
+      />
     </aside>
   );
 }
@@ -124,6 +153,9 @@ export interface MilestoneCreatePanelProps {
   /** Concrete Managed System uuid to preselect; the `all` scope passes null. */
   defaultManagedSystemId: string | null;
   onCreated: (id: string) => void;
+  /** B2e fixup — reports whether the form holds unsaved edits, so the route
+      can confirm before a selection discards them. */
+  onDirtyChange?: (dirty: boolean) => void;
   onCancel: () => void;
 }
 
@@ -139,6 +171,7 @@ export function MilestoneCreatePanel({
   actors,
   defaultManagedSystemId,
   onCreated,
+  onDirtyChange,
   onCancel,
 }: MilestoneCreatePanelProps) {
   const [title, setTitle] = React.useState('');
@@ -149,6 +182,33 @@ export function MilestoneCreatePanel({
   const [startDate, setStartDate] = React.useState('');
   const [targetDate, setTargetDate] = React.useState('');
   const [formError, setFormError] = React.useState<string | null>(null);
+  // B2e fixup — the header close confirms before discarding an unsaved draft.
+  const [confirmingClose, setConfirmingClose] = React.useState(false);
+
+  // Any deviation from the initial fields is an unsaved draft; derived from
+  // the controlled state so no change path can bypass it.
+  const dirty =
+    title !== '' ||
+    why !== '' ||
+    managedSystemId !== (defaultManagedSystemId ?? '') ||
+    analyticsAreaId !== '' ||
+    ownerActorId !== '' ||
+    startDate !== '' ||
+    targetDate !== '';
+
+  React.useEffect(() => {
+    onDirtyChange?.(dirty);
+    // Unmount always reports clean (cancel, create success, confirmed switch).
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
+
+  function handleHeaderClose(): void {
+    if (dirty) {
+      setConfirmingClose(true);
+      return;
+    }
+    onCancel();
+  }
 
   const createMutation = useMutation<MilestoneDto, Error, void>({
     // Same idempotency style as useTaskRequestConversion: a fresh key per submit.
@@ -196,7 +256,7 @@ export function MilestoneCreatePanel({
     <aside className="flex h-full flex-col bg-surface-detail">
       {/* No display id exists yet: the header chrome mounts without record
           identity, mirroring the pending detail read. */}
-      <DetailPanelHeader kind="milestone" onClose={onCancel} />
+      <DetailPanelHeader kind="milestone" onClose={handleHeaderClose} />
       <form
         className="min-h-0 flex-1 overflow-y-auto"
         data-testid="milestone-create-panel"
@@ -298,6 +358,14 @@ export function MilestoneCreatePanel({
           {formError !== null && <span className="text-sm text-accent-danger">{formError}</span>}
         </div>
       </form>
+      <DirtyConfirmation
+        open={confirmingClose}
+        onConfirm={() => {
+          setConfirmingClose(false);
+          onCancel();
+        }}
+        onCancel={() => setConfirmingClose(false)}
+      />
     </aside>
   );
 }
@@ -308,6 +376,8 @@ interface MilestoneDetailContentProps {
   actorNamesById: ReadonlyMap<string, string>;
   managedSystemNamesById: ReadonlyMap<string, string>;
   analyticsAreaNamesById: ReadonlyMap<string, string>;
+  /** B2e fixup — reports whether a header close would discard a title draft. */
+  onTitleDirtyChange: (dirty: boolean) => void;
 }
 
 function MilestoneDetailContent({
@@ -316,6 +386,7 @@ function MilestoneDetailContent({
   actorNamesById,
   managedSystemNamesById,
   analyticsAreaNamesById,
+  onTitleDirtyChange,
 }: MilestoneDetailContentProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -327,6 +398,14 @@ function MilestoneDetailContent({
   const [editingTitle, setEditingTitle] = React.useState(false);
   const [titleDraft, setTitleDraft] = React.useState('');
   const [titleError, setTitleError] = React.useState<string | null>(null);
+  // B2e fixup — an open editor with a changed draft is unsaved work; a
+  // touched-then-reverted draft equals the stored title and closes freely.
+  const titleDirty = editingTitle && titleDraft !== milestone.title;
+  React.useEffect(() => {
+    onTitleDirtyChange(titleDirty);
+    // Unmount (record switch via key=milestone.id) always reports clean.
+    return () => onTitleDirtyChange(false);
+  }, [titleDirty, onTitleDirtyChange]);
   const titleMutation = useMutation<MilestoneDto, Error, void>({
     mutationFn: async () =>
       updateMilestone(
