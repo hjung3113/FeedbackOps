@@ -486,4 +486,78 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     expect(screen.queryByText('Status update failed.')).not.toBeInTheDocument();
     expect(screen.queryByText('Milestone was modified by another actor.')).not.toBeInTheDocument();
   });
+
+  // B2e-status fixup (midreview P2) — the status stale-write refetch brings a
+  // new concurrency token; an open title draft composed against the old row
+  // must not silently rebase onto it (the server could no longer reject the
+  // stale draft). The stale-title reconciliation (discard editor and draft)
+  // runs before the refetch, like the title-409 path.
+  it('discards an open title draft when the status change conflicts and the server row moved', async () => {
+    const REMOTE_UPDATED_AT = '2026-07-21T09:15:00.000Z';
+    vi.mocked(getMilestone)
+      .mockResolvedValueOnce(detailFor(SSO_ROW, 'SSO Stabilization'))
+      .mockResolvedValue(
+        detailFor(
+          { ...SSO_ROW, title: 'Remote title', status: 'blocked', updated_at: REMOTE_UPDATED_AT },
+          'Remote title',
+        ),
+      );
+    vi.mocked(updateMilestone).mockRejectedValue(
+      new ApiError(409, {
+        code: 'conflict.stale_write',
+        message: 'Milestone was modified by another actor.',
+      }),
+    );
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    // The draft is composed against V1 while the editor is open.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'Local draft' },
+    });
+
+    // The status PATCH carries V1 and loses the race against V2.
+    fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
+
+    // The refetched V2 row wins; the editor and its stale draft are gone, so
+    // the draft can never be saved against V2's concurrency token.
+    await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('heading', { name: 'Remote title' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Local draft')).not.toBeInTheDocument();
+    expect(statusSelect()).toHaveValue('blocked');
+    // Only the status PATCH happened: the stale draft was never re-sent.
+    expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1);
+
+    // No draft remains, so the header close no longer needs confirmation.
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Remote title' })).not.toBeInTheDocument();
+    });
+  });
+
+  // The reconciliation is specific to the stale-write branch: a generic
+  // status failure surfaces its error and leaves the open editor and draft
+  // (and the dirty-close confirmation behind them) untouched.
+  it('keeps an open title draft when the status change fails generically', async () => {
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
+    vi.mocked(updateMilestone).mockRejectedValue(
+      new ApiError(500, { code: 'internal.unexpected', message: 'Status update failed.' }),
+    );
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'Local draft' },
+    });
+    fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
+
+    expect(await screen.findByText('Status update failed.')).toBeInTheDocument();
+    expect(statusSelect()).toHaveValue('in_progress');
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Local draft');
+    expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(1);
+  });
 });

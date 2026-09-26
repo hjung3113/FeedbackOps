@@ -557,6 +557,15 @@ function MilestoneDetailContent({
     onError: async (err) => {
       if (err instanceof ApiError && err.status === 409 && err.code === 'conflict.stale_write') {
         setStatusError(null);
+        // B2e-status fixup (midreview P2) — the refetched row carries a new
+        // concurrency token, so an open title draft composed against the old
+        // row must not silently rebase onto it (the server could no longer
+        // reject the stale draft). Same reconciliation as the title-409
+        // branch: discard the editor and draft before the refetch. A generic
+        // failure keeps the editor and draft untouched.
+        setEditingTitle(false);
+        setTitleDraft('');
+        setTitleError(null);
         await queryClient.refetchQueries({ queryKey: ['milestone', milestone.id], exact: true });
       } else {
         setStatusError(err.message);
