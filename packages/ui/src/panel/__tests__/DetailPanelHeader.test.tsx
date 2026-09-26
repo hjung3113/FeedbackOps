@@ -10,6 +10,7 @@ const KIND_ACCENT: Record<DetailPanelKind, string> = {
   task: 'var(--color-amethyst)',
   survey: 'var(--color-cyan-spark)',
   cluster: 'var(--color-amber)',
+  milestone: 'var(--color-amber)',
 };
 
 const kinds = Object.keys(KIND_ACCENT) as DetailPanelKind[];

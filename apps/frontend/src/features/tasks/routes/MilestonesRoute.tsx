@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Activity, Filter, Plus, Search } from 'lucide-react';
 import * as React from 'react';
+import { MilestoneDetailPanel } from '../components/MilestoneDetailPanel';
 import { MilestoneRow } from '../components/MilestoneRow';
 
 // #514 B2c — /tasks?view=milestones list screen: toolbar (status tabs All /
@@ -178,6 +179,19 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
     });
   }
 
+  // Close clears the selection (param drops from the URL) and never widens
+  // the list: the Managed System scope rides along unchanged.
+  function closeMilestone(): void {
+    setSelectedId(null);
+    void navigate({
+      to: '/tasks',
+      search: {
+        view: 'milestones',
+        ...(managedSystem !== undefined ? { managedSystem } : {}),
+      },
+    });
+  }
+
   if (listQuery.isLoading) {
     return <div className="p-4 text-sm text-text-muted">Loading Milestones…</div>;
   }
@@ -301,6 +315,19 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
             )}
           </div>
         </>
+      }
+      // B2d: the selected row stays in the list; the panel fills the existing
+      // right detail slot (routes-and-layout list/detail rule).
+      detailPanel={
+        selectedId ? (
+          <MilestoneDetailPanel
+            milestoneId={selectedId}
+            onClose={closeMilestone}
+            actorNamesById={actorNamesById}
+            managedSystemNamesById={managedSystemNamesById}
+            analyticsAreaNamesById={analyticsAreaNamesById}
+          />
+        ) : undefined
       }
     />
   );

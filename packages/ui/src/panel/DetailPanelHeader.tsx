@@ -2,7 +2,9 @@ import { X } from 'lucide-react';
 import type * as React from 'react';
 import { cn } from '../utils/cn.js';
 
-export type DetailPanelKind = 'voc' | 'finding' | 'task' | 'survey' | 'cluster';
+// 'milestone' (#514 B2d): label and amber accent match DETAIL_PANEL_KINDS in
+// docs/design-prototype/panel.jsx.
+export type DetailPanelKind = 'voc' | 'finding' | 'task' | 'survey' | 'cluster' | 'milestone';
 
 export interface DetailPanelHeaderProps {
   kind: DetailPanelKind;
@@ -18,6 +20,7 @@ const KIND_LABELS: Record<DetailPanelKind, string> = {
   task: 'Task',
   survey: 'Survey',
   cluster: 'Cluster',
+  milestone: 'Milestone',
 };
 
 const KIND_ACCENT: Record<DetailPanelKind, string> = {
@@ -26,6 +29,7 @@ const KIND_ACCENT: Record<DetailPanelKind, string> = {
   task: 'var(--color-amethyst)',
   survey: 'var(--color-cyan-spark)',
   cluster: 'var(--color-amber)',
+  milestone: 'var(--color-amber)',
 };
 
 export function DetailPanelHeader({

@@ -1,3 +1,4 @@
+import { MILESTONE_IDS, MILESTONE_MANAGED_SYSTEM_IDS } from './fixtures/milestones';
 import { installMockApi } from './support/mock-api';
 import { expect, test } from './support/visual-test';
 
@@ -53,5 +54,36 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(summary).toContainText('Released');
     await expect(summary).toContainText('Schedule risk · mini-timeline 우측 표시');
     await expect(page.getByTestId('milestone-summary-evidence-linked')).toHaveText('0');
+  });
+
+  // #514 B2d — open-panel text assertions (no PNG; B2-pixel owns screenshots).
+  test('opens the detail panel from param and closes while preserving scope', async ({ page }) => {
+    await installMockApi(page, { milestones: true });
+    await page.goto(`/tasks?view=milestones&param=${MILESTONE_IDS.sso}`);
+
+    await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
+    await expect(page.getByText('Why this milestone exists')).toBeVisible();
+    await expect(page.getByText('0 of 1 tasks released')).toBeVisible();
+    await expect(page.getByText('FIN-181')).toBeVisible();
+    for (const label of ['Overview', 'Evidence', 'Activity']) {
+      await expect(page.getByRole('button', { name: label })).toBeVisible();
+    }
+    // Slice C (Timeline) and B2d-tasks (Tasks) are deliberately absent.
+    await expect(page.getByRole('button', { name: 'Timeline' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Tasks/ })).toHaveCount(0);
+
+    await page.getByRole('button', { name: '패널 닫기' }).click();
+    await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toHaveCount(0);
+    expect(page.url()).not.toContain('param=');
+
+    // Closing never drops the Managed System scope (list-context rule).
+    await page.goto(
+      `/tasks?view=milestones&managedSystem=${MILESTONE_MANAGED_SYSTEM_IDS.powerbi}&param=${MILESTONE_IDS.sso}`,
+    );
+    await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
+    await page.getByRole('button', { name: '패널 닫기' }).click();
+    await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toHaveCount(0);
+    expect(page.url()).toContain(`managedSystem=${MILESTONE_MANAGED_SYSTEM_IDS.powerbi}`);
+    expect(page.url()).not.toContain('param=');
   });
 });
