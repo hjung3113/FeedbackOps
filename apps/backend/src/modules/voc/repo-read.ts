@@ -11,6 +11,7 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { entityLinks } from '../../db/schema/core.js';
+import { vocClusterMembers } from '../../db/schema/voc-cluster.js';
 import {
   vocInternalComments,
   vocPermissionDecisionsSeedFixture,
@@ -132,11 +133,24 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     // entity_links row with this VOC as source and a follow-up target
     // (finding / task / task_request). voc ↔ voc related_to and rows that
     // only target this VOC do not count.
+    // #513 N2: a follow-up also exists when one of the VOC's clusters has
+    // an active voc_cluster → finding/task_request link. No cluster status
+    // filter (the create path links from draft clusters) and no membership
+    // soft-delete column exists; a detached link simply is not active.
     wheres.push(sql`NOT EXISTS (
       SELECT 1 FROM ${entityLinks} el
       WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
         AND el.source_type = 'voc' AND el.source_id = ${vocs.id}
         AND el.target_type IN ('finding', 'task', 'task_request')
+    ) AND NOT EXISTS (
+      SELECT 1 FROM ${vocClusterMembers} vcm
+      WHERE vcm.voc_id = ${vocs.id}
+        AND EXISTS (
+          SELECT 1 FROM ${entityLinks} el
+          WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
+            AND el.source_type = 'voc_cluster' AND el.source_id = vcm.cluster_id
+            AND el.target_type IN ('finding', 'task_request')
+        )
     )`);
   }
   if (filterSeverity && filterSeverity.length > 0)

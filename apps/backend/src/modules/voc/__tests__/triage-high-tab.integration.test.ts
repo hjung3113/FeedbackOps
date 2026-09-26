@@ -15,6 +15,10 @@ import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
 import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
 import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
 import {
+  insertVocClusterMemberRow,
+  insertVocClusterRow,
+} from '../../voc-clusters/__tests__/_seed-helpers.js';
+import {
   cleanupReadTestTables,
   grantCapability,
   insertDevActor,
@@ -89,6 +93,25 @@ describe.skipIf(!runIntegration)('GET triage high tab (#411)', () => {
     await migrateHandle.pool.query(
       `delete from task_request.task_requests
        where primary_managed_system_id in (
+         select id from core.managed_systems where workspace_id = $1 and slug like $2
+       )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    // #513 N2: AC-5 seeds clusters and memberships. Members FK-reference
+    // vocs and clusters FK-reference managed systems, so both go before the
+    // shared helper deletes those.
+    await migrateHandle.pool.query(
+      `delete from voc_cluster.voc_cluster_members
+       where cluster_id in (
+         select id from voc_cluster.voc_clusters where workspace_id = $1 and primary_managed_system_id in (
+           select id from core.managed_systems where workspace_id = $1 and slug like $2
+         )
+       )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from voc_cluster.voc_clusters
+       where workspace_id = $1 and primary_managed_system_id in (
          select id from core.managed_systems where workspace_id = $1 and slug like $2
        )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
@@ -337,5 +360,186 @@ describe.skipIf(!runIntegration)('GET triage high tab (#411)', () => {
     expect(displayIds.has(await displayIdOf(findingHigh.id))).toBe(false);
     expect(displayIds.has(await displayIdOf(taskHigh.id))).toBe(false);
     expect(displayIds.has(await displayIdOf(requestHigh.id))).toBe(false);
+  });
+
+  it('AC-5 (#513 N2): cluster follow-up links exclude members, bare membership does not', async () => {
+    const cookie = await createTriageActor('cluster-no-link');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Triage cluster no link',
+    );
+
+    const cluster = (title: string) =>
+      insertVocClusterRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msId,
+        createdBy: adminActorId,
+        title,
+      });
+    const highMember = (title: string) =>
+      insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, title, {
+        severity: 'high',
+      });
+    const join = (clusterId: string, vocId: string) =>
+      insertVocClusterMemberRow(migrateHandle, {
+        clusterId,
+        vocId,
+        addedBy: adminActorId,
+      });
+    const link = async (
+      status: 'active' | 'detached',
+      sourceType: string,
+      sourceId: string,
+      targetType: string,
+      targetId: string,
+      relationType: string,
+    ) => {
+      await migrateHandle.pool.query(
+        `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by,
+          detached_by, detached_at
+        ) values ($1, $2, $3, $4, $5, $6, 'internal_only', $7, $8, $9, $10, $11)`,
+        [
+          WORKSPACE_ID,
+          sourceType,
+          sourceId,
+          targetType,
+          targetId,
+          relationType,
+          status,
+          msId,
+          adminActorId,
+          status === 'detached' ? adminActorId : null,
+          status === 'detached' ? new Date() : null,
+        ],
+      );
+    };
+
+    // OUT: active voc_cluster → finding created_finding.
+    const createdOut = await highMember('High member created_finding');
+    const createdCluster = await cluster('created_finding cluster');
+    await join(createdCluster.id, createdOut.id);
+    const createdFinding = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      sourceType: 'voc_cluster',
+      sourceId: createdCluster.id,
+      status: 'active',
+      createdBy: adminActorId,
+      title: 'AC-5 created_finding target',
+    });
+    await link(
+      'active',
+      'voc_cluster',
+      createdCluster.id,
+      'finding',
+      createdFinding.id,
+      'created_finding',
+    );
+
+    // OUT: active voc_cluster → finding evidence_of.
+    const evidenceOut = await highMember('High member evidence_of');
+    const evidenceCluster = await cluster('evidence_of cluster');
+    await join(evidenceCluster.id, evidenceOut.id);
+    const evidenceFinding = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      sourceType: 'voc_cluster',
+      sourceId: evidenceCluster.id,
+      status: 'active',
+      createdBy: adminActorId,
+      title: 'AC-5 evidence_of target',
+    });
+    await link(
+      'active',
+      'voc_cluster',
+      evidenceCluster.id,
+      'finding',
+      evidenceFinding.id,
+      'evidence_of',
+    );
+
+    // OUT: active voc_cluster → task_request requested_task.
+    const requestOut = await highMember('High member requested_task');
+    const requestCluster = await cluster('requested_task cluster');
+    await join(requestCluster.id, requestOut.id);
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'voc_cluster',
+      sourceId: requestCluster.id,
+      primaryManagedSystemId: msId,
+      requesterActorId: adminActorId,
+    });
+    await link(
+      'active',
+      'voc_cluster',
+      requestCluster.id,
+      'task_request',
+      request.id,
+      'requested_task',
+    );
+
+    // IN: member of a cluster with no follow-up link.
+    const bareMember = await highMember('High member bare cluster');
+    const bareCluster = await cluster('unlinked cluster');
+    await join(bareCluster.id, bareMember.id);
+
+    // IN: the cluster's follow-up link is detached.
+    const detachedMember = await highMember('High member detached link');
+    const detachedCluster = await cluster('detached cluster');
+    await join(detachedCluster.id, detachedMember.id);
+    const detachedFinding = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      sourceType: 'voc_cluster',
+      sourceId: detachedCluster.id,
+      status: 'active',
+      createdBy: adminActorId,
+      title: 'AC-5 detached target',
+    });
+    await link(
+      'detached',
+      'voc_cluster',
+      detachedCluster.id,
+      'finding',
+      detachedFinding.id,
+      'created_finding',
+    );
+
+    // IN: related_to plus a cluster with no follow-up link.
+    const relatedAndCluster = await highMember('High related plus bare cluster');
+    const relatedPeer = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'AC-5 related peer',
+    );
+    await link('active', 'voc', relatedAndCluster.id, 'voc', relatedPeer.id, 'related_to');
+    const secondBareCluster = await cluster('second unlinked cluster');
+    await join(secondBareCluster.id, relatedAndCluster.id);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/vocs?view=triage&tab=high-no-link',
+      headers: headers(cookie),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const displayIds = new Set(
+      (response.json() as VocListBody).items.map((item) => item.display_id),
+    );
+    const expected = new Set([
+      await displayIdOf(bareMember.id),
+      await displayIdOf(detachedMember.id),
+      await displayIdOf(relatedAndCluster.id),
+    ]);
+    expect(displayIds).toEqual(expected);
+    expect(displayIds.has(await displayIdOf(createdOut.id))).toBe(false);
+    expect(displayIds.has(await displayIdOf(evidenceOut.id))).toBe(false);
+    expect(displayIds.has(await displayIdOf(requestOut.id))).toBe(false);
   });
 });
