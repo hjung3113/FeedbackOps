@@ -1289,3 +1289,90 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
   });
 });
+
+// R5 (Astra P2-1) — a delayed create response owned the UI unconditionally:
+// the still-enabled fields invited edits that success would silently drop,
+// and a cancelled form's hook-level success still fired the route callback,
+// closing a newer create session and selecting the abandoned record. Create
+// controls lock while pending, and a dismissed/superseded session's
+// completion is ignored (invalidation semantics aside, no stale UI
+// ownership); same-payload uncertain-retry idempotency is unchanged.
+describe('MilestonesRoute create session (R5)', () => {
+  it('disables the create controls while a submission is pending', async () => {
+    let resolveCreate!: (value: MilestoneDto) => void;
+    vi.mocked(createMilestone).mockImplementationOnce(
+      () =>
+        new Promise<MilestoneDto>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+    fillCreateForm(IDS.msPowerBi);
+    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
+
+    for (const label of [
+      'Title',
+      'Why this milestone exists',
+      'Managed System',
+      'Analytics Area',
+      'Owner',
+      'Start',
+      'Target',
+    ]) {
+      expect(screen.getByLabelText(label)).toBeDisabled();
+    }
+    // Cancel stays available: dismissal is a UI decision, not a server one.
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+
+    resolveCreate(createdRow());
+  });
+
+  it('ignores a dismissed session completion so it cannot close a newer create or select the old record', async () => {
+    let resolveCreate!: (value: MilestoneDto) => void;
+    vi.mocked(createMilestone).mockImplementationOnce(
+      () =>
+        new Promise<MilestoneDto>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(createdRow(), 'Launch review hardening'));
+    renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+
+    // Session A: fill and submit; the response stays pending.
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+    fillCreateForm(IDS.msPowerBi);
+    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+    await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
+
+    // Dismiss A (the Cancel action is an explicit UI decision), then open B.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(screen.queryByTestId('milestone-create-panel')).not.toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+
+    // A completes late: it must neither close B nor select the abandoned row.
+    resolveCreate(createdRow());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
+    expect(vi.mocked(navigateMock)).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: '/tasks',
+        search: expect.objectContaining({ param: IDS.created }),
+      }),
+    );
+    expect(
+      screen.queryByRole('heading', { name: 'Launch review hardening' }),
+    ).not.toBeInTheDocument();
+  });
+});

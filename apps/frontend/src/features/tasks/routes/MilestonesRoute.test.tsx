@@ -1,5 +1,6 @@
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { listMilestones } from '@/lib/api/milestones';
+import { ApiError } from '@/lib/api/types';
 import type { MilestoneDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -372,5 +373,62 @@ describe('MilestonesRoute list (#514 B2c)', () => {
     expect(vi.mocked(fetchAnalyticsAreas)).toHaveBeenCalledWith(
       expect.objectContaining({ includeArchived: true, limit: 500, offset: 1 }),
     );
+  });
+});
+
+// R5 (Astra P2-2) — the summary strip and tab badges read the separately
+// keyed counts query. A settled terminal error on that read must suppress its
+// retained response (same terminal-error contract as the detail panels):
+// totals render as unavailable ('—'), tab badges disappear, the filtered list
+// itself stays successful, and a genuine empty success still shows zeros.
+describe('MilestonesRoute counts suppression (R5)', () => {
+  function renderMilestonesWithClient(): QueryClient {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MilestonesRoute />
+      </QueryClientProvider>,
+    );
+    return queryClient;
+  }
+
+  it('suppresses retained summary and tab counts when the counts refetch is denied', async () => {
+    vi.mocked(listMilestones)
+      .mockResolvedValueOnce({ items: MILESTONES })
+      .mockResolvedValueOnce({ items: MILESTONES })
+      .mockRejectedValueOnce(
+        new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }),
+      );
+    const queryClient = renderMilestonesWithClient();
+    await screen.findByText('MLS-1021');
+    expect(screen.getByTestId('milestone-summary-total')).toHaveTextContent('3');
+
+    await queryClient.invalidateQueries({ queryKey: ['milestones', 'counts', null] });
+
+    // The filtered list itself stays successful; rows remain rendered.
+    expect(screen.getByText('MLS-1021')).toBeInTheDocument();
+    // Retained totals are unavailable, not zero.
+    await waitFor(() =>
+      expect(screen.getByTestId('milestone-summary-total')).toHaveTextContent('—'),
+    );
+    expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('—');
+    expect(screen.getByTestId('milestone-summary-released')).toHaveTextContent('—');
+    // Evidence linked is pinned to exactly 0 and is not counts-derived.
+    expect(screen.getByTestId('milestone-summary-evidence-linked')).toHaveTextContent('0');
+    // Tab badges disappear instead of showing retained distributions.
+    expect(screen.getByRole('tab', { name: /^All/ })).not.toHaveTextContent('3');
+    expect(screen.getByRole('tab', { name: /^In progress/ })).not.toHaveTextContent('1');
+  });
+
+  it('keeps genuine zeros when a successful counts read returns an empty list', async () => {
+    vi.mocked(listMilestones).mockResolvedValue({ items: [] });
+    renderMilestonesWithClient();
+
+    expect(await screen.findByTestId('milestone-summary-total')).toHaveTextContent('0');
+    expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('0');
+    expect(screen.getByTestId('milestone-summary-released')).toHaveTextContent('0');
+    // A genuine zero is not rendered as unavailable; the badge itself stays
+    // hidden at 0 (ListToolbar renders badgeCount only when > 0).
+    expect(screen.getByRole('tab', { name: /^All/ })).not.toHaveTextContent('—');
   });
 });

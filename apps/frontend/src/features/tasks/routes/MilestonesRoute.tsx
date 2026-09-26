@@ -177,7 +177,12 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
   });
 
   const items = listQuery.data?.items ?? [];
-  const countItems = countQuery.data?.items ?? [];
+  // R5 (Astra P2-2) — the counts read is independently keyed; a settled
+  // terminal error suppresses its retained response so totals, status
+  // distribution, and task counts never outlive their permission. Genuine
+  // zeros stay zeros; unavailable renders as '—'.
+  const countsUnavailable = countQuery.error != null;
+  const countItems = countsUnavailable ? [] : (countQuery.data?.items ?? []);
   const actorNamesById = React.useMemo(
     () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
     [actors],
@@ -214,14 +219,19 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
 
   const tabs = React.useMemo<ListToolbarTab[]>(
     () =>
-      STATUS_TABS.map((tab) => ({
-        ...tab,
-        badgeCount:
-          tab.value === 'all'
-            ? countItems.length
-            : countItems.filter((milestone) => milestone.status === tab.value).length,
-      })),
-    [countItems],
+      STATUS_TABS.map((tab) => {
+        // R5 — unavailable counts hide the badge instead of showing retained
+        // or zero distributions (ListToolbar renders badgeCount only when set).
+        if (countsUnavailable) return { ...tab };
+        return {
+          ...tab,
+          badgeCount:
+            tab.value === 'all'
+              ? countItems.length
+              : countItems.filter((milestone) => milestone.status === tab.value).length,
+        };
+      }),
+    [countItems, countsUnavailable],
   );
 
   function applySelection(id: string): void {
@@ -390,13 +400,13 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
             >
               <SummaryCell
                 label="Milestones"
-                value={summary.total}
+                value={countsUnavailable ? null : summary.total}
                 testId="milestone-summary-total"
               />
               <SummaryDivider />
               <SummaryCell
                 label="Tasks in flight"
-                value={summary.inFlight}
+                value={countsUnavailable ? null : summary.inFlight}
                 valueClassName="text-accent-primary"
                 testId="milestone-summary-in-flight"
               />
@@ -409,7 +419,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
               <SummaryDivider />
               <SummaryCell
                 label="Released"
-                value={summary.released}
+                value={countsUnavailable ? null : summary.released}
                 // Prototype colors the Released KPI with the emerald token
                 // (screen-milestones.jsx); `text-success` is not a generated
                 // utility — the semantic class is `text-text-success`.
@@ -551,7 +561,9 @@ function SummaryCell({
   testId,
 }: {
   label: string;
-  value: number;
+  /** R5 — null renders the missing-value em dash: counts unavailable is
+      distinct from a genuine zero. */
+  value: number | null;
   valueClassName?: string;
   testId: string;
 }) {
@@ -562,7 +574,7 @@ function SummaryCell({
         className={`text-base font-semibold tabular-nums ${valueClassName}`}
         data-testid={testId}
       >
-        {value}
+        {value === null ? '—' : value}
       </span>
     </div>
   );

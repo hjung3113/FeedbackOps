@@ -358,6 +358,19 @@ export function MilestoneCreatePanel({
     };
   }
 
+  // R5 (Astra P2-1) — the mounted instance is the create session. React
+  // Query may deliver the mutation result after the form was dismissed or
+  // superseded; such a completion is stale and must not drive the route
+  // (closing a newer create form or selecting the abandoned record). The
+  // server-side create itself is not conflated with the UI dismissal.
+  const sessionMountedRef = React.useRef(true);
+  React.useEffect(() => {
+    sessionMountedRef.current = true;
+    return () => {
+      sessionMountedRef.current = false;
+    };
+  }, []);
+
   const createMutation = useMutation<
     MilestoneDto,
     Error,
@@ -368,6 +381,10 @@ export function MilestoneCreatePanel({
       // The creation completed: the form hands over to the detail panel, and
       // any later session must not inherit this key.
       attemptRef.current = null;
+      // R5 — a completion arriving after dismissal/unmount is a stale
+      // session: ignore it so it cannot close a newer create form or select
+      // the abandoned record.
+      if (!sessionMountedRef.current) return;
       onCreated(created.id);
     },
     onError: (err) => setFormError(err.message),
@@ -425,6 +442,7 @@ export function MilestoneCreatePanel({
             <Input
               aria-label="Title"
               className="w-56"
+              disabled={createMutation.isPending}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
             />
@@ -434,6 +452,7 @@ export function MilestoneCreatePanel({
               aria-label="Why this milestone exists"
               className="w-56"
               rows={3}
+              disabled={createMutation.isPending}
               value={why}
               onChange={(event) => setWhy(event.target.value)}
             />
@@ -443,6 +462,7 @@ export function MilestoneCreatePanel({
               aria-label="Managed System"
               className={selectClassName}
               value={managedSystemId}
+              disabled={createMutation.isPending}
               onChange={(event) => handleManagedSystemChange(event.target.value)}
             >
               <option value="">Select…</option>
@@ -458,6 +478,7 @@ export function MilestoneCreatePanel({
               aria-label="Analytics Area"
               className={selectClassName}
               value={analyticsAreaId}
+              disabled={createMutation.isPending}
               onChange={(event) => setAnalyticsAreaId(event.target.value)}
             >
               <option value="">—</option>
@@ -473,6 +494,7 @@ export function MilestoneCreatePanel({
               aria-label="Owner"
               className={selectClassName}
               value={ownerActorId}
+              disabled={createMutation.isPending}
               onChange={(event) => setOwnerActorId(event.target.value)}
             >
               <option value="">—</option>
@@ -488,6 +510,7 @@ export function MilestoneCreatePanel({
               aria-label="Start"
               className={dateClassName}
               type="date"
+              disabled={createMutation.isPending}
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
             />
@@ -497,6 +520,7 @@ export function MilestoneCreatePanel({
               aria-label="Target"
               className={dateClassName}
               type="date"
+              disabled={createMutation.isPending}
               value={targetDate}
               onChange={(event) => setTargetDate(event.target.value)}
             />
