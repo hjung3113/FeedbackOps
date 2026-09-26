@@ -91,6 +91,8 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   'finding.finding_comments': ['SELECT', 'INSERT'],
   // Migration 0025 models Task lifecycle through status updates, not deletion.
   'task.tasks': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0049 follows the approved #514 plan: Milestones are not hard-deleted.
+  'task.milestones': ['SELECT', 'INSERT', 'UPDATE'],
   // Migration 0048 makes Task progress notes append-only.
   'task.task_comments': ['SELECT', 'INSERT'],
   // Migration 0023 preserves Task Request review/conversion history through

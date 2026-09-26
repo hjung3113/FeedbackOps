@@ -13,7 +13,7 @@
  *   3. `tasks/repo.ts` must not contain UPDATE/INSERT/DELETE against
  *      `task_request.*` or `finding.*` tables.
  *
- * The scanners are exported so the self-test below can prove they are not
+ * The scanners stay local so the self-test below can prove they are not
  * vacuous against in-memory sources.
  */
 import fs from 'node:fs';
@@ -45,7 +45,7 @@ const FOREIGN_SCHEMA_WRITE =
 const STATIC_SPECIFIER = /^[ \t]*(?:import|export)\b[^;'"`]*?(?:\bfrom\s*)?['"]([^'"\n]+)['"]/gm;
 const DYNAMIC_SPECIFIER = /\bimport\(\s*['"]([^'"\n]+)['"]\s*\)/g;
 
-export function importSpecifiers(source: string): string[] {
+function importSpecifiers(source: string): string[] {
   return [
     ...[...source.matchAll(STATIC_SPECIFIER)].map((m) => m[1] as string),
     ...[...source.matchAll(DYNAMIC_SPECIFIER)].map((m) => m[1] as string),
@@ -53,7 +53,7 @@ export function importSpecifiers(source: string): string[] {
 }
 
 /** Resolve a relative specifier against its importer; null for packages/aliases. */
-export function resolveModuleTarget(fromFile: string, specifier: string): string | null {
+function resolveModuleTarget(fromFile: string, specifier: string): string | null {
   if (!specifier.startsWith('.')) return null;
   const resolved = path
     .resolve(path.dirname(fromFile), specifier)
@@ -61,7 +61,7 @@ export function resolveModuleTarget(fromFile: string, specifier: string): string
   return path.relative(MODULES_DIR, resolved).split(path.sep).join('/');
 }
 
-export function findForbiddenRepoImports(source: string, fromFile: string): string[] {
+function findForbiddenRepoImports(source: string, fromFile: string): string[] {
   // Only cross-module repo imports are violations: a module may import its
   // own repo (tasks/service.ts → './repo.js' resolves to tasks/repo).
   const ownModule = path.relative(MODULES_DIR, fromFile).split(path.sep)[0];
@@ -75,20 +75,20 @@ export function findForbiddenRepoImports(source: string, fromFile: string): stri
   });
 }
 
-export function findRoutesImports(source: string, fromFile: string): string[] {
+function findRoutesImports(source: string, fromFile: string): string[] {
   return importSpecifiers(source).filter((spec) => {
     const target = resolveModuleTarget(fromFile, spec);
     return target !== null && (target === 'routes' || target.endsWith('/routes'));
   });
 }
 
-export function stripComments(source: string): string {
+function stripComments(source: string): string {
   // `//` only starts a comment after line start, whitespace, or a statement
   // delimiter — so `https://` and `a//b` inside string literals survive.
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[;{}(),=\s])\/\/[^\n]*/g, '$1');
 }
 
-export function findForeignSchemaWrites(source: string): string[] {
+function findForeignSchemaWrites(source: string): string[] {
   return [...stripComments(source).matchAll(FOREIGN_SCHEMA_WRITE)].map((m) => m[0]);
 }
 
