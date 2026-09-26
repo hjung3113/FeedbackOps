@@ -120,7 +120,8 @@ describe.skipIf(!runIntegration)('milestone source finding (#514 A9)', () => {
     title: string,
     createdAt: string,
     evidenceCount = 0,
-  ): Promise<string> {
+  ): Promise<{ id: string; displayId: string }> {
+    const displayId = `${SLUG_PREFIX}-${randomUUID().slice(0, 8)}`;
     const res = await migrateHandle.pool.query<{ id: string }>(
       `insert into finding.findings (
           workspace_id, display_id, primary_managed_system_id, title, summary,
@@ -130,8 +131,9 @@ describe.skipIf(!runIntegration)('milestone source finding (#514 A9)', () => {
        returning id`,
       [
         WORKSPACE_ID,
-        `${SLUG_PREFIX}-${randomUUID().slice(0, 8)}`,
+        displayId,
         msId,
+        title,
         `${title} summary`,
         evidenceCount,
         milestoneId,
@@ -142,7 +144,7 @@ describe.skipIf(!runIntegration)('milestone source finding (#514 A9)', () => {
       res.rows[0]?.id,
       createdAt,
     ]);
-    return res.rows[0]?.id ?? '';
+    return { id: res.rows[0]?.id ?? '', displayId };
   }
 
   function getMilestone(milestoneId: string) {
@@ -162,7 +164,7 @@ describe.skipIf(!runIntegration)('milestone source finding (#514 A9)', () => {
 
   it('get: linked Finding returns { id, display_id, title, summary, evidence_count }', async () => {
     const id = await seedMilestone('Linked milestone');
-    const findingId = await seedLinkedFinding(id, 'Source finding', '2026-09-01T10:00:00Z', 3);
+    const finding = await seedLinkedFinding(id, 'Source finding', '2026-09-01T10:00:00Z', 3);
 
     const res = await getMilestone(id);
     expect(res.statusCode).toBe(200);
@@ -176,8 +178,8 @@ describe.skipIf(!runIntegration)('milestone source finding (#514 A9)', () => {
       } | null;
     }>().source_finding;
     expect(source).not.toBeNull();
-    expect(source?.id).toBe(findingId);
-    expect(source?.display_id).toMatch(/^FIN-/);
+    expect(source?.id).toBe(finding.id);
+    expect(source?.display_id).toBe(finding.displayId);
     expect(source?.title).toBe('Source finding');
     expect(source?.summary).toBe('Source finding summary');
     expect(source?.evidence_count).toBe(3);
@@ -185,13 +187,13 @@ describe.skipIf(!runIntegration)('milestone source finding (#514 A9)', () => {
 
   it('get: two linked Findings — earliest created_at wins, no 409', async () => {
     const id = await seedMilestone('Two-link milestone');
-    const laterId = await seedLinkedFinding(id, 'Later finding', '2026-09-05T10:00:00Z');
-    const earlierId = await seedLinkedFinding(id, 'Earlier finding', '2026-09-02T10:00:00Z');
+    const later = await seedLinkedFinding(id, 'Later finding', '2026-09-05T10:00:00Z');
+    const earlier = await seedLinkedFinding(id, 'Earlier finding', '2026-09-02T10:00:00Z');
 
     const res = await getMilestone(id);
     expect(res.statusCode).toBe(200);
     const source = res.json<{ source_finding: { id: string } | null }>().source_finding;
-    expect(source?.id).toBe(earlierId);
-    expect(source?.id).not.toBe(laterId);
+    expect(source?.id).toBe(earlier.id);
+    expect(source?.id).not.toBe(later.id);
   });
 });
