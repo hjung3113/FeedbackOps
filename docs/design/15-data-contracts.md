@@ -437,7 +437,8 @@ milestones
 - primary_managed_system_id: uuid, required, immutable after create
 - title: text, required
 - why: text, required
-- status: text, required, default 'planning' (no CHECK constraint; persisted set is the open #514 G-status ADR)
+- status: text, required, default 'planning'; CHECK restricts values to
+  planning | in_progress | blocked | released (ADR-0050)
 - owner_actor_id: uuid, required
 - analytics_area_id: uuid, nullable
 - start_date: date, required

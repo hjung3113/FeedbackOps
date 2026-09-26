@@ -204,7 +204,10 @@ export async function updateMilestone(
   return mapMilestoneRow(row);
 }
 
-/** Lock a workspace-scoped Milestone for update. No status policy (#514 G-status). */
+/**
+ * Lock a workspace-scoped Milestone for update. Status does not gate Task
+ * assignment or conversion (ADR-0050 Decision 5).
+ */
 export async function lockMilestone(
   db: Db | Tx,
   input: { workspaceId: string; milestoneId: string },

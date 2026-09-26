@@ -636,8 +636,8 @@ export function createTasksService(deps: TasksServiceDeps) {
           });
 
           // #514 A10 — validate milestone_id before insertTask. Unknown or
-          // foreign-workspace: not_found; cross-MS: out_of_scope. No status
-          // policy here (G-status owns that).
+          // foreign-workspace: not_found; cross-MS: out_of_scope. Status does
+          // not gate Task assignment or conversion (ADR-0050 Decision 5).
           if (args.input.milestone_id != null) {
             const milestone = await lockMilestone(tx, {
               workspaceId: args.actor.workspace_id,
