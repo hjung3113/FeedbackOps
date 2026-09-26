@@ -210,7 +210,7 @@ export function CoverageRoute(): React.ReactElement {
   return (
     <PageShell contentClassName="max-w-none">
       <section data-testid="integration-coverage">
-        <header className="mb-6 flex items-start justify-between gap-4">
+        <header className="mb-6 flex items-end justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight text-text-primary">Coverage</h1>
             <p className="mt-3 text-sm text-text-muted">{PARTIAL_COVERAGE_SUBTITLE}</p>
