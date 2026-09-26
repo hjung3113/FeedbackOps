@@ -18,6 +18,7 @@ This file owns global API rules, standard error codes, the endpoint contract tem
 | [`api/voc-clusters.md`](api/voc-clusters.md) | VOC Cluster |
 | [`api/findings.md`](api/findings.md) | Finding; Progress notes |
 | [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; Progress notes; PATCH /tasks/:id — Task status transition (Slice 7 #138) |
+| [`api/milestones.md`](api/milestones.md) | Milestone Create Contract; Milestone List Contract; Milestone Detail Contract; Milestone Update Contract; Status; Not implemented |
 | [`api/surveys.md`](api/surveys.md) | Survey; Forbidden Endpoint |
 | [`api/core.md`](api/core.md) | Core / Managed System / Analytics Area |
 | [`api/permissions.md`](api/permissions.md) | Permission |
@@ -115,7 +116,13 @@ Finding
 Task Request
 Task
 Survey
+Milestone
 ```
+
+Milestone's create body field is `primary_managed_system_id`
+([api/milestones.md](api/milestones.md)). `primary_managed_system_id` is what
+this section means by managed_system_id; there is no Milestone create body
+field named `managed_system_id`.
 
 Standalone `POST /tasks` creates internal work from the Tasks surface. VOC and
 Finding follow-up must create Task Request first; approved Task Requests are

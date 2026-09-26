@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 
 import {
+  assignTaskMilestoneRequestSchema,
   convertTaskRequestRequestSchema,
   createTaskCommentRequestSchema,
   linkExistingTaskRequestSchema,
@@ -96,6 +97,52 @@ export const tasksRoutes: FastifyPluginAsync<TasksRoutesOptions> = async (app, o
           taskId: id,
           ifMatch,
           route: 'task.status_update',
+          ...rawBody,
+        }),
+      });
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/tasks/:id/milestone',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig?.mutation
+      ? { config: { rateLimit: rateLimitConfig.mutation as never } }
+      : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new Error('session missing after middleware');
+      const { id } = req.params as { id: string };
+      if (!UUID_REGEX.test(id)) {
+        return sendError(reply, 'validation.failed', 'id must be a valid UUID', {
+          fields: [{ path: ['id'], code: 'invalid' }],
+        });
+      }
+      const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+      const ifMatch = requireIfMatchTimestamp(req.headers as Record<string, unknown>);
+      const rawBody = (req.body ?? {}) as Record<string, unknown>;
+      const parsed = assignTaskMilestoneRequestSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsed.error.issues),
+        });
+      }
+      const result = await tasksService.assignTaskMilestone({
+        actor: {
+          actor_id: sess.actor_id,
+          workspace_id: sess.workspace_id,
+          role_level: sess.role_level,
+        },
+        taskId: id,
+        ifMatch,
+        input: parsed.data,
+        idempotencyKey,
+        requestHash: hashRequestBody({
+          taskId: id,
+          ifMatch,
+          route: 'task.milestone_assign',
           ...rawBody,
         }),
       });

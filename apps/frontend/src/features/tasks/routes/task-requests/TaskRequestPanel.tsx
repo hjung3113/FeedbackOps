@@ -280,10 +280,18 @@ export function TaskRequestPanel({
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-text-muted">
                   Milestone
-                  <input type="hidden" value={conversion.milestoneId} readOnly />
-                  <span className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-muted">
-                    Later slice
-                  </span>
+                  <select
+                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                    value={conversion.milestoneId}
+                    onChange={(event) => conversion.setMilestoneId(event.target.value)}
+                  >
+                    <option value="">None</option>
+                    {conversion.milestones?.map((milestone) => (
+                      <option key={milestone.id} value={milestone.id}>
+                        {milestone.title}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <Button
                   type="submit"

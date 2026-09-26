@@ -4,15 +4,16 @@
  * Plain fs + regex over the module sources (no DB, always runs):
  *   1. voc-clusters / tasks / saved-views must not import another module's
  *      repo (`findings/repo`, `findings/repo-read`, `entity-links/repo`,
- *      `task-requests/repo`) — cross-module access goes through the owning
- *      module's application seam (`commands.ts`) or the shared list contracts in `@fops/shared`.
+ *      `task-requests/repo`, `tasks/repo`, `milestones/repo`) — cross-module
+ *      access goes through the owning module's application seam (`commands.ts`)
+ *      or the shared list contracts in `@fops/shared`.
  *   2. No application file under modules/ (anything but `routes.ts` and
  *      `index.ts` barrels) may import a `routes` module (HTTP modules are
  *      not contracts).
  *   3. `tasks/repo.ts` must not contain UPDATE/INSERT/DELETE against
  *      `task_request.*` or `finding.*` tables.
  *
- * The scanners are exported so the self-test below can prove they are not
+ * The scanners stay local so the self-test below can prove they are not
  * vacuous against in-memory sources.
  */
 import fs from 'node:fs';
@@ -27,6 +28,8 @@ const FORBIDDEN_REPO_TARGETS = new Set([
   'findings/repo-read',
   'entity-links/repo',
   'task-requests/repo',
+  'tasks/repo',
+  'milestones/repo',
 ]);
 const FOREIGN_SCHEMA_WRITE =
   /\b(?:update|insert\s+into|delete\s+from)\s+(?:task_request\.|finding\.)/gi;
@@ -42,7 +45,7 @@ const FOREIGN_SCHEMA_WRITE =
 const STATIC_SPECIFIER = /^[ \t]*(?:import|export)\b[^;'"`]*?(?:\bfrom\s*)?['"]([^'"\n]+)['"]/gm;
 const DYNAMIC_SPECIFIER = /\bimport\(\s*['"]([^'"\n]+)['"]\s*\)/g;
 
-export function importSpecifiers(source: string): string[] {
+function importSpecifiers(source: string): string[] {
   return [
     ...[...source.matchAll(STATIC_SPECIFIER)].map((m) => m[1] as string),
     ...[...source.matchAll(DYNAMIC_SPECIFIER)].map((m) => m[1] as string),
@@ -50,7 +53,7 @@ export function importSpecifiers(source: string): string[] {
 }
 
 /** Resolve a relative specifier against its importer; null for packages/aliases. */
-export function resolveModuleTarget(fromFile: string, specifier: string): string | null {
+function resolveModuleTarget(fromFile: string, specifier: string): string | null {
   if (!specifier.startsWith('.')) return null;
   const resolved = path
     .resolve(path.dirname(fromFile), specifier)
@@ -58,27 +61,34 @@ export function resolveModuleTarget(fromFile: string, specifier: string): string
   return path.relative(MODULES_DIR, resolved).split(path.sep).join('/');
 }
 
-export function findForbiddenRepoImports(source: string, fromFile: string): string[] {
+function findForbiddenRepoImports(source: string, fromFile: string): string[] {
+  // Only cross-module repo imports are violations: a module may import its
+  // own repo (tasks/service.ts → './repo.js' resolves to tasks/repo).
+  const ownModule = path.relative(MODULES_DIR, fromFile).split(path.sep)[0];
   return importSpecifiers(source).filter((spec) => {
     const target = resolveModuleTarget(fromFile, spec);
-    return target !== null && FORBIDDEN_REPO_TARGETS.has(target);
+    return (
+      target !== null &&
+      target.split(path.sep)[0] !== ownModule &&
+      FORBIDDEN_REPO_TARGETS.has(target)
+    );
   });
 }
 
-export function findRoutesImports(source: string, fromFile: string): string[] {
+function findRoutesImports(source: string, fromFile: string): string[] {
   return importSpecifiers(source).filter((spec) => {
     const target = resolveModuleTarget(fromFile, spec);
     return target !== null && (target === 'routes' || target.endsWith('/routes'));
   });
 }
 
-export function stripComments(source: string): string {
+function stripComments(source: string): string {
   // `//` only starts a comment after line start, whitespace, or a statement
   // delimiter — so `https://` and `a//b` inside string literals survive.
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[;{}(),=\s])\/\/[^\n]*/g, '$1');
 }
 
-export function findForeignSchemaWrites(source: string): string[] {
+function findForeignSchemaWrites(source: string): string[] {
   return [...stripComments(source).matchAll(FOREIGN_SCHEMA_WRITE)].map((m) => m[0]);
 }
 
@@ -112,6 +122,12 @@ describe('module seam recurrence guard (#391)', () => {
     expect(flagged(`export { y } from '../entity-links/repo.js';`)).toHaveLength(1);
     expect(flagged(`import {\n  a,\n  b as c,\n} from '../findings/repo.js';`)).toHaveLength(1); // multi-line
     expect(flagged(`const m = await import('../findings/repo.js');`)).toHaveLength(1);
+    // #514 A1: tasks/repo and milestones/repo are cross-module seams too —
+    // reported when another module imports them, allowed inside the owner.
+    const sibling = path.join(MODULES_DIR, 'voc-clusters/service.ts');
+    expect(flagged(`import { x } from '../tasks/repo.js';`, sibling)).toHaveLength(1);
+    expect(flagged(`import { x } from '../milestones/repo.js';`, sibling)).toHaveLength(1);
+    expect(flagged(`import { x } from './repo.js';`)).toEqual([]); // own module's repo
     // Nested helper: different depth resolves to the same forbidden target.
     expect(flagged(`import { x } from '../../findings/repo.js';`, nested)).toHaveLength(1);
     expect(flagged(`import { x } from '../findings/repo.js';`, nested)).toEqual([]); // tasks/findings/repo — not it
@@ -159,9 +175,9 @@ describe('module seam recurrence guard (#391)', () => {
     expect(findForeignSchemaWrites('-- UPDATE finding.findings SET x')).not.toEqual([]);
   });
 
-  it('voc-clusters/tasks/saved-views import owning module seams, not repos', () => {
+  it('voc-clusters/tasks/saved-views/milestones import owning module seams, not repos', () => {
     const violations: string[] = [];
-    for (const dir of ['voc-clusters', 'tasks', 'saved-views']) {
+    for (const dir of ['voc-clusters', 'tasks', 'saved-views', 'milestones']) {
       for (const file of listTsFiles(path.join(MODULES_DIR, dir))) {
         for (const match of findForbiddenRepoImports(fs.readFileSync(file, 'utf8'), file)) {
           violations.push(`${path.relative(MODULES_DIR, file)}: ${match}`);
@@ -195,5 +211,11 @@ describe('module seam recurrence guard (#391)', () => {
       violations.map((match) => `modules/tasks/repo.ts: ${match}`),
       'cross-schema writes found in tasks/repo.ts',
     ).toEqual([]);
+  });
+
+  it('milestones/repo.ts mentions neither task.tasks nor finding.findings (#514 A4)', () => {
+    const repoSource = fs.readFileSync(path.join(MODULES_DIR, 'milestones/repo.ts'), 'utf8');
+    expect(repoSource).not.toContain('task.tasks');
+    expect(repoSource).not.toContain('finding.findings');
   });
 });

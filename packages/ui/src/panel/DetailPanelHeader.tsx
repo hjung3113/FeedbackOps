@@ -2,11 +2,18 @@ import { X } from 'lucide-react';
 import type * as React from 'react';
 import { cn } from '../utils/cn.js';
 
-export type DetailPanelKind = 'voc' | 'finding' | 'task' | 'survey' | 'cluster';
+// 'milestone' (#514 B2d): label and amber accent match DETAIL_PANEL_KINDS in
+// docs/design-prototype/panel.jsx.
+export type DetailPanelKind = 'voc' | 'finding' | 'task' | 'survey' | 'cluster' | 'milestone';
 
 export interface DetailPanelHeaderProps {
   kind: DetailPanelKind;
-  id: string;
+  /**
+   * Display id. Omit while the record is pending/denied/unavailable so the
+   * header chrome (and its close action) still mounts without showing any
+   * unavailable record data.
+   */
+  id?: string;
   onClose: () => void;
   extras?: React.ReactNode;
   className?: string;
@@ -18,6 +25,7 @@ const KIND_LABELS: Record<DetailPanelKind, string> = {
   task: 'Task',
   survey: 'Survey',
   cluster: 'Cluster',
+  milestone: 'Milestone',
 };
 
 const KIND_ACCENT: Record<DetailPanelKind, string> = {
@@ -26,6 +34,7 @@ const KIND_ACCENT: Record<DetailPanelKind, string> = {
   task: 'var(--color-amethyst)',
   survey: 'var(--color-cyan-spark)',
   cluster: 'var(--color-amber)',
+  milestone: 'var(--color-amber)',
 };
 
 export function DetailPanelHeader({
@@ -35,6 +44,7 @@ export function DetailPanelHeader({
   extras,
   className,
 }: DetailPanelHeaderProps) {
+  const isMilestone = kind === 'milestone';
   const accentColor = KIND_ACCENT[kind];
 
   return (
@@ -46,20 +56,40 @@ export function DetailPanelHeader({
         className,
       )}
     >
-      {/* 4px accent stripe on the left */}
-      <div aria-hidden="true" style={{ width: 4, flexShrink: 0, backgroundColor: accentColor }} />
+      {!isMilestone && (
+        <div aria-hidden="true" style={{ width: 4, flexShrink: 0, backgroundColor: accentColor }} />
+      )}
 
       {/* Content row */}
       <div
         data-testid="detail-panel-header-content"
-        className="flex flex-1 items-center gap-3 pl-4 pr-3 min-w-0"
+        className={cn('flex flex-1 items-center gap-3 pr-3 min-w-0', isMilestone ? 'pl-5' : 'pl-4')}
       >
-        {/* Kind label + id */}
-        <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-xs text-text-muted shrink-0 uppercase tracking-wide">
-            {KIND_LABELS[kind]}
-          </span>
-          <span className="font-mono text-xs text-text-muted leading-none">{id}</span>
+        {/* Kind label + id (id only when the caller has it) */}
+        <div className={cn('flex gap-2 min-w-0', isMilestone ? 'items-center' : 'items-baseline')}>
+          {isMilestone ? (
+            <span
+              className="inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-medium leading-none tracking-[0.01em]"
+              style={{
+                color: 'rgb(var(--color-amber))',
+                backgroundColor: 'rgb(var(--color-amber) / 12%)',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: 'rgb(var(--color-amber))' }}
+              />
+              {KIND_LABELS[kind]}
+            </span>
+          ) : (
+            <span className="text-xs text-text-muted shrink-0 uppercase tracking-wide">
+              {KIND_LABELS[kind]}
+            </span>
+          )}
+          {id !== undefined && (
+            <span className="font-mono text-xs text-text-muted leading-none">{id}</span>
+          )}
         </div>
 
         {/* Extras slot */}

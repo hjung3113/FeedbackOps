@@ -104,6 +104,15 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
           )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
+    // Milestones before their Managed Systems; after tasks (FK RESTRICT).
+    await migrateHandle.pool.query(
+      `delete from task.milestones
+        where workspace_id = $1
+          and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await migrateHandle.pool.query(
       `delete from task_request.task_requests
         where workspace_id = $1
@@ -1335,5 +1344,120 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       [WORKSPACE_ID, request.id],
     );
     expect(count.rows[0]?.n).toBe(1);
+  });
+  // #514 A10 — convert validates milestone_id through lockMilestone.
+  async function seedMilestone(msId: string, workspaceId = WORKSPACE_ID): Promise<string> {
+    const row = await migrateHandle.pool.query<{ id: string }>(
+      `insert into task.milestones (
+          workspace_id, display_id, primary_managed_system_id, title, why,
+          owner_actor_id, start_date, target_date, created_by
+        )
+       values ($1, $2, $3, 'Milestone', 'why', $4, '2026-10-01', '2026-12-31', $4)
+       returning id`,
+      [workspaceId, `MLS-${randomUUID().slice(0, 8)}`, msId, adminActorId],
+    );
+    return row.rows[0]?.id ?? '';
+  }
+
+  it('convert rejects an unknown milestone with not_found and persists nothing (#514 A10)', async () => {
+    const request = await seedApprovedTaskRequest();
+
+    const res = await convert(adminCookie, request.id, {
+      title: 'Unknown milestone conversion',
+      milestone_id: randomUUID(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ code: string }>().code).toBe('not_found.record');
+    await expectNoConversionSideEffects(request.id);
+  });
+
+  it('convert rejects a milestone from another workspace with not_found and persists nothing (#514 A10)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const otherWs = await dbHandle.pool.query<{ id: string }>(
+      'insert into core.workspaces (name) values ($1) returning id',
+      ['Task convert milestone workspace'],
+    );
+    const otherWsId = otherWs.rows[0]?.id;
+    if (!otherWsId) throw new Error('workspace seed failed');
+    const otherWsMsId = await insertMsDirectly(
+      dbHandle,
+      otherWsId,
+      uid(SLUG_PREFIX),
+      'Cross-workspace milestone MS',
+    );
+    const milestoneId = await seedMilestone(otherWsMsId, otherWsId);
+
+    try {
+      const res = await convert(adminCookie, request.id, {
+        title: 'Cross-workspace milestone conversion',
+        milestone_id: milestoneId,
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json<{ code: string }>().code).toBe('not_found.record');
+      await expectNoConversionSideEffects(request.id);
+    } finally {
+      // fops_app has no DELETE on task.milestones: use the migrate role.
+      await migrateHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
+      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [
+        otherWsMsId,
+      ]);
+      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [otherWsId]);
+    }
+  });
+
+  it('convert rejects a milestone from another managed system with out_of_scope and persists nothing (#514 A10)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const otherMsId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Other MS milestone',
+    );
+    const milestoneId = await seedMilestone(otherMsId);
+
+    try {
+      const res = await convert(adminCookie, request.id, {
+        title: 'Cross-MS milestone conversion',
+        milestone_id: milestoneId,
+      });
+
+      expect(res.statusCode).toBe(422);
+      expect(res.json()).toMatchObject({
+        code: 'validation.failed',
+        detail: { fields: [{ path: ['milestone_id'], code: 'out_of_scope' }] },
+      });
+      await expectNoConversionSideEffects(request.id);
+    } finally {
+      await migrateHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
+      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [otherMsId]);
+    }
+  });
+
+  it('convert stores a planning milestone on the request managed system (#514 A10)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const milestoneId = await seedMilestone(request.msId);
+    // No finally delete: the converted task references the milestone; the
+    // shared FK-safe cleanup (tasks before milestones) removes it.
+
+    const res = await convert(adminCookie, request.id, {
+      title: 'Same-MS milestone conversion',
+      milestone_id: milestoneId,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      milestone_id: milestoneId,
+      primary_managed_system_id: request.msId,
+      source_task_request_id: request.id,
+    });
+
+    const stored = await dbHandle.pool.query<{ status: string; milestone_id: string }>(
+      'select status, milestone_id from task.tasks where source_task_request_id = $1',
+      [request.id],
+    );
+    expect(stored.rows[0]?.milestone_id).toBe(milestoneId);
+    expect(stored.rows[0]?.status).toBe('backlog');
   });
 });

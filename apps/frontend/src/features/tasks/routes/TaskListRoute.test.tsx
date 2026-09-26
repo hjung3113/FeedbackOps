@@ -1,8 +1,9 @@
 import { getTask, listTasks } from '@/lib/api';
+import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
-import type { TaskDetailDto } from '@fops/shared';
+import type { MilestoneDetailDto, TaskDetailDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -87,9 +88,14 @@ vi.mock('@/lib/api', () => {
   };
 });
 
-function renderWithClient(ui: React.ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+vi.mock('@/lib/api/milestones', () => ({
+  getMilestone: vi.fn(),
+}));
+
+function renderWithClient(ui: React.ReactElement, queryClient?: QueryClient) {
+  const client = queryClient ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return client;
 }
 
 describe('TaskListRoute display ids', () => {
@@ -212,7 +218,10 @@ const VOC_ID = '50000000-0000-0000-0000-000000000005';
 const FINDING_ID = '40000000-0000-0000-0000-000000000004';
 const VOC_TITLE = '로그인 지연 불만';
 
-function taskDetailFixture(source: TaskDetailDto['source']): TaskDetailDto {
+function taskDetailFixture(
+  source: TaskDetailDto['source'],
+  milestoneId: string | null = null,
+): TaskDetailDto {
   return {
     id: '10000000-0000-0000-0000-000000000001',
     workspace_id: '90000000-0000-0000-0000-000000000009',
@@ -223,7 +232,7 @@ function taskDetailFixture(source: TaskDetailDto['source']): TaskDetailDto {
     priority: 'high',
     assignee_actor_id: '20000000-0000-0000-0000-000000000002',
     due_date: null,
-    milestone_id: null,
+    milestone_id: milestoneId,
     analytics_area_id: null,
     source_task_request_id: null,
     created_by: '20000000-0000-0000-0000-000000000002',
@@ -233,7 +242,7 @@ function taskDetailFixture(source: TaskDetailDto['source']): TaskDetailDto {
   };
 }
 
-function renderTaskDetailPanel(): void {
+function renderTaskDetailPanel(queryClient?: QueryClient): void {
   renderWithClient(
     <TaskDetailPanel
       taskId="10000000-0000-0000-0000-000000000001"
@@ -241,6 +250,7 @@ function renderTaskDetailPanel(): void {
       managedSystemNamesById={new Map()}
       onClose={vi.fn()}
     />,
+    queryClient,
   );
 }
 
@@ -377,5 +387,124 @@ describe('Task detail Linked context source VOC (#378)', () => {
     expect(trail.querySelector('[data-entity-type="voc"]')).toBeNull();
     // Positive control: the Finding node still renders as before.
     expect(within(trail).getByRole('button', { name: /리포트 속도 저하/ })).toBeInTheDocument();
+  });
+});
+
+describe('Task detail Milestone row (#514 B3b)', () => {
+  const MILESTONE_ID = '60000000-0000-0000-0000-000000000006';
+
+  function milestoneFixture(): MilestoneDetailDto {
+    return {
+      id: MILESTONE_ID,
+      workspace_id: '90000000-0000-0000-0000-000000000009',
+      display_id: 'MLS-1000',
+      primary_managed_system_id: '30000000-0000-0000-0000-000000000003',
+      title: 'Q3 결제 지표 개선',
+      why: '결제 전환율 개선',
+      status: 'in_progress',
+      owner_actor_id: '20000000-0000-0000-0000-000000000002',
+      analytics_area_id: null,
+      start_date: '2026-07-01',
+      target_date: '2026-09-30',
+      created_by: '20000000-0000-0000-0000-000000000002',
+      created_at: '2026-07-01T00:00:00.000Z',
+      updated_at: '2026-07-02T00:00:00.000Z',
+      progress: { released_done: 0, in_flight: 2, queued: 1, total: 3, percent: 0 },
+      source_finding: null,
+    };
+  }
+
+  async function milestoneRow(): Promise<HTMLElement> {
+    const row = (await screen.findByText('Milestone')).parentElement;
+    if (!(row instanceof HTMLElement)) throw new Error('Milestone row not found');
+    return row;
+  }
+
+  it('shows the label Milestone and — when milestone_id is null', async () => {
+    vi.mocked(getMilestone).mockClear();
+    renderTaskDetailPanel();
+
+    const row = await milestoneRow();
+    expect(within(row).getByText('—')).toBeInTheDocument();
+    // The row is a read: nothing to fetch without a linked milestone.
+    expect(getMilestone).not.toHaveBeenCalled();
+  });
+
+  it('fetches the linked milestone via getMilestone and shows its display_id and title', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    vi.mocked(getMilestone).mockResolvedValueOnce(milestoneFixture());
+    renderTaskDetailPanel();
+
+    expect(await screen.findByText('MLS-1000 Q3 결제 지표 개선')).toBeInTheDocument();
+    expect(getMilestone).toHaveBeenCalledWith(MILESTONE_ID, expect.anything());
+  });
+
+  it('shows — when the milestone fetch returns 404', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    let rejectRequest!: (reason: ApiError) => void;
+    const request = new Promise<MilestoneDetailDto>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    const notFound = new ApiError(404, {
+      code: 'not_found.record',
+      message: 'milestone not found',
+    });
+    vi.mocked(getMilestone).mockReturnValueOnce(request);
+    renderTaskDetailPanel();
+
+    const row = await milestoneRow();
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledWith(MILESTONE_ID, expect.anything());
+    });
+    await act(async () => {
+      rejectRequest(notFound);
+      await expect(request).rejects.toBe(notFound);
+    });
+    await waitFor(() => {
+      expect(within(row).getByText('—')).toBeInTheDocument();
+      expect(within(row).queryByText('MLS-1000')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows — after a 404 refetch when the cached milestone was previously visible', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    let rejectRequest!: (reason: ApiError) => void;
+    const request = new Promise<MilestoneDetailDto>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    const notFound = new ApiError(404, {
+      code: 'not_found.record',
+      message: 'milestone not found',
+    });
+    vi.mocked(getMilestone).mockReturnValueOnce(request);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['milestone', MILESTONE_ID], milestoneFixture(), { updatedAt: 0 });
+    renderTaskDetailPanel(queryClient);
+
+    const row = await milestoneRow();
+    expect(within(row).getByText('MLS-1000 Q3 결제 지표 개선')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledWith(MILESTONE_ID, expect.anything());
+    });
+    await act(async () => {
+      rejectRequest(notFound);
+      await expect(request).rejects.toBe(notFound);
+    });
+    await waitFor(() => {
+      expect(within(row).getByText('—')).toBeInTheDocument();
+      expect(within(row).queryByText('MLS-1000 Q3 결제 지표 개선')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders no control that assigns a milestone (no POST /tasks/:id/milestone)', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    vi.mocked(getMilestone).mockResolvedValueOnce(milestoneFixture());
+    renderTaskDetailPanel();
+
+    expect(await screen.findByText('MLS-1000 Q3 결제 지표 개선')).toBeInTheDocument();
+    // The row is a read: no picker and no action button live in it.
+    const row = await milestoneRow();
+    expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button')).not.toBeInTheDocument();
   });
 });

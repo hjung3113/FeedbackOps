@@ -1,5 +1,6 @@
 import { ProgressNotesSection } from '@/features/cross-system/progress-notes/ProgressNotesSection';
 import { getTask } from '@/lib/api';
+import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
@@ -75,6 +76,17 @@ export function TaskDetailPanel({
     queryFn: ({ signal }) => getTask(taskId, signal),
     staleTime: 30 * 1000,
   });
+  // #514 B3b: the Milestone row is a read — GET /milestones/:id only. The
+  // assign/unassign POST has no control in this panel.
+  const milestoneId = taskQuery.data?.milestone_id ?? null;
+  const milestoneQuery = useQuery({
+    queryKey: ['milestone', milestoneId] as const,
+    queryFn: ({ signal }) => getMilestone(milestoneId as string, signal),
+    enabled: milestoneId !== null,
+    staleTime: 30 * 1000,
+  });
+  const milestoneNotFound =
+    milestoneQuery.error instanceof ApiError && milestoneQuery.error.status === 404;
   const { data: me } = useMe();
   // #377: backend gates Task comment GET+POST behind finding.manage + elevated
   // role on the Task's Managed System — same gate drives the composer hint.
@@ -164,6 +176,15 @@ export function TaskDetailPanel({
             <ManagedSystemPill
               name={managedSystemNamesById.get(task.primary_managed_system_id) ?? 'Managed System'}
             />
+          </FieldRow>
+          <FieldRow label="Milestone">
+            {milestoneQuery.data && !milestoneNotFound ? (
+              <span className="text-sm text-text-primary">
+                {milestoneQuery.data.display_id} {milestoneQuery.data.title}
+              </span>
+            ) : (
+              <span className="text-text-muted">—</span>
+            )}
           </FieldRow>
         </div>
 

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  type AssignTaskMilestoneRequest,
   type ConvertTaskRequestRequest,
   type CreateTaskCommentRequest,
   type LinkExistingTaskRequest,
@@ -35,6 +36,7 @@ import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { linkTaskToFinding } from '../findings/commands.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
+import { lockMilestone } from '../milestones/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   type TaskRequestRow,
@@ -56,6 +58,7 @@ import {
   listTasksByWorkspace,
   lockTaskById,
   resolveTaskSource,
+  updateTaskMilestone,
   updateTaskStatus,
 } from './repo.js';
 
@@ -632,6 +635,26 @@ export function createTasksService(deps: TasksServiceDeps) {
             managedSystemId: taskRequest.primary_managed_system_id,
           });
 
+          // #514 A10 — validate milestone_id before insertTask. Unknown or
+          // foreign-workspace: not_found; cross-MS: out_of_scope. No status
+          // policy here (G-status owns that).
+          if (args.input.milestone_id != null) {
+            const milestone = await lockMilestone(tx, {
+              workspaceId: args.actor.workspace_id,
+              milestoneId: args.input.milestone_id,
+            });
+            if (!milestone) {
+              throw new HttpError('not_found.record', 'milestone not found');
+            }
+            if (milestone.primary_managed_system_id !== taskRequest.primary_managed_system_id) {
+              throw new HttpError(
+                'validation.failed',
+                'milestone does not belong to the task request managed system',
+                { fields: [{ path: ['milestone_id'], code: 'out_of_scope' }] },
+              );
+            }
+          }
+
           const task = await insertTask(tx, {
             workspaceId: args.actor.workspace_id,
             primaryManagedSystemId: taskRequest.primary_managed_system_id,
@@ -890,6 +913,92 @@ export function createTasksService(deps: TasksServiceDeps) {
     });
   }
 
+  async function assignTaskMilestone(args: {
+    actor: TasksActor;
+    taskId: string;
+    ifMatch: string;
+    input: AssignTaskMilestoneRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: TaskDto }> {
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const task = await lockTaskById(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: args.taskId,
+          });
+          if (!task) throw new HttpError('not_found.record', 'task not found');
+
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              task.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          if (task.updated_at.toISOString() !== args.ifMatch) {
+            throw new HttpError('conflict.stale_write', 'task updated_at does not match If-Match', {
+              current_updated_at: task.updated_at.toISOString(),
+            });
+          }
+
+          // ADR-0050 Decision 5: assigning or unassigning a Task does not
+          // consult Milestone status. Existence, workspace, and Managed System
+          // checks stay, so a released Milestone in the caller's workspace on
+          // the Task's Managed System is a successful assign.
+          if (args.input.milestone_id != null) {
+            const milestone = await lockMilestone(tx, {
+              workspaceId: args.actor.workspace_id,
+              milestoneId: args.input.milestone_id,
+            });
+            if (!milestone) {
+              throw new HttpError('not_found.record', 'milestone not found');
+            }
+            if (milestone.primary_managed_system_id !== task.primary_managed_system_id) {
+              throw new HttpError(
+                'validation.failed',
+                'milestone does not belong to the task managed system',
+                { fields: [{ path: ['milestone_id'], code: 'out_of_scope' }] },
+              );
+            }
+          }
+
+          const updatedTask = await updateTaskMilestone(tx, {
+            workspaceId: args.actor.workspace_id,
+            taskId: task.id,
+            milestoneId: args.input.milestone_id,
+          });
+
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'task_milestone_assigned',
+            subject_type: 'task',
+            subject_id: task.id,
+            summary: 'Task milestone assigned',
+            detail: {
+              from_milestone_id: task.milestone_id,
+              to_milestone_id: updatedTask.milestone_id,
+            },
+          });
+
+          return { status: 200, body: taskToDto(updatedTask) };
+        },
+      );
+    });
+  }
+
   async function listTasks(args: {
     actor: TasksActor;
     query: ListTasksQuery;
@@ -909,6 +1018,7 @@ export function createTasksService(deps: TasksServiceDeps) {
       ...(assigneeActorId !== undefined ? { assigneeActorId } : {}),
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
       ...(args.query.public_update !== undefined ? { publicUpdate: args.query.public_update } : {}),
+      ...(args.query.milestone_id !== undefined ? { milestoneId: args.query.milestone_id } : {}),
     });
     const items: TaskDto[] = [];
     for (const row of rows) {
@@ -930,6 +1040,7 @@ export function createTasksService(deps: TasksServiceDeps) {
     convertTaskRequest,
     linkExistingTask,
     patchTaskStatus,
+    assignTaskMilestone,
     listTasks,
   };
 }

@@ -1,7 +1,7 @@
 // Analytics Areas registry (Slice 2 #11).
 
-import { ApiError, type ApiErrorEnvelope } from './types';
 import { UnauthenticatedError } from './auth';
+import { ApiError, type ApiErrorEnvelope } from './types';
 
 export interface AnalyticsAreaDto {
   id: string;
@@ -41,11 +41,16 @@ async function readEnvelope(res: Response): Promise<never> {
 export async function fetchAnalyticsAreas(options?: {
   managedSystemId?: string;
   includeArchived?: boolean;
+  /** Page size; the endpoint caps this at 500. */
+  limit?: number;
+  offset?: number;
   signal?: AbortSignal;
 }): Promise<{ items: AnalyticsAreaDto[]; total: number }> {
   const params = new URLSearchParams();
   if (options?.managedSystemId) params.set('managed_system_id', options.managedSystemId);
   if (options?.includeArchived) params.set('include_archived', 'true');
+  if (options?.limit !== undefined) params.set('limit', String(options.limit));
+  if (options?.offset !== undefined) params.set('offset', String(options.offset));
   const url = `/analytics-areas${params.size ? `?${params.toString()}` : ''}`;
   const init: RequestInit = { credentials: 'same-origin' };
   if (options?.signal) init.signal = options.signal;

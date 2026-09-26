@@ -215,7 +215,9 @@ describe('migrations directory', () => {
       /CREATE FUNCTION pgboss\.create_queue\(queue_name text, options jsonb\)[\s\S]*SECURITY DEFINER/,
     );
     expect(sql).toMatch(/options->>'partition' = 'true'[\s\S]*RAISE EXCEPTION/);
-    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION pgboss\.create_queue\(text, jsonb\) TO fops_app/);
+    expect(sql).toMatch(
+      /GRANT EXECUTE ON FUNCTION pgboss\.create_queue\(text, jsonb\) TO fops_app/,
+    );
   });
 
   it('Slice 2 #8 review-followup migration 0008 adds FK indexes + symmetric grants + owner pin + strict shim guard', () => {
@@ -322,6 +324,59 @@ describe('migrations directory', () => {
       /GRANT\s+(?:SELECT,\s*)?DELETE[\s\S]*workspace_display_counters[\s\S]*TO fops_app/i,
     );
   });
+
+  it('#514 A2 migration 0049 creates milestone domain with non-null FK guard first', () => {
+    const sql = readFileSync(join(MIGRATIONS_DIR, '0049_milestone_domain.sql'), 'utf8');
+
+    // The guard is one complete DO block inside the migration, not an
+    // assumed-zero count from elsewhere in the file.
+    const doStart = sql.search(/DO\s*\$\$/);
+    const doEnd = sql.indexOf('$$;', doStart);
+    expect(doStart).toBeGreaterThanOrEqual(0);
+    expect(doEnd).toBeGreaterThan(doStart);
+    const doBlock = sql.slice(doStart, doEnd);
+
+    // Both non-null counts are assigned inside that block.
+    expect(doBlock).toMatch(
+      /SELECT count\(\*\)\s+INTO\s+v_task_milestone_rows[\s\S]*FROM\s+"task"\."tasks"[\s\S]*WHERE\s+"milestone_id"\s+IS\s+NOT\s+NULL/i,
+    );
+    expect(doBlock).toMatch(
+      /SELECT count\(\*\)\s+INTO\s+v_finding_milestone_rows[\s\S]*FROM\s+"finding"\."findings"[\s\S]*WHERE\s+"linked_milestone_id"\s+IS\s+NOT\s+NULL/i,
+    );
+    expect(doBlock).toMatch(
+      /v_task_milestone_rows\s*<>\s*0\s+OR\s+v_finding_milestone_rows\s*<>\s*0/i,
+    );
+
+    // The exception names both counts and interpolates both diagnostics.
+    expect(doBlock).toMatch(/RAISE EXCEPTION/i);
+    expect(doBlock).toMatch(/task\.tasks\.milestone_id/i);
+    expect(doBlock).toMatch(/finding\.findings\.linked_milestone_id/i);
+    expect(doBlock).toMatch(
+      /RAISE EXCEPTION(?s:[^;]*%[^;]*%[^;]*v_task_milestone_rows,\s*v_finding_milestone_rows)\s*;/i,
+    );
+
+    // Both FK additions come after the closed guard block.
+    const taskFk = sql.search(/ADD CONSTRAINT\s+"tasks_milestone_id_milestones_id_fk"/i);
+    const findingFk = sql.search(
+      /ADD CONSTRAINT\s+"findings_linked_milestone_id_milestones_id_fk"/i,
+    );
+    expect(taskFk).toBeGreaterThan(doEnd);
+    expect(findingFk).toBeGreaterThan(doEnd);
+    // No silent data destruction and no status lifecycle lock (G-status).
+    expect(sql).not.toMatch(/SET\s+"?milestone_id"?\s*=\s*NULL/i);
+    expect(sql).not.toMatch(/SET\s+"?linked_milestone_id"?\s*=\s*NULL/i);
+    expect(sql).not.toMatch(/CHECK\s*\(\s*"status"/i);
+    expect(sql).not.toMatch(/milestones_status_check/i);
+  });
+
+  it('#514 A-status migration 0050 locks the ADR-0050 status set', () => {
+    const sql = readFileSync(join(MIGRATIONS_DIR, '0050_milestone_status.sql'), 'utf8');
+    expect(sql).toMatch(/milestones_status_check/);
+    for (const status of ['planning', 'in_progress', 'blocked', 'released']) {
+      expect(sql).toContain(`'${status}'`);
+    }
+    expect(sql).not.toMatch(/DROP TABLE/i);
+  });
 });
 
 describe('migration journal', () => {
@@ -336,7 +391,9 @@ describe('migration journal', () => {
     const tagSet = new Set(tags);
     const fileTags = files.map((file) => file.slice(0, -'.sql'.length));
     const fileTagSet = new Set(fileTags);
-    const missingJournalEntries = files.filter((file) => !tagSet.has(file.slice(0, -'.sql'.length)));
+    const missingJournalEntries = files.filter(
+      (file) => !tagSet.has(file.slice(0, -'.sql'.length)),
+    );
     const missingMigrationFiles = tags.filter((tag) => !fileTagSet.has(tag));
     const unexpectedIndexes = journal.entries
       .filter((entry, expectedIdx) => entry.idx !== expectedIdx)

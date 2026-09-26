@@ -1,0 +1,1 @@
+ALTER TABLE "task"."milestones" ADD CONSTRAINT "milestones_status_check" CHECK ("task"."milestones"."status" in ('planning','in_progress','blocked','released'));

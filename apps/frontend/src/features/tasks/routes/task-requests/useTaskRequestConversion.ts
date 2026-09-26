@@ -1,6 +1,8 @@
 import { convertTaskRequest, fetchPermissionCheck } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { listMilestones } from '@/lib/api/milestones';
 import {
+  type MilestoneDto,
   type TaskDto,
   type TaskPriority,
   type TaskRequestDto,
@@ -34,6 +36,8 @@ export interface UseTaskRequestConversionResult {
   dueDate: string;
   setDueDate: (value: string) => void;
   milestoneId: string;
+  setMilestoneId: (value: string) => void;
+  milestones: MilestoneDto[] | undefined;
   analyticsAreaId: string;
   setAnalyticsAreaId: (value: string) => void;
   analyticsAreas: Array<{ id: string; name: string }> | undefined;
@@ -98,6 +102,17 @@ export function useTaskRequestConversion({
     staleTime: 10 * 60 * 1000,
   });
 
+  const milestonesQuery = useQuery({
+    queryKey: ['milestones', item.primary_managed_system_id] as const,
+    queryFn: ({ signal }) =>
+      listMilestones({
+        managed_system_id: item.primary_managed_system_id,
+        signal,
+      }),
+    enabled: convertOpen,
+    staleTime: 10 * 60 * 1000,
+  });
+
   const convertMutation = useMutation<TaskDto, Error, void>({
     mutationFn: async () => {
       const title = convertTitle.trim();
@@ -108,7 +123,7 @@ export function useTaskRequestConversion({
           priority: convertPriority,
           assignee_actor_id: convertAssigneeId.trim() || null,
           due_date: convertDueDate.trim() || null,
-          milestone_id: null,
+          milestone_id: convertMilestoneId || null,
           analytics_area_id: convertAnalyticsAreaId.trim() || null,
         },
         crypto.randomUUID(),
@@ -155,6 +170,8 @@ export function useTaskRequestConversion({
     dueDate: convertDueDate,
     setDueDate: setConvertDueDate,
     milestoneId: convertMilestoneId,
+    setMilestoneId: setConvertMilestoneId,
+    milestones: milestonesQuery.data?.items,
     analyticsAreaId: convertAnalyticsAreaId,
     setAnalyticsAreaId: setConvertAnalyticsAreaId,
     analyticsAreas: analyticsAreasQuery.data?.items,

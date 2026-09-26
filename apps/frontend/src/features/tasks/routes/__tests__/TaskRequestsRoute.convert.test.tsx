@@ -1,8 +1,9 @@
-import { convertTaskRequestRequestSchema } from '@fops/shared';
+import { listMilestones } from '@/lib/api/milestones';
+import { type MilestoneDto, convertTaskRequestRequestSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from '../TaskRequestsRoute';
 
 const api = vi.hoisted(() => ({ apiClient: vi.fn(), convertTaskRequest: vi.fn() }));
@@ -35,6 +36,36 @@ const taskRequest = {
   source: null,
 };
 
+const milestoneOtherSystemId = 'cccccccc-cccc-4ccc-8ccc-cccccccc00c2';
+const milestoneBase = {
+  workspace_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0001',
+  analytics_area_id: null,
+  why: 'Milestone for conversion picker tests',
+  status: 'in_progress',
+  owner_actor_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001',
+  start_date: '2026-07-01',
+  target_date: '2026-09-30',
+  created_by: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001',
+  created_at: '2026-07-01T00:00:00.000Z',
+  updated_at: '2026-07-01T00:00:00.000Z',
+  progress: { released_done: 0, in_flight: 1, queued: 0, total: 1, percent: 0 },
+};
+const milestoneForRequestSystem: MilestoneDto = {
+  ...milestoneBase,
+  id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb3001',
+  primary_managed_system_id: taskRequest.primary_managed_system_id,
+  display_id: 'MLS-3001',
+  title: 'Billing Q3 cutoff',
+};
+const milestoneForOtherSystem: MilestoneDto = {
+  ...milestoneBase,
+  id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb3002',
+  primary_managed_system_id: milestoneOtherSystemId,
+  display_id: 'MLS-3002',
+  title: 'Other system milestone',
+};
+const MILESTONES: MilestoneDto[] = [milestoneForRequestSystem, milestoneForOtherSystem];
+
 vi.mock('@fops/ui', async () => {
   const actual = await vi.importActual<typeof import('@fops/ui')>('@fops/ui');
   return {
@@ -59,6 +90,9 @@ vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
 }));
 vi.mock('@/lib/api/analytics-areas', () => ({
   fetchAnalyticsAreas: vi.fn(async () => ({ items: [] })),
+}));
+vi.mock('@/lib/api/milestones', () => ({
+  listMilestones: vi.fn(),
 }));
 vi.mock('@/lib/api/managed-systems', () => ({
   fetchManagedSystems: vi.fn(async () => ({
@@ -97,6 +131,15 @@ async function openConvertForm() {
   fireEvent.click(screen.getByRole('button', { name: 'Convert to Task' }));
   return screen.findByTestId('task-request-convert-title-input');
 }
+
+beforeEach(() => {
+  vi.mocked(listMilestones).mockReset();
+  vi.mocked(listMilestones).mockImplementation(async (options) => ({
+    items: MILESTONES.filter(
+      (milestone) => milestone.primary_managed_system_id === options?.managed_system_id,
+    ),
+  }));
+});
 
 describe('TaskRequestsRoute conversion title', () => {
   it('AC-C6a parses the generated default title with the canonical conversion schema', async () => {
@@ -140,5 +183,54 @@ describe('TaskRequestsRoute conversion title', () => {
     const input = await openConvertForm();
     fireEvent.change(input, { target: { value: overLimitTitle } });
     expect(screen.getByTestId('task-request-convert-submit')).toBeEnabled();
+  });
+});
+
+describe('TaskRequestsRoute conversion milestone picker', () => {
+  beforeEach(() => {
+    api.convertTaskRequest.mockResolvedValue({ display_id: 'TASK-7' });
+  });
+
+  it('B3a offers None plus the milestones of the request primary Managed System', async () => {
+    await openConvertForm();
+    const select = screen.getByRole('combobox', { name: 'Milestone' });
+    await waitFor(() => {
+      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
+    });
+    const optionNames = within(select)
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    expect(optionNames).toEqual(['None', milestoneForRequestSystem.title]);
+    expect(optionNames).not.toContain(milestoneForOtherSystem.title);
+    expect(vi.mocked(listMilestones)).toHaveBeenCalledWith(
+      expect.objectContaining({ managed_system_id: taskRequest.primary_managed_system_id }),
+    );
+  });
+
+  it('B3a submits the selected milestone id to convertTaskRequest', async () => {
+    await openConvertForm();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Milestone' }), {
+      target: { value: milestoneForRequestSystem.id },
+    });
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await waitFor(() => {
+      expect(api.convertTaskRequest).toHaveBeenCalledWith(
+        taskRequest.id,
+        expect.objectContaining({ milestone_id: milestoneForRequestSystem.id }),
+        expect.any(String),
+      );
+    });
+  });
+
+  it('B3a submits milestone_id null when None is selected', async () => {
+    await openConvertForm();
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await waitFor(() => {
+      expect(api.convertTaskRequest).toHaveBeenCalledWith(
+        taskRequest.id,
+        expect.objectContaining({ milestone_id: null }),
+        expect.any(String),
+      );
+    });
   });
 });
