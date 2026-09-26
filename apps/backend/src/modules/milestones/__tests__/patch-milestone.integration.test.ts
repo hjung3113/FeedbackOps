@@ -169,7 +169,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
       },
       { ifMatch },
     );
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
 
     const after = await getMilestone(devCookie, milestone.id);
@@ -196,11 +196,18 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
       { managed_system_id: otherMs },
       { ifMatch },
     );
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
 
     const after = await getMilestone(devCookie, milestone.id);
-    expect(after.json<{ primary_managed_system_id: string }>().primary_managed_system_id).toBe(ms);
+    const body = after.json<{
+      primary_managed_system_id: string;
+      title: string;
+      updated_at: string;
+    }>();
+    expect(body.primary_managed_system_id).toBe(ms);
+    expect(body.title).toBe('Patchable milestone');
+    expect(body.updated_at).toBe(ifMatch);
   });
 
   it('patch: a status-only body is validation.failed and the row is unchanged (A8 guard until A-status)', async () => {
@@ -210,7 +217,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(devCookie, milestone.id, { status: 'released' }, { ifMatch });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
 
     const after = await getMilestone(devCookie, milestone.id);
@@ -225,7 +232,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(devCookie, milestone.id, {}, { ifMatch });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
 
@@ -300,7 +307,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
         omitIfMatch: true,
       },
     );
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
 
@@ -315,7 +322,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
       { title: 'No key' },
       { idempotencyKey: '' },
     );
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
 });
