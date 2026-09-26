@@ -83,8 +83,8 @@ export const coverageSummaryFixture = dashboardSummarySchema.parse({
     },
   ],
   coverage: [
-    { id: 'voc-task', value: 180, total: 1000, percent: 18, status: 'warn' },
-    { id: 'finding-execution', value: 23, total: 31, percent: 74, status: 'good' },
+    { id: 'voc-task', value: 180, total: 1000, percent: 18, status: 'bad' },
+    { id: 'finding-execution', value: 23, total: 31, percent: 74, status: 'warn' },
     { id: 'high-followup', value: 41, total: 47, percent: 87, status: 'good' },
     { id: 'released-update', value: 12, total: 17, percent: 70, status: 'warn' },
     { id: 'analytics-area', value: 412, total: 612, percent: 67, status: 'warn' },
@@ -93,7 +93,7 @@ export const coverageSummaryFixture = dashboardSummarySchema.parse({
     {
       managed_system_id: COVERAGE_IDS.systemA,
       coverage: {
-        'voc-task': { value: 180, total: 1000, percent: 18, status: 'warn' },
+        'voc-task': { value: 180, total: 1000, percent: 18, status: 'bad' },
         'finding-execution': { value: 0, total: 4, percent: 0, status: 'bad' },
         'high-followup': { value: 41, total: 47, percent: 87, status: 'good' },
         'released-update': { value: 12, total: 17, percent: 70, status: 'warn' },
@@ -110,7 +110,7 @@ export const coverageSummaryFixture = dashboardSummarySchema.parse({
         {
           analytics_area_id: COVERAGE_IDS.areaA,
           coverage: {
-            'voc-task': { value: 20, total: 100, percent: 20, status: 'warn' },
+            'voc-task': { value: 20, total: 100, percent: 20, status: 'bad' },
             'high-followup': { value: 6, total: 7, percent: 86, status: 'good' },
           },
           action_queues: { 'unassigned-voc': 1 },
@@ -179,4 +179,12 @@ export const coverageAnalyticsAreasFixture = {
   total: 1,
 } as const;
 
+export const coverageEmptySummaryFixture = dashboardSummarySchema.parse({
+  kpis: {},
+  action_queues: [],
+  coverage: [],
+  by_managed_system: [],
+});
+
 export const coverageVisualSnapshot = 'integration-coverage.png';
+export const coverageEmptyVisualSnapshot = 'integration-coverage-empty.png';

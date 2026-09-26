@@ -8,7 +8,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import {
@@ -51,21 +51,24 @@ const SUMMARY = dashboardSummarySchema.parse({
     },
   ],
   coverage: [
-    { id: 'voc-task', value: 180, total: 1000, percent: 18, status: 'warn' },
-    { id: 'finding-execution', value: 23, total: 31, percent: 74, status: 'good' },
+    { id: 'voc-task', value: 180, total: 1000, percent: 18, status: 'bad' },
+    { id: 'finding-execution', value: 24, total: 31, percent: 77, status: 'good' },
+    { id: 'high-followup', value: 41, total: 47, percent: 87, status: 'good' },
+    { id: 'released-update', value: 12, total: 17, percent: 70, status: 'warn' },
+    { id: 'analytics-area', value: 412, total: 612, percent: 67, status: 'warn' },
   ],
   by_managed_system: [
     {
       managed_system_id: MS_A,
       coverage: {
-        'voc-task': { value: 180, total: 1000, percent: 18, status: 'warn' },
+        'voc-task': { value: 180, total: 1000, percent: 18, status: 'bad' },
         'finding-execution': { value: 0, total: 4, percent: 0, status: 'bad' },
       },
       action_queues: { 'unassigned-voc': 0, 'high-severity-unlinked': 4 },
       analytics_areas: [
         {
           analytics_area_id: AREA_A,
-          coverage: { 'voc-task': { value: 20, total: 100, percent: 20, status: 'warn' } },
+          coverage: { 'voc-task': { value: 20, total: 100, percent: 20, status: 'bad' } },
           action_queues: { 'unassigned-voc': 1 },
         },
       ],
@@ -76,6 +79,16 @@ const SUMMARY = dashboardSummarySchema.parse({
       action_queues: { 'bad-outcome-no-followup': 0 },
     },
   ],
+});
+
+// A successful response whose projections are all omitted: coverage,
+// action_queues, and by_managed_system empty. The page must explain
+// availability, not render zeros.
+const EMPTY_SUMMARY = dashboardSummarySchema.parse({
+  kpis: {},
+  action_queues: [],
+  coverage: [],
+  by_managed_system: [],
 });
 
 function buildHarness(initialPath: string) {
@@ -110,51 +123,55 @@ function managedSystem(id: string, slug: string, name: string) {
   };
 }
 
-function stubFetch(capturedUrls: string[]) {
+function catalogResponse(url: string): Response | undefined {
+  if (url.includes('/managed-systems')) {
+    return new Response(
+      JSON.stringify({
+        items: [
+          managedSystem(MS_A, 'identity', 'Identity Platform'),
+          managedSystem(MS_B, 'warehouse', 'Data Warehouse'),
+        ],
+        total: 2,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }
+  if (url.includes('/analytics-areas')) {
+    return new Response(
+      JSON.stringify({
+        items: [
+          {
+            id: AREA_A,
+            workspace_id: '11111111-1111-4111-8111-111111111111',
+            managed_system_id: MS_A,
+            slug: 'growth',
+            name: '성장 지표',
+            owner_team_id: null,
+            archived_at: null,
+            archived_by_actor_id: null,
+            created_at: '2026-06-18T00:00:00.000Z',
+            updated_at: '2026-06-18T00:00:00.000Z',
+          },
+        ],
+        total: 1,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }
+  return undefined;
+}
+
+function stubFetch(capturedUrls: string[], summary: unknown = SUMMARY) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     capturedUrls.push(url);
     if (url.includes('/dashboard/summary')) {
-      return new Response(JSON.stringify(SUMMARY), {
+      return new Response(JSON.stringify(summary), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
     }
-    if (url.includes('/managed-systems')) {
-      return new Response(
-        JSON.stringify({
-          items: [
-            managedSystem(MS_A, 'identity', 'Identity Platform'),
-            managedSystem(MS_B, 'warehouse', 'Data Warehouse'),
-          ],
-          total: 2,
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      );
-    }
-    if (url.includes('/analytics-areas')) {
-      return new Response(
-        JSON.stringify({
-          items: [
-            {
-              id: AREA_A,
-              workspace_id: '11111111-1111-4111-8111-111111111111',
-              managed_system_id: MS_A,
-              slug: 'growth',
-              name: '성장 지표',
-              owner_team_id: null,
-              archived_at: null,
-              archived_by_actor_id: null,
-              created_at: '2026-06-18T00:00:00.000Z',
-              updated_at: '2026-06-18T00:00:00.000Z',
-            },
-          ],
-          total: 1,
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      );
-    }
-    return new Response('not mocked', { status: 500 });
+    return catalogResponse(url) ?? new Response('not mocked', { status: 500 });
   }) as typeof globalThis.fetch;
 }
 
@@ -261,5 +278,94 @@ describe('integration coverage route', () => {
     expect(allUrls.some((url) => url.includes('/dashboard/summary?managed_system_id=all'))).toBe(
       true,
     );
+  });
+
+  test('uses the Coverage prototype surface labels and the locked subtitle', async () => {
+    await renderCoverage('/integration/coverage');
+    const signals = within(screen.getByTestId('coverage-signals'));
+    expect(signals.getByText('Released Task with public update')).toBeVisible();
+    expect(signals.getByText('VOC with Analytics Area set')).toBeVisible();
+    // Plan-corrected wording (plan-513 copy table): no "SLA" suffix.
+    expect(signals.getByText('High severity VOC follow-up')).toBeVisible();
+    const table = within(screen.getByTestId('coverage-table'));
+    expect(table.getByText('Released Task with public update')).toBeVisible();
+    expect(table.getByText('VOC with Analytics Area set')).toBeVisible();
+    expect(
+      screen.getByText('Partial integration coverage. 정책이 요구하는 연결만 표시합니다.'),
+    ).toBeVisible();
+  });
+
+  test('maps coverage status directly to success, warn, and danger presentation', async () => {
+    await renderCoverage('/integration/coverage');
+    // finding-execution 77% good (server band >= 75).
+    const good = screen.getByTestId('coverage-percent-finding-execution');
+    expect(good.className).toContain('text-accent-success');
+    expect(good.className).not.toContain('text-accent-info');
+    expect(screen.getByTestId('coverage-bar-fill-finding-execution').className).toContain(
+      'bg-accent-success',
+    );
+    // released-update 70% warn (40 <= 70 < 75).
+    const warn = screen.getByTestId('coverage-percent-released-update');
+    expect(warn.className).toContain('text-accent-warn');
+    expect(warn.className).not.toContain('text-accent-success');
+    // voc-task 18% bad (< 40).
+    const bad = screen.getByTestId('coverage-percent-voc-task');
+    expect(bad.className).toContain('text-accent-danger');
+    expect(bad.className).not.toContain('text-accent-warn');
+  });
+
+  test('renders the pending state while the summary request is in flight', async () => {
+    let release!: (response: Response) => void;
+    const gated = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/dashboard/summary')) return gated;
+      return catalogResponse(url) ?? new Response('not mocked', { status: 500 });
+    }) as typeof globalThis.fetch;
+    const { router, qc } = buildHarness('/integration/coverage');
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('coverage-pending')).toBeVisible();
+    });
+    expect(screen.queryByTestId('coverage-row-voc-task')).toBeNull();
+    expect(screen.queryByTestId('coverage-table')).toBeNull();
+    expect(screen.queryByTestId('coverage-empty')).toBeNull();
+    release(
+      new Response(JSON.stringify(SUMMARY), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('coverage-row-voc-task')).toBeVisible();
+    });
+    expect(screen.queryByTestId('coverage-pending')).toBeNull();
+  });
+
+  test('renders an explanatory empty state for a successful all-empty summary', async () => {
+    const capturedUrls: string[] = [];
+    stubFetch(capturedUrls, EMPTY_SUMMARY);
+    const { router, qc } = buildHarness('/integration/coverage');
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('coverage-empty')).toBeVisible();
+    });
+    // Omission is availability, not a zero count — the state must say so.
+    expect(screen.getByTestId('coverage-empty').textContent).toContain('omitted');
+    expect(screen.getByTestId('coverage-empty').textContent).toContain('not the same as zero');
+    expect(screen.queryByTestId('coverage-row-voc-task')).toBeNull();
+    expect(screen.queryByTestId('coverage-queue-row-unassigned-voc')).toBeNull();
+    expect(screen.queryByTestId('coverage-table')).toBeNull();
+    expect(screen.queryByTestId('coverage-pending')).toBeNull();
   });
 });

@@ -13,6 +13,7 @@ import {
 import type { Page, Route } from '@playwright/test';
 import {
   coverageAnalyticsAreasFixture,
+  coverageEmptySummaryFixture,
   coverageManagedSystemsFixture,
   coverageSummaryFixture,
 } from '../fixtures/coverage';
@@ -134,7 +135,7 @@ interface InstallOptions {
   /** Home action dashboard fixture state. */
   home?: 'populated' | 'empty';
   /** #513 coverage page fixture state: summary, systems, and analytics areas. */
-  coverage?: boolean;
+  coverage?: 'populated' | 'empty';
   /** Request-access confirmation dialog state; screenshot spec is host-owned. */
   permissionRequestCompose?: boolean;
   /** Managed System registration dialog with owner candidates; screenshot spec is host-owned. */
@@ -254,7 +255,13 @@ export async function installMockApi(
     }
 
     if (options.coverage && isRequest(route, 'GET', '/dashboard/summary')) {
-      await json(route, 200, dashboardSummarySchema.parse(coverageSummaryFixture));
+      await json(
+        route,
+        200,
+        dashboardSummarySchema.parse(
+          options.coverage === 'empty' ? coverageEmptySummaryFixture : coverageSummaryFixture,
+        ),
+      );
       return;
     }
 
