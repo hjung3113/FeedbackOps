@@ -1,11 +1,12 @@
 import { MILESTONE_IDS, MILESTONE_MANAGED_SYSTEM_IDS } from './fixtures/milestones';
 import { installMockApi } from './support/mock-api';
+import { expectVisual } from './support/screenshot';
 import { expect, test } from './support/visual-test';
 
 // #514 B2c — /tasks?view=milestones list: empty copy, status tabs (no
-// Blocked), populated rows, and the summary strip asserted as text through
-// installMockApi. B2-pixel adds the expectVisual calls when the conductor
-// generates PNGs; this spec does not own screenshots.
+// Blocked), populated rows, and the summary strip asserted through installMockApi.
+// B2-pixel adds empty and populated list-with-detail screenshot assertions;
+// the conductor owns generating the corresponding baseline PNGs.
 test.describe('/tasks?view=milestones visual harness', () => {
   test('mounts exactly one list shell', async ({ page }) => {
     await installMockApi(page, { milestones: true });
@@ -22,6 +23,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
       await expect(page.getByRole('tab', { name: new RegExp(`^${label}`) })).toBeVisible();
     }
     await expect(page.getByRole('tab', { name: /Blocked/ })).toHaveCount(0);
+    await expectVisual(page, page.locator('[data-shell="list"]'), 'milestone-empty.png');
   });
 
   test('renders populated rows, tab counts, and the summary strip', async ({ page }) => {
@@ -96,6 +98,18 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await page.goto(`/tasks?view=milestones&param=${MILESTONE_IDS.sso}`);
 
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
+    await expect(page.getByText('Why this milestone exists')).toBeVisible();
+    await expect(page.getByText('FIN-181')).toBeVisible();
+
+    const ssoRow = page.locator('[role="button"]', { hasText: 'MLS-1021' });
+    await expect(ssoRow).toContainText('SSO Stabilization');
+    await expect(ssoRow).toContainText('Power BI');
+    await expect(ssoRow).toContainText('Product Usage');
+
+    const summary = page.getByTestId('milestones-summary');
+    await expect(summary.getByTestId('milestone-summary-total')).toHaveText('5');
+    await expect(summary.getByTestId('milestone-summary-in-flight')).toHaveText('2');
+
     await expect(page.getByRole('button', { name: /^Tasks/ })).toContainText('1');
 
     const tasksSection = page.locator('[data-anchor="tasks"]');
@@ -113,6 +127,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(tasksSection).toContainText('최');
     await expect(tasksSection).not.toContainText('Unassigned');
     await expect(page.getByRole('button', { name: 'Add task' })).toHaveCount(0);
+    await expectVisual(page, page.locator('[data-shell="list"]'), 'milestone-detail.png');
   });
 
   // #514 B2e — the create control lives on the toolbar; the create block
