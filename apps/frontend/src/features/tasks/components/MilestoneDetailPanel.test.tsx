@@ -1,6 +1,7 @@
 import { getMilestone, updateMilestone } from '@/lib/api/milestones';
+import { listTasks } from '@/lib/api/tasks';
 import { ApiError } from '@/lib/api/types';
-import type { MilestoneDetailDto } from '@fops/shared';
+import type { MilestoneDetailDto, TaskDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,6 +11,10 @@ import { MilestoneDetailPanel } from './MilestoneDetailPanel';
 vi.mock('@/lib/api/milestones', () => ({
   getMilestone: vi.fn(),
   updateMilestone: vi.fn(),
+}));
+
+vi.mock('@/lib/api/tasks', () => ({
+  listTasks: vi.fn(),
 }));
 
 // The panel owns the only router usage in this tree; the hoisted mock mirrors
@@ -22,9 +27,29 @@ vi.mock('@tanstack/react-router', () => ({
 const MANAGED_SYSTEM_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccc00c1';
 const AREA_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddd00a1';
 const OWNER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0002';
+const ASSIGNEE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0005';
 const MILESTONE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1021';
 const OTHER_MILESTONE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1022';
 const FINDING_ID = 'ffffffff-ffff-4fff-8fff-ffffffff0181';
+
+// Child Task rows for the B2d-tasks section (listTasks with milestone_id).
+const childTask: TaskDto = {
+  id: '33333333-3333-4333-8333-333333330902',
+  workspace_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0001',
+  display_id: 'TASK-902',
+  primary_managed_system_id: MANAGED_SYSTEM_ID,
+  title: 'Power BI 임베디드 SSO 재인증 핸들러 구현',
+  status: 'doing',
+  priority: 'urgent',
+  assignee_actor_id: ASSIGNEE_ID,
+  due_date: '2026-06-15',
+  milestone_id: MILESTONE_ID,
+  analytics_area_id: AREA_ID,
+  source_task_request_id: null,
+  created_by: OWNER_ID,
+  created_at: '2026-07-20T01:00:00.000Z',
+  updated_at: '2026-07-21T08:10:00.000Z',
+};
 
 const linkedDetail: MilestoneDetailDto = {
   id: MILESTONE_ID,
@@ -57,7 +82,10 @@ const standaloneDetail: MilestoneDetailDto = {
   source_finding: null,
 };
 
-const ACTOR_NAMES = new Map([[OWNER_ID, '박서연']]);
+const ACTOR_NAMES = new Map([
+  [OWNER_ID, '박서연'],
+  [ASSIGNEE_ID, '정하늘'],
+]);
 const MANAGED_SYSTEM_NAMES = new Map([[MANAGED_SYSTEM_ID, 'Power BI']]);
 const AREA_NAMES = new Map([[AREA_ID, 'Product Usage']]);
 
@@ -84,6 +112,10 @@ function renderPanel(
 
 beforeEach(() => {
   vi.mocked(getMilestone).mockReset();
+  vi.mocked(listTasks).mockReset();
+  // Default: the selected milestone has no child Task rows; task-specific
+  // tests override with their own fixtures.
+  vi.mocked(listTasks).mockResolvedValue({ items: [] });
   navigateMock.mockReset();
 });
 
@@ -135,7 +167,7 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(screen.queryByText(/Outcome survey/)).not.toBeInTheDocument();
   });
 
-  it('has exactly Overview, Evidence, Activity in the section nav — no Timeline, no Tasks', async () => {
+  it('has exactly Overview, Tasks, Evidence, Activity in the section nav — no Timeline', async () => {
     renderPanel(linkedDetail);
 
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
@@ -144,9 +176,10 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     const labels = within(nav)
       .getAllByRole('button')
       .map((button) => button.textContent);
-    expect(labels).toEqual(['Overview', 'Evidence', 'Activity']);
+    // 'Tasks0' = the label plus the count pill (DetailPanelSectionNav renders
+    // the count as a child span once the child read resolves).
+    expect(labels).toEqual(['Overview', 'Tasks0', 'Evidence', 'Activity']);
     expect(screen.queryByRole('button', { name: 'Timeline' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Tasks/ })).not.toBeInTheDocument();
   });
 
   it('renders Managed System as read-only text, not an input', async () => {
@@ -391,5 +424,79 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.queryByText(/typed on A/)).not.toBeInTheDocument();
     expect(vi.mocked(updateMilestone)).not.toHaveBeenCalled();
+  });
+
+  // #514 B2d-tasks — Tasks section (screen-milestones.jsx:402-416), fed by
+  // GET /tasks?milestone_id= through the existing tasks client.
+  it('reads the child list with milestone_id through listTasks', async () => {
+    vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
+    renderPanel(linkedDetail);
+
+    await screen.findByText('Tasks · 1');
+    expect(vi.mocked(listTasks)).toHaveBeenCalledWith({
+      milestone_id: MILESTONE_ID,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('renders the Tasks header count and empty copy when no child rows exist', async () => {
+    renderPanel(linkedDetail);
+
+    expect(await screen.findByText('Tasks · 0')).toBeInTheDocument();
+    expect(screen.getByText('아직 연결된 Task 가 없습니다.')).toBeInTheDocument();
+  });
+
+  it('renders a child row with priority, display id, title, internal status, and assignee', async () => {
+    vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
+    renderPanel(linkedDetail);
+
+    const section = await screen.findByText('Tasks · 1');
+    const row = section.closest('[data-anchor="tasks"]');
+    if (!row) throw new Error('tasks section not found');
+    // SeverityIndicator driven by task.priority (urgent → critical).
+    expect(within(row as HTMLElement).getByLabelText('critical')).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText('TASK-902')).toBeInTheDocument();
+    expect(
+      within(row as HTMLElement).getByText('Power BI 임베디드 SSO 재인증 핸들러 구현'),
+    ).toBeInTheDocument();
+    // Internal task status — distinct from reporter-facing status.
+    expect(within(row as HTMLElement).getByText('Doing')).toBeInTheDocument();
+    // UserAvatar renders the assignee's Hangul initial only.
+    expect(within(row as HTMLElement).getByText('정')).toBeInTheDocument();
+  });
+
+  it('renders the Unassigned chip when a child row has no assignee', async () => {
+    vi.mocked(listTasks).mockResolvedValue({ items: [{ ...childTask, assignee_actor_id: null }] });
+    renderPanel(linkedDetail);
+
+    expect(await screen.findByText('Unassigned')).toBeInTheDocument();
+  });
+
+  // G-columns (ADR-0050, choice a): the slot where the prototype shows
+  // estimate (design §7 item 12) renders the Task due_date; no estimate
+  // field is added to the Task contract.
+  it('shows the task due date in the estimate slot and never the word estimate', async () => {
+    vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
+    renderPanel(linkedDetail);
+
+    const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
+    expect(row).toHaveTextContent('2026-06-15');
+    expect(row).not.toHaveTextContent('estimate');
+  });
+
+  it('keeps the updated stamp on the child row', async () => {
+    vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
+    renderPanel(linkedDetail);
+
+    const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
+    expect(row).toHaveTextContent('updated 2026-07-21');
+  });
+
+  it('renders no Add task control in the Tasks section', async () => {
+    vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
+    renderPanel(linkedDetail);
+
+    await screen.findByText('Tasks · 1');
+    expect(screen.queryByRole('button', { name: 'Add task' })).not.toBeInTheDocument();
   });
 });

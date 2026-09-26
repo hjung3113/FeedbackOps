@@ -9,9 +9,11 @@
 import {
   type MilestoneDetailDto,
   type MilestoneDto,
+  type TaskDto,
   listActorsResponseSchema,
   milestoneDetailDtoSchema,
   milestoneDtoSchema,
+  taskDtoSchema,
 } from '@fops/shared';
 
 const WORKSPACE_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0001';
@@ -153,6 +155,30 @@ export const milestoneDetailFixture: MilestoneDetailDto = milestoneDetailDtoSche
     evidence_count: 7,
   },
 });
+
+// #514 B2d-tasks — the SSO milestone's child rows for the detail panel's
+// Tasks section (listTasks with milestone_id). Mirrors the prototype task
+// TASK-902 (data.js Tasks): internal status doing, urgent priority, assignee,
+// due date — the G-columns slot (ADR-0050 choice a); no estimate field.
+export const milestoneTasksFixture: TaskDto[] = [
+  taskDtoSchema.parse({
+    id: '33333333-3333-4333-8333-333333330902',
+    workspace_id: WORKSPACE_ID,
+    display_id: 'TASK-902',
+    primary_managed_system_id: MILESTONE_MANAGED_SYSTEM_IDS.powerbi,
+    title: 'Power BI 임베디드 SSO 재인증 핸들러 구현',
+    status: 'doing',
+    priority: 'urgent',
+    assignee_actor_id: MILESTONE_ACTOR_IDS.u5,
+    due_date: '2026-06-15',
+    milestone_id: MILESTONE_IDS.sso,
+    analytics_area_id: MILESTONE_ANALYTICS_AREA_IDS.product,
+    source_task_request_id: null,
+    created_by: MILESTONE_ACTOR_IDS.u2,
+    created_at: '2026-07-20T01:00:00.000Z',
+    updated_at: '2026-07-21T08:10:00.000Z',
+  }),
+];
 
 // #514 B2c — row lookups for the visual harness: names mirror the prototype
 // data.js Users / ManagedSystems / AnalyticsAreas catalogue so rows resolve

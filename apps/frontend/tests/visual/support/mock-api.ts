@@ -70,6 +70,7 @@ import {
   milestoneDetailFixture,
   milestoneListFixture,
   milestoneManagedSystemsFixture,
+  milestoneTasksFixture,
 } from '../fixtures/milestones';
 import {
   permissionRequestComposeBodySchema,
@@ -327,6 +328,18 @@ export async function installMockApi(
         return;
       }
       await json(route, 200, milestoneDetailFixture);
+      return;
+    }
+    // #514 B2d-tasks — the detail panel's Tasks section reads the milestone's
+    // child rows (listTasks with milestone_id); only the SSO fixture has one.
+    if (
+      options.milestones &&
+      isRequest(route, 'GET', '/tasks', (params) => params.has('milestone_id'))
+    ) {
+      await json(route, 200, {
+        items:
+          url.searchParams.get('milestone_id') === MILESTONE_IDS.sso ? milestoneTasksFixture : [],
+      });
       return;
     }
     // #514 B2e — create and title-patch writers. Bodies and Idempotency-Keys

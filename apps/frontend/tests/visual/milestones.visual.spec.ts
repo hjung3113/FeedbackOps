@@ -68,9 +68,9 @@ test.describe('/tasks?view=milestones visual harness', () => {
     for (const label of ['Overview', 'Evidence', 'Activity']) {
       await expect(page.getByRole('button', { name: label })).toBeVisible();
     }
-    // Slice C (Timeline) and B2d-tasks (Tasks) are deliberately absent.
+    // Slice C (Timeline) stays absent; B2d-tasks adds the Tasks entry.
     await expect(page.getByRole('button', { name: 'Timeline' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^Tasks/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Tasks/ })).toBeVisible();
 
     await page.getByRole('button', { name: '패널 닫기' }).click();
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toHaveCount(0);
@@ -85,6 +85,32 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toHaveCount(0);
     expect(page.url()).toContain(`managedSystem=${MILESTONE_MANAGED_SYSTEM_IDS.powerbi}`);
     expect(page.url()).not.toContain('param=');
+  });
+
+  // #514 B2d-tasks — the detail panel's Tasks section: header count, the
+  // child row (priority, display id, title, internal status, due date in the
+  // G-columns estimate slot per ADR-0050 choice a, updated stamp, assignee),
+  // and no Add task control. Text assertions only; B2-pixel owns PNGs.
+  test('renders the Tasks section with the milestone child row', async ({ page }) => {
+    await installMockApi(page, { milestones: true });
+    await page.goto(`/tasks?view=milestones&param=${MILESTONE_IDS.sso}`);
+
+    await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Tasks/ })).toContainText('1');
+
+    const tasksSection = page.locator('[data-anchor="tasks"]');
+    await expect(tasksSection.getByText('Tasks · 1')).toBeVisible();
+    await expect(tasksSection).toContainText('TASK-902');
+    await expect(tasksSection).toContainText('Power BI 임베디드 SSO 재인증 핸들러 구현');
+    await expect(tasksSection).toContainText('Doing');
+    // G-columns (ADR-0050, choice a): due_date occupies the prototype's
+    // estimate slot; the word estimate never renders and no Add task exists.
+    await expect(tasksSection).toContainText('2026-06-15');
+    await expect(tasksSection).not.toContainText('estimate');
+    await expect(tasksSection).toContainText('updated 2026-07-21');
+    await expect(tasksSection).toContainText('정');
+    await expect(tasksSection).not.toContainText('Unassigned');
+    await expect(page.getByRole('button', { name: 'Add task' })).toHaveCount(0);
   });
 
   // #514 B2e — the create control lives on the toolbar; the create block

@@ -1,6 +1,7 @@
 import { createMilestone, getMilestone, updateMilestone } from '@/lib/api/milestones';
+import { listTasks } from '@/lib/api/tasks';
 import { ApiError } from '@/lib/api/types';
-import type { MilestoneDetailDto, MilestoneDto } from '@fops/shared';
+import type { MilestoneDetailDto, MilestoneDto, TaskDto } from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
@@ -9,6 +10,7 @@ import {
   DirtyConfirmation,
   FieldRow,
   Input,
+  InternalTaskBadge,
   ManagedSystemPill,
   NestedTextBlock,
   OutlineBadge,
@@ -16,7 +18,9 @@ import {
   PanelSectionTitle,
   PanelTitleBlock,
   PermissionBlockedPanel,
+  SeverityIndicator,
   Textarea,
+  UserAvatar,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -27,19 +31,65 @@ import { MilestoneStatusBadge } from './MilestoneStatusBadge';
 // #514 B2d — Milestone detail panel mirroring MilestoneDetailPanel in
 // docs/design-prototype/screen-milestones.jsx, mounted in the existing
 // ListShell detail slot (never a new shell).
-// Timeline and Tasks sections are deliberately omitted: Timeline is Slice C
-// (TaskGantt) and Tasks is B2d-tasks behind the G-columns record (design §7 item 12).
+// Timeline section is deliberately omitted: Timeline is Slice C (TaskGantt).
+// Tasks is B2d-tasks — the child rows read GET /tasks?milestone_id=, with the
+// G-columns call (ADR-0050 choice a) in MilestoneTaskRow below.
 // B2d fixup — the shared header and close action stay mounted on every detail
 // read state (review finding 2), the why keeps the prototype's NestedTextBlock
 // nesting (finding 1), and a linked source Finding offers Open finding
 // navigation to its own route (finding 3). A terminal query error wins over
 // data React Query retains after a failed refetch (R2-1).
 
+// Nav order mirrors the prototype (Overview, Timeline, Tasks, Evidence,
+// Activity); Timeline stays Slice C. MilestoneDetailContent appends the
+// child-row count to the Tasks entry once the milestone query resolves.
 const SECTIONS: PanelSection[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'tasks', label: 'Tasks' },
   { id: 'evidence', label: 'Evidence' },
   { id: 'activity', label: 'Activity' },
 ];
+
+const PRIORITY_SEVERITY: Record<TaskDto['priority'], 'low' | 'medium' | 'high' | 'critical'> = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  urgent: 'critical',
+};
+
+// MilestoneTaskRow (prototype screen-milestones.jsx:214-238) — read-only
+// child row: priority indicator, display id, title, internal status, stamps,
+// assignee chip. No Add task action exists in #514.
+function MilestoneTaskRow({
+  task,
+  assigneeName,
+}: {
+  task: TaskDto;
+  assigneeName?: string | undefined;
+}) {
+  return (
+    // G-columns (ADR-0050 choice a, design §7 item 12): the prototype's estimate slot renders the Task due_date; no estimate field exists.
+    <div className="flex items-center gap-2.5 rounded-sm border border-border-subtle bg-surface-canvas px-3 py-2.5">
+      <SeverityIndicator severity={PRIORITY_SEVERITY[task.priority]} />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-xs text-text-muted">{task.display_id}</span>
+          <span className="truncate text-sm font-medium text-text-primary">{task.title}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-text-muted">
+          <InternalTaskBadge status={task.status} />
+          {task.due_date !== null && <span>· {task.due_date}</span>}
+          <span>· updated {task.updated_at.slice(0, 10)}</span>
+        </div>
+      </div>
+      {assigneeName !== undefined ? (
+        <UserAvatar user={{ display_name: assigneeName }} size="sm" />
+      ) : task.assignee_actor_id === null ? (
+        <span className="rounded border border-border-subtle px-1.5 py-0.5">Unassigned</span>
+      ) : null}
+    </div>
+  );
+}
 
 export interface MilestoneDetailPanelProps {
   milestoneId: string;
@@ -392,6 +442,16 @@ function MilestoneDetailContent({
   const queryClient = useQueryClient();
   const sourceFinding = milestone.source_finding;
 
+  // #514 B2d-tasks — the section reads the milestone's child rows through the
+  // existing tasks client (GET /tasks?milestone_id=); the header count is the
+  // real row count, not the prototype's plannedTasks-derived totalPlanned.
+  const childTasksQuery = useQuery({
+    queryKey: ['tasks', { milestone_id: milestone.id }] as const,
+    queryFn: ({ signal }) => listTasks({ milestone_id: milestone.id, signal }),
+    staleTime: 30 * 1000,
+  });
+  const childTasks = childTasksQuery.data?.items;
+
   // B2e — title-only edit. Managed System is a create-only field (A3/A8) and
   // never becomes an input here; the PATCH carries the title and If-Match
   // (the row's updated_at) with a fresh idempotency key, nothing else.
@@ -464,7 +524,14 @@ function MilestoneDetailContent({
 
   return (
     <>
-      <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
+      <DetailPanelSectionNav
+        sections={SECTIONS.map((section) =>
+          section.id === 'tasks' && childTasks !== undefined
+            ? { ...section, count: childTasks.length }
+            : section,
+        )}
+        scrollRef={scrollRef}
+      />
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div data-anchor="overview">
           <PanelTitleBlock
@@ -649,6 +716,37 @@ function MilestoneDetailContent({
             </FieldRow>
             <FieldRow label="Created">{milestone.created_at.slice(0, 10)}</FieldRow>
           </div>
+        </div>
+
+        {/* #514 B2d-tasks — flat child Task list (screen-milestones.jsx:402-416).
+            The prototype's Add task action has no #514 writer behind it, so the
+            section ships read-only; assign/unassign lives on the Task detail. */}
+        <div data-anchor="tasks" className="border-t border-border-subtle px-4 py-4">
+          <PanelSectionTitle>
+            {childTasks === undefined ? 'Tasks' : `Tasks · ${childTasks.length}`}
+          </PanelSectionTitle>
+          {childTasksQuery.error !== null ? (
+            // Same terminal copy as the Tasks list route (TaskListRoute).
+            <div className="py-3 text-center text-xs text-text-muted">Task list unavailable.</div>
+          ) : childTasks !== undefined && childTasks.length === 0 ? (
+            <div className="py-3 text-center text-xs text-text-muted">
+              아직 연결된 Task 가 없습니다.
+            </div>
+          ) : childTasks !== undefined ? (
+            <div className="flex flex-col gap-1.5">
+              {childTasks.map((task) => (
+                <MilestoneTaskRow
+                  key={task.id}
+                  task={task}
+                  assigneeName={
+                    task.assignee_actor_id !== null
+                      ? actorNamesById.get(task.assignee_actor_id)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div data-anchor="evidence" className="border-t border-border-subtle px-4 py-4">
