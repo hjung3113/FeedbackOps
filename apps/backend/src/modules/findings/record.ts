@@ -70,6 +70,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
   async function listFindings(args: {
     actor: FindingsActor;
     managedSystemId?: string;
+    execution?: 'none';
   }): Promise<{ items: FindingDto[] }> {
     if (args.actor.role_level !== 'admin' && args.actor.role_level !== 'developer') {
       throw new HttpError('permission.denied', 'finding.read capability required');
@@ -78,6 +79,7 @@ export function createFindingRecord(deps: FindingsServiceDeps) {
     const rows = await listFindingsByWorkspace(deps.db, {
       workspaceId: args.actor.workspace_id,
       ...(args.managedSystemId !== undefined ? { managedSystemId: args.managedSystemId } : {}),
+      ...(args.execution !== undefined ? { execution: args.execution } : {}),
     });
     const items: FindingDto[] = [];
     for (const row of rows) {

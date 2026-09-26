@@ -72,21 +72,38 @@ export async function findFindingById(
 
 export async function listFindingsByWorkspace(
   db: Db | Tx,
-  input: { workspaceId: string; managedSystemId?: string },
+  input: { workspaceId: string; managedSystemId?: string; execution?: 'none' },
 ): Promise<FindingReadRow[]> {
   const managedSystemPredicate =
     input.managedSystemId === undefined
       ? sql`TRUE`
-      : sql`primary_managed_system_id = ${input.managedSystemId}`;
+      : sql`f.primary_managed_system_id = ${input.managedSystemId}`;
+  // Same three conditions as countActiveFindingsWithoutExecution (dashboard/repo.ts).
+  // Do not import that function: dashboard must not become a findings dependency.
+  const executionPredicate =
+    input.execution === 'none'
+      ? sql`f.status = 'active'
+          AND f.linked_task_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM core.entity_links el
+            WHERE el.workspace_id = f.workspace_id
+              AND el.status = 'active'
+              AND el.source_type = 'finding'
+              AND el.source_id = f.id
+              AND el.target_type = 'task_request'
+              AND el.relation_type = 'requested_task'
+          )`
+      : sql`TRUE`;
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT
-      id, workspace_id, display_id, primary_managed_system_id, title, summary, source_type,
-      source_id, evidence_count, severity, confidence, status, analytics_area_id,
-      linked_task_id, linked_milestone_id, created_by, created_at, updated_at
-    FROM ${findings}
-    WHERE workspace_id = ${input.workspaceId}
+      f.id, f.workspace_id, f.display_id, f.primary_managed_system_id, f.title, f.summary, f.source_type,
+      f.source_id, f.evidence_count, f.severity, f.confidence, f.status, f.analytics_area_id,
+      f.linked_task_id, f.linked_milestone_id, f.created_by, f.created_at, f.updated_at
+    FROM ${findings} f
+    WHERE f.workspace_id = ${input.workspaceId}
       AND ${managedSystemPredicate}
-    ORDER BY created_at DESC, id DESC
+      AND ${executionPredicate}
+    ORDER BY f.created_at DESC, f.id DESC
   `);
   return result.rows.map(mapFindingRow);
 }

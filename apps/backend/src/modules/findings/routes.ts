@@ -51,6 +51,7 @@ export const findingsRoutes: FastifyPluginAsync<FindingsRoutesOptions> = async (
         ...(parsed.data.managed_system_id !== undefined
           ? { managedSystemId: parsed.data.managed_system_id }
           : {}),
+        ...(parsed.data.execution !== undefined ? { execution: parsed.data.execution } : {}),
       });
       return reply.header('cache-control', 'private, no-cache').code(200).send(result);
     },

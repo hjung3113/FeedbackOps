@@ -213,6 +213,7 @@ export type LinkEvidenceRequest = z.infer<typeof linkEvidenceRequestSchema>;
 export const listFindingsQuerySchema = z
   .object({
     managed_system_id: z.string().uuid().optional(),
+    execution: z.literal('none').optional(),
   })
   .strict();
 export type ListFindingsQuery = z.infer<typeof listFindingsQuerySchema>;
