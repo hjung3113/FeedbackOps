@@ -376,6 +376,67 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
       expect.any(String),
     );
   });
+
+  // R4 (Astra P2-2) — a successful refresh may legitimately omit the selected
+  // Milestone (the list filters rows the actor can no longer see) without any
+  // error: the option disappears but the held id used to survive invisibly
+  // and submission still sent it. It is treated exactly like the error-path
+  // unavailable selection: identity-free placeholder, blocked submit, and an
+  // explicit None recovers.
+  it('treats a selection omitted by a successful refetch as unavailable and blocks submit', async () => {
+    vi.mocked(listMilestones)
+      .mockResolvedValueOnce({
+        items: MILESTONES.filter(
+          (milestone) =>
+            milestone.primary_managed_system_id === taskRequest.primary_managed_system_id,
+        ),
+      })
+      .mockResolvedValue({ items: [] });
+    const { queryClient } = await openConvertFormReturnsClient();
+    const select = screen.getByRole('combobox', { name: 'Milestone' });
+    await waitFor(() => {
+      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
+    });
+    fireEvent.change(select, { target: { value: milestoneForRequestSystem.id } });
+
+    await queryClient.invalidateQueries({
+      queryKey: ['milestones', taskRequest.primary_managed_system_id],
+    });
+
+    // The row is gone from a 200 response: the held selection keeps its
+    // identity-free slot and the select stays honest.
+    await waitFor(() => {
+      expect(
+        within(select).queryByRole('option', { name: milestoneForRequestSystem.title }),
+      ).not.toBeInTheDocument();
+    });
+    const unavailable = within(select).getByRole('option', {
+      name: 'Unavailable',
+    }) as HTMLOptionElement;
+    expect(unavailable).toBeDisabled();
+    expect(unavailable.value).toBe(milestoneForRequestSystem.id);
+    expect(unavailable.textContent).not.toContain(milestoneForRequestSystem.title);
+    expect(select).toHaveValue(milestoneForRequestSystem.id);
+
+    // Submitting the invisible held id is blocked; explicit None converts.
+    const callsBeforeSubmit = api.convertTaskRequest.mock.calls.length;
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await Promise.resolve();
+    expect(api.convertTaskRequest.mock.calls.length).toBe(callsBeforeSubmit);
+
+    const user = userEvent.setup();
+    await user.selectOptions(select, within(select).getByRole('option', { name: 'None' }));
+    expect(select).toHaveValue('');
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await waitFor(() => {
+      expect(api.convertTaskRequest.mock.calls.length).toBe(callsBeforeSubmit + 1);
+    });
+    expect(api.convertTaskRequest).toHaveBeenLastCalledWith(
+      taskRequest.id,
+      expect.objectContaining({ milestone_id: null }),
+      expect.any(String),
+    );
+  });
 });
 
 async function openConvertFormReturnsClient() {

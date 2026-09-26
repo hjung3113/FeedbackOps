@@ -1,7 +1,7 @@
 import { getMilestone, updateMilestone } from '@/lib/api/milestones';
 import { listTasks } from '@/lib/api/tasks';
 import { ApiError } from '@/lib/api/types';
-import type { MilestoneDetailDto, TaskDto } from '@fops/shared';
+import type { MilestoneDetailDto, MilestoneDto, TaskDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -672,5 +672,98 @@ describe('MilestoneDetailPanel title edit concurrency (Astra finding 2)', () => 
     // let the stale draft overwrite the other actor's title without a 409.
     expect(options.ifMatch).toBe('2026-07-21T08:30:00.000Z');
     expect(options.ifMatch).not.toBe(REMOTE_UPDATED_AT);
+  });
+});
+
+// R4 (Astra P2-1) — the title input stayed editable while the save was in
+// flight: typing B after submitting A got silently dropped when success
+// closed the editor. The input locks for the in-flight window, and a
+// successful save still ends cleanly.
+describe('MilestoneDetailPanel title save lock (R4)', () => {
+  it('locks the title input while a save is pending and ends cleanly on success', async () => {
+    const user = userEvent.setup();
+    let resolveTitle!: (value: MilestoneDto) => void;
+    vi.mocked(getMilestone)
+      .mockResolvedValueOnce(linkedDetail)
+      .mockResolvedValue({ ...linkedDetail, title: 'SSO Stabilization v2' });
+    vi.mocked(updateMilestone).mockImplementationOnce(
+      () =>
+        new Promise<MilestoneDto>((resolve) => {
+          resolveTitle = resolve;
+        }),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MilestoneDetailPanel
+          milestoneId={MILESTONE_ID}
+          onClose={() => {}}
+          actorNamesById={ACTOR_NAMES}
+          managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+          analyticsAreaNamesById={AREA_NAMES}
+        />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    await user.click(screen.getByRole('button', { name: 'Edit title' }));
+    const input = screen.getByRole('textbox', { name: 'Title' });
+    await user.type(input, ' v2');
+    // Mock call history accumulates across tests in this file; assert deltas.
+    const callsBeforeSave = vi.mocked(updateMilestone).mock.calls.length;
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(vi.mocked(updateMilestone).mock.calls.length).toBe(callsBeforeSave + 1),
+    );
+
+    // The in-flight window: typing B is impossible, so it cannot be silently
+    // dropped by the success path.
+    expect(input).toBeDisabled();
+    await user.type(input, 'B');
+    expect(input).toHaveValue('SSO Stabilization v2');
+    expect(vi.mocked(updateMilestone).mock.calls.length).toBe(callsBeforeSave + 1);
+
+    resolveTitle({ ...linkedDetail, title: 'SSO Stabilization v2' });
+    expect(
+      await screen.findByRole('heading', { name: 'SSO Stabilization v2' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+  });
+});
+
+// R4 (Astra P2-3) — Open finding left the panel without consulting the
+// unsaved-title confirmation used for close and record switching. Decline
+// keeps the draft without navigating; confirm discards and navigates to the
+// linked Finding. A clean panel navigates immediately (covered by the
+// existing Open finding test).
+describe('MilestoneDetailPanel open finding guard (R4)', () => {
+  it('confirms the dirty title before Open finding navigates', async () => {
+    const user = userEvent.setup();
+    renderPanel(linkedDetail);
+
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    await user.click(screen.getByRole('button', { name: 'Edit title' }));
+    await user.type(screen.getByRole('textbox', { name: 'Title' }), ' with unsaved work');
+
+    await user.click(screen.getByRole('button', { name: 'Open finding' }));
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    // Decline: the draft and the editor stay, no navigation.
+    await user.click(screen.getByRole('button', { name: '계속 작성' }));
+    expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue(
+      'SSO Stabilization with unsaved work',
+    );
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    // Confirm: the draft is discarded and the Finding route is opened.
+    await user.click(screen.getByRole('button', { name: 'Open finding' }));
+    await user.click(await screen.findByRole('button', { name: '이동' }));
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/findings/$findingId',
+      params: { findingId: FINDING_ID },
+    });
+    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
   });
 });

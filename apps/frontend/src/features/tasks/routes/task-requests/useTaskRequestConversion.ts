@@ -42,6 +42,8 @@ export interface UseTaskRequestConversionResult {
   milestones: MilestoneDto[] | undefined;
   /** Settled picker read error, classified; null while the read stands. */
   milestonePickerError: { denied: boolean; message: string } | null;
+  /** R4 — a held selection missing from a settled successful list. */
+  milestoneSelectionUnavailable: boolean;
   analyticsAreaId: string;
   setAnalyticsAreaId: (value: string) => void;
   analyticsAreas: Array<{ id: string; name: string }> | undefined;
@@ -133,6 +135,16 @@ export function useTaskRequestConversion({
       ? null
       : { denied: milestonePickerDenied, message: milestonesError.message };
 
+  // R4 (Astra P2-2) — the list can also drop the held row inside a 200
+  // response (the list filters rows the actor can no longer see). A held id
+  // absent from a settled successful list is unavailable exactly like the
+  // error case; it is never silently cleared.
+  const milestoneSelectionUnavailable =
+    milestonesError === null &&
+    milestonesQuery.data != null &&
+    convertMilestoneId !== '' &&
+    !milestonesQuery.data.items.some((milestone) => milestone.id === convertMilestoneId);
+
   const convertMutation = useMutation<TaskDto, Error, void>({
     mutationFn: async () => {
       const title = convertTitle.trim();
@@ -162,9 +174,13 @@ export function useTaskRequestConversion({
 
   function submit(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    // R2 (Astra P2-3) — a selection made from retained cache cannot ride once
-    // its read has failed terminally; only an explicit None ('') is allowed.
-    if (milestonesError !== null && convertMilestoneId !== '') return;
+    // R2 + R4 — a selection made from retained cache cannot ride once its
+    // read has failed terminally, and a held id omitted from a successful
+    // refreshed list is equally unavailable; only an explicit None ('') is
+    // allowed through.
+    if ((milestonesError !== null || milestoneSelectionUnavailable) && convertMilestoneId !== '') {
+      return;
+    }
     const titleResult = convertTaskRequestRequestSchema.shape.title.safeParse(convertTitle);
     if (!titleResult.success) {
       setConvertTitleError(titleResult.error.issues[0]?.message ?? 'Title is invalid.');
@@ -196,6 +212,7 @@ export function useTaskRequestConversion({
     setMilestoneId: setConvertMilestoneId,
     milestones: milestonesError === null ? milestonesQuery.data?.items : undefined,
     milestonePickerError,
+    milestoneSelectionUnavailable,
     analyticsAreaId: convertAnalyticsAreaId,
     setAnalyticsAreaId: setConvertAnalyticsAreaId,
     analyticsAreas: analyticsAreasQuery.data?.items,

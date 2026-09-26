@@ -705,6 +705,11 @@ function MilestoneDetailContent({
     statusMutation.mutate({ status, ifMatch: milestone.updated_at });
   }
 
+  // R4 (Astra P2-3) — Open finding is a navigation that would discard an
+  // unsaved title draft; it goes through the same scoped discard
+  // confirmation as the header close. No other navigation is guarded.
+  const [pendingFindingId, setPendingFindingId] = React.useState<string | null>(null);
+
   const areaName =
     milestone.analytics_area_id !== null
       ? analyticsAreaNamesById.get(milestone.analytics_area_id)
@@ -763,6 +768,7 @@ function MilestoneDetailContent({
                 <span>Title</span>
                 <Input
                   aria-label="Title"
+                  disabled={titleMutation.isPending}
                   value={titleDraft}
                   onChange={(event) => {
                     setTitleDraft(event.target.value);
@@ -864,6 +870,12 @@ function MilestoneDetailContent({
                   size="sm"
                   className="h-6 gap-1.5 px-2 text-[12px]"
                   onClick={() => {
+                    // R4 — an unsaved title draft confirms before the panel
+                    // is left; a clean panel navigates immediately.
+                    if (titleDirty) {
+                      setPendingFindingId(sourceFinding.id);
+                      return;
+                    }
                     void navigate({
                       to: '/findings/$findingId',
                       params: { findingId: sourceFinding.id },
@@ -1026,6 +1038,23 @@ function MilestoneDetailContent({
           <div className="py-3 text-center text-xs text-text-muted">활동 기록이 없습니다.</div>
         </div>
       </div>
+      {/* R4 — scoped to the Open finding action only: confirm discards the
+          draft (same reset as the header close) and navigates to the linked
+          Finding; decline keeps the editor and the draft. */}
+      <DirtyConfirmation
+        open={pendingFindingId !== null}
+        onConfirm={() => {
+          const findingId = pendingFindingId;
+          setPendingFindingId(null);
+          setEditingTitle(false);
+          setTitleDraft('');
+          setTitleEditVersion(null);
+          if (findingId !== null) {
+            void navigate({ to: '/findings/$findingId', params: { findingId } });
+          }
+        }}
+        onCancel={() => setPendingFindingId(null)}
+      />
     </>
   );
 }
