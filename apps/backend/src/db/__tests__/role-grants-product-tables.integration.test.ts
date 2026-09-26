@@ -207,11 +207,13 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
         order by p.proname`,
     );
     expect(rows.map((row) => row.proname)).toEqual(SURVEY_AGGREGATE_FUNCTIONS);
-    expect(rows).toEqual(SURVEY_AGGREGATE_FUNCTIONS.map((proname) => ({
-      proname,
-      app_execute: true,
-      public_execute: false,
-    })));
+    expect(rows).toEqual(
+      SURVEY_AGGREGATE_FUNCTIONS.map((proname) => ({
+        proname,
+        app_execute: true,
+        public_execute: false,
+      })),
+    );
   });
 
   it('fops_app UPDATE on review candidates is limited to resolution columns', async () => {
