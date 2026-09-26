@@ -9,7 +9,7 @@ import { type MinePermissionRequestRow, fetchDashboardSummary, fetchPermissionRe
 import { useMe } from '@/lib/auth/useMe';
 import { HOME_COVERAGE_COPY, HOME_COPY, HOME_KPI_COPY, HOME_QUEUE_COPY, homeSeverityLabel } from '@/lib/copy/home';
 
-export const HOME_COVERAGE_HREF = '/integration/links';
+export const HOME_COVERAGE_HREF = '/integration/coverage';
 
 export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): React.ReactElement {
   const me = useMe();

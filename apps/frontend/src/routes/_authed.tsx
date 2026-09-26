@@ -32,6 +32,7 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
     { id: 'integration-dashboard', label: 'Action dashboard', href: '/integration', section: 'INTEGRATION', icon: <FileBarChart className="h-4 w-4" /> },
     { id: 'integration-findings', label: 'Findings', href: '/findings', section: 'INTEGRATION', icon: <ListChecks className="h-4 w-4" />, countKey: 'findings.all' },
     { id: 'integration-links', label: 'Entity links', href: '/integration/links', section: 'INTEGRATION', icon: <Link2 className="h-4 w-4" /> },
+    { id: 'integration-coverage', label: 'Coverage', href: '/integration/coverage', section: 'INTEGRATION', icon: <Layers className="h-4 w-4" /> },
   ],
   surveys: [
     { id: 'surveys', label: 'All surveys', href: '/surveys', section: 'SURVEYS', icon: <FileBarChart className="h-4 w-4" />, countKey: 'surveys.all' },

@@ -84,3 +84,30 @@ export const dashboardSummarySchema = z.object({
 }).strict();
 
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
+
+export type DashboardCoverageId = DashboardSummary['coverage'][number]['id'];
+export type DashboardActionQueueId = DashboardSummary['action_queues'][number]['id'];
+// milestone-outcome has no MVP backing queue or filter, so it stays out of the
+// hop map (plan-513: "milestone-outcome. Keep omitting it.").
+export type DashboardHopId = Exclude<DashboardCoverageId, 'milestone-outcome'> | DashboardActionQueueId;
+
+// One coverage/queue id -> filtered-list URL map, shared by the coverage page
+// and Home so the two screens cannot drift (plan-513 one-hop routes table).
+// Every target must stay listed in its route's strict search schema:
+// /vocs (tab, filter.analytics_area), /findings (execution),
+// /tasks (public_update), /surveys, /admin/permissions/requests.
+// voc-task must not reuse the no-link tab: it is the "no voc -> task link"
+// complement, not the follow-up predicate (plan-513, N9).
+export const DASHBOARD_HOP_ROUTES = {
+  'voc-task': '/vocs?view=inbox&tab=no-task',
+  'finding-execution': '/findings?execution=none',
+  'high-followup': '/vocs?view=inbox&tab=high-no-link',
+  'released-update': '/tasks?view=board&public_update=missing',
+  'analytics-area': '/vocs?view=inbox&filter.analytics_area=unset',
+  'unassigned-voc': DASHBOARD_UNASSIGNED_VOC_ROUTE,
+  'high-severity-unlinked': DASHBOARD_HIGH_SEVERITY_UNLINKED_ROUTE,
+  'actionable-finding-no-execution': '/findings?execution=none',
+  'released-task-unresolved-voc': DASHBOARD_RELEASED_TASKS_ROUTE,
+  'bad-outcome-no-followup': DASHBOARD_OUTCOME_SURVEYS_ROUTE,
+  'permission-requests-pending': DASHBOARD_PERMISSION_REQUESTS_ROUTE,
+} as const satisfies Record<DashboardHopId, string>;

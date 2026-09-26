@@ -12,6 +12,11 @@ import {
 } from '@fops/shared';
 import type { Page, Route } from '@playwright/test';
 import {
+  coverageAnalyticsAreasFixture,
+  coverageManagedSystemsFixture,
+  coverageSummaryFixture,
+} from '../fixtures/coverage';
+import {
   VOC_REVIEW_IDS,
   populatedReviewCandidates,
   populatedReviewConversationPage,
@@ -128,6 +133,8 @@ interface InstallOptions {
   savedViews?: boolean;
   /** Home action dashboard fixture state. */
   home?: 'populated' | 'empty';
+  /** #513 coverage page fixture state: summary, systems, and analytics areas. */
+  coverage?: boolean;
   /** Request-access confirmation dialog state; screenshot spec is host-owned. */
   permissionRequestCompose?: boolean;
   /** Managed System registration dialog with owner candidates; screenshot spec is host-owned. */
@@ -243,6 +250,21 @@ export async function installMockApi(
 
     if (options.home && isRequest(route, 'GET', '/dashboard/summary')) {
       await json(route, 200, dashboardSummarySchema.parse(homeSummaryFixture));
+      return;
+    }
+
+    if (options.coverage && isRequest(route, 'GET', '/dashboard/summary')) {
+      await json(route, 200, dashboardSummarySchema.parse(coverageSummaryFixture));
+      return;
+    }
+
+    if (options.coverage && isRequest(route, 'GET', '/managed-systems')) {
+      await json(route, 200, coverageManagedSystemsFixture);
+      return;
+    }
+
+    if (options.coverage && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, coverageAnalyticsAreasFixture);
       return;
     }
 
