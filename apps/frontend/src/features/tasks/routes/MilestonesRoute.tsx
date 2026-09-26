@@ -307,23 +307,11 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
     });
   }
 
-  if (listQuery.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Loading Milestones…</div>;
-  }
-  if (isPermissionDenied(listQuery.error)) {
-    return (
-      <PermissionBlockedPanel
-        state="denied"
-        category="Milestone list"
-        reason={listQuery.error.message}
-        className="m-4"
-      />
-    );
-  }
-  if (listQuery.error) {
-    return <div className="p-4 text-sm text-accent-danger">Milestone list unavailable.</div>;
-  }
-
+  // R6 (Astra P2) — list loading/denied/error present INSIDE the list slot:
+  // the shell and the detail slot keep their lifetime across tab refetches,
+  // so uncached tab switches can no longer destroy create or title drafts.
+  // Retained rows stay hidden on a settled list error, and the counts read
+  // keeps its own independent suppression.
   return (
     <>
       <ListShell
@@ -434,31 +422,46 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {shown.map((milestone) => {
-                const areaName =
-                  milestone.analytics_area_id !== null
-                    ? analyticsAreaNamesById.get(milestone.analytics_area_id)
-                    : undefined;
-                const ownerName = actorNamesById.get(milestone.owner_actor_id);
-                return (
-                  <MilestoneRow
-                    key={milestone.id}
-                    milestone={milestone}
-                    selected={milestone.id === selectedId}
-                    managedSystemName={
-                      managedSystemNamesById.get(milestone.primary_managed_system_id) ??
-                      'Managed System'
-                    }
-                    {...(areaName !== undefined ? { areaName } : {})}
-                    {...(ownerName !== undefined ? { owner: { display_name: ownerName } } : {})}
-                    onSelect={selectMilestone}
-                  />
-                );
-              })}
-              {shown.length === 0 && (
-                <div className="px-5 py-10 text-center text-sm text-text-muted">
-                  표시할 milestone 이 없습니다.
-                </div>
+              {listQuery.isLoading ? (
+                <div className="p-4 text-sm text-text-muted">Loading Milestones…</div>
+              ) : isPermissionDenied(listQuery.error) ? (
+                <PermissionBlockedPanel
+                  state="denied"
+                  category="Milestone list"
+                  reason={listQuery.error.message}
+                  className="m-4"
+                />
+              ) : listQuery.error ? (
+                <div className="p-4 text-sm text-accent-danger">Milestone list unavailable.</div>
+              ) : (
+                <>
+                  {shown.map((milestone) => {
+                    const areaName =
+                      milestone.analytics_area_id !== null
+                        ? analyticsAreaNamesById.get(milestone.analytics_area_id)
+                        : undefined;
+                    const ownerName = actorNamesById.get(milestone.owner_actor_id);
+                    return (
+                      <MilestoneRow
+                        key={milestone.id}
+                        milestone={milestone}
+                        selected={milestone.id === selectedId}
+                        managedSystemName={
+                          managedSystemNamesById.get(milestone.primary_managed_system_id) ??
+                          'Managed System'
+                        }
+                        {...(areaName !== undefined ? { areaName } : {})}
+                        {...(ownerName !== undefined ? { owner: { display_name: ownerName } } : {})}
+                        onSelect={selectMilestone}
+                      />
+                    );
+                  })}
+                  {shown.length === 0 && (
+                    <div className="px-5 py-10 text-center text-sm text-text-muted">
+                      표시할 milestone 이 없습니다.
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </>

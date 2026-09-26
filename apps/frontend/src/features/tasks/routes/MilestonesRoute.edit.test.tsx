@@ -11,6 +11,7 @@ import type { MilestoneDetailDto, MilestoneDto } from '@fops/shared';
 import { DetailPanelSlotContext } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestonesRoute } from './MilestonesRoute';
@@ -1385,5 +1386,129 @@ describe('MilestonesRoute create session (R5)', () => {
     expect(
       screen.queryByRole('heading', { name: 'Launch review hardening' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+// R6 (Astra P2) — the top-level `listQuery.isLoading` return replaced the
+// whole shell (list AND detail slot) whenever an uncached status tab entered
+// loading: a New milestone draft or an open title editor was destroyed
+// without confirmation. Loading/denied/error presentation now lives in the
+// list slot, so the shell and the detail panel keep their lifetime across
+// tab refetches and drafts survive — including when the tab refetch itself
+// is denied (retained rows stay hidden).
+describe('MilestonesRoute tab switch draft preservation (R6)', () => {
+  const PLANNING_ROW: MilestoneDto = {
+    ...SSO_ROW,
+    id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1023',
+    display_id: 'MLS-1023',
+    title: 'Planning Milestone',
+    status: 'planning',
+  };
+
+  let resolveTab!: (value: { items: MilestoneDto[] }) => void;
+  let rejectTab!: (reason: unknown) => void;
+
+  function mockDeferredTab(tabResponse: 'success' | 'denied'): void {
+    vi.mocked(listMilestones)
+      .mockResolvedValueOnce({ items: MILESTONES }) // list 'all'
+      .mockResolvedValueOnce({ items: MILESTONES }) // counts
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ items: MilestoneDto[] }>((resolve, reject) => {
+            resolveTab = resolve;
+            rejectTab = reject;
+          }),
+      );
+    if (tabResponse === 'denied') {
+      // The deferred promise rejects once the test triggers it.
+      void Promise.resolve().then(() => {
+        /* rejection is driven by rejectTab below */
+      });
+    }
+  }
+
+  async function openDirtyDraft(viaCreate: boolean): Promise<void> {
+    if (viaCreate) {
+      fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+      await screen.findByTestId('milestone-create-panel');
+      fireEvent.change(screen.getByLabelText('Title'), {
+        target: { value: 'Draft while switching' },
+      });
+    } else {
+      await screen.findByRole('heading', { name: 'SSO Stabilization' });
+      fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+      fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+        target: { value: 'SSO draft' },
+      });
+    }
+  }
+
+  function expectDraftIntact(viaCreate: boolean): void {
+    if (viaCreate) {
+      expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
+      expect(screen.getByLabelText('Title')).toHaveValue('Draft while switching');
+    } else {
+      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+    }
+  }
+
+  it.each([
+    { label: 'create form', viaCreate: true },
+    { label: 'title editor', viaCreate: false },
+  ])(
+    'keeps the $label draft while an uncached tab loads and after it resolves',
+    async ({ viaCreate }) => {
+      const user = userEvent.setup();
+      mockDeferredTab('success');
+      vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
+      if (viaCreate) {
+        renderWithClient(<MilestonesRoute />);
+        await screen.findByText('MLS-1021');
+      } else {
+        renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+        await screen.findByRole('heading', { name: 'SSO Stabilization' });
+      }
+      await openDirtyDraft(viaCreate);
+
+      // Tabs need a real user click (user-event), not fireEvent.
+      await user.click(screen.getByRole('tab', { name: /^Planning/ }));
+
+      // During the tab refetch the shell and the draft are intact.
+      expect(await screen.findByText('Loading Milestones…')).toBeInTheDocument();
+      expectDraftIntact(viaCreate);
+
+      resolveTab({ items: [PLANNING_ROW] });
+      expect(await screen.findByText('Planning Milestone')).toBeInTheDocument();
+      expectDraftIntact(viaCreate);
+    },
+  );
+
+  it.each([
+    { label: 'create form', viaCreate: true },
+    { label: 'title editor', viaCreate: false },
+  ])('keeps the $label draft when an uncached tab refetch is denied', async ({ viaCreate }) => {
+    const user = userEvent.setup();
+    mockDeferredTab('denied');
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
+    if (viaCreate) {
+      renderWithClient(<MilestonesRoute />);
+      await screen.findByText('MLS-1021');
+    } else {
+      renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+      await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    }
+    await openDirtyDraft(viaCreate);
+
+    await user.click(screen.getByRole('tab', { name: /^Planning/ }));
+    await screen.findByText('Loading Milestones…');
+    expectDraftIntact(viaCreate);
+
+    rejectTab(new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }));
+
+    // The denial presents in the list slot; retained rows stay hidden while
+    // the shell (and the draft) survive.
+    expect(await screen.findByText('finding.manage required')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /SSO Stabilization/ })).not.toBeInTheDocument();
+    expectDraftIntact(viaCreate);
   });
 });
