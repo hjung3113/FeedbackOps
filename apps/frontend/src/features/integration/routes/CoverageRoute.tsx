@@ -286,7 +286,7 @@ export function CoverageRoute(): React.ReactElement {
                     key={item.id}
                     {...(href !== undefined ? { href } : {})}
                     data-testid={`coverage-row-${item.id}`}
-                    className={`grid items-center gap-4 border-b border-border-subtle px-4 py-3 last:border-b-0 hover:bg-surface-row-hover${href === undefined ? ' pointer-events-none' : ''}`}
+                    className={`grid items-center gap-4 border-b border-border-subtle px-4 py-3.5 last:border-b-0 hover:bg-surface-row-hover${href === undefined ? ' pointer-events-none' : ''}`}
                     style={{ gridTemplateColumns: 'minmax(0,1fr) 110px minmax(0,1fr) 56px' }}
                   >
                     <div className="min-w-0">
