@@ -1,4 +1,4 @@
-import { dashboardSummarySchema } from '@fops/shared';
+import { DASHBOARD_HOP_ROUTES, dashboardSummarySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Outlet,
@@ -46,7 +46,7 @@ const response = {
   by_managed_system: [],
 };
 
-function installFetch(): ReturnType<typeof vi.fn> {
+function installFetch(summary: unknown = response): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith('/me'))
@@ -64,7 +64,7 @@ function installFetch(): ReturnType<typeof vi.fn> {
         { status: 200 },
       );
     if (url.startsWith('/dashboard/summary'))
-      return new Response(JSON.stringify(response), { status: 200 });
+      return new Response(JSON.stringify(summary), { status: 200 });
     if (url.startsWith('/tasks') || url.startsWith('/task-requests'))
       return new Response(JSON.stringify({ items: [] }), { status: 200 });
     if (url.startsWith('/permission-requests/mine'))
@@ -131,6 +131,38 @@ describe('HomeScreen route content', () => {
     ).toBeInTheDocument();
     expect(screen.queryByTestId('home-queue-high-severity-unlinked')).toBeNull();
   });
+
+  it('links coverage rows to the shared one-hop routes', async () => {
+    const coverage = [
+      { id: 'voc-task', value: 2, total: 3, percent: 67, status: 'warn' },
+      { id: 'finding-execution', value: 1, total: 2, percent: 50, status: 'warn' },
+      { id: 'high-followup', value: 0, total: 1, percent: 0, status: 'bad' },
+      { id: 'released-update', value: 3, total: 4, percent: 75, status: 'good' },
+      { id: 'analytics-area', value: 1, total: 3, percent: 33, status: 'bad' },
+      { id: 'milestone-outcome', value: 0, total: 2, percent: 0, status: 'bad' },
+    ] as const;
+    installFetch(dashboardSummarySchema.parse({ ...response, coverage }));
+    renderHome();
+
+    await screen.findByTestId('home-coverage-row-voc-task');
+    expect(screen.getByRole('link', { name: /View coverage/ })).toHaveAttribute(
+      'href',
+      '/integration/coverage',
+    );
+
+    for (const item of coverage) {
+      const row = screen.getByTestId(`home-coverage-row-${item.id}`);
+      if (item.id === 'milestone-outcome') {
+        expect(row.tagName).not.toBe('A');
+        continue;
+      }
+      expect({ tagName: row.tagName, href: row.getAttribute('href') }).toEqual({
+        tagName: 'A',
+        href: DASHBOARD_HOP_ROUTES[item.id],
+      });
+    }
+  });
+
   it('renders a present zero queue in the sidebar', () => {
     render(
       <AppSidebar entries={homeSidebarEntries(dashboardSummarySchema.parse(response), true)} />,
