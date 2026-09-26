@@ -175,9 +175,9 @@ describe('module seam recurrence guard (#391)', () => {
     expect(findForeignSchemaWrites('-- UPDATE finding.findings SET x')).not.toEqual([]);
   });
 
-  it('voc-clusters/tasks/saved-views import owning module seams, not repos', () => {
+  it('voc-clusters/tasks/saved-views/milestones import owning module seams, not repos', () => {
     const violations: string[] = [];
-    for (const dir of ['voc-clusters', 'tasks', 'saved-views']) {
+    for (const dir of ['voc-clusters', 'tasks', 'saved-views', 'milestones']) {
       for (const file of listTsFiles(path.join(MODULES_DIR, dir))) {
         for (const match of findForbiddenRepoImports(fs.readFileSync(file, 'utf8'), file)) {
           violations.push(`${path.relative(MODULES_DIR, file)}: ${match}`);
@@ -211,5 +211,11 @@ describe('module seam recurrence guard (#391)', () => {
       violations.map((match) => `modules/tasks/repo.ts: ${match}`),
       'cross-schema writes found in tasks/repo.ts',
     ).toEqual([]);
+  });
+
+  it('milestones/repo.ts mentions neither task.tasks nor finding.findings (#514 A4)', () => {
+    const repoSource = fs.readFileSync(path.join(MODULES_DIR, 'milestones/repo.ts'), 'utf8');
+    expect(repoSource).not.toContain('task.tasks');
+    expect(repoSource).not.toContain('finding.findings');
   });
 });
