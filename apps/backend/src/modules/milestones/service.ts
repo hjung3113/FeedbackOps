@@ -1,4 +1,4 @@
-import type { CreateMilestoneRequest, MilestoneDto } from '@fops/shared';
+import type { CreateMilestoneRequest, ListMilestonesQuery, MilestoneDto } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -9,7 +9,12 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { type MilestoneRow, insertMilestone } from './repo.js';
+import {
+  type MilestoneRow,
+  findMilestoneById,
+  insertMilestone,
+  listMilestonesByWorkspace,
+} from './repo.js';
 
 export interface MilestonesActor {
   actor_id: string;
@@ -150,8 +155,66 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
     });
   }
 
+  // Out-of-scope rows are filtered per row (no list-wide 403), same shape as
+  // listTasks. `managed_system_id=all` keeps the caller's scope.
+  async function listMilestones(args: {
+    actor: MilestonesActor;
+    query: ListMilestonesQuery;
+  }): Promise<{ items: MilestoneDto[] }> {
+    if (!hasElevatedFindingRole(args.actor)) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+    const managedSystemId =
+      args.query.managed_system_id && args.query.managed_system_id !== 'all'
+        ? args.query.managed_system_id
+        : undefined;
+    const rows = await listMilestonesByWorkspace(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      ...(args.query.status !== undefined ? { status: args.query.status } : {}),
+      ...(managedSystemId !== undefined ? { managedSystemId } : {}),
+    });
+    const items: MilestoneDto[] = [];
+    for (const row of rows) {
+      const canManage = (
+        await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+          requireElevatedRole: true,
+        })
+      ).allow;
+      if (!canManage) continue;
+      items.push(milestoneToDto(row));
+    }
+    return { items };
+  }
+
+  async function getMilestone(args: {
+    actor: MilestonesActor;
+    milestoneId: string;
+  }): Promise<MilestoneDto> {
+    if (!hasElevatedFindingRole(args.actor)) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+
+    const row = await findMilestoneById(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      milestoneId: args.milestoneId,
+    });
+    if (!row) throw new HttpError('not_found.record', 'milestone not found');
+
+    const canManage = (
+      await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
+        requireElevatedRole: true,
+      })
+    ).allow;
+    if (!canManage) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+    return milestoneToDto(row);
+  }
+
   return {
     createMilestone,
+    listMilestones,
+    getMilestone,
     milestoneToDto,
   };
 }

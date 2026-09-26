@@ -88,6 +88,43 @@ export async function insertMilestone(
   return mapMilestoneRow(row);
 }
 
+export async function listMilestonesByWorkspace(
+  db: Db | Tx,
+  input: {
+    workspaceId: string;
+    managedSystemId?: string;
+    status?: string;
+  },
+): Promise<MilestoneRow[]> {
+  const predicates = [sql`workspace_id = ${input.workspaceId}`];
+  if (input.status !== undefined) predicates.push(sql`status = ${input.status}`);
+  if (input.managedSystemId !== undefined) {
+    predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
+  }
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT ${MILESTONE_SELECT}
+      FROM task.milestones
+     WHERE ${sql.join(predicates, sql` AND `)}
+     ORDER BY created_at DESC, id DESC
+  `);
+  return result.rows.map(mapMilestoneRow);
+}
+
+export async function findMilestoneById(
+  db: Db | Tx,
+  input: { workspaceId: string; milestoneId: string },
+): Promise<MilestoneRow | null> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT ${MILESTONE_SELECT}
+      FROM task.milestones
+     WHERE id = ${input.milestoneId}
+       AND workspace_id = ${input.workspaceId}
+     LIMIT 1
+  `);
+  const row = result.rows[0];
+  return row ? mapMilestoneRow(row) : null;
+}
+
 /** Lock a workspace-scoped Milestone for update. No status policy (#514 G-status). */
 export async function lockMilestone(
   db: Db | Tx,
