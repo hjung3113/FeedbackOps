@@ -3,7 +3,7 @@ import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import type { MilestoneDetailDto, TaskDetailDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -92,9 +92,10 @@ vi.mock('@/lib/api/milestones', () => ({
   getMilestone: vi.fn(),
 }));
 
-function renderWithClient(ui: React.ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+function renderWithClient(ui: React.ReactElement, queryClient?: QueryClient) {
+  const client = queryClient ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return client;
 }
 
 describe('TaskListRoute display ids', () => {
@@ -241,7 +242,7 @@ function taskDetailFixture(
   };
 }
 
-function renderTaskDetailPanel(): void {
+function renderTaskDetailPanel(queryClient?: QueryClient): void {
   renderWithClient(
     <TaskDetailPanel
       taskId="10000000-0000-0000-0000-000000000001"
@@ -249,6 +250,7 @@ function renderTaskDetailPanel(): void {
       managedSystemNamesById={new Map()}
       onClose={vi.fn()}
     />,
+    queryClient,
   );
 }
 
@@ -433,21 +435,65 @@ describe('Task detail Milestone row (#514 B3b)', () => {
     vi.mocked(getMilestone).mockResolvedValueOnce(milestoneFixture());
     renderTaskDetailPanel();
 
-    expect(await screen.findByText('Q3 결제 지표 개선')).toBeInTheDocument();
-    expect(screen.getByText('MLS-1000')).toBeInTheDocument();
+    expect(await screen.findByText('MLS-1000 Q3 결제 지표 개선')).toBeInTheDocument();
     expect(getMilestone).toHaveBeenCalledWith(MILESTONE_ID, expect.anything());
   });
 
   it('shows — when the milestone fetch returns 404', async () => {
     vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
-    vi.mocked(getMilestone).mockRejectedValueOnce(
-      new ApiError(404, { code: 'not_found.record', message: 'milestone not found' }),
-    );
+    let rejectRequest!: (reason: ApiError) => void;
+    const request = new Promise<MilestoneDetailDto>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    const notFound = new ApiError(404, {
+      code: 'not_found.record',
+      message: 'milestone not found',
+    });
+    vi.mocked(getMilestone).mockReturnValueOnce(request);
     renderTaskDetailPanel();
 
     const row = await milestoneRow();
-    expect(within(row).getByText('—')).toBeInTheDocument();
-    expect(within(row).queryByText('MLS-1000')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledWith(MILESTONE_ID, expect.anything());
+    });
+    await act(async () => {
+      rejectRequest(notFound);
+      await expect(request).rejects.toBe(notFound);
+    });
+    await waitFor(() => {
+      expect(within(row).getByText('—')).toBeInTheDocument();
+      expect(within(row).queryByText('MLS-1000')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows — after a 404 refetch when the cached milestone was previously visible', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    let rejectRequest!: (reason: ApiError) => void;
+    const request = new Promise<MilestoneDetailDto>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    const notFound = new ApiError(404, {
+      code: 'not_found.record',
+      message: 'milestone not found',
+    });
+    vi.mocked(getMilestone).mockReturnValueOnce(request);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['milestone', MILESTONE_ID], milestoneFixture(), { updatedAt: 0 });
+    renderTaskDetailPanel(queryClient);
+
+    const row = await milestoneRow();
+    expect(within(row).getByText('MLS-1000 Q3 결제 지표 개선')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledWith(MILESTONE_ID, expect.anything());
+    });
+    await act(async () => {
+      rejectRequest(notFound);
+      await expect(request).rejects.toBe(notFound);
+    });
+    await waitFor(() => {
+      expect(within(row).getByText('—')).toBeInTheDocument();
+      expect(within(row).queryByText('MLS-1000 Q3 결제 지표 개선')).not.toBeInTheDocument();
+    });
   });
 
   it('renders no control that assigns a milestone (no POST /tasks/:id/milestone)', async () => {
@@ -455,7 +501,7 @@ describe('Task detail Milestone row (#514 B3b)', () => {
     vi.mocked(getMilestone).mockResolvedValueOnce(milestoneFixture());
     renderTaskDetailPanel();
 
-    expect(await screen.findByText('Q3 결제 지표 개선')).toBeInTheDocument();
+    expect(await screen.findByText('MLS-1000 Q3 결제 지표 개선')).toBeInTheDocument();
     // The row is a read: no picker and no action button live in it.
     const row = await milestoneRow();
     expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
