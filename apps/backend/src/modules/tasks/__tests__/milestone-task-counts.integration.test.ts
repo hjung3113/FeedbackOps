@@ -41,6 +41,7 @@ describe.skipIf(!runIntegration)('grouped milestone task counts (#514 B1c)', () 
   let adminActorId: string;
   let managedSystemId: string;
   let fullMilestoneId: string;
+  let secondMilestoneId: string;
   let emptyMilestoneId: string;
 
   beforeAll(async () => {
@@ -115,6 +116,7 @@ describe.skipIf(!runIntegration)('grouped milestone task counts (#514 B1c)', () 
   async function seedFixtures(): Promise<void> {
     managedSystemId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Counts MS');
     fullMilestoneId = await insertMilestone('Full milestone');
+    secondMilestoneId = await insertMilestone('Second populated milestone');
     emptyMilestoneId = await insertMilestone('Empty milestone');
 
     const statuses = ['done', 'released', 'reopened', 'doing', 'backlog', 'todo'] as const;
@@ -128,12 +130,21 @@ describe.skipIf(!runIntegration)('grouped milestone task counts (#514 B1c)', () 
         createdBy: adminActorId,
       });
     }
+
+    await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: managedSystemId,
+      title: 'Second milestone todo task',
+      status: 'todo',
+      milestoneId: secondMilestoneId,
+      createdBy: adminActorId,
+    });
   }
 
-  it('one call over both ids returns both groups; buckets match the formula', async () => {
+  it('one call over two populated ids returns both independent groups', async () => {
     const counts = await countTasksByMilestone(dbHandle.db, {
       workspaceId: WORKSPACE_ID,
-      milestoneIds: [fullMilestoneId, emptyMilestoneId],
+      milestoneIds: [fullMilestoneId, secondMilestoneId],
     });
 
     expect(counts.get(fullMilestoneId)).toEqual({
@@ -142,11 +153,21 @@ describe.skipIf(!runIntegration)('grouped milestone task counts (#514 B1c)', () 
       queued: 2, // backlog + todo
       total: 6,
     });
-    // GROUP BY omits the empty Milestone; the service fills zeros.
-    expect(counts.has(emptyMilestoneId)).toBe(false);
+    expect(counts.get(secondMilestoneId)).toEqual({
+      released_done: 0,
+      in_flight: 0,
+      queued: 1,
+      total: 1,
+    });
   });
 
   it('detail route fills zeros for a Milestone the GROUP BY omitted', async () => {
+    const counts = await countTasksByMilestone(dbHandle.db, {
+      workspaceId: WORKSPACE_ID,
+      milestoneIds: [emptyMilestoneId],
+    });
+    expect(counts.has(emptyMilestoneId)).toBe(false);
+
     const res = await app.inject({
       method: 'GET',
       url: `/milestones/${emptyMilestoneId}`,
