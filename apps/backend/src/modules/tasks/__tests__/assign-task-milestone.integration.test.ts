@@ -34,6 +34,8 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
   let app: FastifyInstance;
   let adminCookie: string;
   let adminActorId: string;
+  let foreignWorkspaceId: string | null = null;
+  let foreignManagedSystemId: string | null = null;
   let foreignMilestoneId: string | null = null;
 
   beforeAll(async () => {
@@ -59,10 +61,30 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
   });
 
   afterAll(async () => {
-    await cleanupFixtures();
-    await app?.close();
-    await dbHandle?.close();
-    await migrateHandle?.close();
+    let foreignParentCounts: { workspace_count: number; managed_system_count: number } | undefined;
+    try {
+      await cleanupFixtures();
+      if (dbHandle) {
+        const rows = await dbHandle.pool.query<{
+          workspace_count: number;
+          managed_system_count: number;
+        }>(
+          `select count(distinct workspace.id)::int as workspace_count,
+                  count(managed_system.id)::int as managed_system_count
+             from core.workspaces workspace
+             left join core.managed_systems managed_system
+               on managed_system.workspace_id = workspace.id
+            where workspace.name = $1`,
+          [`Other workspace ${SLUG_PREFIX}`],
+        );
+        foreignParentCounts = rows.rows[0];
+      }
+    } finally {
+      await app?.close();
+      await dbHandle?.close();
+      await migrateHandle?.close();
+    }
+    expect(foreignParentCounts).toEqual({ workspace_count: 0, managed_system_count: 0 });
   });
 
   async function cleanupFixtures(): Promise<void> {
@@ -73,6 +95,18 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
         foreignMilestoneId,
       ]);
       foreignMilestoneId = null;
+    }
+    if (foreignManagedSystemId) {
+      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [
+        foreignManagedSystemId,
+      ]);
+      foreignManagedSystemId = null;
+    }
+    if (foreignWorkspaceId) {
+      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [
+        foreignWorkspaceId,
+      ]);
+      foreignWorkspaceId = null;
     }
     await migrateHandle.pool.query(
       `delete from core.audit_log
@@ -130,11 +164,17 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
     const result = await migrateHandle.pool.query<{ id: string }>(
       `insert into task.milestones (
           workspace_id, display_id, primary_managed_system_id, title, why,
-          owner_actor_id, start_date, target_date
+          owner_actor_id, start_date, target_date, created_by
         )
-       values ($1, $2, $3, 'Assign milestone', 'why', $4, '2026-10-01', '2026-12-31')
+       values ($1, $2, $3, 'Assign milestone', 'why', $4, '2026-10-01', '2026-12-31', $5)
        returning id`,
-      [WORKSPACE_ID, `MLS-${randomUUID().slice(0, 8)}`, managedSystemId, adminActorId],
+      [
+        WORKSPACE_ID,
+        `MLS-${randomUUID().slice(0, 8)}`,
+        managedSystemId,
+        adminActorId,
+        adminActorId,
+      ],
     );
     const id = result.rows[0]?.id;
     if (!id) throw new Error('insert milestone failed');
@@ -293,20 +333,23 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
       'insert into core.workspaces (name) values ($1) returning id',
       [`Other workspace ${SLUG_PREFIX}`],
     );
-    const otherWorkspaceId = otherWs.rows[0]?.id;
-    if (!otherWorkspaceId) throw new Error('foreign workspace insert failed');
+    foreignWorkspaceId = otherWs.rows[0]?.id ?? null;
+    if (!foreignWorkspaceId) throw new Error('foreign workspace insert failed');
     const foreignMs = await dbHandle.pool.query<{ id: string }>(
       'insert into core.managed_systems (workspace_id, slug, name) values ($1, $2, $3) returning id',
-      [otherWorkspaceId, uid(`${SLUG_PREFIX}-fms`), 'Foreign MS'],
+      [foreignWorkspaceId, uid(`${SLUG_PREFIX}-fms`), 'Foreign MS'],
     );
+    foreignManagedSystemId = foreignMs.rows[0]?.id ?? null;
+    if (!foreignManagedSystemId) throw new Error('foreign Managed System insert failed');
     const foreign = await migrateHandle.pool.query<{ id: string }>(
       `insert into task.milestones (
           workspace_id, display_id, primary_managed_system_id, title, why,
-          owner_actor_id, start_date, target_date
+          owner_actor_id, start_date, target_date, created_by
         )
-       values ($1, 'MLS-foreign', $2, 'Foreign milestone', 'why', $3, '2026-10-01', '2026-12-31')
+       values ($1, 'MLS-foreign', $2, 'Foreign milestone', 'why', $3,
+               '2026-10-01', '2026-12-31', $4)
        returning id`,
-      [otherWorkspaceId, foreignMs.rows[0]?.id, adminActorId],
+      [foreignWorkspaceId, foreignManagedSystemId, adminActorId, adminActorId],
     );
     foreignMilestoneId = foreign.rows[0]?.id ?? null;
     if (!foreignMilestoneId) throw new Error('foreign milestone insert failed');

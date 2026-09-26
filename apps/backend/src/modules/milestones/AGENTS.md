@@ -11,8 +11,10 @@ Findings go through those modules' `index.ts` seams, never their repos.
 - Writes require Admin or Developer with `finding.manage` on the Milestone's
   Managed System (`checkFindingManage` with `requireElevatedRole: true`).
 - `primary_managed_system_id` is create-only; no update path writes it.
-- `status` is a plain text column defaulting to `planning`; the persisted set
-  is the open #514 G-status ADR. No code path writes `status` before that.
+- `status` is a plain text column defaulting to `planning`; Accepted ADR-0050
+  fixes the persisted set to `planning | in_progress | blocked | released`.
+  Create accepts an optional value in that set, and PATCH may set any value in
+  the set.
 - `finding.findings.linked_milestone_id` has no application writer in this
   module. The FK exists; the writer does not.
 - `milestones/repo.ts` writes only `task.milestones` and never reads

@@ -18,6 +18,7 @@ request body (strict, unknown fields rejected):
   analytics_area_id uuid nullable optional
   start_date ISO date required
   target_date ISO date required
+  status optional planning|in_progress|blocked|released (ADR-0050)
 response body: 201 MilestoneDto
 auth and permission: session + workspace; Admin or Developer with
   finding.manage on primary_managed_system_id. Admin bypass follows the same
