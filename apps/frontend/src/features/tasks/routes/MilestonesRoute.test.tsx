@@ -1,3 +1,4 @@
+import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { listMilestones } from '@/lib/api/milestones';
 import type { MilestoneDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -45,6 +46,7 @@ const IDS = {
   workspace: 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0001',
   msPowerBi: 'cccccccc-cccc-4ccc-8ccc-cccccccc00c1',
   areaProduct: 'dddddddd-dddd-4ddd-8ddd-dddddddd00a1',
+  areaRevenue: 'dddddddd-dddd-4ddd-8ddd-dddddddd00a2',
   ownerU1: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001',
   ownerU2: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0002',
   ownerU3: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0003',
@@ -119,6 +121,24 @@ describe('MilestonesRoute list (#514 B2c)', () => {
   beforeEach(() => {
     vi.mocked(listMilestones).mockReset();
     vi.mocked(listMilestones).mockImplementation(async () => ({ items: MILESTONES }));
+    vi.mocked(fetchAnalyticsAreas).mockReset();
+    vi.mocked(fetchAnalyticsAreas).mockImplementation(async () => ({
+      items: [
+        {
+          id: IDS.areaProduct,
+          workspace_id: IDS.workspace,
+          managed_system_id: IDS.msPowerBi,
+          slug: 'product-usage',
+          name: 'Product Usage',
+          owner_team_id: null,
+          archived_at: null,
+          archived_by_actor_id: null,
+          created_at: '2026-07-01T00:00:00.000Z',
+          updated_at: '2026-07-01T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+    }));
   });
 
   it('renders All/In progress/Planning/Released tabs, no Blocked, counts from the unfiltered list', async () => {
@@ -235,5 +255,122 @@ describe('MilestonesRoute list (#514 B2c)', () => {
       }),
     );
     expect(screen.getByText('SSO Stabilization')).toBeInTheDocument();
+  });
+
+  it('keeps managedSystem on selection navigation and list requests (F1)', async () => {
+    renderWithClient(<MilestonesRoute managedSystem={IDS.msPowerBi} />);
+    await screen.findByText('MLS-1021');
+    for (const call of vi.mocked(listMilestones).mock.calls) {
+      expect(call[0]).toMatchObject({ managed_system_id: IDS.msPowerBi });
+    }
+    navigateMock.mockClear();
+
+    await userEvent.click(screen.getByText('SSO Stabilization'));
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: '/tasks',
+        search: { view: 'milestones', param: IDS.sso, managedSystem: IDS.msPowerBi },
+      }),
+    );
+    expect(screen.getByText('SSO Stabilization')).toBeInTheDocument();
+  });
+
+  it('clears the stale highlight when selectedParam is removed (F2)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <MilestonesRoute selectedParam={IDS.sso} />
+      </QueryClientProvider>,
+    );
+    const row = (await screen.findByText('MLS-1021')).closest('[role="button"]') as HTMLElement;
+    expect(row.querySelector('[data-testid="object-row-selected-bar"]')).not.toBeNull();
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <MilestonesRoute />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('object-row-selected-bar')).toBeNull();
+    });
+    expect(screen.getByText('SSO Stabilization')).toBeInTheDocument();
+  });
+
+  it('keeps the prototype three-line row hierarchy (F3)', async () => {
+    await renderMilestones();
+
+    const titleLine = screen.getByText('MLS-1021').parentElement as HTMLElement;
+    const body = titleLine.parentElement as HTMLElement;
+    expect(titleLine.textContent).toContain('SSO Stabilization');
+    expect(titleLine.textContent).toContain('In progress');
+    expect(titleLine.textContent).toContain('Power BI');
+    expect(titleLine.textContent).toContain('Product Usage');
+    expect(body.childElementCount).toBe(3);
+
+    const whyLine = body.children[1] as HTMLElement;
+    expect(whyLine.textContent).toContain('SSO 세션 만료');
+    expect(whyLine.textContent).not.toContain('released');
+
+    const metricsLine = body.children[2] as HTMLElement;
+    expect(metricsLine.textContent).toContain('0/1 released');
+    expect(metricsLine.textContent).toContain('2026-06-15');
+    expect(metricsLine.textContent).not.toContain('SSO 세션');
+  });
+
+  it('resolves archived Areas on later pages and omits null-area badges (F4)', async () => {
+    vi.mocked(fetchAnalyticsAreas).mockReset();
+    vi.mocked(fetchAnalyticsAreas)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: IDS.areaRevenue,
+            workspace_id: IDS.workspace,
+            managed_system_id: IDS.msPowerBi,
+            slug: 'revenue',
+            name: 'Revenue',
+            owner_team_id: null,
+            archived_at: '2026-07-10T00:00:00.000Z',
+            archived_by_actor_id: IDS.ownerU1,
+            created_at: '2026-07-01T00:00:00.000Z',
+            updated_at: '2026-07-10T00:00:00.000Z',
+          },
+        ],
+        total: 2,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: IDS.areaProduct,
+            workspace_id: IDS.workspace,
+            managed_system_id: IDS.msPowerBi,
+            slug: 'product-usage',
+            name: 'Product Usage',
+            owner_team_id: null,
+            archived_at: null,
+            archived_by_actor_id: null,
+            created_at: '2026-07-01T00:00:00.000Z',
+            updated_at: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+        total: 2,
+      });
+
+    renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+
+    const row = screen.getByText('MLS-1021').closest('[role="button"]') as HTMLElement;
+    expect(within(row).getByText('Product Usage')).toBeInTheDocument();
+
+    const nullAreaRow = screen.getByText('MLS-1018').closest('[role="button"]') as HTMLElement;
+    expect(within(nullAreaRow).queryByText(/Product Usage|Revenue/)).toBeNull();
+
+    expect(vi.mocked(fetchAnalyticsAreas)).toHaveBeenCalledWith(
+      expect.objectContaining({ includeArchived: true, limit: 500, offset: 0 }),
+    );
+    expect(vi.mocked(fetchAnalyticsAreas)).toHaveBeenCalledWith(
+      expect.objectContaining({ includeArchived: true, limit: 500, offset: 1 }),
+    );
   });
 });

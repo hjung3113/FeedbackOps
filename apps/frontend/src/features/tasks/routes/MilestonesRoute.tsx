@@ -33,6 +33,9 @@ export interface MilestonesRouteProps {
 
 type MilestoneTab = MilestoneStatusFilter | 'all';
 
+// GET /analytics-areas caps limit at 500; paginate rather than raise it (F4).
+const ANALYTICS_AREAS_PAGE_LIMIT = 500;
+
 // No Blocked tab: this slice has no backing blocked filter decision; Blocked
 // still appears as a row badge (MilestoneStatusBadge).
 const STATUS_TABS: Array<{ value: MilestoneTab; label: string }> = [
@@ -49,7 +52,9 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
 
   React.useEffect(() => {
-    if (selectedParam !== undefined) setSelectedId(selectedParam);
+    // URL selection is authoritative in both directions: a param selects the
+    // row, and Back to a param-less URL clears the stale highlight (F2).
+    setSelectedId(selectedParam ?? null);
   }, [selectedParam]);
 
   const listQuery = useQuery({
@@ -81,9 +86,33 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
     queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
     staleTime: 10 * 60 * 1000,
   });
+  // Area display lookup must resolve every linked Area: archived Areas stay
+  // referenced by existing Milestones, and the endpoint paginates (default
+  // page < catalog), so walk all pages instead of trusting one response (F4).
   const analyticsAreasQuery = useQuery({
-    queryKey: ['analytics-areas', 'all'] as const,
-    queryFn: ({ signal }) => fetchAnalyticsAreas({ signal }),
+    queryKey: ['analytics-areas', 'all', { includeArchived: true, paginated: true }] as const,
+    queryFn: async ({ signal }) => {
+      const first = await fetchAnalyticsAreas({
+        includeArchived: true,
+        limit: ANALYTICS_AREAS_PAGE_LIMIT,
+        offset: 0,
+        signal,
+      });
+      const items = [...first.items];
+      let total = first.total;
+      while (items.length < total) {
+        const next = await fetchAnalyticsAreas({
+          includeArchived: true,
+          limit: ANALYTICS_AREAS_PAGE_LIMIT,
+          offset: items.length,
+          signal,
+        });
+        if (next.items.length === 0) break;
+        items.push(...next.items);
+        total = next.total;
+      }
+      return { items, total };
+    },
     staleTime: 10 * 60 * 1000,
   });
 
@@ -137,7 +166,16 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
 
   function selectMilestone(id: string): void {
     setSelectedId(id);
-    void navigate({ to: '/tasks', search: { view: 'milestones', param: id } });
+    // Preserve the current Managed System scope in the URL so selection never
+    // broadens the list or summary (F1; routes-and-layout list-context rule).
+    void navigate({
+      to: '/tasks',
+      search: {
+        view: 'milestones',
+        param: id,
+        ...(managedSystem !== undefined ? { managedSystem } : {}),
+      },
+    });
   }
 
   if (listQuery.isLoading) {
