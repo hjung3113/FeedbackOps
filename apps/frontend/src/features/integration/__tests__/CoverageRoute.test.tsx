@@ -282,6 +282,7 @@ describe('integration coverage route', () => {
 
   test('uses the Coverage prototype surface labels and the locked subtitle', async () => {
     await renderCoverage('/integration/coverage');
+    expect(screen.getByRole('heading', { level: 1, name: 'Coverage' })).toBeVisible();
     const signals = within(screen.getByTestId('coverage-signals'));
     expect(signals.getByText('Released Task with public update')).toBeVisible();
     expect(signals.getByText('VOC with Analytics Area set')).toBeVisible();

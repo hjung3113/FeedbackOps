@@ -208,12 +208,14 @@ export function CoverageRoute(): React.ReactElement {
     summary.data.by_managed_system.length === 0;
 
   return (
-    <PageShell
-      header={{
-        title: 'Coverage',
-        subtitle: PARTIAL_COVERAGE_SUBTITLE,
-        actions: (
-          <>
+    <PageShell contentClassName="max-w-none">
+      <section data-testid="integration-coverage">
+        <header className="mb-6 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-text-primary">Coverage</h1>
+            <p className="mt-3 text-sm text-text-muted">{PARTIAL_COVERAGE_SUBTITLE}</p>
+          </div>
+          <div className="flex shrink-0 gap-2">
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="subtle" size="sm" data-testid="coverage-filter-button">
@@ -245,12 +247,8 @@ export function CoverageRoute(): React.ReactElement {
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
               Refresh
             </Button>
-          </>
-        ),
-      }}
-      contentClassName="max-w-none"
-    >
-      <section data-testid="integration-coverage">
+          </div>
+        </header>
         {summary.isError && (
           <p className="mb-5 text-sm text-accent-danger">Coverage summary unavailable.</p>
         )}

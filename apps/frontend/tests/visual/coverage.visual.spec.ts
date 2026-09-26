@@ -4,8 +4,8 @@ import { expectVisual } from './support/screenshot';
 import { expect, test } from './support/visual-test';
 
 test.describe('/integration/coverage visual harness', () => {
-  // Baseline PNGs are captured on a host with a browser (coordinator-owned);
-  // this commit ships the spec + schema-validated fixtures only.
+  // Baseline PNGs are generated and inspected on a host with a browser, then
+  // committed with the intended page-level visual change.
   test('renders the populated coverage page', async ({ page }) => {
     await installMockApi(page, { coverage: 'populated' });
     await page.goto('/integration/coverage');
