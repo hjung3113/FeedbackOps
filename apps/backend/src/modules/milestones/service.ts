@@ -115,7 +115,6 @@ async function assertMilestoneOwner(args: {
       {
         fields: [{ path: ['owner_actor_id'], code: 'out_of_scope' }],
       },
-      400,
     );
   }
 }

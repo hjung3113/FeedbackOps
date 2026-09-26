@@ -67,12 +67,10 @@ export type DetailShape =
 export class HttpError extends Error {
   readonly code: ErrorCode;
   readonly detail?: Exclude<DetailShape, undefined>;
-  readonly statusOverride?: 400;
-  constructor(code: ErrorCode, message: string, detail?: DetailShape, statusOverride?: 400) {
+  constructor(code: ErrorCode, message: string, detail?: DetailShape) {
     super(message);
     this.code = code;
     if (detail !== undefined) this.detail = detail;
-    if (statusOverride !== undefined) this.statusOverride = statusOverride;
   }
 }
 

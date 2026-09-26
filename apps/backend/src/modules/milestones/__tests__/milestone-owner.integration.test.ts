@@ -205,7 +205,7 @@ describe.skipIf(!runIntegration)('milestone owner rule (#514 A7)', () => {
 
   it('create: a User owner is validation.failed with no row', async () => {
     const res = await createMilestone(scopedDev.cookie, createBody(scopedDev.msId, userActorId));
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
     expect(await milestoneCount(scopedDev.msId)).toBe(0);
   });
@@ -213,7 +213,7 @@ describe.skipIf(!runIntegration)('milestone owner rule (#514 A7)', () => {
   it('create: a Developer without finding.manage on this Managed System is validation.failed', async () => {
     const unscoped = await unscopedDeveloperId();
     const res = await createMilestone(scopedDev.cookie, createBody(scopedDev.msId, unscoped));
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
     expect(await milestoneCount(scopedDev.msId)).toBe(0);
   });
@@ -224,7 +224,7 @@ describe.skipIf(!runIntegration)('milestone owner rule (#514 A7)', () => {
       scopedDev.cookie,
       createBody(scopedDev.msId, differentlyScoped),
     );
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
     expect(await milestoneCount(scopedDev.msId)).toBe(0);
   });
@@ -258,9 +258,9 @@ describe.skipIf(!runIntegration)('milestone owner rule (#514 A7)', () => {
     const rejections: Array<[string, number, string]> = [
       [randomUUID(), 404, 'not_found.record'],
       [foreignId, 404, 'not_found.record'],
-      [userActorId, 400, 'validation.failed'],
-      [unscoped, 400, 'validation.failed'],
-      [differentlyScoped, 400, 'validation.failed'],
+      [userActorId, 422, 'validation.failed'],
+      [unscoped, 422, 'validation.failed'],
+      [differentlyScoped, 422, 'validation.failed'],
     ];
     for (const [ownerActorId, expectedStatus, expectedCode] of rejections) {
       const res = await patchMilestone(
