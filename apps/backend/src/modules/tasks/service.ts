@@ -35,6 +35,7 @@ import { assertLinkManagedSystemCompatibility } from '../entity-links/service.js
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { linkTaskToFinding } from '../findings/commands.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
+import { lockMilestone } from '../milestones/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   type TaskRequestRow,
@@ -631,6 +632,26 @@ export function createTasksService(deps: TasksServiceDeps) {
             analyticsAreaId: args.input.analytics_area_id,
             managedSystemId: taskRequest.primary_managed_system_id,
           });
+
+          // #514 A10 — validate milestone_id before insertTask. Unknown or
+          // foreign-workspace: not_found; cross-MS: out_of_scope. No status
+          // policy here (G-status owns that).
+          if (args.input.milestone_id != null) {
+            const milestone = await lockMilestone(tx, {
+              workspaceId: args.actor.workspace_id,
+              milestoneId: args.input.milestone_id,
+            });
+            if (!milestone) {
+              throw new HttpError('not_found.record', 'milestone not found');
+            }
+            if (milestone.primary_managed_system_id !== taskRequest.primary_managed_system_id) {
+              throw new HttpError(
+                'validation.failed',
+                'milestone does not belong to the task request managed system',
+                { fields: [{ path: ['milestone_id'], code: 'out_of_scope' }] },
+              );
+            }
+          }
 
           const task = await insertTask(tx, {
             workspaceId: args.actor.workspace_id,
