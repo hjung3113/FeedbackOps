@@ -20,6 +20,7 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { updateMilestone } from '../repo.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -351,6 +352,67 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     expect(audits.rows[0]?.detail).toMatchObject({ fields: ['title', 'why'] });
     expect(audits.rows[0]?.detail.from_status).toBeUndefined();
     expect(audits.rows[0]?.detail.to_status).toBeUndefined();
+  });
+
+  it('repository updates advance the exposed timestamp within one transaction', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
+    const devCookie = await seedScopedDeveloper(ms);
+    const milestone = await seedMilestone(ms, devCookie);
+
+    const timestamps = await dbHandle.db.transaction(async (tx) => {
+      const first = await updateMilestone(tx, {
+        workspaceId: WORKSPACE_ID,
+        milestoneId: milestone.id,
+        patch: { title: 'First repository update' },
+      });
+      const second = await updateMilestone(tx, {
+        workspaceId: WORKSPACE_ID,
+        milestoneId: milestone.id,
+        patch: { title: 'Second repository update' },
+      });
+      return [first.updated_at.toISOString(), second.updated_at.toISOString()];
+    });
+
+    expect(Date.parse(timestamps[1] ?? '')).toBeGreaterThan(Date.parse(timestamps[0] ?? ''));
+  });
+
+  it('patch: concurrent writes with one If-Match allow one update and reject the stale writer', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
+    const devCookie = await seedScopedDeveloper(ms);
+    const milestone = await seedMilestone(ms, devCookie);
+    const ifMatch = await currentIfMatch(devCookie, milestone.id);
+
+    const responses = await Promise.all([
+      patchMilestone(
+        devCookie,
+        milestone.id,
+        { title: 'Concurrent update A' },
+        { idempotencyKey: randomUUID(), ifMatch },
+      ),
+      patchMilestone(
+        devCookie,
+        milestone.id,
+        { title: 'Concurrent update B' },
+        { idempotencyKey: randomUUID(), ifMatch },
+      ),
+    ]);
+
+    expect(responses.map((response) => response.statusCode).sort((a, b) => a - b)).toEqual([
+      200, 409,
+    ]);
+    const accepted = responses.find((response) => response.statusCode === 200);
+    const rejected = responses.find((response) => response.statusCode === 409);
+    if (!accepted || !rejected) throw new Error('expected one accepted and one stale response');
+
+    const acceptedBody = accepted.json<{ title: string; updated_at: string }>();
+    expect(acceptedBody.updated_at).not.toBe(ifMatch);
+    expect(rejected.json()).toMatchObject({
+      code: 'conflict.stale_write',
+      detail: { current_updated_at: acceptedBody.updated_at },
+    });
+
+    const after = await getMilestone(devCookie, milestone.id);
+    expect(after.json()).toMatchObject(acceptedBody);
   });
 
   it('patch: stale If-Match is conflict.stale_write with detail.current_updated_at and no write', async () => {

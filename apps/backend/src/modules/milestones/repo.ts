@@ -180,7 +180,7 @@ export async function updateMilestone(
     };
   },
 ): Promise<MilestoneRow> {
-  const sets = [sql`updated_at = now()`];
+  const sets = [sql`updated_at = GREATEST(now(), updated_at + INTERVAL '1 millisecond')`];
   if (input.patch.title !== undefined) sets.push(sql`title = ${input.patch.title}`);
   if (input.patch.why !== undefined) sets.push(sql`why = ${input.patch.why}`);
   if (input.patch.ownerActorId !== undefined) {

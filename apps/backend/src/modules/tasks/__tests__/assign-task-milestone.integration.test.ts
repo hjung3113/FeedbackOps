@@ -19,6 +19,7 @@ import {
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
+import { updateTaskMilestone } from '../repo.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -283,6 +284,67 @@ describe.skipIf(!runIntegration)('POST /tasks/:id/milestone (#514 B1b)', () => {
 
     const details = await milestoneAuditDetails(task.id);
     expect(details).toEqual([{ from_milestone_id: null, to_milestone_id: milestoneId }]);
+  });
+
+  it('task milestone repository updates advance the exposed timestamp within one transaction', async () => {
+    const msId = await seedManagedSystem();
+    const milestoneId = await seedMilestone(msId);
+    const task = await seedTask(msId);
+
+    const timestamps = await dbHandle.db.transaction(async (tx) => {
+      const first = await updateTaskMilestone(tx, {
+        workspaceId: WORKSPACE_ID,
+        taskId: task.id,
+        milestoneId,
+      });
+      const second = await updateTaskMilestone(tx, {
+        workspaceId: WORKSPACE_ID,
+        taskId: task.id,
+        milestoneId: null,
+      });
+      return [first.updated_at.toISOString(), second.updated_at.toISOString()];
+    });
+
+    expect(Date.parse(timestamps[1] ?? '')).toBeGreaterThan(Date.parse(timestamps[0] ?? ''));
+  });
+
+  it('concurrent assignments with one If-Match allow one update and reject the stale writer', async () => {
+    const msId = await seedManagedSystem();
+    const milestoneId = await seedMilestone(msId);
+    const task = await seedTask(msId);
+
+    const responses = await Promise.all([
+      assignTask(
+        adminCookie,
+        task.id,
+        { milestone_id: milestoneId },
+        { idempotencyKey: randomUUID(), ifMatch: task.updatedAt },
+      ),
+      assignTask(
+        adminCookie,
+        task.id,
+        { milestone_id: milestoneId },
+        { idempotencyKey: randomUUID(), ifMatch: task.updatedAt },
+      ),
+    ]);
+
+    expect(responses.map((response) => response.statusCode).sort((a, b) => a - b)).toEqual([
+      200, 409,
+    ]);
+    const accepted = responses.find((response) => response.statusCode === 200);
+    const rejected = responses.find((response) => response.statusCode === 409);
+    if (!accepted || !rejected) throw new Error('expected one accepted and one stale response');
+
+    const acceptedBody = accepted.json<{ milestone_id: string | null; updated_at: string }>();
+    expect(acceptedBody.milestone_id).toBe(milestoneId);
+    expect(acceptedBody.updated_at).not.toBe(task.updatedAt);
+    expect(rejected.json()).toMatchObject({
+      code: 'conflict.stale_write',
+      detail: { current_updated_at: acceptedBody.updated_at },
+    });
+    expect(await milestoneAuditDetails(task.id)).toEqual([
+      { from_milestone_id: null, to_milestone_id: milestoneId },
+    ]);
   });
 
   it('assigning null clears the stored milestone', async () => {

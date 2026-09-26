@@ -165,7 +165,7 @@ export async function updateTaskMilestone(
   const result = await tx.execute<Record<string, unknown>>(sql`
     UPDATE task.tasks
        SET milestone_id = ${input.milestoneId},
-           updated_at = now()
+           updated_at = GREATEST(now(), updated_at + INTERVAL '1 millisecond')
      WHERE id = ${input.taskId}
        AND workspace_id = ${input.workspaceId}
      RETURNING ${TASK_SELECT}
