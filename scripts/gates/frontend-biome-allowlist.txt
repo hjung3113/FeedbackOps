@@ -181,7 +181,7 @@ packages/shared/src/audit/__tests__/survey-audit-schemas.test.ts organizeImports
 # #513 touched these files. The identities below are whole-file format/import-order
 # or assertions whose blame is f1c06725 (2026-05-19), before this branch.
 # develop's dashboard/repo.ts is already unfixed under `biome check --stdin-file-path`.
-apps/backend/src/modules/dashboard/repo.ts format -- pre-existing on develop; the file predates biome formatting and this branch only adds the public-update gap SQL
+apps/backend/src/modules/dashboard/repo.ts format -- pre-existing on develop; the file predates biome formatting. This branch adds analyticsAreaId and listVocAnalyticsAreaIds, not the public-update gap SQL (that lives in tasks/repo.ts)
 packages/shared/src/vocs/__tests__/list-query.test.ts format -- pre-existing on develop; the file predates biome formatting and this branch only adds tab and unset-area cases
 apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts format -- pre-existing on develop; long expectations predate biome formatting
 apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts organizeImports -- pre-existing on develop; import order predates biome
