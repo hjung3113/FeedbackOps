@@ -1,5 +1,10 @@
 # Final PR526 Astra finding 1 — Task Milestone row
 
+> **SNAPSHOT — recorded at `4123b24` (2026-09-27).** This result captures
+> the reviewed branch state at that commit. Later follow-up commits supersede
+> affected implementation details; this is historical evidence, not a claim
+> about the current checkout.
+
 ## Change
 
 The Task detail row shows cached Milestone identity only while the Milestone query has no settled error. A pending refetch keeps the current value visible; a settled 403 no longer exposes the cached display ID or title. The query cache is retained. The existing 404 placeholder, null-ID no-fetch behavior, ID-first value, and read-only row remain covered by the existing `TaskDetailPanel` component tests.

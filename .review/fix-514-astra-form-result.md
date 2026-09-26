@@ -1,5 +1,10 @@
 # fix-514-astra-form — results
 
+> **SNAPSHOT — recorded at `cee3112` (2026-09-27).** This result captures
+> the reviewed branch state at that commit. Later follow-up commits supersede
+> affected implementation details; this is historical evidence, not a claim
+> about the current checkout.
+
 Bounded TDD repairs for the final PR526 Astra review findings 2, 3, 4
 (`.review/final-review-514-astra.md`). Finding 1 (TaskDetailPanel.tsx) is
 owned by another worker — untouched. Branch: `feature/514-milestone-domain`.

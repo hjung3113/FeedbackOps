@@ -1,5 +1,11 @@
 # PR #526 Opus review follow-up result
 
+> **SNAPSHOT — investigation recorded at `88f4e8a` (2026-09-27), before
+> follow-ups `e4072ea`, `f8727d5`, and `3946bec`. Those later commits supersede
+> affected findings and implementation descriptions, including the earlier
+> calendar-date analysis below. This report is historical evidence, not a
+> claim about the current checkout.**
+
 Scope: reconcile the live Milestone data contract and the three authorized
 status comments; investigate P3-5 and P3-6 without editing schemas, tests, or
 backend behavior. `MilestoneDetailPanel.tsx` and frontend product tests were

@@ -352,7 +352,7 @@ describe('migrations directory', () => {
     expect(doBlock).toMatch(/task\.tasks\.milestone_id/i);
     expect(doBlock).toMatch(/finding\.findings\.linked_milestone_id/i);
     expect(doBlock).toMatch(
-      /RAISE EXCEPTION(?s:[^;]*%[^;]*%[^;]*v_task_milestone_rows,\s*v_finding_milestone_rows)\s*;/i,
+      /RAISE EXCEPTION(?:[^;]*%[^;]*%[^;]*v_task_milestone_rows,\s*v_finding_milestone_rows)\s*;/i,
     );
 
     // Both FK additions come after the closed guard block.

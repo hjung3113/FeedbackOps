@@ -1,5 +1,10 @@
 # Issue #514 gate repair result
 
+> **SNAPSHOT — recorded at `7d05f09` (2026-09-27).** This result captures
+> the reviewed branch state at that commit. Later follow-up commits supersede
+> affected implementation details; this is historical evidence, not a claim
+> about the current checkout.
+
 ## Authority
 
 - Approved plan `.review/plan-514.md:180` specifies `SELECT, INSERT, UPDATE` for `fops_app` and explicitly excludes `DELETE`; line 196 says `fops_app` cannot delete a Milestone.
