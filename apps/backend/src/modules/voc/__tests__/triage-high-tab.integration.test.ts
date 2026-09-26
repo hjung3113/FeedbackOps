@@ -11,6 +11,9 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
+import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
+import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
 import {
   cleanupReadTestTables,
   grantCapability,
@@ -62,6 +65,30 @@ describe.skipIf(!runIntegration)('GET triage high tab (#411)', () => {
     await migrateHandle.pool.query(
       `delete from core.entity_links
        where workspace_id = $1 and managed_system_id in (
+         select id from core.managed_systems where workspace_id = $1 and slug like $2
+       )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    // #513 N1: AC-4 seeds direct follow-up targets (finding/task/task_request).
+    // Remove them before the shared helper deletes the managed systems they
+    // reference.
+    await migrateHandle.pool.query(
+      `delete from finding.findings
+       where primary_managed_system_id in (
+         select id from core.managed_systems where workspace_id = $1 and slug like $2
+       )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from task.tasks
+       where primary_managed_system_id in (
+         select id from core.managed_systems where workspace_id = $1 and slug like $2
+       )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from task_request.task_requests
+       where primary_managed_system_id in (
          select id from core.managed_systems where workspace_id = $1 and slug like $2
        )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
@@ -147,7 +174,7 @@ describe.skipIf(!runIntegration)('GET triage high tab (#411)', () => {
     expect(countResponse.json<{ counts: Record<string, number> }>().counts['voc.tab.high']).toBe(2);
   });
 
-  it('AC-4: preserves high-no-link as high and critical VOCs without active links', async () => {
+  it('AC-4: preserves high-no-link as high and critical VOCs without follow-up links', async () => {
     const cookie = await createTriageActor('no-link');
     const msId = await insertMsDirectly(
       dbHandle,
@@ -175,17 +202,6 @@ describe.skipIf(!runIntegration)('GET triage high tab (#411)', () => {
         severity: 'high',
       },
     );
-    const linkedHigh = await insertVocDirectly(
-      dbHandle,
-      WORKSPACE_ID,
-      msId,
-      reporterId,
-      'High linked',
-      {
-        severity: 'high',
-      },
-    );
-    const linkPeer = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'Link peer');
     const medium = await insertVocDirectly(
       dbHandle,
       WORKSPACE_ID,
@@ -196,13 +212,109 @@ describe.skipIf(!runIntegration)('GET triage high tab (#411)', () => {
         severity: 'medium',
       },
     );
-    await migrateHandle.pool.query(
-      `insert into core.entity_links (
-        workspace_id, source_type, source_id, target_type, target_id,
-        relation_type, visibility, status, managed_system_id, created_by
-      ) values ($1, 'voc', $2, 'voc', $3, 'related_to', 'internal_only', 'active', $4, $5)`,
-      [WORKSPACE_ID, linkedHigh.id, linkPeer.id, msId, adminActorId],
+
+    // #513 N1: voc ↔ voc related_to is not a follow-up link. Both sides of
+    // the pair stay in the tab.
+    const relatedHigh = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'High related only',
+      {
+        severity: 'high',
+      },
     );
+    const relatedPeer = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'Related peer',
+    );
+
+    // Direct follow-up links take the VOC out of the tab.
+    const findingHigh = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'High linked finding',
+      {
+        severity: 'high',
+      },
+    );
+    const taskHigh = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'High linked task',
+      {
+        severity: 'high',
+      },
+    );
+    const requestHigh = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'High linked task request',
+      {
+        severity: 'high',
+      },
+    );
+
+    const finding = await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      sourceId: findingHigh.id,
+      status: 'active',
+      createdBy: adminActorId,
+      title: 'AC-4 direct finding',
+    });
+    const task = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msId,
+      status: 'todo',
+      createdBy: adminActorId,
+    });
+    const request = await insertTaskRequestRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      sourceType: 'voc',
+      sourceId: requestHigh.id,
+      primaryManagedSystemId: msId,
+      requesterActorId: adminActorId,
+    });
+
+    const link = async (
+      sourceType: string,
+      sourceId: string,
+      targetType: string,
+      targetId: string,
+      relationType: string,
+    ) => {
+      await migrateHandle.pool.query(
+        `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        ) values ($1, $2, $3, $4, $5, $6, 'internal_only', 'active', $7, $8)`,
+        [
+          WORKSPACE_ID,
+          sourceType,
+          sourceId,
+          targetType,
+          targetId,
+          relationType,
+          msId,
+          adminActorId,
+        ],
+      );
+    };
+    await link('voc', relatedHigh.id, 'voc', relatedPeer.id, 'related_to');
+    await link('voc', findingHigh.id, 'finding', finding.id, 'created_finding');
+    await link('voc', taskHigh.id, 'task', task.id, 'evidence_of');
+    await link('voc', requestHigh.id, 'task_request', request.id, 'requested_task');
 
     const response = await app.inject({
       method: 'GET',
@@ -214,9 +326,16 @@ describe.skipIf(!runIntegration)('GET triage high tab (#411)', () => {
     const displayIds = new Set(
       (response.json() as VocListBody).items.map((item) => item.display_id),
     );
-    const expected = new Set([await displayIdOf(critical.id), await displayIdOf(high.id)]);
+    const expected = new Set([
+      await displayIdOf(critical.id),
+      await displayIdOf(high.id),
+      await displayIdOf(relatedHigh.id),
+    ]);
     expect(displayIds).toEqual(expected);
-    expect(displayIds.has(await displayIdOf(linkedHigh.id))).toBe(false);
+    expect(displayIds.has(await displayIdOf(relatedPeer.id))).toBe(false);
     expect(displayIds.has(await displayIdOf(medium.id))).toBe(false);
+    expect(displayIds.has(await displayIdOf(findingHigh.id))).toBe(false);
+    expect(displayIds.has(await displayIdOf(taskHigh.id))).toBe(false);
+    expect(displayIds.has(await displayIdOf(requestHigh.id))).toBe(false);
   });
 });
