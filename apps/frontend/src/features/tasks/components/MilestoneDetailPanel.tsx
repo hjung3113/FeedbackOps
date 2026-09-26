@@ -1,7 +1,12 @@
 import { createMilestone, getMilestone, updateMilestone } from '@/lib/api/milestones';
 import { listTasks } from '@/lib/api/tasks';
 import { ApiError } from '@/lib/api/types';
-import type { MilestoneDetailDto, MilestoneDto, TaskDto } from '@fops/shared';
+import type {
+  MilestoneDetailDto,
+  MilestoneDto,
+  MilestoneStatusFilter,
+  TaskDto,
+} from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
@@ -56,6 +61,19 @@ const PRIORITY_SEVERITY: Record<TaskDto['priority'], 'low' | 'medium' | 'high' |
   high: 'high',
   urgent: 'critical',
 };
+
+// B2e-status (ADR-0050) — the persisted set is exactly these four values and
+// PATCH is free among them. Labels verbatim from MILESTONE_STATUS_META in
+// screen-milestones.jsx.
+const STATUS_OPTIONS: ReadonlyArray<{ value: MilestoneStatusFilter; label: string }> = [
+  { value: 'planning', label: 'Planning' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'blocked', label: 'Blocked' },
+  { value: 'released', label: 'Released' },
+];
+
+const selectClassName =
+  'w-48 rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary';
 
 // MilestoneTaskRow (prototype screen-milestones.jsx:214-238) — read-only
 // child row: priority indicator, display id, title, internal status, stamps,
@@ -297,8 +315,6 @@ export function MilestoneCreatePanel({
     createMutation.mutate();
   }
 
-  const selectClassName =
-    'w-48 rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary';
   const dateClassName =
     'rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary';
 
@@ -514,6 +530,43 @@ function MilestoneDetailContent({
     titleMutation.mutate();
   }
 
+  // B2e-status (ADR-0050) — the Properties Status control. A change PATCHes
+  // { status } with If-Match (the row's updated_at) and a fresh idempotency
+  // key; the body never carries primary_managed_system_id. The select is
+  // controlled by the stored status, so a failed PATCH keeps the prior value,
+  // and a stale write refetches and shows the server row (same contract as
+  // the title edit).
+  const [statusError, setStatusError] = React.useState<string | null>(null);
+  const statusMutation = useMutation<MilestoneDto, Error, MilestoneStatusFilter>({
+    mutationFn: async (status) =>
+      updateMilestone(
+        milestone.id,
+        { status },
+        { ifMatch: milestone.updated_at, idempotencyKey: crypto.randomUUID() },
+      ),
+    onSuccess: async () => {
+      setStatusError(null);
+      // Detail read returns the stored row; the list badge reflects it too.
+      await queryClient.invalidateQueries({ queryKey: ['milestone', milestone.id] });
+      await queryClient.invalidateQueries({ queryKey: ['milestones'] });
+    },
+    onError: async (err) => {
+      if (err instanceof ApiError && err.status === 409 && err.code === 'conflict.stale_write') {
+        setStatusError(null);
+        await queryClient.refetchQueries({ queryKey: ['milestone', milestone.id], exact: true });
+      } else {
+        setStatusError(err.message);
+      }
+    },
+  });
+
+  function handleStatusChange(event: React.ChangeEvent<HTMLSelectElement>): void {
+    const status = event.target.value as MilestoneStatusFilter;
+    if (status === milestone.status) return;
+    setStatusError(null);
+    statusMutation.mutate(status);
+  }
+
   const areaName =
     milestone.analytics_area_id !== null
       ? analyticsAreaNamesById.get(milestone.analytics_area_id)
@@ -692,7 +745,27 @@ function MilestoneDetailContent({
           <div className="border-t border-border-subtle py-2">
             <PanelSectionTitle className="px-4">Properties</PanelSectionTitle>
             <FieldRow label="Status">
-              <MilestoneStatusBadge status={milestone.status} />
+              {/* B2e-status (ADR-0050): the closed set is accepted, so the
+                  control offers exactly these four values; PATCH is free
+                  among them. The title-block badge above stays read-only. */}
+              <span className="flex items-center justify-end gap-2">
+                <select
+                  aria-label="Status"
+                  className={selectClassName}
+                  value={milestone.status}
+                  disabled={statusMutation.isPending}
+                  onChange={handleStatusChange}
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {statusError !== null && (
+                  <span className="text-sm text-accent-danger">{statusError}</span>
+                )}
+              </span>
             </FieldRow>
             {/* Managed System is create-only (A3/A8): read-only text, never an input. */}
             <FieldRow label="Managed System">

@@ -15,11 +15,12 @@ import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestonesRoute } from './MilestonesRoute';
 
-// #514 B2e — create and edit without status. Create is the same property block
-// in a create state, opened by the New milestone toolbar control; the body
-// carries the chosen Managed System as primary_managed_system_id and never a
-// status. Edit is a title-only PATCH with If-Match; a 409 conflict.stale_write
-// refetches the milestone and shows the server title.
+// #514 B2e — create and edit. Create is the same property block in a create
+// state, opened by the New milestone toolbar control; the body carries the
+// chosen Managed System as primary_managed_system_id. Edit is a title-only
+// PATCH with If-Match; a 409 conflict.stale_write refetches the milestone and
+// shows the server title. B2e-status (ADR-0050) adds the Properties Status
+// control: a four-value select whose change PATCHes { status } with If-Match.
 
 // Shared across renders so tests can assert where selection sends the actor.
 const navigateMock = vi.hoisted(() => vi.fn());
@@ -256,13 +257,14 @@ describe('MilestonesRoute edit title (#514 B2e)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    // Read view: no input anywhere, Managed System stays stored text.
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    // Read view: the B2e-status control is the only combobox; Managed System
+    // stays stored text.
+    expect(screen.queryByRole('combobox', { name: 'Managed System' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
 
-    // Edit state: only the title becomes an input — no Managed System control.
+    // Edit state: the title becomes an input — still no Managed System control.
     const titleInput = screen.getByRole('textbox', { name: 'Title' });
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Managed System' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Power BI').length).toBeGreaterThan(0);
 
     fireEvent.change(titleInput, { target: { value: 'SSO Stabilization v2' } });
@@ -385,5 +387,103 @@ describe('MilestonesRoute fixup (#514 B2e)', () => {
     await waitFor(() => {
       expect(screen.queryByRole('heading', { name: 'SSO Stabilization' })).not.toBeInTheDocument();
     });
+  });
+});
+
+// #514 B2e-status (ADR-0050) — the Properties Status control offers exactly
+// the persisted set planning | in_progress | blocked | released and PATCH is
+// free among them, so no transition here is forbidden. A change PATCHes
+// { status } with If-Match (the row's updated_at) and a fresh idempotency key
+// and never carries primary_managed_system_id. An error keeps the prior
+// status locally; a stale write refetches and shows the server row.
+describe('MilestonesRoute status (#514 B2e-status)', () => {
+  const statusSelect = () => screen.getByRole('combobox', { name: 'Status' }) as HTMLSelectElement;
+
+  it('offers exactly the ADR-0050 set with the prototype labels', async () => {
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    expect(Array.from(statusSelect().options).map((option) => option.value)).toEqual([
+      'planning',
+      'in_progress',
+      'blocked',
+      'released',
+    ]);
+    // Labels verbatim from MILESTONE_STATUS_META in screen-milestones.jsx.
+    expect(Array.from(statusSelect().options).map((option) => option.textContent)).toEqual([
+      'Planning',
+      'In progress',
+      'Blocked',
+      'Released',
+    ]);
+    expect(statusSelect()).toHaveValue('in_progress');
+  });
+
+  it('PATCHes { status } only, with If-Match and an idempotency key, and refetches the stored row', async () => {
+    vi.mocked(getMilestone)
+      .mockResolvedValueOnce(detailFor(SSO_ROW, 'SSO Stabilization'))
+      .mockResolvedValue(detailFor({ ...SSO_ROW, status: 'released' }, 'SSO Stabilization'));
+    vi.mocked(updateMilestone).mockResolvedValue({ ...SSO_ROW, status: 'released' });
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
+    const patchCall = vi.mocked(updateMilestone).mock.calls[0];
+    if (!patchCall) throw new Error('updateMilestone call missing');
+    const [id, body, options] = patchCall;
+    expect(id).toBe(IDS.sso);
+    // Exact body — proves primary_managed_system_id (and everything else)
+    // never rides along on a status change.
+    expect(body).toEqual({ status: 'released' });
+    expect(options.ifMatch).toBe(UPDATED_AT);
+    expect(options.idempotencyKey).toMatch(UUID_KEY);
+
+    // The stored status returns through the refetched detail read; the
+    // select is controlled by it, not by the local choice.
+    await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
+    expect(statusSelect()).toHaveValue('released');
+    expect(screen.queryByText('Status update failed.')).not.toBeInTheDocument();
+  });
+
+  it('shows the error and keeps the prior status when the PATCH fails', async () => {
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
+    vi.mocked(updateMilestone).mockRejectedValue(
+      new ApiError(500, { code: 'internal.unexpected', message: 'Status update failed.' }),
+    );
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
+
+    expect(await screen.findByText('Status update failed.')).toBeInTheDocument();
+    // The old status is not overwritten locally: the select stays on it and
+    // no refetch masks the failure.
+    expect(statusSelect()).toHaveValue('in_progress');
+    expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches the milestone and shows the server status on 409 conflict.stale_write', async () => {
+    vi.mocked(getMilestone)
+      .mockResolvedValueOnce(detailFor(SSO_ROW, 'SSO Stabilization'))
+      .mockResolvedValue(detailFor({ ...SSO_ROW, status: 'released' }, 'SSO Stabilization'));
+    vi.mocked(updateMilestone).mockRejectedValue(
+      new ApiError(409, {
+        code: 'conflict.stale_write',
+        message: 'Milestone was modified by another actor.',
+      }),
+    );
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
+
+    await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
+    expect(statusSelect()).toHaveValue('released');
+    // No surfaced error and no local overwrite: the server row wins.
+    expect(screen.queryByText('Status update failed.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Milestone was modified by another actor.')).not.toBeInTheDocument();
   });
 });
