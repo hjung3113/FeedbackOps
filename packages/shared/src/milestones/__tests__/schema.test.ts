@@ -132,9 +132,7 @@ describe('createMilestoneRequestSchema', () => {
       }).success,
     ).toBe(true);
     expect(patchMilestoneRequestSchema.safeParse({ start_date: '2024-02-29' }).success).toBe(true);
-    expect(
-      patchMilestoneRequestSchema.safeParse({ target_date: '2024-02-29' }).success,
-    ).toBe(true);
+    expect(patchMilestoneRequestSchema.safeParse({ target_date: '2024-02-29' }).success).toBe(true);
   });
 });
 
