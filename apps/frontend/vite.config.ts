@@ -65,6 +65,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:3011',
         bypass: (req) => (req.headers.accept?.includes('text/html') ? req.url : undefined),
       },
+      // #514 milestone domain routes are a backend-only root prefix (the FE
+      // screen lives at /tasks?view=milestones), so forward them
+      // unconditionally in development.
+      '/milestones': 'http://127.0.0.1:3011',
       // `/surveys` overlaps with the FE route of the same name, so bypass the
       // proxy for browser HTML navigations and only forward JSON/XHR requests.
       '/surveys': {
