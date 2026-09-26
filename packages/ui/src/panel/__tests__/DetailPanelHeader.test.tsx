@@ -24,7 +24,9 @@ describe('DetailPanelHeader — kind accent stripe', () => {
       const header = container.querySelector(`[data-kind="${kind}"]`);
       expect(header).not.toBeNull();
     });
+  }
 
+  for (const kind of kinds.filter((kind) => kind !== 'milestone')) {
     it(`kind="${kind}" accent stripe has correct CSS variable background`, () => {
       const { container } = render(
         <DetailPanelHeader kind={kind} id="V-1024" onClose={() => {}} />,
@@ -37,6 +39,31 @@ describe('DetailPanelHeader — kind accent stripe', () => {
       expect(stripe?.style.backgroundColor).toBe(KIND_ACCENT[kind]);
     });
   }
+});
+
+describe('DetailPanelHeader — milestone kind badge', () => {
+  it('renders the rounded title-case badge without a leading stripe', () => {
+    const { container } = render(
+      <DetailPanelHeader
+        kind="milestone"
+        id="M-21"
+        onClose={() => {}}
+        extras={<span data-testid="extra-slot">extra</span>}
+      />,
+    );
+
+    const header = container.querySelector('[data-kind="milestone"]');
+    const badge = screen.getByText('Milestone');
+
+    expect(badge).toHaveClass('rounded');
+    expect(badge).toHaveClass('text-[11px]');
+    expect(badge).not.toHaveClass('uppercase');
+    expect((badge as HTMLElement).querySelector('[aria-hidden="true"]')).not.toBeNull();
+    expect(header?.querySelector(':scope > div[aria-hidden="true"]')).toBeNull();
+    expect(screen.getByText('M-21')).toBeInTheDocument();
+    expect(screen.getByTestId('extra-slot')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+  });
 });
 
 describe('DetailPanelHeader — display', () => {

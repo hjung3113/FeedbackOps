@@ -44,6 +44,7 @@ export function DetailPanelHeader({
   extras,
   className,
 }: DetailPanelHeaderProps) {
+  const isMilestone = kind === 'milestone';
   const accentColor = KIND_ACCENT[kind];
 
   return (
@@ -55,19 +56,37 @@ export function DetailPanelHeader({
         className,
       )}
     >
-      {/* 4px accent stripe on the left */}
-      <div aria-hidden="true" style={{ width: 4, flexShrink: 0, backgroundColor: accentColor }} />
+      {!isMilestone && (
+        <div aria-hidden="true" style={{ width: 4, flexShrink: 0, backgroundColor: accentColor }} />
+      )}
 
       {/* Content row */}
       <div
         data-testid="detail-panel-header-content"
-        className="flex flex-1 items-center gap-3 pl-4 pr-3 min-w-0"
+        className={cn('flex flex-1 items-center gap-3 pr-3 min-w-0', isMilestone ? 'pl-5' : 'pl-4')}
       >
         {/* Kind label + id (id only when the caller has it) */}
-        <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-xs text-text-muted shrink-0 uppercase tracking-wide">
-            {KIND_LABELS[kind]}
-          </span>
+        <div className={cn('flex gap-2 min-w-0', isMilestone ? 'items-center' : 'items-baseline')}>
+          {isMilestone ? (
+            <span
+              className="inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-medium leading-none tracking-[0.01em]"
+              style={{
+                color: 'rgb(var(--color-amber))',
+                backgroundColor: 'rgb(var(--color-amber) / 12%)',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: 'rgb(var(--color-amber))' }}
+              />
+              {KIND_LABELS[kind]}
+            </span>
+          ) : (
+            <span className="text-xs text-text-muted shrink-0 uppercase tracking-wide">
+              {KIND_LABELS[kind]}
+            </span>
+          )}
           {id !== undefined && (
             <span className="font-mono text-xs text-text-muted leading-none">{id}</span>
           )}

@@ -295,6 +295,63 @@ test.describe('/tasks?view=milestones visual harness', () => {
     );
   });
 
+  test('cp-pixel: renders the milestone detail header badge to prototype style', async ({
+    page,
+  }) => {
+    await installMockApi(page, { milestones: true });
+    await page.goto(`/tasks?view=milestones&param=${MILESTONE_IDS.sso}`);
+
+    const header = page.locator('[data-kind="milestone"]');
+    await expect(header).toBeVisible();
+    const badge = header.getByText('Milestone', { exact: true });
+    await expect(badge).toBeVisible();
+
+    const css = await badge.evaluate((el) => {
+      const badgeStyle = getComputedStyle(el);
+      const tokenRgb = getComputedStyle(document.documentElement)
+        .getPropertyValue('--color-amber')
+        .trim();
+      const dot = el.querySelector<HTMLElement>('span[aria-hidden="true"]');
+      const dotStyle = dot === null ? null : getComputedStyle(dot);
+      const header = el.closest('[data-kind="milestone"]');
+
+      return {
+        text: el.textContent?.trim(),
+        color: badgeStyle.color,
+        background: badgeStyle.backgroundColor,
+        fontSize: badgeStyle.fontSize,
+        borderRadius: badgeStyle.borderRadius,
+        textTransform: badgeStyle.textTransform,
+        tokenRgb,
+        dot:
+          dotStyle === null
+            ? null
+            : {
+                width: dotStyle.width,
+                height: dotStyle.height,
+                background: dotStyle.backgroundColor,
+                radius: dotStyle.borderRadius,
+              },
+        hasLeadingStripe: header?.querySelector(':scope > div[aria-hidden="true"]') !== null,
+      };
+    });
+    const [r, g, b] = parseTriplet(css.tokenRgb);
+
+    expect(css.text).toBe('Milestone');
+    expect(css.color).toBe(`rgb(${r}, ${g}, ${b})`);
+    expect(css.background).toBe(`rgba(${r}, ${g}, ${b}, 0.12)`);
+    expect(css.fontSize).toBe('11px');
+    expect(css.borderRadius).toBe('4px');
+    expect(css.textTransform).toBe('none');
+    expect(css.dot).toEqual({
+      width: '6px',
+      height: '6px',
+      background: `rgb(${r}, ${g}, ${b})`,
+      radius: '9999px',
+    });
+    expect(css.hasLeadingStripe).toBe(false);
+  });
+
   // Finding 2 — the Released summary value used the non-existent `text-success`
   // utility and rendered black; it must consume the --text-success token.
   test('cp-pixel: renders the Released summary value in the semantic success color', async ({
