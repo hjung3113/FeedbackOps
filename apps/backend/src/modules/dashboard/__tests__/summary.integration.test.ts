@@ -34,9 +34,29 @@ type Summary = DashboardSummary;
 type Seed = { msA: string; msB: string; devCookie: string; devActorId: string };
 type QueueId = Summary['action_queues'][number]['id'];
 type CoverageId = Summary['coverage'][number]['id'];
+type SystemCoverageId =
+  | 'voc-task'
+  | 'finding-execution'
+  | 'high-followup'
+  | 'released-update'
+  | 'analytics-area';
+type CoverageCell = { value: number; total: number; percent: number; status: 'good' | 'warn' | 'bad' };
+type SystemRow = {
+  managed_system_id: string;
+  coverage?: Partial<Record<SystemCoverageId, CoverageCell>>;
+  action_queues?: Partial<Record<QueueId, number>>;
+  analytics_areas?: Array<{
+    analytics_area_id: string;
+    coverage?: Partial<Record<'voc-task' | 'high-followup', CoverageCell>>;
+    action_queues?: Partial<Record<'unassigned-voc' | 'high-severity-unlinked', number>>;
+  }>;
+};
 
 const queue = (body: Summary, id: QueueId) => body.action_queues.find((entry) => entry.id === id);
 const coverage = (body: Summary, id: CoverageId) => body.coverage.find((entry) => entry.id === id);
+const systemRows = (body: Summary): SystemRow[] => body.by_managed_system as SystemRow[];
+const systemRow = (body: Summary, managedSystemId: string) =>
+  systemRows(body).find((row) => row.managed_system_id === managedSystemId);
 
 function expectDelta(
   after: number | undefined,
@@ -165,6 +185,12 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     await migrateHandle.pool.query(
       `delete from permission.permission_grants where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
       [WORKSPACE_ID, 'mock-dev-read-dashboard-217%'],
+    );
+    await migrateHandle.pool.query(
+      `delete from permission.permission_grants where actor_id = $1 and managed_system_id in (
+        select id from core.managed_systems where workspace_id = $2 and slug like $3
+      )`,
+      [reporterActorId, WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
       `delete from core.rate_limits where key in (select id::text from core.actors where workspace_id = $1 and external_id like $2)`,
@@ -499,19 +525,38 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expectCoverageDelta(body, before, 'analytics-area', 6, 17);
     expect(body.coverage.map((entry) => entry.id)).not.toContain('milestone-outcome');
     expect(coverage(body, 'milestone-outcome')).toBeUndefined();
+    expect(systemRow(body, seed.msA)?.coverage?.['voc-task']?.total).toBe(10);
+    expect(systemRow(body, seed.msB)?.coverage?.['voc-task']?.total).toBe(7);
+    expect(
+      systemRows(body).reduce((sum, row) => sum + (row.coverage?.['voc-task']?.total ?? 0), 0),
+    ).toBe(body.kpis.open_voc);
+    expect(
+      systemRows(body).reduce((sum, row) => sum + (row.action_queues?.['high-severity-unlinked'] ?? 0), 0),
+    ).toBe(queue(body, 'high-severity-unlinked')?.count);
+    // The workspace-level queue stays on the rollup only; the schema admits
+    // the row key, the service must never emit it (#513 N6 risk).
+    expect(
+      systemRows(body).every((row) => row.action_queues?.['permission-requests-pending'] === undefined),
+    ).toBe(true);
     expect(seed.msA).not.toBe(seed.msB);
   });
 
   it('keeps bad-outcome-no-followup present at zero for an admin with no outcome surveys', async () => {
-    const outcomeSurveys = await migrateHandle.pool.query<{ count: string }>(
-      `select count(*)::text as count from survey.surveys where workspace_id = $1 and type = 'outcome'`,
+    const surveys = await migrateHandle.pool.query<{ count: string }>(
+      `select count(*)::text as count from survey.surveys where workspace_id = $1`,
       [WORKSPACE_ID],
     );
+    const seed = await createDashboardScope();
+    await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'admin empty survey row');
     const response = await get(adminCookie);
+    const body = response.json<Summary>();
 
-    expect(outcomeSurveys.rows[0]?.count).toBe('0');
+    expect(surveys.rows[0]?.count).toBe('0');
     expect(response.statusCode).toBe(200);
-    expect(queue(response.json<Summary>(), 'bad-outcome-no-followup')).toMatchObject({ count: 0 });
+    expect(queue(body, 'bad-outcome-no-followup')).toMatchObject({ count: 0 });
+    expect(systemRow(body, seed.msA)?.action_queues?.['bad-outcome-no-followup']).toBe(0);
+    expect(systemRows(body).length).toBeGreaterThan(0);
+    expect(systemRows(body).every((row) => row.action_queues?.['bad-outcome-no-followup'] === 0)).toBe(true);
   });
 
   it('limits a developer to their one Managed System and omits unavailable entries', async () => {
@@ -570,6 +615,123 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(afterAudit.rows[0]?.count).toBe(beforeAudit.rows[0]?.count);
   });
 
+  it('keeps finding-only rows while omitting VOC, task, and survey metrics outside their scopes', async () => {
+    const seed = await createDashboardScope();
+    await migrateHandle.pool.query(
+      'delete from permission.permission_grants where actor_id = $1 and capability in (\'finding.manage\', \'survey.read\')',
+      [seed.devActorId],
+    );
+    await grantCapability(migrateHandle, WORKSPACE_ID, seed.devActorId, 'finding.read', seed.msB, adminActorId);
+    const vocA = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'scoped VOC A');
+    const vocB = await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msB, reporterActorId, 'hidden VOC B');
+    await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: seed.msA,
+      sourceId: vocA.id,
+      status: 'active',
+      createdBy: adminActorId,
+    });
+    await insertFindingRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: seed.msB,
+      sourceId: vocB.id,
+      status: 'active',
+      createdBy: adminActorId,
+    });
+
+    const body = (await get(seed.devCookie)).json<Summary>();
+    const rowA = systemRow(body, seed.msA);
+    const rowB = systemRow(body, seed.msB);
+
+    expect(rowA?.coverage).toHaveProperty('voc-task');
+    expect(rowA?.coverage).toHaveProperty('finding-execution');
+    expect(rowA?.coverage).not.toHaveProperty('released-update');
+    expect(rowA?.action_queues).toHaveProperty('unassigned-voc');
+    expect(rowA?.action_queues).toHaveProperty('actionable-finding-no-execution');
+    expect(rowA?.action_queues).not.toHaveProperty('released-task-unresolved-voc');
+    expect(rowA?.action_queues).not.toHaveProperty('bad-outcome-no-followup');
+    expect(rowB?.coverage).toEqual({ 'finding-execution': expect.any(Object) });
+    expect(rowB?.action_queues).toEqual({ 'actionable-finding-no-execution': expect.any(Number) });
+  });
+
+  it('keeps VOC metrics present at zero for a system in voc.read with no VOCs', async () => {
+    const seed = await createDashboardScope();
+    const body = (await get(seed.devCookie)).json<Summary>();
+    const row = systemRow(body, seed.msA);
+
+    expect(row?.coverage).toMatchObject({
+      'voc-task': { value: 0, total: 0, percent: 0 },
+      'analytics-area': { value: 0, total: 0, percent: 0 },
+      'high-followup': { value: 0, total: 0, percent: 0 },
+    });
+    expect(row?.action_queues).toMatchObject({ 'unassigned-voc': 0, 'high-severity-unlinked': 0 });
+  });
+
+  it('includes Analytics Areas only for VOC area data and keeps assignment coverage on the system row', async () => {
+    const seed = await createDashboardScope();
+    await grantCapability(migrateHandle, WORKSPACE_ID, seed.devActorId, 'voc.read', seed.msB, adminActorId);
+    await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'VOC with no Analytics Area');
+    const areaId = await analyticsArea(seed.msB);
+    const areaVoc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      seed.msB,
+      reporterActorId,
+      'VOC in one Analytics Area',
+    );
+    await migrateHandle.pool.query('update voc.vocs set analytics_area_id = $1 where id = $2', [areaId, areaVoc.id]);
+
+    const body = (await get(seed.devCookie)).json<Summary>();
+    const rowA = systemRow(body, seed.msA);
+    const rowB = systemRow(body, seed.msB);
+    const areaRow = rowB?.analytics_areas?.[0];
+
+    expect(rowA?.analytics_areas).toBeUndefined();
+    expect(rowB?.coverage).toHaveProperty('analytics-area');
+    expect(rowB?.analytics_areas).toHaveLength(1);
+    expect(areaRow?.analytics_area_id).toBe(areaId);
+    expect(areaRow?.coverage).toHaveProperty('voc-task');
+    expect(areaRow?.coverage).toHaveProperty('high-followup');
+    expect(areaRow?.coverage).not.toHaveProperty('analytics-area');
+  });
+
+  it('returns a survey-only system row with only its permitted zero survey queue', async () => {
+    const managedSystemId = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${SLUG_PREFIX}-${uid('survey-only')}`,
+      'Survey-only Dashboard System',
+    );
+    await grantCapability(migrateHandle, WORKSPACE_ID, reporterActorId, 'survey.read', managedSystemId, adminActorId);
+    const areaId = await analyticsArea(managedSystemId);
+    const voc = await insertVocDirectly(migrateHandle, WORKSPACE_ID, managedSystemId, reporterActorId, 'hidden survey-only VOC');
+    await migrateHandle.pool.query('update voc.vocs set analytics_area_id = $1 where id = $2', [areaId, voc.id]);
+
+    const reporterCookie = await loginAs(app, 'mock-user-1');
+    const response = await get(reporterCookie);
+    const body = response.json<Summary>();
+    const row = systemRow(body, managedSystemId);
+
+    expect(response.statusCode).toBe(200);
+    expect(row).toBeDefined();
+    expect(row?.action_queues).toEqual({ 'bad-outcome-no-followup': 0 });
+    expect(row).not.toHaveProperty('coverage');
+    expect(row).not.toHaveProperty('analytics_areas');
+  });
+
+  it('omits Finding metrics from every row for a plain User', async () => {
+    const seed = await createDashboardScope();
+    await grantCapability(migrateHandle, WORKSPACE_ID, reporterActorId, 'voc.read', seed.msA, adminActorId);
+    await insertVocDirectly(migrateHandle, WORKSPACE_ID, seed.msA, reporterActorId, 'plain User VOC');
+
+    const reporterCookie = await loginAs(app, 'mock-user-1');
+    const body = (await get(reporterCookie)).json<Summary>();
+    const rows = systemRows(body);
+
+    expect(rows.map((row) => row.managed_system_id)).toEqual([seed.msA]);
+    expect(rows.every((row) => !row.coverage?.['finding-execution'])).toBe(true);
+  });
+
   it('applies managed_system_id selectors and returns no scoped data for an outside system', async () => {
     const seed = await createDashboardScope();
     const beforeAll = (await get(adminCookie)).json<Summary>();
@@ -617,7 +779,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       [actor.id],
     );
     expect(response.statusCode).toBe(200);
-    expect(response.json<Summary>()).toEqual({ kpis: {}, action_queues: [], coverage: [] });
+    expect(response.json<Summary>()).toEqual({ kpis: {}, action_queues: [], coverage: [], by_managed_system: [] });
     expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
   });
 

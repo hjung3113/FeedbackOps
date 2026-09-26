@@ -11,11 +11,12 @@ import {
 import type { Db } from '../../db/client.js';
 import { HttpError } from '../../lib/errors.js';
 import { actorFindingReadScope } from '../findings/authorization.js';
+import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { actorScopeForCapability, type Scope } from '../permissions/scope-service.js';
 import type { RequestService } from '../permissions/request-service.js';
-import type { CountVocsQuery } from '../voc/read-service.js';
+import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
 import { actorSurveyReadScope } from '../surveys/authorization.js';
+import type { CountVocsQuery } from '../voc/read-service.js';
 import * as repo from './repo.js';
 
 export interface DashboardActor {
@@ -52,6 +53,33 @@ function coverageStatus(value: number): 'good' | 'warn' | 'bad' {
   return value >= 75 ? 'good' : value >= 40 ? 'warn' : 'bad';
 }
 
+function includesManagedSystem(scope: Scope | undefined, managedSystemId: string): scope is Scope {
+  return scope !== undefined
+    && (scope.kind === 'all' || scope.managedSystemIds.includes(managedSystemId));
+}
+
+type SystemCoverage = NonNullable<DashboardSummary['by_managed_system'][number]['coverage']>;
+type SystemQueues = NonNullable<DashboardSummary['by_managed_system'][number]['action_queues']>;
+
+function coverageCell(value: number, total: number) {
+  const coveragePercent = percent(value, total);
+  return { value, total, percent: coveragePercent, status: coverageStatus(coveragePercent) };
+}
+
+async function managedSystemUnion(
+  db: Db,
+  workspaceId: string,
+  scopes: Array<Scope | undefined>,
+  selectedManagedSystemId?: string,
+): Promise<string[]> {
+  const managedSystemIds = scopes.some((scope) => scope?.kind === 'all')
+    ? await allManagedSystemIds(db, workspaceId)
+    : [...new Set(scopes.flatMap((scope) => scope?.kind === 'scoped' ? scope.managedSystemIds : []))];
+  return selectedManagedSystemId === undefined
+    ? managedSystemIds
+    : managedSystemIds.filter((systemId) => systemId === selectedManagedSystemId);
+}
+
 export function createDashboardService(deps: DashboardDeps) {
   async function authorizationAbsent<T>(read: () => Promise<T>): Promise<T | undefined> {
     try {
@@ -75,14 +103,24 @@ export function createDashboardService(deps: DashboardDeps) {
       },
     }));
 
-    const [findingScopeRaw, taskScopeRaw, surveyScopeRaw] = await Promise.all([
+    const countSystemVocs = (
+      systemId: string,
+      query: Pick<CountVocsQuery, 'tab' | 'filter.severity' | 'analyticsAreaId'> = {},
+    ) => deps.vocReadService.countVocs({
+      actor,
+      query: { view: 'inbox', managed_system_id: systemId, ...query },
+    });
+
+    const [findingScopeRaw, taskScopeRaw, surveyScopeRaw, vocScopeRaw] = await Promise.all([
       actorFindingReadScope(deps.db, actor, { requireElevatedRole: true }),
       actorScopeForCapability(deps.db, actor, 'finding.manage'),
       actorSurveyReadScope(deps.db, deps.checkService, actor),
+      actorScopeForCapability(deps.db, actor, 'voc.read'),
     ]);
     const findingScope = inRequestedScope(findingScopeRaw, selectedManagedSystemId);
     const taskScope = inRequestedScope(taskScopeRaw, selectedManagedSystemId);
     const surveyScope = inRequestedScope(surveyScopeRaw, selectedManagedSystemId);
+    const vocScope = inRequestedScope(vocScopeRaw, selectedManagedSystemId);
     const surveyScopeForDashboard = surveyScope
       ?? (actor.role_level === 'admin' ? surveyScopeRaw : undefined);
     // Survey read scope is data-derived for survey listing. Dashboard queue
@@ -156,8 +194,7 @@ export function createDashboardService(deps: DashboardDeps) {
     }
 
     if (openVoc !== undefined) {
-      const vocScope = await actorScopeForCapability(deps.db, actor, 'voc.read');
-      const selectedVocScope = inRequestedScope(vocScope, selectedManagedSystemId);
+      const selectedVocScope = vocScope;
       if (selectedVocScope !== undefined && (selectedVocScope.kind === 'all' || selectedVocScope.managedSystemIds.length > 0)) {
         const [vocTask, analytics] = await Promise.all([
           repo.countVocsWithTask(deps.db, actor.workspace_id, selectedVocScope, selectedManagedSystemId),
@@ -184,7 +221,94 @@ export function createDashboardService(deps: DashboardDeps) {
         coverage.push({ id: 'high-followup', value: followed, total: totalHigh, percent: highPercent, status: coverageStatus(highPercent) });
       }
     }
-    return { kpis, action_queues: queues, coverage };
+
+    const managedSystemIds = await managedSystemUnion(
+      deps.db,
+      actor.workspace_id,
+      [vocScope, findingScope, taskScope, surveyScope],
+      selectedManagedSystemId,
+    );
+    const byManagedSystem: DashboardSummary['by_managed_system'] = [];
+    for (const systemId of managedSystemIds) {
+      const row: DashboardSummary['by_managed_system'][number] = { managed_system_id: systemId };
+      const rowCoverage: SystemCoverage = {};
+      const rowQueues: SystemQueues = {};
+
+      if (includesManagedSystem(vocScope, systemId)) {
+        const [systemVoc, unassigned, highUnlinked, totalHigh, vocTask, analytics] = await Promise.all([
+          countSystemVocs(systemId),
+          countSystemVocs(systemId, { tab: 'unassigned' }),
+          countSystemVocs(systemId, { tab: 'high-no-link' }),
+          countSystemVocs(systemId, { 'filter.severity': ['high', 'critical'] }),
+          repo.countVocsWithTask(deps.db, actor.workspace_id, vocScope, systemId),
+          repo.countAnalyticsAreaVocCoverage(deps.db, actor.workspace_id, vocScope, systemId),
+        ]);
+        rowCoverage['voc-task'] = coverageCell(vocTask.value, systemVoc);
+        rowCoverage['analytics-area'] = coverageCell(analytics.value, systemVoc);
+        rowQueues['unassigned-voc'] = unassigned;
+        rowQueues['high-severity-unlinked'] = highUnlinked;
+        rowCoverage['high-followup'] = coverageCell(totalHigh - highUnlinked, totalHigh);
+
+        const areaIds = await repo.listVocAnalyticsAreaIds(deps.db, actor.workspace_id, systemId);
+        if (areaIds.length > 0) {
+          row.analytics_areas = await Promise.all(areaIds.map(async (areaId) => {
+            const [areaVoc, areaUnassigned, areaHighUnlinked, areaTotalHigh, areaVocTask] = await Promise.all([
+              countSystemVocs(systemId, { analyticsAreaId: areaId }),
+              countSystemVocs(systemId, { tab: 'unassigned', analyticsAreaId: areaId }),
+              countSystemVocs(systemId, { tab: 'high-no-link', analyticsAreaId: areaId }),
+              countSystemVocs(systemId, { 'filter.severity': ['high', 'critical'], analyticsAreaId: areaId }),
+              repo.countVocsWithTask(deps.db, actor.workspace_id, vocScope, systemId, areaId),
+            ]);
+            return {
+              analytics_area_id: areaId,
+              coverage: {
+                'voc-task': coverageCell(areaVocTask.value, areaVoc),
+                'high-followup': coverageCell(areaTotalHigh - areaHighUnlinked, areaTotalHigh),
+              },
+              action_queues: {
+                'unassigned-voc': areaUnassigned,
+                'high-severity-unlinked': areaHighUnlinked,
+              },
+            };
+          }));
+        }
+      }
+
+      if (includesManagedSystem(findingScope, systemId)) {
+        const [active, noExecution, executed] = await Promise.all([
+          repo.countActiveFindings(deps.db, actor.workspace_id, findingScope, systemId),
+          repo.countActiveFindingsWithoutExecution(deps.db, actor.workspace_id, findingScope, systemId),
+          repo.countActiveFindingsWithExecution(deps.db, actor.workspace_id, findingScope, systemId),
+        ]);
+        rowCoverage['finding-execution'] = coverageCell(executed, active);
+        rowQueues['actionable-finding-no-execution'] = noExecution;
+      }
+
+      if (includesManagedSystem(taskScope, systemId)) {
+        const [unresolved, releasedUpdate] = await Promise.all([
+          repo.countReleasedTasksWithUnresolvedVoc(deps.db, actor.workspace_id, taskScope, systemId),
+          repo.countReleasedTasksWithPublicUpdate(deps.db, actor.workspace_id, taskScope, systemId),
+        ]);
+        rowCoverage['released-update'] = coverageCell(releasedUpdate.value, releasedUpdate.total);
+        rowQueues['released-task-unresolved-voc'] = unresolved;
+      }
+
+      const canSeeSurveyQueue = actor.role_level === 'admin'
+        || includesManagedSystem(surveyScope, systemId);
+      if (canSeeSurveyQueue && surveyScopeForDashboard !== undefined) {
+        rowQueues['bad-outcome-no-followup'] = await repo.countSurveyGaps(
+          deps.db,
+          actor.workspace_id,
+          surveyScopeForDashboard,
+          systemId,
+        );
+      }
+
+      if (Object.keys(rowCoverage).length > 0) row.coverage = rowCoverage;
+      if (Object.keys(rowQueues).length > 0) row.action_queues = rowQueues;
+      byManagedSystem.push(row);
+    }
+    return { kpis, action_queues: queues, coverage, by_managed_system: byManagedSystem };
   }
   return { getSummary };
 }

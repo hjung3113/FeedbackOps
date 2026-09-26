@@ -75,7 +75,7 @@ export type CountVocsQuery = Pick<
   | 'filter.severity'
   | 'filter.reporter_facing_status'
   | 'filter.owner'
->;
+> & { analyticsAreaId?: string };
 
 // ── Inline conversation cursor (conversation-specific; separate from VOC list cursor) ──
 
@@ -306,6 +306,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     const filterSeverity = query['filter.severity'];
     const filterReporterFacingStatus = query['filter.reporter_facing_status'];
     const filterOwner = query['filter.owner'];
+    const analyticsAreaId = query.analyticsAreaId;
     if (tab === 'waiting' && view !== 'triage') {
       throw new HttpError('validation.failed', 'tab=waiting is only valid for view=triage', {
         fields: [{ path: ['tab'], code: 'invalid_for_view' }],
@@ -325,6 +326,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
       ...(filterSeverity !== undefined ? { filterSeverity } : {}),
       ...(filterReporterFacingStatus !== undefined ? { filterReporterFacingStatus } : {}),
       ...(filterOwner !== undefined ? { filterOwner } : {}),
+      ...(analyticsAreaId !== undefined ? { analyticsAreaId } : {}),
     });
   }
 
