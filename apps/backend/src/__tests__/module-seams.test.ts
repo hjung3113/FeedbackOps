@@ -68,9 +68,7 @@ function findForbiddenRepoImports(source: string, fromFile: string): string[] {
   return importSpecifiers(source).filter((spec) => {
     const target = resolveModuleTarget(fromFile, spec);
     return (
-      target !== null &&
-      target.split(path.sep)[0] !== ownModule &&
-      FORBIDDEN_REPO_TARGETS.has(target)
+      target !== null && target.split('/')[0] !== ownModule && FORBIDDEN_REPO_TARGETS.has(target)
     );
   });
 }
