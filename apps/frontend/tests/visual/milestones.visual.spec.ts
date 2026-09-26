@@ -87,6 +87,15 @@ test.describe('/tasks?view=milestones visual harness', () => {
     expect(page.url()).not.toContain('param=');
   });
 
+  // #514 B2e — the create control lives on the toolbar; the create block
+  // itself is covered by MilestonesRoute.edit.test.tsx. No PNG in this spec.
+  test('shows the New milestone toolbar action', async ({ page }) => {
+    await installMockApi(page, { milestones: true });
+    await page.goto('/tasks?view=milestones');
+
+    await expect(page.getByRole('button', { name: 'New milestone' })).toBeVisible();
+  });
+
   // B2d fixup — a selected detail the actor cannot read (403) still mounts the
   // panel chrome and close action; closing it clears param and keeps the
   // Managed System scope (routes-and-layout list-context rule).

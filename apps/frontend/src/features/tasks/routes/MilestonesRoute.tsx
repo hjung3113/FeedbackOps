@@ -12,19 +12,21 @@ import {
   type ListToolbarTab,
   PermissionBlockedPanel,
 } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Activity, Filter, Plus, Search } from 'lucide-react';
 import * as React from 'react';
-import { MilestoneDetailPanel } from '../components/MilestoneDetailPanel';
+import { MilestoneCreatePanel, MilestoneDetailPanel } from '../components/MilestoneDetailPanel';
 import { MilestoneRow } from '../components/MilestoneRow';
 
 // #514 B2c — /tasks?view=milestones list screen: toolbar (status tabs All /
-// In progress / Planning / Released, local search, inert Filter, inert
-// New milestone), summary strip, and MilestoneRow rows, mirroring
+// In progress / Planning / Released, local search, inert Filter), summary
+// strip, and MilestoneRow rows, mirroring
 // docs/design-prototype/screen-milestones.jsx MilestonesScreen. The detail
-// panel is B2d; Slice C (per-row mini timeline, Gantt) is out of this slice —
-// the summary keeps the prototype's schedule-risk label only.
+// panel is B2d; B2e wires New milestone to the same property block in a
+// create state — no separate create screen. Slice C (per-row mini timeline,
+// Gantt) is out of this slice — the summary keeps the prototype's
+// schedule-risk label only.
 // Selection rides `param` like every shipped Task view (design §7 item 8);
 // there is no `selected` key on /tasks.
 export interface MilestonesRouteProps {
@@ -48,9 +50,13 @@ const STATUS_TABS: Array<{ value: MilestoneTab; label: string }> = [
 
 export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRouteProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<MilestoneTab>('all');
   const [search, setSearch] = React.useState('');
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
+  // B2e — the create block is a state of the detail slot, not a route: while
+  // it is open the same property block renders in a create state.
+  const [creating, setCreating] = React.useState(false);
 
   React.useEffect(() => {
     // URL selection is authoritative in both directions: a param selects the
@@ -237,8 +243,14 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                   <Filter className="h-3.5 w-3.5" aria-hidden="true" />
                   Filter
                 </Button>
-                {/* New milestone submits from B2e; inert here per the approved plan. */}
-                <Button variant="primary" size="sm" className="gap-1.5">
+                {/* B2e — opens the property block in a create state in the
+                    detail slot; no separate create screen. */}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setCreating(true)}
+                >
                   <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                   New milestone
                 </Button>
@@ -317,9 +329,33 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
         </>
       }
       // B2d: the selected row stays in the list; the panel fills the existing
-      // right detail slot (routes-and-layout list/detail rule).
+      // right detail slot (routes-and-layout list/detail rule). B2e: the
+      // create block takes the same slot until it is submitted or cancelled.
       detailPanel={
-        selectedId ? (
+        creating ? (
+          <MilestoneCreatePanel
+            managedSystems={(managedSystemsQuery.data?.items ?? []).map(({ id, name }) => ({
+              id,
+              name,
+            }))}
+            analyticsAreas={(analyticsAreasQuery.data?.items ?? []).map(({ id, name }) => ({
+              id,
+              name,
+            }))}
+            actors={(actors ?? []).map(({ id, display_name }) => ({ id, display_name }))}
+            defaultManagedSystemId={
+              managedSystem !== undefined && managedSystem !== 'all' ? managedSystem : null
+            }
+            onCreated={(createdId) => {
+              setCreating(false);
+              // The list refetches so the new row appears; selection rides the
+              // existing `param` key with the Managed System scope preserved.
+              void queryClient.invalidateQueries({ queryKey: ['milestones'] });
+              selectMilestone(createdId);
+            }}
+            onCancel={() => setCreating(false)}
+          />
+        ) : selectedId ? (
           <MilestoneDetailPanel
             milestoneId={selectedId}
             onClose={closeMilestone}

@@ -1,12 +1,13 @@
-import { getMilestone } from '@/lib/api/milestones';
+import { createMilestone, getMilestone, updateMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
-import type { MilestoneDetailDto } from '@fops/shared';
+import type { MilestoneDetailDto, MilestoneDto } from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
   FieldRow,
+  Input,
   ManagedSystemPill,
   NestedTextBlock,
   OutlineBadge,
@@ -14,10 +15,11 @@ import {
   PanelSectionTitle,
   PanelTitleBlock,
   PermissionBlockedPanel,
+  Textarea,
 } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Pencil } from 'lucide-react';
 import * as React from 'react';
 import { MilestoneStatusBadge } from './MilestoneStatusBadge';
 
@@ -115,6 +117,191 @@ export function MilestoneDetailPanel({
   );
 }
 
+export interface MilestoneCreatePanelProps {
+  managedSystems: ReadonlyArray<{ id: string; name: string }>;
+  analyticsAreas: ReadonlyArray<{ id: string; name: string }>;
+  actors: ReadonlyArray<{ id: string; display_name: string }>;
+  /** Concrete Managed System uuid to preselect; the `all` scope passes null. */
+  defaultManagedSystemId: string | null;
+  onCreated: (id: string) => void;
+  onCancel: () => void;
+}
+
+// #514 B2e — the same property block in a create state (§7 item 10): the
+// New milestone toolbar control opens it in the existing ListShell detail
+// slot; there is no separate create screen. Managed System is the required
+// create input (A3/A8) and is submitted as primary_managed_system_id — the
+// body never carries managed_system_id or a status (status waits for
+// B2e-status, after the ADR).
+export function MilestoneCreatePanel({
+  managedSystems,
+  analyticsAreas,
+  actors,
+  defaultManagedSystemId,
+  onCreated,
+  onCancel,
+}: MilestoneCreatePanelProps) {
+  const [title, setTitle] = React.useState('');
+  const [why, setWhy] = React.useState('');
+  const [managedSystemId, setManagedSystemId] = React.useState(defaultManagedSystemId ?? '');
+  const [analyticsAreaId, setAnalyticsAreaId] = React.useState('');
+  const [ownerActorId, setOwnerActorId] = React.useState('');
+  const [startDate, setStartDate] = React.useState('');
+  const [targetDate, setTargetDate] = React.useState('');
+  const [formError, setFormError] = React.useState<string | null>(null);
+
+  const createMutation = useMutation<MilestoneDto, Error, void>({
+    // Same idempotency style as useTaskRequestConversion: a fresh key per submit.
+    mutationFn: async () =>
+      createMilestone(
+        {
+          title: title.trim(),
+          why: why.trim(),
+          primary_managed_system_id: managedSystemId,
+          start_date: startDate,
+          target_date: targetDate,
+          // Optional fields stay off the body when unset: owner defaults to the
+          // creator, Analytics Area stays null server-side.
+          ...(ownerActorId !== '' ? { owner_actor_id: ownerActorId } : {}),
+          ...(analyticsAreaId !== '' ? { analytics_area_id: analyticsAreaId } : {}),
+        },
+        crypto.randomUUID(),
+      ),
+    onSuccess: (created) => onCreated(created.id),
+    onError: (err) => setFormError(err.message),
+  });
+
+  function submit(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (
+      title.trim() === '' ||
+      why.trim() === '' ||
+      managedSystemId === '' ||
+      startDate === '' ||
+      targetDate === ''
+    ) {
+      setFormError('Title, why, Managed System, Start, and Target are required.');
+      return;
+    }
+    setFormError(null);
+    createMutation.mutate();
+  }
+
+  const selectClassName =
+    'w-48 rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary';
+  const dateClassName =
+    'rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary';
+
+  return (
+    <aside className="flex h-full flex-col bg-surface-detail">
+      {/* No display id exists yet: the header chrome mounts without record
+          identity, mirroring the pending detail read. */}
+      <DetailPanelHeader kind="milestone" onClose={onCancel} />
+      <form
+        className="min-h-0 flex-1 overflow-y-auto"
+        data-testid="milestone-create-panel"
+        onSubmit={submit}
+      >
+        <div className="px-4 pb-3 pt-4">
+          <PanelSectionTitle>New milestone</PanelSectionTitle>
+        </div>
+        <div className="border-t border-border-subtle py-2">
+          <PanelSectionTitle className="px-4">Properties</PanelSectionTitle>
+          <FieldRow label="Title">
+            <Input
+              aria-label="Title"
+              className="w-56"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+          </FieldRow>
+          <FieldRow label="Why this milestone exists">
+            <Textarea
+              aria-label="Why this milestone exists"
+              className="w-56"
+              rows={3}
+              value={why}
+              onChange={(event) => setWhy(event.target.value)}
+            />
+          </FieldRow>
+          <FieldRow label="Managed System">
+            <select
+              aria-label="Managed System"
+              className={selectClassName}
+              value={managedSystemId}
+              onChange={(event) => setManagedSystemId(event.target.value)}
+            >
+              <option value="">Select…</option>
+              {managedSystems.map((system) => (
+                <option key={system.id} value={system.id}>
+                  {system.name}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+          <FieldRow label="Analytics Area">
+            <select
+              aria-label="Analytics Area"
+              className={selectClassName}
+              value={analyticsAreaId}
+              onChange={(event) => setAnalyticsAreaId(event.target.value)}
+            >
+              <option value="">—</option>
+              {analyticsAreas.map((area) => (
+                <option key={area.id} value={area.id}>
+                  {area.name}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+          <FieldRow label="Owner">
+            <select
+              aria-label="Owner"
+              className={selectClassName}
+              value={ownerActorId}
+              onChange={(event) => setOwnerActorId(event.target.value)}
+            >
+              <option value="">—</option>
+              {actors.map((actor) => (
+                <option key={actor.id} value={actor.id}>
+                  {actor.display_name}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+          <FieldRow label="Start">
+            <input
+              aria-label="Start"
+              className={dateClassName}
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+            />
+          </FieldRow>
+          <FieldRow label="Target">
+            <input
+              aria-label="Target"
+              className={dateClassName}
+              type="date"
+              value={targetDate}
+              onChange={(event) => setTargetDate(event.target.value)}
+            />
+          </FieldRow>
+        </div>
+        <div className="flex items-center gap-2 border-t border-border-subtle px-4 py-3">
+          <Button type="submit" variant="primary" size="sm" disabled={createMutation.isPending}>
+            Create milestone
+          </Button>
+          <Button type="button" variant="subtle" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          {formError !== null && <span className="text-sm text-accent-danger">{formError}</span>}
+        </div>
+      </form>
+    </aside>
+  );
+}
+
 interface MilestoneDetailContentProps {
   milestone: MilestoneDetailDto;
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -131,7 +318,63 @@ function MilestoneDetailContent({
   analyticsAreaNamesById,
 }: MilestoneDetailContentProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const sourceFinding = milestone.source_finding;
+
+  // B2e — title-only edit. Managed System is a create-only field (A3/A8) and
+  // never becomes an input here; the PATCH carries the title and If-Match
+  // (the row's updated_at) with a fresh idempotency key, nothing else.
+  const [editingTitle, setEditingTitle] = React.useState(false);
+  const [titleDraft, setTitleDraft] = React.useState('');
+  const [titleError, setTitleError] = React.useState<string | null>(null);
+  const titleMutation = useMutation<MilestoneDto, Error, void>({
+    mutationFn: async () =>
+      updateMilestone(
+        milestone.id,
+        { title: titleDraft.trim() },
+        { ifMatch: milestone.updated_at, idempotencyKey: crypto.randomUUID() },
+      ),
+    onSuccess: async () => {
+      setEditingTitle(false);
+      setTitleError(null);
+      // Detail read returns the stored row; the list shows the new title too.
+      await queryClient.invalidateQueries({ queryKey: ['milestone', milestone.id] });
+      await queryClient.invalidateQueries({ queryKey: ['milestones'] });
+    },
+    onError: async (err) => {
+      if (err instanceof ApiError && err.status === 409 && err.code === 'conflict.stale_write') {
+        // Stale If-Match: the server row wins. Drop the typed title, refetch,
+        // and show the stored title — never layer the draft over it.
+        setEditingTitle(false);
+        setTitleDraft('');
+        setTitleError(null);
+        await queryClient.refetchQueries({ queryKey: ['milestone', milestone.id], exact: true });
+      } else {
+        setTitleError(err.message);
+      }
+    },
+  });
+
+  function startTitleEdit(): void {
+    setTitleDraft(milestone.title);
+    setTitleError(null);
+    setEditingTitle(true);
+  }
+
+  function cancelTitleEdit(): void {
+    setEditingTitle(false);
+    setTitleError(null);
+  }
+
+  function submitTitleEdit(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (titleDraft.trim() === '') {
+      setTitleError('Title is required.');
+      return;
+    }
+    titleMutation.mutate();
+  }
+
   const areaName =
     milestone.analytics_area_id !== null
       ? analyticsAreaNamesById.get(milestone.analytics_area_id)
@@ -155,6 +398,51 @@ function MilestoneDetailContent({
               </>
             }
           />
+
+          {/* B2e — title-only edit control; distinct from the toolbar's create
+              control. Only the title becomes an input; a stale If-Match
+              refetches and shows the server title. */}
+          {editingTitle ? (
+            <form
+              className="mx-4 mb-3 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3"
+              onSubmit={submitTitleEdit}
+            >
+              <div className="flex flex-col gap-1 text-xs text-text-muted">
+                <span>Title</span>
+                <Input
+                  aria-label="Title"
+                  value={titleDraft}
+                  onChange={(event) => {
+                    setTitleDraft(event.target.value);
+                    setTitleError(null);
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={titleMutation.isPending}
+                >
+                  Save
+                </Button>
+                <Button type="button" variant="subtle" size="sm" onClick={cancelTitleEdit}>
+                  Cancel
+                </Button>
+                {titleError !== null && (
+                  <span className="text-sm text-accent-danger">{titleError}</span>
+                )}
+              </div>
+            </form>
+          ) : (
+            <div className="mx-4 mb-3 flex justify-end">
+              <Button variant="subtle" size="sm" className="gap-1.5" onClick={startTitleEdit}>
+                <Pencil className="h-3 w-3" aria-hidden="true" />
+                Edit title
+              </Button>
+            </div>
+          )}
 
           {/* Progress strip — real child-Task buckets from progress (B1c);
               no planned bucket, planned tasks are prototype-only. */}

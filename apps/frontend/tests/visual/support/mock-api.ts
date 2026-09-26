@@ -1,11 +1,14 @@
 import {
   addVocClusterMemberRequestSchema,
   approvePermissionRequestSchema,
+  createMilestoneRequestSchema,
   createTaskRequestFromFindingRequestSchema,
   dashboardSummarySchema,
   denyPermissionRequestSchema,
   linkExistingFindingToVocClusterRequestSchema,
+  milestoneDtoSchema,
   needMoreInfoPermissionRequestSchema,
+  patchMilestoneRequestSchema,
   permissionDecisionResultSchema,
   rejectPermissionRequestSchema,
   vocClusterDtoSchema,
@@ -60,6 +63,7 @@ import {
   registerManagedSystemVisualBodySchema,
 } from '../fixtures/managed-system-owner';
 import {
+  MILESTONE_ACTOR_IDS,
   MILESTONE_IDS,
   milestoneActorsFixture,
   milestoneAnalyticsAreasFixture,
@@ -323,6 +327,62 @@ export async function installMockApi(
         return;
       }
       await json(route, 200, milestoneDetailFixture);
+      return;
+    }
+    // #514 B2e — create and title-patch writers. Bodies and Idempotency-Keys
+    // are recorded like every other mutation handler; responses reuse the
+    // detail fixture so the created/patched row renders with
+    // prototype-mirrored fields. Neither writer ever sees a status field.
+    if (options.milestones && isRequest(route, 'POST', '/milestones')) {
+      const body = createMilestoneRequestSchema.parse(request.postDataJSON());
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      const { source_finding: _detailOnly, ...row } = milestoneDetailFixture;
+      await json(
+        route,
+        201,
+        milestoneDtoSchema.parse({
+          ...row,
+          id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1099',
+          display_id: 'MLS-1099',
+          title: body.title,
+          why: body.why,
+          primary_managed_system_id: body.primary_managed_system_id,
+          start_date: body.start_date,
+          target_date: body.target_date,
+          status: 'planning',
+          analytics_area_id: body.analytics_area_id ?? null,
+          owner_actor_id: body.owner_actor_id ?? MILESTONE_ACTOR_IDS.u1,
+          created_by: body.owner_actor_id ?? MILESTONE_ACTOR_IDS.u1,
+          created_at: '2026-07-22T00:00:00.000Z',
+          updated_at: '2026-07-22T00:00:00.000Z',
+          progress: { released_done: 0, in_flight: 0, queued: 0, total: 0, percent: 0 },
+        }),
+      );
+      return;
+    }
+    if (options.milestones && isRequest(route, 'PATCH', `/milestones/${MILESTONE_IDS.sso}`)) {
+      const body = patchMilestoneRequestSchema.parse(request.postDataJSON());
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      const { source_finding: _detailOnly, ...row } = milestoneDetailFixture;
+      await json(
+        route,
+        200,
+        milestoneDtoSchema.parse({
+          ...row,
+          ...(body.title !== undefined ? { title: body.title } : {}),
+          updated_at: '2026-07-23T00:00:00.000Z',
+        }),
+      );
       return;
     }
     if (options.milestones && isRequest(route, 'GET', '/actors')) {
