@@ -4,8 +4,9 @@
  * Plain fs + regex over the module sources (no DB, always runs):
  *   1. voc-clusters / tasks / saved-views must not import another module's
  *      repo (`findings/repo`, `findings/repo-read`, `entity-links/repo`,
- *      `task-requests/repo`) — cross-module access goes through the owning
- *      module's application seam (`commands.ts`) or the shared list contracts in `@fops/shared`.
+ *      `task-requests/repo`, `tasks/repo`, `milestones/repo`) — cross-module
+ *      access goes through the owning module's application seam (`commands.ts`)
+ *      or the shared list contracts in `@fops/shared`.
  *   2. No application file under modules/ (anything but `routes.ts` and
  *      `index.ts` barrels) may import a `routes` module (HTTP modules are
  *      not contracts).
@@ -27,6 +28,8 @@ const FORBIDDEN_REPO_TARGETS = new Set([
   'findings/repo-read',
   'entity-links/repo',
   'task-requests/repo',
+  'tasks/repo',
+  'milestones/repo',
 ]);
 const FOREIGN_SCHEMA_WRITE =
   /\b(?:update|insert\s+into|delete\s+from)\s+(?:task_request\.|finding\.)/gi;
@@ -59,9 +62,16 @@ export function resolveModuleTarget(fromFile: string, specifier: string): string
 }
 
 export function findForbiddenRepoImports(source: string, fromFile: string): string[] {
+  // Only cross-module repo imports are violations: a module may import its
+  // own repo (tasks/service.ts → './repo.js' resolves to tasks/repo).
+  const ownModule = path.relative(MODULES_DIR, fromFile).split(path.sep)[0];
   return importSpecifiers(source).filter((spec) => {
     const target = resolveModuleTarget(fromFile, spec);
-    return target !== null && FORBIDDEN_REPO_TARGETS.has(target);
+    return (
+      target !== null &&
+      target.split(path.sep)[0] !== ownModule &&
+      FORBIDDEN_REPO_TARGETS.has(target)
+    );
   });
 }
 
@@ -112,6 +122,12 @@ describe('module seam recurrence guard (#391)', () => {
     expect(flagged(`export { y } from '../entity-links/repo.js';`)).toHaveLength(1);
     expect(flagged(`import {\n  a,\n  b as c,\n} from '../findings/repo.js';`)).toHaveLength(1); // multi-line
     expect(flagged(`const m = await import('../findings/repo.js');`)).toHaveLength(1);
+    // #514 A1: tasks/repo and milestones/repo are cross-module seams too —
+    // reported when another module imports them, allowed inside the owner.
+    const sibling = path.join(MODULES_DIR, 'voc-clusters/service.ts');
+    expect(flagged(`import { x } from '../tasks/repo.js';`, sibling)).toHaveLength(1);
+    expect(flagged(`import { x } from '../milestones/repo.js';`, sibling)).toHaveLength(1);
+    expect(flagged(`import { x } from './repo.js';`)).toEqual([]); // own module's repo
     // Nested helper: different depth resolves to the same forbidden target.
     expect(flagged(`import { x } from '../../findings/repo.js';`, nested)).toHaveLength(1);
     expect(flagged(`import { x } from '../findings/repo.js';`, nested)).toEqual([]); // tasks/findings/repo — not it
