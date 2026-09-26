@@ -1398,9 +1398,12 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       expect(res.json<{ code: string }>().code).toBe('not_found.record');
       await expectNoConversionSideEffects(request.id);
     } finally {
-      await dbHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
-      await dbHandle.pool.query('delete from core.managed_systems where id = $1', [otherWsMsId]);
-      await dbHandle.pool.query('delete from core.workspaces where id = $1', [otherWsId]);
+      // fops_app has no DELETE on task.milestones: use the migrate role.
+      await migrateHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
+      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [
+        otherWsMsId,
+      ]);
+      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [otherWsId]);
     }
   });
 
@@ -1427,8 +1430,8 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       });
       await expectNoConversionSideEffects(request.id);
     } finally {
-      await dbHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
-      await dbHandle.pool.query('delete from core.managed_systems where id = $1', [otherMsId]);
+      await migrateHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
+      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [otherMsId]);
     }
   });
 

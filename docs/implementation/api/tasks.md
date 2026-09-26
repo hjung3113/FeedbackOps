@@ -111,6 +111,7 @@ validation errors:
   - non-approved Task Request: 422 validation.failed with not_approved on status
   - unknown or cross-workspace Analytics Area: 404 not_found.record
   - Analytics Area on another Managed System: 422 validation.failed with out_of_scope on analytics_area_id
+  - archived Analytics Area: 409 conflict.parent_archived with parent_archived on analytics_area_id
   - unknown or cross-workspace Milestone: 404 not_found.record
   - Milestone on another Managed System: 422 validation.failed with out_of_scope on milestone_id
 side effects:
