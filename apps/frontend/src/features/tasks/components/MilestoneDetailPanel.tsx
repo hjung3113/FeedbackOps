@@ -76,6 +76,9 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: MilestoneStatusFilter; label: strin
 const selectClassName =
   'w-48 rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary';
 
+const milestonePropertyFieldClassName =
+  'grid grid-cols-[120px_1fr] items-start gap-3 px-0 text-[13px] [&>div]:text-left';
+
 // MilestoneTaskRow (prototype screen-milestones.jsx:214-238) — read-only
 // child row: priority indicator, display id, title, internal status, stamps,
 // assignee chip. No Add task action exists in #514.
@@ -685,10 +688,7 @@ function MilestoneDetailContent({
               </span>
             </div>
             {/* Decorative bar — the strip's text already carries the numbers. */}
-            <div
-              className="h-1.5 overflow-hidden rounded-full bg-surface-canvas"
-              aria-hidden="true"
-            >
+            <div className="h-1 overflow-hidden rounded-full bg-border-subtle" aria-hidden="true">
               <div
                 className="h-full bg-accent-primary"
                 style={{ width: `${milestone.progress.percent}%` }}
@@ -722,10 +722,10 @@ function MilestoneDetailContent({
               nests the plain-text why in NestedTextBlock (screen-milestones.jsx):
               plain text, no rich content in the DTO. The shared block keeps its
               border (shown in the reference baseline); only the type scale is
-              corrected to the prototype 13px/1.55 (finding 3). */}
+              corrected to the prototype 13px/1.6 (finding P3-1). */}
           <div className="mb-8">
             <PanelSectionTitle>Why this milestone exists</PanelSectionTitle>
-            <NestedTextBlock className="p-3 text-[13px] leading-[1.55] text-text-secondary">
+            <NestedTextBlock className="p-3 text-[13px] leading-[1.6] text-text-secondary">
               {milestone.why}
             </NestedTextBlock>
           </div>
@@ -780,10 +780,9 @@ function MilestoneDetailContent({
 
           <div className="mb-8">
             <PanelSectionTitle>Properties</PanelSectionTitle>
-            {/* FieldRow defaults carry px-4; the scroll container owns the
-                horizontal padding now (prototype .panel-scroll 24px), so rows
-                align with the section titles. */}
-            <FieldRow label="Status" className="px-0">
+            {/* The scroll container owns horizontal padding. These local rows
+                use the prototype's 120px value column and left alignment. */}
+            <FieldRow label="Status" className={milestonePropertyFieldClassName}>
               {/* B2e-status (ADR-0050): the closed set is accepted, so the
                   control offers exactly these four values; PATCH is free
                   among them. The title-block badge above stays read-only. */}
@@ -807,10 +806,10 @@ function MilestoneDetailContent({
               </span>
             </FieldRow>
             {/* Managed System is create-only (A3/A8): read-only text, never an input. */}
-            <FieldRow label="Managed System" className="px-0">
+            <FieldRow label="Managed System" className={milestonePropertyFieldClassName}>
               <ManagedSystemPill name={managedSystemName} />
             </FieldRow>
-            <FieldRow label="Analytics Area" className="px-0">
+            <FieldRow label="Analytics Area" className={milestonePropertyFieldClassName}>
               {areaName !== undefined ? (
                 <OutlineBadge>{areaName}</OutlineBadge>
               ) : (
@@ -821,20 +820,20 @@ function MilestoneDetailContent({
                 (screen-milestones.jsx Properties). The shared chip composes the
                 avatar + display name; an actor missing from the directory keeps
                 the explicit — fallback (missing-actor handling preserved). */}
-            <FieldRow label="Owner" className="px-0">
+            <FieldRow label="Owner" className={milestonePropertyFieldClassName}>
               {ownerName !== undefined ? (
                 <UserChip user={{ display_name: ownerName }} size="sm" />
               ) : (
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
-            <FieldRow label="Start" className="px-0">
+            <FieldRow label="Start" className={milestonePropertyFieldClassName}>
               <span className="font-mono text-xs text-text-secondary">{milestone.start_date}</span>
             </FieldRow>
-            <FieldRow label="Target" className="px-0">
+            <FieldRow label="Target" className={milestonePropertyFieldClassName}>
               <span className="font-mono text-xs text-text-secondary">{milestone.target_date}</span>
             </FieldRow>
-            <FieldRow label="Created" className="px-0">
+            <FieldRow label="Created" className={milestonePropertyFieldClassName}>
               {milestone.created_at.slice(0, 10)}
             </FieldRow>
           </div>

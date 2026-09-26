@@ -313,6 +313,97 @@ test.describe('/tasks?view=milestones visual harness', () => {
     expect(color).toBe(`rgb(${r}, ${g}, ${b})`);
   });
 
+  test('cp-pixel: keeps the zero-progress track visible against its card', async ({ page }) => {
+    await installMockApi(page, { milestones: true });
+    await page.goto(`/tasks?view=milestones&param=${MILESTONE_IDS.sso}`);
+
+    const detail = page.getByTestId('app-detail-slot');
+    await expect(detail.getByText('0%', { exact: true })).toBeVisible();
+
+    const progressCard = detail
+      .getByText('0 of 1 tasks released', { exact: true })
+      .locator('xpath=../..');
+    const track = progressCard.locator('div[aria-hidden="true"]');
+    await expect(track).toHaveCount(1);
+    const trackCss = await track.evaluate((el) => {
+      const card = el.parentElement;
+      if (card === null) throw new Error('Expected the progress track inside its card');
+      return {
+        height: getComputedStyle(el).height,
+        background: getComputedStyle(el).backgroundColor,
+        cardBackground: getComputedStyle(card).backgroundColor,
+      };
+    });
+
+    expect.soft(trackCss.height).toBe('4px');
+    expect.soft(trackCss.background).not.toBe(trackCss.cardBackground);
+  });
+
+  test('cp-pixel: aligns milestone property values to one prototype column', async ({ page }) => {
+    await installMockApi(page, { milestones: true });
+    await page.goto(`/tasks?view=milestones&param=${MILESTONE_IDS.sso}`);
+
+    const detail = page.getByTestId('app-detail-slot');
+    await expect(detail.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const propertyLabels = [
+      'Managed System',
+      'Analytics Area',
+      'Owner',
+      'Start',
+      'Target',
+      'Created',
+    ];
+    const properties = await Promise.all(
+      propertyLabels.map(async (label) => {
+        const fieldLabel = detail.getByText(label, { exact: true });
+        await expect(fieldLabel).toBeVisible();
+        const row = fieldLabel.locator('xpath=..');
+        const value = row.locator('xpath=./div');
+        const [rowBox, valueBox, rowCss, valueAlignment] = await Promise.all([
+          row.boundingBox(),
+          value.boundingBox(),
+          row.evaluate((el) => {
+            const cs = getComputedStyle(el);
+            return {
+              display: cs.display,
+              columns: cs.gridTemplateColumns,
+              columnGap: cs.columnGap,
+              fontSize: cs.fontSize,
+            };
+          }),
+          value.evaluate((el) => getComputedStyle(el).textAlign),
+        ]);
+        return {
+          label,
+          rowX: requireBox(rowBox).x,
+          valueX: requireBox(valueBox).x,
+          rowCss,
+          valueAlignment,
+        };
+      }),
+    );
+
+    const sharedOrigin = properties[0]?.valueX;
+    if (sharedOrigin === undefined) throw new Error('Expected representative milestone properties');
+    for (const property of properties) {
+      expect.soft(property.rowCss.display, property.label).toBe('grid');
+      expect.soft(property.rowCss.columns, property.label).toMatch(/^120px\s/);
+      expect.soft(property.rowCss.columnGap, property.label).toBe('12px');
+      expect.soft(property.rowCss.fontSize, property.label).toBe('13px');
+      expect.soft(property.valueAlignment, property.label).toBe('left');
+      expect
+        .soft(Math.abs(property.valueX - (property.rowX + 132)), property.label)
+        .toBeLessThan(0.5);
+      expect
+        .soft(
+          Math.abs(property.valueX - sharedOrigin),
+          `${property.label}: row x ${property.rowX}, value x ${property.valueX}, shared origin ${sharedOrigin}`,
+        )
+        .toBeLessThan(0.5);
+    }
+  });
+
   // Finding 3 — detail typography/density on the prototype scale: why block
   // 13px/1.55 (NestedTextBlock), source summary 12px, panel-section 32px
   // rhythm, title block 24px margin, panel-scroll 28/24/32 padding; and
@@ -326,7 +417,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
 
-    // Why block — prototype NestedTextBlock: 13px with 1.55 line height.
+    // Why block — prototype NestedTextBlock: 13px with 1.6 line height.
     // Scoped to the detail panel: the selected row's truncated excerpt shares
     // the same sentence.
     const why = page
@@ -338,7 +429,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
       return { size: cs.fontSize, lineHeight: cs.lineHeight };
     });
     expect(whyCss.size).toBe('13px');
-    expect(Math.abs(Number.parseFloat(whyCss.lineHeight) / 13 - 1.55)).toBeLessThan(0.03);
+    expect(Math.abs(Number.parseFloat(whyCss.lineHeight) / 13 - 1.6)).toBeLessThan(0.03);
 
     // Source summary — prototype text-xs (12px).
     const summary = page.getByText(
@@ -348,7 +439,12 @@ test.describe('/tasks?view=milestones visual harness', () => {
       },
     );
     await expect(summary).toBeVisible();
-    expect(await summary.evaluate((el) => getComputedStyle(el).fontSize)).toBe('12px');
+    const summaryCss = await summary.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { size: cs.fontSize, lineHeight: cs.lineHeight };
+    });
+    expect(summaryCss.size).toBe('12px');
+    expect(Math.abs(Number.parseFloat(summaryCss.lineHeight) / 12 - 1.55)).toBeLessThan(0.03);
 
     // Section rhythm — .panel-section 32px bottom margin, title block 24px,
     // panel-scroll 28/24/32 padding.
