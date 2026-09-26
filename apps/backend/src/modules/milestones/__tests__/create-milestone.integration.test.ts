@@ -179,6 +179,7 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
     const counterAfterFirst = await dbHandle.pool.query<{ next_value: string }>(counterQuery, [
       WORKSPACE_ID,
     ]);
+    expect(counterAfterFirst.rows).toHaveLength(1);
 
     const second = await createMilestone(devCookie, validBody(msId), key);
     expect(second.statusCode).toBe(201);
