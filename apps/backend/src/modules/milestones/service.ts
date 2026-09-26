@@ -1,4 +1,9 @@
-import type { CreateMilestoneRequest, ListMilestonesQuery, MilestoneDto } from '@fops/shared';
+import type {
+  CreateMilestoneRequest,
+  ListMilestonesQuery,
+  MilestoneDto,
+  PatchMilestoneRequest,
+} from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
@@ -14,6 +19,8 @@ import {
   findMilestoneById,
   insertMilestone,
   listMilestonesByWorkspace,
+  lockMilestoneForUpdate,
+  updateMilestone,
 } from './repo.js';
 
 export interface MilestonesActor {
@@ -211,10 +218,106 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
     return milestoneToDto(row);
   }
 
+  async function patchMilestone(args: {
+    actor: MilestonesActor;
+    milestoneId: string;
+    ifMatch: string;
+    input: PatchMilestoneRequest;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<{ status: number; body: MilestoneDto }> {
+    if (!hasElevatedFindingRole(args.actor)) {
+      throw new HttpError('permission.denied', 'finding.manage capability required');
+    }
+    return deps.db.transaction(async (tx) => {
+      return deps.idempotencyService.runIdempotent(
+        tx,
+        args.actor.actor_id,
+        args.idempotencyKey,
+        args.requestHash,
+        async () => {
+          const milestone = await lockMilestoneForUpdate(tx, {
+            workspaceId: args.actor.workspace_id,
+            milestoneId: args.milestoneId,
+          });
+          if (!milestone) throw new HttpError('not_found.record', 'milestone not found');
+
+          const canManage = (
+            await checkFindingManage(
+              deps.checkService,
+              args.actor,
+              milestone.primary_managed_system_id,
+              { requireElevatedRole: true },
+              { tx },
+            )
+          ).allow;
+          if (!canManage) {
+            throw new HttpError('permission.denied', 'finding.manage capability required');
+          }
+
+          if (milestone.updated_at.toISOString() !== args.ifMatch) {
+            throw new HttpError(
+              'conflict.stale_write',
+              'milestone updated_at does not match If-Match',
+              { current_updated_at: milestone.updated_at.toISOString() },
+            );
+          }
+
+          if (args.input.analytics_area_id) {
+            await assertMilestoneAnalyticsArea({
+              tx,
+              workspaceId: args.actor.workspace_id,
+              analyticsAreaId: args.input.analytics_area_id,
+              managedSystemId: milestone.primary_managed_system_id,
+            });
+          }
+
+          const fields = Object.keys(args.input);
+          const updated = await updateMilestone(tx, {
+            workspaceId: args.actor.workspace_id,
+            milestoneId: milestone.id,
+            patch: {
+              ...(args.input.title !== undefined ? { title: args.input.title } : {}),
+              ...(args.input.why !== undefined ? { why: args.input.why } : {}),
+              ...(args.input.owner_actor_id !== undefined
+                ? { ownerActorId: args.input.owner_actor_id }
+                : {}),
+              ...(args.input.analytics_area_id !== undefined
+                ? { analyticsAreaId: args.input.analytics_area_id }
+                : {}),
+              ...(args.input.start_date !== undefined ? { startDate: args.input.start_date } : {}),
+              ...(args.input.target_date !== undefined
+                ? { targetDate: args.input.target_date }
+                : {}),
+            },
+          });
+
+          // No from_status / to_status: no code path updates status before
+          // the G-status ADR (A-status populates the pair).
+          await deps.auditService.record(tx, {
+            workspace_id: args.actor.workspace_id,
+            actor_id: args.actor.actor_id,
+            event_type: 'milestone_updated',
+            subject_type: 'milestone',
+            subject_id: milestone.id,
+            summary: 'Milestone updated',
+            detail: {
+              milestone_id: milestone.id,
+              fields,
+            },
+          });
+
+          return { status: 200, body: milestoneToDto(updated) };
+        },
+      );
+    });
+  }
+
   return {
     createMilestone,
     listMilestones,
     getMilestone,
+    patchMilestone,
     milestoneToDto,
   };
 }

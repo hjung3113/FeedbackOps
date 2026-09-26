@@ -125,6 +125,63 @@ export async function findMilestoneById(
   return row ? mapMilestoneRow(row) : null;
 }
 
+/** Full-row lock for PATCH; A4's narrow lockMilestone stays the cross-module seam. */
+export async function lockMilestoneForUpdate(
+  tx: Tx,
+  input: { workspaceId: string; milestoneId: string },
+): Promise<MilestoneRow | null> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    SELECT ${MILESTONE_SELECT}
+      FROM task.milestones
+     WHERE id = ${input.milestoneId}
+       AND workspace_id = ${input.workspaceId}
+     FOR UPDATE
+     LIMIT 1
+  `);
+  const row = result.rows[0];
+  return row ? mapMilestoneRow(row) : null;
+}
+
+// The input type deliberately has no primary_managed_system_id and no status:
+// no code path can update either column (#514 A8; status awaits G-status).
+export async function updateMilestone(
+  tx: Tx,
+  input: {
+    workspaceId: string;
+    milestoneId: string;
+    patch: {
+      title?: string;
+      why?: string;
+      ownerActorId?: string;
+      analyticsAreaId?: string | null;
+      startDate?: string;
+      targetDate?: string;
+    };
+  },
+): Promise<MilestoneRow> {
+  const sets = [sql`updated_at = now()`];
+  if (input.patch.title !== undefined) sets.push(sql`title = ${input.patch.title}`);
+  if (input.patch.why !== undefined) sets.push(sql`why = ${input.patch.why}`);
+  if (input.patch.ownerActorId !== undefined) {
+    sets.push(sql`owner_actor_id = ${input.patch.ownerActorId}`);
+  }
+  if (input.patch.analyticsAreaId !== undefined) {
+    sets.push(sql`analytics_area_id = ${input.patch.analyticsAreaId}`);
+  }
+  if (input.patch.startDate !== undefined) sets.push(sql`start_date = ${input.patch.startDate}`);
+  if (input.patch.targetDate !== undefined) sets.push(sql`target_date = ${input.patch.targetDate}`);
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    UPDATE task.milestones
+       SET ${sql.join(sets, sql`, `)}
+     WHERE id = ${input.milestoneId}
+       AND workspace_id = ${input.workspaceId}
+     RETURNING ${MILESTONE_SELECT}
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('updateMilestone returned no row');
+  return mapMilestoneRow(row);
+}
+
 /** Lock a workspace-scoped Milestone for update. No status policy (#514 G-status). */
 export async function lockMilestone(
   db: Db | Tx,
