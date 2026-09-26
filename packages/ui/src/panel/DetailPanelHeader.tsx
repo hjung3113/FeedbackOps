@@ -8,7 +8,12 @@ export type DetailPanelKind = 'voc' | 'finding' | 'task' | 'survey' | 'cluster' 
 
 export interface DetailPanelHeaderProps {
   kind: DetailPanelKind;
-  id: string;
+  /**
+   * Display id. Omit while the record is pending/denied/unavailable so the
+   * header chrome (and its close action) still mounts without showing any
+   * unavailable record data.
+   */
+  id?: string;
   onClose: () => void;
   extras?: React.ReactNode;
   className?: string;
@@ -58,12 +63,14 @@ export function DetailPanelHeader({
         data-testid="detail-panel-header-content"
         className="flex flex-1 items-center gap-3 pl-4 pr-3 min-w-0"
       >
-        {/* Kind label + id */}
+        {/* Kind label + id (id only when the caller has it) */}
         <div className="flex items-baseline gap-2 min-w-0">
           <span className="text-xs text-text-muted shrink-0 uppercase tracking-wide">
             {KIND_LABELS[kind]}
           </span>
-          <span className="font-mono text-xs text-text-muted leading-none">{id}</span>
+          {id !== undefined && (
+            <span className="font-mono text-xs text-text-muted leading-none">{id}</span>
+          )}
         </div>
 
         {/* Extras slot */}

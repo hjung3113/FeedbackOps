@@ -1,11 +1,14 @@
 import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
+import type { MilestoneDetailDto } from '@fops/shared';
 import {
+  Button,
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
   FieldRow,
   ManagedSystemPill,
+  NestedTextBlock,
   OutlineBadge,
   type PanelSection,
   PanelSectionTitle,
@@ -13,6 +16,8 @@ import {
   PermissionBlockedPanel,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { ArrowRight } from 'lucide-react';
 import * as React from 'react';
 import { MilestoneStatusBadge } from './MilestoneStatusBadge';
 
@@ -21,6 +26,10 @@ import { MilestoneStatusBadge } from './MilestoneStatusBadge';
 // ListShell detail slot (never a new shell).
 // Timeline and Tasks sections are deliberately omitted: Timeline is Slice C
 // (TaskGantt) and Tasks is B2d-tasks behind the G-columns record (design §7 item 12).
+// B2d fixup — the shared header and close action stay mounted on every detail
+// read state (review finding 2), the why keeps the prototype's NestedTextBlock
+// nesting (finding 1), and a linked source Finding offers Open finding
+// navigation to its own route (finding 3).
 
 const SECTIONS: PanelSection[] = [
   { id: 'overview', label: 'Overview' },
@@ -49,25 +58,75 @@ export function MilestoneDetailPanel({
     queryFn: ({ signal }) => getMilestone(milestoneId, signal),
     staleTime: 30 * 1000,
   });
-
-  if (milestoneQuery.isLoading) {
-    return <div className="p-4 text-sm text-text-muted">Loading Milestone…</div>;
-  }
-  if (isPermissionDenied(milestoneQuery.error)) {
-    return (
-      <PermissionBlockedPanel
-        state="denied"
-        category="Milestone detail"
-        reason={milestoneQuery.error.message}
-        className="m-4"
-      />
-    );
-  }
-  if (milestoneQuery.error || !milestoneQuery.data) {
-    return <div className="p-4 text-sm text-accent-danger">Milestone detail unavailable.</div>;
-  }
-
+  const error = milestoneQuery.error;
   const milestone = milestoneQuery.data;
+
+  return (
+    <aside className="flex h-full flex-col bg-surface-detail">
+      {/* Panel chrome first: header and close stay mounted independently of the
+          query result, so pending, denied, and unavailable reads all stay
+          dismissible. Identity (display id) and the copy-link action only
+          exist once the record resolves — no unavailable record data renders. */}
+      <DetailPanelHeader
+        kind="milestone"
+        onClose={onClose}
+        {...(milestone !== undefined
+          ? {
+              id: milestone.display_id,
+              extras: (
+                <DetailPanelHeaderActions
+                  entityKind="milestone"
+                  entityId={milestone.id}
+                  copyUrl={`/tasks?view=milestones&param=${milestone.id}`}
+                />
+              ),
+            }
+          : {})}
+      />
+      {milestone === undefined ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {milestoneQuery.isLoading ? (
+            <div className="p-4 text-sm text-text-muted">Loading Milestone…</div>
+          ) : error !== null && isPermissionDenied(error) ? (
+            <PermissionBlockedPanel
+              state="denied"
+              category="Milestone detail"
+              reason={error.message}
+              className="m-4"
+            />
+          ) : (
+            <div className="p-4 text-sm text-accent-danger">Milestone detail unavailable.</div>
+          )}
+        </div>
+      ) : (
+        <MilestoneDetailContent
+          milestone={milestone}
+          scrollRef={scrollRef}
+          actorNamesById={actorNamesById}
+          managedSystemNamesById={managedSystemNamesById}
+          analyticsAreaNamesById={analyticsAreaNamesById}
+        />
+      )}
+    </aside>
+  );
+}
+
+interface MilestoneDetailContentProps {
+  milestone: MilestoneDetailDto;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  actorNamesById: ReadonlyMap<string, string>;
+  managedSystemNamesById: ReadonlyMap<string, string>;
+  analyticsAreaNamesById: ReadonlyMap<string, string>;
+}
+
+function MilestoneDetailContent({
+  milestone,
+  scrollRef,
+  actorNamesById,
+  managedSystemNamesById,
+  analyticsAreaNamesById,
+}: MilestoneDetailContentProps) {
+  const navigate = useNavigate();
   const sourceFinding = milestone.source_finding;
   const areaName =
     milestone.analytics_area_id !== null
@@ -78,19 +137,7 @@ export function MilestoneDetailPanel({
     managedSystemNamesById.get(milestone.primary_managed_system_id) ?? 'Managed System';
 
   return (
-    <aside className="flex h-full flex-col bg-surface-detail">
-      <DetailPanelHeader
-        kind="milestone"
-        id={milestone.display_id}
-        onClose={onClose}
-        extras={
-          <DetailPanelHeaderActions
-            entityKind="milestone"
-            entityId={milestone.id}
-            copyUrl={`/tasks?view=milestones&param=${milestone.id}`}
-          />
-        }
-      />
+    <>
       <DetailPanelSectionNav sections={SECTIONS} scrollRef={scrollRef} />
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div data-anchor="overview">
@@ -150,15 +197,37 @@ export function MilestoneDetailPanel({
             </div>
           </div>
 
-          {/* Why this milestone exists — required by FR-TASK-004; plain text
-              (NestedTextBlock in the prototype, no rich content in the DTO). */}
+          {/* Why this milestone exists — required by FR-TASK-004. The prototype
+              nests the plain-text why in NestedTextBlock (screen-milestones.jsx);
+              plain text, no rich content in the DTO. */}
           <div className="border-t border-border-subtle px-4 py-4">
             <PanelSectionTitle>Why this milestone exists</PanelSectionTitle>
-            <p className="mt-2 text-sm leading-relaxed text-text-secondary">{milestone.why}</p>
+            <NestedTextBlock>{milestone.why}</NestedTextBlock>
           </div>
 
           <div className="border-t border-border-subtle px-4 py-4">
-            <PanelSectionTitle>Source</PanelSectionTitle>
+            {/* Title row carries the prototype's Open finding action when a
+                source Finding is linked (finding 3): navigation to the existing
+                Finding detail route only — no Finding → Milestone writer. */}
+            <div className="flex items-center justify-between">
+              <PanelSectionTitle className="mb-0">Source</PanelSectionTitle>
+              {sourceFinding !== null && (
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    void navigate({
+                      to: '/findings/$findingId',
+                      params: { findingId: sourceFinding.id },
+                    });
+                  }}
+                >
+                  <ArrowRight className="h-3 w-3" aria-hidden="true" />
+                  Open finding
+                </Button>
+              )}
+            </div>
             {sourceFinding ? (
               <div className="mt-2 flex flex-col gap-2 rounded-sm border border-border-subtle bg-surface-card p-3">
                 <span className="text-xs text-text-muted">From finding</span>
@@ -226,7 +295,7 @@ export function MilestoneDetailPanel({
           <div className="py-3 text-center text-xs text-text-muted">활동 기록이 없습니다.</div>
         </div>
       </div>
-    </aside>
+    </>
   );
 }
 

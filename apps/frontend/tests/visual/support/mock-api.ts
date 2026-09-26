@@ -157,9 +157,12 @@ interface InstallOptions {
   /**
    * #514 Milestone list surface: `true` serves the prototype-mirrored list,
    * `'empty'` serves an empty list; status-query params filter the fixture.
-   * Fixtures validate against shared DTO schemas at import.
+   * `'denied-detail'` keeps the populated list but answers the detail route
+   * with 403 permission.denied so dismissal of an inaccessible selection is
+   * observable in the browser. Fixtures validate against shared DTO schemas
+   * at import.
    */
-  milestones?: boolean | 'empty';
+  milestones?: boolean | 'empty' | 'denied-detail';
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -313,6 +316,12 @@ export async function installMockApi(
       return;
     }
     if (options.milestones && isRequest(route, 'GET', `/milestones/${MILESTONE_IDS.sso}`)) {
+      // B2d fixup — an inaccessible selected detail stays dismissible; the
+      // browser case asserts closing it clears param and retains managedSystem.
+      if (options.milestones === 'denied-detail') {
+        await json(route, 403, { code: 'permission.denied', message: 'finding.manage required' });
+        return;
+      }
       await json(route, 200, milestoneDetailFixture);
       return;
     }

@@ -1,12 +1,21 @@
 import { getMilestone } from '@/lib/api/milestones';
+import { ApiError } from '@/lib/api/types';
 import type { MilestoneDetailDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestoneDetailPanel } from './MilestoneDetailPanel';
 
 vi.mock('@/lib/api/milestones', () => ({
   getMilestone: vi.fn(),
+}));
+
+// The panel owns the only router usage in this tree; the hoisted mock mirrors
+// TaskListRoute.test.tsx so navigation targets are assertable.
+const navigateMock = vi.hoisted(() => vi.fn());
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigateMock,
 }));
 
 const MANAGED_SYSTEM_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccc00c1';
@@ -50,14 +59,19 @@ const ACTOR_NAMES = new Map([[OWNER_ID, '박서연']]);
 const MANAGED_SYSTEM_NAMES = new Map([[MANAGED_SYSTEM_ID, 'Power BI']]);
 const AREA_NAMES = new Map([[AREA_ID, 'Product Usage']]);
 
-function renderPanel(detail: MilestoneDetailDto): void {
-  vi.mocked(getMilestone).mockResolvedValue(detail);
+function renderPanel(
+  detail: MilestoneDetailDto | Promise<MilestoneDetailDto> | ApiError,
+  options: { onClose?: () => void } = {},
+): void {
+  vi.mocked(getMilestone).mockReturnValue(
+    detail instanceof ApiError ? Promise.reject(detail) : Promise.resolve(detail),
+  );
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
       <MilestoneDetailPanel
         milestoneId={MILESTONE_ID}
-        onClose={() => {}}
+        onClose={options.onClose ?? (() => {})}
         actorNamesById={ACTOR_NAMES}
         managedSystemNamesById={MANAGED_SYSTEM_NAMES}
         analyticsAreaNamesById={AREA_NAMES}
@@ -68,6 +82,7 @@ function renderPanel(detail: MilestoneDetailDto): void {
 
 beforeEach(() => {
   vi.mocked(getMilestone).mockReset();
+  navigateMock.mockReset();
 });
 
 describe('MilestoneDetailPanel (#514 B2d)', () => {
@@ -138,5 +153,89 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.getAllByText('Power BI').length).toBeGreaterThan(0);
+  });
+
+  // B2d fixup finding 1 — the prototype nests the real Why text in
+  // NestedTextBlock (screen-milestones.jsx:331-335); no bare paragraph.
+  it('renders the real why text inside the NestedTextBlock hierarchy', async () => {
+    renderPanel(linkedDetail);
+
+    const why = await screen.findByText('SSO 세션 만료 후 재인증 흐름이 없습니다.');
+    // NestedTextBlock presentation (packages/ui NestedTextBlock): inset
+    // bordered canvas block, per the prototype's panel-section Why block.
+    expect(why).toHaveClass('rounded-md');
+    expect(why).toHaveClass('border-border-subtle');
+    expect(why).toHaveClass('bg-surface-canvas');
+  });
+
+  // B2d fixup finding 2 — the shared header chrome and close action stay
+  // mounted independently of the detail query result; pending/denied/missing
+  // states stay dismissible and never expose unavailable record data.
+  it('keeps the panel header and close action mounted while the detail read is pending', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderPanel(new Promise<MilestoneDetailDto>(() => {}), { onClose });
+
+    expect(screen.getByText('Loading Milestone…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+    // No record data may leak before the read resolves.
+    expect(screen.queryByText('SSO Stabilization')).not.toBeInTheDocument();
+    expect(screen.queryByText('MLS-1021')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '패널 닫기' }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the panel dismissible on a permission-denied detail read', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderPanel(
+      new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }),
+      {
+        onClose,
+      },
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Milestone detail' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+    expect(screen.queryByText('SSO 세션 만료 후 재인증 흐름이 없습니다.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '패널 닫기' }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the panel dismissible when the selected detail is missing', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderPanel(new ApiError(404, { code: 'not_found.record', message: 'record not found' }), {
+      onClose,
+    });
+
+    expect(await screen.findByText('Milestone detail unavailable.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '패널 닫기' }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  // B2d fixup finding 3 — a linked source Finding opens its own detail route
+  // (prototype Open finding, screen-milestones.jsx:337-343; routes-and-layout
+  // linked-context rule). No writer is implied: source_finding is read-only.
+  it('opens the linked source Finding detail route from the Source section', async () => {
+    const user = userEvent.setup();
+    renderPanel(linkedDetail);
+
+    await user.click(await screen.findByRole('button', { name: 'Open finding' }));
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/findings/$findingId',
+      params: { findingId: FINDING_ID },
+    });
+  });
+
+  it('renders no Open finding control when the milestone is standalone', async () => {
+    renderPanel(standaloneDetail);
+
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    expect(screen.queryByRole('button', { name: 'Open finding' })).not.toBeInTheDocument();
   });
 });

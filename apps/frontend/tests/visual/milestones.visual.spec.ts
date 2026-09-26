@@ -86,4 +86,31 @@ test.describe('/tasks?view=milestones visual harness', () => {
     expect(page.url()).toContain(`managedSystem=${MILESTONE_MANAGED_SYSTEM_IDS.powerbi}`);
     expect(page.url()).not.toContain('param=');
   });
+
+  // B2d fixup — a selected detail the actor cannot read (403) still mounts the
+  // panel chrome and close action; closing it clears param and keeps the
+  // Managed System scope (routes-and-layout list-context rule).
+  test('closes an inaccessible selected detail while clearing param and retaining scope', async ({
+    page,
+  }) => {
+    await installMockApi(page, { milestones: 'denied-detail' });
+    await page.goto(
+      `/tasks?view=milestones&managedSystem=${MILESTONE_MANAGED_SYSTEM_IDS.powerbi}&param=${MILESTONE_IDS.sso}`,
+    );
+
+    // The scoped list stays as primary context; the blocked detail is dismissible.
+    await expect(page.getByText('MLS-1021')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Milestone detail' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '패널 닫기' })).toBeVisible();
+    // Panel-only record content must not render (the list row legitimately
+    // still shows the title; the blocked panel must not).
+    await expect(page.getByRole('heading', { name: 'SSO Stabilization' })).toHaveCount(0);
+    await expect(page.getByText('Why this milestone exists')).toHaveCount(0);
+    await expect(page.getByText('From finding')).toHaveCount(0);
+
+    await page.getByRole('button', { name: '패널 닫기' }).click();
+    await expect(page.getByRole('button', { name: '패널 닫기' })).toHaveCount(0);
+    expect(page.url()).toContain(`managedSystem=${MILESTONE_MANAGED_SYSTEM_IDS.powerbi}`);
+    expect(page.url()).not.toContain('param=');
+  });
 });
