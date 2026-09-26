@@ -3,6 +3,7 @@ import { ApiError } from '@/lib/api/types';
 import { type MilestoneDto, convertTaskRequestRequestSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from '../TaskRequestsRoute';
@@ -312,6 +313,68 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
         expect.any(String),
       );
     });
+  });
+
+  // R2 followup (midreview P2) — with the options suppressed, the native
+  // select silently falls back to its first option (None) while the
+  // controlled value still names the removed Milestone: the visible choice
+  // lies, the guard blocks submission, and a real user cannot pick None
+  // again because it is already displayed. The unavailable selection keeps a
+  // disabled slot (never its identity) so the select is honest and choosing
+  // None is a real, reachable change.
+  it('shows the unavailable selection honestly and lets the user deliberately fall back to None', async () => {
+    vi.mocked(listMilestones)
+      .mockResolvedValueOnce({
+        items: MILESTONES.filter(
+          (milestone) =>
+            milestone.primary_managed_system_id === taskRequest.primary_managed_system_id,
+        ),
+      })
+      .mockRejectedValue(
+        new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }),
+      );
+    const { queryClient } = await openConvertFormReturnsClient();
+    const select = screen.getByRole('combobox', { name: 'Milestone' });
+    await waitFor(() => {
+      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
+    });
+    fireEvent.change(select, { target: { value: milestoneForRequestSystem.id } });
+
+    await queryClient.invalidateQueries({
+      queryKey: ['milestones', taskRequest.primary_managed_system_id],
+    });
+    expect(await screen.findByText('finding.manage required')).toBeInTheDocument();
+
+    // The held selection keeps a disabled, identity-free slot: the select
+    // shows what is actually held instead of pretending it is None.
+    const unavailable = within(select).getByRole('option', {
+      name: 'Unavailable',
+    }) as HTMLOptionElement;
+    expect(unavailable).toBeDisabled();
+    expect(unavailable.value).toBe(milestoneForRequestSystem.id);
+    expect(unavailable.textContent).not.toContain(milestoneForRequestSystem.title);
+    expect(unavailable.textContent).not.toContain('MLS-3001');
+    expect(select).toHaveValue(milestoneForRequestSystem.id);
+
+    // A real user recovers: None is selectable because the displayed option
+    // is the unavailable slot, not None itself (userEvent, not a fabricated
+    // same-value change).
+    const user = userEvent.setup();
+    await user.selectOptions(select, within(select).getByRole('option', { name: 'None' }));
+    expect(select).toHaveValue('');
+    expect(within(select).queryByRole('option', { name: 'Unavailable' })).not.toBeInTheDocument();
+
+    // The deliberate None converts with an explicit null payload.
+    const callsBeforeSubmit = api.convertTaskRequest.mock.calls.length;
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await waitFor(() => {
+      expect(api.convertTaskRequest.mock.calls.length).toBe(callsBeforeSubmit + 1);
+    });
+    expect(api.convertTaskRequest).toHaveBeenLastCalledWith(
+      taskRequest.id,
+      expect.objectContaining({ milestone_id: null }),
+      expect.any(String),
+    );
   });
 });
 

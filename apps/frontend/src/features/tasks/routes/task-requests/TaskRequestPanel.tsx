@@ -291,6 +291,17 @@ export function TaskRequestPanel({
                         {milestone.title}
                       </option>
                     ))}
+                    {/* R2 followup (midreview P2) — while a held selection's
+                        list read has failed, the select must not silently
+                        display None: the held id keeps a disabled,
+                        identity-free slot so the shown value matches the
+                        internal state and choosing None is a real, reachable
+                        change. The retained identity is never rendered. */}
+                    {conversion.milestonePickerError !== null && conversion.milestoneId !== '' && (
+                      <option value={conversion.milestoneId} disabled>
+                        Unavailable
+                      </option>
+                    )}
                   </select>
                   {/* R2 (Astra P2-3) — a settled picker read error is shown in
                       place of the retained options: the server's denial reason
