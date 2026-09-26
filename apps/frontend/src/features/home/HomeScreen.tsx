@@ -119,16 +119,17 @@ function MyWorkPanel({ tasks, requests }: { tasks: TaskDto[]; requests: TaskRequ
   </section>;
 }
 
+function CoverageMetricRow({ item, href }: { item: DashboardSummary['coverage'][number]; href: string | undefined }): React.ReactElement {
+  const body = <><div className="flex justify-between gap-2 text-xs"><span className="text-text-primary">{HOME_COVERAGE_COPY[item.id]}</span><span className="shrink-0 tabular-nums text-text-muted">{item.value} / {item.total} · {item.percent}%</span></div><div className="mt-2 h-1 rounded-full bg-surface-row-selected"><div className={item.status === 'bad' ? 'h-1 rounded-full bg-accent-danger' : item.status === 'warn' ? 'h-1 rounded-full bg-accent-warn' : 'h-1 rounded-full bg-accent-success'} style={{ width: `${item.percent}%` }} /></div></>;
+  return href === undefined
+    ? <div data-testid={`home-coverage-row-${item.id}`}>{body}</div>
+    : <a href={href} className="block" data-testid={`home-coverage-row-${item.id}`}>{body}</a>;
+}
+
 function CoveragePanel({ coverage }: { coverage: DashboardSummary['coverage'] }): React.ReactElement {
   return <section><PanelHeading title={HOME_COPY.coverage} action={HOME_COPY.viewCoverage} href={HOME_COVERAGE_HREF} />
     <div className="space-y-4 rounded-md border border-border-subtle bg-surface-card p-4" data-testid="home-coverage">
-      {coverage.map((item) => {
-        const rowContent = <><div className="flex justify-between gap-2 text-xs"><span className="text-text-primary">{HOME_COVERAGE_COPY[item.id]}</span><span className="shrink-0 tabular-nums text-text-muted">{item.value} / {item.total} · {item.percent}%</span></div><div className="mt-2 h-1 rounded-full bg-surface-row-selected"><div className={item.status === 'bad' ? 'h-1 rounded-full bg-accent-danger' : item.status === 'warn' ? 'h-1 rounded-full bg-accent-warn' : 'h-1 rounded-full bg-accent-success'} style={{ width: `${item.percent}%` }} /></div></>;
-        const href = item.id === 'milestone-outcome' ? undefined : DASHBOARD_HOP_ROUTES[item.id];
-        return href === undefined
-          ? <div key={item.id} data-testid={`home-coverage-row-${item.id}`}>{rowContent}</div>
-          : <a key={item.id} href={href} className="block" data-testid={`home-coverage-row-${item.id}`}>{rowContent}</a>;
-      })}
+      {coverage.map((item) => <CoverageMetricRow key={item.id} item={item} href={item.id === 'milestone-outcome' ? undefined : DASHBOARD_HOP_ROUTES[item.id]} />)}
     </div>
   </section>;
 }

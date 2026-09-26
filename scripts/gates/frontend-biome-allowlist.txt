@@ -178,3 +178,14 @@ packages/shared/src/audit/voc.ts format -- pre-existing on develop (1x, unchange
 apps/backend/src/modules/voc/routes/crud.ts organizeImports -- pre-existing on develop as voc/routes.ts (1x, unchanged); #478 renames the file, does not touch the import block
 apps/backend/src/modules/voc/__tests__/routes-no-frame.test.ts lint/suspicious/noExportsInTest -- pre-existing on develop (2x, unchanged); the design (#478) explicitly keeps `stripComments`/`findFrameOwnership` exported for the file's own self-test, do not un-export
 packages/shared/src/audit/__tests__/survey-audit-schemas.test.ts organizeImports -- pre-existing on develop (1x, unchanged); import order predates biome
+# #513 touched these files. The identities below are whole-file format/import-order
+# or assertions whose blame is f1c06725 (2026-05-19), before this branch.
+# develop's dashboard/repo.ts is already unfixed under `biome check --stdin-file-path`.
+apps/backend/src/modules/dashboard/repo.ts format -- pre-existing on develop; the file predates biome formatting and this branch only adds the public-update gap SQL
+packages/shared/src/vocs/__tests__/list-query.test.ts format -- pre-existing on develop; the file predates biome formatting and this branch only adds tab and unset-area cases
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts format -- pre-existing on develop; long expectations predate biome formatting
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts organizeImports -- pre-existing on develop; import order predates biome
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (blame f1c06725); cursor and out-of-scope assertions this branch did not add
+apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (blame f1c06725); cleanup queries this branch did not add
+apps/frontend/src/routes/_authed.tsx format -- pre-existing on develop; this branch adds only the Coverage nav entry
+apps/frontend/src/routes/_authed.tsx organizeImports -- pre-existing on develop; import order predates biome and this branch does not reorder imports
