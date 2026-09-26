@@ -402,7 +402,6 @@ test.describe('/tasks?view=milestones visual harness', () => {
 
     const detail = page.getByTestId('app-detail-slot');
     await expect(detail.getByRole('heading', { name: 'SSO Stabilization' })).toBeVisible();
-    await page.evaluate(() => document.fonts.ready);
     const propertyLabels = [
       'Managed System',
       'Analytics Area',
@@ -411,35 +410,38 @@ test.describe('/tasks?view=milestones visual harness', () => {
       'Target',
       'Created',
     ];
-    const properties = await Promise.all(
-      propertyLabels.map(async (label) => {
-        const fieldLabel = detail.getByText(label, { exact: true });
-        await expect(fieldLabel).toBeVisible();
-        const row = fieldLabel.locator('xpath=..');
-        const value = row.locator('xpath=./div');
-        const [rowBox, valueBox, rowCss, valueAlignment] = await Promise.all([
-          row.boundingBox(),
-          value.boundingBox(),
-          row.evaluate((el) => {
-            const cs = getComputedStyle(el);
-            return {
-              display: cs.display,
-              columns: cs.gridTemplateColumns,
-              columnGap: cs.columnGap,
-              fontSize: cs.fontSize,
-            };
-          }),
-          value.evaluate((el) => getComputedStyle(el).textAlign),
-        ]);
+    await Promise.all(
+      propertyLabels.map((label) => expect(detail.getByText(label, { exact: true })).toBeVisible()),
+    );
+    await page.evaluate(() => document.fonts.ready);
+    const properties = await detail.evaluate((root, labels: string[]) => {
+      return labels.map((label) => {
+        const fieldLabel = Array.from(root.querySelectorAll<HTMLElement>('*')).find(
+          (element) => element.childElementCount === 0 && element.textContent?.trim() === label,
+        );
+        const row = fieldLabel?.parentElement;
+        const value = row?.querySelector<HTMLElement>(':scope > div');
+        if (!(row instanceof HTMLElement) || !(value instanceof HTMLElement)) {
+          throw new Error(`Expected the ${label} property row and value`);
+        }
+
+        const rowBox = row.getBoundingClientRect();
+        const valueBox = value.getBoundingClientRect();
+        const rowCss = getComputedStyle(row);
         return {
           label,
-          rowX: requireBox(rowBox).x,
-          valueX: requireBox(valueBox).x,
-          rowCss,
-          valueAlignment,
+          rowX: rowBox.x,
+          valueX: valueBox.x,
+          rowCss: {
+            display: rowCss.display,
+            columns: rowCss.gridTemplateColumns,
+            columnGap: rowCss.columnGap,
+            fontSize: rowCss.fontSize,
+          },
+          valueAlignment: getComputedStyle(value).textAlign,
         };
-      }),
-    );
+      });
+    }, propertyLabels);
 
     const sharedOrigin = properties[0]?.valueX;
     if (sharedOrigin === undefined) throw new Error('Expected representative milestone properties');
@@ -462,7 +464,7 @@ test.describe('/tasks?view=milestones visual harness', () => {
   });
 
   // Finding 3 — detail typography/density on the prototype scale: why block
-  // 13px/1.55 (NestedTextBlock), source summary 12px, panel-section 32px
+  // 13px/1.6 (NestedTextBlock), source summary 12px/1.55, panel-section 32px
   // rhythm, title block 24px margin, panel-scroll 28/24/32 padding; and
   // finding 4 — the Owner property renders the shared user chip with the
   // resolved owner.
