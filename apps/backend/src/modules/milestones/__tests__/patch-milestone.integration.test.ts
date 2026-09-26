@@ -153,6 +153,43 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     return res.json<{ updated_at: string }>().updated_at;
   }
 
+  it('patch: impossible calendar dates return 422 validation.failed without writing', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
+    const devCookie = await seedScopedDeveloper(ms);
+    const milestone = await seedMilestone(ms);
+    const ifMatch = await currentIfMatch(devCookie, milestone.id);
+
+    const res = await patchMilestone(
+      devCookie,
+      milestone.id,
+      { target_date: '2025-02-29' },
+      { ifMatch },
+    );
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ code: string }>().code).toBe('validation.failed');
+
+    const after = await getMilestone(devCookie, milestone.id);
+    const body = after.json<{ target_date: string; updated_at: string }>();
+    expect(body.target_date).toBe('2026-12-31');
+    expect(body.updated_at).toBe(ifMatch);
+  });
+
+  it('patch: a leap-day date is accepted', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
+    const devCookie = await seedScopedDeveloper(ms);
+    const milestone = await seedMilestone(ms);
+    const ifMatch = await currentIfMatch(devCookie, milestone.id);
+
+    const res = await patchMilestone(
+      devCookie,
+      milestone.id,
+      { start_date: '2024-02-29' },
+      { ifMatch },
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ start_date: string }>().start_date).toBe('2024-02-29');
+  });
+
   it('patch: primary_managed_system_id is rejected and the row keeps its Managed System, title, and updated_at', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const otherMs = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Other MS');

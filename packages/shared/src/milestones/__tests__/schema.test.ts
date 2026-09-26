@@ -22,6 +22,12 @@ const validCreate = {
   target_date: '2026-12-31',
 };
 
+const invalidCalendarDates = [
+  ['impossible month', '2026-13-01'],
+  ['impossible day', '2026-04-31'],
+  ['February 29 in a non-leap year', '2025-02-29'],
+] as const;
+
 describe('createMilestoneRequestSchema', () => {
   it('accepts the five required fields and defaults nothing else', () => {
     const parsed = createMilestoneRequestSchema.parse(validCreate);
@@ -102,6 +108,33 @@ describe('createMilestoneRequestSchema', () => {
     expect(
       createMilestoneRequestSchema.safeParse({ ...validCreate, target_date: '2026/12/31' }).success,
     ).toBe(false);
+  });
+
+  for (const [description, date] of invalidCalendarDates) {
+    it(`rejects ${description} in create and PATCH date fields`, () => {
+      expect(
+        createMilestoneRequestSchema.safeParse({ ...validCreate, start_date: date }).success,
+      ).toBe(false);
+      expect(
+        createMilestoneRequestSchema.safeParse({ ...validCreate, target_date: date }).success,
+      ).toBe(false);
+      expect(patchMilestoneRequestSchema.safeParse({ start_date: date }).success).toBe(false);
+      expect(patchMilestoneRequestSchema.safeParse({ target_date: date }).success).toBe(false);
+    });
+  }
+
+  it('accepts February 29 in a leap year in create and PATCH date fields', () => {
+    expect(
+      createMilestoneRequestSchema.safeParse({
+        ...validCreate,
+        start_date: '2024-02-29',
+        target_date: '2024-02-29',
+      }).success,
+    ).toBe(true);
+    expect(patchMilestoneRequestSchema.safeParse({ start_date: '2024-02-29' }).success).toBe(true);
+    expect(
+      patchMilestoneRequestSchema.safeParse({ target_date: '2024-02-29' }).success,
+    ).toBe(true);
   });
 });
 

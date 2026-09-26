@@ -30,6 +30,17 @@ export type MilestoneStatusFilter = z.infer<typeof milestoneStatusFilterSchema>;
 
 const milestoneTextField = z.string().trim().min(1);
 
+// Milestone request dates need real calendar values; leave the shared Task ISO-date schema unchanged.
+const milestoneDateSchema = isoDateSchema.refine((value) => {
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  return month >= 1 && month <= 12 && day >= 1 && day <= (daysInMonth[month - 1] ?? 0);
+});
+
 export const createMilestoneRequestSchema = z
   .object({
     title: milestoneTextField,
@@ -37,8 +48,8 @@ export const createMilestoneRequestSchema = z
     primary_managed_system_id: z.string().uuid(),
     owner_actor_id: z.string().uuid().optional(),
     analytics_area_id: z.string().uuid().nullable().optional(),
-    start_date: isoDateSchema,
-    target_date: isoDateSchema,
+    start_date: milestoneDateSchema,
+    target_date: milestoneDateSchema,
     // ADR-0050: optional on create; omitted stores the column default.
     status: milestoneStatusFilterSchema.optional(),
   })
@@ -52,8 +63,8 @@ export const patchMilestoneRequestSchema = z
     why: milestoneTextField.optional(),
     owner_actor_id: z.string().uuid().optional(),
     analytics_area_id: z.string().uuid().nullable().optional(),
-    start_date: isoDateSchema.optional(),
-    target_date: isoDateSchema.optional(),
+    start_date: milestoneDateSchema.optional(),
+    target_date: milestoneDateSchema.optional(),
     status: milestoneStatusFilterSchema.optional(),
   })
   .strict()
