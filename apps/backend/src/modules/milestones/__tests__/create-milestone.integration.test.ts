@@ -124,6 +124,27 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
     target_date: '2026-12-31',
   });
 
+  it('create: year zero returns 422 validation.failed without writing', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Milestone MS');
+    const devCookie = await seedScopedDeveloper(msId);
+
+    const res = await createMilestone(devCookie, {
+      ...validBody(msId),
+      start_date: '0000-01-01',
+    });
+    expect({ statusCode: res.statusCode, code: res.json<{ code: string }>().code }).toEqual({
+      statusCode: 422,
+      code: 'validation.failed',
+    });
+
+    const rows = await dbHandle.pool.query<{ count: number }>(
+      `select count(*)::int as count from task.milestones
+        where workspace_id = $1 and primary_managed_system_id = $2`,
+      [WORKSPACE_ID, msId],
+    );
+    expect(rows.rows[0]?.count).toBe(0);
+  });
+
   it('create: impossible calendar dates return 422 validation.failed without writing', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Milestone MS');
     const devCookie = await seedScopedDeveloper(msId);

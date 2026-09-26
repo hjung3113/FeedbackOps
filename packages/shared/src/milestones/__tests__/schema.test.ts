@@ -23,6 +23,7 @@ const validCreate = {
 };
 
 const invalidCalendarDates = [
+  ['year zero', '0000-01-01'],
   ['impossible month', '2026-13-01'],
   ['impossible day', '2026-04-31'],
   ['February 29 in a non-leap year', '2025-02-29'],
@@ -110,8 +111,9 @@ describe('createMilestoneRequestSchema', () => {
     ).toBe(false);
   });
 
-  for (const [description, date] of invalidCalendarDates) {
-    it(`rejects ${description} in create and PATCH date fields`, () => {
+  it.each(invalidCalendarDates)(
+    'rejects %s in create and PATCH date fields',
+    (_description, date) => {
       expect(
         createMilestoneRequestSchema.safeParse({ ...validCreate, start_date: date }).success,
       ).toBe(false);
@@ -120,8 +122,8 @@ describe('createMilestoneRequestSchema', () => {
       ).toBe(false);
       expect(patchMilestoneRequestSchema.safeParse({ start_date: date }).success).toBe(false);
       expect(patchMilestoneRequestSchema.safeParse({ target_date: date }).success).toBe(false);
-    });
-  }
+    },
+  );
 
   it('accepts February 29 in a leap year in create and PATCH date fields', () => {
     expect(

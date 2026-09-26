@@ -32,7 +32,6 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
   let dbHandle: DbHandle;
   let migrateHandle: DbHandle;
   let app: FastifyInstance;
-  let adminCookie: string;
   let adminActorId: string;
 
   beforeAll(async () => {
@@ -41,8 +40,6 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     migrateHandle = createDb(MIGRATE_URL);
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
-
-    adminCookie = await loginAs(app, 'mock-admin-1');
 
     const actors = await dbHandle.pool.query<{ id: string; external_id: string }>(
       `select id, external_id from core.actors
@@ -88,7 +85,10 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     return loginAs(app, actor.externalId);
   }
 
-  async function seedMilestone(msId: string): Promise<{
+  async function seedMilestone(
+    msId: string,
+    cookie: string,
+  ): Promise<{
     id: string;
     updated_at: string;
     title: string;
@@ -98,7 +98,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
       method: 'POST',
       url: '/milestones',
       headers: {
-        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
         'content-type': 'application/json',
         'idempotency-key': randomUUID(),
       },
@@ -153,10 +153,33 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     return res.json<{ updated_at: string }>().updated_at;
   }
 
+  it('patch: year zero returns 422 validation.failed without writing', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
+    const devCookie = await seedScopedDeveloper(ms);
+    const milestone = await seedMilestone(ms, devCookie);
+    const ifMatch = await currentIfMatch(devCookie, milestone.id);
+
+    const res = await patchMilestone(
+      devCookie,
+      milestone.id,
+      { start_date: '0000-01-01' },
+      { ifMatch },
+    );
+    expect({ statusCode: res.statusCode, code: res.json<{ code: string }>().code }).toEqual({
+      statusCode: 422,
+      code: 'validation.failed',
+    });
+
+    const after = await getMilestone(devCookie, milestone.id);
+    const body = after.json<{ start_date: string; updated_at: string }>();
+    expect(body.start_date).toBe('2026-10-01');
+    expect(body.updated_at).toBe(ifMatch);
+  });
+
   it('patch: impossible calendar dates return 422 validation.failed without writing', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(
@@ -177,7 +200,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
   it('patch: a leap-day date is accepted', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(
@@ -194,7 +217,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const otherMs = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Other MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(
@@ -224,7 +247,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const otherMs = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Other MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(
@@ -250,7 +273,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
   it('patch: planning to released with no child Tasks succeeds and audits the pair (ADR-0050)', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(devCookie, milestone.id, { status: 'released' }, { ifMatch });
@@ -273,7 +296,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
   it('patch: a status outside the ADR-0050 set is validation.failed and does not write', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(devCookie, milestone.id, { status: 'done' }, { ifMatch });
@@ -288,7 +311,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
   it('patch: empty body is rejected', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(devCookie, milestone.id, {}, { ifMatch });
@@ -299,7 +322,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
   it('patch: title change returns 200, bumps updated_at, and audits milestone_updated without a status pair', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(
@@ -333,7 +356,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
   it('patch: stale If-Match is conflict.stale_write with detail.current_updated_at and no write', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(
@@ -357,7 +380,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
   it('patch: missing If-Match fails the way PATCH /tasks/:id fails', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
 
     const res = await patchMilestone(
       devCookie,
@@ -374,7 +397,7 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
   it('patch: Idempotency-Key is required', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
-    const milestone = await seedMilestone(ms);
+    const milestone = await seedMilestone(ms, devCookie);
 
     const res = await patchMilestone(
       devCookie,
