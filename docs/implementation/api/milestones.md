@@ -32,9 +32,13 @@ validation errors, in check order:
   - archived Managed System: 409 conflict.parent_archived with parent_archived
     on primary_managed_system_id
   - actor lacks finding.manage on the Managed System: 403 permission.denied
-  - unknown owner_actor_id: 404 not_found.record; owner actor without
-    finding.manage on the same Managed System: 422 validation.failed with
-    out_of_scope on owner_actor_id
+  - unknown or foreign-workspace owner_actor_id: 404 not_found.record
+  - owner_actor_id must be an existing actor in the caller's workspace whose
+    role is Admin or Developer: an Admin owner uses the same bypass as the
+    requester (no finding.manage check); a Developer owner must have
+    finding.manage on primary_managed_system_id. A non-elevated owner (User)
+    or a Developer owner without finding.manage on the Managed System:
+    422 validation.failed with out_of_scope on owner_actor_id
   - unknown or cross-workspace Analytics Area: 404 not_found.record
   - Analytics Area on another Managed System: 422 validation.failed with
     out_of_scope on analytics_area_id
@@ -148,8 +152,14 @@ validation errors, in check order:
   - Milestone exists but the actor cannot manage it: 403 permission.denied
   - If-Match does not equal updated_at: 409 conflict.stale_write with
     current_updated_at; the stale action is not applied
-  - owner and Analytics Area checks run against the Milestone's Managed System
-    with the same errors as create
+  - owner_actor_id uses the same owner rule as create: it must be an existing
+    in-workspace Admin or Developer (an Admin owner bypasses finding.manage; a
+    Developer owner must have finding.manage on the Milestone's Managed
+    System). Unknown or foreign-workspace owner: 404 not_found.record.
+    Non-elevated or insufficiently scoped owner: 422 validation.failed with
+    out_of_scope on owner_actor_id
+  - Analytics Area checks run against the Milestone's Managed System with the
+    same errors as create
 side effects:
   - update the submitted fields
   - milestone_updated audit with detail { milestone_id, fields }. The audit
