@@ -767,3 +767,120 @@ describe('MilestoneDetailPanel open finding guard (R4)', () => {
     expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
   });
 });
+
+// R4 followup — titleMutation AND statusMutation both stay pending through
+// the post-save invalidateQueries await, and each onSuccess closes the title
+// editor (title path) or advances only an already-open draft (status path)
+// before the refetch settles. In that window the Edit title button
+// re-enabled and startTitleEdit reopened the editor against the STALE cached
+// row: the reopened draft captured the old version, and its next save 409'd
+// — dropping the user's own new draft. Edit title stays locked (button +
+// handler guard) while EITHER mutation is pending; once the refetch settles
+// the reopened edit captures the new version and saves with the new If-Match.
+// Status is NOT disabled while merely editing — the existing pending
+// serialization is the only status guard.
+describe('MilestoneDetailPanel title reopen window (R4 followup)', () => {
+  const NEW_UPDATED_AT = '2026-07-22T09:00:00.000Z';
+
+  it.each([
+    {
+      label: 'after a title save',
+      viaTitleSave: true,
+      storedTitle: 'SSO Stabilization v2',
+      editedTitle: 'SSO Stabilization v2B',
+    },
+    {
+      label: 'after a status save',
+      viaTitleSave: false,
+      storedTitle: 'SSO Stabilization',
+      editedTitle: 'SSO StabilizationB',
+    },
+  ])(
+    'keeps Edit title locked until the refetch settles $label, and the reopened edit captures the new version',
+    async ({ viaTitleSave, storedTitle, editedTitle }) => {
+      const user = userEvent.setup();
+      let resolveMutation!: (value: MilestoneDto) => void;
+      let resolveRefetch!: (value: MilestoneDetailDto) => void;
+      const v2Detail: MilestoneDetailDto = viaTitleSave
+        ? { ...linkedDetail, title: storedTitle, updated_at: NEW_UPDATED_AT }
+        : { ...linkedDetail, status: 'released', updated_at: NEW_UPDATED_AT };
+      vi.mocked(getMilestone)
+        .mockResolvedValueOnce(linkedDetail)
+        .mockImplementation(
+          () =>
+            new Promise<MilestoneDetailDto>((resolve) => {
+              resolveRefetch = resolve;
+            }),
+        );
+      vi.mocked(updateMilestone).mockImplementationOnce(
+        () =>
+          new Promise<MilestoneDto>((resolve) => {
+            resolveMutation = resolve;
+          }),
+      );
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MilestoneDetailPanel
+            milestoneId={MILESTONE_ID}
+            onClose={() => {}}
+            actorNamesById={ACTOR_NAMES}
+            managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+            analyticsAreaNamesById={AREA_NAMES}
+          />
+        </QueryClientProvider>,
+      );
+
+      await screen.findByRole('heading', { name: 'SSO Stabilization' });
+      const callsBefore = vi.mocked(updateMilestone).mock.calls.length;
+      if (viaTitleSave) {
+        await user.click(screen.getByRole('button', { name: 'Edit title' }));
+        await user.type(screen.getByRole('textbox', { name: 'Title' }), ' v2');
+        await user.click(screen.getByRole('button', { name: 'Save' }));
+      } else {
+        await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'released');
+      }
+      await waitFor(() =>
+        expect(vi.mocked(updateMilestone).mock.calls.length).toBe(callsBefore + 1),
+      );
+
+      // The mutation resolves; the title editor closes (title path) and the
+      // post-save refetch has not settled — the stale cached row is still
+      // the rendered record.
+      resolveMutation(v2Detail);
+      await waitFor(() => expect(resolveRefetch).toBeDefined());
+      if (viaTitleSave) {
+        await waitFor(() =>
+          expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument(),
+        );
+      }
+
+      // The reopen window: Edit title stays locked, and a click cannot reopen
+      // the editor against the stale row.
+      const editButton = screen.getByRole('button', { name: 'Edit title' });
+      expect(editButton).toBeDisabled();
+      await user.click(editButton);
+      expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+
+      // The refetch settles with the new version: the lock lifts, the
+      // reopened editor holds the NEW row's title, and its save uses the NEW
+      // If-Match.
+      resolveRefetch(v2Detail);
+      await waitFor(() => expect(editButton).toBeEnabled());
+      await user.click(editButton);
+      const reopened = screen.getByRole('textbox', { name: 'Title' });
+      expect(reopened).toHaveValue(storedTitle);
+      await user.type(reopened, 'B');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() =>
+        expect(vi.mocked(updateMilestone).mock.calls.length).toBe(callsBefore + 2),
+      );
+      const reopenedCall = vi.mocked(updateMilestone).mock.calls[callsBefore + 1];
+      if (!reopenedCall) throw new Error('reopened updateMilestone call missing');
+      const [, body, options] = reopenedCall;
+      expect(body).toEqual({ title: editedTitle });
+      expect(options.ifMatch).toBe(NEW_UPDATED_AT);
+    },
+  );
+});

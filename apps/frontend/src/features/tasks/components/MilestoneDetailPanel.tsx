@@ -610,6 +610,10 @@ function MilestoneDetailContent({
   });
 
   function startTitleEdit(): void {
+    // R4 followup — reopening while either mutation's post-save refetch is in
+    // flight would capture the stale cached row's version (the button is
+    // disabled; this guards the programmatic/Enter-adjacent path too).
+    if (titleMutation.isPending || statusMutation.isPending) return;
     setTitleDraft(milestone.title);
     // Astra finding 2 — the concurrency token is bound at edit start; a
     // refetch while editing never moves it (see the titleEditVersion comment).
@@ -795,7 +799,18 @@ function MilestoneDetailContent({
             </form>
           ) : (
             <div className="mb-4 flex justify-end">
-              <Button variant="subtle" size="sm" className="gap-1.5" onClick={startTitleEdit}>
+              {/* R4 followup — titleMutation and statusMutation both stay
+                  pending through their onSuccess invalidateQueries await;
+                  reopening the editor in that window captures the stale
+                  cached row's title/version, so the button locks while either
+                  mutation is pending and the handler refuses the race. */}
+              <Button
+                variant="subtle"
+                size="sm"
+                className="gap-1.5"
+                disabled={titleMutation.isPending || statusMutation.isPending}
+                onClick={startTitleEdit}
+              >
                 <Pencil className="h-3 w-3" aria-hidden="true" />
                 Edit title
               </Button>
