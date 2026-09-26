@@ -108,7 +108,9 @@ test.describe('/tasks?view=milestones visual harness', () => {
     await expect(tasksSection).toContainText('2026-06-15');
     await expect(tasksSection).not.toContainText('estimate');
     await expect(tasksSection).toContainText('updated 2026-07-21');
-    await expect(tasksSection).toContainText('정');
+    // Prototype TASK-902 assignee u-4 resolves to 최민서 (data.js:24, :382);
+    // the avatar renders the initial.
+    await expect(tasksSection).toContainText('최');
     await expect(tasksSection).not.toContainText('Unassigned');
     await expect(page.getByRole('button', { name: 'Add task' })).toHaveCount(0);
   });

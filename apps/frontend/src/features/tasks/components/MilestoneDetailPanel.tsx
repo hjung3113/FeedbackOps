@@ -466,7 +466,11 @@ function MilestoneDetailContent({
     queryFn: ({ signal }) => listTasks({ milestone_id: milestone.id, signal }),
     staleTime: 30 * 1000,
   });
-  const childTasks = childTasksQuery.data?.items;
+  // B2d fixup F1 — the child read has its own lifetime, so a terminal error
+  // (e.g. a denied refetch after a permission change) must win over the data
+  // React Query retains: no count in the nav or section title, no rows. Same
+  // contract as the milestone read above (R2-1).
+  const childTasks = childTasksQuery.error == null ? childTasksQuery.data?.items : undefined;
 
   // B2e — title-only edit. Managed System is a create-only field (A3/A8) and
   // never becomes an input here; the PATCH carries the title and If-Match
@@ -799,8 +803,22 @@ function MilestoneDetailContent({
             {childTasks === undefined ? 'Tasks' : `Tasks · ${childTasks.length}`}
           </PanelSectionTitle>
           {childTasksQuery.error !== null ? (
-            // Same terminal copy as the Tasks list route (TaskListRoute).
-            <div className="py-3 text-center text-xs text-text-muted">Task list unavailable.</div>
+            isPermissionDenied(childTasksQuery.error) ? (
+              // B2d fixup F1 — a denied child-list read is the permission
+              // contract, not an outage: the same classification as the
+              // milestone read and TaskListRoute drives the approved blocked
+              // panel with the server's reason.
+              <PermissionBlockedPanel
+                state="denied"
+                category="Task list"
+                reason={childTasksQuery.error.message}
+              />
+            ) : (
+              // Same terminal copy as the Tasks list route (TaskListRoute).
+              <div className="py-3 text-center text-xs text-text-muted">
+                Task list unavailable.
+              </div>
+            )
           ) : childTasks !== undefined && childTasks.length === 0 ? (
             <div className="py-3 text-center text-xs text-text-muted">
               아직 연결된 Task 가 없습니다.
@@ -811,9 +829,13 @@ function MilestoneDetailContent({
                 <MilestoneTaskRow
                   key={task.id}
                   task={task}
+                  // B2d fixup F2 — a non-null assignee id missing from the
+                  // directory (lookup pending or failed) keeps the explicit
+                  // 'Assigned' fallback from the Task list/detail; the avatar
+                  // slot renders it until the name resolves.
                   assigneeName={
                     task.assignee_actor_id !== null
-                      ? actorNamesById.get(task.assignee_actor_id)
+                      ? (actorNamesById.get(task.assignee_actor_id) ?? 'Assigned')
                       : undefined
                   }
                 />

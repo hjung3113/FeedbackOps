@@ -36,6 +36,9 @@ export const MILESTONE_ACTOR_IDS = {
   u1: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001',
   u2: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0002',
   u3: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0003',
+  // B2d fixup F3 — TASK-902's prototype assignee (data.js Tasks: `assignee:
+  // 'u-4'`), resolving to 최민서 in the actor fixture below.
+  u4: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0004',
   u5: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0005',
 } as const;
 
@@ -169,7 +172,9 @@ export const milestoneTasksFixture: TaskDto[] = [
     title: 'Power BI 임베디드 SSO 재인증 핸들러 구현',
     status: 'doing',
     priority: 'urgent',
-    assignee_actor_id: MILESTONE_ACTOR_IDS.u5,
+    // Prototype TASK-902 assignee is u-4 (data.js:382), not u-5; u5 stays on
+    // the Notification Reliability milestone it actually owns.
+    assignee_actor_id: MILESTONE_ACTOR_IDS.u4,
     due_date: '2026-06-15',
     milestone_id: MILESTONE_IDS.sso,
     analytics_area_id: MILESTONE_ANALYTICS_AREA_IDS.product,
@@ -203,6 +208,13 @@ export const milestoneActorsFixture = listActorsResponseSchema.parse({
       id: MILESTONE_ACTOR_IDS.u3,
       display_name: '이도윤',
       email: 'u3@example.test',
+      role_level: 'developer',
+    },
+    // Prototype u-4 (data.js Users: 최민서) — TASK-902's assignee (F3).
+    {
+      id: MILESTONE_ACTOR_IDS.u4,
+      display_name: '최민서',
+      email: 'u4@example.test',
       role_level: 'developer',
     },
     {

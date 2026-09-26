@@ -472,6 +472,48 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(await screen.findByText('Unassigned')).toBeInTheDocument();
   });
 
+  // B2d fixup F2 — a non-null assignee id missing from the actor directory
+  // (lookup pending or failed) still shows an explicit assigned indication:
+  // the Task list/detail fallback 'Assigned' (TaskListRoute:124), never a
+  // bare row. Resolving the map replaces the fallback with the avatar.
+  it('falls back to Assigned while the actor name is unresolved, then the avatar once resolved', async () => {
+    vi.mocked(getMilestone).mockResolvedValue(linkedDetail);
+    vi.mocked(listTasks).mockResolvedValue({ items: [childTask] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <MilestoneDetailPanel
+          milestoneId={MILESTONE_ID}
+          onClose={() => {}}
+          actorNamesById={new Map()}
+          managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+          analyticsAreaNamesById={AREA_NAMES}
+        />
+      </QueryClientProvider>,
+    );
+
+    const row = (await screen.findByText('Tasks · 1')).closest('[data-anchor="tasks"]');
+    if (!row) throw new Error('tasks section not found');
+    // The avatar renders the fallback name's initial; Unassigned stays
+    // specific to a genuinely null assignment.
+    expect(within(row as HTMLElement).getByText('A')).toBeInTheDocument();
+    expect(within(row as HTMLElement).queryByText('Unassigned')).not.toBeInTheDocument();
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <MilestoneDetailPanel
+          milestoneId={MILESTONE_ID}
+          onClose={() => {}}
+          actorNamesById={ACTOR_NAMES}
+          managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+          analyticsAreaNamesById={AREA_NAMES}
+        />
+      </QueryClientProvider>,
+    );
+    expect(within(row as HTMLElement).getByText('정')).toBeInTheDocument();
+    expect(within(row as HTMLElement).queryByText('A')).not.toBeInTheDocument();
+  });
+
   // G-columns (ADR-0050, choice a): the slot where the prototype shows
   // estimate (design §7 item 12) renders the Task due_date; no estimate
   // field is added to the Task contract.
@@ -498,5 +540,66 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
 
     await screen.findByText('Tasks · 1');
     expect(screen.queryByRole('button', { name: 'Add task' })).not.toBeInTheDocument();
+  });
+
+  // B2d fixup F1 — a denied child-list read is a permission-limited state,
+  // not a general outage (frontend AGENTS: distinct permission-limited
+  // states): the same ApiError(403) classification as TaskListRoute drives
+  // the approved PermissionBlockedPanel inside the section.
+  it('renders the permission blocked panel when the child read is denied', async () => {
+    vi.mocked(listTasks).mockRejectedValue(
+      new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }),
+    );
+    renderPanel(linkedDetail);
+
+    expect(await screen.findByRole('heading', { name: 'Task list' })).toBeInTheDocument();
+    expect(screen.getByText('finding.manage required')).toBeInTheDocument();
+    // The generic outage copy never explains a 403.
+    expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
+    // The milestone itself stays readable.
+    expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
+  });
+
+  // B2d fixup F1 — the milestone and child reads have separate lifetimes:
+  // after a successful child read, a denied refetch must clear the retained
+  // count from the nav and section title (same terminal-error contract as
+  // the milestone read, R2-1) before showing the blocked panel.
+  it('clears the retained count when a successful child read is denied on refetch', async () => {
+    vi.mocked(getMilestone).mockResolvedValue(linkedDetail);
+    vi.mocked(listTasks).mockResolvedValueOnce({ items: [childTask] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MilestoneDetailPanel
+          milestoneId={MILESTONE_ID}
+          onClose={() => {}}
+          actorNamesById={ACTOR_NAMES}
+          managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+          analyticsAreaNamesById={AREA_NAMES}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Tasks · 1')).toBeInTheDocument();
+
+    vi.mocked(listTasks).mockRejectedValue(
+      new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }),
+    );
+    await queryClient.refetchQueries({ queryKey: ['tasks', { milestone_id: MILESTONE_ID }] });
+
+    expect(await screen.findByRole('heading', { name: 'Task list' })).toBeInTheDocument();
+    expect(screen.getByText('finding.manage required')).toBeInTheDocument();
+    // Retained success data no longer feeds the nav entry or section count.
+    expect(screen.queryByText('Tasks · 1')).not.toBeInTheDocument();
+    const nav = screen.getByRole('button', { name: 'Overview' }).closest('div');
+    if (!nav) throw new Error('section nav not found');
+    const labels = within(nav)
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+    expect(labels).toEqual(['Overview', 'Tasks', 'Evidence', 'Activity']);
+    // Rows and empty copy stay hidden: a denied read is not an empty success.
+    expect(screen.queryByText('TASK-902')).not.toBeInTheDocument();
+    expect(screen.queryByText('아직 연결된 Task 가 없습니다.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
   });
 });
