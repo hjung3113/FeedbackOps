@@ -362,10 +362,17 @@ export function MilestoneCreatePanel({
 
   function submit(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
+    // F4 followup — a scoped deep link can name an archived system: the select
+    // then holds a hidden id the options list never offered, and submitting it
+    // is a guaranteed 409 conflict.parent_archived. A selection that is not
+    // among the offered active options is treated as missing; a real user
+    // selection always comes from that list, so it is never overwritten here.
+    const systemOffered = managedSystems.some((system) => system.id === managedSystemId);
     if (
       title.trim() === '' ||
       why.trim() === '' ||
       managedSystemId === '' ||
+      !systemOffered ||
       startDate === '' ||
       targetDate === ''
     ) {

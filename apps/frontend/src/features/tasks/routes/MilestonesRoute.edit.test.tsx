@@ -811,3 +811,67 @@ describe('MilestonesRoute create cancel sync (Opus P3-3)', () => {
     expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
   });
 });
+
+// F4 followup — the route passes the URL's Managed System scope as
+// defaultManagedSystemId, and a scoped deep link can name an archived system.
+// The create options list only active systems, so the select holds a hidden
+// id; submitting it would be a guaranteed 409 conflict.parent_archived. The
+// submit must treat a selection that is not among the offered active options
+// as missing, while an active scoped default still submits untouched.
+describe('MilestonesRoute create archived deep-link default (F4 followup)', () => {
+  it('does not submit the archived scoped default and keeps the form open', async () => {
+    mockLookupsForF4();
+    vi.mocked(createMilestone).mockResolvedValue(createdRow());
+    renderWithClient(<MilestonesRoute managedSystem={IDS_F4.msArchived} />);
+    await screen.findByText('MLS-1021');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+
+    // Every other field is filled; the hidden archived default stays untouched.
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Launch review hardening' },
+    });
+    fireEvent.change(screen.getByLabelText('Why this milestone exists'), {
+      target: { value: '출시 리뷰 전 필수 정리 항목입니다.' },
+    });
+    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-08-01' } });
+    fireEvent.change(screen.getByLabelText('Target'), { target: { value: '2026-09-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+
+    // The 409-bound body is never sent; the user must pick an active system.
+    expect(vi.mocked(createMilestone)).not.toHaveBeenCalled();
+    expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
+    expect(
+      screen.getByText('Title, why, Managed System, Start, and Target are required.'),
+    ).toBeInTheDocument();
+  });
+
+  it('still submits an active scoped default the user left untouched', async () => {
+    vi.mocked(createMilestone).mockResolvedValue(createdRow());
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(createdRow(), 'Launch review hardening'));
+    renderWithClient(<MilestonesRoute managedSystem={IDS.msPowerBi} />);
+    await screen.findByText('MLS-1021');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Launch review hardening' },
+    });
+    fireEvent.change(screen.getByLabelText('Why this milestone exists'), {
+      target: { value: '출시 리뷰 전 필수 정리 항목입니다.' },
+    });
+    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-08-01' } });
+    fireEvent.change(screen.getByLabelText('Target'), { target: { value: '2026-09-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
+
+    await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
+    const createCall = vi.mocked(createMilestone).mock.calls[0];
+    if (!createCall) throw new Error('createMilestone call missing');
+    const [body] = createCall;
+    // The preselected active scope rides as the primary system without the
+    // user touching the select.
+    expect(body).toEqual(expect.objectContaining({ primary_managed_system_id: IDS.msPowerBi }));
+  });
+});
