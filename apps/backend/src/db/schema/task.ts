@@ -94,6 +94,10 @@ export const tasks = taskSchema.table(
       t.workspaceId,
       t.assigneeActorId,
     ),
+    // 0049 (#514 A2): partial index mirroring tasks_milestone_id_idx.
+    milestoneIdIdx: index('tasks_milestone_id_idx')
+      .on(t.milestoneId)
+      .where(sql`${t.milestoneId} is not null`),
     statusCheck: check(
       'tasks_status_check',
       sql`${t.status} in ('backlog','todo','doing','review','done','released','reopened')`,
