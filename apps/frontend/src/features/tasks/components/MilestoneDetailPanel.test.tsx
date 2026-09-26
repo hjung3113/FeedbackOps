@@ -218,6 +218,79 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  // R2-1 — React Query keeps the successful record when a later read fails.
+  // The same client and ['milestone', id] key must drop cached identity,
+  // body, and record actions once that refetch is terminal.
+  it.each([
+    {
+      failure: '403 permission.denied',
+      error: new ApiError(403, {
+        code: 'permission.denied',
+        message: 'finding.manage required',
+      }),
+      blocked: true,
+    },
+    {
+      failure: '404 not_found.record',
+      error: new ApiError(404, { code: 'not_found.record', message: 'record not found' }),
+      blocked: false,
+    },
+  ])(
+    'hides the cached milestone after a successful read then a $failure refetch',
+    async ({ error, blocked }) => {
+      const onClose = vi.fn();
+      const user = userEvent.setup();
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      vi.mocked(getMilestone).mockResolvedValueOnce(linkedDetail);
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MilestoneDetailPanel
+            milestoneId={MILESTONE_ID}
+            onClose={onClose}
+            actorNamesById={ACTOR_NAMES}
+            managedSystemNamesById={MANAGED_SYSTEM_NAMES}
+            analyticsAreaNamesById={AREA_NAMES}
+          />
+        </QueryClientProvider>,
+      );
+
+      expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
+      expect(screen.getByText('MLS-1021')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open finding' })).toBeInTheDocument();
+
+      vi.mocked(getMilestone).mockRejectedValueOnce(error);
+      await queryClient.invalidateQueries({ queryKey: ['milestone', MILESTONE_ID] });
+
+      if (blocked) {
+        expect(
+          await screen.findByRole('heading', { name: 'Milestone detail' }),
+        ).toBeInTheDocument();
+        expect(screen.getByText('finding.manage required')).toBeInTheDocument();
+        expect(screen.queryByText('Milestone detail unavailable.')).not.toBeInTheDocument();
+      } else {
+        expect(await screen.findByText('Milestone detail unavailable.')).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Milestone detail' })).not.toBeInTheDocument();
+      }
+
+      expect(screen.queryByRole('heading', { name: 'SSO Stabilization' })).not.toBeInTheDocument();
+      expect(screen.queryByText('MLS-1021')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('SSO 세션 만료 후 재인증 흐름이 없습니다.'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('From finding')).not.toBeInTheDocument();
+      expect(screen.queryByText('FIN-181')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Open finding' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '링크 복사' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument();
+
+      expect(screen.getByText('Milestone')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '패널 닫기' }));
+      expect(onClose).toHaveBeenCalledOnce();
+    },
+  );
+
   // B2d fixup finding 3 — a linked source Finding opens its own detail route
   // (prototype Open finding, screen-milestones.jsx:337-343; routes-and-layout
   // linked-context rule). No writer is implied: source_finding is read-only.

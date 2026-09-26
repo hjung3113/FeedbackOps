@@ -29,7 +29,8 @@ import { MilestoneStatusBadge } from './MilestoneStatusBadge';
 // B2d fixup — the shared header and close action stay mounted on every detail
 // read state (review finding 2), the why keeps the prototype's NestedTextBlock
 // nesting (finding 1), and a linked source Finding offers Open finding
-// navigation to its own route (finding 3).
+// navigation to its own route (finding 3). A terminal query error wins over
+// data React Query retains after a failed refetch (R2-1).
 
 const SECTIONS: PanelSection[] = [
   { id: 'overview', label: 'Overview' },
@@ -59,14 +60,17 @@ export function MilestoneDetailPanel({
     staleTime: 30 * 1000,
   });
   const error = milestoneQuery.error;
-  const milestone = milestoneQuery.data;
+  // React Query keeps the last success when a refetch fails, and exposes both
+  // data and error. A settled read error is the detail permission contract:
+  // hide retained identity, record actions, and body. Do not clear the cache.
+  const milestone = error == null ? milestoneQuery.data : undefined;
 
   return (
     <aside className="flex h-full flex-col bg-surface-detail">
       {/* Panel chrome first: header and close stay mounted independently of the
           query result, so pending, denied, and unavailable reads all stay
-          dismissible. Identity (display id) and the copy-link action only
-          exist once the record resolves — no unavailable record data renders. */}
+          dismissible. Identity and record actions render only for a successful
+          read with no terminal error — never for cached data after 403/404. */}
       <DetailPanelHeader
         kind="milestone"
         onClose={onClose}
