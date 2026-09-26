@@ -1,6 +1,7 @@
 import { convertTaskRequest, fetchPermissionCheck } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { listMilestones } from '@/lib/api/milestones';
+import { ApiError } from '@/lib/api/types';
 import {
   type MilestoneDto,
   type TaskDto,
@@ -37,7 +38,10 @@ export interface UseTaskRequestConversionResult {
   setDueDate: (value: string) => void;
   milestoneId: string;
   setMilestoneId: (value: string) => void;
+  /** Retained cache is suppressed on a settled read error (R2, Astra P2-3). */
   milestones: MilestoneDto[] | undefined;
+  /** Settled picker read error, classified; null while the read stands. */
+  milestonePickerError: { denied: boolean; message: string } | null;
   analyticsAreaId: string;
   setAnalyticsAreaId: (value: string) => void;
   analyticsAreas: Array<{ id: string; name: string }> | undefined;
@@ -113,6 +117,22 @@ export function useTaskRequestConversion({
     staleTime: 10 * 60 * 1000,
   });
 
+  // R2 (Astra P2-3) — a settled picker read error wins over the data React
+  // Query retains (same terminal-error contract as the milestone detail
+  // panel, R2-1): retained titles must not render as options, a denial is
+  // distinguishable from an empty list, and a selection made from the
+  // retained cache cannot be submitted.
+  const milestonesError = milestonesQuery.error;
+  const milestonePickerDenied =
+    milestonesError instanceof ApiError &&
+    milestonesError.status === 403 &&
+    (milestonesError.code === 'permission.denied' ||
+      milestonesError.code === 'permission.scope_required');
+  const milestonePickerError =
+    milestonesError === null
+      ? null
+      : { denied: milestonePickerDenied, message: milestonesError.message };
+
   const convertMutation = useMutation<TaskDto, Error, void>({
     mutationFn: async () => {
       const title = convertTitle.trim();
@@ -142,6 +162,9 @@ export function useTaskRequestConversion({
 
   function submit(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
+    // R2 (Astra P2-3) — a selection made from retained cache cannot ride once
+    // its read has failed terminally; only an explicit None ('') is allowed.
+    if (milestonesError !== null && convertMilestoneId !== '') return;
     const titleResult = convertTaskRequestRequestSchema.shape.title.safeParse(convertTitle);
     if (!titleResult.success) {
       setConvertTitleError(titleResult.error.issues[0]?.message ?? 'Title is invalid.');
@@ -171,7 +194,8 @@ export function useTaskRequestConversion({
     setDueDate: setConvertDueDate,
     milestoneId: convertMilestoneId,
     setMilestoneId: setConvertMilestoneId,
-    milestones: milestonesQuery.data?.items,
+    milestones: milestonesError === null ? milestonesQuery.data?.items : undefined,
+    milestonePickerError,
     analyticsAreaId: convertAnalyticsAreaId,
     setAnalyticsAreaId: setConvertAnalyticsAreaId,
     analyticsAreas: analyticsAreasQuery.data?.items,

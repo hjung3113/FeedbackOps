@@ -875,3 +875,109 @@ describe('MilestonesRoute create archived deep-link default (F4 followup)', () =
     expect(body).toEqual(expect.objectContaining({ primary_managed_system_id: IDS.msPowerBi }));
   });
 });
+
+// R2 (Astra P2-2 / Opus P2) — a successful own status change must not
+// stale-stamp an open title draft. When the status PATCH started from the
+// same version the draft was composed against, the draft's captured token
+// advances to the returned one, so the next title save succeeds instead of
+// 409-discarding the user's own work. A status PATCH sent from an externally
+// newer version (a background refetch raced in) must not rebase the older
+// draft onto the newest token — the draft stays bound to its own version and
+// still loses the race as a 409, preserving the external title change.
+describe('MilestonesRoute status-title coordination (R2)', () => {
+  const statusSelect = () => screen.getByRole('combobox', { name: 'Status' }) as HTMLSelectElement;
+  const OWN_V2 = '2026-07-21T09:00:00.000Z';
+  const EXTERNAL_V2 = '2026-07-21T09:45:00.000Z';
+  const OWN_V3 = '2026-07-21T10:00:00.000Z';
+
+  it('advances the open title draft after its own successful status change', async () => {
+    vi.mocked(getMilestone)
+      .mockResolvedValueOnce(detailFor(SSO_ROW, 'SSO Stabilization'))
+      .mockResolvedValue(
+        detailFor({ ...SSO_ROW, status: 'released', updated_at: OWN_V2 }, 'SSO Stabilization'),
+      );
+    vi.mocked(updateMilestone)
+      .mockResolvedValueOnce({ ...SSO_ROW, status: 'released', updated_at: OWN_V2 })
+      .mockResolvedValueOnce({
+        ...SSO_ROW,
+        status: 'released',
+        updated_at: OWN_V2,
+        title: 'SSO Stabilization v2',
+      });
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'SSO Stabilization v2' },
+    });
+
+    // The user's own status change succeeds from the same version V1.
+    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(statusSelect()).toHaveValue('released'));
+
+    // The draft survives, and saving it must use the status response's new
+    // token — not the stale V1 it was composed against.
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO Stabilization v2');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(2));
+    const titleCall = vi.mocked(updateMilestone).mock.calls[1];
+    if (!titleCall) throw new Error('title updateMilestone call missing');
+    const [, body, options] = titleCall;
+    expect(body).toEqual({ title: 'SSO Stabilization v2' });
+    expect(options.ifMatch).toBe(OWN_V2);
+  });
+
+  it('does not rebase a draft composed against an older version onto the newest token', async () => {
+    const POST_STATUS_ROW: MilestoneDto = {
+      ...SSO_ROW,
+      title: 'Renamed elsewhere',
+      status: 'released',
+      updated_at: OWN_V3,
+    };
+    vi.mocked(getMilestone)
+      .mockResolvedValueOnce(detailFor(SSO_ROW, 'SSO Stabilization'))
+      .mockResolvedValueOnce(
+        detailFor(
+          { ...SSO_ROW, title: 'Renamed elsewhere', updated_at: EXTERNAL_V2 },
+          'Renamed elsewhere',
+        ),
+      )
+      .mockResolvedValue(detailFor(POST_STATUS_ROW, 'Renamed elsewhere'));
+    vi.mocked(updateMilestone)
+      .mockResolvedValueOnce({ ...POST_STATUS_ROW })
+      .mockResolvedValue({ ...POST_STATUS_ROW, title: 'Renamed elsewhere' });
+    const { queryClient } = renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'My local draft' },
+    });
+
+    // An external change lands through a background refetch while the draft
+    // is open: the draft stays bound to V1 (Astra finding 2 contract).
+    await queryClient.refetchQueries({ queryKey: ['milestone', IDS.sso], exact: true });
+    await screen.findByRole('heading', { name: 'Renamed elsewhere' });
+
+    // The status change the user makes now is sent from the externally newer
+    // version and succeeds — but it must not lift the stale draft to V3.
+    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(statusSelect()).toHaveValue('released'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(2));
+    const titleCall = vi.mocked(updateMilestone).mock.calls[1];
+    if (!titleCall) throw new Error('title updateMilestone call missing');
+    const [, , options] = titleCall;
+    // V1 — the draft's own token. The server rejects it and the existing
+    // 409 reconciliation shows the server title; the external change wins.
+    expect(options.ifMatch).toBe(UPDATED_AT);
+    expect(options.ifMatch).not.toBe(OWN_V3);
+    expect(options.ifMatch).not.toBe(EXTERNAL_V2);
+  });
+});

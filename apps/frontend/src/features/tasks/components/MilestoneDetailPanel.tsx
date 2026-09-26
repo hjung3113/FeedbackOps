@@ -629,17 +629,26 @@ function MilestoneDetailContent({
   // key; the body never carries primary_managed_system_id. The select is
   // controlled by the stored status, so a failed PATCH keeps the prior value,
   // and a stale write refetches and shows the server row (same contract as
-  // the title edit).
+  // the title edit). The request token rides in the mutation variables.
   const [statusError, setStatusError] = React.useState<string | null>(null);
-  const statusMutation = useMutation<MilestoneDto, Error, MilestoneStatusFilter>({
-    mutationFn: async (status) =>
-      updateMilestone(
-        milestone.id,
-        { status },
-        { ifMatch: milestone.updated_at, idempotencyKey: crypto.randomUUID() },
-      ),
-    onSuccess: async () => {
+  const statusMutation = useMutation<
+    MilestoneDto,
+    Error,
+    { status: MilestoneStatusFilter; ifMatch: string }
+  >({
+    mutationFn: async ({ status, ifMatch }) =>
+      updateMilestone(milestone.id, { status }, { ifMatch, idempotencyKey: crypto.randomUUID() }),
+    onSuccess: async (updated, { ifMatch: requestToken }) => {
       setStatusError(null);
+      // R2 — the draft token is advanced ONLY when the status PATCH started
+      // from the same version the open draft was composed against: the two
+      // writes were coordinated, so the next title save succeeds instead of
+      // 409-discarding the user's own work. A PATCH sent from an externally
+      // newer version does not match, so the older draft keeps its own token
+      // and cannot rebase over the external change.
+      if (titleEditVersion !== null && titleEditVersion === requestToken) {
+        setTitleEditVersion(updated.updated_at);
+      }
       // Detail read returns the stored row; the list badge reflects it too.
       await queryClient.invalidateQueries({ queryKey: ['milestone', milestone.id] });
       await queryClient.invalidateQueries({ queryKey: ['milestones'] });
@@ -668,7 +677,9 @@ function MilestoneDetailContent({
     const status = event.target.value as MilestoneStatusFilter;
     if (status === milestone.status) return;
     setStatusError(null);
-    statusMutation.mutate(status);
+    // R2 — the token is captured here so onSuccess can compare it with the
+    // open draft's captured version (same-version-only coordination).
+    statusMutation.mutate({ status, ifMatch: milestone.updated_at });
   }
 
   const areaName =

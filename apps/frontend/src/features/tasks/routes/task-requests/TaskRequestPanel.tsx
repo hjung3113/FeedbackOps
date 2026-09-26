@@ -292,6 +292,24 @@ export function TaskRequestPanel({
                       </option>
                     ))}
                   </select>
+                  {/* R2 (Astra P2-3) — a settled picker read error is shown in
+                      place of the retained options: the server's denial reason
+                      for a permission failure, the same 'Milestone list
+                      unavailable.' copy the Milestone list route uses for a
+                      generic outage. */}
+                  {conversion.milestonePickerError !== null && (
+                    <span
+                      className={
+                        conversion.milestonePickerError.denied
+                          ? 'text-xs text-accent-danger'
+                          : 'text-xs text-text-muted'
+                      }
+                    >
+                      {conversion.milestonePickerError.denied
+                        ? conversion.milestonePickerError.message
+                        : 'Milestone list unavailable.'}
+                    </span>
+                  )}
                 </label>
                 <Button
                   type="submit"

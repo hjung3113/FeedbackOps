@@ -1,4 +1,5 @@
 import { listMilestones } from '@/lib/api/milestones';
+import { ApiError } from '@/lib/api/types';
 import { type MilestoneDto, convertTaskRequestRequestSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -118,11 +119,12 @@ vi.mock('@/lib/api', () => ({
 function renderRoute(requestedOutcome = requestedOutcome225) {
   taskRequest.requested_outcome = requestedOutcome;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  render(
     <QueryClientProvider client={queryClient}>
       <TaskRequestsRoute selectedParam={taskRequest.id} />
     </QueryClientProvider>,
   );
+  return { queryClient };
 }
 
 async function openConvertForm() {
@@ -233,4 +235,96 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
       );
     });
   });
+
+  // R2 (Astra P2-3) — after a successful picker read, a denied refetch must
+  // win over the data React Query retains: the cached titles leave the
+  // options, the denial reason is surfaced (distinct from an empty list), and
+  // a selection made from the retained cache cannot be submitted.
+  it('hides retained options, shows the denial, and blocks the retained selection after a 403 refetch', async () => {
+    vi.mocked(listMilestones)
+      .mockResolvedValueOnce({
+        items: MILESTONES.filter(
+          (milestone) =>
+            milestone.primary_managed_system_id === taskRequest.primary_managed_system_id,
+        ),
+      })
+      .mockRejectedValue(
+        new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }),
+      );
+    const { queryClient } = await openConvertFormReturnsClient();
+    const select = screen.getByRole('combobox', { name: 'Milestone' });
+    await waitFor(() => {
+      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
+    });
+    fireEvent.change(select, { target: { value: milestoneForRequestSystem.id } });
+
+    await queryClient.invalidateQueries({
+      queryKey: ['milestones', taskRequest.primary_managed_system_id],
+    });
+    // The retained titles leave the UI, and the denial is distinguishable
+    // from an empty list.
+    expect(await screen.findByText('finding.manage required')).toBeInTheDocument();
+    expect(
+      within(select).queryByRole('option', { name: milestoneForRequestSystem.title }),
+    ).not.toBeInTheDocument();
+
+    // The retained selection cannot ride: submitting it would convert with a
+    // Milestone the actor can no longer even see. (Call history accumulates
+    // across tests in this file, so assert on the delta.)
+    const callsBeforeSubmit = api.convertTaskRequest.mock.calls.length;
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await Promise.resolve();
+    expect(api.convertTaskRequest.mock.calls.length).toBe(callsBeforeSubmit);
+  });
+
+  it('shows generic unavailability distinctly and still converts with an explicit None', async () => {
+    vi.mocked(listMilestones)
+      .mockResolvedValueOnce({
+        items: MILESTONES.filter(
+          (milestone) =>
+            milestone.primary_managed_system_id === taskRequest.primary_managed_system_id,
+        ),
+      })
+      .mockRejectedValue(new ApiError(500, { code: 'internal.unexpected', message: 'boom' }));
+    const { queryClient } = await openConvertFormReturnsClient();
+    const select = screen.getByRole('combobox', { name: 'Milestone' });
+    await waitFor(() => {
+      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
+    });
+    fireEvent.change(select, { target: { value: milestoneForRequestSystem.id } });
+
+    await queryClient.invalidateQueries({
+      queryKey: ['milestones', taskRequest.primary_managed_system_id],
+    });
+
+    // A generic outage is not a permission denial.
+    expect(await screen.findByText('Milestone list unavailable.')).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
+
+    // None is an explicit choice, not a retained selection: the form stays
+    // usable and converts without a Milestone.
+    fireEvent.change(select, { target: { value: '' } });
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+    await waitFor(() => {
+      expect(api.convertTaskRequest).toHaveBeenCalledWith(
+        taskRequest.id,
+        expect.objectContaining({ milestone_id: null }),
+        expect.any(String),
+      );
+    });
+  });
 });
+
+async function openConvertFormReturnsClient() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  taskRequest.requested_outcome = requestedOutcome225;
+  render(
+    <QueryClientProvider client={queryClient}>
+      <TaskRequestsRoute selectedParam={taskRequest.id} />
+    </QueryClientProvider>,
+  );
+  await screen.findByText('REQ-42');
+  fireEvent.click(screen.getByRole('button', { name: 'Convert to Task' }));
+  await screen.findByTestId('task-request-convert-title-input');
+  return { queryClient };
+}
