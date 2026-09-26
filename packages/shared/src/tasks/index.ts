@@ -93,6 +93,14 @@ export const patchTaskStatusRequestSchema = z
   .strict();
 export type PatchTaskStatusRequest = z.infer<typeof patchTaskStatusRequestSchema>;
 
+// #514 B1b — POST /tasks/:id/milestone. `null` unassigns.
+export const assignTaskMilestoneRequestSchema = z
+  .object({
+    milestone_id: z.string().uuid().nullable(),
+  })
+  .strict();
+export type AssignTaskMilestoneRequest = z.infer<typeof assignTaskMilestoneRequestSchema>;
+
 export const convertTaskRequestRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(200),

@@ -157,6 +157,24 @@ export async function updateTaskStatus(
   return mapTaskRow(row);
 }
 
+// #514 B1b — the assign command writes milestone_id and updated_at only.
+export async function updateTaskMilestone(
+  tx: Tx,
+  input: { workspaceId: string; taskId: string; milestoneId: string | null },
+): Promise<TaskRow> {
+  const result = await tx.execute<Record<string, unknown>>(sql`
+    UPDATE task.tasks
+       SET milestone_id = ${input.milestoneId},
+           updated_at = now()
+     WHERE id = ${input.taskId}
+       AND workspace_id = ${input.workspaceId}
+     RETURNING ${TASK_SELECT}
+  `);
+  const row = result.rows[0];
+  if (!row) throw new Error('updateTaskMilestone returned no row');
+  return mapTaskRow(row);
+}
+
 export async function insertTaskComment(
   tx: Tx,
   input: {

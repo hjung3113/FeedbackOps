@@ -64,6 +64,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'finding_task_linked',
   'task_status_changed',
   'task_comment_created',
+  'task_milestone_assigned',
   'milestone_created',
   'milestone_updated',
   'public_update_review_candidate_created',
@@ -89,7 +90,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
 describe('audit event registry', () => {
   it('locks event-type order, uniqueness, and detail-map key coverage', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
-    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(69);
+    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(70);
     expect(Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS)).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
   });
 });
