@@ -146,7 +146,7 @@ describe('listVocsQuerySchema — limit', () => {
 });
 
 describe('listVocsQuerySchema — tab', () => {
-  it.each(['untriaged', 'high', 'unassigned', 'similar', 'no-link', 'waiting'] as const)(
+  it.each(['untriaged', 'high', 'unassigned', 'similar', 'no-link', 'no-task', 'waiting'] as const)(
     'accepts tab=%s',
     (tab) => {
       expect(listVocsQuerySchema.parse({ view: 'inbox', tab }).tab).toBe(tab);

@@ -309,7 +309,7 @@ describe('useInboxRoute', () => {
     expect(tab).toHaveAttribute('data-state', 'active');
   });
 
-  it('AC-E6b renders the six inbox tabs in canonical value order', async () => {
+  it('AC-E6b renders the seven inbox tabs in canonical value order', async () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
@@ -322,18 +322,19 @@ describe('useInboxRoute', () => {
       'Similar',
       'No link',
       'High · no link',
+      'No task',
     ]);
 
     // Untriaged is already the active tab and Radix emits no onValueChange for
     // the selected value, so it is asserted through aria-selected instead of
-    // through a navigation. The other five each have to route.
+    // through a navigation. The other six each have to route.
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
 
     // Radix TabsTrigger activates on mousedown, not click (same note as
     // SourceContextSegmented.test.tsx:2). fireEvent.click left navigateMock at
     // 0, so the assertion below had nothing to beat.
     for (const tab of tabs.slice(1)) fireEvent.mouseDown(tab);
-    expect(navigateMock).toHaveBeenCalledTimes(5);
+    expect(navigateMock).toHaveBeenCalledTimes(6);
     expect(
       navigateMock.mock.calls.map(([call]) => {
         const reducer = (
@@ -341,7 +342,7 @@ describe('useInboxRoute', () => {
         ).search;
         return reducer({}).tab;
       }),
-    ).toEqual(['high', 'unassigned', 'similar', 'no-link', 'high-no-link']);
+    ).toEqual(['high', 'unassigned', 'similar', 'no-link', 'high-no-link', 'no-task']);
   });
 
   it('my view renders My VOCs title instead of tabs', async () => {

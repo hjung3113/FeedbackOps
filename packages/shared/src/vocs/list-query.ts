@@ -32,6 +32,7 @@ export const vocTabEnumSchema = z.enum([
   'unassigned',
   'similar',
   'no-link',
+  'no-task',
   'high-no-link',
   'waiting',
 ]);

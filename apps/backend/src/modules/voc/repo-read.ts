@@ -73,7 +73,15 @@ export interface ListVocsRepoArgs {
   view: 'inbox' | 'my' | 'triage';
   analyticsAreaId?: string;
   actorIdForMyFilter?: string; // required when view='my'
-  tab?: 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link' | 'high-no-link' | 'waiting';
+  tab?:
+    | 'untriaged'
+    | 'high'
+    | 'unassigned'
+    | 'similar'
+    | 'no-link'
+    | 'no-task'
+    | 'high-no-link'
+    | 'waiting';
   filterSeverity?: ('low' | 'medium' | 'high' | 'critical')[];
   filterReporterFacingStatus?: string[];
   filterOwner?: 'assigned' | 'unassigned';
@@ -129,7 +137,14 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
   else if (tab === 'unassigned') wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
   else if (tab === 'waiting')
     wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
-  else if (tab === 'no-link' || tab === 'high-no-link') {
+  else if (tab === 'no-task') {
+    wheres.push(sql`NOT EXISTS (
+      SELECT 1 FROM ${entityLinks} el
+      WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
+        AND el.source_type = 'voc' AND el.source_id = ${vocs.id}
+        AND el.target_type = 'task'
+    )`);
+  } else if (tab === 'no-link' || tab === 'high-no-link') {
     if (tab === 'high-no-link') wheres.push(sql`severity IN ('high', 'critical')`);
     // #513 N1: "no link" means "no direct follow-up link" — an active
     // entity_links row with this VOC as source and a follow-up target
