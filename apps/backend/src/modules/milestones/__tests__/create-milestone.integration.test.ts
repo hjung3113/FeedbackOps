@@ -188,6 +188,7 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
     const counterAfterReplay = await dbHandle.pool.query<{ next_value: string }>(counterQuery, [
       WORKSPACE_ID,
     ]);
+    expect(counterAfterReplay.rows).toHaveLength(1);
     expect(counterAfterReplay.rows[0]?.next_value).toBe(counterAfterFirst.rows[0]?.next_value);
 
     const rows = await dbHandle.pool.query<{ display_id: string }>(
