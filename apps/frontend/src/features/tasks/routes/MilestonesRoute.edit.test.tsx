@@ -59,6 +59,7 @@ const IDS = {
   ownerU1: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001',
   ownerU2: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0002',
   sso: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1021',
+  rowB: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1022',
   created: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1099',
 };
 
@@ -979,5 +980,233 @@ describe('MilestonesRoute status-title coordination (R2)', () => {
     expect(options.ifMatch).toBe(UPDATED_AT);
     expect(options.ifMatch).not.toBe(OWN_V3);
     expect(options.ifMatch).not.toBe(EXTERNAL_V2);
+  });
+});
+
+// R3 (Astra P2-1) — concurrent own submissions can discard the draft: two
+// same-version requests race, and whichever title request lands after a
+// committed status change is 409-cleared. Serialization: a pending status
+// change forbids title submission (button + handler, Enter included), a
+// pending title save forbids status changes. Deferred responses prove the
+// window; the same-version coordination from the earlier repair is retained
+// after the pending request settles.
+describe('MilestonesRoute title/status serialization (R3)', () => {
+  const statusSelect = () => screen.getByRole('combobox', { name: 'Status' }) as HTMLSelectElement;
+  const OWN_V2 = '2026-07-21T09:00:00.000Z';
+
+  it('blocks title submission while a status change is pending, then coordinates', async () => {
+    let resolveStatus!: (value: MilestoneDto) => void;
+    vi.mocked(getMilestone)
+      .mockResolvedValueOnce(detailFor(SSO_ROW, 'SSO Stabilization'))
+      .mockResolvedValue(
+        detailFor({ ...SSO_ROW, status: 'released', updated_at: OWN_V2 }, 'SSO Stabilization'),
+      );
+    vi.mocked(updateMilestone)
+      .mockImplementationOnce(
+        () =>
+          new Promise<MilestoneDto>((resolve) => {
+            resolveStatus = resolve;
+          }),
+      )
+      .mockResolvedValue({
+        ...SSO_ROW,
+        status: 'released',
+        updated_at: OWN_V2,
+        title: 'SSO Stabilization v2',
+      });
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'SSO Stabilization v2' },
+    });
+
+    // The status change is sent and never resolves: the in-flight window.
+    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
+
+    // Save is disabled and the Enter-driven submit is guarded: no second
+    // request can race the pending one.
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    fireEvent.submit(save.closest('form') as HTMLFormElement);
+    expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1);
+
+    // The status request settles; Save re-enables and the same-version
+    // coordination still applies — the title goes out with the new token.
+    resolveStatus({ ...SSO_ROW, status: 'released', updated_at: OWN_V2 });
+    await waitFor(() => expect(statusSelect()).toHaveValue('released'));
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(2));
+    const titleCall = vi.mocked(updateMilestone).mock.calls[1];
+    if (!titleCall) throw new Error('title updateMilestone call missing');
+    const [, body, options] = titleCall;
+    expect(body).toEqual({ title: 'SSO Stabilization v2' });
+    expect(options.ifMatch).toBe(OWN_V2);
+  });
+
+  it('blocks status changes while a title save is pending', async () => {
+    let resolveTitle!: (value: MilestoneDto) => void;
+    vi.mocked(getMilestone)
+      .mockResolvedValueOnce(detailFor(SSO_ROW, 'SSO Stabilization'))
+      .mockResolvedValue(
+        detailFor(
+          { ...SSO_ROW, title: 'SSO Stabilization v2', updated_at: OWN_V2 },
+          'SSO Stabilization v2',
+        ),
+      );
+    vi.mocked(updateMilestone)
+      .mockImplementationOnce(
+        () =>
+          new Promise<MilestoneDto>((resolve) => {
+            resolveTitle = resolve;
+          }),
+      )
+      .mockResolvedValue({ ...SSO_ROW, title: 'SSO Stabilization v2', updated_at: OWN_V2 });
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'SSO Stabilization v2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
+
+    // The status select is disabled and its handler ignores the event while
+    // the title save is in flight.
+    expect(statusSelect()).toBeDisabled();
+    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1);
+
+    resolveTitle({ ...SSO_ROW, title: 'SSO Stabilization v2', updated_at: OWN_V2 });
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'SSO Stabilization v2' })).toBeInTheDocument(),
+    );
+    expect(statusSelect()).toBeEnabled();
+    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(2));
+    const statusCall = vi.mocked(updateMilestone).mock.calls[1];
+    if (!statusCall) throw new Error('status updateMilestone call missing');
+    const [, body] = statusCall;
+    expect(body).toEqual({ status: 'released' });
+  });
+});
+
+// R3 (Astra P2-2) — the dirty-create guard did not cover an edited unsaved
+// title: selecting another record, opening New milestone, or an external URL
+// param change unmounted the editor and destroyed the draft silently. The
+// route now receives title dirtiness and runs the same discard confirmation;
+// declining preserves the draft and the record, confirming discards, and a
+// completed save/cancel clears the guard.
+describe('MilestonesRoute title-dirty guard (R3)', () => {
+  const ROW_B: MilestoneDto = {
+    ...SSO_ROW,
+    id: IDS.rowB,
+    display_id: 'MLS-1022',
+    title: 'Beta milestone',
+  };
+
+  function mockTwoRecords(): void {
+    vi.mocked(listMilestones).mockImplementation(async () => ({ items: [SSO_ROW, ROW_B] }));
+    vi.mocked(getMilestone).mockImplementation((id) =>
+      Promise.resolve(
+        detailFor(
+          id === IDS.sso ? SSO_ROW : ROW_B,
+          id === IDS.sso ? 'SSO Stabilization' : 'Beta milestone',
+        ),
+      ),
+    );
+  }
+
+  async function openDirtyTitleEditor(): Promise<void> {
+    renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'SSO draft' },
+    });
+  }
+
+  it('confirms before another record replaces the draft; decline preserves, cancel clears the guard', async () => {
+    mockTwoRecords();
+    await openDirtyTitleEditor();
+
+    fireEvent.click(screen.getByText('Beta milestone'));
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+
+    // Decline keeps the record, the editor, and the draft.
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+    expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+
+    // Cancelling the edit clears the dirty guard: the next switch is direct.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByText('Beta milestone'));
+    expect(await screen.findByRole('heading', { name: 'Beta milestone' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+  });
+
+  it('confirms before New milestone replaces the draft; confirming opens the create block', async () => {
+    mockTwoRecords();
+    await openDirtyTitleEditor();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+    expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    fireEvent.click(await screen.findByRole('button', { name: '이동' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+    // The detail editor is replaced by a fresh create form: the discarded
+    // draft is not inherited (the create form owns its own empty Title).
+    expect(screen.queryByRole('heading', { name: 'SSO Stabilization' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('');
+  });
+
+  it('confirms before a URL param change replaces the draft; declining preserves it', async () => {
+    mockTwoRecords();
+    const { view, queryClient } = renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'SSO draft' },
+    });
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <DetailPanelHost>
+          <MilestonesRoute selectedParam={IDS.rowB} />
+        </DetailPanelHost>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+    expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+  });
+
+  it('needs no confirmation for a record switch after a successful title save', async () => {
+    mockTwoRecords();
+    vi.mocked(updateMilestone).mockResolvedValue({
+      ...SSO_ROW,
+      title: 'SSO Stabilization v2',
+    });
+    await openDirtyTitleEditor();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+
+    fireEvent.click(screen.getByText('Beta milestone'));
+    expect(await screen.findByRole('heading', { name: 'Beta milestone' })).toBeInTheDocument();
+    expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
   });
 });

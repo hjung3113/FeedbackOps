@@ -61,7 +61,11 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
   // B2e fixup — a dirty create form must confirm before a selection (existing
   // row or changed URL param) discards it; the switch applies only on confirm.
   const [createDirty, setCreateDirty] = React.useState(false);
+  // R3 — an edited unsaved title is guarded the same way: the detail panel
+  // reports dirtiness and any panel replacement confirms first.
+  const [detailTitleDirty, setDetailTitleDirty] = React.useState(false);
   const [pendingSelection, setPendingSelection] = React.useState<string | null>(null);
+  const [pendingCreate, setPendingCreate] = React.useState(false);
   const [selectionConfirmOpen, setSelectionConfirmOpen] = React.useState(false);
 
   const prevParamRef = React.useRef(selectedParam);
@@ -76,6 +80,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
     // row, and Back to a param-less URL clears the stale highlight (F2).
     // B2e fixup — create mode never masks the change: a clean form switches
     // immediately, a dirty form waits for the discard confirmation.
+    // R3 — an edited title waits for the same confirmation.
     if (creating) {
       if (createDirty) {
         setPendingSelection(selectedParam ?? null);
@@ -84,8 +89,13 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
       }
       setCreating(false);
     }
+    if (detailTitleDirty) {
+      setPendingSelection(selectedParam ?? null);
+      setSelectionConfirmOpen(true);
+      return;
+    }
     setSelectedId(selectedParam ?? null);
-  }, [selectedParam, creating, createDirty]);
+  }, [selectedParam, creating, createDirty, detailTitleDirty]);
 
   const listQuery = useQuery({
     queryKey: ['milestones', 'list', managedSystem ?? null, activeTab] as const,
@@ -231,14 +241,30 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
       }
       setCreating(false);
     }
+    // R3 — an edited unsaved title confirms before another record replaces
+    // the panel; declining keeps the record, the editor, and the draft.
+    if (detailTitleDirty) {
+      setPendingSelection(id);
+      setSelectionConfirmOpen(true);
+      return;
+    }
     applySelection(id);
   }
 
   function confirmSelectionChange(): void {
     const id = pendingSelection;
+    const openCreate = pendingCreate;
     setSelectionConfirmOpen(false);
     setPendingSelection(null);
+    setPendingCreate(false);
+    setDetailTitleDirty(false);
     setCreating(false);
+    if (openCreate) {
+      // R3 — confirming a dirty-title switch to the create block discards the
+      // draft and opens the same property block in a create state.
+      setCreating(true);
+      return;
+    }
     setSelectedId(id);
     if (id !== null && id !== selectedParam) applySelection(id);
   }
@@ -320,7 +346,17 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                     variant="primary"
                     size="sm"
                     className="shrink-0 gap-1.5 px-2"
-                    onClick={() => setCreating(true)}
+                    onClick={() => {
+                      // R3 — an edited unsaved title confirms before the
+                      // create block replaces the detail panel.
+                      if (detailTitleDirty) {
+                        setPendingCreate(true);
+                        setPendingSelection(null);
+                        setSelectionConfirmOpen(true);
+                        return;
+                      }
+                      setCreating(true);
+                    }}
                   >
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                     New milestone
@@ -455,18 +491,21 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
               actorNamesById={actorNamesById}
               managedSystemNamesById={managedSystemNamesById}
               analyticsAreaNamesById={analyticsAreaNamesById}
+              onTitleDirtyChange={setDetailTitleDirty}
             />
           ) : undefined
         }
       />
-      {/* B2e fixup — confirming the pending switch discards the create draft
-          and selects the requested record; declining keeps the create form. */}
+      {/* B2e fixup + R3 — confirming the pending switch discards the dirty
+          create or title draft and applies the requested record/create block;
+          declining keeps the panel with its draft. */}
       <DirtyConfirmation
         open={selectionConfirmOpen}
         onConfirm={confirmSelectionChange}
         onCancel={() => {
           setSelectionConfirmOpen(false);
           setPendingSelection(null);
+          setPendingCreate(false);
         }}
       />
     </>

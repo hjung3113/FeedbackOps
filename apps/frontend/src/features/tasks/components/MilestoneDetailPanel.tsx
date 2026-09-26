@@ -123,6 +123,10 @@ export interface MilestoneDetailPanelProps {
   actorNamesById: ReadonlyMap<string, string>;
   managedSystemNamesById: ReadonlyMap<string, string>;
   analyticsAreaNamesById: ReadonlyMap<string, string>;
+  /** R3 — reports whether a title draft is unsaved, so the route can run the
+      discard confirmation before a record switch, New milestone, or a URL
+      param change replaces the panel. */
+  onTitleDirtyChange?: (dirty: boolean) => void;
 }
 
 export function MilestoneDetailPanel({
@@ -131,6 +135,7 @@ export function MilestoneDetailPanel({
   actorNamesById,
   managedSystemNamesById,
   analyticsAreaNamesById,
+  onTitleDirtyChange,
 }: MilestoneDetailPanelProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const milestoneQuery = useQuery({
@@ -146,8 +151,16 @@ export function MilestoneDetailPanel({
 
   // B2e fixup — a dirty title edit confirms before the header close discards
   // it (ui-design-system: "Dirty forms warn before close"). Clean, loading,
-  // and failed-read states keep closing immediately.
+  // and failed-read states keep closing immediately. R3 — the same dirty
+  // state is also reported upward so the route can confirm record switches.
   const [titleDirty, setTitleDirty] = React.useState(false);
+  const handleTitleDirtyChange = React.useCallback(
+    (dirty: boolean) => {
+      setTitleDirty(dirty);
+      onTitleDirtyChange?.(dirty);
+    },
+    [onTitleDirtyChange],
+  );
   const [discardTitleOpen, setDiscardTitleOpen] = React.useState(false);
 
   function handleHeaderClose(): void {
@@ -206,7 +219,7 @@ export function MilestoneDetailPanel({
           actorNamesById={actorNamesById}
           managedSystemNamesById={managedSystemNamesById}
           analyticsAreaNamesById={analyticsAreaNamesById}
-          onTitleDirtyChange={setTitleDirty}
+          onTitleDirtyChange={handleTitleDirtyChange}
         />
       )}
       <DirtyConfirmation
@@ -613,6 +626,11 @@ function MilestoneDetailContent({
 
   function submitTitleEdit(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
+    // R3 — serialized with the status mutation: a same-version title request
+    // sent while a status change is in flight would be 409-cleared the
+    // moment the status write commits. The disabled Save button and this
+    // guard (Enter submits the form too) both refuse the race.
+    if (titleMutation.isPending || statusMutation.isPending) return;
     if (titleDraft.trim() === '') {
       setTitleError('Title is required.');
       return;
@@ -676,6 +694,11 @@ function MilestoneDetailContent({
   function handleStatusChange(event: React.ChangeEvent<HTMLSelectElement>): void {
     const status = event.target.value as MilestoneStatusFilter;
     if (status === milestone.status) return;
+    // R3 — serialized with the title mutation: a status change issued while
+    // a title save is in flight would commit from the same version and
+    // 409-clear the just-submitted draft. The disabled select and this guard
+    // both refuse the race.
+    if (statusMutation.isPending || titleMutation.isPending) return;
     setStatusError(null);
     // R2 — the token is captured here so onSuccess can compare it with the
     // open draft's captured version (same-version-only coordination).
@@ -752,7 +775,7 @@ function MilestoneDetailContent({
                   type="submit"
                   variant="primary"
                   size="sm"
-                  disabled={titleMutation.isPending}
+                  disabled={titleMutation.isPending || statusMutation.isPending}
                 >
                   Save
                 </Button>
@@ -892,7 +915,7 @@ function MilestoneDetailContent({
                   aria-label="Status"
                   className={selectClassName}
                   value={milestone.status}
-                  disabled={statusMutation.isPending}
+                  disabled={statusMutation.isPending || titleMutation.isPending}
                   onChange={handleStatusChange}
                 >
                   {STATUS_OPTIONS.map((option) => (
