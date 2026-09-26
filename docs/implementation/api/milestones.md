@@ -191,12 +191,16 @@ Milestone status. `blocked` is stored, not a list tab.
 
 - No DELETE route and no hard delete; `fops_app` holds SELECT, INSERT, UPDATE
   on `task.milestones`.
-- No per-milestone Task create, attach, or listing route. A Task carries
-  `milestone_id` only from Task conversion
+- No per-milestone Task create or listing route. A Task may receive
+  `milestone_id` during Task Request conversion
   (`POST /task-requests/:id/convert`, [tasks.md](tasks.md) §Task Conversion
-  Contract): unknown or cross-workspace Milestone is 404 not_found.record, a
-  Milestone on another Managed System is 422 validation.failed with
-  out_of_scope on milestone_id, and null stays valid.
+  Contract): an unknown or cross-workspace Milestone is 404 not_found.record,
+  a Milestone on another Managed System is 422 validation.failed with
+  out_of_scope on milestone_id, and null stays valid. An existing Task can
+  also be assigned, reassigned, or unassigned through `POST
+  /tasks/:id/milestone` ([tasks.md](tasks.md) §POST /tasks/:id/milestone), which
+  accepts `null` to clear the assignment and applies the Task's Managed System
+  scope checks.
 - No Gantt or timeline endpoint.
 
 Shared DTOs: `MilestoneDto` / `MilestoneDetailDto` in
