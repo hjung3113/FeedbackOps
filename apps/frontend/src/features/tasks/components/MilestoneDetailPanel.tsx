@@ -249,8 +249,9 @@ export interface MilestoneCreatePanelProps {
 // New milestone toolbar control opens it in the existing ListShell detail
 // slot; there is no separate create screen. Managed System is the required
 // create input (A3/A8) and is submitted as primary_managed_system_id — the
-// body never carries managed_system_id or a status (status waits for
-// B2e-status, after the ADR).
+// body never carries managed_system_id, and this form sends no status:
+// omitted status stores the ADR-0050 column default 'planning', and status
+// changes go through the detail panel's ADR-0050 status control.
 export function MilestoneCreatePanel({
   managedSystems,
   analyticsAreas,

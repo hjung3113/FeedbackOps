@@ -1,7 +1,9 @@
 import { cn } from '@fops/ui';
 
 export interface MilestoneStatusBadgeProps {
-  /** MilestoneDto.status is a plain string (open G-status set); unknown falls back to Planning. */
+  /** MilestoneDto.status is the ADR-0050 closed set planning | in_progress |
+      blocked | released (Accepted); unknown values still fall back to
+      Planning defensively. */
   status: string;
   className?: string;
 }

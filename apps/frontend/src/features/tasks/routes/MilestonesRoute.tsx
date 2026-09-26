@@ -111,6 +111,18 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
   });
 
   const { actors } = useWorkspaceActors();
+  // Opus P3-2 — the create contract accepts only an Admin or Developer as
+  // owner_actor_id (a User owner is 422 validation.failed with out_of_scope),
+  // so the create form's Owner options carry eligible actors only. Display
+  // lookups below keep every actor so rows and panels resolve any owner's
+  // name.
+  const eligibleOwnerActors = React.useMemo(
+    () =>
+      (actors ?? []).filter(
+        (actor) => actor.role_level === 'admin' || actor.role_level === 'developer',
+      ),
+    [actors],
+  );
   const managedSystemsQuery = useQuery({
     queryKey: ['managed-systems', 'all'] as const,
     queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
@@ -411,7 +423,10 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                 managed_system_id: area.managed_system_id,
                 archived: area.archived_at !== null,
               }))}
-              actors={(actors ?? []).map(({ id, display_name }) => ({ id, display_name }))}
+              actors={eligibleOwnerActors.map(({ id, display_name }) => ({
+                id,
+                display_name,
+              }))}
               defaultManagedSystemId={
                 managedSystem !== undefined && managedSystem !== 'all' ? managedSystem : null
               }
@@ -424,7 +439,14 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
                 applySelection(createdId);
               }}
               onDirtyChange={setCreateDirty}
-              onCancel={() => setCreating(false)}
+              onCancel={() => {
+                setCreating(false);
+                // Opus P3-3 — a declined dirty-switch consumes the URL change
+                // (prevParamRef advanced), so the param effect cannot rerun.
+                // Closing the create must sync the selection with the URL as
+                // it stands now, not with the stale pre-switch value.
+                setSelectedId(selectedParam ?? null);
+              }}
             />
           ) : selectedId ? (
             <MilestoneDetailPanel

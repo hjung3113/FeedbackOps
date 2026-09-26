@@ -31,8 +31,8 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({
     actors: [
-      { id: IDS.ownerU1, display_name: '김지원', kind: 'user' },
-      { id: IDS.ownerU2, display_name: '박서연', kind: 'user' },
+      { id: IDS.ownerU1, display_name: '김지원', kind: 'user', role_level: 'admin' },
+      { id: IDS.ownerU2, display_name: '박서연', kind: 'user', role_level: 'user' },
     ],
   }),
 }));
@@ -204,11 +204,12 @@ function DetailPanelHost({ children }: { children: React.ReactNode }) {
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <DetailPanelHost>{ui}</DetailPanelHost>
     </QueryClientProvider>,
   );
+  return { view, queryClient };
 }
 
 // The backend accepts RFC4122 v4 keys; the exact set is enforced by
@@ -747,5 +748,66 @@ describe('MilestonesRoute create options (Astra finding 4)', () => {
     // The stale selection cannot ride along: it would be a 422 out_of_scope
     // create, and the user re-picks deliberately for the new system.
     expect(areaSelect).toHaveValue('');
+  });
+});
+
+// Opus P3-2 (owner half) — the create contract accepts only an Admin or
+// Developer as owner_actor_id (a User owner is 422 validation.failed with
+// out_of_scope, docs/implementation/api/milestones.md), so the Owner options
+// carry eligible actors only. Display lookups keep every actor so rows and
+// panels still resolve names for User-role owners.
+describe('MilestonesRoute create owner options (Opus P3-2)', () => {
+  it('offers only Admin/Developer owners and keeps User actors in display lookups', async () => {
+    renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+
+    // The existing row is owned by 박서연 (role_level 'user'): the display
+    // lookup resolves her avatar initial even though she is not selectable.
+    expect(screen.getByText('박')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+
+    const ownerSelect = screen.getByLabelText('Owner') as HTMLSelectElement;
+    expect(Array.from(ownerSelect.options).map((option) => option.textContent)).toEqual([
+      '—',
+      '김지원',
+    ]);
+  });
+});
+
+// Opus P3-3 — prevParamRef advances before the pending decision, so after
+// declining the dirty-create switch the effect never fires again. Cancelling
+// the create must then sync the panel with the actual URL param instead of
+// leaving the stale pre-switch selection.
+describe('MilestonesRoute create cancel sync (Opus P3-3)', () => {
+  it('selects the URL param when the create is cancelled after a declined switch', async () => {
+    vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
+    const { view, queryClient } = renderWithClient(<MilestonesRoute />);
+    await screen.findByText('MLS-1021');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Draft to keep' } });
+
+    // External URL change (Back/Forward) while the dirty create is open: the
+    // discard confirmation opens and declining keeps the draft.
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <DetailPanelHost>
+          <MilestonesRoute selectedParam={IDS.sso} />
+        </DetailPanelHost>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+    expect(screen.getByTestId('milestone-create-panel')).toBeInTheDocument();
+
+    // Giving up on the draft closes the create; the panel must now show what
+    // the URL says (param=MLS-1021), not the stale empty selection.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByTestId('milestone-create-panel')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
   });
 });

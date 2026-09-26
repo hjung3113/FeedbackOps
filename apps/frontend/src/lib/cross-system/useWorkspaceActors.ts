@@ -10,7 +10,7 @@
 // When teams ship, derive `kind` from the BE row instead of hardcoding.
 
 import { apiClient } from '@/lib/api';
-import type { ListActorsResponse } from '@fops/shared';
+import type { ListActorsResponse, RoleLevel } from '@fops/shared';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 
 export type ActorKind = 'user' | 'team';
@@ -19,6 +19,9 @@ export interface WorkspaceActor {
   id: string;
   display_name: string;
   kind: ActorKind;
+  /** Canonical BE role (admin | developer | user); consumers that need
+      eligibility (e.g. Milestone owner options) filter on it. */
+  role_level: RoleLevel;
 }
 
 export interface WorkspaceActorsPage {
@@ -44,6 +47,7 @@ export function useWorkspaceActors(): UseWorkspaceActorsResult {
         actors: res.data.actors.map((a) => ({
           id: a.id,
           display_name: a.display_name,
+          role_level: a.role_level,
           kind: 'user' as const,
         })),
       };
