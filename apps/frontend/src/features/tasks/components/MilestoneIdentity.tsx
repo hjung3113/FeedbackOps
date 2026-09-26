@@ -1,5 +1,5 @@
-import type * as React from 'react';
 import { PanelSectionTitle } from '@fops/ui';
+import type * as React from 'react';
 
 // Milestone-local presentation wrappers for the #514 final fidelity pass
 // (.review/fix-514-pixel-final-fidelity-prompt.txt). The shared pill/badge/

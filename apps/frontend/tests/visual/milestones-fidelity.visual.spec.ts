@@ -243,7 +243,7 @@ test.describe('milestone fidelity (final pixel pass)', () => {
         width: '6px',
         height: '6px',
         radius: '9999px',
-        background: `rgb(242, 196, 109)`,
+        background: 'rgb(242, 196, 109)',
         expected: 'rgb(242, 196, 109)',
       });
     }
