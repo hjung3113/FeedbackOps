@@ -496,6 +496,49 @@ describe('Task detail Milestone row (#514 B3b)', () => {
     });
   });
 
+  it('hides cached milestone identity after a denied refetch', async () => {
+    vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
+    vi.mocked(getMilestone).mockClear();
+    vi.mocked(getMilestone).mockResolvedValueOnce(milestoneFixture());
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderTaskDetailPanel(queryClient);
+
+    const row = await milestoneRow();
+    const cachedIdentity = 'MLS-1000 Q3 결제 지표 개선';
+    expect(await within(row).findByText(cachedIdentity)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledTimes(1);
+    });
+
+    let rejectRequest!: (reason: ApiError) => void;
+    const request = new Promise<MilestoneDetailDto>((_resolve, reject) => {
+      rejectRequest = reject;
+    });
+    const denied = new ApiError(403, {
+      code: 'permission.denied',
+      message: 'milestone read denied',
+    });
+    vi.mocked(getMilestone).mockReturnValueOnce(request);
+    let refetch!: Promise<void>;
+    act(() => {
+      refetch = queryClient.invalidateQueries({ queryKey: ['milestone', MILESTONE_ID] });
+    });
+    await waitFor(() => {
+      expect(getMilestone).toHaveBeenCalledTimes(2);
+    });
+
+    await act(async () => {
+      rejectRequest(denied);
+      await expect(request).rejects.toBe(denied);
+      await refetch;
+    });
+    expect(queryClient.getQueryData(['milestone', MILESTONE_ID])).toEqual(milestoneFixture());
+    await waitFor(() => {
+      expect(within(row).getByText('—')).toBeInTheDocument();
+      expect(within(row).queryByText(cachedIdentity)).not.toBeInTheDocument();
+    });
+  });
+
   it('renders no control that assigns a milestone (no POST /tasks/:id/milestone)', async () => {
     vi.mocked(getTask).mockResolvedValueOnce(taskDetailFixture(null, MILESTONE_ID));
     vi.mocked(getMilestone).mockResolvedValueOnce(milestoneFixture());

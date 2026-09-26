@@ -85,8 +85,6 @@ export function TaskDetailPanel({
     enabled: milestoneId !== null,
     staleTime: 30 * 1000,
   });
-  const milestoneNotFound =
-    milestoneQuery.error instanceof ApiError && milestoneQuery.error.status === 404;
   const { data: me } = useMe();
   // #377: backend gates Task comment GET+POST behind finding.manage + elevated
   // role on the Task's Managed System — same gate drives the composer hint.
@@ -178,7 +176,7 @@ export function TaskDetailPanel({
             />
           </FieldRow>
           <FieldRow label="Milestone">
-            {milestoneQuery.data && !milestoneNotFound ? (
+            {milestoneQuery.data && milestoneQuery.error === null ? (
               <span className="text-sm text-text-primary">
                 {milestoneQuery.data.display_id} {milestoneQuery.data.title}
               </span>
