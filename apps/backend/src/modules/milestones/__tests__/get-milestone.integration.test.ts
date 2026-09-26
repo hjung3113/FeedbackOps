@@ -179,7 +179,7 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
 
     const res = await getMilestone(devCookie, otherMilestone);
     expect(res.statusCode).toBe(403);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('permission.denied');
+    expect(res.json<{ code: string }>().code).toBe('permission.denied');
   });
 
   it('get: other-workspace Milestone is not_found.record', async () => {
@@ -219,7 +219,7 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
 
     const res = await getMilestone(devCookie, foreignMilestone.rows[0]?.id ?? randomUUID());
     expect(res.statusCode).toBe(404);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('not_found.record');
+    expect(res.json<{ code: string }>().code).toBe('not_found.record');
   });
 
   it('get: missing id is not_found.record', async () => {
@@ -228,7 +228,7 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
 
     const res = await getMilestone(devCookie, randomUUID());
     expect(res.statusCode).toBe(404);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('not_found.record');
+    expect(res.json<{ code: string }>().code).toBe('not_found.record');
   });
 
   it('get: a User is denied', async () => {
@@ -237,6 +237,6 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
 
     const res = await getMilestone(userCookie, id);
     expect(res.statusCode).toBe(403);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('permission.denied');
+    expect(res.json<{ code: string }>().code).toBe('permission.denied');
   });
 });

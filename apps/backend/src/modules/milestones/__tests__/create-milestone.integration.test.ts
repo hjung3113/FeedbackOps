@@ -205,7 +205,7 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
       payload: validBody(msId),
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('validation.failed');
+    expect(res.json<{ code: string }>().code).toBe('validation.failed');
 
     const rows = await dbHandle.pool.query<{ count: number }>(
       `select count(*)::int as count from task.milestones
@@ -221,7 +221,7 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
 
     const res = await createMilestone(devCookie, { ...validBody(msId), status: 'planning' });
     expect(res.statusCode).toBe(400);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('validation.failed');
+    expect(res.json<{ code: string }>().code).toBe('validation.failed');
 
     const rows = await dbHandle.pool.query<{ count: number }>(
       `select count(*)::int as count from task.milestones

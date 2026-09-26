@@ -190,6 +190,6 @@ describe.skipIf(!runIntegration)('milestone list (#514 A5)', () => {
   it('list: a User is denied', async () => {
     const res = await listMilestones(userCookie);
     expect(res.statusCode).toBe(403);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('permission.denied');
+    expect(res.json<{ code: string }>().code).toBe('permission.denied');
   });
 });
