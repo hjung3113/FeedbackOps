@@ -47,7 +47,9 @@ validation errors, in check order:
 side effects:
   - create task.milestones row; display_id from core.next_display_id, prefix
     MLS-
-  - status column default 'planning'; the request body has no status field
+  - optional status in planning|in_progress|blocked|released (ADR-0050).
+    Omitted status stores the column default 'planning'. A value outside
+    the set is validation.failed and writes no row.
   - owner_actor_id omitted defaults to the calling actor
 audit events:
   - milestone_created with detail { milestone_id, display_id,
@@ -137,6 +139,7 @@ request body (strict, unknown fields rejected; at least one field required):
   analytics_area_id optional nullable uuid
   start_date optional ISO date
   target_date optional ISO date
+  status optional planning|in_progress|blocked|released (ADR-0050)
 response body: 200 MilestoneDto
 auth and permission: Admin or Developer with finding.manage on the Milestone
   primary_managed_system_id. Admin bypass follows the Finding actions
@@ -162,8 +165,9 @@ validation errors, in check order:
     same errors as create
 side effects:
   - update the submitted fields
-  - milestone_updated audit with detail { milestone_id, fields }. The audit
-    has no from_status / to_status pair today.
+  - milestone_updated audit with detail { milestone_id, fields }. A status
+    change also writes from_status and to_status (ADR-0050). A title-only
+    PATCH does not.
 optimistic concurrency: If-Match on updated_at. On mismatch the API returns
   the current version and does not auto-merge.
 idempotency behavior: Idempotency-Key required; hash includes the raw request
@@ -172,15 +176,15 @@ idempotency behavior: Idempotency-Key required; hash includes the raw request
 ```
 
 `primary_managed_system_id` is not a PATCH field: the Managed System is
-immutable after create. `status` is not a PATCH field either; see below.
+immutable after create.
 
 ## Status
 
-Client status is not accepted today. The create and PATCH bodies are strict
-and contain no status field; the column default is `planning`. ADR 0050 will
-record the confirmed status labels (`planning`, `in_progress`, `blocked`,
-`released`) and the lifecycle rules before A-status lands; this section does
-not describe a transition graph, and A-status amends it.
+ADR-0050. The persisted set is `planning | in_progress | blocked | released`.
+Create and PATCH accept `status` only inside that set. PATCH may move freely
+among the four values. Release does not depend on child Tasks: `planning` to
+`released` with zero child Tasks succeeds. Assign and convert do not consult
+Milestone status. `blocked` is stored, not a list tab.
 
 ## Not implemented
 

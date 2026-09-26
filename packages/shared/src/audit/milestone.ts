@@ -21,7 +21,15 @@ export const milestoneUpdatedDetailSchema = z
   .object({
     milestone_id: z.string().uuid(),
     fields: z.array(
-      z.enum(['title', 'why', 'owner_actor_id', 'analytics_area_id', 'start_date', 'target_date']),
+      z.enum([
+        'title',
+        'why',
+        'owner_actor_id',
+        'analytics_area_id',
+        'start_date',
+        'target_date',
+        'status',
+      ]),
     ),
     from_status: z.string().optional(),
     to_status: z.string().optional(),

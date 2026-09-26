@@ -214,6 +214,7 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
             startDate: args.input.start_date,
             targetDate: args.input.target_date,
             createdBy: args.actor.actor_id,
+            ...(args.input.status !== undefined ? { status: args.input.status } : {}),
           });
 
           await deps.auditService.record(tx, {
@@ -394,11 +395,13 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
               ...(args.input.target_date !== undefined
                 ? { targetDate: args.input.target_date }
                 : {}),
+              ...(args.input.status !== undefined ? { status: args.input.status } : {}),
             },
           });
 
-          // No from_status / to_status: no code path updates status before
-          // the G-status ADR (A-status populates the pair).
+          // ADR-0050: a status change records the pair. A title-only PATCH does not.
+          const statusChanged =
+            args.input.status !== undefined && args.input.status !== milestone.status;
           await deps.auditService.record(tx, {
             workspace_id: args.actor.workspace_id,
             actor_id: args.actor.actor_id,
@@ -409,6 +412,9 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
             detail: {
               milestone_id: milestone.id,
               fields,
+              ...(statusChanged
+                ? { from_status: milestone.status, to_status: args.input.status }
+                : {}),
             },
           });
 

@@ -61,9 +61,12 @@ describe('createMilestoneRequestSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects status (strict; client status waits for the G-status ADR / A-status)', () => {
+  it('accepts a status inside the ADR-0050 set and rejects anything else', () => {
     expect(
-      createMilestoneRequestSchema.safeParse({ ...validCreate, status: 'planning' }).success,
+      createMilestoneRequestSchema.safeParse({ ...validCreate, status: 'in_progress' }).success,
+    ).toBe(true);
+    expect(
+      createMilestoneRequestSchema.safeParse({ ...validCreate, status: 'archived' }).success,
     ).toBe(false);
   });
 
@@ -130,8 +133,9 @@ describe('patchMilestoneRequestSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects status until A-status applies the G-status ADR', () => {
-    expect(patchMilestoneRequestSchema.safeParse({ status: 'released' }).success).toBe(false);
+  it('accepts a status inside the ADR-0050 set and rejects anything else', () => {
+    expect(patchMilestoneRequestSchema.safeParse({ status: 'released' }).success).toBe(true);
+    expect(patchMilestoneRequestSchema.safeParse({ status: 'done' }).success).toBe(false);
   });
 });
 

@@ -368,6 +368,15 @@ describe('migrations directory', () => {
     expect(sql).not.toMatch(/CHECK\s*\(\s*"status"/i);
     expect(sql).not.toMatch(/milestones_status_check/i);
   });
+
+  it('#514 A-status migration 0050 locks the ADR-0050 status set', () => {
+    const sql = readFileSync(join(MIGRATIONS_DIR, '0050_milestone_status.sql'), 'utf8');
+    expect(sql).toMatch(/milestones_status_check/);
+    for (const status of ['planning', 'in_progress', 'blocked', 'released']) {
+      expect(sql).toContain(`'${status}'`);
+    }
+    expect(sql).not.toMatch(/DROP TABLE/i);
+  });
 });
 
 describe('migration journal', () => {

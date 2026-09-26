@@ -229,19 +229,23 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
     expect(rows.rows[0]?.count).toBe(0);
   });
 
-  it('create: a body that includes status is validation.failed and writes no row (A4 guard until A-status)', async () => {
+  it('create: an ADR-0050 status is stored; a value outside the set writes no row', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Milestone MS');
     const devCookie = await seedScopedDeveloper(msId);
 
-    const res = await createMilestone(devCookie, { ...validBody(msId), status: 'planning' });
-    expect(res.statusCode).toBe(422);
-    expect(res.json<{ code: string }>().code).toBe('validation.failed');
+    const ok = await createMilestone(devCookie, { ...validBody(msId), status: 'in_progress' });
+    expect(ok.statusCode).toBe(201);
+    expect(ok.json<{ status: string }>().status).toBe('in_progress');
 
-    const rows = await dbHandle.pool.query<{ count: number }>(
-      `select count(*)::int as count from task.milestones
+    const bad = await createMilestone(devCookie, { ...validBody(msId), status: 'archived' });
+    expect(bad.statusCode).toBe(422);
+    expect(bad.json<{ code: string }>().code).toBe('validation.failed');
+
+    const rows = await dbHandle.pool.query<{ status: string }>(
+      `select status from task.milestones
         where workspace_id = $1 and primary_managed_system_id = $2`,
       [WORKSPACE_ID, msId],
     );
-    expect(rows.rows[0]?.count).toBe(0);
+    expect(rows.rows).toEqual([{ status: 'in_progress' }]);
   });
 });

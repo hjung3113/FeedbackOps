@@ -210,13 +210,36 @@ describe.skipIf(!runIntegration)('milestone patch (#514 A8)', () => {
     expect(body.updated_at).toBe(ifMatch);
   });
 
-  it('patch: a status-only body is validation.failed and the row is unchanged (A8 guard until A-status)', async () => {
+  it('patch: planning to released with no child Tasks succeeds and audits the pair (ADR-0050)', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
     const devCookie = await seedScopedDeveloper(ms);
     const milestone = await seedMilestone(ms);
     const ifMatch = await currentIfMatch(devCookie, milestone.id);
 
     const res = await patchMilestone(devCookie, milestone.id, { status: 'released' }, { ifMatch });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ status: string }>().status).toBe('released');
+
+    const audits = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
+      `select detail from core.audit_log
+        where workspace_id = $1 and subject_id = $2 and event_type = 'milestone_updated'`,
+      [WORKSPACE_ID, milestone.id],
+    );
+    expect(audits.rows).toHaveLength(1);
+    expect(audits.rows[0]?.detail).toMatchObject({
+      fields: ['status'],
+      from_status: 'planning',
+      to_status: 'released',
+    });
+  });
+
+  it('patch: a status outside the ADR-0050 set is validation.failed and does not write', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Patch MS');
+    const devCookie = await seedScopedDeveloper(ms);
+    const milestone = await seedMilestone(ms);
+    const ifMatch = await currentIfMatch(devCookie, milestone.id);
+
+    const res = await patchMilestone(devCookie, milestone.id, { status: 'done' }, { ifMatch });
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
 

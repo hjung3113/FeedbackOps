@@ -39,12 +39,13 @@ export const createMilestoneRequestSchema = z
     analytics_area_id: z.string().uuid().nullable().optional(),
     start_date: isoDateSchema,
     target_date: isoDateSchema,
+    // ADR-0050: optional on create; omitted stores the column default.
+    status: milestoneStatusFilterSchema.optional(),
   })
   .strict();
 export type CreateMilestoneRequest = z.infer<typeof createMilestoneRequestSchema>;
 
-// primary_managed_system_id and status are not PATCH fields. Status waits for
-// the G-status ADR (A-status amends this schema).
+// primary_managed_system_id is not a PATCH field. status is, inside ADR-0050's set.
 export const patchMilestoneRequestSchema = z
   .object({
     title: milestoneTextField.optional(),
@@ -53,11 +54,12 @@ export const patchMilestoneRequestSchema = z
     analytics_area_id: z.string().uuid().nullable().optional(),
     start_date: isoDateSchema.optional(),
     target_date: isoDateSchema.optional(),
+    status: milestoneStatusFilterSchema.optional(),
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0, {
     message:
-      'at least one of title, why, owner_actor_id, analytics_area_id, start_date, target_date is required',
+      'at least one of title, why, owner_actor_id, analytics_area_id, start_date, target_date, status is required',
   });
 export type PatchMilestoneRequest = z.infer<typeof patchMilestoneRequestSchema>;
 
@@ -69,7 +71,7 @@ export const listMilestonesQuerySchema = z
   .strict();
 export type ListMilestonesQuery = z.infer<typeof listMilestonesQuerySchema>;
 
-// status is a plain string: the persisted set is the open G-status decision.
+// ADR-0050 closed the persisted set. The DTO still accepts the stored text.
 export const milestoneDtoSchema = z
   .object({
     id: z.string().uuid(),

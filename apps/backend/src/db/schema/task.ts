@@ -29,7 +29,7 @@ export const milestones = taskSchema.table(
       .references(() => managedSystems.id),
     title: text('title').notNull(),
     why: text('why').notNull(),
-    // No check() on status: the persisted set is the open G-status ADR (#514).
+    // ADR-0050: closed set planning | in_progress | blocked | released.
     status: text('status').notNull().default('planning'),
     ownerActorId: uuid('owner_actor_id')
       .notNull()
@@ -52,6 +52,10 @@ export const milestones = taskSchema.table(
     workspaceManagedSystemIdx: index('milestones_workspace_managed_system_idx').on(
       t.workspaceId,
       t.primaryManagedSystemId,
+    ),
+    statusCheck: check(
+      'milestones_status_check',
+      sql`${t.status} in ('planning','in_progress','blocked','released')`,
     ),
   }),
 );

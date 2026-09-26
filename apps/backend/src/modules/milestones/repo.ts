@@ -47,8 +47,7 @@ const MILESTONE_SELECT = sql`
   target_date::text AS target_date, created_by, created_at, updated_at
 `;
 
-// status is deliberately not a parameter: the column default ('planning')
-// applies and the persisted set is the open G-status decision (#514).
+// Omitted status leaves the column default ('planning'). ADR-0050.
 export async function insertMilestone(
   tx: Tx,
   input: {
@@ -61,6 +60,7 @@ export async function insertMilestone(
     startDate: string;
     targetDate: string;
     createdBy: string;
+    status?: string;
   },
 ): Promise<MilestoneRow> {
   const displayRows = await tx.execute<{ v: string }>(sql`
@@ -71,16 +71,37 @@ export async function insertMilestone(
     throw new Error('next_display_id returned empty');
   }
 
+  const columns = [
+    sql`workspace_id`,
+    sql`display_id`,
+    sql`primary_managed_system_id`,
+    sql`title`,
+    sql`why`,
+    sql`owner_actor_id`,
+    sql`analytics_area_id`,
+    sql`start_date`,
+    sql`target_date`,
+    sql`created_by`,
+  ];
+  const values = [
+    sql`${input.workspaceId}`,
+    sql`${displayId}`,
+    sql`${input.primaryManagedSystemId}`,
+    sql`${input.title}`,
+    sql`${input.why}`,
+    sql`${input.ownerActorId}`,
+    sql`${input.analyticsAreaId}`,
+    sql`${input.startDate}`,
+    sql`${input.targetDate}`,
+    sql`${input.createdBy}`,
+  ];
+  if (input.status !== undefined) {
+    columns.push(sql`status`);
+    values.push(sql`${input.status}`);
+  }
   const result = await tx.execute<Record<string, unknown>>(sql`
-    INSERT INTO task.milestones (
-      workspace_id, display_id, primary_managed_system_id, title, why,
-      owner_actor_id, analytics_area_id, start_date, target_date, created_by
-    )
-    VALUES (
-      ${input.workspaceId}, ${displayId}, ${input.primaryManagedSystemId}, ${input.title},
-      ${input.why}, ${input.ownerActorId}, ${input.analyticsAreaId}, ${input.startDate},
-      ${input.targetDate}, ${input.createdBy}
-    )
+    INSERT INTO task.milestones (${sql.join(columns, sql`, `)})
+    VALUES (${sql.join(values, sql`, `)})
     RETURNING ${MILESTONE_SELECT}
   `);
   const row = result.rows[0];
@@ -142,8 +163,7 @@ export async function lockMilestoneForUpdate(
   return row ? mapMilestoneRow(row) : null;
 }
 
-// The input type deliberately has no primary_managed_system_id and no status:
-// no code path can update either column (#514 A8; status awaits G-status).
+// primary_managed_system_id stays off this type (A8). status is ADR-0050.
 export async function updateMilestone(
   tx: Tx,
   input: {
@@ -156,6 +176,7 @@ export async function updateMilestone(
       analyticsAreaId?: string | null;
       startDate?: string;
       targetDate?: string;
+      status?: string;
     };
   },
 ): Promise<MilestoneRow> {
@@ -170,6 +191,7 @@ export async function updateMilestone(
   }
   if (input.patch.startDate !== undefined) sets.push(sql`start_date = ${input.patch.startDate}`);
   if (input.patch.targetDate !== undefined) sets.push(sql`target_date = ${input.patch.targetDate}`);
+  if (input.patch.status !== undefined) sets.push(sql`status = ${input.patch.status}`);
   const result = await tx.execute<Record<string, unknown>>(sql`
     UPDATE task.milestones
        SET ${sql.join(sets, sql`, `)}
