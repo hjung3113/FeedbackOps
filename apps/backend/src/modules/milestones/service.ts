@@ -10,7 +10,7 @@ import type {
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
-import { lockAnalyticsArea } from '../analytics-areas/index.js';
+import { type LockedAnalyticsArea, lockAnalyticsArea } from '../analytics-areas/index.js';
 import { findWorkspaceActor } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
@@ -82,19 +82,26 @@ function milestoneToDto(row: MilestoneRow, progress: MilestoneProgress): Milesto
   };
 }
 
-// Same lock order and scope rules as assertConversionAnalyticsArea in
-// tasks/service.ts: lock the Managed System before the Analytics Area, or the
-// Milestone insert's FK KEY SHARE can deadlock against a concurrent AA
-// archive.
-async function assertMilestoneAnalyticsArea(args: {
+// Keep the Managed System -> Analytics Area order used by Task conversion.
+// PATCH also acquires these parent locks before its Milestone row lock; it
+// defers validation until after authorization and If-Match to preserve error
+// precedence.
+async function lockMilestoneAnalyticsArea(args: {
   tx: Tx;
   workspaceId: string;
   analyticsAreaId: string | null | undefined;
   managedSystemId: string;
-}): Promise<void> {
-  if (!args.analyticsAreaId) return;
+}): Promise<LockedAnalyticsArea | null> {
+  if (!args.analyticsAreaId) return null;
   await lockManagedSystem(args.tx, args.workspaceId, args.managedSystemId);
-  const aa = await lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
+  return lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
+}
+
+function assertMilestoneAnalyticsAreaLock(args: {
+  analyticsArea: LockedAnalyticsArea | null;
+  managedSystemId: string;
+}): void {
+  const aa = args.analyticsArea;
   if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
   if (aa.managed_system_id !== args.managedSystemId) {
     throw new HttpError('validation.failed', 'analytics_area does not belong to managed_system', {
@@ -106,6 +113,20 @@ async function assertMilestoneAnalyticsArea(args: {
       fields: [{ path: ['analytics_area_id'], code: 'parent_archived' }],
     });
   }
+}
+
+async function assertMilestoneAnalyticsArea(args: {
+  tx: Tx;
+  workspaceId: string;
+  analyticsAreaId: string | null | undefined;
+  managedSystemId: string;
+}): Promise<void> {
+  if (!args.analyticsAreaId) return;
+  const analyticsArea = await lockMilestoneAnalyticsArea(args);
+  assertMilestoneAnalyticsAreaLock({
+    analyticsArea,
+    managedSystemId: args.managedSystemId,
+  });
 }
 
 async function assertMilestoneOwner(args: {
@@ -332,6 +353,23 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
         args.idempotencyKey,
         args.requestHash,
         async () => {
+          let analyticsArea: LockedAnalyticsArea | null = null;
+          if (args.input.analytics_area_id) {
+            // The Managed System is immutable, so this unlocked read supplies
+            // its id before acquiring parent locks in Task conversion order.
+            const current = await findMilestoneById(tx, {
+              workspaceId: args.actor.workspace_id,
+              milestoneId: args.milestoneId,
+            });
+            if (!current) throw new HttpError('not_found.record', 'milestone not found');
+            analyticsArea = await lockMilestoneAnalyticsArea({
+              tx,
+              workspaceId: args.actor.workspace_id,
+              analyticsAreaId: args.input.analytics_area_id,
+              managedSystemId: current.primary_managed_system_id,
+            });
+          }
+
           const milestone = await lockMilestoneForUpdate(tx, {
             workspaceId: args.actor.workspace_id,
             milestoneId: args.milestoneId,
@@ -370,10 +408,8 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
           }
 
           if (args.input.analytics_area_id) {
-            await assertMilestoneAnalyticsArea({
-              tx,
-              workspaceId: args.actor.workspace_id,
-              analyticsAreaId: args.input.analytics_area_id,
+            assertMilestoneAnalyticsAreaLock({
+              analyticsArea,
               managedSystemId: milestone.primary_managed_system_id,
             });
           }

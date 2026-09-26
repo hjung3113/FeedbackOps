@@ -251,13 +251,16 @@ async function assertConversionAnalyticsArea(args: {
   tx: Tx;
   workspaceId: string;
   analyticsAreaId: string | null | undefined;
+  milestoneId: string | null | undefined;
   managedSystemId: string;
 }): Promise<void> {
-  if (!args.analyticsAreaId) return;
-  // Lock order MS -> AA, same as AA archive (ADR-0019 E) and VOC create; the
-  // Task insert's FK also takes a KEY SHARE on the MS, so locking the AA first
-  // would invert the order and can deadlock against a concurrent AA archive.
+  if (!args.analyticsAreaId && args.milestoneId == null) return;
+  // Lock the Managed System before either child row. When an Analytics Area is
+  // present, this matches AA archive (ADR-0019 E) and VOC create. When only a
+  // Milestone is present, it also keeps the Task insert's Managed System FK
+  // KEY SHARE request from inverting the Managed System -> Milestone order.
   await lockManagedSystem(args.tx, args.workspaceId, args.managedSystemId);
+  if (!args.analyticsAreaId) return;
   const aa = await lockAnalyticsArea(args.tx, args.workspaceId, args.analyticsAreaId);
   if (!aa) throw new HttpError('not_found.record', 'analytics area not found');
   if (aa.managed_system_id !== args.managedSystemId) {
@@ -632,6 +635,7 @@ export function createTasksService(deps: TasksServiceDeps) {
             tx,
             workspaceId: args.actor.workspace_id,
             analyticsAreaId: args.input.analytics_area_id,
+            milestoneId: args.input.milestone_id,
             managedSystemId: taskRequest.primary_managed_system_id,
           });
 
