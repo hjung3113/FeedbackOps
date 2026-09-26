@@ -34,6 +34,7 @@ describe.skipIf(!runIntegration)('milestone analytics area scope (#514 A6)', () 
   let migrateHandle: DbHandle;
   let app: FastifyInstance;
   let adminActorId: string;
+  let otherWorkspaceId = '';
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -82,6 +83,18 @@ describe.skipIf(!runIntegration)('milestone analytics area scope (#514 A6)', () 
         where workspace_id = $1 and slug like $2`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
+    if (otherWorkspaceId) {
+      await migrateHandle.pool.query('delete from core.analytics_areas where workspace_id = $1', [
+        otherWorkspaceId,
+      ]);
+      await migrateHandle.pool.query('delete from core.managed_systems where workspace_id = $1', [
+        otherWorkspaceId,
+      ]);
+      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [
+        otherWorkspaceId,
+      ]);
+      otherWorkspaceId = '';
+    }
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
   }
 
@@ -105,6 +118,28 @@ describe.skipIf(!runIntegration)('milestone analytics area scope (#514 A6)', () 
         [id, adminActorId],
       );
     }
+    return id;
+  }
+
+  async function seedForeignWorkspaceArea(): Promise<string> {
+    otherWorkspaceId = randomUUID();
+    await migrateHandle.pool.query('insert into core.workspaces (id, name) values ($1, $2)', [
+      otherWorkspaceId,
+      `AA foreign ws ${SLUG_PREFIX}`,
+    ]);
+    const foreignMs = await insertMsDirectly(
+      dbHandle,
+      otherWorkspaceId,
+      uid(SLUG_PREFIX),
+      'Foreign MS',
+    );
+    const row = await dbHandle.pool.query<{ id: string }>(
+      `insert into core.analytics_areas (workspace_id, managed_system_id, slug, name)
+       values ($1, $2, $3, $4) returning id`,
+      [otherWorkspaceId, foreignMs, uid(`${SLUG_PREFIX}-aa`), 'Foreign AA'],
+    );
+    const id = row.rows[0]?.id;
+    if (!id) throw new Error('foreign analytics area seed failed');
     return id;
   }
 
@@ -185,10 +220,50 @@ describe.skipIf(!runIntegration)('milestone analytics area scope (#514 A6)', () 
     const foreignArea = await seedArea(otherMs);
 
     const res = await createMilestone(cookie, createBody(ms, foreignArea));
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json()).toMatchObject({
       code: 'validation.failed',
       detail: { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
+    });
+  });
+
+  it('other-workspace area is not_found.record on create and patch, with no writes', async () => {
+    const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'AA MS');
+    const cookie = await seedScopedAdmin(ms);
+    const foreignWsArea = await seedForeignWorkspaceArea();
+
+    const rejected = await createMilestone(cookie, createBody(ms, foreignWsArea));
+    expect(rejected.statusCode).toBe(404);
+    expect(rejected.json<{ code: string }>().code).toBe('not_found.record');
+    const created = await dbHandle.pool.query<{ count: number }>(
+      `select count(*)::int as count from task.milestones
+        where workspace_id = $1 and primary_managed_system_id = $2`,
+      [WORKSPACE_ID, ms],
+    );
+    expect(created.rows[0]?.count).toBe(0);
+
+    const ok = await createMilestone(cookie, createBody(ms));
+    expect(ok.statusCode).toBe(201);
+    const before = ok.json<{
+      id: string;
+      analytics_area_id: string | null;
+      updated_at: string;
+    }>();
+    expect(before.analytics_area_id).toBeNull();
+
+    const patched = await patchMilestone(
+      cookie,
+      before.id,
+      { analytics_area_id: foreignWsArea },
+      before.updated_at,
+    );
+    expect(patched.statusCode).toBe(404);
+    expect(patched.json<{ code: string }>().code).toBe('not_found.record');
+
+    const after = await getMilestone(cookie, before.id);
+    expect(after.json<{ analytics_area_id: string | null; updated_at: string }>()).toMatchObject({
+      analytics_area_id: null,
+      updated_at: before.updated_at,
     });
   });
 
@@ -233,7 +308,7 @@ describe.skipIf(!runIntegration)('milestone analytics area scope (#514 A6)', () 
 
     const cases: Array<[string, number, string]> = [
       [randomUUID(), 404, 'not_found.record'],
-      [foreignArea, 400, 'validation.failed'],
+      [foreignArea, 422, 'validation.failed'],
       [archivedArea, 409, 'conflict.parent_archived'],
     ];
     for (const [areaId, expectedStatus, expectedCode] of cases) {
@@ -245,6 +320,11 @@ describe.skipIf(!runIntegration)('milestone analytics area scope (#514 A6)', () 
       );
       expect(res.statusCode).toBe(expectedStatus);
       expect(res.json<{ code: string }>().code).toBe(expectedCode);
+      if (areaId === foreignArea) {
+        expect(res.json()).toMatchObject({
+          detail: { fields: [{ path: ['analytics_area_id'], code: 'out_of_scope' }] },
+        });
+      }
     }
 
     const after = await getMilestone(cookie, before.id);
