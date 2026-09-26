@@ -67,6 +67,9 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
   const [pendingSelection, setPendingSelection] = React.useState<string | null>(null);
   const [pendingCreate, setPendingCreate] = React.useState(false);
   const [selectionConfirmOpen, setSelectionConfirmOpen] = React.useState(false);
+  // R3 followup — set while the open confirmation was triggered by a URL param
+  // change, so a decline can restore the URL to the retained selection.
+  const pendingFromUrlRef = React.useRef(false);
 
   const prevParamRef = React.useRef(selectedParam);
   React.useEffect(() => {
@@ -83,6 +86,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
     // R3 — an edited title waits for the same confirmation.
     if (creating) {
       if (createDirty) {
+        pendingFromUrlRef.current = false;
         setPendingSelection(selectedParam ?? null);
         setSelectionConfirmOpen(true);
         return;
@@ -90,10 +94,14 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
       setCreating(false);
     }
     if (detailTitleDirty) {
+      // R3 followup — remember the origin so a decline restores the URL
+      // instead of leaving it diverged from the retained selection.
+      pendingFromUrlRef.current = true;
       setPendingSelection(selectedParam ?? null);
       setSelectionConfirmOpen(true);
       return;
     }
+    pendingFromUrlRef.current = false;
     setSelectedId(selectedParam ?? null);
   }, [selectedParam, creating, createDirty, detailTitleDirty]);
 
@@ -233,6 +241,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
   function selectMilestone(id: string): void {
     // B2e fixup — accepting an existing row replaces create state; a dirty
     // create form confirms first and stays open with its draft while declined.
+    // Re-selecting the prior row intentionally exits create and stays guarded.
     if (creating) {
       if (createDirty) {
         setPendingSelection(id);
@@ -240,6 +249,11 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
         return;
       }
       setCreating(false);
+    } else if (id === selectedId) {
+      // R3 followup (midreview P2) — the shown record re-selected: a no-op.
+      // Running the confirm would clear the derived dirty flag while the
+      // editor still holds its draft, silently disarming B/New protection.
+      return;
     }
     // R3 — an edited unsaved title confirms before another record replaces
     // the panel; declining keeps the record, the editor, and the draft.
@@ -254,6 +268,7 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
   function confirmSelectionChange(): void {
     const id = pendingSelection;
     const openCreate = pendingCreate;
+    pendingFromUrlRef.current = false;
     setSelectionConfirmOpen(false);
     setPendingSelection(null);
     setPendingCreate(false);
@@ -506,6 +521,23 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
           setSelectionConfirmOpen(false);
           setPendingSelection(null);
           setPendingCreate(false);
+          // R3 followup (midreview P3) — a declined URL-driven switch restores
+          // the URL to the retained selection (view and Managed System scope
+          // preserved), reconciling prevParamRef so the restoration does not
+          // re-open the dialog. Row/New-origin declines never moved the URL.
+          if (pendingFromUrlRef.current) {
+            pendingFromUrlRef.current = false;
+            const retained = selectedId;
+            prevParamRef.current = retained ?? undefined;
+            void navigate({
+              to: '/tasks',
+              search: {
+                view: 'milestones',
+                ...(retained !== null ? { param: retained } : {}),
+                ...(managedSystem !== undefined ? { managedSystem } : {}),
+              },
+            });
+          }
         }}
       />
     </>

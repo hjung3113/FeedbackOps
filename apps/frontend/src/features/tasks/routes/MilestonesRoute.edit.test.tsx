@@ -1209,4 +1209,83 @@ describe('MilestonesRoute title-dirty guard (R3)', () => {
     expect(await screen.findByRole('heading', { name: 'Beta milestone' })).toBeInTheDocument();
     expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
   });
+
+  // R3 followup (midreview P2) — re-selecting the row that is already shown
+  // must be a no-op BEFORE the discard confirmation: confirming it cleared
+  // the route's derived dirty flag while the editor still held the draft, so
+  // the next B/New switch silently discarded the visible unsaved title.
+  // Re-selecting the prior row while the create block is open is exempt: it
+  // intentionally exits create and stays guarded.
+  it('treats same-record selection as a no-op and keeps B/New protected', async () => {
+    mockTwoRecords();
+    await openDirtyTitleEditor();
+
+    // The selected row's own title text also renders as the panel heading;
+    // the list row is the first match (list renders before the panel).
+    fireEvent.click(screen.getAllByText('SSO Stabilization')[0] as HTMLElement);
+    expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+
+    // B is still protected, and confirming it discards the draft.
+    fireEvent.click(screen.getByText('Beta milestone'));
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '이동' }));
+    expect(await screen.findByRole('heading', { name: 'Beta milestone' })).toBeInTheDocument();
+
+    // A fresh draft on B: New milestone is still protected as well.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'B draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('B draft');
+  });
+
+  // R3 followup (midreview P3) — a declined URL-driven switch restores the
+  // URL to the retained selection through the existing navigate mechanism
+  // (view and Managed System scope preserved), reconciles the previous-param
+  // ref so the restoration does not open a second dialog, and keeps the
+  // draft intact. The prior report's claim that save/cancel alone resolves
+  // the mismatch was wrong; the URL is restored here instead.
+  it('restores the URL to the retained selection when a URL switch is declined', async () => {
+    mockTwoRecords();
+    const { view, queryClient } = renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
+    await screen.findByRole('heading', { name: 'SSO Stabilization' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'SSO draft' },
+    });
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <DetailPanelHost>
+          <MilestonesRoute selectedParam={IDS.rowB} />
+        </DetailPanelHost>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('변경사항이 저장되지 않았습니다')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '계속 작성' }));
+
+    // The URL is restored to the retained record, not left at B.
+    expect(navigateMock).toHaveBeenLastCalledWith({
+      to: '/tasks',
+      search: { view: 'milestones', param: IDS.sso },
+    });
+
+    // The completed restoration rerenders param A: no second dialog, and the
+    // draft survives.
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <DetailPanelHost>
+          <MilestonesRoute selectedParam={IDS.sso} />
+        </DetailPanelHost>
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByText('변경사항이 저장되지 않았습니다')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('SSO draft');
+  });
 });
