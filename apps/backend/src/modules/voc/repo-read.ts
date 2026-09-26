@@ -85,6 +85,7 @@ export interface ListVocsRepoArgs {
   filterSeverity?: ('low' | 'medium' | 'high' | 'critical')[];
   filterReporterFacingStatus?: string[];
   filterOwner?: 'assigned' | 'unassigned';
+  filterAnalyticsAreaUnset?: boolean;
   sort:
     | 'created_at:desc'
     | 'created_at:asc'
@@ -112,6 +113,7 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     filterSeverity,
     filterReporterFacingStatus,
     filterOwner,
+    filterAnalyticsAreaUnset,
     analyticsAreaId,
   } = args;
   if (scopeFilter.kind === 'scoped' && scopeFilter.managedSystemIds.length === 0) return null;
@@ -179,6 +181,9 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     wheres.push(sql`(owner_user_id IS NOT NULL OR owner_team_id IS NOT NULL)`);
   else if (filterOwner === 'unassigned')
     wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
+  if (filterAnalyticsAreaUnset) {
+    wheres.push(sql`analytics_area_id IS NULL`);
+  }
   if (analyticsAreaId !== undefined) {
     wheres.push(sql`analytics_area_id = ${analyticsAreaId}::uuid`);
   }

@@ -894,4 +894,57 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     const lastNonNullIdx = Math.max(ids.indexOf(critVoc.id), ids.indexOf(medVoc.id), ids.indexOf(lowVoc.id));
     expect(ids.indexOf(nullVoc.id)).toBeGreaterThan(lastNonNullIdx);
   });
+
+  it('N10: filter.analytics_area=unset includes active VOCs with no Analytics Area only', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Unset Area MS');
+    const areaRes = await dbHandle.pool.query<{ id: string }>(
+      `insert into core.analytics_areas (workspace_id, managed_system_id, slug, name)
+       values ($1, $2, $3, $4)
+       returning id`,
+      [WORKSPACE_ID, msId, uid(SLUG_PREFIX), 'Assigned Analytics Area'],
+    );
+    const areaId = areaRes.rows[0]?.id;
+    if (!areaId) throw new Error('N10 analytics area insert returned no id');
+
+    const assignedVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'VOC with Analytics Area',
+    );
+    const unsetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'VOC without Analytics Area',
+    );
+    const archivedUnsetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'Archived VOC without Analytics Area',
+    );
+    await dbHandle.pool.query('update voc.vocs set analytics_area_id = $2 where id = $1', [
+      assignedVoc.id,
+      areaId,
+    ]);
+    await dbHandle.pool.query('update voc.vocs set archived_at = now() where id = $1', [
+      archivedUnsetVoc.id,
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}&filter.analytics_area=unset`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: { id: string }[] }>();
+    const ids = new Set(body.items.map((item) => item.id));
+    expect(ids).toEqual(new Set([unsetVoc.id]));
+    expect(ids).not.toContain(assignedVoc.id);
+    expect(ids).not.toContain(archivedUnsetVoc.id);
+  });
 });

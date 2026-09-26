@@ -169,3 +169,14 @@ describe('listVocsQuerySchema — filter.owner', () => {
     ).toThrow();
   });
 });
+
+describe('listVocsQuerySchema — filter.analytics_area', () => {
+  it("accepts filter.analytics_area='unset' as a flat query key", () => {
+    const result = listVocsQuerySchema.parse({
+      view: 'inbox',
+      'filter.analytics_area': 'unset',
+    });
+
+    expect(result['filter.analytics_area']).toBe('unset');
+  });
+});

@@ -17,8 +17,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.fn();
 let searchState: Record<string, unknown> = {};
+const apiClientMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tanstack/react-router', () => ({
+  createFileRoute: () => (options: unknown) => ({ options }),
   useSearch: () => searchState,
   useNavigate: () => navigateMock,
   Link: ({
@@ -51,6 +53,11 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
     </button>
   ),
 }));
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return { ...actual, apiClient: apiClientMock };
+});
 
 // ── Stub useVocList ────────────────────────────────────────────────────────────
 
@@ -151,11 +158,20 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 // VocList imports useQuery for managed-systems — stub @tanstack/react-query
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({ data: { items: [] } }),
+  useQuery: (options: {
+    queryKey?: readonly unknown[];
+    queryFn?: (context: { signal: AbortSignal }) => Promise<unknown>;
+  }) => {
+    if (options.queryKey?.[0] === 'vocs' && options.queryFn) {
+      void options.queryFn({ signal: new AbortController().signal });
+    }
+    return { data: { items: [] }, isLoading: false, error: null, refetch: vi.fn() };
+  },
 }));
 
 // ── Test harness ──────────────────────────────────────────────────────────────
 
+import { Route as vocsRoute } from '@/routes/_authed/vocs';
 import { useInboxRoute } from '../InboxRoute';
 
 function InboxTestHarness({ view }: { view: 'inbox' | 'my' }) {
@@ -174,11 +190,33 @@ describe('useInboxRoute', () => {
   beforeEach(() => {
     searchState = {};
     navigateMock.mockClear();
+    apiClientMock.mockReset();
+    apiClientMock.mockResolvedValue({ data: { items: [] } });
     useVocListMock.mockReturnValue({
       data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
       isLoading: false,
       error: null,
       refetch: vi.fn(),
+    });
+  });
+
+  it('forwards filter.analytics_area=unset from inbox search to the fetch URL', async () => {
+    const { useVocList } =
+      await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
+    useVocListMock.mockImplementation(useVocList);
+    const route = vocsRoute as unknown as {
+      options: { validateSearch: (raw: unknown) => Record<string, unknown> };
+    };
+    searchState = route.options.validateSearch({ view: 'inbox', 'filter.analytics_area': 'unset' });
+
+    render(<InboxTestHarness view="inbox" />);
+
+    await waitFor(() => {
+      expect(apiClientMock).toHaveBeenCalledWith(
+        'GET',
+        expect.stringContaining('filter.analytics_area=unset'),
+        expect.anything(),
+      );
     });
   });
 

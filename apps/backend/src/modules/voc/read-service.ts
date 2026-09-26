@@ -345,6 +345,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     const filterSeverity = query['filter.severity'];
     const filterReporterFacingStatus = query['filter.reporter_facing_status'];
     const filterOwner = query['filter.owner'];
+    const filterAnalyticsAreaUnset = query['filter.analytics_area'] === 'unset';
 
     // ── 1. View=triage: reject query.sort (server-pinned sort) ──────────────
     if (view === 'triage' && query.sort !== undefined) {
@@ -431,6 +432,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
     if (filterSeverity !== undefined) repoArgs.filterSeverity = filterSeverity;
     if (filterReporterFacingStatus !== undefined) repoArgs.filterReporterFacingStatus = filterReporterFacingStatus;
     if (filterOwner !== undefined) repoArgs.filterOwner = filterOwner;
+    if (filterAnalyticsAreaUnset) repoArgs.filterAnalyticsAreaUnset = true;
     if (decodedCursor !== undefined) repoArgs.cursor = decodedCursor;
 
     const { rows, hasMore, nextCursor: repoCursor } = await repoRead.listVocsForRead(deps.db, repoArgs);

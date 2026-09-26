@@ -52,6 +52,7 @@ interface InboxSearch {
   'filter.severity'?: string;
   'filter.reporterStatus'?: string;
   'filter.owner'?: string;
+  'filter.analytics_area'?: 'unset';
   sort?: InboxSort;
   selected?: string;
 }
@@ -181,13 +182,20 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     return out;
   }, [search]);
 
+  const apiFilters = React.useMemo(() => {
+    const analyticsArea = search['filter.analytics_area'];
+    return analyticsArea === 'unset'
+      ? { ...currentFilters, 'filter.analytics_area': [analyticsArea] }
+      : currentFilters;
+  }, [currentFilters, search['filter.analytics_area']]);
+
   // ── useVocList params ─────────────────────────────────────────────────────
 
   const vocList = useVocList({
     view,
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
     ...(view === 'inbox' ? { tab: activeTab } : {}),
-    filters: currentFilters,
+    filters: apiFilters,
     sort: currentSort,
   });
 
