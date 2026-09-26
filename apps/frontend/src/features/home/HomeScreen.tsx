@@ -1,4 +1,4 @@
-import type { DashboardSummary, TaskDto, TaskRequestDto } from '@fops/shared';
+import { DASHBOARD_HOP_ROUTES, type DashboardSummary, type TaskDto, type TaskRequestDto } from '@fops/shared';
 import { Button, PageShell } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
@@ -9,7 +9,7 @@ import { type MinePermissionRequestRow, fetchDashboardSummary, fetchPermissionRe
 import { useMe } from '@/lib/auth/useMe';
 import { HOME_COVERAGE_COPY, HOME_COPY, HOME_KPI_COPY, HOME_QUEUE_COPY, homeSeverityLabel } from '@/lib/copy/home';
 
-export const HOME_COVERAGE_HREF = '/integration/links';
+export const HOME_COVERAGE_HREF = '/integration/coverage';
 
 export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): React.ReactElement {
   const me = useMe();
@@ -54,7 +54,10 @@ export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): R
         {summary.isError ? <p className="mb-5 text-sm text-accent-danger">Home summary unavailable.</p> : <HomeSummary summary={summary.data} />}
         <div className="mt-9 grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-7">
           <MyWorkPanel tasks={myTasks.data?.items ?? []} requests={pendingRequests.data?.items ?? []} />
-          <CoveragePanel coverage={summary.data?.coverage ?? []} />
+          <CoveragePanel
+            coverage={summary.data?.coverage ?? []}
+            {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+          />
         </div>
         <div className="mt-9">
           <OpenRequestsPanel requests={openPermissionRequests.data?.requests ?? []} />
@@ -119,10 +122,29 @@ function MyWorkPanel({ tasks, requests }: { tasks: TaskDto[]; requests: TaskRequ
   </section>;
 }
 
-function CoveragePanel({ coverage }: { coverage: DashboardSummary['coverage'] }): React.ReactElement {
+function coverageHopHref(
+  id: DashboardSummary['coverage'][number]['id'],
+  managedSystemId: string | undefined,
+): string | undefined {
+  if (id === 'milestone-outcome') return undefined;
+  const route = DASHBOARD_HOP_ROUTES[id];
+  if (managedSystemId === undefined) return route;
+  const url = new URL(route, 'http://localhost');
+  url.searchParams.set('managedSystem', managedSystemId);
+  return `${url.pathname}?${url.searchParams.toString()}`;
+}
+
+function CoverageMetricRow({ item, href }: { item: DashboardSummary['coverage'][number]; href: string | undefined }): React.ReactElement {
+  const body = <><div className="flex justify-between gap-2 text-xs"><span className="text-text-primary">{HOME_COVERAGE_COPY[item.id]}</span><span className="shrink-0 tabular-nums text-text-muted">{item.value} / {item.total} · {item.percent}%</span></div><div className="mt-2 h-1 rounded-full bg-surface-row-selected"><div className={item.status === 'bad' ? 'h-1 rounded-full bg-accent-danger' : item.status === 'warn' ? 'h-1 rounded-full bg-accent-warn' : 'h-1 rounded-full bg-accent-success'} style={{ width: `${item.percent}%` }} /></div></>;
+  return href === undefined
+    ? <div data-testid={`home-coverage-row-${item.id}`}>{body}</div>
+    : <a href={href} className="block" data-testid={`home-coverage-row-${item.id}`}>{body}</a>;
+}
+
+function CoveragePanel({ coverage, managedSystemId }: { coverage: DashboardSummary['coverage']; managedSystemId?: string }): React.ReactElement {
   return <section><PanelHeading title={HOME_COPY.coverage} action={HOME_COPY.viewCoverage} href={HOME_COVERAGE_HREF} />
     <div className="space-y-4 rounded-md border border-border-subtle bg-surface-card p-4" data-testid="home-coverage">
-      {coverage.map((item) => <div key={item.id}><div className="flex justify-between gap-2 text-xs"><span className="text-text-primary">{HOME_COVERAGE_COPY[item.id]}</span><span className="shrink-0 tabular-nums text-text-muted">{item.value} / {item.total} · {item.percent}%</span></div><div className="mt-2 h-1 rounded-full bg-surface-row-selected"><div className={item.status === 'bad' ? 'h-1 rounded-full bg-accent-danger' : item.status === 'warn' ? 'h-1 rounded-full bg-accent-warn' : 'h-1 rounded-full bg-accent-success'} style={{ width: `${item.percent}%` }} /></div></div>)}
+      {coverage.map((item) => <CoverageMetricRow key={item.id} item={item} href={coverageHopHref(item.id, managedSystemId)} />)}
     </div>
   </section>;
 }

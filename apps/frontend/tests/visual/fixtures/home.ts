@@ -17,6 +17,7 @@ export const homeSummaryFixture = dashboardSummarySchema.parse({
     { id: 'finding-execution', value: 23, total: 31, percent: 74, status: 'good' },
     { id: 'high-followup', value: 41, total: 47, percent: 87, status: 'good' },
   ],
+  by_managed_system: [],
 });
 
 export const homeVisualSnapshot = 'home-action-dashboard.png';

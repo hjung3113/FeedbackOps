@@ -33,6 +33,7 @@ const vocSearchSchema = z
     'filter.severity': z.string().optional(),
     'filter.reporterStatus': z.string().optional(),
     'filter.owner': z.string().optional(),
+    'filter.analytics_area': z.literal('unset').optional(),
   })
   .strict(); // reject unknown query keys — prevents link-poisoning as #20 grows
 

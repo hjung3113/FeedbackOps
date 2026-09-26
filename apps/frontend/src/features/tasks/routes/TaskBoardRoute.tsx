@@ -94,15 +94,15 @@ function GroupByButton({ value, onChange }: { value: GroupBy; onChange: (value: 
   </div>;
 }
 
-export function TaskBoardRoute({ selectedParam, managedSystem }: { selectedParam?: string; managedSystem?: string }) {
+export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: { selectedParam?: string; managedSystem?: string; publicUpdate?: 'missing' }) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const [groupBy, setGroupBy] = React.useState<GroupBy>('status');
   const [filters, setFilters] = React.useState<Filters>({});
   const [selectedId, setSelectedId] = React.useState<string | null>(selectedParam ?? null);
   const mutationTokens = React.useRef(new Map<string, number>());
-  const tasksKey = ['tasks', managedSystem] as const;
-  const tasksQuery = useQuery({ queryKey: tasksKey, queryFn: ({ signal }) => listTasks({ signal, ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}) }), staleTime: 30_000 });
+  const tasksKey = publicUpdate === 'missing' ? (['tasks', managedSystem, 'public_update:missing'] as const) : (['tasks', managedSystem] as const);
+  const tasksQuery = useQuery({ queryKey: tasksKey, queryFn: ({ signal }) => listTasks({ signal, ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) }), staleTime: 30_000 });
   const { actors } = useWorkspaceActors();
   const systemsQuery = useQuery({ queryKey: ['managed-systems', 'all'] as const, queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }), staleTime: 600_000 });
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
@@ -149,7 +149,10 @@ export function TaskBoardRoute({ selectedParam, managedSystem }: { selectedParam
       }
     },
   });
-  function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: { view: 'board', param: id } }); }
+  function boardSearch(param?: string): { view: 'board'; param?: string; public_update?: 'missing' } {
+    return { view: 'board', ...(param !== undefined ? { param } : {}), ...(publicUpdate === 'missing' ? { public_update: publicUpdate } : {}) };
+  }
+  function selectTask(id: string) { setSelectedId(id); void navigate({ to: '/tasks', search: boardSearch(id) }); }
   function onDragEnd(event: DragEndEvent) { const task = event.active.data.current?.task as TaskDto | undefined; const target = event.over?.id; if (groupBy !== 'status') { toast.warning('Group by Status 일 때만 드래그로 상태를 변경할 수 있습니다.'); return; } if (!task || typeof target !== 'string') return; if (task.status !== target) mutation.mutate({ task, status: target as TaskStatus }); }
   function moveToNextStatus(taskId: string) {
     const task = items.find((item) => item.id === taskId);
@@ -163,7 +166,7 @@ export function TaskBoardRoute({ selectedParam, managedSystem }: { selectedParam
   }
   if (tasksQuery.error) return <div className="p-4 text-sm text-accent-danger">Task board unavailable.</div>;
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
-  return <WorkbenchShell toolbar={{ title: <span className="flex items-center gap-2">Board <OutlineBadge>{filtered.length} tasks</OutlineBadge></span>, actions: <><ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} /><GroupByButton value={groupBy} onChange={setGroupBy} /><Button variant="primary" size="sm" disabled title="Task creation API is not available yet"><Plus className="h-4 w-4" />New task</Button></> }} detailPanel={selected ? <TaskDetailPanel taskId={selected.id} actorNamesById={actorNames} managedSystemNamesById={systemNames} view="board" onMoveToNextStatus={moveToNextStatus} onClose={() => { setSelectedId(null); void navigate({ to: '/tasks', search: { view: 'board' } }); }} /> : null}>
+  return <WorkbenchShell toolbar={{ title: <span className="flex items-center gap-2">Board <OutlineBadge>{filtered.length} tasks</OutlineBadge></span>, actions: <><ListFilterButton categories={filterCategories} values={filters} onChange={setFilters} /><GroupByButton value={groupBy} onChange={setGroupBy} /><Button variant="primary" size="sm" disabled title="Task creation API is not available yet"><Plus className="h-4 w-4" />New task</Button></> }} detailPanel={selected ? <TaskDetailPanel taskId={selected.id} actorNamesById={actorNames} managedSystemNamesById={systemNames} view="board" onMoveToNextStatus={moveToNextStatus} onClose={() => { setSelectedId(null); void navigate({ to: '/tasks', search: boardSearch() }); }} /> : null}>
     <div className="flex items-stretch gap-4 border-b border-border-subtle bg-surface-canvas px-5 py-2.5">
       <StatBlock label="Total tasks" value={items.length} />
       <StatDivider />

@@ -19,6 +19,7 @@ export async function listTasks(
     status?: TaskStatus;
     assignee?: string;
     managed_system_id?: string;
+    public_update?: 'missing';
     signal?: AbortSignal;
   } = {},
 ): Promise<ListTasksResponse> {
@@ -28,6 +29,7 @@ export async function listTasks(
   if (options.managed_system_id !== undefined) {
     qs.set('managed_system_id', options.managed_system_id);
   }
+  if (options.public_update === 'missing') qs.set('public_update', 'missing');
   const path = qs.size > 0 ? `/tasks?${qs.toString()}` : '/tasks';
   const res = await apiClient<ListTasksResponse>('GET', path, {
     ...(options.signal !== undefined ? { signal: options.signal } : {}),

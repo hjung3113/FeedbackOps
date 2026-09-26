@@ -23,10 +23,12 @@ import { z } from 'zod';
 // Defaults (scope union / nothing selected) are omitted from the URL. `all` and an
 // absent managedSystem both query WITHOUT managed_system_id (the backend applies the
 // caller's effective scope union); a uuid is passed through.
+// execution=none is the coverage gap hop. Absent execution stays unfiltered.
 export const findingsSearchSchema = z
   .object({
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     selected: z.string().uuid().optional(),
+    execution: z.literal('none').optional(),
   })
   .strict();
 
@@ -42,6 +44,7 @@ export function FindingsListPage(): React.ReactElement {
   const navigate = useNavigate({ from: '/findings/' });
   const selectedId = search.selected ?? null;
   const managedSystemId = search.managedSystem === 'all' ? undefined : search.managedSystem;
+  const execution = search.execution;
 
   const selectFinding = React.useCallback(
     (id: string): void => {
@@ -64,6 +67,7 @@ export function FindingsListPage(): React.ReactElement {
   return (
     <FindingsListShell
       managedSystemId={managedSystemId}
+      execution={execution}
       selectedId={selectedId}
       onSelect={selectFinding}
       onSelectionReconciled={reconcileSelection}
@@ -73,16 +77,18 @@ export function FindingsListPage(): React.ReactElement {
 
 function FindingsListShell({
   managedSystemId,
+  execution,
   selectedId,
   onSelect,
   onSelectionReconciled,
 }: {
   managedSystemId: string | undefined;
+  execution: 'none' | undefined;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onSelectionReconciled: () => void;
 }): React.ReactElement {
-  const listQuery = useFindingsList(managedSystemId);
+  const listQuery = useFindingsList(managedSystemId, execution);
   const { actors } = useWorkspaceActors();
   const findings = listQuery.data?.items ?? [];
   const actorsById = React.useMemo(() => {

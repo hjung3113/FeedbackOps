@@ -11,6 +11,7 @@ import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
 import { entityLinks } from '../../db/schema/core.js';
+import { vocClusterMembers } from '../../db/schema/voc-cluster.js';
 import {
   vocInternalComments,
   vocPermissionDecisionsSeedFixture,
@@ -70,12 +71,28 @@ export interface ListVocsRepoArgs {
   workspaceId: string;
   scopeFilter: Scope;
   view: 'inbox' | 'my' | 'triage';
+  analyticsAreaId?: string;
   actorIdForMyFilter?: string; // required when view='my'
-  tab?: 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link' | 'high-no-link' | 'waiting';
+  tab?:
+    | 'untriaged'
+    | 'high'
+    | 'unassigned'
+    | 'similar'
+    | 'no-link'
+    | 'no-task'
+    | 'high-no-link'
+    | 'waiting';
   filterSeverity?: ('low' | 'medium' | 'high' | 'critical')[];
   filterReporterFacingStatus?: string[];
   filterOwner?: 'assigned' | 'unassigned';
-  sort: 'created_at:desc' | 'created_at:asc' | 'severity:asc' | 'severity:desc' | 'reporter_facing_status:asc' | 'triage_pinned';
+  filterAnalyticsAreaUnset?: boolean;
+  sort:
+    | 'created_at:desc'
+    | 'created_at:asc'
+    | 'severity:asc'
+    | 'severity:desc'
+    | 'reporter_facing_status:asc'
+    | 'triage_pinned';
   cursor?: { sv: string | number; id: string };
   limit: number;
 }
@@ -96,6 +113,8 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     filterSeverity,
     filterReporterFacingStatus,
     filterOwner,
+    filterAnalyticsAreaUnset,
+    analyticsAreaId,
   } = args;
   if (scopeFilter.kind === 'scoped' && scopeFilter.managedSystemIds.length === 0) return null;
   if (tab === 'similar') return null;
@@ -105,7 +124,9 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
     sql`archived_at IS NULL`,
   ];
   if (scopeFilter.kind === 'scoped') {
-    wheres.push(sql`primary_managed_system_id = ANY(${sqlUuidArray(scopeFilter.managedSystemIds)})`);
+    wheres.push(
+      sql`primary_managed_system_id = ANY(${sqlUuidArray(scopeFilter.managedSystemIds)})`,
+    );
   }
   if (view === 'my') {
     if (!actorIdForMyFilter) throw new Error('actorIdForMyFilter required for view=my');
@@ -116,22 +137,56 @@ export function buildVocListPredicate(args: VocListPredicateArgs): ReturnType<ty
   if (tab === 'untriaged') wheres.push(sql`triage_state = 'untriaged'`);
   else if (tab === 'high') wheres.push(sql`severity IN ('high', 'critical')`);
   else if (tab === 'unassigned') wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
-  else if (tab === 'waiting') wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
-  else if (tab === 'no-link' || tab === 'high-no-link') {
-    if (tab === 'high-no-link') wheres.push(sql`severity IN ('high', 'critical')`);
+  else if (tab === 'waiting')
+    wheres.push(sql`triage_state = 'untriaged' AND triage_state_review_postponed_at IS NOT NULL`);
+  else if (tab === 'no-task') {
     wheres.push(sql`NOT EXISTS (
       SELECT 1 FROM ${entityLinks} el
       WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
-        AND ((el.source_type = 'voc' AND el.source_id = ${vocs.id})
-          OR (el.target_type = 'voc' AND el.target_id = ${vocs.id}))
+        AND el.source_type = 'voc' AND el.source_id = ${vocs.id}
+        AND el.target_type = 'task'
+    )`);
+  } else if (tab === 'no-link' || tab === 'high-no-link') {
+    if (tab === 'high-no-link') wheres.push(sql`severity IN ('high', 'critical')`);
+    // #513 N1: "no link" means "no direct follow-up link" — an active
+    // entity_links row with this VOC as source and a follow-up target
+    // (finding / task / task_request). voc ↔ voc related_to and rows that
+    // only target this VOC do not count.
+    // #513 N2: a follow-up also exists when one of the VOC's clusters has
+    // an active voc_cluster → finding/task_request link. No cluster status
+    // filter (the create path links from draft clusters) and no membership
+    // soft-delete column exists; a detached link simply is not active.
+    wheres.push(sql`NOT EXISTS (
+      SELECT 1 FROM ${entityLinks} el
+      WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
+        AND el.source_type = 'voc' AND el.source_id = ${vocs.id}
+        AND el.target_type IN ('finding', 'task', 'task_request')
+    ) AND NOT EXISTS (
+      SELECT 1 FROM ${vocClusterMembers} vcm
+      WHERE vcm.voc_id = ${vocs.id}
+        AND EXISTS (
+          SELECT 1 FROM ${entityLinks} el
+          WHERE el.workspace_id = ${workspaceId} AND el.status = 'active'
+            AND el.source_type = 'voc_cluster' AND el.source_id = vcm.cluster_id
+            AND el.target_type IN ('finding', 'task_request')
+        )
     )`);
   }
-  if (filterSeverity && filterSeverity.length > 0) wheres.push(sql`severity = ANY(${sqlTextArray(filterSeverity)})`);
+  if (filterSeverity && filterSeverity.length > 0)
+    wheres.push(sql`severity = ANY(${sqlTextArray(filterSeverity)})`);
   if (filterReporterFacingStatus && filterReporterFacingStatus.length > 0) {
     wheres.push(sql`reporter_facing_status = ANY(${sqlTextArray(filterReporterFacingStatus)})`);
   }
-  if (filterOwner === 'assigned') wheres.push(sql`(owner_user_id IS NOT NULL OR owner_team_id IS NOT NULL)`);
-  else if (filterOwner === 'unassigned') wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
+  if (filterOwner === 'assigned')
+    wheres.push(sql`(owner_user_id IS NOT NULL OR owner_team_id IS NOT NULL)`);
+  else if (filterOwner === 'unassigned')
+    wheres.push(sql`owner_user_id IS NULL AND owner_team_id IS NULL`);
+  if (filterAnalyticsAreaUnset) {
+    wheres.push(sql`analytics_area_id IS NULL`);
+  }
+  if (analyticsAreaId !== undefined) {
+    wheres.push(sql`analytics_area_id = ${analyticsAreaId}::uuid`);
+  }
   return wheres;
 }
 
@@ -167,7 +222,9 @@ function mapVocRow(row: Record<string, unknown>): VocReadRow {
     severity: (row.severity as 'low' | 'medium' | 'high' | 'critical' | null) ?? null,
     reporterFacingStatus: row.reporter_facing_status as string,
     triageState: row.triage_state as string,
-    triageStateReviewPostponedAt: toDateOrNull(row.triage_state_review_postponed_at as Date | string | null | undefined),
+    triageStateReviewPostponedAt: toDateOrNull(
+      row.triage_state_review_postponed_at as Date | string | null | undefined,
+    ),
     sourceContext: row.source_context as string,
     // For list rows, descriptionRichContent is null (heavy column not fetched).
     descriptionRichContent: row.description_rich_content ?? null,
@@ -194,8 +251,24 @@ const SEVERITY_ORDINAL_CASE = sql<number>`
 export async function listVocsForRead(
   db: Db | Tx,
   args: ListVocsRepoArgs,
-): Promise<{ rows: VocReadRow[]; hasMore: boolean; nextCursor: { sv: string | number; id: string } | null }> {
-  const { workspaceId, scopeFilter, view, actorIdForMyFilter, tab, filterSeverity, filterReporterFacingStatus, filterOwner, sort, cursor, limit } = args;
+): Promise<{
+  rows: VocReadRow[];
+  hasMore: boolean;
+  nextCursor: { sv: string | number; id: string } | null;
+}> {
+  const {
+    workspaceId,
+    scopeFilter,
+    view,
+    actorIdForMyFilter,
+    tab,
+    filterSeverity,
+    filterReporterFacingStatus,
+    filterOwner,
+    sort,
+    cursor,
+    limit,
+  } = args;
 
   const wheres = buildVocListPredicate(args);
   if (wheres === null) return { rows: [], hasMore: false, nextCursor: null };
@@ -223,7 +296,7 @@ export async function listVocsForRead(
       const unassignedBool = parts[0] === '1';
       const sevOrd = Number(parts[1]);
       const isNullBool = parts[2] === '1';
-      const createdAt = parts.length >= 4 ? parts.slice(3).join('|') : parts[2] ?? '';
+      const createdAt = parts.length >= 4 ? parts.slice(3).join('|') : (parts[2] ?? '');
       // Triage sort: (unassigned DESC, isNull ASC, sevOrd DESC, createdAt ASC, id ASC).
       // "after cursor" means the row comes later in this ordering.
       cursorPredicate = sql`(
@@ -353,18 +426,18 @@ export async function listVocsForRead(
     // WHY (M6): severity nulls always last — prepend (severity IS NULL) ASC flag.
     let orderBySql: ReturnType<typeof sql>;
     if (config.severityOrdinal) {
-      orderBySql = dir === 'asc'
-        ? sql`(severity IS NULL) ASC, ${SEVERITY_ORDINAL_CASE} ASC NULLS LAST, id ASC`
-        : sql`(severity IS NULL) ASC, ${SEVERITY_ORDINAL_CASE} DESC NULLS LAST, id DESC`;
+      orderBySql =
+        dir === 'asc'
+          ? sql`(severity IS NULL) ASC, ${SEVERITY_ORDINAL_CASE} ASC NULLS LAST, id ASC`
+          : sql`(severity IS NULL) ASC, ${SEVERITY_ORDINAL_CASE} DESC NULLS LAST, id DESC`;
     } else if (config.column === 'created_at') {
-      orderBySql = dir === 'asc'
-        ? sql`created_at ASC, id ASC`
-        : sql`created_at DESC, id DESC`;
+      orderBySql = dir === 'asc' ? sql`created_at ASC, id ASC` : sql`created_at DESC, id DESC`;
     } else {
       // reporter_facing_status
-      orderBySql = dir === 'asc'
-        ? sql`reporter_facing_status ASC, id ASC`
-        : sql`reporter_facing_status DESC, id DESC`;
+      orderBySql =
+        dir === 'asc'
+          ? sql`reporter_facing_status ASC, id ASC`
+          : sql`reporter_facing_status DESC, id DESC`;
     }
 
     querySql = sql`
@@ -399,10 +472,12 @@ export async function listVocsForRead(
 
     // Use _created_at_raw (postgres text) for full microsecond precision in cursor.
     // JS Date.toISOString() loses microseconds; raw postgres text preserves them.
-    const rawCreatedAt = (last._created_at_raw as string | undefined) ?? lastMapped.createdAt.toISOString();
+    const rawCreatedAt =
+      (last._created_at_raw as string | undefined) ?? lastMapped.createdAt.toISOString();
 
     if (isTriage) {
-      const unassignedInt = lastMapped.ownerUserId === null && lastMapped.ownerTeamId === null ? 1 : 0;
+      const unassignedInt =
+        lastMapped.ownerUserId === null && lastMapped.ownerTeamId === null ? 1 : 0;
       const isNullInt = lastMapped.severity === null ? 1 : 0;
       const sevOrd = lastMapped.severity ? (SEVERITY_ORDINAL[lastMapped.severity] ?? 0) : 0;
       // Encode: `${unassigned}|${sevOrd}|${isNull}|${createdAt}` (M6: added isNull flag)
@@ -483,7 +558,9 @@ export async function selectPinnedVocListRow(
     sql`archived_at IS NULL`,
   ];
   if (scopeFilter.kind === 'scoped') {
-    wheres.push(sql`primary_managed_system_id = ANY(${sqlUuidArray(scopeFilter.managedSystemIds)})`);
+    wheres.push(
+      sql`primary_managed_system_id = ANY(${sqlUuidArray(scopeFilter.managedSystemIds)})`,
+    );
   }
 
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
@@ -521,11 +598,11 @@ export interface ConversationRow {
 }
 
 export interface SelectConversationPageArgs {
-  workspaceId: string;    // defense-in-depth: JOIN to voc.vocs v AND v.workspace_id (M2)
+  workspaceId: string; // defense-in-depth: JOIN to voc.vocs v AND v.workspace_id (M2)
   vocId: string;
-  actorId: string;        // for reporter_reply visibility filter
-  canTriage: boolean;     // gates internal_comment + sees all reporter_replies
-  isReporter: boolean;    // when true && !canTriage → only own reporter_replies
+  actorId: string; // for reporter_reply visibility filter
+  canTriage: boolean; // gates internal_comment + sees all reporter_replies
+  isReporter: boolean; // when true && !canTriage → only own reporter_replies
   cursor?: { createdAt: string; id: string }; // (createdAt, id) pagination
   limit: number;
   kind?: ConversationKind;
@@ -534,7 +611,11 @@ export interface SelectConversationPageArgs {
 export async function selectConversationPage(
   db: Db | Tx,
   args: SelectConversationPageArgs,
-): Promise<{ entries: ConversationRow[]; hasMore: boolean; nextCursor: { createdAt: string; id: string } | null }> {
+): Promise<{
+  entries: ConversationRow[];
+  hasMore: boolean;
+  nextCursor: { createdAt: string; id: string } | null;
+}> {
   const { workspaceId, vocId, actorId, canTriage, isReporter, cursor, limit, kind } = args;
 
   const fetchLimit = limit + 1;
@@ -637,9 +718,7 @@ export async function selectConversationPage(
     return { entries: [], hasMore: false, nextCursor: null };
   }
 
-  const unionSql = branches.length === 1
-    ? branches[0]!
-    : sql.join(branches, sql` UNION ALL `);
+  const unionSql = branches.length === 1 ? branches[0]! : sql.join(branches, sql` UNION ALL `);
 
   const querySql = sql`
     SELECT * FROM (${unionSql}) AS conv
@@ -701,7 +780,10 @@ export async function outOfScopeSummary(
     effectiveScope: Scope;
     readScope: Scope;
   },
-): Promise<{ count: number; severity_distribution: Record<'low' | 'medium' | 'high' | 'critical', number> } | null> {
+): Promise<{
+  count: number;
+  severity_distribution: Record<'low' | 'medium' | 'high' | 'critical', number>;
+} | null> {
   const { workspaceId, effectiveScope, readScope } = args;
 
   // readScope='all' → nothing is out-of-scope.
@@ -736,7 +818,7 @@ export async function outOfScopeSummary(
   `);
 
   const rows = result.rows;
-  const total = rows.reduce((acc, r) => acc + parseInt(r.cnt, 10), 0);
+  const total = rows.reduce((acc, r) => acc + Number.parseInt(r.cnt, 10), 0);
 
   // Zero VOCs in diff → null.
   if (total === 0) return null;
@@ -751,7 +833,7 @@ export async function outOfScopeSummary(
   for (const row of rows) {
     const sev = row.severity;
     if (sev && sev in dist) {
-      dist[sev as 'low' | 'medium' | 'high' | 'critical'] += parseInt(row.cnt, 10);
+      dist[sev as 'low' | 'medium' | 'high' | 'critical'] += Number.parseInt(row.cnt, 10);
     }
     // null severity rows are excluded from histogram per spec.
   }
@@ -878,7 +960,7 @@ export async function selectVocAttachmentCounts(
      GROUP BY voc_id
   `);
   for (const row of result.rows) {
-    out.set(row.voc_id, parseInt(row.cnt, 10));
+    out.set(row.voc_id, Number.parseInt(row.cnt, 10));
   }
   return out;
 }
@@ -921,7 +1003,7 @@ export async function selectSimilarVocCounts(
        AND source.archived_at IS NULL
      GROUP BY source.id
   `);
-  for (const row of result.rows) out.set(row.source_voc_id, parseInt(row.cnt, 10));
+  for (const row of result.rows) out.set(row.source_voc_id, Number.parseInt(row.cnt, 10));
   return out;
 }
 
@@ -946,7 +1028,7 @@ export async function selectSimilarVocCount(
        AND p.id <> ${sourceVocId}
        AND ${peerVisible}
   `);
-  return parseInt(result.rows[0]?.cnt ?? '0', 10);
+  return Number.parseInt(result.rows[0]?.cnt ?? '0', 10);
 }
 
 export async function selectSimilarVocItems(

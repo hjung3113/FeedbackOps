@@ -13,6 +13,13 @@ const dashboardActionSchema = z.object({
   intent: z.string(),
 }).strict();
 
+const dashboardCoverageCellSchema = z.object({
+  value: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  percent: z.number().int().min(0).max(100),
+  status: z.enum(['good', 'warn', 'bad']),
+}).strict();
+
 export const dashboardSummarySchema = z.object({
   kpis: z.object({
     open_voc: z.number().int().nonnegative().optional(),
@@ -37,11 +44,70 @@ export const dashboardSummarySchema = z.object({
   }).strict()),
   coverage: z.array(z.object({
     id: z.enum(['voc-task', 'finding-execution', 'milestone-outcome', 'high-followup', 'released-update', 'analytics-area']),
-    value: z.number().int().nonnegative(),
-    total: z.number().int().nonnegative(),
-    percent: z.number().int().min(0).max(100),
-    status: z.enum(['good', 'warn', 'bad']),
+    value: dashboardCoverageCellSchema.shape.value,
+    total: dashboardCoverageCellSchema.shape.total,
+    percent: dashboardCoverageCellSchema.shape.percent,
+    status: dashboardCoverageCellSchema.shape.status,
+  }).strict()),
+  by_managed_system: z.array(z.object({
+    managed_system_id: z.string().uuid(),
+    coverage: z.object({
+      'voc-task': dashboardCoverageCellSchema.optional(),
+      'finding-execution': dashboardCoverageCellSchema.optional(),
+      'high-followup': dashboardCoverageCellSchema.optional(),
+      'released-update': dashboardCoverageCellSchema.optional(),
+      'analytics-area': dashboardCoverageCellSchema.optional(),
+    }).strict().optional(),
+    action_queues: z.object({
+      'unassigned-voc': z.number().int().nonnegative().optional(),
+      'high-severity-unlinked': z.number().int().nonnegative().optional(),
+      'actionable-finding-no-execution': z.number().int().nonnegative().optional(),
+      'released-task-unresolved-voc': z.number().int().nonnegative().optional(),
+      'bad-outcome-no-followup': z.number().int().nonnegative().optional(),
+      // Workspace-level queue (plan: "see risk on N6"). The schema admits the
+      // key per the locked response shape, but the service never emits it on
+      // a system row — omitting it is the absence rule, not a zero.
+      'permission-requests-pending': z.number().int().nonnegative().optional(),
+    }).strict().optional(),
+    analytics_areas: z.array(z.object({
+      analytics_area_id: z.string().uuid(),
+      coverage: z.object({
+        'voc-task': dashboardCoverageCellSchema.optional(),
+        'high-followup': dashboardCoverageCellSchema.optional(),
+      }).strict().optional(),
+      action_queues: z.object({
+        'unassigned-voc': z.number().int().nonnegative().optional(),
+        'high-severity-unlinked': z.number().int().nonnegative().optional(),
+      }).strict().optional(),
+    }).strict()).optional(),
   }).strict()),
 }).strict();
 
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
+
+export type DashboardCoverageId = DashboardSummary['coverage'][number]['id'];
+export type DashboardActionQueueId = DashboardSummary['action_queues'][number]['id'];
+// milestone-outcome has no MVP backing queue or filter, so it stays out of the
+// hop map (plan-513: "milestone-outcome. Keep omitting it.").
+export type DashboardHopId = Exclude<DashboardCoverageId, 'milestone-outcome'> | DashboardActionQueueId;
+
+// One coverage/queue id -> filtered-list URL map, shared by the coverage page
+// and Home so the two screens cannot drift (plan-513 one-hop routes table).
+// Every target must stay listed in its route's strict search schema:
+// /vocs (tab, filter.analytics_area), /findings (execution),
+// /tasks (public_update), /surveys, /admin/permissions/requests.
+// voc-task must not reuse the no-link tab: it is the "no voc -> task link"
+// complement, not the follow-up predicate (plan-513, N9).
+export const DASHBOARD_HOP_ROUTES = {
+  'voc-task': '/vocs?view=inbox&tab=no-task',
+  'finding-execution': '/findings?execution=none',
+  'high-followup': '/vocs?view=inbox&tab=high-no-link',
+  'released-update': '/tasks?view=board&public_update=missing',
+  'analytics-area': '/vocs?view=inbox&filter.analytics_area=unset',
+  'unassigned-voc': DASHBOARD_UNASSIGNED_VOC_ROUTE,
+  'high-severity-unlinked': DASHBOARD_HIGH_SEVERITY_UNLINKED_ROUTE,
+  'actionable-finding-no-execution': '/findings?execution=none',
+  'released-task-unresolved-voc': DASHBOARD_RELEASED_TASKS_ROUTE,
+  'bad-outcome-no-followup': DASHBOARD_OUTCOME_SURVEYS_ROUTE,
+  'permission-requests-pending': DASHBOARD_PERMISSION_REQUESTS_ROUTE,
+} as const satisfies Record<DashboardHopId, string>;

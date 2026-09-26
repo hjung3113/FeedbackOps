@@ -908,6 +908,7 @@ export function createTasksService(deps: TasksServiceDeps) {
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),
       ...(assigneeActorId !== undefined ? { assigneeActorId } : {}),
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
+      ...(args.query.public_update !== undefined ? { publicUpdate: args.query.public_update } : {}),
     });
     const items: TaskDto[] = [];
     for (const row of rows) {

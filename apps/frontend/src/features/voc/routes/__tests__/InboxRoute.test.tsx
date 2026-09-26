@@ -17,8 +17,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.fn();
 let searchState: Record<string, unknown> = {};
+const apiClientMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tanstack/react-router', () => ({
+  createFileRoute: () => (options: unknown) => ({ options }),
   useSearch: () => searchState,
   useNavigate: () => navigateMock,
   Link: ({
@@ -51,6 +53,11 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
     </button>
   ),
 }));
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return { ...actual, apiClient: apiClientMock };
+});
 
 // ── Stub useVocList ────────────────────────────────────────────────────────────
 
@@ -151,11 +158,20 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 // VocList imports useQuery for managed-systems — stub @tanstack/react-query
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({ data: { items: [] } }),
+  useQuery: (options: {
+    queryKey?: readonly unknown[];
+    queryFn?: (context: { signal: AbortSignal }) => Promise<unknown>;
+  }) => {
+    if (options.queryKey?.[0] === 'vocs' && options.queryFn) {
+      void options.queryFn({ signal: new AbortController().signal });
+    }
+    return { data: { items: [] }, isLoading: false, error: null, refetch: vi.fn() };
+  },
 }));
 
 // ── Test harness ──────────────────────────────────────────────────────────────
 
+import { Route as vocsRoute } from '@/routes/_authed/vocs';
 import { useInboxRoute } from '../InboxRoute';
 
 function InboxTestHarness({ view }: { view: 'inbox' | 'my' }) {
@@ -174,11 +190,39 @@ describe('useInboxRoute', () => {
   beforeEach(() => {
     searchState = {};
     navigateMock.mockClear();
+    apiClientMock.mockReset();
+    apiClientMock.mockResolvedValue({ data: { items: [] } });
     useVocListMock.mockReturnValue({
       data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
       isLoading: false,
       error: null,
       refetch: vi.fn(),
+    });
+  });
+
+  it('forwards filter.analytics_area=unset from inbox search to the fetch URL', async () => {
+    const { useVocList } =
+      await vi.importActual<typeof import('../../hooks/useVocList')>('../../hooks/useVocList');
+    useVocListMock.mockImplementation(useVocList);
+    const route = vocsRoute as unknown as {
+      options: { validateSearch: (raw: unknown) => Record<string, unknown> };
+    };
+    searchState = route.options.validateSearch({ view: 'inbox', 'filter.analytics_area': 'unset' });
+
+    render(<InboxTestHarness view="inbox" />);
+
+    await waitFor(() => {
+      const requestUrl = apiClientMock.mock.calls.find(([method]) => method === 'GET')?.[1];
+      expect(requestUrl).toEqual(expect.any(String));
+      if (typeof requestUrl !== 'string') return;
+
+      const query = new URL(requestUrl, 'http://localhost').searchParams;
+      expect(query.get('filter.analytics_area')).toBe('unset');
+      expect(query.has('tab')).toBe(false);
+      expect(screen.getByRole('tab', { name: 'Untriaged' })).toHaveAttribute(
+        'aria-selected',
+        'false',
+      );
     });
   });
 
@@ -309,7 +353,7 @@ describe('useInboxRoute', () => {
     expect(tab).toHaveAttribute('data-state', 'active');
   });
 
-  it('AC-E6b renders the six inbox tabs in canonical value order', async () => {
+  it('AC-E6b renders the seven inbox tabs in canonical value order', async () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
@@ -322,18 +366,19 @@ describe('useInboxRoute', () => {
       'Similar',
       'No link',
       'High · no link',
+      'No task',
     ]);
 
     // Untriaged is already the active tab and Radix emits no onValueChange for
     // the selected value, so it is asserted through aria-selected instead of
-    // through a navigation. The other five each have to route.
+    // through a navigation. The other six each have to route.
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
 
     // Radix TabsTrigger activates on mousedown, not click (same note as
     // SourceContextSegmented.test.tsx:2). fireEvent.click left navigateMock at
     // 0, so the assertion below had nothing to beat.
     for (const tab of tabs.slice(1)) fireEvent.mouseDown(tab);
-    expect(navigateMock).toHaveBeenCalledTimes(5);
+    expect(navigateMock).toHaveBeenCalledTimes(6);
     expect(
       navigateMock.mock.calls.map(([call]) => {
         const reducer = (
@@ -341,7 +386,7 @@ describe('useInboxRoute', () => {
         ).search;
         return reducer({}).tab;
       }),
-    ).toEqual(['high', 'unassigned', 'similar', 'no-link', 'high-no-link']);
+    ).toEqual(['high', 'unassigned', 'similar', 'no-link', 'high-no-link', 'no-task']);
   });
 
   it('my view renders My VOCs title instead of tabs', async () => {

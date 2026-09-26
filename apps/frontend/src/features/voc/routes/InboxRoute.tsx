@@ -31,7 +31,14 @@ export interface InboxRouteProps {
 
 // ── URL state shape (subset of VocSearch) ────────────────────────────────────
 
-type InboxTab = 'untriaged' | 'high' | 'unassigned' | 'similar' | 'no-link' | 'high-no-link';
+type InboxTab =
+  | 'untriaged'
+  | 'high'
+  | 'unassigned'
+  | 'similar'
+  | 'no-link'
+  | 'high-no-link'
+  | 'no-task';
 type InboxSort =
   | 'created_at:desc'
   | 'created_at:asc'
@@ -45,6 +52,7 @@ interface InboxSearch {
   'filter.severity'?: string;
   'filter.reporterStatus'?: string;
   'filter.owner'?: string;
+  'filter.analytics_area'?: 'unset';
   sort?: InboxSort;
   selected?: string;
 }
@@ -66,6 +74,7 @@ const INBOX_TABS: ListToolbarTab[] = [
   { value: 'similar', label: 'Similar' },
   { value: 'no-link', label: 'No link' },
   { value: 'high-no-link', label: 'High · no link' },
+  { value: 'no-task', label: 'No task' },
 ];
 
 const FILTER_CATEGORIES: FilterCategory[] = [
@@ -158,7 +167,9 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   // ── Derived URL state ─────────────────────────────────────────────────────
 
-  const activeTab = search.tab ?? 'untriaged';
+  const hasAnalyticsAreaUnsetFilter = search['filter.analytics_area'] === 'unset';
+  const activeTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? '' : 'untriaged');
+  const apiTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? undefined : 'untriaged');
   const currentSort = search.sort ?? DEFAULT_SORT;
 
   // Parse comma-list filter strings into arrays for ListFilterButton.
@@ -173,13 +184,20 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     return out;
   }, [search]);
 
+  const apiFilters = React.useMemo(() => {
+    const analyticsArea = search['filter.analytics_area'];
+    return analyticsArea === 'unset'
+      ? { ...currentFilters, 'filter.analytics_area': [analyticsArea] }
+      : currentFilters;
+  }, [currentFilters, search['filter.analytics_area']]);
+
   // ── useVocList params ─────────────────────────────────────────────────────
 
   const vocList = useVocList({
     view,
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
-    ...(view === 'inbox' ? { tab: activeTab } : {}),
-    filters: currentFilters,
+    ...(view === 'inbox' && apiTab !== undefined ? { tab: apiTab } : {}),
+    filters: apiFilters,
     sort: currentSort,
   });
 

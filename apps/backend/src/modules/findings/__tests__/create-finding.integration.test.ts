@@ -77,7 +77,7 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
     await migrateHandle.pool.query(
       `delete from core.entity_links
         where workspace_id = $1
-          and relation_type = 'created_finding'
+          and relation_type in ('created_finding', 'requested_task')
           and managed_system_id in (
             select id from core.managed_systems where workspace_id = $1 and slug like $2
           )`,
@@ -360,4 +360,71 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/create-finding (#122)', () => {
     expect(ids).toContain(createdA.json<{ id: string }>().id);
     expect(ids).not.toContain(createdB.json<{ id: string }>().id);
   });
+
+  it('filters findings without execution when execution=none and leaves the unfiltered list unchanged', async () => {
+    const { msId } = await seedSource();
+    const gap = await createFindingOn(msId, 'Gap finding');
+    const linked = await createFindingOn(msId, 'Linked task finding');
+    const requested = await createFindingOn(msId, 'Requested task finding');
+    const draft = await createFindingOn(msId, 'Draft finding');
+
+    await dbHandle.pool.query(
+      `update finding.findings set status = 'active' where id = any($1::uuid[])`,
+      [[gap, linked, requested]],
+    );
+    await dbHandle.pool.query('update finding.findings set linked_task_id = $1 where id = $2', [
+      randomUUID(),
+      linked,
+    ]);
+    await dbHandle.pool.query(
+      `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, managed_system_id, created_by
+        )
+       values ($1, 'finding', $2, 'task_request', $3, 'requested_task', $4, $5)`,
+      [WORKSPACE_ID, requested, randomUUID(), msId, adminActorId],
+    );
+
+    const filtered = await app.inject({
+      method: 'GET',
+      url: `/findings?execution=none&managed_system_id=${msId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(filtered.statusCode).toBe(200);
+    const filteredIds = filtered
+      .json<{ items: Array<{ id: string }> }>()
+      .items.map((item) => item.id);
+    expect(filteredIds).toContain(gap);
+    expect(filteredIds).not.toContain(linked);
+    expect(filteredIds).not.toContain(requested);
+    expect(filteredIds).not.toContain(draft);
+
+    const unfiltered = await app.inject({
+      method: 'GET',
+      url: `/findings?managed_system_id=${msId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(unfiltered.statusCode).toBe(200);
+    const unfilteredIds = unfiltered
+      .json<{ items: Array<{ id: string }> }>()
+      .items.map((item) => item.id);
+    expect(unfilteredIds).toEqual(expect.arrayContaining([gap, linked, requested, draft]));
+  });
+
+  async function createFindingOn(msId: string, title: string): Promise<string> {
+    const voc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterActorId,
+      `${title} source`,
+    );
+    const created = await createFinding(adminCookie, voc.id, {
+      title,
+      summary: 'Execution filter fixture.',
+      severity: 'medium',
+    });
+    expect(created.statusCode).toBe(201);
+    return created.json<{ id: string }>().id;
+  }
 });

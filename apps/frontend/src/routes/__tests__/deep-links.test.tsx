@@ -1,6 +1,7 @@
 import {
   DASHBOARD_ACTIONABLE_FINDINGS_ROUTE,
   DASHBOARD_HIGH_SEVERITY_UNLINKED_ROUTE,
+  DASHBOARD_HOP_ROUTES,
   DASHBOARD_OUTCOME_SURVEYS_ROUTE,
   DASHBOARD_PERMISSION_REQUESTS_ROUTE,
   DASHBOARD_RELEASED_TASKS_ROUTE,
@@ -25,6 +26,10 @@ const dashboardLinks = [
 const links = [
   ...new Set([
     ...dashboardLinks,
+    // N13: every coverage/queue one-hop route must resolve against the strict
+    // route search schemas (tab=no-task, execution=none,
+    // filter.analytics_area=unset, public_update=missing).
+    ...Object.values(DASHBOARD_HOP_ROUTES),
     ...ALL_SIDEBAR_ENTRIES.map((entry) => entry.href),
     HOME_COVERAGE_HREF,
   ]),

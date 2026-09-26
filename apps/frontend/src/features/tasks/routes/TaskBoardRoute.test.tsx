@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
-import { TasksRouteView } from '@/routes/_authed/tasks';
+import { TasksRouteView, tasksSearchSchema } from '@/routes/_authed/tasks';
 import { ApiError } from '@/lib/api/types';
 import { toast } from 'sonner';
 
@@ -174,6 +174,37 @@ describe('TaskBoardRoute', () => {
     await waitFor(() => expect(screen.getByLabelText('Backlog column')).toHaveTextContent('TASK-1000'));
     await waitFor(() => expect(api.listTasks.mock.calls.length).toBeGreaterThan(1));
     expect(toast.error).toHaveBeenCalledWith('Task changed elsewhere. Board refreshed.');
+  });
+
+  it('filters rendered board items for public_update=missing and still drags only when grouped by status', async () => {
+    const gap = { ...task, id: '10000000-0000-0000-0000-000000000002', display_id: 'TASK-1001', title: 'Missing public update', status: 'released' as const };
+    const updated = { ...task, id: '10000000-0000-0000-0000-000000000003', display_id: 'TASK-1002', title: 'Has public update', status: 'released' as const };
+    expect(tasksSearchSchema.parse({ view: 'board', public_update: 'missing', managedSystem: 'all', param: task.id })).toEqual({
+      view: 'board', public_update: 'missing', managedSystem: 'all', param: task.id,
+    });
+    api.listTasks.mockImplementation(async (options?: { public_update?: string }) => options?.public_update === 'missing' ? { items: [gap] } : { items: [task, gap, updated] });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><TasksRouteView search={{ view: 'board', public_update: 'missing' }} /></QueryClientProvider>);
+    await screen.findByText('TASK-1001');
+    expect(screen.queryByText('TASK-1000')).not.toBeInTheDocument();
+    expect(screen.queryByText('TASK-1002')).not.toBeInTheDocument();
+    expect(api.listTasks).toHaveBeenCalledWith(expect.objectContaining({ public_update: 'missing' }));
+    expect(draggableOptions).toContainEqual(expect.objectContaining({ id: gap.id, disabled: false }));
+    draggableOptions.length = 0;
+    fireEvent.click(screen.getByRole('button', { name: 'Group by' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Priority' }));
+    await waitFor(() => expect(draggableOptions).toContainEqual(expect.objectContaining({ id: gap.id, disabled: true })));
+
+    cleanup();
+    draggableOptions.length = 0;
+    api.listTasks.mockClear();
+    renderBoard();
+    await screen.findByText('TASK-1000');
+    expect(screen.getByText('TASK-1001')).toBeInTheDocument();
+    expect(screen.getByText('TASK-1002')).toBeInTheDocument();
+    expect(api.listTasks).toHaveBeenCalled();
+    expect(api.listTasks.mock.calls.some((call) => call[0]?.public_update === 'missing')).toBe(false);
   });
 
   it('disables status drag outside status grouping and uses the toast backstop', async () => {

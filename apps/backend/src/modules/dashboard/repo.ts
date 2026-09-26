@@ -160,11 +160,34 @@ export async function countAnalyticsAreaVocCoverage(db: Db, workspaceId: string,
   return { value: Number(result.rows[0]?.value ?? 0), total: Number(result.rows[0]?.total ?? 0) };
 }
 
-export async function countVocsWithTask(db: Db, workspaceId: string, scope: Scope, managedSystemId?: string) {
+export async function countVocsWithTask(
+  db: Db,
+  workspaceId: string,
+  scope: Scope,
+  managedSystemId?: string,
+  analyticsAreaId?: string,
+) {
+  const areaPredicate = analyticsAreaId === undefined
+    ? sql`TRUE`
+    : sql`v.analytics_area_id = ${analyticsAreaId}::uuid`;
   const result = await db.execute<{ value: number | string; total: number | string }>(sql`
     SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM core.entity_links el WHERE el.workspace_id = v.workspace_id
       AND el.status = 'active' AND el.source_type = 'voc' AND el.source_id = v.id AND el.target_type = 'task'))::int AS value,
       count(*)::int AS total FROM voc.vocs v WHERE v.workspace_id = ${workspaceId} AND v.archived_at IS NULL
-      AND ${scopePredicate('v.primary_managed_system_id', scope, managedSystemId)}`);
+      AND ${scopePredicate('v.primary_managed_system_id', scope, managedSystemId)}
+      AND ${areaPredicate}`);
   return { value: Number(result.rows[0]?.value ?? 0), total: Number(result.rows[0]?.total ?? 0) };
+}
+
+export async function listVocAnalyticsAreaIds(db: Db, workspaceId: string, managedSystemId: string) {
+  const result = await db.execute<{ analytics_area_id: string }>(sql`
+    SELECT DISTINCT v.analytics_area_id::text AS analytics_area_id
+    FROM voc.vocs v
+    WHERE v.workspace_id = ${workspaceId}
+      AND v.primary_managed_system_id = ${managedSystemId}::uuid
+      AND v.archived_at IS NULL
+      AND v.analytics_area_id IS NOT NULL
+    ORDER BY v.analytics_area_id::text
+  `);
+  return result.rows.map((row) => row.analytics_area_id);
 }

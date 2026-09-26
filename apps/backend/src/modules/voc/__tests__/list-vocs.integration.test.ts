@@ -30,22 +30,36 @@ import {
 } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
+const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
-const runIntegration = Boolean(APP_URL && WORKSPACE_ID);
+const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 
 const SLUG_PREFIX = 'it-list';
 
 describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
   let dbHandle: DbHandle;
+  let migrateHandle: DbHandle;
   let app: FastifyInstance;
   let adminCookie: string;
   let adminActorId: string;
   let reporterId: string;
   let reporterCookie: string;
 
+  async function cleanupFixtures() {
+    await migrateHandle.pool.query(
+      `delete from core.entity_links
+       where workspace_id = $1 and managed_system_id in (
+         select id from core.managed_systems where workspace_id = $1 and slug like $2
+       )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
+  }
+
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
+    migrateHandle = createDb(MIGRATE_URL);
     app = await buildServer({ config: loadConfig(), dbHandle });
     await app.ready();
     adminCookie = await loginAs(app, 'mock-admin-1');
@@ -67,15 +81,13 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     reporterId = rid;
   });
 
-  beforeEach(async () => {
-    // Clean before each test so rate_limits and VOC data from previous tests don't interfere.
-    await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
-  });
+  beforeEach(cleanupFixtures);
 
   afterAll(async () => {
-    await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
+    await cleanupFixtures();
     await app?.close();
     await dbHandle?.close();
+    await migrateHandle?.close();
   });
 
   // ── AC1: view=inbox scope union ───────────────────────────────────────────
@@ -394,6 +406,42 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ items: { title: string }[] }>();
     expect(body.items.map((i) => i.title)).toContain('NoLink VOC');
+  });
+
+  it('N9: tab=no-task excludes active task links but includes finding-only and related_to-only VOCs', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'No-Task MS');
+    const taskLinkedVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'VOC with active task link');
+    const findingOnlyVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'VOC with finding only');
+    const relatedOnlyVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msId, reporterId, 'VOC with related_to only');
+
+    const link = async (
+      sourceId: string,
+      targetType: 'task' | 'finding' | 'voc',
+      targetId: string,
+      relationType: 'evidence_of' | 'created_finding' | 'related_to',
+    ) => {
+      await migrateHandle.pool.query(
+        `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, visibility, status, managed_system_id, created_by
+        ) values ($1, 'voc', $2, $3, $4, $5, 'internal_only', 'active', $6, $7)`,
+        [WORKSPACE_ID, sourceId, targetType, targetId, relationType, msId, adminActorId],
+      );
+    };
+    await link(taskLinkedVoc.id, 'task', randomUUID(), 'evidence_of');
+    await link(findingOnlyVoc.id, 'finding', randomUUID(), 'created_finding');
+    await link(relatedOnlyVoc.id, 'voc', taskLinkedVoc.id, 'related_to');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}&tab=no-task`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: { id: string }[] }>();
+    const ids = new Set(body.items.map((item) => item.id));
+    expect(ids).toEqual(new Set([findingOnlyVoc.id, relatedOnlyVoc.id]));
+    expect(ids).not.toContain(taskLinkedVoc.id);
   });
 
   // ── AC15: tab=waiting (triage view) ──────────────────────────────────────
@@ -845,5 +893,66 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     // null VOC must come after all non-null VOCs (nulls last).
     const lastNonNullIdx = Math.max(ids.indexOf(critVoc.id), ids.indexOf(medVoc.id), ids.indexOf(lowVoc.id));
     expect(ids.indexOf(nullVoc.id)).toBeGreaterThan(lastNonNullIdx);
+  });
+
+  it('N10: filter.analytics_area=unset includes active VOCs with no Analytics Area only', async () => {
+    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Unset Area MS');
+    const areaRes = await dbHandle.pool.query<{ id: string }>(
+      `insert into core.analytics_areas (workspace_id, managed_system_id, slug, name)
+       values ($1, $2, $3, $4)
+       returning id`,
+      [WORKSPACE_ID, msId, uid(SLUG_PREFIX), 'Assigned Analytics Area'],
+    );
+    const areaId = areaRes.rows[0]?.id;
+    if (!areaId) throw new Error('N10 analytics area insert returned no id');
+
+    const assignedVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'VOC with Analytics Area',
+    );
+    const unsetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'VOC without Analytics Area',
+    );
+    const triagedUnsetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'Triaged VOC without Analytics Area',
+      { triageState: 'triaged' },
+    );
+    const archivedUnsetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'Archived VOC without Analytics Area',
+    );
+    await dbHandle.pool.query('update voc.vocs set analytics_area_id = $2 where id = $1', [
+      assignedVoc.id,
+      areaId,
+    ]);
+    await dbHandle.pool.query('update voc.vocs set archived_at = now() where id = $1', [
+      archivedUnsetVoc.id,
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/vocs?view=inbox&managed_system_id=${msId}&filter.analytics_area=unset`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: { id: string }[] }>();
+    const ids = new Set(body.items.map((item) => item.id));
+    expect(ids).toEqual(new Set([unsetVoc.id, triagedUnsetVoc.id]));
+    expect(ids).not.toContain(assignedVoc.id);
+    expect(ids).not.toContain(archivedUnsetVoc.id);
   });
 });

@@ -13,7 +13,8 @@ Finding screens and hooks live in `apps/frontend/src/features/findings/`.
 Code ownership and URL mount are not the same thing here:
 
 - Owns both code and URL for Links, at `/integration/links`.
-- `/integration/evidence` and `/integration/coverage` are planned, not yet built.
+- Owns both code and URL for Coverage, at `/integration/coverage` (route file `apps/frontend/src/routes/_authed/integration/coverage.tsx`, screen `features/integration/routes/CoverageRoute.tsx`).
+- `/integration/evidence` is planned, not yet built.
 - Findings is mounted at the top-level `/findings` and `/findings/$findingId` routes and owned by `apps/frontend/src/features/findings/` (route files live in `apps/frontend/src/routes/_authed/findings/`).
 - Home may link into Integration-owned surfaces with selected object and action intent.
 

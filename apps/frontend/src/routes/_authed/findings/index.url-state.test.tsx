@@ -20,7 +20,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -283,6 +283,46 @@ describe('/findings URL state', () => {
     ).toBe(true);
     // Only the MS_1 finding is in the scoped list.
     expect(screen.queryByRole('button', { name: /FND-102/ })).not.toBeInTheDocument();
+  });
+
+  test('execution=none is sent on the findings fetch and omitted when absent', async () => {
+    const filtered: FetchCase = { requested: [] };
+    const router = renderUrlState(
+      filtered,
+      `/findings?managedSystem=${MS_1}&selected=${F1_ID}&execution=none`,
+    );
+    await waitFor(() =>
+      expect(
+        filtered.requested.some((url) => {
+          const path = new URL(url, 'http://localhost');
+          return (
+            path.pathname === '/findings' &&
+            path.searchParams.get('execution') === 'none' &&
+            path.searchParams.get('managed_system_id') === MS_1
+          );
+        }),
+      ).toBe(true),
+    );
+    expect(router.state.location.search).toEqual({
+      managedSystem: MS_1,
+      selected: F1_ID,
+      execution: 'none',
+    });
+
+    cleanup();
+    const open: FetchCase = { requested: [] };
+    renderUrlState(open, '/findings');
+    await waitFor(() =>
+      expect(
+        open.requested.some((url) => new URL(url, 'http://localhost').pathname === '/findings'),
+      ).toBe(true),
+    );
+    expect(
+      open.requested.some((url) => {
+        const path = new URL(url, 'http://localhost');
+        return path.pathname === '/findings' && path.searchParams.has('execution');
+      }),
+    ).toBe(false);
   });
 
   test('strict search schema rejects invalid values and unknown keys', () => {
