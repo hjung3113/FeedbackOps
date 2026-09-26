@@ -68,13 +68,13 @@ export function MilestoneOwnerAvatar({ name }: { name: string }) {
   );
 }
 
-// Prototype UserChip (panel.jsx): avatar + name on a 6px axis. The 12px name
-// keeps the existing shared-chip scale; only the avatar geometry was named.
+// Prototype UserChip (panel.jsx): avatar + name on a 6px axis. The name uses
+// the inherited 13px body typography and 1.4 line height.
 export function MilestoneOwnerChip({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <MilestoneOwnerAvatar name={name} />
-      <span className="text-xs leading-none text-text-primary">{name}</span>
+      <span className="text-[13px] leading-[1.4] text-text-primary">{name}</span>
     </span>
   );
 }

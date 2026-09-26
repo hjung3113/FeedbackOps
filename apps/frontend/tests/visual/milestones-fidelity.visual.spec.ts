@@ -120,11 +120,13 @@ test.describe('milestone fidelity (final pixel pass)', () => {
       const ownerValue = ownerLabel.parentElement?.querySelector(':scope > div');
       const ownerChip = ownerValue?.firstElementChild;
       const ownerAvatar = ownerChip?.firstElementChild;
+      const ownerName = ownerChip?.children[1];
       const propertiesPill = msValue?.firstElementChild;
       const propertiesBadge = areaValue?.firstElementChild;
       if (
         !(ownerChip instanceof HTMLElement) ||
         !(ownerAvatar instanceof HTMLElement) ||
+        !(ownerName instanceof HTMLElement) ||
         !(propertiesPill instanceof HTMLElement) ||
         !(propertiesBadge instanceof HTMLElement)
       ) {
@@ -183,6 +185,10 @@ test.describe('milestone fidelity (final pixel pass)', () => {
         propertiesPill: pillCss(propertiesPill, '--managed-system-power-bi'),
         propertiesBadge: badgeCss(propertiesBadge),
         evidenceBadge: evidenceBadge instanceof HTMLElement ? badgeCss(evidenceBadge) : null,
+        ownerName: {
+          fontSize: getComputedStyle(ownerName).fontSize,
+          lineHeight: getComputedStyle(ownerName).lineHeight,
+        },
         ownerAvatar: {
           width: getComputedStyle(ownerAvatar).width,
           height: getComputedStyle(ownerAvatar).height,
@@ -273,6 +279,8 @@ test.describe('milestone fidelity (final pixel pass)', () => {
     expect.soft(captured.ownerAvatar.background, 'owner avatar fill').toBe(captured.accent);
     expect.soft(captured.ownerAvatar.radius, 'owner avatar radius').toBe('9999px');
     expect.soft(captured.ownerAvatar.initial, 'owner avatar initial').toBe('박');
+    expect.soft(captured.ownerName.fontSize, 'owner name font').toBe('13px');
+    expect.soft(captured.ownerName.lineHeight, 'owner name line height').toBe('18.2px');
   });
 
   test('renders list row title, compact badges, owner avatar, and meta icons to prototype values', async ({
