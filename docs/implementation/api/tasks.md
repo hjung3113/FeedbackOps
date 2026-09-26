@@ -151,6 +151,7 @@ idempotency behavior: Idempotency-Key required; hash includes body, Task
 query:
   status optional backlog|todo|doing|review|done|released|reopened
   assignee optional uuid or me
+  milestone_id optional uuid
 response body: { items: TaskDto[] }
 auth and permission: Admin or Developer. Admin sees all workspace Tasks.
   Developer rows are filtered by finding.manage on primary_managed_system_id.

@@ -118,6 +118,7 @@ export const listTasksQuerySchema = z
     assignee: z.union([z.string().uuid(), z.literal('me')]).optional(),
     managed_system_id: z.union([z.string().uuid(), z.literal('all')]).optional(),
     public_update: z.literal('missing').optional(),
+    milestone_id: z.string().uuid().optional(),
   })
   .strict();
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;

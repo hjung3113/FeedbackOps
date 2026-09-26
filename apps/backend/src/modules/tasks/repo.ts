@@ -243,6 +243,7 @@ export async function listTasksByWorkspace(
     assigneeActorId?: string;
     managedSystemId?: string;
     publicUpdate?: 'missing';
+    milestoneId?: string;
   },
 ): Promise<TaskRow[]> {
   const predicates = [sql`workspace_id = ${input.workspaceId}`];
@@ -290,6 +291,9 @@ export async function listTasksByWorkspace(
           AND link.status = 'active'
       )
     `);
+  }
+  if (input.milestoneId !== undefined) {
+    predicates.push(sql`milestone_id = ${input.milestoneId}`);
   }
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT ${TASK_SELECT}
