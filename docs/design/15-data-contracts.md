@@ -199,7 +199,7 @@ findings
 - status: enum(draft, active, not_actionable, converted, archived), required
 - analytics_area_id: uuid, nullable
 - linked_task_id: uuid, nullable
-- linked_milestone_id: uuid, nullable
+- linked_milestone_id: uuid, nullable, FK to task.milestones.id ON DELETE RESTRICT (no application writer yet)
 - created_by: uuid, required
 - created_at: timestamp, required
 - updated_at: timestamp, required
@@ -382,7 +382,7 @@ tasks
 - priority: enum(low, medium, high, urgent), required
 - assignee_actor_id: uuid, nullable
 - due_date: date, nullable
-- milestone_id: uuid, nullable, no FK until Milestone domain lands
+- milestone_id: uuid, nullable, FK to milestones.id ON DELETE RESTRICT
 - analytics_area_id: uuid, nullable
 - source_task_request_id: uuid, nullable
 - created_by: uuid, required
@@ -423,6 +423,36 @@ Rules:
 - source is null for standalone Tasks.
 - source.task_request is derived from source_task_request_id.
 - source.finding is derived from the active (finding, task_request, requested_task) link.
+```
+
+## Milestone
+
+Owner: Task
+
+```text
+milestones
+- id: uuid, required
+- workspace_id: uuid, required
+- display_id: text, required, unique per workspace (MLS- prefix)
+- primary_managed_system_id: uuid, required, immutable after create
+- title: text, required
+- why: text, required
+- status: text, required, default 'planning' (no CHECK constraint; persisted set is the open #514 G-status ADR)
+- owner_actor_id: uuid, required
+- analytics_area_id: uuid, nullable
+- start_date: date, required
+- target_date: date, required
+- created_by: uuid, required
+- created_at: timestamp, required
+- updated_at: timestamp, required
+```
+
+Rules:
+
+```text
+- task.tasks.milestone_id references milestones.id ON DELETE RESTRICT; fops_app has no DELETE grant.
+- finding.findings.linked_milestone_id references milestones.id ON DELETE RESTRICT; application code has no writer yet.
+- primary_managed_system_id is set at create and is not a PATCH field.
 ```
 
 ## Permission Request
