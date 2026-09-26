@@ -1,7 +1,12 @@
 import type { MilestoneDto } from '@fops/shared';
 import type { AvatarUser } from '@fops/ui';
-import { ManagedSystemPill, ObjectRow, OutlineBadge, UserAvatar } from '@fops/ui';
+import { ObjectRow } from '@fops/ui';
 import { Flag, ListChecks } from 'lucide-react';
+import {
+  MilestoneManagedSystemPill,
+  MilestoneOutlineBadge,
+  MilestoneOwnerAvatar,
+} from './MilestoneIdentity';
 import { MilestoneStatusBadge } from './MilestoneStatusBadge';
 
 export interface MilestoneRowProps {
@@ -37,21 +42,25 @@ export function MilestoneRow({
       density="expanded"
       {...(onSelect !== undefined ? { onClick: () => onSelect(milestone.id) } : {})}
       title={
-        <>
-          {milestone.title}
+        // Prototype .row-title (styles.css): 13px title at weight 600, badges
+        // on a visible 8px axis; truncation stays on the title text.
+        <span className="inline-flex min-w-0 max-w-full items-center gap-2 align-middle">
+          <span className="min-w-0 truncate text-[13px] font-semibold">{milestone.title}</span>
           <MilestoneStatusBadge status={milestone.status} />
-          <ManagedSystemPill name={managedSystemName} />
-          {areaName !== undefined && <OutlineBadge>{areaName}</OutlineBadge>}
-        </>
+          <MilestoneManagedSystemPill name={managedSystemName} />
+          {areaName !== undefined && <MilestoneOutlineBadge>{areaName}</MilestoneOutlineBadge>}
+        </span>
       }
-      {...(owner !== undefined ? { trailing: <UserAvatar user={owner} size="sm" /> } : {})}
+      {...(owner !== undefined
+        ? { trailing: <MilestoneOwnerAvatar name={owner.display_name} /> }
+        : {})}
     >
       <div className="max-w-[540px] truncate text-xs text-text-secondary" title={milestone.why}>
         {milestone.why}
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+      <div className="flex flex-wrap items-center gap-2.5 text-xs text-text-muted">
         <span className="inline-flex items-center gap-1">
-          <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
+          <ListChecks className="h-2.5 w-2.5" aria-hidden="true" />
           <span className="tabular-nums">{milestone.progress.total}</span>
         </span>
         <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />
@@ -60,7 +69,7 @@ export function MilestoneRow({
         </span>
         <span className="h-1 w-1 rounded-full bg-text-muted/60" aria-hidden="true" />
         <span className="inline-flex items-center gap-1">
-          <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+          <Flag className="h-2.5 w-2.5" aria-hidden="true" />
           <span className="tabular-nums">{milestone.target_date}</span>
         </span>
       </div>

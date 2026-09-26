@@ -16,22 +16,24 @@ import {
   FieldRow,
   Input,
   InternalTaskBadge,
-  ManagedSystemPill,
   NestedTextBlock,
-  OutlineBadge,
   type PanelSection,
-  PanelSectionTitle,
   PanelTitleBlock,
   PermissionBlockedPanel,
   SeverityIndicator,
   Textarea,
   UserAvatar,
-  UserChip,
 } from '@fops/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowRight, Pencil } from 'lucide-react';
 import * as React from 'react';
+import {
+  MilestoneManagedSystemPill,
+  MilestoneOutlineBadge,
+  MilestoneOwnerChip,
+  MilestonePanelSectionTitle,
+} from './MilestoneIdentity';
 import { MilestoneStatusBadge } from './MilestoneStatusBadge';
 
 // #514 B2d — Milestone detail panel mirroring MilestoneDetailPanel in
@@ -334,10 +336,10 @@ export function MilestoneCreatePanel({
         onSubmit={submit}
       >
         <div className="px-4 pb-3 pt-4">
-          <PanelSectionTitle>New milestone</PanelSectionTitle>
+          <MilestonePanelSectionTitle>New milestone</MilestonePanelSectionTitle>
         </div>
         <div className="border-t border-border-subtle py-2">
-          <PanelSectionTitle className="px-4">Properties</PanelSectionTitle>
+          <MilestonePanelSectionTitle className="px-4">Properties</MilestonePanelSectionTitle>
           <FieldRow label="Title">
             <Input
               aria-label="Title"
@@ -623,8 +625,10 @@ function MilestoneDetailContent({
             badges={
               <>
                 <MilestoneStatusBadge status={milestone.status} />
-                <ManagedSystemPill name={managedSystemName} />
-                {areaName !== undefined && <OutlineBadge>{areaName}</OutlineBadge>}
+                <MilestoneManagedSystemPill name={managedSystemName} />
+                {areaName !== undefined && (
+                  <MilestoneOutlineBadge>{areaName}</MilestoneOutlineBadge>
+                )}
               </>
             }
           />
@@ -680,7 +684,7 @@ function MilestoneDetailContent({
               scroll padding owns alignment). */}
           <div className="mb-8 flex flex-col gap-2.5 rounded-md bg-surface-canvas p-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-text-primary">
+              <span className="text-[13px] font-medium text-text-primary">
                 {milestone.progress.released_done} of {milestone.progress.total} tasks released
               </span>
               <span className="text-sm font-semibold tabular-nums text-text-secondary">
@@ -724,7 +728,7 @@ function MilestoneDetailContent({
               border (shown in the reference baseline); only the type scale is
               corrected to the prototype 13px/1.6 (finding P3-1). */}
           <div className="mb-8">
-            <PanelSectionTitle>Why this milestone exists</PanelSectionTitle>
+            <MilestonePanelSectionTitle>Why this milestone exists</MilestonePanelSectionTitle>
             <NestedTextBlock className="p-3 text-[13px] leading-[1.6] text-text-secondary">
               {milestone.why}
             </NestedTextBlock>
@@ -735,12 +739,12 @@ function MilestoneDetailContent({
                 source Finding is linked (finding 3): navigation to the existing
                 Finding detail route only — no Finding → Milestone writer. */}
             <div className="flex items-center justify-between">
-              <PanelSectionTitle className="mb-0">Source</PanelSectionTitle>
+              <MilestonePanelSectionTitle className="mb-0">Source</MilestonePanelSectionTitle>
               {sourceFinding !== null && (
                 <Button
                   variant="subtle"
                   size="sm"
-                  className="gap-1.5"
+                  className="h-6 gap-1.5 px-2 text-[12px]"
                   onClick={() => {
                     void navigate({
                       to: '/findings/$findingId',
@@ -748,16 +752,16 @@ function MilestoneDetailContent({
                     });
                   }}
                 >
-                  <ArrowRight className="h-3 w-3" aria-hidden="true" />
+                  <ArrowRight className="h-[11px] w-[11px]" aria-hidden="true" />
                   Open finding
                 </Button>
               )}
             </div>
             {sourceFinding ? (
-              <div className="mt-2 flex flex-col gap-2 rounded-md bg-surface-canvas p-3">
+              <div className="mt-2.5 flex flex-col gap-1.5 rounded-md bg-surface-canvas p-3">
                 <span className="text-xs text-text-muted">From finding</span>
-                <div className="text-sm font-medium text-text-primary">
-                  <span className="mr-2 font-mono text-xs text-text-muted">
+                <div className="text-[13px] font-medium text-text-primary">
+                  <span className="mr-1.5 font-mono text-xs text-text-muted">
                     {sourceFinding.display_id}
                   </span>
                   {sourceFinding.title}
@@ -766,7 +770,9 @@ function MilestoneDetailContent({
                     1.55 line height (screen-milestones.jsx Source block). */}
                 <p className="text-xs leading-[1.55] text-text-muted">{sourceFinding.summary}</p>
                 <div className="flex flex-wrap gap-2">
-                  <OutlineBadge>Evidence · {sourceFinding.evidence_count}</OutlineBadge>
+                  <MilestoneOutlineBadge>
+                    Evidence · {sourceFinding.evidence_count}
+                  </MilestoneOutlineBadge>
                 </div>
               </div>
             ) : (
@@ -779,7 +785,7 @@ function MilestoneDetailContent({
           </div>
 
           <div className="mb-8">
-            <PanelSectionTitle>Properties</PanelSectionTitle>
+            <MilestonePanelSectionTitle>Properties</MilestonePanelSectionTitle>
             {/* The scroll container owns horizontal padding. These local rows
                 use the prototype's 120px value column and left alignment. */}
             <FieldRow label="Status" className={milestonePropertyFieldClassName}>
@@ -807,22 +813,23 @@ function MilestoneDetailContent({
             </FieldRow>
             {/* Managed System is create-only (A3/A8): read-only text, never an input. */}
             <FieldRow label="Managed System" className={milestonePropertyFieldClassName}>
-              <ManagedSystemPill name={managedSystemName} />
+              <MilestoneManagedSystemPill name={managedSystemName} />
             </FieldRow>
             <FieldRow label="Analytics Area" className={milestonePropertyFieldClassName}>
               {areaName !== undefined ? (
-                <OutlineBadge>{areaName}</OutlineBadge>
+                <MilestoneOutlineBadge>{areaName}</MilestoneOutlineBadge>
               ) : (
                 <span className="text-text-muted">—</span>
               )}
             </FieldRow>
             {/* Owner per finding 4: the prototype renders a UserChip here
-                (screen-milestones.jsx Properties). The shared chip composes the
-                avatar + display name; an actor missing from the directory keeps
-                the explicit — fallback (missing-actor handling preserved). */}
+                (screen-milestones.jsx Properties) — the milestone-local chip
+                keeps avatar + display name at the prototype 18px/9px avatar
+                geometry; an actor missing from the directory keeps the
+                explicit — fallback (missing-actor handling preserved). */}
             <FieldRow label="Owner" className={milestonePropertyFieldClassName}>
               {ownerName !== undefined ? (
-                <UserChip user={{ display_name: ownerName }} size="sm" />
+                <MilestoneOwnerChip name={ownerName} />
               ) : (
                 <span className="text-text-muted">—</span>
               )}
@@ -843,9 +850,9 @@ function MilestoneDetailContent({
             The prototype's Add task action has no #514 writer behind it, so the
             section ships read-only; assign/unassign lives on the Task detail. */}
         <div data-anchor="tasks" className="mb-8">
-          <PanelSectionTitle>
+          <MilestonePanelSectionTitle>
             {childTasks === undefined ? 'Tasks' : `Tasks · ${childTasks.length}`}
-          </PanelSectionTitle>
+          </MilestonePanelSectionTitle>
           {childTasksQuery.error !== null ? (
             isPermissionDenied(childTasksQuery.error) ? (
               // B2d fixup F1 — a denied child-list read is the permission
@@ -887,7 +894,7 @@ function MilestoneDetailContent({
         </div>
 
         <div data-anchor="evidence" className="mb-8 last:mb-0">
-          <PanelSectionTitle>Evidence</PanelSectionTitle>
+          <MilestonePanelSectionTitle>Evidence</MilestonePanelSectionTitle>
           {/* No evidence read path in these slices (manual linking is §7 item 14);
               empty copy only — no Outcome survey controls (FOP-OUT-014). */}
           <div className="py-3 text-center text-xs text-text-muted">
@@ -896,7 +903,7 @@ function MilestoneDetailContent({
         </div>
 
         <div data-anchor="activity" className="last:mb-0">
-          <PanelSectionTitle>Activity</PanelSectionTitle>
+          <MilestonePanelSectionTitle>Activity</MilestonePanelSectionTitle>
           {/* No audit_log read path exists (§7 item 9); the empty copy ships. */}
           <div className="py-3 text-center text-xs text-text-muted">활동 기록이 없습니다.</div>
         </div>
