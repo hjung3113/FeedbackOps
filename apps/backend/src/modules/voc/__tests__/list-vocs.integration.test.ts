@@ -920,6 +920,14 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
       reporterId,
       'VOC without Analytics Area',
     );
+    const triagedUnsetVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msId,
+      reporterId,
+      'Triaged VOC without Analytics Area',
+      { triageState: 'triaged' },
+    );
     const archivedUnsetVoc = await insertVocDirectly(
       dbHandle,
       WORKSPACE_ID,
@@ -943,7 +951,7 @@ describe.skipIf(!runIntegration)('GET /vocs (#15 C4 — list)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ items: { id: string }[] }>();
     const ids = new Set(body.items.map((item) => item.id));
-    expect(ids).toEqual(new Set([unsetVoc.id]));
+    expect(ids).toEqual(new Set([unsetVoc.id, triagedUnsetVoc.id]));
     expect(ids).not.toContain(assignedVoc.id);
     expect(ids).not.toContain(archivedUnsetVoc.id);
   });

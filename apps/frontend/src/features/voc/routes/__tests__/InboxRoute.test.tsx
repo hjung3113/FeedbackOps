@@ -212,10 +212,16 @@ describe('useInboxRoute', () => {
     render(<InboxTestHarness view="inbox" />);
 
     await waitFor(() => {
-      expect(apiClientMock).toHaveBeenCalledWith(
-        'GET',
-        expect.stringContaining('filter.analytics_area=unset'),
-        expect.anything(),
+      const requestUrl = apiClientMock.mock.calls.find(([method]) => method === 'GET')?.[1];
+      expect(requestUrl).toEqual(expect.any(String));
+      if (typeof requestUrl !== 'string') return;
+
+      const query = new URL(requestUrl, 'http://localhost').searchParams;
+      expect(query.get('filter.analytics_area')).toBe('unset');
+      expect(query.has('tab')).toBe(false);
+      expect(screen.getByRole('tab', { name: 'Untriaged' })).toHaveAttribute(
+        'aria-selected',
+        'false',
       );
     });
   });

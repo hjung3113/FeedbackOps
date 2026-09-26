@@ -167,7 +167,9 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
 
   // ── Derived URL state ─────────────────────────────────────────────────────
 
-  const activeTab = search.tab ?? 'untriaged';
+  const hasAnalyticsAreaUnsetFilter = search['filter.analytics_area'] === 'unset';
+  const activeTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? '' : 'untriaged');
+  const apiTab = search.tab ?? (hasAnalyticsAreaUnsetFilter ? undefined : 'untriaged');
   const currentSort = search.sort ?? DEFAULT_SORT;
 
   // Parse comma-list filter strings into arrays for ListFilterButton.
@@ -194,7 +196,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
   const vocList = useVocList({
     view,
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
-    ...(view === 'inbox' ? { tab: activeTab } : {}),
+    ...(view === 'inbox' && apiTab !== undefined ? { tab: apiTab } : {}),
     filters: apiFilters,
     sort: currentSort,
   });
