@@ -1,0 +1,673 @@
+{
+  "generated_at": "2026-09-27",
+  "app": "FeedbackOps frontend",
+  "capture_tool": "ego-browser skill (Chromium)",
+  "viewport": "1440x960",
+  "device_scale_factor": 1,
+  "color_scheme": "light",
+  "personas_used": [
+    "Mock Admin (admin@feedbackops.local)",
+    "Mock User (user@feedbackops.local)"
+  ],
+  "total_screenshots": 69,
+  "total_entries": 73,
+  "entries": [
+    {
+      "route": "/login",
+      "screenshot_path": "docs/current-ui/login-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "mock-login picker, no session",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Non-prod mock-login picker, 6 seed actors (Admin x2, Developer x2, User x2)."
+    },
+    {
+      "route": "/home",
+      "screenshot_path": "docs/current-ui/home-admin-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Home queue populated with Admin operational-gap groups."
+    },
+    {
+      "route": "/home",
+      "screenshot_path": "docs/current-ui/home-admin-default-fullpage.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Full-scroll capture of the same Admin Home state."
+    },
+    {
+      "route": "/home",
+      "screenshot_path": "docs/current-ui/home-user-empty.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock User",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "User Home empty state: '현재 확인할 운영 큐가 없습니다.' No assigned work, no open requests at capture time."
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 12 seeded VOCs",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Inbox list, no row selected."
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-overview.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Overview tab",
+      "notes": "Viewport capture."
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-overview-fullpage.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Overview tab",
+      "notes": "Full-scroll capture of the same panel."
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-description.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Description section",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-public.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Public tab",
+      "notes": "Public Update thread."
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-internal.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Internal tab",
+      "notes": "Internal Comment thread."
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-triage.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Triage tab",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-similar.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Similar VOC tab",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-trail.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Linked entity trail",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-compose-public-update.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Compose - Public Update",
+      "notes": "One of three compose surfaces (Public/Internal/Reporter Reply)."
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-compose-internal-note.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Compose - Internal Note",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=inbox",
+      "screenshot_path": "docs/current-ui/voc-inbox-detail-compose-reporter-reply.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Compose - Reporter Reply",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 2 seeded triage items",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Triage workspace, no row selected."
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-selected-low.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "severity=low row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel open",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-selected-medium.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "severity=medium row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel open",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-selected-high.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "severity=high row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel open",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-selected-critical.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "severity=critical row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel open",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-tab-summary.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Summary tab",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-tab-cluster.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail: Cluster tab",
+      "notes": "Cluster tab shows candidate/no-cluster state (0 clusters exist workspace-wide)."
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-owner-combobox-open.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "Owner combobox open",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-owner-selected-preview.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "Owner selected, preview state",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-owner-selected.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "Owner committed",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-area-selected.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "Analytics Area selected",
+      "notes": null
+    },
+    {
+      "route": "/vocs?view=triage",
+      "screenshot_path": "docs/current-ui/voc-triage-finding-create-not-implemented-toast.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "row selected, Create Finding clicked",
+      "render_success": true,
+      "open_modal_detail_or_tab": "toast",
+      "notes": "'Create Finding' action is not implemented yet in this build — confirmed by an in-app toast, not a guess. This is why Findings/Task Requests/VOC Clusters remain empty workspace-wide: the only creation path is gated behind this unbuilt action."
+    },
+    {
+      "route": "/voc-clusters",
+      "screenshot_path": "docs/current-ui/voc-clusters-empty.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 0 clusters",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Genuinely empty: 0 clusters exist workspace-wide because cluster/Finding creation from Triage is not implemented (see voc-triage-finding-create-not-implemented-toast.png). Detail panel state is unreachable without seeding cluster rows directly in the DB, which was out of scope for this read-only capture."
+    },
+    {
+      "route": "/findings",
+      "screenshot_path": "docs/current-ui/findings-list-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 0 findings",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Empty: '생성된 Finding이 없습니다.' Same root cause as VOC Clusters — Create Finding is not implemented."
+    },
+    {
+      "route": "/findings/:findingId (detail)",
+      "screenshot_path": null,
+      "viewport": "1440x960",
+      "fixture_or_scenario": "n/a",
+      "render_success": false,
+      "open_modal_detail_or_tab": null,
+      "notes": "NOT CAPTURED: no Finding records exist in this build and the only creation path (Triage → Create Finding) is not implemented, so no findingId is reachable to open a detail panel."
+    },
+    {
+      "route": "/tasks?view=requests",
+      "screenshot_path": "docs/current-ui/tasks-requests-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 0 task requests",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Empty: 'No Task Requests.' Downstream of the same Findings gap — Task Requests are created from Findings, and no Findings exist."
+    },
+    {
+      "route": "/tasks?view=requests",
+      "screenshot_path": "docs/current-ui/tasks-requests-all-tab.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, All tab",
+      "render_success": true,
+      "open_modal_detail_or_tab": "tab: All",
+      "notes": "Still empty; all 5 status tabs (Pending/Needs evidence/Approved/Rejected/All) show 0."
+    },
+    {
+      "route": "/tasks?view=requests (row detail)",
+      "screenshot_path": null,
+      "viewport": "1440x960",
+      "fixture_or_scenario": "n/a",
+      "render_success": false,
+      "open_modal_detail_or_tab": null,
+      "notes": "NOT CAPTURED: 0 Task Requests exist in this build (see tasks-requests-default.png), so no row is available to open a detail panel."
+    },
+    {
+      "route": "/tasks?view=backlog",
+      "screenshot_path": "docs/current-ui/tasks-backlog-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 0 tasks",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Empty backlog list."
+    },
+    {
+      "route": "/tasks?view=board",
+      "screenshot_path": "docs/current-ui/tasks-board-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 0 tasks",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Board columns (Backlog/Todo/Doing/Review) all empty."
+    },
+    {
+      "route": "/tasks?view=board",
+      "screenshot_path": "docs/current-ui/tasks-board-empty.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 0 tasks",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Explicit empty-state capture of the board."
+    },
+    {
+      "route": "/tasks?view=board",
+      "screenshot_path": "docs/current-ui/tasks-board-new-task-attempt.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 'New task' clicked",
+      "render_success": true,
+      "open_modal_detail_or_tab": "New task flow",
+      "notes": "Capture of the New Task creation attempt from the board toolbar."
+    },
+    {
+      "route": "/surveys",
+      "screenshot_path": "docs/current-ui/surveys-list-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "List view before any survey existed / baseline list chrome."
+    },
+    {
+      "route": "/surveys",
+      "screenshot_path": "docs/current-ui/surveys-create-modal.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, New survey clicked",
+      "render_success": true,
+      "open_modal_detail_or_tab": "modal: New survey",
+      "notes": null
+    },
+    {
+      "route": "/surveys",
+      "screenshot_path": "docs/current-ui/surveys-create-modal-filled.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, form filled",
+      "render_success": true,
+      "open_modal_detail_or_tab": "modal: New survey (filled)",
+      "notes": "This submission created the real seeded survey SRV-1000 used in later captures."
+    },
+    {
+      "route": "/surveys",
+      "screenshot_path": "docs/current-ui/surveys-new-survey-attempt.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": true,
+      "open_modal_detail_or_tab": "New survey flow",
+      "notes": null
+    },
+    {
+      "route": "/surveys/:surveyId?builder=true",
+      "screenshot_path": "docs/current-ui/survey-builder-empty.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "SRV-1000, no questions",
+      "render_success": true,
+      "open_modal_detail_or_tab": "builder",
+      "notes": null
+    },
+    {
+      "route": "/surveys/:surveyId?builder=true",
+      "screenshot_path": "docs/current-ui/survey-builder-with-question.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "SRV-1000, 1 question added",
+      "render_success": true,
+      "open_modal_detail_or_tab": "builder",
+      "notes": null
+    },
+    {
+      "route": "/surveys/:surveyId?builder=true",
+      "screenshot_path": "docs/current-ui/survey-builder-saved.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "SRV-1000, saved",
+      "render_success": true,
+      "open_modal_detail_or_tab": "builder",
+      "notes": null
+    },
+    {
+      "route": "/surveys/:surveyId",
+      "screenshot_path": "docs/current-ui/survey-launch-confirm-dialog.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "SRV-1000",
+      "render_success": true,
+      "open_modal_detail_or_tab": "dialog: Launch/Close confirm",
+      "notes": null
+    },
+    {
+      "route": "/surveys",
+      "screenshot_path": "docs/current-ui/surveys-list-detail-open.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "SRV-1000, open status",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel: Overview (Builder locked, Questions, Guardrail, Privacy)",
+      "notes": "Survey is 'open' so Builder question-editing is locked, matching the product rule that launched surveys can't have questions changed."
+    },
+    {
+      "route": "/surveys",
+      "screenshot_path": "docs/current-ui/surveys-list-detail-open-fullpage.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "SRV-1000, open status",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel (full scroll)",
+      "notes": null
+    },
+    {
+      "route": "/surveys",
+      "screenshot_path": "docs/current-ui/surveys-list-detail-open-locked.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "SRV-1000, open status",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel, locked builder close-up",
+      "notes": null
+    },
+    {
+      "route": "/surveys/:surveyId/results",
+      "screenshot_path": "docs/current-ui/survey-results-nodata.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "SRV-1000, 0 responses",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "No-data empty state — SRV-1000 has no responses yet in this build; a populated results state was not reachable without submitting survey responses as a respondent, which was out of scope."
+    },
+    {
+      "route": "/integration",
+      "screenshot_path": "docs/current-ui/integration-index-redirects-to-links-empty.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 0 entity links",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "'/integration' currently renders the same Entity Links tab content as '/integration/links' (confirmed via page.url() after navigation) rather than a distinct action-dashboard view — this may be intentional MVP scope or a routing gap; flagged here as observed behavior, not a guess."
+    },
+    {
+      "route": "/integration/links",
+      "screenshot_path": "docs/current-ui/integration-links-empty.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 0 entity links",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Empty: '해당 상태의 entity_link 가 없습니다.' across All/Active/Stale/Detached/Revoked tabs."
+    },
+    {
+      "route": "/integration/evidence",
+      "screenshot_path": "docs/current-ui/integration-evidence-not-found.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": false,
+      "open_modal_detail_or_tab": null,
+      "notes": "Route renders 'Not Found'. Confirms apps/frontend AGENTS.md note that Evidence is planned but not yet built. Screenshot kept as evidence of the 404, not a rendered screen."
+    },
+    {
+      "route": "/integration/coverage",
+      "screenshot_path": "docs/current-ui/integration-coverage-not-found.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": false,
+      "open_modal_detail_or_tab": null,
+      "notes": "Route renders 'Not Found'. Confirms Coverage is planned but not yet built. Screenshot kept as evidence of the 404, not a rendered screen."
+    },
+    {
+      "route": "/admin/managed-systems",
+      "screenshot_path": "docs/current-ui/admin-managed-systems-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": null
+    },
+    {
+      "route": "/admin/managed-systems",
+      "screenshot_path": "docs/current-ui/admin-managed-systems-detail.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel",
+      "notes": null
+    },
+    {
+      "route": "/admin/managed-systems",
+      "screenshot_path": "docs/current-ui/admin-managed-systems-configure-modal.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": true,
+      "open_modal_detail_or_tab": "modal: Configure",
+      "notes": null
+    },
+    {
+      "route": "/admin/managed-systems",
+      "screenshot_path": "docs/current-ui/admin-managed-systems-request-access.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock User (no permission)",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Permission-denied state: 'You need permission to view this surface.' with a Request access button."
+    },
+    {
+      "route": "/admin/managed-systems",
+      "screenshot_path": "docs/current-ui/admin-managed-systems-request-access-dialog.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock User",
+      "render_success": true,
+      "open_modal_detail_or_tab": "dialog: Request access",
+      "notes": null
+    },
+    {
+      "route": "/admin/managed-systems",
+      "screenshot_path": "docs/current-ui/admin-managed-systems-request-access-dialog-filled.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock User, reason filled",
+      "render_success": true,
+      "open_modal_detail_or_tab": "dialog: Request access (filled)",
+      "notes": null
+    },
+    {
+      "route": "/admin/managed-systems",
+      "screenshot_path": "docs/current-ui/admin-managed-systems-request-pending.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock User, request submitted",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "'Request pending' state after submitting; this request is the same one later reviewed in the admin-permissions-requests-* captures."
+    },
+    {
+      "route": "/admin/analytics-areas",
+      "screenshot_path": "docs/current-ui/admin-analytics-areas-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": null
+    },
+    {
+      "route": "/admin/analytics-areas",
+      "screenshot_path": "docs/current-ui/admin-analytics-areas-detail.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, row selected",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel",
+      "notes": null
+    },
+    {
+      "route": "/admin/permissions/requests",
+      "screenshot_path": "docs/current-ui/admin-permissions-requests-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 0 requests",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Captured before the Mock User request existed — genuine empty state, all 5 tabs at 0."
+    },
+    {
+      "route": "/admin/permissions/requests",
+      "screenshot_path": "docs/current-ui/admin-permissions-requests-pending-detail.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 1 pending request",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel: pending, decision form",
+      "notes": "Request generated live via the Mock User 'Request access' flow above (workspace.admin, workspace-wide scope)."
+    },
+    {
+      "route": "/admin/permissions/requests",
+      "screenshot_path": "docs/current-ui/admin-permissions-requests-pending-detail-fullpage.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 1 pending request",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel (full scroll)",
+      "notes": null
+    },
+    {
+      "route": "/admin/permissions/requests",
+      "screenshot_path": "docs/current-ui/admin-permissions-requests-decision-approve-selected.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel, '승인' decision selected, reason filled",
+      "notes": null
+    },
+    {
+      "route": "/admin/permissions/requests",
+      "screenshot_path": "docs/current-ui/admin-permissions-requests-approved-toast.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, decision submitted",
+      "render_success": true,
+      "open_modal_detail_or_tab": "toast: '권한 요청이 처리되었습니다.'",
+      "notes": null
+    },
+    {
+      "route": "/admin/permissions/requests",
+      "screenshot_path": "docs/current-ui/admin-permissions-requests-approved-detail.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, 승인됨 tab",
+      "render_success": true,
+      "open_modal_detail_or_tab": "detail panel: approved",
+      "notes": null
+    },
+    {
+      "route": "/admin/settings",
+      "screenshot_path": "docs/current-ui/admin-settings-default.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin",
+      "render_success": true,
+      "open_modal_detail_or_tab": null,
+      "notes": "Permission Policy / Survey Policy / Scope Defaults sections; most fields are policy-locked, 2 are inline-editable (Self-approval, Anonymity threshold)."
+    },
+    {
+      "route": "/admin/settings",
+      "screenshot_path": "docs/current-ui/admin-settings-edit-dialog.png",
+      "viewport": "1440x960",
+      "fixture_or_scenario": "Mock Admin, Edit clicked",
+      "render_success": true,
+      "open_modal_detail_or_tab": "inline edit: Self-approval of Permission Request",
+      "notes": "Inline combobox edit, not a modal dialog — the field itself becomes an editable control with a 'Done' button."
+    },
+    {
+      "route": "various",
+      "screenshot_path": null,
+      "viewport": "1440x960",
+      "fixture_or_scenario": "n/a",
+      "render_success": false,
+      "open_modal_detail_or_tab": null,
+      "notes": "NOT CAPTURED (best-effort, time-boxed): true network 'loading' states and forced 5xx 'error' states were not captured live — this build has no dev-only network-delay or fault-injection switch, and browser-level throttling was judged not worth the time given everything else in scope. The FE has a separate Playwright visual harness (apps/frontend/tests/visual) with MSW-mocked loading/error/500 fixtures per screen; that harness is the reliable source for those specific states, not this live-app capture pass."
+    },
+    {
+      "route": "various",
+      "screenshot_path": null,
+      "viewport": "1440x960",
+      "fixture_or_scenario": "n/a",
+      "render_success": false,
+      "open_modal_detail_or_tab": null,
+      "notes": "NOT CAPTURED: 'disabled/locked' controls ARE visible inline within several captured screenshots (e.g. admin-settings-default.png Locked rows, surveys-list-detail-open.png locked Builder) rather than as standalone files — no separate screenshot was made purely for a disabled control in isolation."
+    }
+  ]
+}
