@@ -5,8 +5,7 @@
 
 import { z } from 'zod';
 
-// Same parser shape as the tasks module's private isoDateSchema.
-const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+import { isoDateSchema } from '../tasks/index.js';
 
 export const milestoneStatusFilterSchema = z.enum([
   'planning',

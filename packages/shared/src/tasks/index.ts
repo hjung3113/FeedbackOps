@@ -8,7 +8,7 @@ export type { TaskStatus } from './status.js';
 export const taskPrioritySchema = z.enum(['low', 'medium', 'high', 'urgent']);
 export type TaskPriority = z.infer<typeof taskPrioritySchema>;
 
-const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const taskDtoSchema = z
   .object({
