@@ -173,9 +173,21 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
 
     const first = await createMilestone(devCookie, validBody(msId), key);
     expect(first.statusCode).toBe(201);
+
+    const counterQuery = `select next_value from core.display_counters
+        where workspace_id = $1 and entity_type = 'milestone'`;
+    const counterAfterFirst = await dbHandle.pool.query<{ next_value: string }>(counterQuery, [
+      WORKSPACE_ID,
+    ]);
+
     const second = await createMilestone(devCookie, validBody(msId), key);
     expect(second.statusCode).toBe(201);
     expect(second.json<{ id: string }>().id).toBe(first.json<{ id: string }>().id);
+
+    const counterAfterReplay = await dbHandle.pool.query<{ next_value: string }>(counterQuery, [
+      WORKSPACE_ID,
+    ]);
+    expect(counterAfterReplay.rows[0]?.next_value).toBe(counterAfterFirst.rows[0]?.next_value);
 
     const rows = await dbHandle.pool.query<{ display_id: string }>(
       'select display_id from task.milestones where id = $1',
@@ -204,7 +216,7 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
       },
       payload: validBody(msId),
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
 
     const rows = await dbHandle.pool.query<{ count: number }>(
@@ -220,7 +232,7 @@ describe.skipIf(!runIntegration)('milestone create (#514 A4)', () => {
     const devCookie = await seedScopedDeveloper(msId);
 
     const res = await createMilestone(devCookie, { ...validBody(msId), status: 'planning' });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
 
     const rows = await dbHandle.pool.query<{ count: number }>(
