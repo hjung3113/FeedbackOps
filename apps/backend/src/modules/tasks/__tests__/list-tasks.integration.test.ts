@@ -13,6 +13,8 @@ import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
   insertMsDirectly,
+  insertPublicUpdate,
+  insertVocDirectly,
   loginAs,
   uid,
 } from '../../voc/__tests__/_seed-helpers.js';
@@ -70,6 +72,14 @@ describe.skipIf(!runIntegration)('task list managed_system_id filter (#395)', ()
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    await migrateHandle.pool.query(
+      `delete from core.entity_links
+        where workspace_id = $1
+          and managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
     await migrateHandle.pool.query(
       `delete from task.tasks
         where workspace_id = $1
@@ -142,4 +152,60 @@ describe.skipIf(!runIntegration)('task list managed_system_id filter (#395)', ()
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('validation.failed');
   });
+
+  it('public_update=missing returns the released-task public-update gap and leaves the unfiltered list unchanged', async () => {
+    const gap = await insertReleased('Released without public update');
+    const updated = await insertReleased('Released with public update');
+    const unlinked = await insertReleased('Released without VOC');
+    const gapVoc = await insertVocDirectly(dbHandle, WORKSPACE_ID, msAId, adminActorId, 'Gap VOC');
+    const updatedVoc = await insertVocDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      msAId,
+      adminActorId,
+      'Updated VOC',
+    );
+    await linkVocEvidence(gapVoc.id, gap.id);
+    await linkVocEvidence(updatedVoc.id, updated.id);
+    await insertPublicUpdate(dbHandle, updatedVoc.id, adminActorId);
+
+    const filtered = await app.inject({
+      method: 'GET',
+      url: `/tasks?public_update=missing&managed_system_id=${msAId}`,
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${adminCookie}` },
+    });
+    expect(filtered.statusCode).toBe(200);
+    const filteredIds = filtered
+      .json<{ items: Array<{ id: string }> }>()
+      .items.map((item) => item.id);
+    expect(filteredIds).toContain(gap.id);
+    expect(filteredIds).not.toContain(updated.id);
+    expect(filteredIds).not.toContain(unlinked.id);
+
+    const open = await listTasks(msAId);
+    expect(open.statusCode).toBe(200);
+    const openIds = open.json<{ items: Array<{ id: string }> }>().items.map((item) => item.id);
+    expect(openIds).toEqual(expect.arrayContaining([gap.id, updated.id, unlinked.id]));
+  });
+
+  async function insertReleased(title: string): Promise<{ id: string }> {
+    return insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msAId,
+      title,
+      status: 'released',
+      createdBy: adminActorId,
+    });
+  }
+
+  async function linkVocEvidence(vocId: string, taskId: string): Promise<void> {
+    await migrateHandle.pool.query(
+      `insert into core.entity_links (
+          workspace_id, source_type, source_id, target_type, target_id,
+          relation_type, managed_system_id, created_by
+        )
+       values ($1, 'voc', $2, 'task', $3, 'evidence_of', $4, $5)`,
+      [WORKSPACE_ID, vocId, taskId, msAId, adminActorId],
+    );
+  }
 });

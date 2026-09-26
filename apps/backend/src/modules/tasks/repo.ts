@@ -242,6 +242,7 @@ export async function listTasksByWorkspace(
     status?: TaskStatus;
     assigneeActorId?: string;
     managedSystemId?: string;
+    publicUpdate?: 'missing';
   },
 ): Promise<TaskRow[]> {
   const predicates = [sql`workspace_id = ${input.workspaceId}`];
@@ -251,6 +252,44 @@ export async function listTasksByWorkspace(
   }
   if (input.managedSystemId !== undefined) {
     predicates.push(sql`primary_managed_system_id = ${input.managedSystemId}`);
+  }
+  // Gap side of countReleasedTasksWithPublicUpdate (dashboard/repo.ts):
+  // released, in that denominator, and not in that numerator. Do not import it.
+  if (input.publicUpdate === 'missing') {
+    predicates.push(sql`
+      status = 'released'
+      AND EXISTS (
+        SELECT 1
+        FROM core.entity_links link
+        JOIN voc.vocs voc
+          ON voc.id = link.source_id
+         AND voc.workspace_id = link.workspace_id
+         AND voc.archived_at IS NULL
+        WHERE link.workspace_id = task.tasks.workspace_id
+          AND link.source_type = 'voc'
+          AND link.target_type = 'task'
+          AND link.target_id = task.tasks.id
+          AND link.relation_type = 'evidence_of'
+          AND link.status = 'active'
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM core.entity_links link
+        JOIN voc.vocs voc
+          ON voc.id = link.source_id
+         AND voc.workspace_id = link.workspace_id
+         AND voc.archived_at IS NULL
+        JOIN voc.voc_public_updates public_update
+          ON public_update.voc_id = voc.id
+         AND public_update.skip_public_update = false
+        WHERE link.workspace_id = task.tasks.workspace_id
+          AND link.source_type = 'voc'
+          AND link.target_type = 'task'
+          AND link.target_id = task.tasks.id
+          AND link.relation_type = 'evidence_of'
+          AND link.status = 'active'
+      )
+    `);
   }
   const result = await (db as Db).execute<Record<string, unknown>>(sql`
     SELECT ${TASK_SELECT}
