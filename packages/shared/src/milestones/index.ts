@@ -1,10 +1,24 @@
 // #514 A3 — shared Milestone schemas.
 // DTO field names are the milestone column names; timestamps are ISO strings.
-// `progress` lands with B1c; `source_finding` (A9) is on the detail DTO only.
-
+// `progress` (B1c) sits on both the list DTO and the detail DTO.
 import { z } from 'zod';
 
 import { isoDateSchema } from '../tasks/index.js';
+
+// #514 B1c — child-Task progress buckets: released_done = done + released
+// (B1 formula); in_flight = doing + review + reopened (counting reopened as
+// in flight is the design §7 item 4 proposal); queued = backlog + todo;
+// total = child count; percent = total === 0 ? 0 : round(100*released_done/total).
+export const milestoneProgressSchema = z
+  .object({
+    released_done: z.number().int().nonnegative(),
+    in_flight: z.number().int().nonnegative(),
+    queued: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    percent: z.number().int().min(0).max(100),
+  })
+  .strict();
+export type MilestoneProgress = z.infer<typeof milestoneProgressSchema>;
 
 export const milestoneStatusFilterSchema = z.enum([
   'planning',
@@ -72,6 +86,7 @@ export const milestoneDtoSchema = z
     created_by: z.string().uuid(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
+    progress: milestoneProgressSchema,
   })
   .strict();
 export type MilestoneDto = z.infer<typeof milestoneDtoSchema>;

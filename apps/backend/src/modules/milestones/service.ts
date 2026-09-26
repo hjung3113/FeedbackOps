@@ -3,6 +3,7 @@ import type {
   ListMilestonesQuery,
   MilestoneDetailDto,
   MilestoneDto,
+  MilestoneProgress,
   PatchMilestoneRequest,
 } from '@fops/shared';
 
@@ -17,6 +18,7 @@ import { checkFindingManage, hasElevatedFindingRole } from '../findings/authoriz
 import { findSourceFindingForMilestone } from '../findings/index.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { type MilestoneTaskCounts, countTasksByMilestone } from '../tasks/index.js';
 import {
   type MilestoneRow,
   findMilestoneById,
@@ -39,7 +41,28 @@ export interface MilestonesServiceDeps {
   idempotencyService: IdempotencyService;
 }
 
-function milestoneToDto(row: MilestoneRow): MilestoneDto {
+// #514 B1c — child-Task progress buckets: released_done = done + released
+// (B1 formula); in_flight = doing + review + reopened (counting reopened as
+// in flight is the design §7 item 4 proposal); queued = backlog + todo;
+// total = child count; percent = total === 0 ? 0 : round(100*released_done/total).
+// GROUP BY omits empty Milestones, so a missing id reads as all zeros.
+function toMilestoneProgress(counts: MilestoneTaskCounts | undefined): MilestoneProgress {
+  const { released_done, in_flight, queued, total } = counts ?? {
+    released_done: 0,
+    in_flight: 0,
+    queued: 0,
+    total: 0,
+  };
+  return {
+    released_done,
+    in_flight,
+    queued,
+    total,
+    percent: total === 0 ? 0 : Math.round((100 * released_done) / total),
+  };
+}
+
+function milestoneToDto(row: MilestoneRow, progress: MilestoneProgress): MilestoneDto {
   return {
     id: row.id,
     workspace_id: row.workspace_id,
@@ -55,6 +78,7 @@ function milestoneToDto(row: MilestoneRow): MilestoneDto {
     created_by: row.created_by,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
+    progress,
   };
 }
 
@@ -206,7 +230,7 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
             },
           });
 
-          return { status: 201, body: milestoneToDto(row) };
+          return { status: 201, body: milestoneToDto(row, toMilestoneProgress(undefined)) };
         },
       );
     });
@@ -230,17 +254,24 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
       ...(args.query.status !== undefined ? { status: args.query.status } : {}),
       ...(managedSystemId !== undefined ? { managedSystemId } : {}),
     });
-    const items: MilestoneDto[] = [];
+    const visibleRows: MilestoneRow[] = [];
     for (const row of rows) {
       const canManage = (
         await checkFindingManage(deps.checkService, args.actor, row.primary_managed_system_id, {
           requireElevatedRole: true,
         })
       ).allow;
-      if (!canManage) continue;
-      items.push(milestoneToDto(row));
+      if (canManage) visibleRows.push(row);
     }
-    return { items };
+    // #514 B1c — one grouped count query over the already-visible ids only,
+    // so an out-of-scope Milestone stays absent (requirement 6).
+    const counts = await countTasksByMilestone(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      milestoneIds: visibleRows.map((row) => row.id),
+    });
+    return {
+      items: visibleRows.map((row) => milestoneToDto(row, toMilestoneProgress(counts.get(row.id)))),
+    };
   }
 
   // #514 A9 — the source Finding read goes through findings/index.ts (the
@@ -272,7 +303,14 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
       workspaceId: args.actor.workspace_id,
       milestoneId: row.id,
     });
-    return { ...milestoneToDto(row), source_finding };
+    const counts = await countTasksByMilestone(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      milestoneIds: [row.id],
+    });
+    return {
+      ...milestoneToDto(row, toMilestoneProgress(counts.get(row.id))),
+      source_finding,
+    };
   }
 
   async function patchMilestone(args: {
@@ -374,7 +412,14 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
             },
           });
 
-          return { status: 200, body: milestoneToDto(updated) };
+          const counts = await countTasksByMilestone(tx, {
+            workspaceId: args.actor.workspace_id,
+            milestoneIds: [milestone.id],
+          });
+          return {
+            status: 200,
+            body: milestoneToDto(updated, toMilestoneProgress(counts.get(milestone.id))),
+          };
         },
       );
     });

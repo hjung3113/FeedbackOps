@@ -136,7 +136,7 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
     });
   }
 
-  it('get: in-scope Milestone returns the columns; source_finding null, no progress (B1c)', async () => {
+  it('get: in-scope Milestone returns the columns; source_finding null, zero progress (#514 B1c)', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Get MS');
     const devCookie = await seedScopedDeveloper([ms]);
     const id = await seedMilestone(ms, 'Readable milestone');
@@ -168,7 +168,13 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
     expect(body.start_date).toBe('2026-10-01');
     expect(body.target_date).toBe('2026-12-31');
     expect(body.source_finding).toBeNull();
-    expect(body.progress).toBeUndefined();
+    expect(body.progress).toEqual({
+      released_done: 0,
+      in_flight: 0,
+      queued: 0,
+      total: 0,
+      percent: 0,
+    });
   });
 
   it('get: out-of-scope id is permission.denied, not 404', async () => {

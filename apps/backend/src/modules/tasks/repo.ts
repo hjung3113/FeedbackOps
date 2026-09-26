@@ -303,6 +303,54 @@ export async function listTasksByWorkspace(
   `);
   return result.rows.map(mapTaskRow);
 }
+export interface MilestoneTaskCounts {
+  released_done: number;
+  in_flight: number;
+  queued: number;
+  total: number;
+}
+
+// #514 B1c — one grouped child-count query for a page of Milestone ids.
+// Buckets: released_done = done + released; in_flight = doing + review +
+// reopened (counting reopened as in flight is the design §7 item 4
+// proposal); queued = backlog + todo; total = child count. An empty
+// Milestone is omitted by GROUP BY; the caller fills zeros.
+export async function countTasksByMilestone(
+  db: Db | Tx,
+  input: { workspaceId: string; milestoneIds: string[] },
+): Promise<Map<string, MilestoneTaskCounts>> {
+  const counts = new Map<string, MilestoneTaskCounts>();
+  if (input.milestoneIds.length === 0) return counts;
+  const result = await (db as Db).execute<{
+    milestone_id: string;
+    released_done: number;
+    in_flight: number;
+    queued: number;
+    total: number;
+  }>(sql`
+    SELECT milestone_id,
+           COUNT(*) FILTER (WHERE status IN ('done', 'released'))::int AS released_done,
+           COUNT(*) FILTER (WHERE status IN ('doing', 'review', 'reopened'))::int AS in_flight,
+           COUNT(*) FILTER (WHERE status IN ('backlog', 'todo'))::int AS queued,
+           COUNT(*)::int AS total
+      FROM task.tasks
+     WHERE workspace_id = ${input.workspaceId}
+       AND milestone_id IN (${sql.join(
+         input.milestoneIds.map((id) => sql`${id}`),
+         sql`, `,
+       )})
+     GROUP BY milestone_id
+  `);
+  for (const row of result.rows) {
+    counts.set(row.milestone_id, {
+      released_done: Number(row.released_done),
+      in_flight: Number(row.in_flight),
+      queued: Number(row.queued),
+      total: Number(row.total),
+    });
+  }
+  return counts;
+}
 
 export interface ResolvedTaskSource {
   source: TaskDetailSource;

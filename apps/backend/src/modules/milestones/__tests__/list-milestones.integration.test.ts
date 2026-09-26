@@ -11,6 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
 import {
   SESSION_COOKIE_NAME,
   cleanupReadTestTables,
@@ -74,6 +75,14 @@ describe.skipIf(!runIntegration)('milestone list (#514 A5)', () => {
       [WORKSPACE_ID],
     );
     await migrateHandle.pool.query(
+      `delete from task.tasks
+        where workspace_id = $1
+          and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
       `delete from task.milestones
         where workspace_id = $1
           and primary_managed_system_id in (
@@ -104,6 +113,22 @@ describe.skipIf(!runIntegration)('milestone list (#514 A5)', () => {
     });
     expect(res.statusCode).toBe(201);
     return res.json<{ id: string }>().id;
+  }
+
+  /** Direct insert (no API mutation, so the admin rate-limit bucket is spared). */
+  async function insertMilestoneRow(managedSystemId: string, title: string): Promise<string> {
+    const result = await migrateHandle.pool.query<{ id: string }>(
+      `insert into task.milestones (
+          workspace_id, display_id, primary_managed_system_id, title, why,
+          owner_actor_id, start_date, target_date, created_by
+        )
+       values ($1, $2, $3, $4, 'why', $5, '2026-10-01', '2026-12-31', $5)
+       returning id`,
+      [WORKSPACE_ID, `MLS-${randomUUID().slice(0, 8)}`, managedSystemId, title, adminActorId],
+    );
+    const id = result.rows[0]?.id;
+    if (!id) throw new Error(`insert milestone failed for title=${title}`);
+    return id;
   }
 
   /** Developer whose finding.manage covers only managedSystemIds. */
@@ -191,5 +216,52 @@ describe.skipIf(!runIntegration)('milestone list (#514 A5)', () => {
     const res = await listMilestones(userCookie);
     expect(res.statusCode).toBe(403);
     expect(res.json<{ code: string }>().code).toBe('permission.denied');
+  });
+
+  it('list: returns progress for each visible Milestone; out-of-scope stays absent (#514 B1c)', async () => {
+    const msInScope = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'In scope');
+    const msOutOfScope = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Out of scope',
+    );
+    const fullId = await insertMilestoneRow(msInScope, 'Full milestone');
+    await insertMilestoneRow(msInScope, 'Empty milestone');
+    await insertMilestoneRow(msOutOfScope, 'Out-of-scope milestone');
+    for (const status of ['done', 'released', 'reopened', 'doing', 'backlog', 'todo'] as const) {
+      await insertTaskRow(migrateHandle, {
+        workspaceId: WORKSPACE_ID,
+        primaryManagedSystemId: msInScope,
+        title: `Task ${status}`,
+        status,
+        milestoneId: fullId,
+        createdBy: adminActorId,
+      });
+    }
+    const devCookie = await seedScopedDeveloper([msInScope]);
+
+    const res = await listMilestones(devCookie);
+    expect(res.statusCode).toBe(200);
+    const byTitle = new Map(
+      res
+        .json<{ items: Array<{ title: string; progress: unknown }> }>()
+        .items.map((item) => [item.title, item.progress] as const),
+    );
+    expect(byTitle.get('Full milestone')).toEqual({
+      released_done: 2,
+      in_flight: 2,
+      queued: 2,
+      total: 6,
+      percent: 33,
+    });
+    expect(byTitle.get('Empty milestone')).toEqual({
+      released_done: 0,
+      in_flight: 0,
+      queued: 0,
+      total: 0,
+      percent: 0,
+    });
+    expect(byTitle.has('Out-of-scope milestone')).toBe(false);
   });
 });
