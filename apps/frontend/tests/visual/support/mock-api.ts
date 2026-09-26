@@ -60,6 +60,11 @@ import {
   registerManagedSystemVisualBodySchema,
 } from '../fixtures/managed-system-owner';
 import {
+  MILESTONE_IDS,
+  milestoneDetailFixture,
+  milestoneListFixture,
+} from '../fixtures/milestones';
+import {
   permissionRequestComposeBodySchema,
   permissionRequestComposeSuccess,
 } from '../fixtures/permission-request-compose';
@@ -146,6 +151,8 @@ interface InstallOptions {
   vocCreate?: boolean;
   /** Issue #399 Finding detail baseline surface; schemas validate fixtures at import. */
   findingDetail?: boolean;
+  /** #514 Milestone shell surface; fixtures validate against shared DTO schemas at import. */
+  milestones?: boolean;
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -277,6 +284,17 @@ export async function installMockApi(
 
     if (options.home && isRequest(route, 'GET', '/tasks')) {
       await json(route, 200, { items: options.home === 'populated' ? homeMyWorkTasksFixture : [] });
+      return;
+    }
+
+    // #514 B2a — Milestone list/detail. The B2a shell fetches nothing yet;
+    // these routes exist so later screen nodes (B2c/B2d) extend, not create.
+    if (options.milestones && isRequest(route, 'GET', '/milestones')) {
+      await json(route, 200, { items: milestoneListFixture });
+      return;
+    }
+    if (options.milestones && isRequest(route, 'GET', `/milestones/${MILESTONE_IDS.sso}`)) {
+      await json(route, 200, milestoneDetailFixture);
       return;
     }
 
