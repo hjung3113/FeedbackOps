@@ -163,6 +163,40 @@ describe('HomeScreen route content', () => {
     }
   });
 
+  it('keeps the selected managed system on coverage hops', async () => {
+    const systemId = '33333333-3333-4333-8333-333333333333';
+    const coverage = [
+      { id: 'voc-task', value: 2, total: 3, percent: 67, status: 'warn' },
+      { id: 'finding-execution', value: 1, total: 2, percent: 50, status: 'warn' },
+      { id: 'high-followup', value: 0, total: 1, percent: 0, status: 'bad' },
+      { id: 'released-update', value: 3, total: 4, percent: 75, status: 'good' },
+      { id: 'analytics-area', value: 1, total: 3, percent: 33, status: 'bad' },
+      { id: 'milestone-outcome', value: 0, total: 2, percent: 0, status: 'bad' },
+    ] as const;
+    installFetch(dashboardSummarySchema.parse({ ...response, coverage }));
+    renderHome(`/home?managedSystem=${systemId}`);
+
+    await screen.findByTestId('home-coverage-row-voc-task');
+    expect(screen.getByRole('link', { name: /View coverage/ })).toHaveAttribute(
+      'href',
+      '/integration/coverage',
+    );
+    for (const item of coverage) {
+      const row = screen.getByTestId(`home-coverage-row-${item.id}`);
+      if (item.id === 'milestone-outcome') {
+        expect(row.tagName).not.toBe('A');
+        continue;
+      }
+      const href = row.getAttribute('href');
+      expect(href).toEqual(expect.any(String));
+      const url = new URL(href ?? '', 'http://localhost');
+      expect(url.searchParams.get('managedSystem')).toBe(systemId);
+      url.searchParams.delete('managedSystem');
+      const rest = url.searchParams.toString();
+      expect(`${url.pathname}?${rest}`).toBe(DASHBOARD_HOP_ROUTES[item.id]);
+    }
+  });
+
   it('renders a present zero queue in the sidebar', () => {
     render(
       <AppSidebar entries={homeSidebarEntries(dashboardSummarySchema.parse(response), true)} />,
