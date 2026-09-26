@@ -136,7 +136,7 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
     });
   }
 
-  it('get: in-scope Milestone returns the columns; no source_finding (A9) and no progress (B1c)', async () => {
+  it('get: in-scope Milestone returns the columns; source_finding null, no progress (B1c)', async () => {
     const ms = await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Get MS');
     const devCookie = await seedScopedDeveloper([ms]);
     const id = await seedMilestone(ms, 'Readable milestone');
@@ -167,7 +167,7 @@ describe.skipIf(!runIntegration)('milestone get (#514 A5)', () => {
     expect(body.analytics_area_id).toBeNull();
     expect(body.start_date).toBe('2026-10-01');
     expect(body.target_date).toBe('2026-12-31');
-    expect(body.source_finding).toBeUndefined();
+    expect(body.source_finding).toBeNull();
     expect(body.progress).toBeUndefined();
   });
 

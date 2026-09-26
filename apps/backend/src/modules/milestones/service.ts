@@ -1,6 +1,7 @@
 import type {
   CreateMilestoneRequest,
   ListMilestonesQuery,
+  MilestoneDetailDto,
   MilestoneDto,
   PatchMilestoneRequest,
 } from '@fops/shared';
@@ -13,6 +14,7 @@ import { findWorkspaceActor } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
+import { findSourceFindingForMilestone } from '../findings/index.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
@@ -241,10 +243,12 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
     return { items };
   }
 
+  // #514 A9 — the source Finding read goes through findings/index.ts (the
+  // module seam); milestones/repo never touches finding.findings.
   async function getMilestone(args: {
     actor: MilestonesActor;
     milestoneId: string;
-  }): Promise<MilestoneDto> {
+  }): Promise<MilestoneDetailDto> {
     if (!hasElevatedFindingRole(args.actor)) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
@@ -263,7 +267,12 @@ export function createMilestonesService(deps: MilestonesServiceDeps) {
     if (!canManage) {
       throw new HttpError('permission.denied', 'finding.manage capability required');
     }
-    return milestoneToDto(row);
+
+    const source_finding = await findSourceFindingForMilestone(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      milestoneId: row.id,
+    });
+    return { ...milestoneToDto(row), source_finding };
   }
 
   async function patchMilestone(args: {

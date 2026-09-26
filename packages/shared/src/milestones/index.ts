@@ -1,7 +1,6 @@
 // #514 A3 — shared Milestone schemas.
 // DTO field names are the milestone column names; timestamps are ISO strings.
-// `progress` lands with B1c, `source_finding` with A9. No max length is
-// imposed on title/why (design §7 item 7 leaves limits unspecified).
+// `progress` lands with B1c; `source_finding` (A9) is on the detail DTO only.
 
 import { z } from 'zod';
 
@@ -76,3 +75,20 @@ export const milestoneDtoSchema = z
   })
   .strict();
 export type MilestoneDto = z.infer<typeof milestoneDtoSchema>;
+
+export const milestoneSourceFindingSchema = z
+  .object({
+    id: z.string().uuid(),
+    display_id: z.string(),
+    title: z.string(),
+    summary: z.string(),
+    evidence_count: z.number().int().nonnegative(),
+  })
+  .strict();
+export type MilestoneSourceFinding = z.infer<typeof milestoneSourceFindingSchema>;
+
+// Detail-only extension of MilestoneDto (list stays without source_finding).
+export const milestoneDetailDtoSchema = milestoneDtoSchema.extend({
+  source_finding: milestoneSourceFindingSchema.nullable(),
+});
+export type MilestoneDetailDto = z.infer<typeof milestoneDetailDtoSchema>;
