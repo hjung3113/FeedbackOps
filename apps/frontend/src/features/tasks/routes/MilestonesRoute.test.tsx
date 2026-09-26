@@ -2,10 +2,11 @@ import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import type { MilestoneDto } from '@fops/shared';
+import { DetailPanelSlotContext } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type * as React from 'react';
+import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestonesRoute } from './MilestonesRoute';
 
@@ -41,6 +42,7 @@ vi.mock('@/lib/api/analytics-areas', () => ({
 
 vi.mock('@/lib/api/milestones', () => ({
   listMilestones: vi.fn(async () => ({ items: MILESTONES })),
+  getMilestone: vi.fn(async () => ({ ...MILESTONES[0], source_finding: null })),
 }));
 
 const IDS = {
@@ -392,6 +394,36 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     return queryClient;
   }
 
+  // Mirrors AppFrame's detail-slot host (same pattern as the edit tests) so
+  // the selected record's independently keyed detail read is observable.
+  function DetailPanelHost({ children }: { children: React.ReactNode }) {
+    const [panel, setPanel] = React.useState<React.ReactNode>();
+    const setContent = React.useCallback(
+      (_key: string, node: React.ReactNode) => setPanel(node),
+      [],
+    );
+    const clear = React.useCallback(() => setPanel(undefined), []);
+    const context = React.useMemo(() => ({ setContent, clear }), [setContent, clear]);
+    return (
+      <DetailPanelSlotContext.Provider value={context}>
+        {children}
+        {panel}
+      </DetailPanelSlotContext.Provider>
+    );
+  }
+
+  function renderMilestonesWithDetailHost(): QueryClient {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DetailPanelHost>
+          <MilestonesRoute />
+        </DetailPanelHost>
+      </QueryClientProvider>,
+    );
+    return queryClient;
+  }
+
   it('suppresses retained summary and tab counts when the counts refetch is denied', async () => {
     vi.mocked(listMilestones)
       .mockResolvedValueOnce({ items: MILESTONES })
@@ -430,5 +462,41 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     // A genuine zero is not rendered as unavailable; the badge itself stays
     // hidden at 0 (ListToolbar renders badgeCount only when > 0).
     expect(screen.getByRole('tab', { name: /^All/ })).not.toHaveTextContent('—');
+  });
+
+  // R6 correction — a settled error on the LIST read hides the totals and
+  // badges too (the original requirement), while the already-selected
+  // record's independent detail read is untouched.
+  it('hides totals and badges when the list read itself is denied while counts stay cached', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listMilestones)
+      .mockResolvedValueOnce({ items: MILESTONES }) // list initial
+      .mockResolvedValueOnce({ items: MILESTONES }) // counts initial
+      .mockRejectedValueOnce(
+        new ApiError(403, { code: 'permission.denied', message: 'finding.manage required' }),
+      ); // list refetch only; counts stay cached-successful
+    const queryClient = renderMilestonesWithDetailHost();
+    await screen.findByText('MLS-1021');
+
+    // Select the record first: its detail read is independently keyed.
+    await user.click(screen.getByText('SSO Stabilization'));
+    expect(await screen.findByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
+    expect(screen.getByTestId('milestone-summary-total')).toHaveTextContent('3');
+
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['milestones', 'list', null, 'all'] });
+    });
+
+    // The denial presents in the list slot; retained rows stay hidden while
+    // the shell (and the draft) survive.
+    expect(await screen.findByText('finding.manage required')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /SSO Stabilization/ })).not.toBeInTheDocument();
+    // …and neither do the retained totals or status/task badges.
+    expect(screen.getByTestId('milestone-summary-total')).toHaveTextContent('—');
+    expect(screen.getByTestId('milestone-summary-in-flight')).toHaveTextContent('—');
+    expect(screen.getByTestId('milestone-summary-released')).toHaveTextContent('—');
+    expect(screen.getByRole('tab', { name: /^All/ })).not.toHaveTextContent('3');
+    // The selected record's independent detail read is unchanged.
+    expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
   });
 });

@@ -177,11 +177,13 @@ export function MilestonesRoute({ selectedParam, managedSystem }: MilestonesRout
   });
 
   const items = listQuery.data?.items ?? [];
-  // R5 (Astra P2-2) — the counts read is independently keyed; a settled
-  // terminal error suppresses its retained response so totals, status
-  // distribution, and task counts never outlive their permission. Genuine
-  // zeros stay zeros; unavailable renders as '—'.
-  const countsUnavailable = countQuery.error != null;
+  // R5 (Astra P2-2) + R6 correction — the counts read is independently keyed,
+  // but a settled terminal error on EITHER read suppresses the derived
+  // totals: the counts query's own denial, and the list read's denial (the
+  // original requirement — totals/badges hide when the list is denied even
+  // though counts remain cached-successful). Genuine zeros stay zeros;
+  // unavailable renders as '—'.
+  const countsUnavailable = countQuery.error != null || listQuery.error != null;
   const countItems = countsUnavailable ? [] : (countQuery.data?.items ?? []);
   const actorNamesById = React.useMemo(
     () => new Map((actors ?? []).map((actor) => [actor.id, actor.display_name])),
