@@ -6,8 +6,6 @@
 # lib/api/client.ts, which defines it, is pinned too).
 # The unparsed-endpoints test fails when a file's count differs in EITHER
 # direction, so migrated endpoints must shrink their entry.
-features/admin/managed-systems/useManagedSystemsRegistry.ts 2
-features/admin/permissions/permission-state-view.tsx 2
 features/admin/settings/use-workspace-settings.ts 3
 features/cross-system/create-finding/useCreateFindingFromVocMutation.ts 2
 features/integration/hooks/useEntityLinkInventory.ts 2

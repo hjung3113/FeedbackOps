@@ -1,9 +1,10 @@
 // LinkedExecutionSection — linked finding/task block (Slice 3 always empty).
 
-import * as React from 'react';
 import type { VocDetailEnvelope } from '@fops/shared';
-import { PanelSectionTitle, EmptyState, PermissionBlockedPanel, OutlineBadge } from '@fops/ui';
-import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
+import { EmptyState, OutlineBadge, PanelSectionTitle, PermissionBlockedPanel } from '@fops/ui';
+import * as React from 'react';
+
+import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
 
 export interface LinkedExecutionSectionProps {
   voc: VocDetailEnvelope;
@@ -17,7 +18,7 @@ export function LinkedExecutionSection({
   linkedTask = null,
   hasReporterTaskSummary = false,
 }: LinkedExecutionSectionProps): React.ReactElement {
-  const linkedFindingDecision = usePermissionDecision(voc, 'linkedFinding');
+  const linkedFindingDecision = getPermissionDecision(voc, 'linkedFinding');
 
   if (linkedFindingDecision !== null) {
     return (
@@ -29,11 +30,11 @@ export function LinkedExecutionSection({
           {...(linkedFindingDecision.reason !== undefined
             ? { reason: linkedFindingDecision.reason }
             : {})}
-          {...(linkedFindingDecision.requiredScope !== undefined
-            ? { requiredScope: linkedFindingDecision.requiredScope }
+          {...(linkedFindingDecision.required_scope !== undefined
+            ? { requiredScope: linkedFindingDecision.required_scope }
             : {})}
-          {...(linkedFindingDecision.decisionId !== undefined
-            ? { decisionId: linkedFindingDecision.decisionId }
+          {...(linkedFindingDecision.decision_id !== undefined
+            ? { decisionId: linkedFindingDecision.decision_id }
             : {})}
         />
       </div>

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { vocDetailEnvelopeSchema, vocSummaryEnvelopeSchema } from '../detail.js';
+import {
+  vocDetailEnvelopeSchema,
+  vocSummaryEnvelopeSchema,
+  vocSummarySelfDecisionSchema,
+} from '../detail.js';
 
 const U = '01919b8c-0000-7000-8000-000000000001';
 const U2 = '01919b8c-0000-7000-8000-000000000002';
@@ -155,7 +159,14 @@ const validSummary = {
   reporter_facing_status: 'received' as const,
   created_at: '2026-01-01T00:00:00.000Z',
   permission_decisions: {
-    _self: { state: 'request_access', requestable: true },
+    _self: {
+      state: 'request_access',
+      requestable_permission: {
+        permission: 'voc.read',
+        managed_system_id: U2,
+        reason_required: false,
+      },
+    },
   },
 };
 
@@ -167,7 +178,9 @@ describe('vocSummaryEnvelopeSchema', () => {
   it('accepts permission_decisions with blocked state', () => {
     const result = vocSummaryEnvelopeSchema.parse({
       ...validSummary,
-      permission_decisions: { _self: { state: 'blocked_not_requestable' } },
+      permission_decisions: {
+        _self: { state: 'blocked_not_requestable', reason: 'explicit_deny' },
+      },
     });
     expect(result.permission_decisions._self).toBeDefined();
   });
@@ -185,5 +198,28 @@ describe('vocSummaryEnvelopeSchema', () => {
   it('rejects missing display_id', () => {
     const { display_id: _, ...rest } = validSummary;
     expect(() => vocSummaryEnvelopeSchema.parse(rest)).toThrow();
+  });
+});
+
+describe('vocSummarySelfDecisionSchema', () => {
+  it('accepts the live summary _self shapes', () => {
+    expect(
+      vocSummarySelfDecisionSchema.parse(validSummary.permission_decisions._self),
+    ).toMatchObject({ state: 'request_access' });
+    expect(
+      vocSummarySelfDecisionSchema.parse({
+        state: 'blocked_not_requestable',
+        reason: 'explicit_deny',
+      }),
+    ).toEqual({ state: 'blocked_not_requestable', reason: 'explicit_deny' });
+  });
+
+  it('rejects the old requestable flag and a reason-less block', () => {
+    expect(() =>
+      vocSummarySelfDecisionSchema.parse({ state: 'request_access', requestable: true }),
+    ).toThrow();
+    expect(() =>
+      vocSummarySelfDecisionSchema.parse({ state: 'blocked_not_requestable' }),
+    ).toThrow();
   });
 });

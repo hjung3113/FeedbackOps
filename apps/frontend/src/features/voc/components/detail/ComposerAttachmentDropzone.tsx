@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { formatFileSize } from '@/features/voc/lib/format-file-size';
 import { uploadAttachment } from '@/lib/api/attachments';
 import { errorMapper } from '@/lib/api/errorMapper';
+import { mintIdempotencyKey } from '@/lib/api/idempotency';
 import type { ApiError } from '@/lib/api/types';
 
 const MAX_SIZE_BYTES = 25 * 1024 * 1024;
@@ -71,17 +72,6 @@ export interface ComposerAttachmentDropzoneProps {
 function mintRowId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return `row-${Math.random().toString(36).slice(2)}-${Date.now()}`;
-}
-
-function mintIdempotencyKey(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-  const bytes = new Uint8Array(16);
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(bytes);
-  else for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (b) => (b ?? 0).toString(16).padStart(2, '0'));
-  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
 }
 
 // formatFileSize moved to lib/format-file-size.ts (PLAN-22 §Bug-1, 2026-05-22).

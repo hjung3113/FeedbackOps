@@ -94,7 +94,8 @@ export function TriagePanel({
     return actors.map((a) => ({
       id: a.id,
       display_name: a.display_name,
-      kind: a.kind,
+      // Actor list has no teams (ADR-0018); OwnerPicker still wants kind.
+      kind: 'user' as const,
     }));
   }, [actors]);
 

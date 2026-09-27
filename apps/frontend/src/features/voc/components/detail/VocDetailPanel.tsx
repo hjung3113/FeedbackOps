@@ -2,7 +2,6 @@
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
 import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
-import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
@@ -10,6 +9,7 @@ import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
+import { getSummarySelfDecision } from '@/lib/cross-system/getPermissionDecision';
 import type { EntityLinkDto, VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import {
   Button,
@@ -507,7 +507,7 @@ function SummaryPermissionView({
   onClose,
   onExpandToggle,
 }: SummaryPermissionViewProps): React.ReactElement {
-  const selfDecision = usePermissionDecision(data, '_self');
+  const selfDecision = getSummarySelfDecision(data);
 
   return (
     <div className="flex flex-col h-full">
@@ -523,11 +523,11 @@ function SummaryPermissionView({
             state={selfDecision.state}
             category="VOC 상세"
             {...(selfDecision.reason !== undefined ? { reason: selfDecision.reason } : {})}
-            {...(selfDecision.requiredScope !== undefined
-              ? { requiredScope: selfDecision.requiredScope }
+            {...(selfDecision.required_scope !== undefined
+              ? { requiredScope: selfDecision.required_scope }
               : {})}
-            {...(selfDecision.decisionId !== undefined
-              ? { decisionId: selfDecision.decisionId }
+            {...(selfDecision.decision_id !== undefined
+              ? { decisionId: selfDecision.decision_id }
               : {})}
           />
         ) : (
