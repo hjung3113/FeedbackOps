@@ -74,7 +74,7 @@ export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): R
               {HOME_COPY.title(actorName)}
             </h1>
             <p className="mt-3 text-sm text-text-muted">
-              {HOME_COPY.subtitle(summary.data?.action_queues)}
+              {HOME_COPY.subtitle(summary.data?.action_queues, summary.data?.coverage)}
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -95,15 +95,23 @@ export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): R
         ) : (
           <HomeSummary summary={summary.data} />
         )}
-        <div className="mt-9 grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-7">
+        <div
+          className={`mt-9 grid gap-7 ${
+            summary.data !== undefined && summary.data.coverage.length > 0
+              ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
+              : 'grid-cols-1'
+          }`}
+        >
           <MyWorkPanel
             tasks={myTasks.data?.items ?? []}
             requests={pendingRequests.data?.items ?? []}
           />
-          <CoveragePanel
-            coverage={summary.data?.coverage ?? []}
-            {...(managedSystemId !== undefined ? { managedSystemId } : {})}
-          />
+          {summary.data !== undefined && summary.data.coverage.length > 0 && (
+            <CoveragePanel
+              coverage={summary.data.coverage}
+              {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+            />
+          )}
         </div>
         <div className="mt-9">
           <OpenRequestsPanel requests={openPermissionRequests.data?.requests ?? []} />
@@ -150,6 +158,9 @@ function OpenRequestsPanel({
 
 function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): React.ReactElement {
   const kpis = summary?.kpis;
+  const queues = summary?.action_queues ?? [];
+  const activeQueues = queues.filter((queue) => queue.count > 0);
+  const zeroQueues = queues.filter((queue) => queue.count === 0);
   const kpiKeys = Object.keys(HOME_KPI_COPY) as Array<keyof typeof HOME_KPI_COPY>;
   return (
     <>
@@ -178,16 +189,36 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
             );
           })}
       </div>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-          {HOME_COPY.queueHeading}
-        </h2>
-      </div>
-      <div className="grid grid-cols-4 gap-3" data-testid="home-action-queues">
-        {summary?.action_queues.map((queue) => (
-          <ActionQueueCard key={queue.id} queue={queue} />
-        ))}
-      </div>
+      {/* #521 follows empty-state AC over the populated docs/design-prototype/screen-home.jsx example. */}
+      {summary !== undefined && activeQueues.length > 0 && (
+        <>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+              {HOME_COPY.queueHeading}
+            </h2>
+          </div>
+          <div className="grid grid-cols-4 gap-3" data-testid="home-action-queues">
+            {activeQueues.map((queue) => (
+              <ActionQueueCard key={queue.id} queue={queue} />
+            ))}
+          </div>
+        </>
+      )}
+      {zeroQueues.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="home-zero-queues">
+          <span className="text-xs text-text-muted">{HOME_COPY.noZeroQueueItems}</span>
+          {zeroQueues.map((queue) => (
+            <a
+              className="inline-flex items-center rounded-full border border-border-subtle bg-surface-card px-2 py-1 text-xs text-text-secondary hover:text-text-primary"
+              data-testid={`home-zero-queue-${queue.id}`}
+              href={queue.next_action.route}
+              key={queue.id}
+            >
+              {HOME_QUEUE_COPY[queue.id].title} 0
+            </a>
+          ))}
+        </div>
+      )}
     </>
   );
 }

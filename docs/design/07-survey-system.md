@@ -238,6 +238,9 @@ configured anonymity threshold, the UI must hide the aggregate or merge buckets
 for actors without personal response viewing permission. MVP default threshold
 is 5 responses.
 
+A zero-response result may disclose a survey-level `none` state because no individual response can
+be inferred, while one through the configured threshold minus one remains suppressed.
+
 Workspace Admin does not bypass Survey anonymity thresholds by role alone.
 Viewing below-threshold personal response detail requires explicit personal
 response viewing permission.

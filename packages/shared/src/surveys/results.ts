@@ -138,6 +138,8 @@ export const surveyResultDtoSchema = z
     survey_id: z.string().uuid(),
     status: z.enum(['open', 'closed']),
     identity_protected: z.boolean(),
+    response_state: z.enum(['none', 'below_threshold', 'visible']),
+    anonymity_threshold: z.number().int().positive(),
     questions: z.array(surveyQuestionResultSchema),
     next_actions: z.array(surveyResultNextActionSchema),
   })

@@ -46,7 +46,10 @@ const response = {
   by_managed_system: [],
 };
 
-function installFetch(summary: unknown = response): ReturnType<typeof vi.fn> {
+function installFetch(
+  summary: unknown = response,
+  options: { pendingSummary?: boolean } = {},
+): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith('/me'))
@@ -63,8 +66,10 @@ function installFetch(summary: unknown = response): ReturnType<typeof vi.fn> {
         }),
         { status: 200 },
       );
-    if (url.startsWith('/dashboard/summary'))
+    if (url.startsWith('/dashboard/summary')) {
+      if (options.pendingSummary) return new Promise<Response>(() => {});
       return new Response(JSON.stringify(summary), { status: 200 });
+    }
     if (url.startsWith('/tasks') || url.startsWith('/task-requests'))
       return new Response(JSON.stringify({ items: [] }), { status: 200 });
     if (url.startsWith('/permission-requests/mine'))
@@ -117,19 +122,92 @@ describe('HomeScreen route content', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders a present zero queue and omits absent queue cards', async () => {
+  it('keeps zero queues in the compact strip and omits absent queue cards', async () => {
     installFetch();
     renderHome();
     await waitFor(() =>
-      expect(screen.getByTestId('home-queue-unassigned-voc')).toBeInTheDocument(),
+      expect(screen.getByTestId('home-zero-queue-unassigned-voc')).toBeInTheDocument(),
     );
-    expect(screen.getByTestId('home-queue-count-unassigned-voc')).toHaveTextContent('0');
+    expect(screen.queryByTestId('home-queue-unassigned-voc')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Unassigned VOC 0' })).toHaveAttribute(
+      'href',
+      '/vocs?view=triage',
+    );
     expect(
       screen.getByText(
         '오늘 워크스페이스에 3개의 운영 갭이 있습니다. 우선순위가 높은 큐부터 확인하세요.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('home-queue-high-severity-unlinked')).toBeNull();
+  });
+
+  it('renders only the zero queue strip when every queue count is zero', async () => {
+    const allZero = dashboardSummarySchema.parse({
+      ...response,
+      action_queues: response.action_queues.map((queue) => ({ ...queue, count: 0 })),
+    });
+    installFetch(allZero);
+    renderHome();
+
+    await screen.findByTestId('home-zero-queue-unassigned-voc');
+    expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
+    expect(screen.queryByTestId('home-action-queues')).toBeNull();
+    expect(screen.getByTestId('home-zero-queues')).toHaveTextContent('처리할 항목 없음');
+    expect(screen.getAllByRole('link', { name: / 0$/ })).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: /Review|Request|Open/ })).toBeNull();
+    expect(screen.getByText('현재 확인할 운영 큐가 없습니다.')).toBeInTheDocument();
+  });
+
+  it('omits queue and Coverage sections while the summary is loading', async () => {
+    const fetchMock = installFetch(response, { pendingSummary: true });
+    renderHome();
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).startsWith('/dashboard/summary')),
+      ).toBe(true),
+    );
+    expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
+    expect(screen.queryByTestId('home-action-queues')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Coverage signals' })).toBeNull();
+    expect(screen.queryByTestId('home-coverage')).toBeNull();
+  });
+
+  it('omits the recovery queue section when action_queues is empty', async () => {
+    const noQueues = dashboardSummarySchema.parse({
+      ...response,
+      action_queues: [],
+      coverage: [{ id: 'voc-task', value: 1, total: 2, percent: 50, status: 'warn' }],
+    });
+    installFetch(noQueues);
+    renderHome();
+
+    await screen.findByTestId('home-kpi-open_voc');
+    expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
+    expect(screen.queryByTestId('home-action-queues')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Coverage signals' })).toBeInTheDocument();
+  });
+
+  it('omits the Coverage section when coverage is empty', async () => {
+    installFetch(dashboardSummarySchema.parse({ ...response, coverage: [] }));
+    renderHome();
+
+    await screen.findByTestId('home-kpi-open_voc');
+    expect(screen.queryByRole('heading', { name: 'Coverage signals' })).toBeNull();
+    expect(screen.queryByTestId('home-coverage')).toBeNull();
+  });
+
+  it('explains the scoped Home view when both queues and coverage are empty', async () => {
+    installFetch(dashboardSummarySchema.parse({ ...response, action_queues: [], coverage: [] }));
+    renderHome();
+
+    await screen.findByText(
+      '운영 큐와 Coverage는 Managed System 담당 범위가 있을 때만 표시됩니다. 지금은 나에게 배정된 작업만 보입니다.',
+    );
+    expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
+    expect(screen.queryByTestId('home-action-queues')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Coverage signals' })).toBeNull();
+    expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
   it('links coverage rows to the shared one-hop routes', async () => {
@@ -218,7 +296,13 @@ describe('HomeScreen route content', () => {
   });
 
   it('maps urgent, warn, and info queues to their semantic color classes', async () => {
-    installFetch();
+    const summary = dashboardSummarySchema.parse({
+      ...response,
+      action_queues: response.action_queues.map((queue) =>
+        queue.id === 'unassigned-voc' ? { ...queue, count: 1 } : queue,
+      ),
+    });
+    installFetch(summary);
     renderHome();
     await waitFor(() =>
       expect(screen.getByTestId('home-queue-unassigned-voc')).toBeInTheDocument(),

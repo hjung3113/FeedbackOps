@@ -1,6 +1,8 @@
 import {
   homeEmptyVisualSnapshot,
+  homeUnscopedVisualSnapshot,
   homeVisualSnapshot,
+  homeZeroQueuesVisualSnapshot,
   inboxHighNoLinkSelectedVisualSnapshot,
 } from './fixtures/home';
 import { installMockApi } from './support/mock-api';
@@ -22,6 +24,30 @@ test.describe('/home visual harness', () => {
     await page.goto('/home');
     await expect(page.getByTestId('home-screen')).toBeVisible();
     await expectVisual(page, page.locator('[data-app-frame]'), homeEmptyVisualSnapshot);
+  });
+
+  test('renders positive queues with zero queues in a compact strip', async ({ page }) => {
+    await installMockApi(page, { home: 'zero-queues' });
+    await page.goto('/home');
+    await expect(page.getByTestId('home-zero-queues')).toContainText('처리할 항목 없음');
+    await expect(page.getByTestId('home-zero-queue-unassigned-voc')).toHaveAttribute(
+      'href',
+      '/vocs?view=triage&tab=unassigned',
+    );
+    await expectVisual(page, page.locator('[data-app-frame]'), homeZeroQueuesVisualSnapshot);
+  });
+
+  test('hides out-of-scope queue sections for a non-admin actor', async ({ page }) => {
+    await installMockApi(page, { home: 'unscoped', role: 'user' });
+    await page.goto('/home');
+    await expect(
+      page.getByText(
+        '운영 큐와 Coverage는 Managed System 담당 범위가 있을 때만 표시됩니다. 지금은 나에게 배정된 작업만 보입니다.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recovery & follow-up queues' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Coverage signals' })).toHaveCount(0);
+    await expectVisual(page, page.locator('[data-app-frame]'), homeUnscopedVisualSnapshot);
   });
 
   test('inbox-high-no-link-selected', async ({ page }) => {

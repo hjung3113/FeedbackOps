@@ -6,6 +6,8 @@ Date: 2026-07-19
 
 Accepted.
 
+Amended by ADR-0053.
+
 ## Context
 
 Survey responses can be evidence without being broadly visible personal data. The product needs a durable distinction between an aggregate Survey and an individual response before submission, linking, and result surfaces are added.

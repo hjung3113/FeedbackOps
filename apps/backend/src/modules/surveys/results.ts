@@ -126,6 +126,12 @@ export function createSurveyResults(deps: SurveysServiceDeps) {
         managed_system_id: survey.primary_managed_system_id,
       };
       const availability = findingManage.allow ? 'allowed' : 'blocked_requestable';
+      const responseState =
+        responseCount === 0
+          ? 'none'
+          : responseCount < anonymityThreshold && !holder
+            ? 'below_threshold'
+            : 'visible';
       const actionPermission =
         !findingManage.allow && findingManage.requestable !== null
           ? { requestable_permission: requestablePermission }
@@ -134,6 +140,8 @@ export function createSurveyResults(deps: SurveysServiceDeps) {
         survey_id: survey.id,
         status: survey.status,
         identity_protected: survey.responses_identity_protected,
+        response_state: responseState,
+        anonymity_threshold: anonymityThreshold,
         questions: questions.map((question) => {
           if (!holder && responseCount < anonymityThreshold) return suppressed(question.id);
           const rows = rowsByQuestion.get(question.id) ?? [];
