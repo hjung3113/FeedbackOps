@@ -520,6 +520,63 @@ describe('<VocDetailPanel>', () => {
     expect(container.querySelector('[data-anchor="similar"]')).not.toBeNull();
   });
 
+  it('puts Description and Conversation in overflow while keeping the dead Internal anchor absent', async () => {
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
+    );
+
+    expect(container.querySelector('[data-anchor="internal"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Description' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Conversation' })).toBeNull();
+    // Radix's DropdownMenuTrigger opens on `pointerdown`, which jsdom cannot
+    // synthesise convincingly — fireEvent.click leaves aria-expanded="false".
+    // Driving it by keyboard matches this repo's established pattern (see
+    // apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx openAccountMenu).
+    fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
+    expect(screen.getByRole('menuitem', { name: 'Description' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Conversation' })).toBeInTheDocument();
+  });
+
+  it('shows both permission actions in one footer menu for an admin actor', () => {
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
+      }),
+    );
+    const { container, unmount } = renderWithClient(
+      <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
+    );
+
+    // Exactly one bottom action bar — the old design rendered NextActionFooter
+    // and a second bordered CTA row as two separate stacked footers (#519).
+    expect(container.querySelectorAll('.sticky.bottom-0')).toHaveLength(1);
+    // Radix's DropdownMenuTrigger opens on `pointerdown`, which jsdom cannot
+    // synthesise convincingly — driving it by keyboard matches this repo's
+    // established pattern (apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx).
+    fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Task 요청' }));
+    expect(document.querySelector('[role="dialog"]')).toBeInTheDocument();
+    unmount();
+
+    // Re-render fresh: the RequestTaskModal opened above marks the rest of the
+    // page aria-hidden while it's mounted, so a second dropdown can't be
+    // reliably opened against the same tree without first closing it.
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Finding 생성' }));
+    expect(document.querySelector('[role="dialog"]')).toBeInTheDocument();
+  });
+
+  it('omits the footer overflow menu entirely for a plain user actor', () => {
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'user' } },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: '추가 작업' })).toBeNull();
+  });
+
   it('#337: reporter-arm envelope omits Triage, Similar, and their navigation entries', async () => {
     const {
       analytics_area_id: _analyticsAreaId,

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { DetailPanelSectionNav } from '../DetailPanelSectionNav';
 
 const SECTIONS = [
@@ -71,5 +71,46 @@ describe('DetailPanelSectionNav', () => {
       <DetailPanelSectionNav sections={SECTIONS} className="my-custom-class" />,
     );
     expect(container.firstChild).toHaveClass('my-custom-class');
+  });
+
+  it('places overflow sections in the menu and scrolls to the selected section', () => {
+    const scrollEl = document.createElement('div');
+    scrollEl.scrollTo = vi.fn();
+    const overview = document.createElement('div');
+    overview.setAttribute('data-anchor', 'overview');
+    const details = document.createElement('div');
+    details.setAttribute('data-anchor', 'details');
+    scrollEl.append(overview, details);
+    document.body.appendChild(scrollEl);
+
+    const scrollRef = { current: scrollEl } as React.RefObject<HTMLElement>;
+    render(
+      <DetailPanelSectionNav
+        sections={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'details', label: 'Details', overflow: true },
+        ]}
+        scrollRef={scrollRef}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+    // Radix's DropdownMenuTrigger opens on `pointerdown`, which jsdom cannot
+    // synthesise convincingly — fireEvent.click leaves aria-expanded="false".
+    // Driving it by keyboard matches this repo's established pattern (see
+    // apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx openAccountMenu).
+    fireEvent.keyDown(screen.getByRole('button', { name: /더보기/ }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
+
+    expect(scrollEl.scrollTo).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: /더보기/ }).className).toMatch(
+      /border-accent-primary/,
+    );
+    document.body.removeChild(scrollEl);
+  });
+
+  it('does not render the overflow trigger when no section is overflowed', () => {
+    render(<DetailPanelSectionNav sections={SECTIONS} />);
+    expect(screen.queryByRole('button', { name: /더보기/ })).toBeNull();
   });
 });

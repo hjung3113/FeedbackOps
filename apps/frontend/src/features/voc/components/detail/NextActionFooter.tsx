@@ -1,9 +1,16 @@
 // NextActionFooter — sticky bottom footer with next actions.
 // next_actions is opaque in Slice 3; BE returns [] for fresh VOCs.
 
-import * as React from 'react';
 import type { VocDetailEnvelope } from '@fops/shared';
-import { Button } from '@fops/ui';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@fops/ui';
+import { Ellipsis } from 'lucide-react';
+import type * as React from 'react';
 
 // Runtime shape we narrow to.
 interface NextAction {
@@ -25,9 +32,13 @@ function isNextAction(v: unknown): v is NextAction {
 
 export interface NextActionFooterProps {
   voc: VocDetailEnvelope;
+  overflowActions?: Array<{ label: string; onClick: () => void; testId?: string }>;
 }
 
-export function NextActionFooter({ voc }: NextActionFooterProps): React.ReactElement {
+export function NextActionFooter({
+  voc,
+  overflowActions,
+}: NextActionFooterProps): React.ReactElement {
   const actions = voc.next_actions.filter(isNextAction);
   const primaryAction = actions.find((a) => a.available && a.primary !== false);
   const restCount = actions.filter((a) => a !== primaryAction).length;
@@ -43,10 +54,28 @@ export function NextActionFooter({ voc }: NextActionFooterProps): React.ReactEle
               {primaryAction.label}
             </Button>
           )}
-          {restCount > 0 && (
-            <span className="text-xs text-text-muted">+{restCount} more</span>
-          )}
+          {restCount > 0 && <span className="text-xs text-text-muted">+{restCount} more</span>}
         </>
+      )}
+      {overflowActions !== undefined && overflowActions.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="ml-auto" aria-label="추가 작업">
+              <Ellipsis className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {overflowActions.map((action) => (
+              <DropdownMenuItem
+                key={action.label}
+                onSelect={action.onClick}
+                data-testid={action.testId}
+              >
+                {action.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
