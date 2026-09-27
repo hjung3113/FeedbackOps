@@ -152,7 +152,8 @@ Anatomy:
 - ListToolbar
 - FilterViewTabs
 - ObjectRow[]
-- EmptyState
+- `ListStateMessage` for application list states, wrapping `@fops/ui` `EmptyState` with `empty`,
+  `filtered`, and `error` variants
 - LoadingState
 - ErrorState
 - BulkActionBar when rows selected

@@ -11,6 +11,7 @@ import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 export function useFindingsList(
   managedSystemId?: string,
   execution?: 'none',
+  enabled = true,
 ): UseQueryResult<ListFindingsResponse> {
   return useQuery({
     queryKey: ['findings', { managedSystemId, execution }] as const,
@@ -33,5 +34,6 @@ export function useFindingsList(
         error.status !== 429
       ) &&
       failureCount < 1,
+    enabled,
   });
 }

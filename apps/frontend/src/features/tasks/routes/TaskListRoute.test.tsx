@@ -151,6 +151,15 @@ describe('TaskListRoute display ids', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows the true-empty message without a filter-reset action', async () => {
+    vi.mocked(listTasks).mockResolvedValueOnce({ items: [] });
+    renderWithClient(<TaskListRoute />);
+
+    expect(await screen.findByText('Task가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('생성된 Task가 여기에 표시됩니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
+  });
+
   it('renders permission denied instead of the list unavailable copy for a 403', async () => {
     vi.mocked(listTasks).mockRejectedValueOnce(
       new ApiError(403, {
@@ -162,7 +171,7 @@ describe('TaskListRoute display ids', () => {
 
     const panel = await screen.findByText('Task list');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
-    expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission list failure unavailable', async () => {
@@ -171,8 +180,14 @@ describe('TaskListRoute display ids', () => {
     );
     renderWithClient(<TaskListRoute />);
 
-    expect(await screen.findByText('Task list unavailable.')).toBeInTheDocument();
+    expect(await screen.findByText('Task 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText('잠시 후 다시 시도하세요.')).toBeInTheDocument();
     expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
+
+    const attemptsBeforeRetry = vi.mocked(listTasks).mock.calls.length;
+    await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('TASK-1000')).toBeInTheDocument();
+    expect(vi.mocked(listTasks).mock.calls.length).toBeGreaterThan(attemptsBeforeRetry);
   });
 
   it('renders permission denied instead of task detail unavailable for a 403', async () => {

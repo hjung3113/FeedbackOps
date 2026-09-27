@@ -21,6 +21,7 @@ const TAB_ORDER: Array<{ value: TaskRequestTab; label: string }> = [
 export interface UseTaskRequestsQueueResult {
   activeTab: TaskRequestTab;
   setActiveTab: (tab: TaskRequestTab) => void;
+  hasItems: boolean;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
   tabs: ListToolbarTab[];
@@ -32,6 +33,7 @@ export interface UseTaskRequestsQueueResult {
   isLoading: boolean;
   permissionDeniedError: { message: string } | null;
   hasError: boolean;
+  refetch: () => void;
 }
 
 export function useTaskRequestsQueue({
@@ -128,6 +130,7 @@ export function useTaskRequestsQueue({
   return {
     activeTab,
     setActiveTab,
+    hasItems: items.length > 0,
     selectedId,
     setSelectedId,
     tabs,
@@ -141,5 +144,8 @@ export function useTaskRequestsQueue({
       ? { message: taskRequestsQuery.error.message }
       : null,
     hasError: taskRequestsQuery.error !== null,
+    refetch: () => {
+      void taskRequestsQuery.refetch();
+    },
   };
 }

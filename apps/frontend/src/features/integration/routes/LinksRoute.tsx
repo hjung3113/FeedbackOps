@@ -73,6 +73,30 @@ export function LinksRoute() {
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
   });
 
+  const activeFilterDescription = React.useMemo(() => {
+    const conditions: string[] = [];
+    if (search.status !== undefined) {
+      const statusLabel = STATUS_TABS.find((tab) => tab.value === search.status)?.label;
+      conditions.push(`상태: ${statusLabel ?? search.status}`);
+    }
+    if (search.type !== undefined) conditions.push(`관계 유형: ${search.type}`);
+    return conditions.length > 0 ? conditions.join(' · ') : undefined;
+  }, [search.status, search.type]);
+  const needsUnfilteredCheck =
+    activeFilterDescription !== undefined &&
+    inventory.isSuccess &&
+    inventory.data.items.length === 0;
+  const unfilteredInventory = useEntityLinkInventory(
+    {
+      ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+    },
+    needsUnfilteredCheck,
+  );
+  const tableError = inventory.error ?? (needsUnfilteredCheck ? unfilteredInventory.error : null);
+  const retryTable = React.useCallback((): void => {
+    void (inventory.error ? inventory.refetch() : unfilteredInventory.refetch());
+  }, [inventory.error, inventory.refetch, unfilteredInventory.refetch]);
+
   const countInventory = useEntityLinkInventory({
     ...(search.type !== undefined ? { relationType: search.type } : {}),
     ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
@@ -124,10 +148,7 @@ export function LinksRoute() {
     const items = countInventory.data?.items ?? [];
     const counts = new Map<string, number>([['all', items.length]]);
     for (const status of STATUS_TAB_VALUES) {
-      counts.set(
-        status,
-        items.filter((link) => link.status === status).length,
-      );
+      counts.set(status, items.filter((link) => link.status === status).length);
     }
     return STATUS_TABS.map((tab) => ({
       ...tab,
@@ -176,6 +197,15 @@ export function LinksRoute() {
     });
   }
 
+  function handleResetFilters(): void {
+    void navigate({
+      to: '/integration/links',
+      search: (prev): LinksSearch => ({
+        ...(prev.managedSystem !== undefined ? { managedSystem: prev.managedSystem } : {}),
+      }),
+    });
+  }
+
   return (
     <>
       <ListToolbar
@@ -211,13 +241,14 @@ export function LinksRoute() {
       />
       <EntityLinksInventoryTable
         items={inventory.data?.items ?? []}
-        loading={inventory.isLoading}
-        error={inventory.error ?? null}
+        loading={inventory.isLoading || (needsUnfilteredCheck && unfilteredInventory.isPending)}
+        error={tableError ?? null}
         managedSystemsById={managedSystemsById}
         actorsById={actorsById}
-        onRetry={() => {
-          void inventory.refetch();
-        }}
+        onRetry={retryTable}
+        unfilteredItemsCount={unfilteredInventory.data?.items.length ?? 0}
+        filterDescription={activeFilterDescription}
+        onResetFilters={handleResetFilters}
       />
     </>
   );

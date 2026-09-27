@@ -1,3 +1,5 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
+import { ApiError } from '@/lib/api/types';
 import type { EntityLinkDto } from '@fops/shared';
 import { Checkbox, ManagedSystemPill, PermissionBlockedPanel, cn } from '@fops/ui';
 import { EntityRelationRow } from './EntityRelationRow';
@@ -20,6 +22,9 @@ export interface EntityLinksInventoryTableProps {
   managedSystemsById?: Record<string, ManagedSystemPresentation>;
   actorsById?: Record<string, ActorPresentation>;
   onRetry?: () => void;
+  unfilteredItemsCount?: number;
+  filterDescription?: string | undefined;
+  onResetFilters?: (() => void) | undefined;
 }
 
 function shortId(id: string): string {
@@ -45,45 +50,76 @@ export function EntityLinksInventoryTable({
   managedSystemsById = {},
   actorsById = {},
   onRetry,
+  unfilteredItemsCount = 0,
+  filterDescription,
+  onResetFilters,
 }: EntityLinksInventoryTableProps) {
   if (loading === true) {
     return <div className="p-6 text-sm text-text-muted">Loading entity_links…</div>;
   }
 
   if (error != null) {
+    if (isPermissionDenied(error)) {
+      return (
+        <PermissionBlockedPanel
+          state="denied"
+          category="Entity links"
+          reason={error.message}
+          className="m-4"
+          {...(onRetry !== undefined
+            ? {
+                summary: (
+                  <button type="button" onClick={onRetry}>
+                    다시 시도
+                  </button>
+                ),
+              }
+            : {})}
+        />
+      );
+    }
+
     return (
-      <PermissionBlockedPanel
-        state="denied"
-        category="Entity links"
-        reason={error.message}
-        className="m-4"
-        {...(onRetry !== undefined
-          ? {
-              summary: (
-                <button type="button" onClick={onRetry}>
-                  다시 시도
-                </button>
-              ),
-            }
-          : {})}
-      />
+      <div className="p-4">
+        <ListStateMessage
+          variant="error"
+          title="Entity Link 목록을 불러오지 못했습니다"
+          body="잠시 후 다시 시도하세요."
+          {...(onRetry !== undefined ? { action: { label: '다시 시도', onClick: onRetry } } : {})}
+        />
+      </div>
     );
   }
 
   if (items.length === 0) {
+    if (filterDescription !== undefined && unfilteredItemsCount > 0) {
+      return (
+        <div className="p-4">
+          <ListStateMessage
+            variant="filtered"
+            title="현재 조건에 맞는 Entity Link가 없습니다"
+            body={filterDescription}
+            {...(onResetFilters !== undefined
+              ? { action: { label: '필터 초기화', onClick: onResetFilters } }
+              : {})}
+          />
+        </div>
+      );
+    }
+
     return (
-      <div className="p-6 text-center text-sm text-text-muted">
-        해당 상태의 entity_link 가 없습니다.
+      <div className="p-4">
+        <ListStateMessage
+          variant="empty"
+          title="Entity Link가 없습니다."
+          body="시스템 간 연결이 생성되면 이 목록에 표시됩니다."
+        />
       </div>
     );
   }
 
   return (
-    <div
-      aria-label="Entity link inventory"
-      role="list"
-      className="min-w-full"
-    >
+    <div aria-label="Entity link inventory" role="list" className="min-w-full">
       {items.map((link) => {
         const managedSystem = managedSystemsById[link.managed_system_id];
         const actor = actorsById[link.created_by];
@@ -141,6 +177,14 @@ export function EntityLinksInventoryTable({
         );
       })}
     </div>
+  );
+}
+
+function isPermissionDenied(error: Error): error is ApiError {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
   );
 }
 
