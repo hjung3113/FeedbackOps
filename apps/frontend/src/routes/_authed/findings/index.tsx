@@ -126,13 +126,10 @@ function FindingsListShell({
 
   React.useEffect(() => {
     if (!listQuery.isSuccess) return;
-    // A selected Finding can be valid in the full list while execution=none
-    // intentionally filters it out. Keep it until that filter is cleared.
-    if (execution === 'none') return;
     if (selectedId !== null && !findings.some((finding) => finding.id === selectedId)) {
       onSelectionReconciled();
     }
-  }, [execution, findings, listQuery.isSuccess, onSelectionReconciled, selectedId]);
+  }, [findings, listQuery.isSuccess, onSelectionReconciled, selectedId]);
 
   return (
     <ListShell

@@ -156,7 +156,7 @@ describe('TaskListRoute display ids', () => {
     renderWithClient(<TaskListRoute />);
 
     expect(await screen.findByText('Task가 없습니다.')).toBeInTheDocument();
-    expect(screen.getByText('실행 대기 중인 Task가 여기에 표시됩니다.')).toBeInTheDocument();
+    expect(screen.getByText('생성된 Task가 여기에 표시됩니다.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
   });
 
@@ -171,7 +171,7 @@ describe('TaskListRoute display ids', () => {
 
     const panel = await screen.findByText('Task list');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
-    expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission list failure unavailable', async () => {

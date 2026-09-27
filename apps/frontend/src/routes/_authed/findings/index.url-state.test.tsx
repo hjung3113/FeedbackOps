@@ -70,6 +70,7 @@ const MS_2 = '99999999-9999-9999-9999-999999999902';
 const F1_ID = '11111111-1111-4111-8111-111111111111';
 const F2_ID = '44444444-4444-4444-4444-444444444444';
 const STALE_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const UNKNOWN_ID = '99999999-9999-4999-8999-999999999999';
 
 const F1 = {
   id: F1_ID,
@@ -125,6 +126,7 @@ interface FetchCase {
   failList?: boolean;
   failuresRemaining?: number;
   emptyList?: boolean;
+  emptyExecutionNone?: boolean;
 }
 
 function installFetch(c: FetchCase): void {
@@ -139,7 +141,9 @@ function installFetch(c: FetchCase): void {
         return jsonResponse({ code: 'internal.unexpected' }, 500);
       }
       if (c.emptyList) return jsonResponse({ items: [] });
-      if (path.searchParams.get('execution') === 'none') return jsonResponse({ items: [] });
+      if (c.emptyExecutionNone && path.searchParams.get('execution') === 'none') {
+        return jsonResponse({ items: [] });
+      }
       const msFilter = path.searchParams.get('managed_system_id');
       const items = msFilter
         ? FINDINGS.filter((finding) => finding.primary_managed_system_id === msFilter)
@@ -312,6 +316,7 @@ describe('/findings URL state', () => {
         }),
       ).toBe(true),
     );
+    expect(await screen.findByRole('button', { name: /FND-101/ })).toBeInTheDocument();
     expect(router.state.location.search).toEqual({
       managedSystem: MS_1,
       selected: F1_ID,
@@ -346,21 +351,33 @@ describe('/findings URL state', () => {
   });
 
   test('clears the execution URL filter and restores Findings after a filtered miss', async () => {
-    const filtered: FetchCase = { requested: [] };
-    const router = renderUrlState(
-      filtered,
-      `/findings?managedSystem=${MS_1}&selected=${F1_ID}&execution=none`,
-    );
+    const filtered: FetchCase = { requested: [], emptyExecutionNone: true };
+    const router = renderUrlState(filtered, `/findings?managedSystem=${MS_1}&execution=none`);
 
     expect(await screen.findByText('현재 조건에 맞는 Finding이 없습니다')).toBeInTheDocument();
     expect(screen.getByText('실행과 연결되지 않은 Finding만 표시 중입니다.')).toBeInTheDocument();
     expect(screen.getByText('0개')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
-    await waitFor(() =>
-      expect(router.state.location.search).toEqual({ managedSystem: MS_1, selected: F1_ID }),
-    );
+    await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_1 }));
     expect(screen.getByRole('button', { name: /FND-101/ })).toBeInTheDocument();
+  });
+
+  test('drops a stale selection when execution=none and both list queries are empty', async () => {
+    const empty: FetchCase = { requested: [], emptyList: true };
+    const router = renderUrlState(empty, `/findings?execution=none&selected=${UNKNOWN_ID}`);
+
+    expect(await screen.findByText('생성된 Finding이 없습니다.')).toBeInTheDocument();
+    await waitFor(() => expect(router.state.location.search).toEqual({ execution: 'none' }));
+    const paths = empty.requested.map((url) => new URL(url, 'http://localhost'));
+    expect(
+      paths.some(
+        (path) => path.pathname === '/findings' && path.searchParams.get('execution') === 'none',
+      ),
+    ).toBe(true);
+    expect(
+      paths.some((path) => path.pathname === '/findings' && !path.searchParams.has('execution')),
+    ).toBe(true);
   });
 
   test('retries an ordinary Finding list error through the query refetch', async () => {

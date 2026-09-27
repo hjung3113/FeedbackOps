@@ -49,6 +49,8 @@ export function TaskRequestsRoute({
 
   const activeTabLabel =
     queue.tabs.find((tab) => tab.value === queue.activeTab)?.label ?? queue.activeTab;
+  const isPendingEmpty =
+    queue.shown.length === 0 && queue.hasItems && queue.activeTab === 'pending_review';
   const isFilteredEmpty =
     queue.shown.length === 0 &&
     queue.hasItems &&
@@ -75,7 +77,13 @@ export function TaskRequestsRoute({
               />
             ))}
             {queue.shown.length === 0 &&
-              (isFilteredEmpty ? (
+              (isPendingEmpty ? (
+                <ListStateMessage
+                  variant="filtered"
+                  title="검토 대기 중인 Task Request가 없습니다"
+                  body="다른 상태의 Task Request가 있습니다."
+                />
+              ) : isFilteredEmpty ? (
                 <ListStateMessage
                   variant="filtered"
                   title="현재 조건에 맞는 Task Request가 없습니다"

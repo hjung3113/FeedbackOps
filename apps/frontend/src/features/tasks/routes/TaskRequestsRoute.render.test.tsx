@@ -1,5 +1,6 @@
 import { fetchTaskRequests } from '@/lib/api';
 import { ApiError } from '@/lib/api/types';
+import type { TaskRequestDto } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -47,8 +48,8 @@ vi.mock('@/lib/api/managed-systems', () => ({
   })),
 }));
 
-vi.mock('@/lib/api', () => {
-  const taskRequest = {
+const { taskRequest } = vi.hoisted(() => ({
+  taskRequest: {
     id: '10000000-0000-0000-0000-000000000001',
     workspace_id: '90000000-0000-0000-0000-000000000009',
     display_id: 'REQ-42',
@@ -71,34 +72,35 @@ vi.mock('@/lib/api', () => {
       relation_type: 'requested_task',
       link_id: '70000000-0000-0000-0000-000000000007',
     },
-  };
-  return {
-    approveTaskRequest: vi.fn(),
-    convertTaskRequest: vi.fn(),
-    fetchMe: vi.fn(async () => ({
-      actor: {
-        id: '60000000-0000-0000-0000-000000000006',
-        role_level: 'admin',
+  } as TaskRequestDto,
+}));
+
+vi.mock('@/lib/api', () => ({
+  approveTaskRequest: vi.fn(),
+  convertTaskRequest: vi.fn(),
+  fetchMe: vi.fn(async () => ({
+    actor: {
+      id: '60000000-0000-0000-0000-000000000006',
+      role_level: 'admin',
+    },
+  })),
+  fetchPermissionCheck: vi.fn(async () => ({ state: 'approved' })),
+  fetchTaskRequests: vi.fn(async () => ({ items: [taskRequest] })),
+  linkExistingTask: vi.fn(),
+  listTasks: vi.fn(async () => ({ items: [] })),
+  rejectTaskRequest: vi.fn(),
+  requestMoreEvidenceForTaskRequest: vi.fn(),
+  resolveActors: vi.fn(async () => ({
+    actors: [
+      {
+        id: '20000000-0000-0000-0000-000000000002',
+        display_name: '요청자',
+        email: 'requester@example.test',
       },
-    })),
-    fetchPermissionCheck: vi.fn(async () => ({ state: 'approved' })),
-    fetchTaskRequests: vi.fn(async () => ({ items: [taskRequest] })),
-    linkExistingTask: vi.fn(),
-    listTasks: vi.fn(async () => ({ items: [] })),
-    rejectTaskRequest: vi.fn(),
-    requestMoreEvidenceForTaskRequest: vi.fn(),
-    resolveActors: vi.fn(async () => ({
-      actors: [
-        {
-          id: '20000000-0000-0000-0000-000000000002',
-          display_name: '요청자',
-          email: 'requester@example.test',
-        },
-      ],
-      teams: [],
-    })),
-  };
-});
+    ],
+    teams: [],
+  })),
+}));
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -125,6 +127,26 @@ describe('TaskRequestsRoute display ids', () => {
     expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
   });
 
+  it('shows pending-specific copy when only other statuses have requests', async () => {
+    vi.mocked(fetchTaskRequests).mockResolvedValueOnce({
+      items: [
+        { ...taskRequest, status: 'approved' },
+        {
+          ...taskRequest,
+          id: '10000000-0000-0000-0000-000000000002',
+          display_id: 'REQ-43',
+          status: 'rejected',
+        },
+      ],
+    });
+    renderWithClient(<TaskRequestsRoute />);
+
+    expect(await screen.findByText('검토 대기 중인 Task Request가 없습니다')).toBeInTheDocument();
+    expect(screen.getByText('다른 상태의 Task Request가 있습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('Task Request가 없습니다.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
+  });
+
   it('resets an empty non-default status tab to the default Pending tab', async () => {
     renderWithClient(<TaskRequestsRoute />);
 
@@ -135,6 +157,7 @@ describe('TaskRequestsRoute display ids', () => {
     expect(screen.getByText('선택한 상태: Approved')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
+    expect(screen.getByRole('tab', { name: 'Pending' })).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByRole('button', { name: /REQ-42/ })).toBeInTheDocument();
     expect(screen.queryByText('현재 조건에 맞는 Task Request가 없습니다')).not.toBeInTheDocument();
   });
@@ -150,7 +173,7 @@ describe('TaskRequestsRoute display ids', () => {
 
     const panel = await screen.findByText('Task Request queue');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
-    expect(screen.queryByText('Task Request queue unavailable.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task Request 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission queue failure unavailable', async () => {

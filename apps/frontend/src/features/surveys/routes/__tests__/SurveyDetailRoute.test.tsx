@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { Survey } from '../../types';
 
@@ -90,5 +91,30 @@ describe('/surveys/:surveyId route', () => {
     render(<SurveyDetailRoute />);
 
     expect(screen.getByText('설문을 찾을 수 없습니다.')).toBeInTheDocument();
+  });
+
+  it('retries the survey list from the detail route error state', async () => {
+    const refetch = vi.fn();
+    useSurvey.mockReturnValue({
+      data: survey,
+      isLoading: false,
+      isError: false,
+    });
+    useSurveyManageGate.mockReturnValue({
+      canManage: false,
+      gateState: 'absent',
+    });
+    useSurveys.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: new Error('list request failed'),
+      refetch,
+    });
+
+    render(<SurveyDetailRoute />);
+
+    expect(await screen.findByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 });

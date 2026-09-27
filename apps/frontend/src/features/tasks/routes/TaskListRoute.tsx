@@ -146,7 +146,7 @@ export function TaskListRoute({
             <ListStateMessage
               variant="empty"
               title="Task가 없습니다."
-              body="실행 대기 중인 Task가 여기에 표시됩니다."
+              body="생성된 Task가 여기에 표시됩니다."
             />
           )}
         </>

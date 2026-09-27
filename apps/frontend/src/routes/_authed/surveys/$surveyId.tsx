@@ -60,6 +60,7 @@ export function SurveyDetailRoute() {
           surveys={list.data ?? []}
           isLoading={list.isLoading}
           error={list.error}
+          onRetry={() => void list.refetch()}
           selectedId={surveyId}
           onSelect={(id) =>
             void navigate({
