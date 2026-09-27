@@ -41,8 +41,6 @@ import { sql } from 'drizzle-orm';
 import { sqlUuidArray } from '../../../db/sql-arrays.js';
 import type { Scope } from '../authorization.js';
 
-export { sqlUuidArray };
-
 /** TypeScript twin of `dismissalScopeKeySql`, for the write path. */
 export function dismissalScopeKey(
   readScope: Scope,
