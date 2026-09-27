@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 /**
@@ -25,14 +24,14 @@ export interface ReporterStatusBadgeProps {
  * `docs/design-prototype/data.js`.
  */
 const LABELS: Record<ReporterFacingStatusEnum, string> = {
-  received:  '접수됨',
+  received: '접수됨',
   reviewing: '검토 중',
-  assigned:  '담당자 배정됨',
-  progress:  '처리 중',
-  prep:      '해결 준비 중',
-  resolved:  '해결됨',
-  reopened:  '다시 처리 중',
-  closed:    '종료됨',
+  assigned: '담당자 배정됨',
+  progress: '처리 중',
+  prep: '해결 준비 중',
+  resolved: '해결됨',
+  reopened: '다시 처리 중',
+  closed: '종료됨',
 };
 
 /**
@@ -65,7 +64,14 @@ export function ReporterStatusBadge({ status, className }: ReporterStatusBadgePr
         // resolves to an invalid value and the pill renders un-tinted (#000
         // text on transparent background) — visible as "뱃지 없음" in
         // `.review/title-reference.png` review.
-        color:           `rgb(var(${token}) / 1)`,
+        //
+        // #525: the label text uses the `-label` token, not `token` — the raw
+        // status hue is legible as a small dot/14%-tint but fails WCAG AA
+        // 4.5:1 as running text at that same value (measured 2.25:1–3.91:1).
+        // `-label` is the identical hue darkened until it clears 4.5:1;
+        // `reviewing`/`assigned` already passed, so their `-label` is
+        // unchanged. The dot below intentionally keeps the vivid `token`.
+        color: `rgb(var(${token}-label) / 1)`,
         backgroundColor: `rgb(var(${token}) / 0.14)`,
       }}
       data-token={token}

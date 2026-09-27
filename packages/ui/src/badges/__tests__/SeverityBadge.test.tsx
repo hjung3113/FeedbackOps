@@ -1,13 +1,11 @@
-/// <reference types="@testing-library/jest-dom" />
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
-import { SeverityBadge } from '../SeverityBadge.js';
 import type { SeverityEnum } from '../../indicators/SeverityIndicator.js';
+import { SeverityBadge } from '../SeverityBadge.js';
 
 const cases: Array<{ severity: SeverityEnum; label: string }> = [
-  { severity: 'low',      label: '낮음' },
-  { severity: 'medium',   label: '중간' },
-  { severity: 'high',     label: '높음' },
+  { severity: 'low', label: '낮음' },
+  { severity: 'medium', label: '중간' },
+  { severity: 'high', label: '높음' },
   { severity: 'critical', label: '심각' },
 ];
 
@@ -22,6 +20,16 @@ describe('SeverityBadge', () => {
       const { container } = render(<SeverityBadge severity={severity} />);
       const badge = container.querySelector(`[data-token="--severity-${severity}"]`);
       expect(badge).not.toBeNull();
+    });
+
+    // #525: `var(${token})` used directly as `color` is not a valid CSS
+    // color (the token is a raw RGB triplet) and the base hue fails WCAG AA
+    // 4.5:1 as text at 12% tint anyway — must use the `-label` token,
+    // rgb()-wrapped.
+    it('uses the -label token (rgb()-wrapped) for label text color', () => {
+      const { container } = render(<SeverityBadge severity={severity} />);
+      const badge = container.querySelector(`[data-token="--severity-${severity}"]`) as HTMLElement;
+      expect(badge.style.color).toBe(`rgb(var(--severity-${severity}-label) / 1)`);
     });
   });
 });

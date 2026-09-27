@@ -4,13 +4,20 @@ import userEvent from '@testing-library/user-event';
 import { DetailPanelHeader } from '../DetailPanelHeader.js';
 import type { DetailPanelKind } from '../DetailPanelHeader.js';
 
+// #525: the tokens are raw RGB triplets — a bare `var(--color-X)` is not a
+// valid CSS color, so the component wraps it in `rgb(...)`. This map's exact
+// string values ARE the regression guard: if the component reverts to the
+// bare form, this test fails even though jsdom's CSSOM echoes either form
+// back from `.style.backgroundColor` without validating it (var() references
+// are unresolved at parse time, so jsdom can't tell the bare form is
+// invalid on its own — matching the literal fixed string is what catches it).
 const KIND_ACCENT: Record<DetailPanelKind, string> = {
-  voc: 'var(--color-aether-blue)',
-  finding: 'var(--color-emerald)',
-  task: 'var(--color-amethyst)',
-  survey: 'var(--color-cyan-spark)',
-  cluster: 'var(--color-amber)',
-  milestone: 'var(--color-amber)',
+  voc: 'rgb(var(--color-aether-blue))',
+  finding: 'rgb(var(--color-emerald))',
+  task: 'rgb(var(--color-amethyst))',
+  survey: 'rgb(var(--color-cyan-spark))',
+  cluster: 'rgb(var(--color-amber))',
+  milestone: 'rgb(var(--color-amber))',
 };
 
 const kinds = Object.keys(KIND_ACCENT) as DetailPanelKind[];

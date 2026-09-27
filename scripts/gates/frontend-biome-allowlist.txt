@@ -239,3 +239,6 @@ apps/frontend/src/routes/_authed/admin/permissions/requests.test.tsx organizeImp
 apps/frontend/src/routes/_authed/admin/permissions/requests.test.tsx format -- pre-existing on develop; whole-file double-quote style predates biome, this branch only adds/edits individual test bodies
 apps/frontend/src/lib/layout/AppFrame.tsx organizeImports -- pre-existing on develop; import order predates biome, this branch adds a scopeControlEnabled prop only
 apps/frontend/src/lib/layout/AppFrame.tsx format -- pre-existing on develop; import block/JSDoc predates biome formatting, this branch adds a scopeControlEnabled prop only
+packages/ui/src/badges/__tests__/SeverityBadge.test.tsx lint/complexity/noForEach -- pre-existing on develop; the outer cases.forEach() this branch did not write, only added new it() blocks inside it
+packages/ui/src/badges/__tests__/ReporterStatusBadge.test.tsx lint/complexity/noForEach -- pre-existing on develop; the outer cases.forEach() this branch did not write, only added new it() blocks inside it
+packages/ui/src/indicators/__tests__/SeverityIndicator.test.tsx lint/complexity/noForEach -- pre-existing on develop; the outer severities.forEach() and inner bars.forEach() calls this branch did not write, only added a new it() block using the same pre-existing pattern

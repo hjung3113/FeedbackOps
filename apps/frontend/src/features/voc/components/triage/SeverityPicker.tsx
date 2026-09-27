@@ -55,11 +55,14 @@ const ACTIVE_CLASS: Record<SeverityLevel, string> = {
   critical: 'bg-severity-critical/10 ring-1 ring-inset ring-severity-critical/40',
 };
 
+// #525: the raw severity hue fails WCAG AA 4.5:1 as label text at this
+// chip's tint background — use the contrast-safe `-label` pair instead
+// (the bar/tint/ring above keep the vivid base token).
 const ACTIVE_LABEL_CLASS: Record<SeverityLevel, string> = {
-  low: 'text-severity-low',
-  medium: 'text-severity-medium',
-  high: 'text-severity-high',
-  critical: 'text-severity-critical',
+  low: 'text-severity-low-label',
+  medium: 'text-severity-medium-label',
+  high: 'text-severity-high-label',
+  critical: 'text-severity-critical-label',
 };
 
 export function SeverityPicker({
