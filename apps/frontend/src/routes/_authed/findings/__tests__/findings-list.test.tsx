@@ -14,82 +14,86 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FindingsListPage, findingsSearchSchema } from '../index';
 
-vi.mock('@fops/ui', () => ({
-  ListShell: ({
-    toolbar,
-    list,
-    detailPanel,
-  }: {
-    toolbar?: { title: string; subtitle?: string; actions?: React.ReactNode };
-    list: React.ReactNode;
-    detailPanel?: React.ReactNode;
-  }) => (
-    <div data-shell="list">
-      {toolbar && (
-        <header data-testid="list-shell-toolbar">
-          <h1>{toolbar.title}</h1>
-          {toolbar.subtitle && <p>{toolbar.subtitle}</p>}
-          <div>{toolbar.actions}</div>
-        </header>
-      )}
-      <main>{list}</main>
-      <aside data-testid="list-shell-detail-slot">{detailPanel}</aside>
-    </div>
-  ),
-  ObjectRow: ({
-    id,
-    title,
-    badges,
-    meta,
-    trailing,
-    severity,
-    selected,
-    onClick,
-  }: {
-    id?: string;
-    title: React.ReactNode;
-    badges?: React.ReactNode;
-    meta?: React.ReactNode;
-    trailing?: React.ReactNode;
-    severity?: string;
-    selected?: boolean;
-    onClick?: React.MouseEventHandler<HTMLButtonElement>;
-  }) => (
-    <button
-      type="button"
-      data-testid={`finding-row-${id}`}
-      data-selected={selected ? 'true' : 'false'}
-      onClick={onClick}
-    >
-      {severity ? <span data-token={`--severity-${severity}`} /> : null}
-      <span>{id}</span>
-      <span>{title}</span>
-      <span>{badges}</span>
-      <span>{meta}</span>
-      <span>{trailing}</span>
-    </button>
-  ),
-  OutlineBadge: ({ children, ...props }: { children: React.ReactNode }) => (
-    <span {...props}>{children}</span>
-  ),
-  PermissionBlockedPanel: ({ state, category }: { state: string; category: string }) => (
-    <div data-testid="permission-blocked" data-state={state}>
-      {category}
-    </div>
-  ),
-  Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
-  UserAvatar: ({
-    user,
-    size,
-  }: {
-    user: { display_name: string };
-    size?: 'sm' | 'md' | 'lg';
-  }) => (
-    <span data-size={size} data-testid={`owner-avatar-${user.display_name}`}>
-      {user.display_name}
-    </span>
-  ),
-}));
+vi.mock('@fops/ui', async () => {
+  const actual = await vi.importActual<typeof import('@fops/ui')>('@fops/ui');
+  return {
+    ...actual,
+    ListShell: ({
+      toolbar,
+      list,
+      detailPanel,
+    }: {
+      toolbar?: { title: string; subtitle?: string; actions?: React.ReactNode };
+      list: React.ReactNode;
+      detailPanel?: React.ReactNode;
+    }) => (
+      <div data-shell="list">
+        {toolbar && (
+          <header data-testid="list-shell-toolbar">
+            <h1>{toolbar.title}</h1>
+            {toolbar.subtitle && <p>{toolbar.subtitle}</p>}
+            <div>{toolbar.actions}</div>
+          </header>
+        )}
+        <main>{list}</main>
+        <aside data-testid="list-shell-detail-slot">{detailPanel}</aside>
+      </div>
+    ),
+    ObjectRow: ({
+      id,
+      title,
+      badges,
+      meta,
+      trailing,
+      severity,
+      selected,
+      onClick,
+    }: {
+      id?: string;
+      title: React.ReactNode;
+      badges?: React.ReactNode;
+      meta?: React.ReactNode;
+      trailing?: React.ReactNode;
+      severity?: string;
+      selected?: boolean;
+      onClick?: React.MouseEventHandler<HTMLButtonElement>;
+    }) => (
+      <button
+        type="button"
+        data-testid={`finding-row-${id}`}
+        data-selected={selected ? 'true' : 'false'}
+        onClick={onClick}
+      >
+        {severity ? <span data-token={`--severity-${severity}`} /> : null}
+        <span>{id}</span>
+        <span>{title}</span>
+        <span>{badges}</span>
+        <span>{meta}</span>
+        <span>{trailing}</span>
+      </button>
+    ),
+    OutlineBadge: ({ children, ...props }: { children: React.ReactNode }) => (
+      <span {...props}>{children}</span>
+    ),
+    PermissionBlockedPanel: ({ state, category }: { state: string; category: string }) => (
+      <div data-testid="permission-blocked" data-state={state}>
+        {category}
+      </div>
+    ),
+    Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
+    UserAvatar: ({
+      user,
+      size,
+    }: {
+      user: { display_name: string };
+      size?: 'sm' | 'md' | 'lg';
+    }) => (
+      <span data-size={size} data-testid={`owner-avatar-${user.display_name}`}>
+        {user.display_name}
+      </span>
+    ),
+  };
+});
 
 const findings = [
   {
@@ -263,8 +267,9 @@ describe('FindingsListPage', () => {
     await renderFindingsPage();
 
     expect(screen.getByTestId('finding-list-error')).toHaveTextContent(
-      '데이터를 불러오지 못했습니다.',
+      'Finding 목록을 불러오지 못했습니다',
     );
+    expect(screen.getByTestId('finding-list-error')).toHaveTextContent('잠시 후 다시 시도하세요.');
     expect(screen.queryByTestId('permission-blocked')).not.toBeInTheDocument();
     expect(screen.queryByText('0개')).not.toBeInTheDocument();
   });

@@ -73,15 +73,27 @@ function buildHarness(initialPath: string) {
   return { router, qc };
 }
 
-function stubFetch(capturedUrls: string[]) {
+function stubFetch(
+  capturedUrls: string[],
+  links: readonly (typeof ALL_LINKS)[number][] = ALL_LINKS,
+  linkResponses?: Array<{ status: number; body: unknown }>,
+) {
+  let linkAttempt = 0;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     capturedUrls.push(url);
     if (url.includes('/entity-links')) {
+      const response = linkResponses?.[linkAttempt];
+      linkAttempt += 1;
+      if (response !== undefined) {
+        return new Response(JSON.stringify(response.body), {
+          status: response.status,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
       const parsed = new URL(url, 'http://localhost');
       const status = parsed.searchParams.get('status');
-      const items =
-        status === null ? ALL_LINKS : ALL_LINKS.filter((link) => link.status === status);
+      const items = status === null ? links : links.filter((link) => link.status === status);
       return new Response(JSON.stringify({ items }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -171,10 +183,10 @@ describe('integration links route', () => {
     expect(urls.some((url) => url.includes('/entity-links?scope=workspace'))).toBe(true);
   });
 
-  test('renders Korean empty state for no matching rows', async () => {
+  test('resets a filtered status miss and restores the unfiltered rows', async () => {
     const urls: string[] = [];
     stubFetch(urls);
-    const { router, qc } = buildHarness('/integration/links?status=revoked');
+    const { router, qc } = buildHarness(`/integration/links?status=revoked&managedSystem=${MS_A}`);
 
     render(
       <QueryClientProvider client={qc}>
@@ -183,8 +195,74 @@ describe('integration links route', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('해당 상태의 entity_link 가 없습니다.')).toBeInTheDocument();
+      expect(screen.getByText('현재 조건에 맞는 Entity Link가 없습니다')).toBeInTheDocument();
     });
+    expect(screen.getByText('상태: Revoked')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+
+    await waitFor(() => expect(router.state.location.search).toEqual({ managedSystem: MS_A }));
+    expect(await screen.findByText(LINK_A.slice(0, 8))).toBeInTheDocument();
+    expect(screen.getByText(LINK_B.slice(0, 8))).toBeInTheDocument();
+  });
+
+  test('shows a true-empty Entity Link message without a filter-reset action', async () => {
+    const urls: string[] = [];
+    stubFetch(urls, []);
+    const { router, qc } = buildHarness('/integration/links');
+
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Entity Link가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('시스템 간 연결이 생성되면 이 목록에 표시됩니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
+  });
+
+  test('retries an ordinary Entity Link inventory error', async () => {
+    const urls: string[] = [];
+    stubFetch(urls, ALL_LINKS, [
+      { status: 500, body: { code: 'internal.unexpected', message: 'server failed' } },
+      { status: 500, body: { code: 'internal.unexpected', message: 'server failed' } },
+      { status: 200, body: { items: [ALL_LINKS[0]] } },
+    ]);
+    const { router, qc } = buildHarness('/integration/links');
+
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Entity Link 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    const attemptsBeforeRetry = urls.filter((url) => url.includes('/entity-links')).length;
+    await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    expect(await screen.findByText(LINK_A.slice(0, 8))).toBeInTheDocument();
+    const attemptsAfterRetry = urls.filter((url) => url.includes('/entity-links')).length;
+    expect(attemptsAfterRetry).toBeGreaterThan(attemptsBeforeRetry);
+  });
+
+  test('keeps PermissionBlockedPanel for Entity Link permission failures', async () => {
+    const urls: string[] = [];
+    const denied = { code: 'permission.denied', message: 'entity_link.read capability required' };
+    stubFetch(urls, ALL_LINKS, [
+      { status: 403, body: denied },
+      { status: 403, body: denied },
+    ]);
+    const { router, qc } = buildHarness('/integration/links');
+
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const panel = await screen.findByText('Entity links');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.queryByText('Entity Link 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
   });
 
   test('changing status tab updates the request status param and rendered subset', async () => {

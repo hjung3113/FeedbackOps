@@ -8,6 +8,7 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SurveyBuilder } from '../../components/builder/SurveyBuilder';
@@ -149,9 +150,44 @@ describe('Survey screens', () => {
     rerender(<SurveyList surveys={[]} isLoading error={null} onSelect={select} />);
     expect(screen.getByTestId('survey-list-skeleton')).toBeInTheDocument();
     rerender(
-      <SurveyList surveys={[]} isLoading={false} error={new Error('failed')} onSelect={select} />,
+      <SurveyList
+        surveys={[]}
+        isLoading={false}
+        error={new Error('failed')}
+        onSelect={select}
+        onRetry={vi.fn()}
+      />,
     );
     expect(screen.getByTestId('survey-list-error')).toBeInTheDocument();
+  });
+
+  it('refetches the survey list from the error state', async () => {
+    apiRequest
+      .mockRejectedValueOnce(new Error('server failed'))
+      .mockRejectedValueOnce(new Error('server failed'))
+      .mockResolvedValueOnce({ data: [] });
+
+    function RetryableSurveyList() {
+      const query = useSurveys();
+      return (
+        <SurveyList
+          surveys={query.data ?? []}
+          isLoading={query.isLoading}
+          error={query.error}
+          onSelect={vi.fn()}
+          onRetry={() => void query.refetch()}
+        />
+      );
+    }
+
+    renderWithQuery(<RetryableSurveyList />);
+
+    expect(await screen.findByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(apiRequest).toHaveBeenCalledTimes(2);
+    await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    expect(await screen.findByText('생성된 설문이 없습니다.')).toBeInTheDocument();
+    expect(apiRequest).toHaveBeenCalledTimes(3);
   });
 
   it.each(['open', 'closed'] as const)(

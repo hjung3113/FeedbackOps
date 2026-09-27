@@ -1,3 +1,4 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { listTasks } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';
@@ -98,7 +99,14 @@ export function TaskListRoute({
     );
   }
   if (tasksQuery.error) {
-    return <div className="p-4 text-sm text-accent-danger">Task list unavailable.</div>;
+    return (
+      <ListStateMessage
+        variant="error"
+        title="Task 목록을 불러오지 못했습니다"
+        body="잠시 후 다시 시도하세요."
+        action={{ label: '다시 시도', onClick: () => void tasksQuery.refetch() }}
+      />
+    );
   }
 
   return (
@@ -134,7 +142,13 @@ export function TaskListRoute({
               }
             />
           ))}
-          {items.length === 0 && <div className="px-5 py-8 text-sm text-text-muted">No Tasks.</div>}
+          {items.length === 0 && (
+            <ListStateMessage
+              variant="empty"
+              title="Task가 없습니다."
+              body="실행 대기 중인 Task가 여기에 표시됩니다."
+            />
+          )}
         </>
       }
       detailPanel={

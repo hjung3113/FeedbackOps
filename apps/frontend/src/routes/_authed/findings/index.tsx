@@ -1,5 +1,6 @@
 // /findings — ADR-0020 ListShell finding list + right detail panel.
 
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
 import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
 import { ApiError } from '@/lib/api/types';
@@ -64,6 +65,13 @@ export function FindingsListPage(): React.ReactElement {
     });
   }, [navigate]);
 
+  const resetFilters = React.useCallback((): void => {
+    void navigate({
+      to: '/findings',
+      search: ({ execution: _execution, ...rest }) => rest,
+    });
+  }, [navigate]);
+
   return (
     <FindingsListShell
       managedSystemId={managedSystemId}
@@ -71,6 +79,7 @@ export function FindingsListPage(): React.ReactElement {
       selectedId={selectedId}
       onSelect={selectFinding}
       onSelectionReconciled={reconcileSelection}
+      onResetFilters={resetFilters}
     />
   );
 }
@@ -81,16 +90,32 @@ function FindingsListShell({
   selectedId,
   onSelect,
   onSelectionReconciled,
+  onResetFilters,
 }: {
   managedSystemId: string | undefined;
   execution: 'none' | undefined;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onSelectionReconciled: () => void;
+  onResetFilters: () => void;
 }): React.ReactElement {
   const listQuery = useFindingsList(managedSystemId, execution);
-  const { actors } = useWorkspaceActors();
   const findings = listQuery.data?.items ?? [];
+  const checkUnfiltered = execution === 'none' && listQuery.isSuccess && findings.length === 0;
+  const unfilteredQuery = useFindingsList(managedSystemId, undefined, checkUnfiltered);
+  const stateError = listQuery.isError
+    ? listQuery.error
+    : checkUnfiltered && unfilteredQuery.isError
+      ? unfilteredQuery.error
+      : null;
+  const stateIsError = listQuery.isError || (checkUnfiltered && unfilteredQuery.isError);
+  const stateIsPending = listQuery.isPending || (checkUnfiltered && unfilteredQuery.isPending);
+  const isFilteredEmpty =
+    checkUnfiltered && unfilteredQuery.isSuccess && (unfilteredQuery.data?.items.length ?? 0) > 0;
+  const retryList = React.useCallback((): void => {
+    void (listQuery.isError ? listQuery.refetch() : unfilteredQuery.refetch());
+  }, [listQuery.isError, listQuery.refetch, unfilteredQuery.refetch]);
+  const { actors } = useWorkspaceActors();
   const actorsById = React.useMemo(() => {
     const map = new Map<string, AvatarUser>();
     for (const actor of actors ?? []) {
@@ -101,10 +126,13 @@ function FindingsListShell({
 
   React.useEffect(() => {
     if (!listQuery.isSuccess) return;
+    // A selected Finding can be valid in the full list while execution=none
+    // intentionally filters it out. Keep it until that filter is cleared.
+    if (execution === 'none') return;
     if (selectedId !== null && !findings.some((finding) => finding.id === selectedId)) {
       onSelectionReconciled();
     }
-  }, [findings, listQuery.isSuccess, onSelectionReconciled, selectedId]);
+  }, [execution, findings, listQuery.isSuccess, onSelectionReconciled, selectedId]);
 
   return (
     <ListShell
@@ -115,13 +143,16 @@ function FindingsListShell({
       list={
         <FindingsListBody
           findings={findings}
-          isPending={listQuery.isPending}
-          isError={listQuery.isError}
+          isPending={stateIsPending}
+          isError={stateIsError}
           isSuccess={listQuery.isSuccess}
-          error={listQuery.error}
+          error={stateError}
+          isFilteredEmpty={isFilteredEmpty}
           selectedId={selectedId}
           actorsById={actorsById}
           onSelect={onSelect}
+          onRetry={retryList}
+          onResetFilters={onResetFilters}
         />
       }
       detailPanel={
@@ -137,18 +168,24 @@ function FindingsListBody({
   isError,
   isSuccess,
   error,
+  isFilteredEmpty,
   selectedId,
   actorsById,
   onSelect,
+  onRetry,
+  onResetFilters,
 }: {
   findings: FindingDto[];
   isPending: boolean;
   isError: boolean;
   isSuccess: boolean;
   error: unknown;
+  isFilteredEmpty: boolean;
   selectedId: string | null;
   actorsById: Map<string, AvatarUser>;
   onSelect: (id: string) => void;
+  onRetry: () => void;
+  onResetFilters: () => void;
 }): React.ReactElement {
   return (
     <section className="flex min-h-full flex-col">
@@ -175,12 +212,30 @@ function FindingsListBody({
           className="m-4"
         />
       ) : isError ? (
-        <p className="p-4 text-sm text-accent-danger" data-testid="finding-list-error">
-          데이터를 불러오지 못했습니다.
-        </p>
+        <div data-testid="finding-list-error" className="p-4">
+          <ListStateMessage
+            variant="error"
+            title="Finding 목록을 불러오지 못했습니다"
+            body="잠시 후 다시 시도하세요."
+            action={{ label: '다시 시도', onClick: onRetry }}
+          />
+        </div>
+      ) : isFilteredEmpty ? (
+        <div className="p-4" data-testid="finding-filtered-empty-state">
+          <ListStateMessage
+            variant="filtered"
+            title="현재 조건에 맞는 Finding이 없습니다"
+            body="실행과 연결되지 않은 Finding만 표시 중입니다."
+            action={{ label: '필터 초기화', onClick: onResetFilters }}
+          />
+        </div>
       ) : findings.length === 0 ? (
-        <div className="p-8 text-center text-sm text-text-muted" data-testid="finding-empty-state">
-          생성된 Finding이 없습니다.
+        <div className="p-4" data-testid="finding-empty-state">
+          <ListStateMessage
+            variant="empty"
+            title="생성된 Finding이 없습니다."
+            body="VOC 근거에서 실행 후보로 승격된 Finding이 여기에 표시됩니다."
+          />
         </div>
       ) : (
         <div data-testid="finding-list">

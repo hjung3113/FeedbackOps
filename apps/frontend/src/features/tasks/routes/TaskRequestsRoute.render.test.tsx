@@ -2,6 +2,7 @@ import { fetchTaskRequests } from '@/lib/api';
 import { ApiError } from '@/lib/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from './TaskRequestsRoute';
@@ -115,6 +116,29 @@ describe('TaskRequestsRoute display ids', () => {
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
   });
 
+  it('shows the default empty queue without a filter-reset action', async () => {
+    vi.mocked(fetchTaskRequests).mockResolvedValueOnce({ items: [] });
+    renderWithClient(<TaskRequestsRoute />);
+
+    expect(await screen.findByText('Task Request가 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText('검토 요청이 접수되면 이 목록에 표시됩니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
+  });
+
+  it('resets an empty non-default status tab to the default Pending tab', async () => {
+    renderWithClient(<TaskRequestsRoute />);
+
+    await screen.findByText('REQ-42');
+    await userEvent.click(screen.getByRole('tab', { name: 'Approved' }));
+
+    expect(await screen.findByText('현재 조건에 맞는 Task Request가 없습니다')).toBeInTheDocument();
+    expect(screen.getByText('선택한 상태: Approved')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
+
+    expect(await screen.findByRole('button', { name: /REQ-42/ })).toBeInTheDocument();
+    expect(screen.queryByText('현재 조건에 맞는 Task Request가 없습니다')).not.toBeInTheDocument();
+  });
+
   it('renders permission denied instead of the queue unavailable copy for a 403', async () => {
     vi.mocked(fetchTaskRequests).mockRejectedValueOnce(
       new ApiError(403, {
@@ -135,7 +159,13 @@ describe('TaskRequestsRoute display ids', () => {
     );
     renderWithClient(<TaskRequestsRoute />);
 
-    expect(await screen.findByText('Task Request queue unavailable.')).toBeInTheDocument();
+    expect(await screen.findByText('Task Request 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(screen.getByText('잠시 후 다시 시도하세요.')).toBeInTheDocument();
     expect(document.querySelector('[data-state="denied"]')).not.toBeInTheDocument();
+
+    const attemptsBeforeRetry = vi.mocked(fetchTaskRequests).mock.calls.length;
+    await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('REQ-42')).toBeInTheDocument();
+    expect(vi.mocked(fetchTaskRequests).mock.calls.length).toBeGreaterThan(attemptsBeforeRetry);
   });
 });

@@ -14,6 +14,7 @@ export interface EntityLinkInventoryPage {
 
 export function useEntityLinkInventory(
   params: EntityLinkInventoryParams,
+  enabled = true,
 ): UseQueryResult<EntityLinkInventoryPage> {
   const { status, relationType, managedSystemId } = params;
 
@@ -37,5 +38,6 @@ export function useEntityLinkInventory(
     },
     staleTime: 30_000,
     retry: 1,
+    enabled,
   });
 }

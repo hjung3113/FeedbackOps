@@ -102,6 +102,7 @@ export function SurveysIndexRoute() {
               ? { permissionState: gate.permissionState }
               : {})}
             onCreate={() => setCreateOpen(true)}
+            onRetry={() => void query.refetch()}
           />
         }
         detailPanel={

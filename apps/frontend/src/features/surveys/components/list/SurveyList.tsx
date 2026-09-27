@@ -1,6 +1,7 @@
+import { ListStateMessage } from '@/components/ListStateMessage';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import type { FrontendPermissionState } from '@/lib/api';
-import { Button, EmptyState, Input, Skeleton } from '@fops/ui';
+import { Button, Input, Skeleton } from '@fops/ui';
 import { Grid2X2, List, Plus } from 'lucide-react';
 import * as React from 'react';
 import type { Survey, SurveyStatus } from '../../types';
@@ -26,6 +27,7 @@ export interface SurveyListProps {
   canCreate?: boolean;
   permissionState?: FrontendPermissionState;
   onCreate?: () => void;
+  onRetry?: () => void;
 }
 
 export function SurveyList({
@@ -37,6 +39,7 @@ export function SurveyList({
   canCreate = false,
   permissionState,
   onCreate,
+  onRetry,
 }: SurveyListProps) {
   const [status, setStatus] = React.useState<SurveyStatus | 'all'>('all');
   const [search, setSearch] = React.useState('');
@@ -55,10 +58,20 @@ export function SurveyList({
     );
   if (error)
     return (
-      <div className="p-6 text-sm text-text-muted" data-testid="survey-list-error">
-        데이터를 불러오지 못했습니다.
+      <div data-testid="survey-list-error">
+        <ListStateMessage
+          variant="error"
+          title="설문 목록을 불러오지 못했습니다"
+          body="잠시 후 다시 시도하세요."
+          {...(onRetry !== undefined ? { action: { label: '다시 시도', onClick: onRetry } } : {})}
+        />
       </div>
     );
+  const activeConditions = [
+    ...(status !== 'all' ? [`상태: ${statusLabel[status]}`] : []),
+    ...(search.length > 0 ? [`검색어: ${search}`] : []),
+  ];
+  const isFilteredEmpty = surveys.length > 0 && visible.length === 0 && activeConditions.length > 0;
   return (
     <div data-testid="survey-list">
       <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2">
@@ -116,33 +129,49 @@ export function SurveyList({
         )}
       </div>
       {visible.length === 0 ? (
-        <EmptyState
-          title="생성된 설문이 없습니다."
-          body={
-            canCreate
-              ? '설문을 만들어 응답을 수집하세요.'
-              : '설문을 만들려면 survey.manage 권한이 필요합니다.'
-          }
-          action={
-            canCreate ? (
-              onCreate && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={onCreate}
-                  data-testid="survey-empty-create-button"
-                >
-                  <Plus className="h-4 w-4" />
-                  New survey
-                </Button>
+        isFilteredEmpty ? (
+          <ListStateMessage
+            variant="filtered"
+            title="현재 조건에 맞는 설문이 없습니다"
+            body={activeConditions.join(' · ')}
+            action={{
+              label: '필터 초기화',
+              onClick: () => {
+                setStatus('all');
+                setSearch('');
+              },
+            }}
+          />
+        ) : (
+          <ListStateMessage
+            variant="empty"
+            title="생성된 설문이 없습니다."
+            body={
+              canCreate
+                ? '설문을 만들어 응답을 수집하세요.'
+                : '설문을 만들려면 survey.manage 권한이 필요합니다.'
+            }
+            actionContent={
+              canCreate ? (
+                onCreate && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={onCreate}
+                    data-testid="survey-empty-create-button"
+                  >
+                    <Plus className="h-4 w-4" />
+                    New survey
+                  </Button>
+                )
+              ) : permissionState === 'request_access' ? (
+                <RequestAccessButton capability="survey.manage" returnRouteIntent="/surveys" />
+              ) : (
+                <p data-testid="survey-empty-contact-admin">담당 관리자에게 문의하세요.</p>
               )
-            ) : permissionState === 'request_access' ? (
-              <RequestAccessButton capability="survey.manage" returnRouteIntent="/surveys" />
-            ) : (
-              <p data-testid="survey-empty-contact-admin">담당 관리자에게 문의하세요.</p>
-            )
-          }
-        />
+            }
+          />
+        )
       ) : (
         <div
           className={
