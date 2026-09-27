@@ -17,6 +17,12 @@
  */
 
 import * as React from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/shadcn/dropdown-menu.js';
 import { cn } from '../utils/cn.js';
 
 export interface PanelSection {
@@ -24,6 +30,8 @@ export interface PanelSection {
   label: string;
   /** Optional count badge — shown as a small pill next to the label. */
   count?: number;
+  /** Render this section in the overflow menu instead of the pinned navigation. */
+  overflow?: boolean;
 }
 
 export interface DetailPanelSectionNavProps {
@@ -74,7 +82,9 @@ export function DetailPanelSectionNav({
       };
       root.addEventListener('scroll', updateActiveSection, { passive: true });
       updateActiveSection();
-      return () => { root.removeEventListener('scroll', updateActiveSection); };
+      return () => {
+        root.removeEventListener('scroll', updateActiveSection);
+      };
     }
 
     const observer = new IntersectionObserver(
@@ -91,8 +101,12 @@ export function DetailPanelSectionNav({
       },
       { root, rootMargin: '0px 0px -66% 0px', threshold: 0 },
     );
-    anchors.forEach((a) => { observer.observe(a); });
-    return () => { observer.disconnect(); };
+    anchors.forEach((a) => {
+      observer.observe(a);
+    });
+    return () => {
+      observer.disconnect();
+    };
   }, [scrollRef, sectionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scrollTo = React.useCallback(
@@ -108,12 +122,17 @@ export function DetailPanelSectionNav({
         top: root.scrollTop + elRect.top - rootRect.top,
         behavior: 'smooth',
       });
-      setTimeout(() => { programmaticRef.current = false; }, 700);
+      setTimeout(() => {
+        programmaticRef.current = false;
+      }, 700);
     },
     [scrollRef],
   );
 
   if (!sections.length) return null;
+
+  const pinned = sections.filter((s) => !s.overflow);
+  const overflowed = sections.filter((s) => s.overflow);
 
   return (
     <div
@@ -126,13 +145,15 @@ export function DetailPanelSectionNav({
         className,
       )}
     >
-      {sections.map((s) => {
+      {pinned.map((s) => {
         const isActive = activeSection === s.id;
         return (
           <button
             key={s.id}
             type="button"
-            onClick={() => { scrollTo(s.id); }}
+            onClick={() => {
+              scrollTo(s.id);
+            }}
             className={cn(
               // .panel-section-nav-button
               'inline-flex items-center gap-1.5 px-2.5 py-1.5',
@@ -159,6 +180,39 @@ export function DetailPanelSectionNav({
           </button>
         );
       })}
+      {overflowed.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1.5',
+                'border-0 border-b-2 bg-transparent cursor-pointer',
+                'text-xs font-medium whitespace-nowrap leading-none',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                overflowed.some((s) => activeSection === s.id)
+                  ? 'border-accent-primary text-text-primary'
+                  : 'border-transparent text-text-muted hover:text-text-secondary',
+              )}
+            >
+              더보기 ▾
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {overflowed.map((s) => (
+              <DropdownMenuItem
+                key={s.id}
+                onSelect={() => {
+                  scrollTo(s.id);
+                }}
+              >
+                {s.label}
+                {s.count !== undefined && <span className="ml-2">{s.count}</span>}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }

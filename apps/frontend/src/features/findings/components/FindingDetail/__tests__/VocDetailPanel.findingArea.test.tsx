@@ -57,9 +57,6 @@ vi.mock('@/features/voc/components/detail/LinkedEntityTrailSection', () => ({
 vi.mock('@/features/voc/components/detail/LinkedExecutionSection', () => ({
   LinkedExecutionSection: () => null,
 }));
-vi.mock('@/features/voc/components/detail/NextActionFooter', () => ({
-  NextActionFooter: () => null,
-}));
 vi.mock('@/features/voc/components/detail/PublicUpdateReviewModal', () => ({
   PublicUpdateReviewModal: () => null,
 }));
@@ -101,7 +98,11 @@ describe('VocDetailPanel Finding creation area handoff', () => {
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));
+    // Radix's DropdownMenuTrigger opens on `pointerdown`, which jsdom cannot
+    // synthesise convincingly — driving it by keyboard matches this repo's
+    // established pattern (apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx).
+    fireEvent.keyDown(screen.getByRole('button', { name: '더보기' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Finding 생성' }));
 
     const modal = screen.getByTestId('create-finding-modal-props');
     expect(modal).toHaveAttribute('data-open', 'true');

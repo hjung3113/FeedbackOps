@@ -188,17 +188,15 @@ interface FullDetailViewProps {
   me: import('@/lib/auth/useMe').MeResponse | null;
 }
 
-// Prototype ref (screen-voc.jsx:172-182): section IDs for the detail panel.
+// Prototype deviation (screen-voc.jsx:175-185): issue #519 and the user's Option C decision
+// pin the core navigation and move Description/Conversation into an overflow menu.
 // Execution section only shown when there's an active finding/task (Slice 4+).
-// For Slice 3, show all static sections; Internal tab maps to the internal
-// conversation tab in ConversationTimeline.
 const STATIC_DETAIL_SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'triage', label: 'Triage' },
-  { id: 'description', label: 'Description' },
+  { id: 'description', label: 'Description', overflow: true },
   { id: 'trail', label: 'Trail' },
-  { id: 'conversation', label: 'Public' },
-  { id: 'internal', label: 'Internal' },
+  { id: 'conversation', label: 'Conversation', overflow: true },
   { id: 'compose', label: 'Compose' },
 ];
 
@@ -415,7 +413,6 @@ function FullDetailView({
           <div data-anchor="conversation">
             <ConversationTimeline voc={voc} actorNamesById={actorNamesById} />
           </div>
-          <div data-anchor="internal" />
           <div data-anchor="compose">
             <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
             {canCreateFinding && pendingReviewCount > 0 && (
@@ -436,26 +433,23 @@ function FullDetailView({
           </div>
         </div>
 
-        <NextActionFooter voc={voc} />
-        {(canCreateFinding || canRequestTask) && (
-          <div className="px-4 pb-3 flex justify-end gap-2 border-t border-border-subtle pt-2">
-            {canRequestTask && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setRequestTaskOpen(true)}
-                data-testid="voc-request-task-button"
-              >
-                Task 요청
-              </Button>
-            )}
-            {canCreateFinding && (
-              <Button variant="outline" size="sm" onClick={() => setCreateFindingOpen(true)}>
-                Finding 생성
-              </Button>
-            )}
-          </div>
-        )}
+        <NextActionFooter
+          voc={voc}
+          overflowActions={[
+            ...(canRequestTask
+              ? [
+                  {
+                    label: 'Task 요청',
+                    onClick: () => setRequestTaskOpen(true),
+                    testId: 'voc-request-task-button',
+                  },
+                ]
+              : []),
+            ...(canCreateFinding
+              ? [{ label: 'Finding 생성', onClick: () => setCreateFindingOpen(true) }]
+              : []),
+          ]}
+        />
       </div>
 
       <DirtyConfirmation
