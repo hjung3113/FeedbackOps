@@ -76,12 +76,7 @@ export function TriageSummaryCard({
           {ownerChanged && (
             <DiffRow
               label="Owner"
-              from={ownerLabel(
-                baseline.ownerUserId,
-                baseline.ownerTeamId,
-                actorMap,
-                ownerTeamName,
-              )}
+              from={ownerLabel(baseline.ownerUserId, baseline.ownerTeamId, actorMap, ownerTeamName)}
               to={ownerLabel(
                 panelState.ownerUserId,
                 panelState.ownerTeamId,
@@ -96,16 +91,23 @@ export function TriageSummaryCard({
               from={
                 baseline.analyticsAreaId === null
                   ? '미지정'
-                  : baselineAnalyticsAreaName ?? 'Analytics area'
+                  : (baselineAnalyticsAreaName ?? 'Analytics area')
               }
-              to={panelState.analyticsAreaId === null ? '미지정' : analyticsAreaName ?? 'Analytics area'}
+              to={
+                panelState.analyticsAreaId === null
+                  ? '미지정'
+                  : (analyticsAreaName ?? 'Analytics area')
+              }
             />
           )}
         </>
       )}
 
       {currentReporterStatus !== undefined && (
-        <div className="flex items-center gap-1.5 text-xs text-text-muted" data-testid="reporter-status-transition">
+        <div
+          className="flex items-center gap-1.5 text-xs text-text-muted"
+          data-testid="reporter-status-transition"
+        >
           <span>확정 시 Reporter status:</span>
           <ReporterStatusBadge status={currentReporterStatus} />
           <ArrowRight size={10} className="text-text-muted shrink-0" aria-hidden="true" />

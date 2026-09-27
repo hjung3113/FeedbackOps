@@ -20,8 +20,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import type { VocDetailEnvelope, VocListItem, VocSummaryEnvelope } from '@fops/shared';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
+import type { VocDetailEnvelope, VocListItem, VocSummaryEnvelope } from '@fops/shared';
 import { TriagePanel } from '../TriagePanel';
 
 const TRIAGE_VOC: VocListItem = {
@@ -45,7 +45,9 @@ const TRIAGE_VOC: VocListItem = {
 
 const DESCRIPTION = {
   type: 'doc',
-  content: [{ type: 'paragraph', content: [{ type: 'text', text: '구독 알림 발송이 멈췄습니다.' }] }],
+  content: [
+    { type: 'paragraph', content: [{ type: 'text', text: '구독 알림 발송이 멈췄습니다.' }] },
+  ],
 };
 
 function detailEnvelope(description: unknown): VocDetailEnvelope {
@@ -89,7 +91,9 @@ describe('TriagePanel Overview and grouped navigation', () => {
 
   beforeEach(() => {
     mockDetail({ data: detailEnvelope(DESCRIPTION), isLoading: false, isError: false });
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ actors: [] }))) as typeof globalThis.fetch;
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ actors: [] })),
+    ) as typeof globalThis.fetch;
   });
 
   afterEach(() => {
@@ -117,7 +121,9 @@ describe('TriagePanel Overview and grouped navigation', () => {
     expect(labels).toEqual(['Overview', 'Assignment', 'Similar4', 'Summary']);
     expect(within(nav as HTMLElement).queryByText('더보기')).not.toBeInTheDocument();
     for (const removed of ['Body', 'Severity', 'Owner', 'Area', 'Cluster']) {
-      expect(within(nav as HTMLElement).queryByRole('button', { name: new RegExp(removed) })).not.toBeInTheDocument();
+      expect(
+        within(nav as HTMLElement).queryByRole('button', { name: new RegExp(removed) }),
+      ).not.toBeInTheDocument();
     }
   });
 
@@ -129,7 +135,11 @@ describe('TriagePanel Overview and grouped navigation', () => {
   });
 
   it('shows muted empty-body copy for a structurally empty description', () => {
-    mockDetail({ data: detailEnvelope({ type: 'doc', content: [{ type: 'paragraph' }] }), isLoading: false, isError: false });
+    mockDetail({
+      data: detailEnvelope({ type: 'doc', content: [{ type: 'paragraph' }] }),
+      isLoading: false,
+      isError: false,
+    });
     renderPanel();
     expect(screen.getByText('본문 없음')).toHaveClass('text-text-muted');
     expect(screen.getByTestId('triage-description-region')).not.toHaveTextContent(TRIAGE_VOC.title);

@@ -49,11 +49,7 @@ describe('TriageRow', () => {
 
   it('keeps missing owner, missing area, and similar count neutral', () => {
     render(
-      <TriageRow
-        voc={{ ...BASE_VOC, similar_count: 3 }}
-        selected={false}
-        onSelect={vi.fn()}
-      />,
+      <TriageRow voc={{ ...BASE_VOC, similar_count: 3 }} selected={false} onSelect={vi.fn()} />,
     );
 
     for (const text of ['Owner 없음', 'Area 미지정', '↔ similar 3']) {

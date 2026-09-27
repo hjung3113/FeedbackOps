@@ -16,7 +16,7 @@
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import { isTipTapDocStructurallyEmpty, type VocListItem } from '@fops/shared';
+import { type VocListItem, isTipTapDocStructurallyEmpty } from '@fops/shared';
 import {
   AnalyticsAreaPicker,
   Button,

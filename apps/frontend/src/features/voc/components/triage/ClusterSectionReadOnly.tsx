@@ -127,7 +127,8 @@ export function ClusterSectionReadOnly({
   } else {
     stateLine = (
       <>
-        유사한 VOC <strong className="text-text-primary">{data.items.length}</strong>건이 발견됐어요.
+        유사한 VOC <strong className="text-text-primary">{data.items.length}</strong>건이
+        발견됐어요.
       </>
     );
   }
