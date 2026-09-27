@@ -10,3 +10,7 @@ export {
   linkTaskToFinding,
   lockFindingForUpdate,
 } from './commands.js';
+export {
+  findSourceFindingForMilestone,
+  type MilestoneSourceFindingRow,
+} from './repo-read.js';

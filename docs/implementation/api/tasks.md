@@ -112,6 +112,8 @@ validation errors:
   - unknown or cross-workspace Analytics Area: 404 not_found.record
   - Analytics Area on another Managed System: 422 validation.failed with out_of_scope on analytics_area_id
   - archived Analytics Area: 409 conflict.parent_archived with parent_archived on analytics_area_id
+  - unknown or cross-workspace Milestone: 404 not_found.record
+  - Milestone on another Managed System: 422 validation.failed with out_of_scope on milestone_id
 side effects:
   - create task.tasks with status backlog and source_task_request_id
   - create active entity link (task_request, task, converted_to)
@@ -149,6 +151,7 @@ idempotency behavior: Idempotency-Key required; hash includes body, Task
 query:
   status optional backlog|todo|doing|review|done|released|reopened
   assignee optional uuid or me
+  milestone_id optional uuid
 response body: { items: TaskDto[] }
 auth and permission: Admin or Developer. Admin sees all workspace Tasks.
   Developer rows are filtered by finding.manage on primary_managed_system_id.
@@ -231,6 +234,7 @@ GET /tasks
 GET /tasks/:id
 GET /tasks/:id/comments
 POST /tasks/:id/comments
+POST /tasks/:id/milestone
 POST /tasks    # not implemented
 ```
 
@@ -380,3 +384,21 @@ Task Request is not independently created through `POST /task-requests` as of
 Slice 6. It is created only through source transition routes:
 `POST /findings/:id/request-task`, `POST /vocs/:id/request-task`, and
 `POST /voc-clusters/:id/request-task`.
+
+## POST /tasks/:id/milestone — Task milestone assign (issue #514 B1b)
+
+| Aspect | Contract |
+|---|---|
+| Purpose | Assign a Milestone to a Task, or unassign it. |
+| Headers | `Idempotency-Key: <uuidv4>` (required) · `If-Match: <updated_at ISO>` (required) · `Authorization: Bearer <session>` |
+| Body | `{ milestone_id: uuid \| null }`; `.strict()` (zod). `null` unassigns. |
+| Permission | Admin or Developer with `finding.manage` on the Task `primary_managed_system_id`, matching the status PATCH authority. |
+| Milestone scope | Unknown or other-workspace Milestone → 404 `not_found.record`. Milestone on another Managed System → 422 `validation.failed`, `out_of_scope` on `milestone_id`. The check goes through the milestones module's `lockMilestone`; the command writes no entity link. |
+| Milestone status | ADR-0050 Decision 5: Milestone status is not consulted. Existence, workspace, and Managed System checks stay; a `released` Milestone in the caller's workspace on the Task's Managed System is a successful assign. |
+| Optimistic concurrency | `If-Match` compared against `task.updated_at`; mismatch → 409 `conflict.stale_write` with `detail.current_updated_at`. |
+| Service ordering | `SELECT FOR UPDATE task → permission check → If-Match compare → lockMilestone scope check → UPDATE milestone_id + updated_at → audit emit`. |
+| Writes | `task.tasks.milestone_id` and `updated_at` only. No Task status change, no status_change comment, no entity link. |
+| Response | 200 `TaskDto`. An idempotent replay returns the stored first response. Missing task → 404 `not_found.record`. |
+| Audit event | `task_milestone_assigned` with strict detail `{ from_milestone_id: uuid \| null, to_milestone_id: uuid \| null }`, written in the same transaction as the UPDATE. |
+| Idempotency hash | Includes `taskId`, `ifMatch`, route identity `task.milestone_assign`, and request body. |
+| Error codes | `validation.failed` · `validation.malformed_idempotency_key` · `permission.denied` · `not_found.record` · `conflict.stale_write` · `conflict.idempotency_key_reuse` · `rate_limited.actor` |

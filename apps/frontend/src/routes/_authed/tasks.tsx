@@ -1,3 +1,4 @@
+import { MilestonesRoute } from '@/features/tasks/routes/MilestonesRoute';
 import { TaskBoardRoute } from '@/features/tasks/routes/TaskBoardRoute';
 import { TaskListRoute } from '@/features/tasks/routes/TaskListRoute';
 import { TaskRequestsRoute } from '@/features/tasks/routes/TaskRequestsRoute';
@@ -6,7 +7,7 @@ import { z } from 'zod';
 
 export const tasksSearchSchema = z
   .object({
-    view: z.enum(['requests', 'backlog', 'board', 'my', 'inbox']).optional(),
+    view: z.enum(['requests', 'backlog', 'board', 'my', 'inbox', 'milestones']).optional(),
     param: z.string().optional(),
     managedSystem: z.union([z.string().uuid(), z.literal('all')]).optional(),
     public_update: z.literal('missing').optional(),
@@ -35,6 +36,9 @@ export function TasksRouteView({ search }: { search: TasksSearch }) {
         {...(search.public_update === 'missing' ? { publicUpdate: search.public_update } : {})}
       />
     );
+  }
+  if (search.view === 'milestones') {
+    return <MilestonesRoute {...managedSystemProps} {...selectedParamProps} />;
   }
   return <TaskListRoute {...managedSystemProps} {...selectedParamProps} />;
 }

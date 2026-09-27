@@ -139,3 +139,38 @@ export async function findCreatedFindingSourceLink(
     relation_type: row.relation_type as 'created_finding',
   };
 }
+
+// #514 A9 — earliest Finding whose linked_milestone_id points at a Milestone.
+// Read-only: no application writer sets linked_milestone_id. Multiple rows are
+// possible (column is non-unique); the detail DTO carries one object, so the
+// tiebreak is earliest created_at, then id.
+export interface MilestoneSourceFindingRow {
+  id: string;
+  display_id: string;
+  title: string;
+  summary: string;
+  evidence_count: number;
+}
+
+export async function findSourceFindingForMilestone(
+  db: Db | Tx,
+  input: { workspaceId: string; milestoneId: string },
+): Promise<MilestoneSourceFindingRow | null> {
+  const result = await (db as Db).execute<Record<string, unknown>>(sql`
+    SELECT id, display_id, title, summary, evidence_count
+    FROM ${findings}
+    WHERE workspace_id = ${input.workspaceId}
+      AND linked_milestone_id = ${input.milestoneId}
+    ORDER BY created_at ASC, id ASC
+    LIMIT 1
+  `);
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id as string,
+    display_id: row.display_id as string,
+    title: row.title as string,
+    summary: row.summary as string,
+    evidence_count: Number(row.evidence_count),
+  };
+}

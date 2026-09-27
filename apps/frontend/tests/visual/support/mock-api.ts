@@ -1,11 +1,14 @@
 import {
   addVocClusterMemberRequestSchema,
   approvePermissionRequestSchema,
+  createMilestoneRequestSchema,
   createTaskRequestFromFindingRequestSchema,
   dashboardSummarySchema,
   denyPermissionRequestSchema,
   linkExistingFindingToVocClusterRequestSchema,
+  milestoneDtoSchema,
   needMoreInfoPermissionRequestSchema,
+  patchMilestoneRequestSchema,
   permissionDecisionResultSchema,
   rejectPermissionRequestSchema,
   vocClusterDtoSchema,
@@ -59,6 +62,16 @@ import {
   managedSystemVisualSchema,
   registerManagedSystemVisualBodySchema,
 } from '../fixtures/managed-system-owner';
+import {
+  MILESTONE_ACTOR_IDS,
+  MILESTONE_IDS,
+  milestoneActorsFixture,
+  milestoneAnalyticsAreasFixture,
+  milestoneDetailFixture,
+  milestoneListFixture,
+  milestoneManagedSystemsFixture,
+  milestoneTasksFixture,
+} from '../fixtures/milestones';
 import {
   permissionRequestComposeBodySchema,
   permissionRequestComposeSuccess,
@@ -146,6 +159,15 @@ interface InstallOptions {
   vocCreate?: boolean;
   /** Issue #399 Finding detail baseline surface; schemas validate fixtures at import. */
   findingDetail?: boolean;
+  /**
+   * #514 Milestone list surface: `true` serves the prototype-mirrored list,
+   * `'empty'` serves an empty list; status-query params filter the fixture.
+   * `'denied-detail'` keeps the populated list but answers the detail route
+   * with 403 permission.denied so dismissal of an inaccessible selection is
+   * observable in the browser. Fixtures validate against shared DTO schemas
+   * at import.
+   */
+  milestones?: boolean | 'empty' | 'denied-detail';
 }
 
 const fetchResourceTypes = new Set(['fetch', 'xhr']);
@@ -277,6 +299,115 @@ export async function installMockApi(
 
     if (options.home && isRequest(route, 'GET', '/tasks')) {
       await json(route, 200, { items: options.home === 'populated' ? homeMyWorkTasksFixture : [] });
+      return;
+    }
+
+    // #514 B2a/B2c — Milestone list/detail plus the row-lookup endpoints the
+    // list screen fans out to (actors, Managed Systems, Analytics Areas).
+    // The status query param filters the fixture so the In progress tab
+    // renders server-filtered rows, faithfully to listMilestones.
+    if (options.milestones && isRequest(route, 'GET', '/milestones')) {
+      if (options.milestones === 'empty') {
+        await json(route, 200, { items: [] });
+        return;
+      }
+      const status = url.searchParams.get('status');
+      await json(route, 200, {
+        items:
+          status === null
+            ? milestoneListFixture
+            : milestoneListFixture.filter((milestone) => milestone.status === status),
+      });
+      return;
+    }
+    if (options.milestones && isRequest(route, 'GET', `/milestones/${MILESTONE_IDS.sso}`)) {
+      // B2d fixup — an inaccessible selected detail stays dismissible; the
+      // browser case asserts closing it clears param and retains managedSystem.
+      if (options.milestones === 'denied-detail') {
+        await json(route, 403, { code: 'permission.denied', message: 'finding.manage required' });
+        return;
+      }
+      await json(route, 200, milestoneDetailFixture);
+      return;
+    }
+    // #514 B2d-tasks — the detail panel's Tasks section reads the milestone's
+    // child rows (listTasks with milestone_id); only the SSO fixture has one.
+    if (
+      options.milestones &&
+      isRequest(route, 'GET', '/tasks', (params) => params.has('milestone_id'))
+    ) {
+      await json(route, 200, {
+        items:
+          url.searchParams.get('milestone_id') === MILESTONE_IDS.sso ? milestoneTasksFixture : [],
+      });
+      return;
+    }
+    // #514 B2e — create and title-patch writers. Bodies and Idempotency-Keys
+    // are recorded like every other mutation handler; responses reuse the
+    // detail fixture so the created/patched row renders with
+    // prototype-mirrored fields. Neither writer ever sees a status field.
+    if (options.milestones && isRequest(route, 'POST', '/milestones')) {
+      const body = createMilestoneRequestSchema.parse(request.postDataJSON());
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      const { source_finding: _detailOnly, ...row } = milestoneDetailFixture;
+      await json(
+        route,
+        201,
+        milestoneDtoSchema.parse({
+          ...row,
+          id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb1099',
+          display_id: 'MLS-1099',
+          title: body.title,
+          why: body.why,
+          primary_managed_system_id: body.primary_managed_system_id,
+          start_date: body.start_date,
+          target_date: body.target_date,
+          status: 'planning',
+          analytics_area_id: body.analytics_area_id ?? null,
+          owner_actor_id: body.owner_actor_id ?? MILESTONE_ACTOR_IDS.u1,
+          created_by: body.owner_actor_id ?? MILESTONE_ACTOR_IDS.u1,
+          created_at: '2026-07-22T00:00:00.000Z',
+          updated_at: '2026-07-22T00:00:00.000Z',
+          progress: { released_done: 0, in_flight: 0, queued: 0, total: 0, percent: 0 },
+        }),
+      );
+      return;
+    }
+    if (options.milestones && isRequest(route, 'PATCH', `/milestones/${MILESTONE_IDS.sso}`)) {
+      const body = patchMilestoneRequestSchema.parse(request.postDataJSON());
+      postedBodies.push(body);
+      postedRequests.push({
+        body,
+        idempotencyKey: await request.headerValue('Idempotency-Key'),
+        pathname: url.pathname,
+      });
+      const { source_finding: _detailOnly, ...row } = milestoneDetailFixture;
+      await json(
+        route,
+        200,
+        milestoneDtoSchema.parse({
+          ...row,
+          ...(body.title !== undefined ? { title: body.title } : {}),
+          updated_at: '2026-07-23T00:00:00.000Z',
+        }),
+      );
+      return;
+    }
+    if (options.milestones && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, milestoneActorsFixture);
+      return;
+    }
+    if (options.milestones && isRequest(route, 'GET', '/managed-systems')) {
+      await json(route, 200, milestoneManagedSystemsFixture);
+      return;
+    }
+    if (options.milestones && isRequest(route, 'GET', '/analytics-areas')) {
+      await json(route, 200, milestoneAnalyticsAreasFixture);
       return;
     }
 

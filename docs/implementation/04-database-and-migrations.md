@@ -84,8 +84,8 @@ finding
 task
 - tasks
 - task_comments (Task progress notes; `docs/adr/0049-finding-task-progress-notes.md`)
+- milestones
 - work_initiatives / projects when future execution grouping is introduced
-- milestones when future execution grouping is introduced
 
 task_request
 - task_requests

@@ -280,10 +280,51 @@ export function TaskRequestPanel({
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-text-muted">
                   Milestone
-                  <input type="hidden" value={conversion.milestoneId} readOnly />
-                  <span className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-muted">
-                    Later slice
-                  </span>
+                  <select
+                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                    value={conversion.milestoneId}
+                    onChange={(event) => conversion.setMilestoneId(event.target.value)}
+                  >
+                    <option value="">None</option>
+                    {conversion.milestones?.map((milestone) => (
+                      <option key={milestone.id} value={milestone.id}>
+                        {milestone.title}
+                      </option>
+                    ))}
+                    {/* R2 + R4 (midreview/Astra) — while a held selection is
+                        unavailable (its list read failed terminally, or a
+                        successful refreshed list omitted it), the select must
+                        not silently display None: the held id keeps a
+                        disabled, identity-free slot so the shown value
+                        matches the internal state and choosing None is a
+                        real, reachable change. The retained identity is never
+                        rendered. */}
+                    {(conversion.milestonePickerError !== null ||
+                      conversion.milestoneSelectionUnavailable) &&
+                      conversion.milestoneId !== '' && (
+                        <option value={conversion.milestoneId} disabled>
+                          Unavailable
+                        </option>
+                      )}
+                  </select>
+                  {/* R2 (Astra P2-3) — a settled picker read error is shown in
+                      place of the retained options: the server's denial reason
+                      for a permission failure, the same 'Milestone list
+                      unavailable.' copy the Milestone list route uses for a
+                      generic outage. */}
+                  {conversion.milestonePickerError !== null && (
+                    <span
+                      className={
+                        conversion.milestonePickerError.denied
+                          ? 'text-xs text-accent-danger'
+                          : 'text-xs text-text-muted'
+                      }
+                    >
+                      {conversion.milestonePickerError.denied
+                        ? conversion.milestonePickerError.message
+                        : 'Milestone list unavailable.'}
+                    </span>
+                  )}
                 </label>
                 <Button
                   type="submit"

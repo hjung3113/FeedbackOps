@@ -89,6 +89,19 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       [WORKSPACE_ID],
     );
     await migrateHandle.pool.query(
+      `delete from core.audit_log
+        where workspace_id = $1
+          and event_type = 'milestone_updated'
+          and subject_id in (
+            select id from task.milestones
+             where workspace_id = $1
+               and primary_managed_system_id in (
+                 select id from core.managed_systems where workspace_id = $1 and slug like $2
+               )
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
       `delete from core.entity_links
         where workspace_id = $1
           and managed_system_id in (
@@ -98,6 +111,15 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     );
     await migrateHandle.pool.query(
       `delete from task.tasks
+        where workspace_id = $1
+          and primary_managed_system_id in (
+            select id from core.managed_systems where workspace_id = $1 and slug like $2
+          )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    // Milestones before their Managed Systems; after tasks (FK RESTRICT).
+    await migrateHandle.pool.query(
+      `delete from task.milestones
         where workspace_id = $1
           and primary_managed_system_id in (
             select id from core.managed_systems where workspace_id = $1 and slug like $2
@@ -295,6 +317,49 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       },
       payload,
     });
+  }
+
+  function patchMilestone(
+    cookie: string,
+    milestoneId: string,
+    ifMatch: string,
+    analyticsAreaId: string,
+  ) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/milestones/${milestoneId}`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'content-type': 'application/json',
+        'idempotency-key': randomUUID(),
+        'if-match': ifMatch,
+      },
+      payload: { analytics_area_id: analyticsAreaId },
+    });
+  }
+
+  async function waitForBlockedQuery(
+    matchesQuery: (query: string) => boolean,
+    description: string,
+  ): Promise<string> {
+    const deadline = Date.now() + 8_000;
+    while (Date.now() < deadline) {
+      const activity = await dbHandle.pool.query<{ query: string }>(`
+        select query
+          from pg_stat_activity
+         where datname = current_database()
+           and usename = current_user
+           and pid <> pg_backend_pid()
+           and wait_event_type = 'Lock'
+      `);
+      const blocked = activity.rows.find((row) => matchesQuery(row.query.toLowerCase()));
+      if (blocked) return blocked.query;
+
+      // Poll an observed PostgreSQL lock-wait state instead of relying on a
+      // timing sleep to schedule the two public requests.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`timed out waiting for PostgreSQL lock wait: ${description}`);
   }
 
   function linkTask(
@@ -1335,5 +1400,235 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       [WORKSPACE_ID, request.id],
     );
     expect(count.rows[0]?.n).toBe(1);
+  });
+  // #514 A10 — convert validates milestone_id through lockMilestone.
+  async function seedMilestone(msId: string, workspaceId = WORKSPACE_ID): Promise<string> {
+    const row = await migrateHandle.pool.query<{ id: string }>(
+      `insert into task.milestones (
+          workspace_id, display_id, primary_managed_system_id, title, why,
+          owner_actor_id, start_date, target_date, created_by
+        )
+       values ($1, $2, $3, 'Milestone', 'why', $4, '2026-10-01', '2026-12-31', $4)
+       returning id`,
+      [workspaceId, `MLS-${randomUUID().slice(0, 8)}`, msId, adminActorId],
+    );
+    return row.rows[0]?.id ?? '';
+  }
+
+  it.each([
+    {
+      scenario: 'with an Analytics Area',
+      conversionHasArea: true,
+      blocker: 'permission' as const,
+      actorSuffix: 'r3-lock-order',
+    },
+    {
+      scenario: 'without an Analytics Area',
+      conversionHasArea: false,
+      blocker: 'analytics-area' as const,
+      actorSuffix: 'r3-lock-order-no-area',
+    },
+  ])(
+    'keeps the lock order while converting and patching a Milestone $scenario (#514 R3)',
+    async ({ conversionHasArea, blocker: blockerKind, actorSuffix }) => {
+      const request = await seedApprovedTaskRequest();
+      const milestoneId = await seedMilestone(request.msId);
+      const analyticsAreaId = await seedAnalyticsArea({ msId: request.msId });
+      const patchActor = await seedConversionActor(actorSuffix);
+      await grantCapability(
+        dbHandle,
+        WORKSPACE_ID,
+        patchActor.id,
+        'finding.manage',
+        request.msId,
+        adminActorId,
+      );
+      const milestoneVersion = await dbHandle.pool.query<{ updated_at: Date }>(
+        'select updated_at from task.milestones where id = $1',
+        [milestoneId],
+      );
+      const ifMatch = milestoneVersion.rows[0]?.updated_at.toISOString();
+      if (!ifMatch) throw new Error('seeded milestone version not found');
+
+      const blocker = await migrateHandle.pool.connect();
+      let transactionOpen = false;
+      let patchRequest: ReturnType<typeof patchMilestone> | undefined;
+      let convertRequest: ReturnType<typeof convert> | undefined;
+      try {
+        await blocker.query('BEGIN');
+        transactionOpen = true;
+        if (blockerKind === 'permission') {
+          await blocker.query('LOCK TABLE permission.permission_denies IN ACCESS EXCLUSIVE MODE');
+        } else {
+          await blocker.query('SELECT id FROM core.analytics_areas WHERE id = $1 FOR UPDATE', [
+            analyticsAreaId,
+          ]);
+        }
+
+        patchRequest = patchMilestone(patchActor.cookie, milestoneId, ifMatch, analyticsAreaId);
+        await waitForBlockedQuery(
+          (query) =>
+            query.includes(blockerKind === 'permission' ? 'permission_denies' : 'analytics_areas'),
+          blockerKind === 'permission'
+            ? 'Developer PATCH waiting in checkFindingManage'
+            : 'Developer PATCH waiting for the Analytics Area row after locking its Managed System',
+        );
+
+        convertRequest = convert(adminCookie, request.id, {
+          title: conversionHasArea
+            ? 'Concurrent milestone conversion'
+            : 'Concurrent conversion without Analytics Area',
+          milestone_id: milestoneId,
+          ...(conversionHasArea ? { analytics_area_id: analyticsAreaId } : {}),
+        });
+        const conversionLockWait = await waitForBlockedQuery(
+          (query) =>
+            conversionHasArea
+              ? query.includes('milestones') || query.includes('managed_systems')
+              : query.includes('task.tasks') || query.includes('managed_systems'),
+          'Task conversion waiting on the Managed System or Milestone path',
+        );
+
+        await blocker.query('COMMIT');
+        transactionOpen = false;
+
+        if (!patchRequest || !convertRequest) {
+          throw new Error('lock-order requests were not started');
+        }
+        const [patchResponse, convertResponse] = await Promise.all([patchRequest, convertRequest]);
+        expect(patchResponse.statusCode).toBe(200);
+        expect(convertResponse.statusCode).toBe(201);
+        expect(conversionLockWait.toLowerCase()).toContain('managed_systems');
+
+        const stored = await dbHandle.pool.query<{
+          analytics_area_id: string | null;
+          task_analytics_area_id: string | null;
+          task_milestone_id: string | null;
+        }>(
+          `select m.analytics_area_id,
+                  t.analytics_area_id as task_analytics_area_id,
+                  t.milestone_id as task_milestone_id
+             from task.milestones m
+             join task.tasks t on t.source_task_request_id = $2
+            where m.id = $1`,
+          [milestoneId, request.id],
+        );
+        expect(stored.rows[0]).toEqual({
+          analytics_area_id: analyticsAreaId,
+          task_analytics_area_id: conversionHasArea ? analyticsAreaId : null,
+          task_milestone_id: milestoneId,
+        });
+      } finally {
+        if (transactionOpen) await blocker.query('ROLLBACK').catch(() => undefined);
+        blocker.release();
+        await Promise.allSettled([
+          ...(patchRequest ? [patchRequest] : []),
+          ...(convertRequest ? [convertRequest] : []),
+        ]);
+      }
+    },
+    20_000,
+  );
+
+  it('convert rejects an unknown milestone with not_found and persists nothing (#514 A10)', async () => {
+    const request = await seedApprovedTaskRequest();
+
+    const res = await convert(adminCookie, request.id, {
+      title: 'Unknown milestone conversion',
+      milestone_id: randomUUID(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ code: string }>().code).toBe('not_found.record');
+    await expectNoConversionSideEffects(request.id);
+  });
+
+  it('convert rejects a milestone from another workspace with not_found and persists nothing (#514 A10)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const otherWs = await dbHandle.pool.query<{ id: string }>(
+      'insert into core.workspaces (name) values ($1) returning id',
+      ['Task convert milestone workspace'],
+    );
+    const otherWsId = otherWs.rows[0]?.id;
+    if (!otherWsId) throw new Error('workspace seed failed');
+    const otherWsMsId = await insertMsDirectly(
+      dbHandle,
+      otherWsId,
+      uid(SLUG_PREFIX),
+      'Cross-workspace milestone MS',
+    );
+    const milestoneId = await seedMilestone(otherWsMsId, otherWsId);
+
+    try {
+      const res = await convert(adminCookie, request.id, {
+        title: 'Cross-workspace milestone conversion',
+        milestone_id: milestoneId,
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json<{ code: string }>().code).toBe('not_found.record');
+      await expectNoConversionSideEffects(request.id);
+    } finally {
+      // fops_app has no DELETE on task.milestones: use the migrate role.
+      await migrateHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
+      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [
+        otherWsMsId,
+      ]);
+      await migrateHandle.pool.query('delete from core.workspaces where id = $1', [otherWsId]);
+    }
+  });
+
+  it('convert rejects a milestone from another managed system with out_of_scope and persists nothing (#514 A10)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const otherMsId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      uid(SLUG_PREFIX),
+      'Other MS milestone',
+    );
+    const milestoneId = await seedMilestone(otherMsId);
+
+    try {
+      const res = await convert(adminCookie, request.id, {
+        title: 'Cross-MS milestone conversion',
+        milestone_id: milestoneId,
+      });
+
+      expect(res.statusCode).toBe(422);
+      expect(res.json()).toMatchObject({
+        code: 'validation.failed',
+        detail: { fields: [{ path: ['milestone_id'], code: 'out_of_scope' }] },
+      });
+      await expectNoConversionSideEffects(request.id);
+    } finally {
+      await migrateHandle.pool.query('delete from task.milestones where id = $1', [milestoneId]);
+      await migrateHandle.pool.query('delete from core.managed_systems where id = $1', [otherMsId]);
+    }
+  });
+
+  it('convert stores a planning milestone on the request managed system (#514 A10)', async () => {
+    const request = await seedApprovedTaskRequest();
+    const milestoneId = await seedMilestone(request.msId);
+    // No finally delete: the converted task references the milestone; the
+    // shared FK-safe cleanup (tasks before milestones) removes it.
+
+    const res = await convert(adminCookie, request.id, {
+      title: 'Same-MS milestone conversion',
+      milestone_id: milestoneId,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      milestone_id: milestoneId,
+      primary_managed_system_id: request.msId,
+      source_task_request_id: request.id,
+    });
+
+    const stored = await dbHandle.pool.query<{ status: string; milestone_id: string }>(
+      'select status, milestone_id from task.tasks where source_task_request_id = $1',
+      [request.id],
+    );
+    expect(stored.rows[0]?.milestone_id).toBe(milestoneId);
+    expect(stored.rows[0]?.status).toBe('backlog');
   });
 });

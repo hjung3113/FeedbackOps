@@ -1,8 +1,8 @@
+import { NAV_TREE } from '@/routes/_authed';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Database, Inbox, Plus, Settings } from 'lucide-react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSidebar } from '../AppSidebar';
-import { NAV_TREE } from '@/routes/_authed';
 
 const entries = [
   {
@@ -15,8 +15,23 @@ const entries = [
   { id: 'my', label: 'My', href: '/my', active: true, section: 'VIEWS' },
 ];
 
+function createMemoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
+  const values = new Map<string, string>();
+
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+}
+
 beforeEach(() => {
+  vi.stubGlobal('localStorage', createMemoryStorage());
   localStorage.removeItem('appSidebarCollapsed');
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('AppSidebar', () => {
@@ -161,7 +176,16 @@ describe('AppSidebar', () => {
     const apply = vi.fn();
     const save = vi.fn();
     const remove = vi.fn();
-    render(<AppSidebar entries={entries} savedViews={[{ id: 'view-1', name: 'High priority' }]} canSaveView onApplySavedView={apply} onSaveView={save} onDeleteSavedView={remove} />);
+    render(
+      <AppSidebar
+        entries={entries}
+        savedViews={[{ id: 'view-1', name: 'High priority' }]}
+        canSaveView
+        onApplySavedView={apply}
+        onSaveView={save}
+        onDeleteSavedView={remove}
+      />,
+    );
     expect(screen.getByTestId('saved-views-section')).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar-count-view-1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('saved-view-apply-view-1'));
@@ -210,6 +234,32 @@ describe('AppSidebar', () => {
     expect(invite).toHaveAttribute('aria-label', 'Invite member');
     expect(invite.querySelector('svg')).not.toBeNull();
     expect(invite.textContent).toBe('');
+  });
+
+  it('renders Milestones without a badge when nav counts have no milestone key', () => {
+    const counts = {
+      'voc.inbox': 5,
+      'voc.triage': 3,
+      'voc.my': 2,
+      'voc.tab.high': 1,
+      'voc.tab.unassigned': 1,
+      'voc.tab.no-link': 2,
+      'voc.clusters': 4,
+      'findings.all': 7,
+      'surveys.all': 0,
+    };
+    const milestoneEntry = NAV_TREE.tasks.find((entry) => entry.label === 'Milestones');
+
+    expect(milestoneEntry).toBeDefined();
+    expect(milestoneEntry?.countKey).toBeUndefined();
+
+    render(<AppSidebar entries={NAV_TREE.tasks} counts={counts} />);
+
+    const milestonesLink = screen.getByTestId('sidebar-nav-milestones');
+    expect(milestonesLink).toHaveAttribute('href', '/tasks?view=milestones');
+    expect(milestonesLink).toHaveTextContent('Milestones');
+    expect(screen.queryByTestId('sidebar-count-milestones')).not.toBeInTheDocument();
+    expect(milestonesLink).not.toHaveTextContent('0');
   });
 
   it('distinguishes an absent count from an explicit zero count', () => {
@@ -285,7 +335,13 @@ describe('AppSidebar', () => {
     expect(screen.getByTestId('scope-union-badge')).toBeVisible();
     expect(screen.getByTestId('scope-selector')).toHaveTextContent('Identity · Finance');
 
-    rerender(<AppSidebar entries={entries} isAdmin={true} managedSystems={[{ id: 'one', name: 'Identity', granted: true }]} />);
+    rerender(
+      <AppSidebar
+        entries={entries}
+        isAdmin={true}
+        managedSystems={[{ id: 'one', name: 'Identity', granted: true }]}
+      />,
+    );
     expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
   });
 

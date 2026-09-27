@@ -28,9 +28,8 @@ import {
 } from './modules/analytics-areas/index.js';
 import { MAX_ATTACHMENT_BYTES, attachmentsRoutes } from './modules/attachments/index.js';
 import { createAttachmentsService } from './modules/attachments/service.js';
-import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
-import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
 import type { AuthProvider } from './modules/auth/auth-provider.js';
+import { listActorsRoutes } from './modules/auth/list-actors-routes.js';
 import { createMockAuthProvider } from './modules/auth/mock-auth-provider.js';
 import { createOidcAuthProvider } from './modules/auth/oidc-auth-provider.js';
 import { authRoutes } from './modules/auth/routes.js';
@@ -38,44 +37,46 @@ import { createSessionService } from './modules/auth/session-service.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { healthRoutes } from './modules/core/health/routes.js';
 import { createIdempotencyService } from './modules/core/idempotency/idempotency-service.js';
+import { createDashboardService, dashboardRoutes } from './modules/dashboard/index.js';
 import { createEntityLinksService, entityLinksRoutes } from './modules/entity-links/index.js';
 import { createFindingsService, findingsRoutes } from './modules/findings/index.js';
 import {
   createManagedSystemService,
   managedSystemsRoutes,
 } from './modules/managed-systems/index.js';
-import { createNavCountsService, navRoutes, type NavCountsService } from './modules/nav/index.js';
-import { createSavedViewsService, savedViewsRoutes } from './modules/saved-views/index.js';
+import { createMilestonesService, milestonesRoutes } from './modules/milestones/index.js';
+import { type NavCountsService, createNavCountsService, navRoutes } from './modules/nav/index.js';
 import {
   createCheckService,
   createDecisionService,
   createRequestService,
   permissionsRoutes,
 } from './modules/permissions/index.js';
+import { createSavedViewsService, savedViewsRoutes } from './modules/saved-views/index.js';
 import { createSurveysService, surveysRoutes } from './modules/surveys/index.js';
 import { createTaskRequestsService, taskRequestsRoutes } from './modules/task-requests/index.js';
 import { createTasksService, tasksRoutes } from './modules/tasks/index.js';
 import { createVocClustersService, vocClustersRoutes } from './modules/voc-clusters/index.js';
+import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
+import {
+  createConversationService,
+  createPublicUpdateReviewCandidateService,
+  createVocEmbeddingEnqueuer,
+  createVocReadService,
+  createVocRecommendationsService,
+  createVocService,
+  vocRecommendationsRoutes,
+  vocRoutes,
+} from './modules/voc/index.js';
+import {
+  createPreSubmitVocPeersService,
+  preSubmitVocPeersRoutes,
+} from './modules/voc/pre-submit-peers/index.js';
 import {
   createWorkspaceSettingsService,
   getResolvedWorkspaceSettings,
   workspaceSettingsRoutes,
 } from './modules/workspace-settings/index.js';
-import {
-  createConversationService,
-  createPublicUpdateReviewCandidateService,
-  createVocEmbeddingEnqueuer,
-  createVocRecommendationsService,
-  createVocReadService,
-  createVocService,
-  vocRecommendationsRoutes,
-  vocRoutes,
-} from './modules/voc/index.js';
-import { isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
-import {
-  createPreSubmitVocPeersService,
-  preSubmitVocPeersRoutes,
-} from './modules/voc/pre-submit-peers/index.js';
 
 export interface BuildServerOptions {
   config: AppConfig;
@@ -520,6 +521,23 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
+  // ── Milestones module — #514 ─────────────────────────────────────────────
+  const milestonesService = createMilestonesService({
+    db: dbHandle.db,
+    auditService,
+    checkService,
+    idempotencyService,
+  });
+  await app.register(milestonesRoutes, {
+    sessionService,
+    milestonesService,
+    workspaceId,
+    rateLimitConfig: {
+      mutation: app.rateLimitConfig.mutation,
+      read: app.rateLimitConfig.read,
+    },
+  });
+
   // VOC conversation command is constructed here so cluster candidate apply can
   // delegate each selected VOC to the canonical per-VOC command.
   const vocService = createVocService({
@@ -567,12 +585,14 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
       read: app.rateLimitConfig.read,
     },
   });
-  const navCountsService = opts.navCountsService ?? createNavCountsService({
-    vocReadService,
-    findingsService,
-    surveysService,
-    vocClustersService,
-  });
+  const navCountsService =
+    opts.navCountsService ??
+    createNavCountsService({
+      vocReadService,
+      findingsService,
+      surveysService,
+      vocClustersService,
+    });
   await app.register(navRoutes, {
     sessionService,
     navCountsService,
@@ -608,13 +628,14 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     embeddingVersion: config.EMBEDDING_VERSION,
     embeddingEnabled: isEmbeddingEnabled(config),
-    createClustersService: (db) => createVocClustersService({
-      db,
-      auditService,
-      checkService,
-      idempotencyService,
-      postPublicUpdate: conversationService.postPublicUpdate,
-    }),
+    createClustersService: (db) =>
+      createVocClustersService({
+        db,
+        auditService,
+        checkService,
+        idempotencyService,
+        postPublicUpdate: conversationService.postPublicUpdate,
+      }),
   });
   await app.register(vocRecommendationsRoutes, {
     sessionService,

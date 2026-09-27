@@ -10,6 +10,7 @@ const KIND_ACCENT: Record<DetailPanelKind, string> = {
   task: 'var(--color-amethyst)',
   survey: 'var(--color-cyan-spark)',
   cluster: 'var(--color-amber)',
+  milestone: 'var(--color-amber)',
 };
 
 const kinds = Object.keys(KIND_ACCENT) as DetailPanelKind[];
@@ -23,7 +24,9 @@ describe('DetailPanelHeader — kind accent stripe', () => {
       const header = container.querySelector(`[data-kind="${kind}"]`);
       expect(header).not.toBeNull();
     });
+  }
 
+  for (const kind of kinds.filter((kind) => kind !== 'milestone')) {
     it(`kind="${kind}" accent stripe has correct CSS variable background`, () => {
       const { container } = render(
         <DetailPanelHeader kind={kind} id="V-1024" onClose={() => {}} />,
@@ -38,6 +41,31 @@ describe('DetailPanelHeader — kind accent stripe', () => {
   }
 });
 
+describe('DetailPanelHeader — milestone kind badge', () => {
+  it('renders the rounded title-case badge without a leading stripe', () => {
+    const { container } = render(
+      <DetailPanelHeader
+        kind="milestone"
+        id="M-21"
+        onClose={() => {}}
+        extras={<span data-testid="extra-slot">extra</span>}
+      />,
+    );
+
+    const header = container.querySelector('[data-kind="milestone"]');
+    const badge = screen.getByText('Milestone');
+
+    expect(badge).toHaveClass('rounded');
+    expect(badge).toHaveClass('text-[11px]');
+    expect(badge).not.toHaveClass('uppercase');
+    expect((badge as HTMLElement).querySelector('[aria-hidden="true"]')).not.toBeNull();
+    expect(header?.querySelector(':scope > div[aria-hidden="true"]')).toBeNull();
+    expect(screen.getByText('M-21')).toBeInTheDocument();
+    expect(screen.getByTestId('extra-slot')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+  });
+});
+
 describe('DetailPanelHeader — display', () => {
   it('renders the display id', () => {
     render(<DetailPanelHeader kind="voc" id="V-2048" onClose={() => {}} />);
@@ -47,6 +75,16 @@ describe('DetailPanelHeader — display', () => {
   it('renders kind label', () => {
     render(<DetailPanelHeader kind="voc" id="V-1" onClose={() => {}} />);
     expect(screen.getByText('VOC')).toBeInTheDocument();
+  });
+
+  // B2d fixup (#514): panels mount the header before their detail query
+  // resolves; without an id the chrome and close action still render and no
+  // unavailable record data appears.
+  it('renders kind label and close action without an id span when id is omitted', () => {
+    const { container } = render(<DetailPanelHeader kind="milestone" onClose={() => {}} />);
+    expect(screen.getByText('Milestone')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
+    expect(container.querySelector('.font-mono')).toBeNull();
   });
 
   it('matches prototype panel-header and panel-id typography', () => {
