@@ -16,6 +16,7 @@
 //   never the mutation's AbortSignal.
 
 import { apiClient } from '@/lib/api/client';
+import { mintIdempotencyKey } from '@/lib/api/idempotency';
 import { buildCompensatePayload, buildPayload } from './triage-payload';
 import type { TriageInput, TriageOutput, TriageSnapshot } from './triage-types';
 
@@ -42,18 +43,12 @@ export async function patchVocTriage(
  */
 export async function executeCompensatingPatch(snapshot: TriageSnapshot): Promise<TriageOutput> {
   const payload = buildCompensatePayload(snapshot);
-  const freshKey = mintFreshKey();
   const res = await apiClient<TriageOutput>('PATCH', `/vocs/${snapshot.vocId}`, {
     body: payload,
     ifMatch: snapshot.ifMatch,
-    idempotencyKey: freshKey,
+    idempotencyKey: mintIdempotencyKey(),
   });
   return res.data;
-}
-
-function mintFreshKey(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
 export async function getVocUpdatedAt(

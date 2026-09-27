@@ -6,7 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
 vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({ useWorkspaceActors: vi.fn() }));
-vi.mock('@/features/voc/hooks/usePermissionDecision', () => ({ usePermissionDecision: vi.fn() }));
+vi.mock('@/lib/cross-system/getPermissionDecision', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/cross-system/getPermissionDecision')>();
+  return { ...actual, getPermissionDecision: vi.fn() };
+});
 vi.mock('@/features/voc/hooks/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
 vi.mock('@/features/voc/hooks/useVocConversation', () => ({ useVocConversation: vi.fn() }));
 const navigate = vi.fn();
@@ -63,13 +66,13 @@ vi.mock('@/features/voc/components/detail/ComposerSection', () => ({
 }));
 
 import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
-import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
 import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
 import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { getTask } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
+import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
 import { VocDetailPanel } from '../VocDetailPanel';
 import {
   DETAIL_ENVELOPE,
@@ -94,16 +97,22 @@ beforeEach(() => {
   navigate.mockReset();
   vi.mocked(getTask).mockReset();
   vi.mocked(useManagedSystem).mockReturnValue(null);
-  vi.mocked(usePermissionDecision).mockReturnValue(null);
+  vi.mocked(getPermissionDecision).mockReturnValue(null);
   vi.mocked(useVocConversation).mockReturnValue(makeConversationQuery());
   vi.mocked(useWorkspaceActors).mockReturnValue({
     actors: [
       {
         id: DETAIL_ENVELOPE.reporter_id,
         display_name: ME_RESPONSE.actor.display_name,
-        kind: 'user',
+        email: 'reporter@example.test',
+        role_level: 'user' as const,
       },
-      { id: '00000000-0000-0000-0000-000000000002', display_name: '박운영', kind: 'user' },
+      {
+        id: '00000000-0000-0000-0000-000000000002',
+        display_name: '박운영',
+        email: 'park@example.test',
+        role_level: 'admin' as const,
+      },
     ],
   } as ReturnType<typeof useWorkspaceActors>);
   vi.mocked(fetchAnalyticsAreas).mockResolvedValue({ items: [], total: 0 });
@@ -391,16 +400,55 @@ describe('<VocDetailPanel>', () => {
       primary_managed_system_id: 'ms-1',
       reporter_facing_status: 'received',
       created_at: '2026-05-01T00:00:00Z',
-      permission_decisions: { _self: { state: 'denied' } },
+      permission_decisions: {
+        _self: { state: 'blocked_not_requestable', reason: 'explicit_deny' },
+      },
     };
     vi.mocked(useVocDetail).mockReturnValue(
       makeDetailQuery({ data: summaryData as unknown as typeof DETAIL_ENVELOPE }),
     );
-    vi.mocked(usePermissionDecision).mockReturnValue({ state: 'denied' });
     vi.mocked(useMe).mockReturnValue(makeMeQuery());
 
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     // PermissionBlockedPanel renders; title should NOT be present
+    expect(screen.queryByText('테스트 VOC 제목')).not.toBeInTheDocument();
+  });
+
+  it('summary envelope: live read-service _self renders request_access, not a scope line', () => {
+    const managedSystemId = '01919b8c-0000-7000-8000-0000000000aa';
+    // Exact object built by apps/backend/src/modules/voc/read-service.ts (summary path).
+    // Adapter is the real getSummarySelfDecision — this file's mock only replaces
+    // getPermissionDecision, which the summary view does not call.
+    const summaryData = {
+      id: '01919b8c-0000-7000-8000-0000000000bb',
+      display_id: 'VOC-0001',
+      primary_managed_system_id: managedSystemId,
+      reporter_facing_status: 'received',
+      created_at: '2026-05-01T00:00:00.000Z',
+      permission_decisions: {
+        _self: {
+          state: 'request_access',
+          requestable_permission: {
+            permission: 'voc.read',
+            managed_system_id: managedSystemId,
+            reason_required: false,
+          },
+        },
+      },
+    };
+    vi.mocked(useVocDetail).mockReturnValue(
+      makeDetailQuery({ data: summaryData as unknown as typeof DETAIL_ENVELOPE }),
+    );
+
+    const { container } = renderWithClient(
+      <VocDetailPanel vocId="01919b8c-0000-7000-8000-0000000000bb" onClose={vi.fn()} />,
+    );
+
+    expect(container.querySelector('[data-state="request_access"]')).not.toBeNull();
+    expect(screen.getByText('이 항목에 접근하려면 권한 요청이 필요합니다.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '권한 요청하기' })).toBeInTheDocument();
+    expect(screen.queryByText('voc.read')).not.toBeInTheDocument();
+    expect(screen.queryByText('권한 결정 데이터를 해석할 수 없습니다.')).not.toBeInTheDocument();
     expect(screen.queryByText('테스트 VOC 제목')).not.toBeInTheDocument();
   });
 

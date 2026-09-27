@@ -49,7 +49,7 @@ describe('PermissionBlockedPanel — state rendering', () => {
       <PermissionBlockedPanel
         state="request_access"
         category="VOC 상세"
-        requiredScope={{ capability: 'voc.read', managed_system_id: 'ms-001' }}
+        requiredScope={['voc.read', 'ms-001']}
       />,
     );
     expect(screen.getByText('voc.read · ms-001')).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe('PermissionBlockedPanel — state rendering', () => {
       <PermissionBlockedPanel
         state="request_access"
         category="VOC 상세"
-        requiredScope={{ capability: 'voc.read' }}
+        requiredScope={['voc.read']}
       />,
     );
     expect(screen.getByText('voc.read')).toBeInTheDocument();

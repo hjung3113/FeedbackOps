@@ -83,9 +83,28 @@ export const vocSummaryEnvelopeSchema = z.object({
   primary_managed_system_id: z.string().uuid(),
   reporter_facing_status: reporterFacingStatusEnumSchema,
   created_at: z.string().datetime(),
-  // permission_decisions._self carries state + requestable metadata; other
-  // keys may be present (future per-action decisions). Kept as record to
-  // avoid coupling the shared schema to auth-service internals.
+  // permission_decisions stays an opaque record. `_self` is not
+  // permissionDecisionSchema — parse it with vocSummarySelfDecisionSchema.
+  // Other keys may be present (future per-action decisions).
   permission_decisions: z.record(z.string(), z.unknown()),
 });
 export type VocSummaryEnvelope = z.infer<typeof vocSummaryEnvelopeSchema>;
+
+// Live summary `_self` from voc read-service (kind === 'summary'). It has
+// never carried decision_id / category / evaluated_at. Do not parse it with
+// permissionDecisionSchema.
+export const vocSummarySelfDecisionSchema = z.discriminatedUnion('state', [
+  z.object({
+    state: z.literal('request_access'),
+    requestable_permission: z.object({
+      permission: z.string().min(1),
+      managed_system_id: z.string().uuid().nullable(),
+      reason_required: z.boolean(),
+    }),
+  }),
+  z.object({
+    state: z.literal('blocked_not_requestable'),
+    reason: z.string().min(1),
+  }),
+]);
+export type VocSummarySelfDecision = z.infer<typeof vocSummarySelfDecisionSchema>;

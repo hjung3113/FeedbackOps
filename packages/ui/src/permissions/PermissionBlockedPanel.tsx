@@ -16,11 +16,8 @@ export interface PermissionBlockedPanelProps {
   category: string;
   /** Reason string returned by BE in the decision envelope */
   reason?: string;
-  /** Required scope description (e.g. capability + managed_system_id) */
-  requiredScope?: {
-    capability: string;
-    managed_system_id?: string;
-  };
+  /** Canonical `required_scope` strings from permissionDecisionSchema. */
+  requiredScope?: readonly string[];
   /** Optional ReactNode for summary state to inject summary content. */
   summary?: React.ReactNode;
   /** Decision identifier returned by BE for audit trail. */
@@ -72,13 +69,8 @@ export function PermissionBlockedPanel({
       {state === 'request_access' && (
         <div className="flex flex-col gap-2">
           <p className="text-sm text-text-secondary">이 항목에 접근하려면 권한 요청이 필요합니다.</p>
-          {requiredScope !== undefined && (
-            <p className="text-xs text-text-muted">
-              {requiredScope.capability}
-              {requiredScope.managed_system_id !== undefined
-                ? ` · ${requiredScope.managed_system_id}`
-                : ''}
-            </p>
+          {requiredScope !== undefined && requiredScope.length > 0 && (
+            <p className="text-xs text-text-muted">{requiredScope.join(' · ')}</p>
           )}
           <Button
             variant="default"

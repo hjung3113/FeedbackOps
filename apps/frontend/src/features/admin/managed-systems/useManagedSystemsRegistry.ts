@@ -1,4 +1,3 @@
-import type { ListActorsResponse } from '@fops/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -6,12 +5,12 @@ import {
   type AnalyticsAreaDto,
   type ManagedSystemDto,
   type ResolveActorsResponse,
-  apiClient,
   fetchAnalyticsAreas,
   fetchManagedSystems,
   fetchPermissionRequestsAll,
   resolveActors,
 } from '../../../lib/api';
+import { useWorkspaceActors } from '../../../lib/cross-system/useWorkspaceActors';
 import { groupAreasByMs } from '../lib/groupAreasByMs.js';
 
 // Shared by string with other screens' ['managed-systems', …] queries; the
@@ -91,17 +90,8 @@ export function useManagedSystemsRegistry(includeArchived: boolean): {
 }
 
 export function useRegistryActorOptions(): { id: string; display_name: string }[] | undefined {
-  const actorsQuery = useQuery({
-    queryKey: ['actors', 'workspace', 'current'] as const,
-    retry: false,
-    queryFn: async ({ signal }) => {
-      const response = await apiClient<ListActorsResponse>('GET', '/actors?workspace=current', {
-        signal,
-      });
-      return response.data.actors.map(({ id, display_name }) => ({ id, display_name }));
-    },
-  });
-  return actorsQuery.data;
+  const { actors } = useWorkspaceActors({ retry: false, staleTime: 0 });
+  return actors?.map(({ id, display_name }) => ({ id, display_name }));
 }
 
 export function useKnownOwnerTeam(

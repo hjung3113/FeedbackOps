@@ -6,9 +6,10 @@ vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
 vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({ actors: [] }),
 }));
-vi.mock('@/features/voc/hooks/usePermissionDecision', () => ({
-  usePermissionDecision: () => null,
-}));
+vi.mock('@/lib/cross-system/getPermissionDecision', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/cross-system/getPermissionDecision')>();
+  return { ...actual, getPermissionDecision: () => null };
+});
 vi.mock('@/features/voc/hooks/usePublicUpdateReviewCandidates', () => ({
   usePublicUpdateReviewCandidates: () => ({ data: { items: [] } }),
 }));

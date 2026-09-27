@@ -9,8 +9,6 @@
 // constraints — focus rings, ≥40×40 touch targets, label-plus-icon — are
 // satisfied via the existing `@fops/ui` Button.
 
-import type { ListActorsResponse } from '@fops/shared';
-import { useQuery } from '@tanstack/react-query';
 import {
   AlertOctagon,
   CheckCircle2,
@@ -23,7 +21,8 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { type FrontendPermissionState, type PermissionDecision, apiClient } from '../../../lib/api';
+import type { FrontendPermissionState, PermissionDecision } from '../../../lib/api';
+import { useWorkspaceActors } from '../../../lib/cross-system/useWorkspaceActors';
 import { RequestAccessButton } from './request-access-button.js';
 
 export interface PermissionStateViewProps {
@@ -100,37 +99,17 @@ const STATE_CHROME: Record<FrontendPermissionState, StateChrome> = {
   },
 };
 
-export interface WorkspaceActor {
-  id: string;
-  display_name: string;
-  role_level: string;
-}
-
-export function useWorkspaceActors(enabled = true) {
-  return useQuery({
-    queryKey: ['actors', 'workspace', 'current'],
-    enabled,
-    retry: false,
-    queryFn: async ({ signal }): Promise<WorkspaceActor[]> => {
-      const response = await apiClient<ListActorsResponse>('GET', '/actors?workspace=current', {
-        signal,
-      });
-      return response.data.actors.map(({ id, display_name, role_level }) => ({
-        id,
-        display_name,
-        role_level,
-      }));
-    },
-  });
-}
-
 export function PermissionStateView(props: PermissionStateViewProps) {
   const chrome = STATE_CHROME[props.state];
   const { Icon } = chrome;
   const showRequestButton = props.state === 'request_access';
   const showContactAdmin = props.state === 'blocked_non_requestable';
-  const actors = useWorkspaceActors(showContactAdmin);
-  const adminNames = actors.data
+  const actors = useWorkspaceActors({
+    enabled: showContactAdmin,
+    retry: false,
+    staleTime: 0,
+  });
+  const adminNames = actors.actors
     ?.filter((actor) => actor.role_level === 'admin')
     .map((actor) => actor.display_name);
   return (

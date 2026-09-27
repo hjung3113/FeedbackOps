@@ -1,17 +1,17 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-vi.mock('@/features/voc/hooks/usePermissionDecision', () => ({
-  usePermissionDecision: vi.fn(),
+vi.mock('@/lib/cross-system/getPermissionDecision', () => ({
+  getPermissionDecision: vi.fn(),
 }));
 
-import { usePermissionDecision } from '@/features/voc/hooks/usePermissionDecision';
+import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
 import { LinkedExecutionSection } from '../LinkedExecutionSection';
 import { DETAIL_ENVELOPE } from './_fixtures';
 
 describe('<LinkedExecutionSection>', () => {
   beforeEach(() => {
-    vi.mocked(usePermissionDecision).mockReturnValue(null);
+    vi.mocked(getPermissionDecision).mockReturnValue(null);
   });
 
   it('renders EmptyState when no linkedFinding permission decision', () => {
@@ -32,7 +32,7 @@ describe('<LinkedExecutionSection>', () => {
   });
 
   it('renders PermissionBlockedPanel when linkedFinding decision is present', () => {
-    vi.mocked(usePermissionDecision).mockReturnValue({
+    vi.mocked(getPermissionDecision).mockReturnValue({
       state: 'denied',
       reason: '권한 없음',
     });
