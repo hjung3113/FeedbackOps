@@ -22,8 +22,8 @@ import { Link } from '@tanstack/react-router';
 import { FileText, Flag, Layers, User } from 'lucide-react';
 import * as React from 'react';
 import { useMemo, useState } from 'react';
-import type { ResolvedManagedSystem } from '../../hooks/useManagedSystem';
-import { useWorkspaceActors } from '../../hooks/useWorkspaceActors';
+import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { VocRow } from './VocRow';
 import { VocRowSkeleton } from './VocRowSkeleton';
 

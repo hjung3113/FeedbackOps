@@ -41,14 +41,14 @@ vi.mock('../../hooks/useVocList', () => ({
   useVocList: (...args: unknown[]) => useVocListMock(...args),
 }));
 
-vi.mock('../../hooks/useWorkspaceActors', () => ({
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({ actors: [], isSuccess: true, isLoading: false, error: null }),
 }));
 
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 
 // Mock the permission check hook (Group 5 wires this in).
-vi.mock('@/features/admin/permissions/use-permission-check', () => ({
+vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
   usePermissionCheck: vi.fn(),
   permissionCheckQueryKey: () => ['permission-check', 'voc.triage', null],
   permissionRequestsMineKey: ['permission-requests-mine'],
@@ -81,7 +81,7 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
 
 import { TriageRoute } from '../TriageRoute';
 import { useMe } from '@/lib/auth/useMe';
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 

@@ -7,7 +7,8 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
-import { loginAs, paragraphDoc } from '../../voc/__tests__/_seed-helpers.js';
+import { loginAs } from '../../../test-support/auth.js';
+import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
 import {
   grantCapability,
   insertActorRow,
@@ -15,6 +16,7 @@ import {
   insertVocClusterRow,
   insertVocRow,
 } from './_seed-helpers.js';
+
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';

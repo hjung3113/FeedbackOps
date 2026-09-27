@@ -33,14 +33,13 @@ import {
   createVocClustersService,
   type VocClustersService,
 } from "../../voc-clusters/service.js";
-import {
-  grantCapability,
-  insertDevActor,
-  insertVocDirectly,
-  loginAs,
-  uid,
-} from "../../voc/__tests__/_seed-helpers.js";
+import { insertDevActor } from "../../../test-support/actor-fixtures.js";
+import { loginAs } from "../../../test-support/auth.js";
+import { uid } from "../../../test-support/ids.js";
+import { grantCapability } from "../../../test-support/permissions-fixtures.js";
+import { insertVocDirectly } from "../../../test-support/voc-fixtures.js";
 import { createFindingsService, type FindingsService } from "../service.js";
+
 
 const APP_URL = process.env.DATABASE_URL ?? "";
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? "";

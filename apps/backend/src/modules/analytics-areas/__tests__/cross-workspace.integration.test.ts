@@ -34,6 +34,7 @@ import {
   type AnalyticsAreaService,
 } from '../analytics-area-service.js';
 
+
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
 const runIntegration = Boolean(APP_URL && WORKSPACE_ID);

@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { fetchManagedSystems } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 // djb2 hash → one of 8 Pack-17-friendly hex colors.
 const COLOR_PALETTE = [
@@ -34,9 +34,7 @@ export interface ResolvedManagedSystem {
   archived: boolean;
 }
 
-export function useManagedSystem(
-  id: string | null | undefined,
-): ResolvedManagedSystem | null {
+export function useManagedSystem(id: string | null | undefined): ResolvedManagedSystem | null {
   const { data } = useQuery({
     queryKey: ['managed-systems', 'all'],
     queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),

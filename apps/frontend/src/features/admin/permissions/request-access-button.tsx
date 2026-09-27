@@ -32,7 +32,7 @@ import {
   type CreatePermissionRequestSuccess,
   createPermissionRequest,
 } from '../../../lib/api';
-import { permissionCheckQueryKey, permissionRequestsMineKey } from './use-permission-check.js';
+import { permissionCheckQueryKey, permissionRequestsMineKey } from '@/lib/cross-system/usePermissionCheck';
 
 export interface RequestAccessButtonProps {
   capability: string;

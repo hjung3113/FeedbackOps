@@ -2,8 +2,8 @@
 
 import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
 import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
-import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { ApiError } from '@/lib/api/types';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { FindingDto } from '@fops/shared';
 import {
   type AvatarUser,

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import type * as React from 'react';
 
-import { permissionRequestsMineKey } from '@/features/admin/permissions/use-permission-check';
+import { permissionRequestsMineKey } from '@/lib/cross-system/usePermissionCheck';
 import { type MinePermissionRequestRow, fetchDashboardSummary, fetchPermissionRequestsMine, fetchTaskRequests, listTasks } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { HOME_COVERAGE_COPY, HOME_COPY, HOME_KPI_COPY, HOME_QUEUE_COPY, homeSeverityLabel } from '@/lib/copy/home';

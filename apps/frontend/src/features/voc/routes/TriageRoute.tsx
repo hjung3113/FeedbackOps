@@ -23,7 +23,7 @@ import * as React from 'react';
 import { useSearch, useNavigate } from '@tanstack/react-router';
 import { PermissionBlockedPanel } from '@fops/ui';
 import { useMe } from '@/lib/auth/useMe';
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useVocList } from '../hooks/useVocList';
 import { VocTriageScreen, type TriageTab } from '../components/triage/VocTriageScreen';
 

@@ -38,13 +38,10 @@
 
 import { sql } from 'drizzle-orm';
 
+import { sqlUuidArray } from '../../../db/sql-arrays.js';
 import type { Scope } from '../authorization.js';
 
-export function sqlUuidArray(ids: string[]): ReturnType<typeof sql> {
-  if (ids.length === 0) return sql`ARRAY[]::uuid[]`;
-  const items = ids.map((id) => sql`${id}::uuid`);
-  return sql`ARRAY[${sql.join(items, sql`, `)}]::uuid[]`;
-}
+export { sqlUuidArray };
 
 /** TypeScript twin of `dismissalScopeKeySql`, for the write path. */
 export function dismissalScopeKey(

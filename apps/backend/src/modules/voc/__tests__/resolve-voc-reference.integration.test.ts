@@ -30,14 +30,14 @@ import {
   type VocReadService,
   createVocReadService,
 } from '../read-service.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import {
   cleanupReadTestTables,
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
   insertVocDirectly,
-  uid,
-} from './_seed-helpers.js';
+} from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';

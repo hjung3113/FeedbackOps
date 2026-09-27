@@ -15,7 +15,7 @@ import { vocs } from '../../db/schema/voc.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { stableStringify } from '../../lib/json/stable-stringify.js';
-import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
+import { sanitizeRichContentOrThrow } from '../../lib/rich-content/sanitize-or-throw.js';
 import { lockAnalyticsArea } from '../analytics-areas/index.js';
 import {
   LinkAttachmentsRejected,
@@ -36,13 +36,6 @@ import { type ReporterFacingStatus, nextReporterStates } from './transitions.js'
 export interface CreateVocActor {
   actor_id: string;
   workspace_id: string;
-}
-
-function richContentFieldCode(error: RichContentError): string {
-  if (error.code === 'rich_content.external_image_forbidden') {
-    return 'external_image_forbidden';
-  }
-  return error.fields_code ?? 'disallowed_node';
 }
 
 export interface VocEnvelope {
@@ -127,21 +120,11 @@ export function createVocService(deps: VocServiceDeps) {
     }
 
     // 3. Sanitize rich content.
-    const sanitized = sanitizeTipTap({
+    const sanitized = sanitizeRichContentOrThrow({
       surface: 'voc-description',
       doc: input.description_rich_content,
+      fieldPath: ['description_rich_content'],
     });
-    if (!sanitized.ok) {
-      throw new HttpError(sanitized.error.code, sanitized.error.reason, {
-        fields: [
-          {
-            path: ['description_rich_content'],
-            code: richContentFieldCode(sanitized.error),
-          },
-        ],
-        hint: sanitized.error.path,
-      });
-    }
 
     // 4. INSERT vocs. `insertVoc` returns `inserted[0]` which is typed as
     // possibly-undefined under noUncheckedIndexedAccess; narrow defensively.
@@ -154,7 +137,7 @@ export function createVocService(deps: VocServiceDeps) {
       analyticsAreaId: input.analytics_area_id ?? null,
       reporterId: actor.actor_id,
       title: input.title,
-      descriptionRichContent: sanitized.doc,
+      descriptionRichContent: sanitized,
       sourceContext: input.source_context,
     });
     if (!row) {
@@ -806,23 +789,13 @@ export function createVocService(deps: VocServiceDeps) {
     }
 
     // 6. Sanitize description_rich_content when present.
-    let sanitizedDoc: ReturnType<typeof sanitizeTipTap> | null = null;
+    let sanitizedDoc: ReturnType<typeof sanitizeRichContentOrThrow> | null = null;
     if (input.description_rich_content !== undefined) {
-      sanitizedDoc = sanitizeTipTap({
+      sanitizedDoc = sanitizeRichContentOrThrow({
         surface: 'voc-description',
         doc: input.description_rich_content,
+        fieldPath: ['description_rich_content'],
       });
-      if (!sanitizedDoc.ok) {
-        throw new HttpError(sanitizedDoc.error.code, sanitizedDoc.error.reason, {
-          fields: [
-            {
-              path: ['description_rich_content'],
-              code: richContentFieldCode(sanitizedDoc.error),
-            },
-          ],
-          hint: sanitizedDoc.error.path,
-        });
-      }
     }
 
     // 7. PLAN-22 C7b — link supplied attachment_ids in the same tx. Each id
@@ -879,11 +852,11 @@ export function createVocService(deps: VocServiceDeps) {
     }
 
     // description_rich_content diff — compare via SHA-256 of stableStringify
-    if (input.description_rich_content !== undefined && sanitizedDoc?.ok) {
+    if (input.description_rich_content !== undefined && sanitizedDoc !== null) {
       const fromHash = createHash('sha256')
         .update(stableStringify(row.descriptionRichContent))
         .digest('hex');
-      const toHash = createHash('sha256').update(stableStringify(sanitizedDoc.doc)).digest('hex');
+      const toHash = createHash('sha256').update(stableStringify(sanitizedDoc)).digest('hex');
       if (fromHash !== toHash) {
         changes.description_rich_content = { from_hash: fromHash, to_hash: toHash };
       }
@@ -922,8 +895,8 @@ export function createVocService(deps: VocServiceDeps) {
             ? row.title
             : undefined,
       descriptionRichContent:
-        changes.description_rich_content !== undefined && sanitizedDoc !== null && sanitizedDoc.ok
-          ? sanitizedDoc.doc
+        changes.description_rich_content !== undefined && sanitizedDoc !== null
+          ? sanitizedDoc
           : undefined,
     });
 

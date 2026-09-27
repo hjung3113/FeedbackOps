@@ -7,6 +7,7 @@ import type {
 
 import type { Db } from "../../db/client.js";
 import { vocs } from "../../db/schema/voc.js";
+import { sqlTextArray } from "../../db/sql-arrays.js";
 import type { Tx } from "../../db/tx.js";
 
 export interface LinkEndpointRow {
@@ -105,12 +106,6 @@ function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
           ? row.detached_at
           : new Date(row.detached_at as string),
   };
-}
-
-function sqlTextArray(values: string[]): ReturnType<typeof sql> {
-  if (values.length === 0) return sql`ARRAY[]::text[]`;
-  const items = values.map((value) => sql`${value}::text`);
-  return sql`ARRAY[${sql.join(items, sql`, `)}]::text[]`;
 }
 
 export async function resolveVocEndpoint(

@@ -9,10 +9,10 @@ import {
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
-import { HttpError } from '../../lib/errors.js';
 import { actorFindingReadScope } from '../findings/authorization.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import type { CheckService } from '../permissions/check-service.js';
+import { isAuthorizationAbsence } from '../permissions/read-utility.js';
 import type { RequestService } from '../permissions/request-service.js';
 import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
 import { actorSurveyReadScope, checkSurveyRead } from '../surveys/authorization.js';
@@ -33,13 +33,6 @@ type DashboardDeps = {
     countVocs(args: { actor: DashboardActor; query: CountVocsQuery }): Promise<number>;
   };
 };
-
-function isAuthorizationAbsence(error: unknown): error is HttpError {
-  return (
-    error instanceof HttpError &&
-    (error.code === 'permission.denied' || error.code === 'permission.scope_required')
-  );
-}
 
 function inRequestedScope(scope: Scope, managedSystemId?: string): Scope | undefined {
   if (managedSystemId === undefined || managedSystemId === 'all') return scope;

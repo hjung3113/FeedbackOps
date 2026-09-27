@@ -16,15 +16,19 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
 import {
   SESSION_COOKIE_NAME,
+  loginAs,
+} from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import {
   cleanupReadTestTables,
+  insertPublicUpdate,
+  insertVocDirectly,
+} from '../../../test-support/voc-fixtures.js';
+import {
   insertInternalComment,
   insertLinkedAttachment,
-  insertMsDirectly,
-  insertPublicUpdate,
   insertReporterReply,
-  insertVocDirectly,
-  loginAs,
-  uid,
 } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';

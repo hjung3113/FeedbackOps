@@ -12,19 +12,25 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import {
   SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  grantCapability,
-  insertDevActor,
-  insertInternalComment,
-  insertMsDirectly,
-  insertPublicUpdate,
-  insertReporterReply,
-  insertVocDirectly,
   loginAs,
+} from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import {
   randomUUID,
   uid,
+} from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import {
+  cleanupReadTestTables,
+  insertPublicUpdate,
+  insertVocDirectly,
+} from '../../../test-support/voc-fixtures.js';
+import {
+  insertInternalComment,
+  insertReporterReply,
 } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';

@@ -22,7 +22,7 @@ import { actors } from '../../db/schema/core.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { encodeCommentCursor } from '../../lib/pg-timestamp.js';
-import { type RichContentError, sanitizeTipTap } from '../../lib/rich-content/sanitize.js';
+import { sanitizeRichContentOrThrow } from '../../lib/rich-content/sanitize-or-throw.js';
 import { lockAnalyticsArea } from '../analytics-areas/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
@@ -137,23 +137,12 @@ function taskCommentToDto(row: TaskCommentRow): TaskCommentDto {
   };
 }
 
-function richContentFieldCode(error: RichContentError): string {
-  if (error.code === 'rich_content.external_image_forbidden') return 'external_image_forbidden';
-  return error.fields_code ?? 'disallowed_node';
-}
-
 function sanitizeCommentBody(doc: unknown): unknown {
-  const result = sanitizeTipTap({
+  return sanitizeRichContentOrThrow({
     surface: 'internal-comment',
-    doc: doc as Parameters<typeof sanitizeTipTap>[0]['doc'],
+    doc,
+    fieldPath: ['body_rich_content'],
   });
-  if (!result.ok) {
-    throw new HttpError(result.error.code, result.error.reason, {
-      fields: [{ path: ['body_rich_content'], code: richContentFieldCode(result.error) }],
-      hint: result.error.path,
-    });
-  }
-  return result.doc;
 }
 
 interface MentionNode {

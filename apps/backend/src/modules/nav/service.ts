@@ -1,4 +1,4 @@
-import { HttpError } from '../../lib/errors.js';
+import { isAuthorizationAbsence } from '../permissions/read-utility.js';
 import type { CountVocsQuery } from '../voc/read-service.js';
 
 export interface NavActor {
@@ -21,11 +21,6 @@ type NavCountsDeps = {
     listClusters(args: { actor: NavActor; managedSystemId?: string }): Promise<{ items: readonly unknown[] }>;
   };
 };
-
-function isAuthorizationAbsence(error: unknown): error is HttpError {
-  return error instanceof HttpError
-    && (error.code === 'permission.denied' || error.code === 'permission.scope_required');
-}
 
 export function createNavCountsService(deps: NavCountsDeps) {
   async function getCounts(actor: NavActor, managedSystemId?: string): Promise<Record<string, number>> {

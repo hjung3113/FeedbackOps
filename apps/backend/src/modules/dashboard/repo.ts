@@ -1,12 +1,8 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
+import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Scope } from '../permissions/scope-service.js';
-
-function sqlUuidArray(ids: readonly string[]): ReturnType<typeof sql> {
-  if (ids.length === 0) return sql`ARRAY[]::uuid[]`;
-  return sql`ARRAY[${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)}]::uuid[]`;
-}
 
 function scopePredicate(column: string, scope: Scope, managedSystemId?: string): ReturnType<typeof sql> {
   const columnRef = sql.raw(column);

@@ -148,7 +148,7 @@ vi.mock('@/features/findings/components/FindingDetail', () => ({
   ),
 }));
 
-vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({
     actors: [
       {

@@ -44,6 +44,7 @@ import {
 } from '../../../../../test-support/recommendations-eval/harness.js';
 import { VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from '../../constants.js';
 
+
 const fixture = THRESHOLD_EVAL_FIXTURE;
 
 describe('threshold evaluation fixture (#168)', () => {

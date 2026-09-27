@@ -14,21 +14,24 @@ import { type DbHandle, createDb } from "../../../db/client.js";
 import { buildServer } from "../../../server.js";
 import { initBoss, shutdownBoss } from "../../../lib/jobs.js";
 import { createAuditService } from "../../core/audit/index.js";
+import { insertDevActor } from "../../../test-support/actor-fixtures.js";
 import {
   SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  insertDevActor,
-  insertMsDirectly,
   loginAs,
-  uid,
+} from "../../../test-support/auth.js";
+import { insertMsDirectly } from "../../../test-support/core-fixtures.js";
+import { uid } from "../../../test-support/ids.js";
+import {
+  cleanupReadTestTables,
   insertVocDirectly,
-} from "../../voc/__tests__/_seed-helpers.js";
+} from "../../../test-support/voc-fixtures.js";
 import { insertTaskRow } from "./_seed-helpers.js";
 import {
   releasedReviewCandidatesHandler,
   type TaskReleasedReviewCandidatesPayload,
 } from "../../voc/jobs/released-review-candidates.js";
 import { createPublicUpdateReviewCandidatesService } from "../../voc/public-update-review-candidates/service.js";
+
 
 const APP_URL = process.env.DATABASE_URL ?? "";
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? "";

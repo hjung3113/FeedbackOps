@@ -14,13 +14,14 @@ import { buildServer } from '../../../server.js';
 import { hashRequestBody } from '../../core/idempotency/canonicalize.js';
 import {
   SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  insertMsDirectly,
   loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+} from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { cleanupReadTestTables } from '../../../test-support/voc-fixtures.js';
 import { updateTaskMilestone } from '../repo.js';
 import { insertTaskRow } from './_seed-helpers.js';
+
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';

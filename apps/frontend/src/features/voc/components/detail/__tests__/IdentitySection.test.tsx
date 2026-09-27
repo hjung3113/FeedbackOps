@@ -2,12 +2,12 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
-vi.mock('@/features/voc/hooks/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
+vi.mock('@/lib/cross-system/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
 vi.mock('@/features/voc/lib/format-date', () => ({
   formatVocCreatedAt: (_iso: string) => '방금 전',
 }));
 
-import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
+import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { useMe } from '@/lib/auth/useMe';
 import { IdentityMetadataStrip, IdentitySection } from '../IdentitySection';
 import { DETAIL_ENVELOPE, ME_RESPONSE, OTHER_ACTOR_ID } from './_fixtures';

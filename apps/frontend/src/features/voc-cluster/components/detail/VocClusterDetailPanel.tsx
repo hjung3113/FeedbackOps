@@ -28,7 +28,7 @@ import { useConfirmCluster } from '@/features/voc-cluster/hooks/useConfirmCluste
 import { useRemoveClusterMember } from '@/features/voc-cluster/hooks/useRemoveClusterMember';
 import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useRequestTaskFromCluster';
 import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
-import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
+import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 

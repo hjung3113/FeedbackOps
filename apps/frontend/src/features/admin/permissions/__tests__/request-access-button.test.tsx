@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { RequestAccessButton } from '../request-access-button.js';
-import { permissionCheckQueryKey, permissionRequestsMineKey } from '../use-permission-check.js';
+import { permissionCheckQueryKey, permissionRequestsMineKey } from '@/lib/cross-system/usePermissionCheck';
 
 const CAPABILITY = 'finding.manage';
 const MANAGED_SYSTEM_ID = '11111111-1111-4111-8111-111111111111';

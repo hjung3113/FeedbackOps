@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { FindingCommentKind, FindingStatus } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
+import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 import type { FindingReadRow } from './repo-read.js';
 import { mapFindingRow } from './repo-read.js';
@@ -97,12 +98,6 @@ function mapFindingCommentRow(row: Record<string, unknown>): FindingCommentRow {
     created_at: toDate(row.created_at as Date | string),
     created_at_raw: String(row.created_at_raw ?? row.created_at),
   };
-}
-
-function sqlUuidArray(ids: string[]): ReturnType<typeof sql> {
-  if (ids.length === 0) return sql`ARRAY[]::uuid[]`;
-  const items = ids.map((id) => sql`${id}::uuid`);
-  return sql`ARRAY[${sql.join(items, sql`, `)}]::uuid[]`;
 }
 
 export function mapEvidenceHighlightRow(row: Record<string, unknown>): EvidenceHighlightRow {

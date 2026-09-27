@@ -1,4 +1,4 @@
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useMe } from '@/lib/auth/useMe';
 
 /** Capability decisions are authoritative; /me is only a fail-closed readiness gate. */

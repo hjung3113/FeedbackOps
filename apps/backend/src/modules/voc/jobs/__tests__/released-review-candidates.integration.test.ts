@@ -4,15 +4,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createAuditService } from "../../../core/audit/index.js";
 import { type DbHandle, createDb } from "../../../../db/client.js";
+import { insertMsDirectly } from "../../../../test-support/core-fixtures.js";
+import { uid } from "../../../../test-support/ids.js";
 import {
   insertPublicUpdate,
-  insertMsDirectly,
   insertVocDirectly,
-  uid,
-} from "../../../voc/__tests__/_seed-helpers.js";
+} from "../../../../test-support/voc-fixtures.js";
 import { insertTaskRow } from "../../../tasks/__tests__/_seed-helpers.js";
 import { releasedReviewCandidatesHandler } from "../released-review-candidates.js";
 import { createPublicUpdateReviewCandidatesService } from "../../../voc/public-update-review-candidates/service.js";
+
 
 const APP_URL = process.env.DATABASE_URL ?? "";
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? "";

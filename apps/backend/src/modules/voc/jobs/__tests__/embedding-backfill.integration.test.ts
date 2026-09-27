@@ -10,12 +10,15 @@ import type { PgBoss } from 'pg-boss';
 import { type DbHandle, createDb } from '../../../../db/client.js';
 import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
 import { countVocsNeedingEmbedding } from '../../embedding/repo.js';
-import { insertMsDirectly, insertVocDirectly, uid } from '../../__tests__/_seed-helpers.js';
+import { insertMsDirectly } from '../../../../test-support/core-fixtures.js';
+import { uid } from '../../../../test-support/ids.js';
+import { insertVocDirectly } from '../../../../test-support/voc-fixtures.js';
 import { embedVoc } from '../embed-voc.js';
 import {
   VOC_EMBEDDING_BACKFILL_BATCH_SIZE,
   backfillVocEmbeddings,
 } from '../embedding-backfill.js';
+
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
