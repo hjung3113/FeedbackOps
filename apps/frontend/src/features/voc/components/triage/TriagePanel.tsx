@@ -48,7 +48,11 @@ export interface TriagePanelProps {
   /**
    * Called when a triage action is triggered. For non-mutation side-effects.
    */
-  onAct?: (kind: 'confirm' | 'finding' | 'skip') => void;
+  onAct?: (
+    kind: 'confirm' | 'finding' | 'skip',
+    /** vocId/managedSystemId/analyticsAreaId as just committed — only populated for 'confirm' and 'finding'. */
+    context?: { vocId: string; managedSystemId: string; analyticsAreaId: string | null },
+  ) => void;
   /**
    * C3.2: Optimistic remove — called synchronously on confirm/finding/skip
    * so the queue filters this VOC out immediately.
@@ -204,18 +208,18 @@ export function TriagePanel({
         { duration: 4000 },
       );
 
-      // D-3.4: Finding 만들기 — DO NOT navigate; toast the deferral message
-      if (kind === 'finding') {
-        toast.info('Finding 생성은 Slice 5에서 제공됩니다.', { duration: 3000 });
-      }
-
-      onAct?.(kind);
+      onAct?.(kind, {
+        vocId: voc.id,
+        managedSystemId: voc.primary_managed_system_id,
+        analyticsAreaId: panelState.analyticsAreaId,
+      });
     },
     [
       panelLocked,
       voc.id,
       voc.display_id,
       voc.updated_at,
+      voc.primary_managed_system_id,
       panelState,
       onOptimisticRemove,
       onAct,
