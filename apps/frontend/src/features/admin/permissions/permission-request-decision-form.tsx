@@ -25,7 +25,7 @@ export function PermissionRequestDecisionForm({
 }: {
   request: AdminPermissionRequestRow;
 }) {
-  const [action, setAction] = React.useState<PermissionRequestDecisionAction>('approve');
+  const [action, setAction] = React.useState<PermissionRequestDecisionAction | null>(null);
   const [reason, setReason] = React.useState('');
   const [policyCitation, setPolicyCitation] = React.useState('');
   const [peerReviewerAbsence, setPeerReviewerAbsence] = React.useState('');
@@ -33,31 +33,33 @@ export function PermissionRequestDecisionForm({
   const mutation = useDecidePermissionRequest();
   const me = useMe();
   const workspaceSettings = useWorkspaceSettings();
-  const selectedAction = ACTIONS.find((candidate) => candidate.value === action) ?? ACTIONS[0]!;
+  const selectedAction = ACTIONS.find((candidate) => candidate.value === action) ?? null;
   const needsReason =
-    selectedAction.needsReason ||
+    (selectedAction?.needsReason ?? false) ||
     (action === 'approve' &&
       isCapability(request.requested_capability) &&
       isSensitiveCapability(request.requested_capability));
   const decidable = request.status === 'pending' || request.status === 'needs_more_info';
   const isSelfApproval = request.requester_actor_id === me.data?.actor.id;
+  const selfApprovalBlockedByPolicy =
+    isSelfApproval && workspaceSettings.data?.permission_self_approval === 'forbidden';
   const showSelfApprovalCapture = isSelfApproval && action === 'approve';
   const selfApprovalReady =
     !showSelfApprovalCapture ||
     (policyCitation.trim().length >= 8 && peerReviewerAbsence.trim().length >= 8);
-  const selfApprovalForbidden =
-    showSelfApprovalCapture && workspaceSettings.data?.permission_self_approval === 'forbidden';
-  const submitDisabled = !decidable || !selfApprovalReady || selfApprovalForbidden;
+  const selfApprovalForbidden = showSelfApprovalCapture && selfApprovalBlockedByPolicy;
+  const submitDisabled =
+    !decidable || action === null || !selfApprovalReady || selfApprovalForbidden;
 
   React.useEffect(() => {
-    setAction('approve');
+    setAction(null);
     setReason('');
     setPolicyCitation('');
     setPeerReviewerAbsence('');
   }, [request.id]);
 
   function submit() {
-    if (submitDisabled || (needsReason && !reason.trim())) return;
+    if (action === null || submitDisabled || (needsReason && !reason.trim())) return;
     mutation.mutate(
       {
         id: request.id,
@@ -104,6 +106,11 @@ export function PermissionRequestDecisionForm({
           </Button>
         ))}
       </div>
+      {selfApprovalBlockedByPolicy ? (
+        <p className="text-xs text-accent-danger">
+          Workspace policy에서 self-approval을 금지합니다. 다른 Admin이 이 요청을 승인해야 합니다.
+        </p>
+      ) : null}
       <label
         className="flex flex-col gap-2 text-sm text-text-secondary"
         htmlFor="permission-decision-reason"
@@ -191,7 +198,11 @@ export function PermissionRequestDecisionForm({
         disabled={submitDisabled}
         data-testid="permission-decision-submit"
       >
-        {showSelfApprovalCapture ? 'Self-approve 확정 · 감사 캡처' : `${selectedAction.label} 처리`}
+        {showSelfApprovalCapture
+          ? 'Self-approve 확정 · 감사 캡처'
+          : selectedAction
+            ? `${selectedAction.label} 처리`
+            : '결정을 선택하세요'}
       </Button>
       <p className="text-xs text-text-muted">
         승인은 차단된 액션을 자동으로 실행하지 않습니다. 요청자는 다시 동일 액션을 명시적으로

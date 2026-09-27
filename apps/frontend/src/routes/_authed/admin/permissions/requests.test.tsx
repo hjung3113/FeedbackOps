@@ -318,13 +318,48 @@ describe("/admin/permissions/requests", () => {
     },
   );
 
+  test("#524 no decision is pre-selected on entry, and submit stays disabled until one is chosen explicitly", async () => {
+    installFetch();
+    renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-decision-section"),
+      ).toBeInTheDocument(),
+    );
+
+    for (const label of ["승인", "추가 정보 요청", "거절", "명시적 거부"]) {
+      expect(screen.getByRole("button", { name: label })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    }
+    expect(screen.getByTestId("permission-decision-submit")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("permission-decision-submit"));
+    expect(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+        ([, init]) => init?.method === "POST",
+      ),
+    ).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "승인" }));
+    expect(
+      screen.getByRole("button", { name: "승인" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("permission-decision-submit")).toBeEnabled();
+  });
+
   test("AC-4 shows audit capture only for this Admin's approve action, not another request or another action", async () => {
     installFetch({ actorId: "actor-pending" });
     renderRoute();
 
     await waitFor(() =>
-      expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
+      expect(
+        screen.getByTestId("permission-decision-section"),
+      ).toBeInTheDocument(),
     );
+    expect(screen.queryByTestId("self-approval-audit-capture")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "승인" }));
+    expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "거절" }));
     expect(screen.queryByTestId("self-approval-audit-capture")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "승인" }));
@@ -339,6 +374,12 @@ describe("/admin/permissions/requests", () => {
   test("AC-5 requires two trimmed eight-character audit fields and posts their exact envelope", async () => {
     installFetch({ actorId: "actor-pending" });
     renderRoute();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("permission-decision-section"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "승인" }));
     await waitFor(() =>
       expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
     );
@@ -400,9 +441,15 @@ describe("/admin/permissions/requests", () => {
       });
       renderRoute();
       await waitFor(() =>
-        expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
+        expect(
+          screen.getByTestId("permission-decision-section"),
+        ).toBeInTheDocument(),
       );
       expect(screen.getByRole("button", { name: "승인" })).toBeEnabled();
+      fireEvent.click(screen.getByRole("button", { name: "승인" }));
+      await waitFor(() =>
+        expect(screen.getByTestId("self-approval-audit-capture")).toBeInTheDocument(),
+      );
       fireEvent.change(screen.getByLabelText(/Policy citation/), {
         target: { value: "policy-8" },
       });
@@ -432,6 +479,7 @@ describe("/admin/permissions/requests", () => {
         screen.getByTestId("permission-decision-section"),
       ).toBeInTheDocument(),
     );
+    fireEvent.click(screen.getByRole("button", { name: "승인" }));
 
     fireEvent.click(screen.getByTestId("permission-decision-submit"));
     await waitFor(() =>
@@ -572,6 +620,7 @@ describe("/admin/permissions/requests", () => {
       ).toBeInTheDocument(),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "승인" }));
     expect(screen.getByLabelText("사유 · 필수")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("permission-decision-submit"));
 
@@ -591,6 +640,7 @@ describe("/admin/permissions/requests", () => {
       ).toBeInTheDocument(),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "승인" }));
     expect(screen.getByLabelText("사유 · 선택")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("permission-decision-submit"));
 
@@ -616,6 +666,7 @@ describe("/admin/permissions/requests", () => {
       ).toBeInTheDocument(),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "승인" }));
     fireEvent.click(screen.getByTestId("permission-decision-submit"));
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(errorMapper(envelope).message),
