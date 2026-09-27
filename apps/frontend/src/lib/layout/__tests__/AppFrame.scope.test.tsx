@@ -55,6 +55,46 @@ describe('AppFrame managed-system scope', () => {
     globalThis.fetch = originalFetch;
   });
 
+  it('#518 disables the scope selector on a route that does not support Managed System scope', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/me')
+        return json({
+          actor: {
+            id: 'actor',
+            external_id: 'actor',
+            email: 'actor@test',
+            display_name: 'Actor',
+            role_level: 'admin',
+          },
+          workspace_id: 'workspace',
+        });
+      if (url === '/managed-systems')
+        return json({ items: [managedSystem(MS_ONE, 'Identity')], total: 1 });
+      if (url.startsWith('/nav/counts')) return json({ counts: {} });
+      throw new Error(`unexpected request ${url}`);
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    try {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <AppFrame activeDomain="admin" scopeControlEnabled={false} sidebarEntries={[]}>
+            content
+          </AppFrame>
+        </QueryClientProvider>,
+      );
+      await waitFor(() => expect(screen.getByTestId('scope-selector')).toBeInTheDocument());
+      expect(screen.getByTestId('scope-selector')).toBeDisabled();
+      expect(screen.getByTestId('scope-selector')).toHaveTextContent('워크스페이스 전체');
+      fireEvent.click(screen.getByTestId('scope-selector'));
+      expect(screen.queryByTestId('scope-option-all')).not.toBeInTheDocument();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('renders non-admin scope options when /me omits actor', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
