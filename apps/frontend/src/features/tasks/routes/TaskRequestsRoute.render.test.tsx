@@ -157,7 +157,7 @@ describe('TaskRequestsRoute display ids', () => {
     expect(screen.getByText('선택한 상태: Approved')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '필터 초기화' }));
 
-    expect(screen.getByRole('tab', { name: 'Pending' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /^Pending/ })).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByRole('button', { name: /REQ-42/ })).toBeInTheDocument();
     expect(screen.queryByText('현재 조건에 맞는 Task Request가 없습니다')).not.toBeInTheDocument();
   });
