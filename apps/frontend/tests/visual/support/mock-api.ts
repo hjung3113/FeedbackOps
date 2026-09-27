@@ -472,7 +472,8 @@ export async function installMockApi(
     }
 
     if (
-      options.triageAreaScenario === 'create-finding-area-inherited' &&
+      (options.triageAreaScenario === 'triage-analytics-area-populated' ||
+        options.triageAreaScenario === 'create-finding-area-inherited') &&
       isRequest(route, 'GET', `/vocs/${TRIAGE_AREA_IDS.voc}`)
     ) {
       await json(route, 200, triageAreaFindingSourceVoc);

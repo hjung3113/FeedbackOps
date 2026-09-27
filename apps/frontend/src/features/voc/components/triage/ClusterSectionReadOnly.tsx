@@ -127,13 +127,14 @@ export function ClusterSectionReadOnly({
   } else {
     stateLine = (
       <>
-        유사한 VOC <strong className="text-text-primary">{data.items.length}</strong>건이 발견됐어요.
+        유사한 VOC <strong className="text-text-primary">{data.items.length}</strong>건이
+        발견됐어요.
       </>
     );
   }
 
   return (
-    <div className="mb-8" data-anchor="cluster" data-testid="cluster-recommendation-section">
+    <div className="mb-8" data-anchor="similar" data-testid="cluster-recommendation-section">
       <div className="flex items-center justify-between">
         <PanelSectionTitle className="mb-0">Cluster 추천</PanelSectionTitle>
         {similarCount > 0 && (

@@ -47,6 +47,20 @@ describe('TriageRow', () => {
     expect(screen.getByText('Area 미지정')).toBeInTheDocument();
   });
 
+  it('keeps missing owner, missing area, and similar count neutral', () => {
+    render(
+      <TriageRow voc={{ ...BASE_VOC, similar_count: 3 }} selected={false} onSelect={vi.fn()} />,
+    );
+
+    for (const text of ['Owner 없음', 'Area 미지정', '↔ similar 3']) {
+      const item = screen.getByText(text);
+      expect(item).toHaveClass('text-text-muted');
+      expect(item).not.toHaveClass('text-text-danger');
+      expect(item).not.toHaveClass('text-text-warning');
+      expect(item).not.toHaveClass('text-accent-primary');
+    }
+  });
+
   it('calls onSelect when clicked', () => {
     const onSelect = vi.fn();
     render(<TriageRow voc={BASE_VOC} selected={false} onSelect={onSelect} />);

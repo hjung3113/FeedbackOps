@@ -4,8 +4,8 @@
 // a diff against the voc baseline. Re-initialises on voc.id change
 // (mirrors prototype screen-voc-create.jsx:401-406 useEffect pattern).
 
-import { useReducer, useEffect } from 'react';
 import type { VocListItem } from '@fops/shared';
+import { useEffect, useReducer } from 'react';
 
 // ── State shape ───────────────────────────────────────────────────────────────
 
@@ -57,6 +57,7 @@ function vocToBaseline(voc: VocListItem): TriagePanelLocalState {
 
 export interface UseTriagePanelStateResult {
   panelState: TriagePanelLocalState;
+  baseline: TriagePanelLocalState;
   dispatch: React.Dispatch<TriagePanelAction>;
   dirty: boolean;
 }
@@ -78,5 +79,5 @@ export function useTriagePanelState(voc: VocListItem): UseTriagePanelStateResult
     panelState.ownerTeamId !== baseline.ownerTeamId ||
     panelState.analyticsAreaId !== baseline.analyticsAreaId;
 
-  return { panelState, dispatch, dirty };
+  return { panelState, baseline, dispatch, dirty };
 }
