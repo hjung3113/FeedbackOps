@@ -14,18 +14,12 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
-import {
-  SESSION_COOKIE_NAME,
-  loginAs,
-} from '../../../test-support/auth.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
-import {
-  cleanupReadTestTables,
-  insertVocDirectly,
-} from '../../../test-support/voc-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -36,7 +30,9 @@ const SLUG_PREFIX = 'it-intcmnt';
 
 // ── Audit helpers ─────────────────────────────────────────────────────────────
 
-async function getAuditRows(vocId: string): Promise<Array<{ event_type: string; detail: Record<string, unknown> }>> {
+async function getAuditRows(
+  vocId: string,
+): Promise<Array<{ event_type: string; detail: Record<string, unknown> }>> {
   if (!MIGRATE_URL) return [];
   const ops = createDb(MIGRATE_URL);
   try {
@@ -197,7 +193,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── Admin → 201 ──
 
   it('admin → 201; internal_comment row + audit internal_comment_created', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-admin`, 'Admin MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-admin`,
+      'Admin MS',
+    );
     const voc = await insertVoc(msId, 'Admin VOC');
 
     const res = await postInternalComment(adminCookie, voc.id, {
@@ -223,10 +224,19 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── Same-MS dev (with voc.triage grant) → 201 ──
 
   it('same-MS dev with voc.triage grant → 201', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-devok`, 'Dev OK MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-devok`,
+      'Dev OK MS',
+    );
     const voc = await insertVoc(msId, 'Dev OK VOC');
 
-    const { externalId, id: devId } = await insertDevActor(dbHandle, WORKSPACE_ID, `intcmnt-dev-${randomUUID().slice(0, 8)}`);
+    const { externalId, id: devId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `intcmnt-dev-${randomUUID().slice(0, 8)}`,
+    );
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
     const devCookie = await loginAs(app, externalId);
 
@@ -241,11 +251,25 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── Cross-MS dev → 403 permission.scope_required ──
 
   it('cross-MS dev (grant on different MS) → 403 permission.scope_required', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-devscope`, 'Dev Scope MS');
-    const otherMsId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-devscope2`, 'Dev Scope2 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-devscope`,
+      'Dev Scope MS',
+    );
+    const otherMsId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-devscope2`,
+      'Dev Scope2 MS',
+    );
     const voc = await insertVoc(msId, 'Dev Scope VOC');
 
-    const { externalId, id: devId } = await insertDevActor(dbHandle, WORKSPACE_ID, `intcmnt-cross-${randomUUID().slice(0, 8)}`);
+    const { externalId, id: devId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `intcmnt-cross-${randomUUID().slice(0, 8)}`,
+    );
     // Grant on OTHER MS, not the one with the VOC
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', otherMsId, adminActorId);
     const devCookie = await loginAs(app, externalId);
@@ -262,7 +286,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── Non-triage actor (plain user / reporter without grant) → 403 permission.denied ──
 
   it('plain user (reporter without voc.triage grant) → 403 permission.denied', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-plain`, 'Plain MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-plain`,
+      'Plain MS',
+    );
     const voc = await insertVoc(msId, 'Plain VOC');
 
     // reporter does not have voc.triage
@@ -278,7 +307,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── Reporter who ALSO holds voc.triage on the MS → 201 (codex cycle-1 BLOCKER fix) ──
 
   it('reporter who also holds voc.triage on MS → 201 (reporter identity not a deny condition)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-reptriage`, 'Rep Triage MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-reptriage`,
+      'Rep Triage MS',
+    );
     // reporter_id IS reporterId (mock-user-1)
     const voc = await insertVoc(msId, 'Rep Triage VOC');
 
@@ -298,7 +332,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── mentions: [] + no mention nodes → 201; audit mentions: [] ──
 
   it('mentions: [] + no mention nodes → 201; audit internal_comment_created with mentions: []', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-nomention`, 'No Mention MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-nomention`,
+      'No Mention MS',
+    );
     const voc = await insertVoc(msId, 'No Mention VOC');
 
     const res = await postInternalComment(adminCookie, voc.id, {
@@ -316,7 +355,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── mentions: [validUuid] + body mention node → 201 ──
 
   it('mentions: [validUuid] + body mention node with same actor_id → 201', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-mention1`, 'Mention1 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-mention1`,
+      'Mention1 MS',
+    );
     const voc = await insertVoc(msId, 'Mention1 VOC');
 
     const res = await postInternalComment(adminCookie, voc.id, {
@@ -331,11 +375,20 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // mentions[] has extra entry not in body
 
   it('mentions: [a,b] + body mention nodes {a} only → 422 validation.failed (set-equality, mentions[] extra)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-mextra`, 'MExtra MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-mextra`,
+      'MExtra MS',
+    );
     const voc = await insertVoc(msId, 'MExtra VOC');
 
     // Insert a second valid actor to use as extra mention
-    const { id: devId2 } = await insertDevActor(dbHandle, WORKSPACE_ID, `intcmnt-m2-${randomUUID().slice(0, 8)}`);
+    const { id: devId2 } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `intcmnt-m2-${randomUUID().slice(0, 8)}`,
+    );
 
     const res = await postInternalComment(adminCookie, voc.id, {
       // body only has adminActorId mention
@@ -351,10 +404,19 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // body has extra mention not in mentions[]
 
   it('mentions: [a] + body mention nodes {a,b} → 422 validation.failed (set-equality, body extra)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-bextra`, 'BExtra MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-bextra`,
+      'BExtra MS',
+    );
     const voc = await insertVoc(msId, 'BExtra VOC');
 
-    const { id: devId2 } = await insertDevActor(dbHandle, WORKSPACE_ID, `intcmnt-b2-${randomUUID().slice(0, 8)}`);
+    const { id: devId2 } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `intcmnt-b2-${randomUUID().slice(0, 8)}`,
+    );
 
     const res = await postInternalComment(adminCookie, voc.id, {
       // body has TWO mention nodes
@@ -369,7 +431,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── cross-workspace mention uuid → 422 validation.failed ──
 
   it('mentions: [randomUuid not in workspace] → 422 validation.failed (cross-workspace)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-cwmention`, 'CwMention MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cwmention`,
+      'CwMention MS',
+    );
     const voc = await insertVoc(msId, 'CwMention VOC');
 
     const crossWorkspaceId = randomUUID(); // doesn't exist in workspace
@@ -386,7 +453,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── Idempotency replay ──
 
   it('idempotency replay: same key+body → 201×2, same internal_comment.id', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-idem`, 'Idem MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-idem`,
+      'Idem MS',
+    );
     const voc = await insertVoc(msId, 'Idem VOC');
 
     const key = randomUUID();
@@ -406,7 +478,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── Archived VOC → 409 ──
 
   it('archived VOC → 409 conflict.record_archived', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-arcvoc`, 'Arc Voc MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-arcvoc`,
+      'Arc Voc MS',
+    );
     const voc = await insertVoc(msId, 'Arc Voc VOC');
 
     await dbHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [voc.id]);
@@ -423,7 +500,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── Sanitizer attr-injection (#23) ────────────────────────────────────
 
   it('body with mention.attrs disallowed label key → 422 disallowed_attr_key', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-atki`, 'AtKI MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-atki`,
+      'AtKI MS',
+    );
     const voc = await insertVoc(msId, 'AtKI VOC');
 
     const attrInjectionDoc = {
@@ -443,8 +525,14 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
 
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_attr');
-    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.path).toEqual(['body_rich_content']);
-    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
+    expect(
+      res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail
+        ?.fields?.[0]?.path,
+    ).toEqual(['body_rich_content']);
+    expect(
+      res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail
+        ?.fields?.[0]?.code,
+    ).toBe('disallowed_attr_key');
     expect(res.json<{ detail: { hint: string } }>().detail?.hint).toMatch(/attrs\.label$/);
   });
 
@@ -457,10 +545,18 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
     ['language="ts"', 'ts', 'ts'],
     ['language absent', undefined, undefined],
   ])('codeBlock %s round-trips through internal-comment', async (_label, langIn, langExpected) => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-cblk`, 'CodeBlock MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-cblk`,
+      'CodeBlock MS',
+    );
     const voc = await insertVoc(msId, 'CodeBlock VOC');
 
-    const codeBlockNode: Record<string, unknown> = { type: 'codeBlock', content: [{ type: 'text', text: 'console.log(1)' }] };
+    const codeBlockNode: Record<string, unknown> = {
+      type: 'codeBlock',
+      content: [{ type: 'text', text: 'console.log(1)' }],
+    };
     if (langIn !== undefined) {
       codeBlockNode.attrs = { language: langIn };
     }
@@ -472,7 +568,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
     });
     expect(res.statusCode).toBe(201);
 
-    type Reply = { internal_comment: { id: string; body_rich_content: { content: Array<{ type: string; attrs?: { language?: unknown } }> } } };
+    type Reply = {
+      internal_comment: {
+        id: string;
+        body_rich_content: { content: Array<{ type: string; attrs?: { language?: unknown } }> };
+      };
+    };
     const reply = res.json<Reply>();
     const cb = reply.internal_comment.body_rich_content.content[0]!;
     expect(cb.type).toBe('codeBlock');
@@ -484,10 +585,11 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
     }
 
     // Verify persisted row matches envelope.
-    const persisted = await dbHandle.pool.query<{ body_rich_content: { content: Array<{ type: string; attrs?: { language?: unknown } }> } }>(
-      `select body_rich_content from voc.voc_internal_comments where id = $1`,
-      [reply.internal_comment.id],
-    );
+    const persisted = await dbHandle.pool.query<{
+      body_rich_content: { content: Array<{ type: string; attrs?: { language?: unknown } }> };
+    }>(`select body_rich_content from voc.voc_internal_comments where id = $1`, [
+      reply.internal_comment.id,
+    ]);
     const persistedCb = persisted.rows[0]?.body_rich_content.content[0];
     expect(persistedCb?.type).toBe('codeBlock');
     if (langExpected === undefined) {
@@ -502,7 +604,11 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   it('rate limit: 11th POST within 60s → 429 rate_limited.actor', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-rl`, 'RL MS');
     // Fresh dev actor with grant to avoid polluting admin's bucket
-    const { externalId, id: devId } = await insertDevActor(dbHandle, WORKSPACE_ID, `intcmnt-rl-${randomUUID().slice(0, 8)}`);
+    const { externalId, id: devId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `intcmnt-rl-${randomUUID().slice(0, 8)}`,
+    );
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
     const devCookie = await loginAs(app, externalId);
 
@@ -531,7 +637,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
   // ── PLAN-22 C7b — attachment_ids linking ─────────────────────────────────
 
   it('attachment_ids with valid owned unlinked row → 201 + linked to internal_comment (PLAN-22 C7b)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-icatt`, 'IC Att MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-icatt`,
+      'IC Att MS',
+    );
     const voc = await insertVoc(msId, 'IC Att VOC');
 
     // Admin is the actor here — seed under adminActorId.
@@ -557,10 +668,9 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/internal-comments (#16 C5)', ()
       comment_id: string;
       comment_kind: string;
       linked_at: Date | null;
-    }>(
-      `select comment_id, comment_kind, linked_at from voc.voc_attachments where id = $1`,
-      [attachmentId],
-    );
+    }>(`select comment_id, comment_kind, linked_at from voc.voc_attachments where id = $1`, [
+      attachmentId,
+    ]);
     expect(linked.rows[0]?.comment_id).toBe(commentId);
     expect(linked.rows[0]?.comment_kind).toBe('internal_comment');
     expect(linked.rows[0]?.linked_at).not.toBeNull();

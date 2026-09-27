@@ -11,10 +11,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import {
-  SESSION_COOKIE_NAME,
-  loginAs,
-} from '../../../test-support/auth.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 
@@ -127,7 +124,16 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
     };
     const before = await scopedCounts();
     if (assertTeardown) {
-      for (const table of ['answers', 'responses', 'questions', 'surveys', 'grants', 'sessions', 'actors', 'systems'] as const)
+      for (const table of [
+        'answers',
+        'responses',
+        'questions',
+        'surveys',
+        'grants',
+        'sessions',
+        'actors',
+        'systems',
+      ] as const)
         expect(before[table], `${table} fixture rows before cleanup`).toBeGreaterThan(0);
       expect(before.audit, expectedSideEffects.audit.message).toBe(expectedSideEffects.audit.count);
       expect(before.approvals, expectedSideEffects.approvals.message).toBe(
@@ -211,8 +217,14 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
           'systems',
           'workspaces',
         ] as const)
-          expect(foreignBefore[table], `foreign ${table} fixture rows before cleanup`).toBeGreaterThan(0);
-        expect(foreignBefore.audit, 'foreign denied probes leave no audit side effects before cleanup').toBe(0);
+          expect(
+            foreignBefore[table],
+            `foreign ${table} fixture rows before cleanup`,
+          ).toBeGreaterThan(0);
+        expect(
+          foreignBefore.audit,
+          'foreign denied probes leave no audit side effects before cleanup',
+        ).toBe(0);
         expect(
           foreignBefore.approvals,
           'foreign denied probes leave no approval side effects before cleanup',
@@ -644,7 +656,10 @@ describe.skipIf(!runIntegration)('survey response evidence routes (#187 C3)', ()
 
   it('revokes one approved excerpt once, keeps its row, hides it from results, and audits IDs only', async () => {
     expectedSideEffects = {
-      audit: { count: 2, message: 'revocation and results-read personal-read audit rows before cleanup' },
+      audit: {
+        count: 2,
+        message: 'revocation and results-read personal-read audit rows before cleanup',
+      },
       approvals: { count: 2, message: 'two retained approval rows before cleanup' },
     };
     const source = await seed();

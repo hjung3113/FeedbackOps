@@ -12,16 +12,12 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
-import {
-  SESSION_COOKIE_NAME,
-  loginAs,
-} from '../../../test-support/auth.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables } from '../../../test-support/voc-fixtures.js';
 import { insertTaskRequestRow } from './_seed-helpers.js';
-
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -127,12 +123,14 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     await cleanupReadTestTables(dbHandle, WORKSPACE_ID, SLUG_PREFIX);
   }
 
-  async function seedTaskRequest(input: {
-    msId?: string;
-    requesterActorId?: string;
-    status?: 'pending_review' | 'approved' | 'rejected' | 'needs_more_evidence' | 'converted';
-    title?: string;
-  } = {}): Promise<{ id: string; msId: string }> {
+  async function seedTaskRequest(
+    input: {
+      msId?: string;
+      requesterActorId?: string;
+      status?: 'pending_review' | 'approved' | 'rejected' | 'needs_more_evidence' | 'converted';
+      title?: string;
+    } = {},
+  ): Promise<{ id: string; msId: string }> {
     const msId =
       input.msId ??
       (await insertMsDirectly(dbHandle, WORKSPACE_ID, uid(SLUG_PREFIX), 'Task Request MS'));
@@ -182,11 +180,20 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
 
     const adminList = await listTaskRequests(adminCookie);
     expect(adminList.statusCode).toBe(200);
-    const adminIds = adminList.json<{ items: Array<{ id: string }> }>().items.map((item) => item.id);
+    const adminIds = adminList
+      .json<{ items: Array<{ id: string }> }>()
+      .items.map((item) => item.id);
     expect(adminIds).toEqual(expect.arrayContaining([visible.id, hidden.id]));
 
     const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('trq'));
-    await grantCapability(dbHandle, WORKSPACE_ID, devId, 'finding.manage', visible.msId, adminActorId);
+    await grantCapability(
+      dbHandle,
+      WORKSPACE_ID,
+      devId,
+      'finding.manage',
+      visible.msId,
+      adminActorId,
+    );
     const devCookie = await loginAs(app, externalId);
 
     const devList = await listTaskRequests(devCookie, 'pending_review');
@@ -203,7 +210,9 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
   it('approve: pending_review -> approved records audit and does not create a Task row', async () => {
     const request = await seedTaskRequest();
 
-    const res = await decide(adminCookie, request.id, 'approve', { reason: 'Ready for execution.' });
+    const res = await decide(adminCookie, request.id, 'approve', {
+      reason: 'Ready for execution.',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
       id: request.id,
@@ -247,7 +256,9 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(missingReason.statusCode).toBe(422);
     expect(missingReason.json<{ code: string }>().code).toBe('validation.failed');
 
-    const rejected = await decide(adminCookie, toReject.id, 'reject', { reason: 'Not actionable yet.' });
+    const rejected = await decide(adminCookie, toReject.id, 'reject', {
+      reason: 'Not actionable yet.',
+    });
     expect(rejected.statusCode).toBe(200);
     expect(rejected.json()).toMatchObject({ id: toReject.id, status: 'rejected' });
 
@@ -303,7 +314,9 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
   it('self-approval by requester with admin role and reason is approved with sensitive audit detail', async () => {
     const request = await seedTaskRequest({ requesterActorId: adminActorId });
 
-    const res = await decide(adminCookie, request.id, 'approve', { reason: 'Emergency owner approval.' });
+    const res = await decide(adminCookie, request.id, 'approve', {
+      reason: 'Emergency owner approval.',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ id: request.id, status: 'approved' });
 

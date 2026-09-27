@@ -19,21 +19,20 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createDb, type DbHandle } from '../../../db/client.js';
+import { type DbHandle, createDb } from '../../../db/client.js';
 import { HttpError } from '../../../lib/errors.js';
 import { runSeed } from '../../../seed/index.js';
 import {
-  seedSecondWorkspace,
   type SecondWorkspaceSeed,
+  seedSecondWorkspace,
 } from '../../../test-support/seed-second-workspace.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
-import { createCheckService, type ActorContext } from '../../permissions/check-service.js';
+import { type ActorContext, createCheckService } from '../../permissions/check-service.js';
 import {
-  createAnalyticsAreaService,
   type AnalyticsAreaService,
+  createAnalyticsAreaService,
 } from '../analytics-area-service.js';
-
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';

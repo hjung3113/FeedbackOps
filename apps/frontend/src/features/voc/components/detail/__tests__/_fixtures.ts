@@ -1,10 +1,10 @@
 // Shared test fixtures for VocDetailPanel C8 tests.
 
-import type { VocDetailEnvelope } from '@fops/shared';
-import type { UseQueryResult, UseInfiniteQueryResult } from '@tanstack/react-query';
+import type { ConversationPage } from '@/features/voc/hooks/useVocConversation';
 import type { MeResponse } from '@/lib/auth/useMe';
 import type { VocDetailResult } from '@/lib/cross-system/useVocDetail';
-import type { ConversationPage } from '@/features/voc/hooks/useVocConversation';
+import type { VocDetailEnvelope } from '@fops/shared';
+import type { UseInfiniteQueryResult, UseQueryResult } from '@tanstack/react-query';
 
 // ── Stub actors ──────────────────────────────────────────────────────────────
 
@@ -80,7 +80,8 @@ export function makeDetailQuery(
     failureCount: 0,
     failureReason: null,
     errorUpdateCount: 0,
-    refetch: async () => makeDetailQuery() as ReturnType<typeof import('@tanstack/react-query').useQuery>,
+    refetch: async () =>
+      makeDetailQuery() as ReturnType<typeof import('@tanstack/react-query').useQuery>,
     ...overrides,
   } as unknown as UseQueryResult<VocDetailResult>;
 }
@@ -108,7 +109,8 @@ export function makeMeQuery(
     failureCount: 0,
     failureReason: null,
     errorUpdateCount: 0,
-    refetch: async () => makeMeQuery() as ReturnType<typeof import('@tanstack/react-query').useQuery>,
+    refetch: async () =>
+      makeMeQuery() as ReturnType<typeof import('@tanstack/react-query').useQuery>,
     ...overrides,
   } as unknown as UseQueryResult<MeResponse>;
 }
@@ -140,9 +142,16 @@ export function makeConversationQuery(
     failureCount: 0,
     failureReason: null,
     errorUpdateCount: 0,
-    fetchNextPage: async () => makeConversationQuery() as ReturnType<typeof import('@tanstack/react-query').useInfiniteQuery>,
-    fetchPreviousPage: async () => makeConversationQuery() as ReturnType<typeof import('@tanstack/react-query').useInfiniteQuery>,
-    refetch: async () => makeConversationQuery() as ReturnType<typeof import('@tanstack/react-query').useQuery>,
+    fetchNextPage: async () =>
+      makeConversationQuery() as ReturnType<
+        typeof import('@tanstack/react-query').useInfiniteQuery
+      >,
+    fetchPreviousPage: async () =>
+      makeConversationQuery() as ReturnType<
+        typeof import('@tanstack/react-query').useInfiniteQuery
+      >,
+    refetch: async () =>
+      makeConversationQuery() as ReturnType<typeof import('@tanstack/react-query').useQuery>,
     ...overrides,
   } as unknown as UseInfiniteQueryResult<{ pages: ConversationPage[] }>;
 }

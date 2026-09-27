@@ -44,8 +44,8 @@ vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
   permissionRequestsMineKey: ['permission-requests-mine'],
 }));
 
-import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useMe } from '@/lib/auth/useMe';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { TriageRoute } from '../TriageRoute';
 
 const ADMIN_ME = {

@@ -43,7 +43,6 @@ import {
   createVocRecommendationsService,
 } from '../service.js';
 
-
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';

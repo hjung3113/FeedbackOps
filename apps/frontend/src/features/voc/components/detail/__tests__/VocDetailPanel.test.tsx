@@ -65,14 +65,14 @@ vi.mock('@/features/voc/components/detail/ComposerSection', () => ({
   ),
 }));
 
-import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
-import { useVocDetail } from '@/lib/cross-system/useVocDetail';
-import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { getTask } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
 import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
+import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { useVocDetail } from '@/lib/cross-system/useVocDetail';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { VocDetailPanel } from '../VocDetailPanel';
 import {
   DETAIL_ENVELOPE,

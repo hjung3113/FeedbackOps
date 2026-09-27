@@ -28,11 +28,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import {
+  permissionCheckQueryKey,
+  permissionRequestsMineKey,
+} from '@/lib/cross-system/usePermissionCheck';
+import {
   ApiError,
   type CreatePermissionRequestSuccess,
   createPermissionRequest,
 } from '../../../lib/api';
-import { permissionCheckQueryKey, permissionRequestsMineKey } from '@/lib/cross-system/usePermissionCheck';
 
 export interface RequestAccessButtonProps {
   capability: string;

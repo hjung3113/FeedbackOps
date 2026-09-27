@@ -4,21 +4,17 @@
 // are selected and *how many* are enqueued, not that pg-boss can insert a row
 // (migration 0043 + the boot test cover that).
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PgBoss } from 'pg-boss';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../../db/client.js';
-import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
-import { countVocsNeedingEmbedding } from '../../embedding/repo.js';
 import { insertMsDirectly } from '../../../../test-support/core-fixtures.js';
 import { uid } from '../../../../test-support/ids.js';
 import { insertVocDirectly } from '../../../../test-support/voc-fixtures.js';
+import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
+import { countVocsNeedingEmbedding } from '../../embedding/repo.js';
 import { embedVoc } from '../embed-voc.js';
-import {
-  VOC_EMBEDDING_BACKFILL_BATCH_SIZE,
-  backfillVocEmbeddings,
-} from '../embedding-backfill.js';
-
+import { VOC_EMBEDDING_BACKFILL_BATCH_SIZE, backfillVocEmbeddings } from '../embedding-backfill.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -215,7 +211,12 @@ describe.skipIf(!runIntegration)('voc.embedding_backfill (#168)', () => {
 
     const first = recordingBoss();
     await backfillVocEmbeddings(
-      { db: appHandle.db, boss: first.boss, embeddingVersion: ACTIVE_VERSION, embeddingEnabled: true },
+      {
+        db: appHandle.db,
+        boss: first.boss,
+        embeddingVersion: ACTIVE_VERSION,
+        embeddingEnabled: true,
+      },
       { correlation_id: 'test' },
     );
     expect(ours(first.sent, ids).map((job) => job.data.voc_id)).toEqual([vocId]);
@@ -260,7 +261,11 @@ describe.skipIf(!runIntegration)('voc.embedding_backfill (#168)', () => {
       { correlation_id: 'test' },
     );
 
-    expect(ours(sent, ids).map((job) => job.data.voc_id).sort()).toEqual([...ids].sort());
+    expect(
+      ours(sent, ids)
+        .map((job) => job.data.voc_id)
+        .sort(),
+    ).toEqual([...ids].sort());
   });
 
   it('bounds the batch and reports what it left for the next run', async () => {

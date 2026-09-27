@@ -13,18 +13,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import { insertDevActor } from '../../../test-support/actor-fixtures.js';
-import {
-  SESSION_COOKIE_NAME,
-  loginAs,
-} from '../../../test-support/auth.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
-import {
-  cleanupReadTestTables,
-  insertVocDirectly,
-} from '../../../test-support/voc-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -35,7 +28,9 @@ const SLUG_PREFIX = 'it-reptreply';
 
 // ── Audit helpers ─────────────────────────────────────────────────────────────
 
-async function getAuditRows(vocId: string): Promise<Array<{ event_type: string; detail: Record<string, unknown> }>> {
+async function getAuditRows(
+  vocId: string,
+): Promise<Array<{ event_type: string; detail: Record<string, unknown> }>> {
   if (!MIGRATE_URL) return [];
   const ops = createDb(MIGRATE_URL);
   try {
@@ -145,7 +140,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
   // ── Reporter on own VOC → 201; audit row ──
 
   it('reporter on own VOC → 201; reporter_reply row + audit reporter_reply_created', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-happy`, 'Happy MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-happy`,
+      'Happy MS',
+    );
     const voc = await insertVoc(msId, 'Happy VOC');
 
     const res = await postReporterReply(reporterCookie, voc.id, {
@@ -153,7 +153,10 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
     });
 
     expect(res.statusCode).toBe(201);
-    const body = res.json<{ reporter_reply: Record<string, unknown>; voc: Record<string, unknown> }>();
+    const body = res.json<{
+      reporter_reply: Record<string, unknown>;
+      voc: Record<string, unknown>;
+    }>();
     expect(body.reporter_reply.id).toBeDefined();
     expect(body.reporter_reply.actor_id).toBe(reporterId);
     expect(body.reporter_reply.voc_id).toBe(voc.id);
@@ -174,7 +177,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
   // ── Non-reporter → 403 permission.denied ──
 
   it('non-reporter (admin) posting reply → 403 permission.denied', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-nonrep`, 'NonRep MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-nonrep`,
+      'NonRep MS',
+    );
     const voc = await insertVoc(msId, 'NonRep VOC');
 
     const res = await postReporterReply(adminCookie, voc.id, {
@@ -193,7 +201,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
   // the DB trigger fires and throws.
 
   it('DB trigger defense-in-depth: INSERT with actor != reporter → trigger rejects', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-trig`, 'Trig MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-trig`,
+      'Trig MS',
+    );
     const voc = await insertVoc(msId, 'Trig VOC');
 
     // Try direct SQL insert with adminActorId (not the reporter)
@@ -209,7 +222,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
   // ── attachment_ids linking (PLAN-22 C7b) ─────────────────────────────────
 
   it('attachment_ids with valid owned unlinked row → 201 + linked to reporter_reply (PLAN-22 C7b)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-attok`, 'AttOk MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-attok`,
+      'AttOk MS',
+    );
     const voc = await insertVoc(msId, 'AttOk VOC');
 
     // Seed unlinked attachment owned by the reporter.
@@ -234,17 +252,21 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
       comment_id: string;
       comment_kind: string;
       linked_at: Date | null;
-    }>(
-      `select comment_id, comment_kind, linked_at from voc.voc_attachments where id = $1`,
-      [attachmentId],
-    );
+    }>(`select comment_id, comment_kind, linked_at from voc.voc_attachments where id = $1`, [
+      attachmentId,
+    ]);
     expect(linked.rows[0]?.comment_id).toBe(replyId);
     expect(linked.rows[0]?.comment_kind).toBe('reporter_reply');
     expect(linked.rows[0]?.linked_at).not.toBeNull();
   });
 
   it('attachment_ids: [] → 201 (PLAN-22 C7b empty array accepted)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-attemt`, 'Att Empty MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-attemt`,
+      'Att Empty MS',
+    );
     const voc = await insertVoc(msId, 'Att Empty VOC');
 
     const res = await postReporterReply(reporterCookie, voc.id, {
@@ -256,7 +278,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
   });
 
   it('attachment_ids referencing other-actor row → 422 validation.failed (PLAN-22 C7b)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-attwr`, 'AttWr MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-attwr`,
+      'AttWr MS',
+    );
     const voc = await insertVoc(msId, 'AttWr VOC');
 
     // Seed attachment owned by admin (not the reporter).
@@ -281,7 +308,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
   // ── body containing attachmentRef node → 201 (PLAN-22 C7b: sanitizer-gated) ──
 
   it('body with attachmentRef node → 201 (PLAN-22 C7b: sanitizer allows the node, decoration-only)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-attref`, 'AttRef MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-attref`,
+      'AttRef MS',
+    );
     const voc = await insertVoc(msId, 'AttRef VOC');
 
     const bodyWithRef = {
@@ -305,7 +337,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
   // ── Sanitizer attr-injection (#23) ────────────────────────────────────
 
   it('body with attachmentRef.attrs disallowed_attr_key → 422 disallowed_attr_key', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-atki`, 'AtKI MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-atki`,
+      'AtKI MS',
+    );
     const voc = await insertVoc(msId, 'AtKI VOC');
 
     const attrInjectionDoc = {
@@ -324,15 +361,26 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
 
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_attr');
-    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.path).toEqual(['body_rich_content']);
-    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.code).toBe('disallowed_attr_key');
+    expect(
+      res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail
+        ?.fields?.[0]?.path,
+    ).toEqual(['body_rich_content']);
+    expect(
+      res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail
+        ?.fields?.[0]?.code,
+    ).toBe('disallowed_attr_key');
     expect(res.json<{ detail: { hint: string } }>().detail?.hint).toMatch(/attrs\.onclick$/);
   });
 
   // ── Status field on envelope unchanged after reply ──
 
   it('reporter_facing_status on voc envelope unchanged after reply', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-status`, 'Status MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-status`,
+      'Status MS',
+    );
     const voc = await insertVoc(msId, 'Status VOC');
 
     const res = await postReporterReply(reporterCookie, voc.id, {
@@ -347,7 +395,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
   // ── Idempotency replay ──
 
   it('idempotency replay: same key+body → 201×2, same reporter_reply.id', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-idem`, 'Idem MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-idem`,
+      'Idem MS',
+    );
     const voc = await insertVoc(msId, 'Idem VOC');
 
     const key = randomUUID();
@@ -367,7 +420,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
   // ── Archived VOC → 409 ──
 
   it('archived VOC → 409 conflict.record_archived', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-arcvoc`, 'Arc Voc MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-arcvoc`,
+      'Arc Voc MS',
+    );
     const voc = await insertVoc(msId, 'Arc Voc VOC');
 
     await dbHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [voc.id]);
@@ -393,7 +451,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/reporter-replies (#16 C5)', () 
          values ($1, $2, $3, $4, 'user', 'internal_member')
          on conflict (workspace_id, external_id) do update set email = excluded.email
          returning id`,
-      [WORKSPACE_ID, freshReporterExtId, `rl-reporter-${randomUUID().slice(0, 8)}@local`, 'RL Reporter'],
+      [
+        WORKSPACE_ID,
+        freshReporterExtId,
+        `rl-reporter-${randomUUID().slice(0, 8)}@local`,
+        'RL Reporter',
+      ],
     );
     const freshReporterId = insertRes.rows[0]?.id;
     if (!freshReporterId) throw new Error('failed to insert fresh reporter');

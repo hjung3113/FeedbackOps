@@ -91,12 +91,7 @@ export async function insertLinkedAttachment(
   uploaderActorId: string,
   opts: { name?: string; sizeBytes?: number; mimeType?: string; archived?: boolean } = {},
 ): Promise<{ id: string }> {
-  const {
-    name = 'shot.png',
-    sizeBytes = 1024,
-    mimeType = 'image/png',
-    archived = false,
-  } = opts;
+  const { name = 'shot.png', sizeBytes = 1024, mimeType = 'image/png', archived = false } = opts;
   const storageKey = `${workspaceId}/${randomUUID()}/${name}`;
   const vocIdArg = parent.kind === 'voc' ? parent.vocId : null;
   const commentIdArg = parent.kind === 'voc' ? null : parent.commentId;

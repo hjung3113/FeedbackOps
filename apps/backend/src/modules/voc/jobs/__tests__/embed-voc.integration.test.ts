@@ -9,16 +9,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../../db/client.js';
+import { insertMsDirectly } from '../../../../test-support/core-fixtures.js';
+import { uid } from '../../../../test-support/ids.js';
+import { insertVocDirectly } from '../../../../test-support/voc-fixtures.js';
 import { createDisabledEmbeddingProvider } from '../../embedding/disabled.js';
 import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
 import type { EmbeddingProvider } from '../../embedding/port.js';
 import { selectVocsNeedingEmbedding, upsertVocEmbedding } from '../../embedding/repo.js';
 import { deriveVocEmbeddingInput } from '../../embedding/text.js';
-import { insertMsDirectly } from '../../../../test-support/core-fixtures.js';
-import { uid } from '../../../../test-support/ids.js';
-import { insertVocDirectly } from '../../../../test-support/voc-fixtures.js';
 import { embedVoc } from '../embed-voc.js';
-
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';

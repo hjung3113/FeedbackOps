@@ -10,7 +10,6 @@ import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { createCheckService } from '../check-service.js';
 
-
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';
@@ -106,22 +105,18 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         where workspace_id = $1 and actor_id in (${actorIds})`,
       [WORKSPACE_ID],
     );
-    await db.pool.query(
-      `delete from core.idempotency_keys where actor_id in (${actorIds})`,
-      [WORKSPACE_ID],
-    );
-    await db.pool.query(
-      `delete from core.sessions where actor_id in (${actorIds})`,
-      [WORKSPACE_ID],
-    );
-    await migrateDb.pool.query(
-      `delete from core.audit_log where actor_id in (${actorIds})`,
-      [WORKSPACE_ID],
-    );
-    await db.pool.query(
-      `delete from core.actors where workspace_id = $1 and ${actorPattern}`,
-      [WORKSPACE_ID],
-    );
+    await db.pool.query(`delete from core.idempotency_keys where actor_id in (${actorIds})`, [
+      WORKSPACE_ID,
+    ]);
+    await db.pool.query(`delete from core.sessions where actor_id in (${actorIds})`, [
+      WORKSPACE_ID,
+    ]);
+    await migrateDb.pool.query(`delete from core.audit_log where actor_id in (${actorIds})`, [
+      WORKSPACE_ID,
+    ]);
+    await db.pool.query(`delete from core.actors where workspace_id = $1 and ${actorPattern}`, [
+      WORKSPACE_ID,
+    ]);
     await db.pool.query(
       `delete from core.managed_systems
         where workspace_id = $1
@@ -458,7 +453,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   });
 
   it('allows a self-approval with its envelope, audits it, and mints an effective grant by default', async () => {
-    await migrateDb.pool.query('delete from core.workspace_settings where workspace_id = $1', [WORKSPACE_ID]);
+    await migrateDb.pool.query('delete from core.workspace_settings where workspace_id = $1', [
+      WORKSPACE_ID,
+    ]);
     const settingsRow = await db.pool.query(
       'select 1 from core.workspace_settings where workspace_id = $1',
       [WORKSPACE_ID],
@@ -558,8 +555,14 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   // ── Issue #404: validation 422 normalization + sensitive rate tier ──────
 
   it.each([
-    ['AC-1 returns 422 with field detail for a bogus status filter (legacy list)', '/permission-requests'],
-    ['AC-1 returns 422 with field detail for a bogus status filter (console list)', '/permissions/requests'],
+    [
+      'AC-1 returns 422 with field detail for a bogus status filter (legacy list)',
+      '/permission-requests',
+    ],
+    [
+      'AC-1 returns 422 with field detail for a bogus status filter (console list)',
+      '/permissions/requests',
+    ],
   ] as const)('%s', async (_title, url) => {
     const response = await app.inject({
       method: 'GET',

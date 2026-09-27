@@ -189,3 +189,48 @@ apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts lint/style/
 apps/backend/src/modules/voc/__tests__/list-vocs.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (blame f1c06725); cleanup queries this branch did not add
 apps/frontend/src/routes/_authed.tsx format -- pre-existing on develop; this branch adds only the Coverage nav entry
 apps/frontend/src/routes/_authed.tsx organizeImports -- pre-existing on develop; import order predates biome and this branch does not reorder imports
+
+# #517 Phase 1 (test-support extraction / hook + import-path relocation) touched only
+# import lines or moved content verbatim in the files below; the diagnostics are on
+# untouched pre-existing content that the import-line change exposed to the changed-files
+# biome scope for the first time. Verified against origin/develop per-file diffs before
+# allowlisting; backend integration suite (183 files, real DB) and frontend suite (176
+# files) both green after this branch's safe `biome check --write` formatting pass.
+apps/backend/src/modules/entity-links/__tests__/commands.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/findings/__tests__/commands.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (3x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/entity-links/__tests__/entity-links.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/surveys/__tests__/slice8-exit-criteria-response-voc.integration.test.ts lint/style/useTemplate -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/surveys/__tests__/slice8-exit-criteria-evidence-visibility.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/task-requests/__tests__/commands.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/hooks/__tests__/useVocDetail.test.tsx lint/complexity/useLiteralKeys -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/surveys/__tests__/survey-patch.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/surveys/__tests__/survey-results.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/task-requests/__tests__/task-request-review.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/components/triage/TriageRow.tsx lint/a11y/useSemanticElements -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/components/triage/TriageRow.tsx lint/a11y/noRedundantRoles -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/tasks/__tests__/task-detail-and-finding-link.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/_seed-helpers.ts lint/suspicious/noImplicitAnyLet -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/tasks/__tests__/patch-task-status.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (4x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/embedding-enqueue-on-write.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (4x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/conversation-visibility-boundary.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (4x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/conversation-visibility-boundary.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/conversation-visibility-boundary.integration.test.ts lint/correctness/noUnusedVariables -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/get-conversation.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (4x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/components/list/VocList.tsx lint/a11y/useSemanticElements -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/frontend/src/features/voc/components/list/VocList.tsx lint/suspicious/noArrayIndexKey -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-reporter-reply.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (6x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-reporter-reply.integration.test.ts lint/correctness/noUnusedVariables -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-internal-comment.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (7x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-internal-comment.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-internal-comment.integration.test.ts lint/correctness/noUnusedVariables -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/jobs/__tests__/embedding-backfill.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (5x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/conversation-service.ts lint/style/noNonNullAssertion -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-public-update.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (11x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/__tests__/post-public-update.integration.test.ts lint/correctness/noUnusedVariables -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/jobs/__tests__/embed-voc.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (6x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/jobs/__tests__/released-review-candidates.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (8x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/jobs/__tests__/released-review-candidates.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (2x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/modules/voc/recommendations/__tests__/recommendations-routes.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (6x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/test-support/permissions-fixtures.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/test-support/voc-fixtures.ts lint/suspicious/noImplicitAnyLet -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)
+apps/backend/src/test-support/voc-fixtures.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (1x, unchanged by #517 Phase 1; import-path relocation only)

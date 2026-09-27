@@ -16,22 +16,16 @@ import {
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
 import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
 import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
 import { insertVocClusterRow } from '../../voc-clusters/__tests__/_seed-helpers.js';
-import { insertDevActor } from '../../../test-support/actor-fixtures.js';
-import {
-  SESSION_COOKIE_NAME,
-  loginAs,
-} from '../../../test-support/auth.js';
-import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
-import { uid } from '../../../test-support/ids.js';
-import { grantCapability } from '../../../test-support/permissions-fixtures.js';
-import {
-  cleanupReadTestTables,
-  insertVocDirectly,
-} from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -969,11 +963,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
       'POST Triage Target VOC',
     );
 
-    const { id: devId, externalId } = await insertDevActor(
-      dbHandle,
-      WORKSPACE_ID,
-      uid('post-tri'),
-    );
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('post-tri'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msA, adminActorId);
     const devCookie = await loginAs(app, externalId);
 
@@ -1249,11 +1239,7 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     // (routes.ts gates on requireSession/requireWorkspace only), so a plain
     // voc.triage actor can call it; per ADR-0047 the voc↔voc row must come
     // back hidden with no endpoint ids.
-    const { id: devId, externalId } = await insertDevActor(
-      dbHandle,
-      WORKSPACE_ID,
-      uid('inv-tri'),
-    );
+    const { id: devId, externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, uid('inv-tri'));
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msA, adminActorId);
     const devCookie = await loginAs(app, externalId);
 
