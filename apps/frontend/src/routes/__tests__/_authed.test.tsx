@@ -12,7 +12,7 @@
 import { redirect } from '@tanstack/react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthenticatedError, fetchMe } from '../../lib/api';
-import { SIDEBAR_ENTRIES } from '../_authed';
+import { NAV_TREE, SIDEBAR_ENTRIES } from '../_authed';
 
 // Re-implement beforeLoad logic verbatim from _authed.tsx so we can
 // exercise it in isolation without the TanStack file-route type brands.
@@ -118,4 +118,12 @@ describe('_authed sidebar navigation tree', () => {
     );
   });
 
+  it('#522 has no Integration nav entry pointing at a route that only redirects elsewhere', () => {
+    // /integration itself has no independent surface — it immediately
+    // redirects to /integration/links (apps/frontend/src/routes/_authed/
+    // integration/index.tsx). A nav entry that claims to be an "Action
+    // dashboard" but lands there misrepresents the destination.
+    expect(NAV_TREE.integration.map((entry) => entry.href)).not.toContain('/integration');
+    expect(NAV_TREE.integration.map((entry) => entry.id)).not.toContain('integration-dashboard');
+  });
 });
