@@ -203,10 +203,16 @@ function AuthedLayout() {
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate({ from: '/vocs' });
   const activeDomain = railForPathname(location.pathname);
-  const managedSystemId =
-    activeDomain === 'voc' || activeDomain === 'home'
-      ? (new URLSearchParams(location.searchStr).get('managedSystem') ?? undefined)
-      : undefined;
+  // Every domain except Admin already reads/scopes by its own `managedSystem`
+  // URL param (docs/frontend/routes-and-layout.md §URL State Rules): VOC,
+  // VOC Clusters, Findings, Tasks (every view), Surveys, Integration
+  // (Links/Coverage). Admin's four sub-routes only partially support it
+  // (Analytics Areas does, Managed Systems/Permission Requests/Settings do
+  // not), so it stays out of the shared sidebar selector for now (#518).
+  const supportsManagedSystemScope = activeDomain !== 'admin';
+  const managedSystemId = supportsManagedSystemScope
+    ? (new URLSearchParams(location.searchStr).get('managedSystem') ?? undefined)
+    : undefined;
   const homeSummary = useQuery({
     queryKey: ['dashboard-summary', managedSystemId] as const,
     enabled: activeDomain === 'home',
@@ -234,18 +240,18 @@ function AuthedLayout() {
   );
   const changeManagedSystem = React.useCallback(
     (managedSystemId: string | undefined) => {
-      if (location.pathname !== '/vocs' && location.pathname !== '/home') return;
+      if (!supportsManagedSystemScope) return;
       void navigate({
-        to: location.pathname === '/home' ? '/home' : '/vocs',
-        search: (previous) => {
+        to: location.pathname as never,
+        search: (previous: Record<string, unknown>) => {
           const { managedSystem: _managedSystem, ...remaining } = previous;
           return managedSystemId === undefined
             ? remaining
             : { ...remaining, managedSystem: managedSystemId };
         },
-      });
+      } as never);
     },
-    [location.pathname, navigate],
+    [location.pathname, navigate, supportsManagedSystemScope],
   );
   const savedViewFilter = React.useMemo<Record<string, unknown> | undefined>(() => {
     if (activeDomain !== 'voc' || location.pathname !== '/vocs') return undefined;
@@ -296,7 +302,8 @@ function AuthedLayout() {
       sidebarEntries={entries}
       activeDomain={activeDomain}
       {...(managedSystemId !== undefined ? { managedSystemId } : {})}
-      syncManagedSystemFromUrl={activeDomain === 'voc' || activeDomain === 'home'}
+      syncManagedSystemFromUrl={supportsManagedSystemScope}
+      scopeControlEnabled={supportsManagedSystemScope}
       onManagedSystemChange={changeManagedSystem}
       {...(savedViewFilter !== undefined ? { savedViewFilter } : {})}
       onApplySavedView={applySavedView}

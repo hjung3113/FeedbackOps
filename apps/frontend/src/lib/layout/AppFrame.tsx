@@ -12,6 +12,8 @@ export interface AppFrameProps {
   managedSystemId?: string;
   /** VOC routes already encode this scope in their strict URL search schema. */
   syncManagedSystemFromUrl?: boolean;
+  /** False on a route whose data is not scoped by Managed System (e.g. most of Admin). */
+  scopeControlEnabled?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
   savedViewFilter?: Record<string, unknown>;
   onApplySavedView?: (view: SavedView) => void;
@@ -31,7 +33,7 @@ interface SlotEntry {
  * NOT a shell — does NOT live in packages/ui. The shell taxonomy is fixed at exactly three
  * (PageShell / ListShell / WorkbenchShell per ADR-0020). AppFrame composes one of those as its outlet.
  */
-export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncManagedSystemFromUrl = false, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
+export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncManagedSystemFromUrl = false, scopeControlEnabled = true, onManagedSystemChange, savedViewFilter, onApplySavedView, children, className }: AppFrameProps) {
   const [slots, setSlots] = React.useState<SlotEntry[]>([]);
   const [selectedManagedSystemId, setSelectedManagedSystemId] = React.useState<string | undefined>(managedSystemId);
   React.useEffect(() => {
@@ -111,6 +113,7 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     systemLabel: systemMeta[activeDomain].label,
     systemSubtitle: systemMeta[activeDomain].subtitle,
     managedSystems,
+    scopeControlEnabled,
     isAdmin,
     onManagedSystemChange: changeManagedSystem,
     ...(counts !== undefined ? { counts } : {}),

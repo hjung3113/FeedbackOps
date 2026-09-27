@@ -59,6 +59,8 @@ export interface AppSidebarProps {
   counts?: NavCounts;
   managedSystems?: ManagedSystemScopeOption[];
   selectedManagedSystemId?: string;
+  /** False on a route whose data is not scoped by Managed System (e.g. most of Admin). */
+  scopeControlEnabled?: boolean;
   isAdmin?: boolean;
   onManagedSystemChange?: (managedSystemId: string | undefined) => void;
   savedViews?: Array<{ id: string; name: string }>;
@@ -94,6 +96,7 @@ export function AppSidebar({
   counts = {},
   managedSystems = [],
   selectedManagedSystemId,
+  scopeControlEnabled = true,
   isAdmin = true,
   onManagedSystemChange,
   savedViews = [],
@@ -142,19 +145,31 @@ export function AppSidebar({
       </div>
       {!collapsed && (
         <div className="relative border-b border-border-subtle p-2">
-          <button type="button" className="flex w-full items-center gap-2 rounded-md border border-border-subtle px-2 py-2 text-left text-sm hover:bg-surface-row-hover" onClick={() => setScopeOpen((open) => !open)} aria-expanded={scopeOpen} aria-haspopup="listbox" data-testid="scope-selector">
+          <button
+            type="button"
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md border border-border-subtle px-2 py-2 text-left text-sm hover:bg-surface-row-hover',
+              !scopeControlEnabled && 'cursor-not-allowed opacity-60 hover:bg-transparent',
+            )}
+            onClick={() => scopeControlEnabled && setScopeOpen((open) => !open)}
+            disabled={!scopeControlEnabled}
+            aria-expanded={scopeOpen}
+            aria-haspopup="listbox"
+            title={scopeControlEnabled ? undefined : '이 화면은 Managed System 범위를 지원하지 않습니다'}
+            data-testid="scope-selector"
+          >
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-accent-primary/15 text-xs font-semibold text-accent-primary">{selectedSystem ? selectedSystem.name.slice(0, 1) : '∗'}</span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1 truncate font-medium">
-                {selectedSystem?.name ?? 'All Managed Systems'}
-                {isUnion && <ScopeBadge testId="scope-union-badge" label="union" />}
-                {selectedSystem && !selectedSystem.granted && <ScopeBadge testId="scope-out-of-scope-badge" label="out of scope" urgent />}
+                {scopeControlEnabled ? (selectedSystem?.name ?? 'All Managed Systems') : '워크스페이스 전체'}
+                {scopeControlEnabled && isUnion && <ScopeBadge testId="scope-union-badge" label="union" />}
+                {scopeControlEnabled && selectedSystem && !selectedSystem.granted && <ScopeBadge testId="scope-out-of-scope-badge" label="out of scope" urgent />}
               </span>
-              {isUnion && grantedSystems.length > 0 && <span className="block truncate text-[10px] text-text-muted">{grantedSystems.map((system) => system.name).join(' · ')}</span>}
+              {scopeControlEnabled && isUnion && grantedSystems.length > 0 && <span className="block truncate text-[10px] text-text-muted">{grantedSystems.map((system) => system.name).join(' · ')}</span>}
             </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-text-muted" />
+            {scopeControlEnabled && <ChevronDown className="h-3 w-3 shrink-0 text-text-muted" />}
           </button>
-          {scopeOpen && (
+          {scopeControlEnabled && scopeOpen && (
             <div className="absolute left-2 right-2 top-full z-50 mt-1 rounded-md border border-border-subtle bg-surface-popover p-1 shadow-lg" role="listbox" aria-label="Managed System scope">
               <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-row-hover" onClick={() => selectScope(undefined)} data-testid="scope-option-all">
                 <span className="flex h-5 w-5 items-center justify-center rounded bg-accent-primary/15 text-xs text-accent-primary">∗</span>
