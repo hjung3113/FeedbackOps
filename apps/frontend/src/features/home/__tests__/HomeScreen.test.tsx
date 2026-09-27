@@ -46,7 +46,10 @@ const response = {
   by_managed_system: [],
 };
 
-function installFetch(summary: unknown = response): ReturnType<typeof vi.fn> {
+function installFetch(
+  summary: unknown = response,
+  options: { pendingSummary?: boolean } = {},
+): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith('/me'))
@@ -63,8 +66,10 @@ function installFetch(summary: unknown = response): ReturnType<typeof vi.fn> {
         }),
         { status: 200 },
       );
-    if (url.startsWith('/dashboard/summary'))
+    if (url.startsWith('/dashboard/summary')) {
+      if (options.pendingSummary) return new Promise<Response>(() => {});
       return new Response(JSON.stringify(summary), { status: 200 });
+    }
     if (url.startsWith('/tasks') || url.startsWith('/task-requests'))
       return new Response(JSON.stringify({ items: [] }), { status: 200 });
     if (url.startsWith('/permission-requests/mine'))
@@ -152,6 +157,21 @@ describe('HomeScreen route content', () => {
     expect(screen.queryByRole('button', { name: /Review|Request|Open/ })).toBeNull();
   });
 
+  it('omits queue and Coverage sections while the summary is loading', async () => {
+    const fetchMock = installFetch(response, { pendingSummary: true });
+    renderHome();
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).startsWith('/dashboard/summary')),
+      ).toBe(true),
+    );
+    expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
+    expect(screen.queryByTestId('home-action-queues')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Coverage signals' })).toBeNull();
+    expect(screen.queryByTestId('home-coverage')).toBeNull();
+  });
+
   it('omits the recovery queue section when action_queues is empty', async () => {
     const noQueues = dashboardSummarySchema.parse({
       ...response,
@@ -161,7 +181,7 @@ describe('HomeScreen route content', () => {
     installFetch(noQueues);
     renderHome();
 
-    await screen.findByTestId('home-coverage');
+    await screen.findByTestId('home-kpi-open_voc');
     expect(screen.queryByRole('heading', { name: 'Recovery & follow-up queues' })).toBeNull();
     expect(screen.queryByTestId('home-action-queues')).toBeNull();
     expect(screen.getByRole('heading', { name: 'Coverage signals' })).toBeInTheDocument();
@@ -171,15 +191,13 @@ describe('HomeScreen route content', () => {
     installFetch(dashboardSummarySchema.parse({ ...response, coverage: [] }));
     renderHome();
 
-    await screen.findByTestId('home-action-queues');
+    await screen.findByTestId('home-kpi-open_voc');
     expect(screen.queryByRole('heading', { name: 'Coverage signals' })).toBeNull();
     expect(screen.queryByTestId('home-coverage')).toBeNull();
   });
 
   it('explains the scoped Home view when both queues and coverage are empty', async () => {
-    installFetch(
-      dashboardSummarySchema.parse({ ...response, action_queues: [], coverage: [] }),
-    );
+    installFetch(dashboardSummarySchema.parse({ ...response, action_queues: [], coverage: [] }));
     renderHome();
 
     await screen.findByText(

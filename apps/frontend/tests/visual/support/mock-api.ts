@@ -51,13 +51,13 @@ import {
   requestTaskSuccess,
 } from '../fixtures/finding-detail';
 import {
+  type HomeVisualScenario,
   homeMyWorkRequestsFixture,
   homeMyWorkTasksFixture,
   homeOpenPermissionRequestsFixture,
   homeSummaryFixture,
   homeUnscopedSummaryFixture,
   homeZeroQueueSummaryFixture,
-  type HomeVisualScenario,
 } from '../fixtures/home';
 import {
   managedSystemOwnerActors,
@@ -309,9 +309,7 @@ export async function installMockApi(
     if (options.home && isRequest(route, 'GET', '/tasks')) {
       await json(route, 200, {
         items:
-          options.home === 'populated' || options.home === 'unscoped'
-            ? homeMyWorkTasksFixture
-            : [],
+          options.home === 'populated' || options.home === 'unscoped' ? homeMyWorkTasksFixture : [],
       });
       return;
     }

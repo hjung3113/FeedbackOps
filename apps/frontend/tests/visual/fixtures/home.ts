@@ -3,14 +3,72 @@ import { dashboardSummarySchema, taskDtoSchema, taskRequestDtoSchema } from '@fo
 import type { MinePermissionRequestRow } from '@/lib/api/permissions';
 
 export const homeSummaryFixture = dashboardSummarySchema.parse({
-  kpis: { open_voc: 47, active_finding: 14, pending_request: 8, tasks_in_flight: 23, coverage_percent: 67 },
+  kpis: {
+    open_voc: 47,
+    active_finding: 14,
+    pending_request: 8,
+    tasks_in_flight: 23,
+    coverage_percent: 67,
+  },
   action_queues: [
-    { id: 'unassigned-voc', severity: 'urgent', count: 12, next_action: { label: 'Review VOCs', route: '/vocs?view=triage&tab=unassigned', intent: 'review' }, secondary_action: { label: 'Bulk assign', route: '/vocs?view=triage&tab=unassigned', intent: 'assign' } },
-    { id: 'actionable-finding-no-execution', severity: 'warn', count: 8, next_action: { label: 'Request Tasks', route: '/findings', intent: 'request-task' }, secondary_action: { label: 'Open queue', route: '/findings', intent: 'open' } },
-    { id: 'released-task-unresolved-voc', severity: 'warn', count: 5, next_action: { label: 'Review Updates', route: '/vocs?view=inbox', intent: 'review-update' }, secondary_action: { label: 'Open queue', route: '/vocs?view=inbox', intent: 'open' } },
-    { id: 'bad-outcome-no-followup', severity: 'urgent', count: 3, next_action: { label: 'Create Follow-up', route: '/surveys', intent: 'create-follow-up' }, secondary_action: { label: 'View surveys', route: '/surveys', intent: 'open' } },
-    { id: 'high-severity-unlinked', severity: 'urgent', count: 4, next_action: { label: 'Link Finding', route: '/vocs?view=triage&tab=high', intent: 'link' }, secondary_action: { label: 'Open queue', route: '/vocs?view=triage&tab=high', intent: 'open' } },
-    { id: 'permission-requests-pending', severity: 'info', count: 2, next_action: { label: 'Open Requests', route: '/admin/permissions/requests', intent: 'review' }, secondary_action: null },
+    {
+      id: 'unassigned-voc',
+      severity: 'urgent',
+      count: 12,
+      next_action: {
+        label: 'Review VOCs',
+        route: '/vocs?view=triage&tab=unassigned',
+        intent: 'review',
+      },
+      secondary_action: {
+        label: 'Bulk assign',
+        route: '/vocs?view=triage&tab=unassigned',
+        intent: 'assign',
+      },
+    },
+    {
+      id: 'actionable-finding-no-execution',
+      severity: 'warn',
+      count: 8,
+      next_action: { label: 'Request Tasks', route: '/findings', intent: 'request-task' },
+      secondary_action: { label: 'Open queue', route: '/findings', intent: 'open' },
+    },
+    {
+      id: 'released-task-unresolved-voc',
+      severity: 'warn',
+      count: 5,
+      next_action: { label: 'Review Updates', route: '/vocs?view=inbox', intent: 'review-update' },
+      secondary_action: { label: 'Open queue', route: '/vocs?view=inbox', intent: 'open' },
+    },
+    {
+      id: 'bad-outcome-no-followup',
+      severity: 'urgent',
+      count: 3,
+      next_action: { label: 'Create Follow-up', route: '/surveys', intent: 'create-follow-up' },
+      secondary_action: { label: 'View surveys', route: '/surveys', intent: 'open' },
+    },
+    {
+      id: 'high-severity-unlinked',
+      severity: 'urgent',
+      count: 4,
+      next_action: { label: 'Link Finding', route: '/vocs?view=triage&tab=high', intent: 'link' },
+      secondary_action: {
+        label: 'Open queue',
+        route: '/vocs?view=triage&tab=high',
+        intent: 'open',
+      },
+    },
+    {
+      id: 'permission-requests-pending',
+      severity: 'info',
+      count: 2,
+      next_action: {
+        label: 'Open Requests',
+        route: '/admin/permissions/requests',
+        intent: 'review',
+      },
+      secondary_action: null,
+    },
   ],
   coverage: [
     { id: 'voc-task', value: 180, total: 1000, percent: 18, status: 'warn' },
@@ -67,8 +125,22 @@ const taskBase = {
 } as const;
 
 export const homeMyWorkTasksFixture = [
-  taskDtoSchema.parse({ ...taskBase, id: homeFixtureIds.taskOne, display_id: 'TASK-901', title: '매출 리포트 쿼리 플랜 개선', status: 'review', priority: 'high' }),
-  taskDtoSchema.parse({ ...taskBase, id: homeFixtureIds.taskTwo, display_id: 'TASK-902', title: '데이터 추출 안정화', status: 'doing', priority: 'medium' }),
+  taskDtoSchema.parse({
+    ...taskBase,
+    id: homeFixtureIds.taskOne,
+    display_id: 'TASK-901',
+    title: '매출 리포트 쿼리 플랜 개선',
+    status: 'review',
+    priority: 'high',
+  }),
+  taskDtoSchema.parse({
+    ...taskBase,
+    id: homeFixtureIds.taskTwo,
+    display_id: 'TASK-902',
+    title: '데이터 추출 안정화',
+    status: 'doing',
+    priority: 'medium',
+  }),
 ];
 
 const taskRequestBase = {
@@ -85,8 +157,22 @@ const taskRequestBase = {
 } as const;
 
 export const homeMyWorkRequestsFixture = [
-  taskRequestDtoSchema.parse({ ...taskRequestBase, id: homeFixtureIds.requestOne, display_id: 'REQ-42', source_type: 'finding', source_id: homeFixtureIds.finding, requested_outcome: '검토 결과 → Task 변환' }),
-  taskRequestDtoSchema.parse({ ...taskRequestBase, id: homeFixtureIds.requestTwo, display_id: 'REQ-43', source_type: 'voc', source_id: homeFixtureIds.voc, requested_outcome: '공개 업데이트 검토' }),
+  taskRequestDtoSchema.parse({
+    ...taskRequestBase,
+    id: homeFixtureIds.requestOne,
+    display_id: 'REQ-42',
+    source_type: 'finding',
+    source_id: homeFixtureIds.finding,
+    requested_outcome: '검토 결과 → Task 변환',
+  }),
+  taskRequestDtoSchema.parse({
+    ...taskRequestBase,
+    id: homeFixtureIds.requestTwo,
+    display_id: 'REQ-43',
+    source_type: 'voc',
+    source_id: homeFixtureIds.voc,
+    requested_outcome: '공개 업데이트 검토',
+  }),
 ];
 
 export const homeOpenPermissionRequestsFixture = [

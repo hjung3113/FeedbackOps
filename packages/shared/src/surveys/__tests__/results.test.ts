@@ -134,14 +134,11 @@ describe('SurveyResultDto privacy boundary', () => {
     },
   );
 
-  it.each(['response_state', 'anonymity_threshold'] as const)(
-    'requires the %s field',
-    (field) => {
-      const missingField: Record<string, unknown> = { ...maximalValidResult() };
-      delete missingField[field];
-      expect(() => surveyResultDtoSchema.parse(missingField)).toThrow();
-    },
-  );
+  it.each(['response_state', 'anonymity_threshold'] as const)('requires the %s field', (field) => {
+    const missingField: Record<string, unknown> = { ...maximalValidResult() };
+    delete missingField[field];
+    expect(() => surveyResultDtoSchema.parse(missingField)).toThrow();
+  });
 
   it('requires a positive integer anonymity threshold', () => {
     expect(() =>

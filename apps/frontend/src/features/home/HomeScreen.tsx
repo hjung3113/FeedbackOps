@@ -97,18 +97,18 @@ export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): R
         )}
         <div
           className={`mt-9 grid gap-7 ${
-            summary.data?.coverage.length === 0
-              ? 'grid-cols-1'
-              : 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
+            summary.data !== undefined && summary.data.coverage.length > 0
+              ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
+              : 'grid-cols-1'
           }`}
         >
           <MyWorkPanel
             tasks={myTasks.data?.items ?? []}
             requests={pendingRequests.data?.items ?? []}
           />
-          {summary.data?.coverage.length !== 0 && (
+          {summary.data !== undefined && summary.data.coverage.length > 0 && (
             <CoveragePanel
-              coverage={summary.data?.coverage ?? []}
+              coverage={summary.data.coverage}
               {...(managedSystemId !== undefined ? { managedSystemId } : {})}
             />
           )}
@@ -190,7 +190,7 @@ function HomeSummary({ summary }: { summary: DashboardSummary | undefined }): Re
           })}
       </div>
       {/* #521 follows empty-state AC over the populated docs/design-prototype/screen-home.jsx example. */}
-      {(summary === undefined || activeQueues.length > 0) && (
+      {summary !== undefined && activeQueues.length > 0 && (
         <>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">

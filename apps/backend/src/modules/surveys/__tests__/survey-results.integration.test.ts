@@ -493,10 +493,9 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
   it('classifies survey response state per actor and never exposes below-threshold counts', async () => {
     const previousSettings = await migrateHandle.pool.query<{
       survey_anonymity_threshold: number;
-    }>(
-      'select survey_anonymity_threshold from core.workspace_settings where workspace_id = $1',
-      [WORKSPACE_ID],
-    );
+    }>('select survey_anonymity_threshold from core.workspace_settings where workspace_id = $1', [
+      WORKSPACE_ID,
+    ]);
     try {
       const configured = await patchWorkspaceSettings({ survey_anonymity_threshold: 6 });
       expect(configured.statusCode).toBe(200);
