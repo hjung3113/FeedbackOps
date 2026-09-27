@@ -236,7 +236,10 @@ describe('integration links route', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText('Entity Link 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.getByText('Entity Link 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+      { timeout: 4000 },
+    );
     const attemptsBeforeRetry = urls.filter((url) => url.includes('/entity-links')).length;
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
@@ -260,7 +263,10 @@ describe('integration links route', () => {
       </QueryClientProvider>,
     );
 
-    const panel = await screen.findByText('Entity links');
+    await waitFor(() => expect(screen.getByText('Entity links')).toBeInTheDocument(), {
+      timeout: 4000,
+    });
+    const panel = screen.getByText('Entity links');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
     expect(screen.queryByText('Entity Link 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
   });

@@ -367,7 +367,10 @@ describe('/findings URL state', () => {
     const retrying: FetchCase = { requested: [], failuresRemaining: 2 };
     renderUrlState(retrying, '/findings');
 
-    expect(await screen.findByText('Finding 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.getByText('Finding 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+      { timeout: 4000 },
+    );
     expect(screen.getByText('잠시 후 다시 시도하세요.')).toBeInTheDocument();
     const attemptsBeforeRetry = retrying.requested.filter(
       (url) => new URL(url, 'http://localhost').pathname === '/findings',

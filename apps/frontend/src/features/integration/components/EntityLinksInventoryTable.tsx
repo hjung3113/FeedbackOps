@@ -23,8 +23,8 @@ export interface EntityLinksInventoryTableProps {
   actorsById?: Record<string, ActorPresentation>;
   onRetry?: () => void;
   unfilteredItemsCount?: number;
-  filterDescription?: string;
-  onResetFilters?: () => void;
+  filterDescription?: string | undefined;
+  onResetFilters?: (() => void) | undefined;
 }
 
 function shortId(id: string): string {

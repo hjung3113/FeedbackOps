@@ -165,7 +165,7 @@ describe('TaskRequestsRoute display ids', () => {
 
     const attemptsBeforeRetry = vi.mocked(fetchTaskRequests).mock.calls.length;
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
-    expect(await screen.findByText('REQ-42')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /REQ-42/ })).toBeInTheDocument();
     expect(vi.mocked(fetchTaskRequests).mock.calls.length).toBeGreaterThan(attemptsBeforeRetry);
   });
 });

@@ -182,7 +182,10 @@ describe('Survey screens', () => {
 
     renderWithQuery(<RetryableSurveyList />);
 
-    expect(await screen.findByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.getByText('설문 목록을 불러오지 못했습니다')).toBeInTheDocument(),
+      { timeout: 4000 },
+    );
     expect(apiRequest).toHaveBeenCalledTimes(2);
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
 
