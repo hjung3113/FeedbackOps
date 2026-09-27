@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@fops/ui';
+import { Ellipsis } from 'lucide-react';
 import type * as React from 'react';
 
 // Runtime shape we narrow to.
@@ -59,8 +60,8 @@ export function NextActionFooter({
       {overflowActions !== undefined && overflowActions.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="ml-auto" aria-label="더보기">
-              ⋯
+            <Button variant="ghost" size="sm" className="ml-auto" aria-label="추가 작업">
+              <Ellipsis className="h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

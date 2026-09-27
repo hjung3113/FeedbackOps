@@ -14,8 +14,13 @@
  *   .panel-section-nav-button:hover   → hover:text-text-secondary
  *   .panel-section-nav-button.active  → border-b-accent-primary text-text-primary
  *   .panel-section-nav-count          → px-1 py-px rounded-full bg-surface-canvas text-text-muted text-[10px] font-mono
+ *
+ * Sections flagged `overflow: true` render inside a trailing "더보기" dropdown instead of the
+ * pinned strip (#519 — a deliberate deviation from the prototype, whose strip overflows a
+ * 440px panel). With no flagged section the output is identical to the prototype strip.
  */
 
+import { ChevronDown } from 'lucide-react';
 import * as React from 'react';
 import {
   DropdownMenu,
@@ -195,7 +200,8 @@ export function DetailPanelSectionNav({
                   : 'border-transparent text-text-muted hover:text-text-secondary',
               )}
             >
-              더보기 ▾
+              더보기
+              <ChevronDown className="h-3 w-3" aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -207,7 +213,11 @@ export function DetailPanelSectionNav({
                 }}
               >
                 {s.label}
-                {s.count !== undefined && <span className="ml-2">{s.count}</span>}
+                {s.count !== undefined && (
+                  <span className="ml-auto px-1 rounded-full bg-surface-canvas text-text-muted font-mono text-[10px] leading-[1.4]">
+                    {s.count}
+                  </span>
+                )}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

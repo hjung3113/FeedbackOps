@@ -553,7 +553,7 @@ describe('<VocDetailPanel>', () => {
     // Radix's DropdownMenuTrigger opens on `pointerdown`, which jsdom cannot
     // synthesise convincingly — driving it by keyboard matches this repo's
     // established pattern (apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx).
-    fireEvent.keyDown(screen.getByRole('button', { name: '더보기' }), { key: 'Enter' });
+    fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Task 요청' }));
     expect(document.querySelector('[role="dialog"]')).toBeInTheDocument();
     unmount();
@@ -562,7 +562,7 @@ describe('<VocDetailPanel>', () => {
     // page aria-hidden while it's mounted, so a second dropdown can't be
     // reliably opened against the same tree without first closing it.
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
-    fireEvent.keyDown(screen.getByRole('button', { name: '더보기' }), { key: 'Enter' });
+    fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Finding 생성' }));
     expect(document.querySelector('[role="dialog"]')).toBeInTheDocument();
   });
@@ -574,7 +574,7 @@ describe('<VocDetailPanel>', () => {
       }),
     );
     renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: '더보기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '추가 작업' })).toBeNull();
   });
 
   it('#337: reporter-arm envelope omits Triage, Similar, and their navigation entries', async () => {
