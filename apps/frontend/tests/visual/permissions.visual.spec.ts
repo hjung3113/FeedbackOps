@@ -107,7 +107,9 @@ test.describe('/admin/permissions/requests visual harness', () => {
     ).toThrow();
   });
 
-  test('AC-8 opens a self-approval request with approve pending', async ({ page }) => {
+  test('AC-8 opens a self-approval request with no decision preselected, then approves', async ({
+    page,
+  }) => {
     const mock = await installMockApi(page);
 
     await page.goto('/admin/permissions/requests');
@@ -117,10 +119,12 @@ test.describe('/admin/permissions/requests visual harness', () => {
       .click();
 
     const detail = page.getByTestId('permission-request-detail-panel');
-    await expect(detail.getByRole('button', { name: '승인', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    const approve = detail.getByRole('button', { name: '승인', exact: true });
+    // #524: the form starts with no decision and submit disabled until an explicit choice.
+    await expect(approve).toHaveAttribute('aria-pressed', 'false');
+    await expect(detail.getByTestId('permission-decision-submit')).toBeDisabled();
+    await approve.click();
+    await expect(approve).toHaveAttribute('aria-pressed', 'true');
     await expect(detail.getByTestId('self-approval-audit-capture')).toBeVisible();
     await detail.getByLabel(/Policy citation/).fill('workspace policy §4.3');
     await detail.getByLabel(/Peer reviewer 부재 사유/).fill('다른 reviewer 모두 PTO입니다.');
@@ -167,6 +171,8 @@ test.describe('/admin/permissions/requests visual harness', () => {
       .click();
 
     const detail = page.getByTestId('permission-request-detail-panel');
+    // #524: no decision is preselected; approve must be chosen explicitly.
+    await detail.getByRole('button', { name: '승인', exact: true }).click();
     await detail.getByLabel('사유 · 선택').fill('읽기 권한을 승인합니다.');
     await detail.getByTestId('permission-decision-submit').click();
 
