@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -167,6 +167,34 @@ describe('TriagePanel Overview and grouped navigation', () => {
     renderPanel();
     expect(screen.getByText('본문을 불러오지 못했습니다.')).toBeInTheDocument();
     expect(screen.getByTestId('triage-description-region')).not.toHaveTextContent(TRIAGE_VOC.title);
+  });
+
+  it('keeps cached description visible when a background detail refetch errors', () => {
+    mockDetail({
+      data: detailEnvelope(DESCRIPTION),
+      isError: true,
+      isLoading: false,
+      error: new Error('refetch failed'),
+    });
+    renderPanel();
+    expect(screen.getByText('구독 알림 발송이 멈췄습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('본문을 불러오지 못했습니다.')).not.toBeInTheDocument();
+  });
+
+  it('wires reporter status and the actual baseline into the live Summary', () => {
+    renderPanel();
+
+    const transition = screen.getByTestId('reporter-status-transition');
+    expect(transition).toBeInTheDocument();
+    expect(transition).toHaveTextContent('접수됨');
+    expect(transition).toHaveTextContent('검토 중');
+    expect(screen.getByTestId('summary-no-changes')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'low' }));
+
+    expect(screen.getAllByTestId(/^summary-diff-row-/)).toHaveLength(1);
+    expect(screen.getByTestId('summary-diff-row-Severity')).toHaveTextContent('low');
+    expect(screen.queryByTestId('summary-no-changes')).not.toBeInTheDocument();
   });
 
   it('shows a muted loading line without rendering title text as body', () => {

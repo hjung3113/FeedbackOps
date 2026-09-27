@@ -35,7 +35,7 @@ permission-limited summary envelope otherwise.
    reporter-status badge. Missing Owner, missing Area, and similar-count text
    use the existing muted text token.
 4. Keep the four URL-backed toolbar tabs locked by ADR-0022. Render the sort
-   hint as muted secondary text with its full accessible title.
+   hint as muted secondary text with the full sort rule in a hover `title` tooltip.
 
 ## Consequences
 

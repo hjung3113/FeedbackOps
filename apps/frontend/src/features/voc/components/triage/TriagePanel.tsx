@@ -313,12 +313,8 @@ export function TriagePanel({
             <span>{new Date(voc.created_at).toLocaleDateString('ko-KR')}</span>
           </div>
           <div data-testid="triage-description-region">
-            {vocDetailQuery.isLoading ? (
+            {vocDetailQuery.isLoading && !vocDetailQuery.data ? (
               <p className="text-xs text-text-muted">불러오는 중…</p>
-            ) : vocDetailQuery.isError ? (
-              <div className="rounded-md border border-dashed border-border-subtle p-3 text-sm text-text-muted">
-                본문을 불러오지 못했습니다.
-              </div>
             ) : vocDetailQuery.data && 'description_rich_content' in vocDetailQuery.data ? (
               isTipTapDocStructurallyEmpty(vocDetailQuery.data.description_rich_content) ? (
                 <p className="text-sm text-text-muted">본문 없음</p>
@@ -330,10 +326,16 @@ export function TriagePanel({
                   />
                 </div>
               )
-            ) : (
+            ) : vocDetailQuery.data ? (
               <div className="rounded-md border border-dashed border-border-subtle p-3 text-sm text-text-muted">
                 본문을 표시할 수 없습니다 — 이 VOC의 상세 내용을 볼 권한이 없습니다.
               </div>
+            ) : vocDetailQuery.isError ? (
+              <div className="rounded-md border border-dashed border-border-subtle p-3 text-sm text-text-muted">
+                본문을 불러오지 못했습니다.
+              </div>
+            ) : (
+              <p className="text-xs text-text-muted">불러오는 중…</p>
             )}
           </div>
         </div>
