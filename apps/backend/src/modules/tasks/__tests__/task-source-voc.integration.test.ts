@@ -24,18 +24,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
 import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
-import {
-  SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
-  insertVocDirectly,
-  loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -321,7 +317,10 @@ describe.skipIf(!runIntegration)('task detail source VOC visibility (#378)', () 
       taskRequestSource: 'finding',
     });
     const got = await getTask(adminCookie, chain.taskId);
-    const detail = got.json<{ updated_at: string; source: { voc?: { visibility_state: string } } }>();
+    const detail = got.json<{
+      updated_at: string;
+      source: { voc?: { visibility_state: string } };
+    }>();
     // Positive twin: GET carries the verdict, so equality below is not vacuous.
     expect(detail.source.voc?.visibility_state).toBe('allowed');
 

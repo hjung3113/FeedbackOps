@@ -19,13 +19,13 @@
 // (enabled:false on the useVocList query) so a blocked actor never triggers
 // a queue query.
 
-import * as React from 'react';
-import { useSearch, useNavigate } from '@tanstack/react-router';
-import { PermissionBlockedPanel } from '@fops/ui';
 import { useMe } from '@/lib/auth/useMe';
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import { PermissionBlockedPanel } from '@fops/ui';
+import { useNavigate, useSearch } from '@tanstack/react-router';
+import type * as React from 'react';
+import { type TriageTab, VocTriageScreen } from '../components/triage/VocTriageScreen';
 import { useVocList } from '../hooks/useVocList';
-import { VocTriageScreen, type TriageTab } from '../components/triage/VocTriageScreen';
 
 // ── URL state shape ───────────────────────────────────────────────────────────
 

@@ -9,10 +9,10 @@
 // PermissionBlockedPanel for any non-approved state. The gate also runs
 // BEFORE the triage queue fetch so a blocked actor never triggers a query.
 
-import * as React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
+import type * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // REV-3 Cluster Y: TriagePanel now uses useQueryClient (for the empty-body
 // compensate refetch path). Tests must wrap renders in QueryClientProvider.
@@ -41,14 +41,14 @@ vi.mock('../../hooks/useVocList', () => ({
   useVocList: (...args: unknown[]) => useVocListMock(...args),
 }));
 
-vi.mock('../../hooks/useWorkspaceActors', () => ({
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({ actors: [], isSuccess: true, isLoading: false, error: null }),
 }));
 
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
 
 // Mock the permission check hook (Group 5 wires this in).
-vi.mock('@/features/admin/permissions/use-permission-check', () => ({
+vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
   usePermissionCheck: vi.fn(),
   permissionCheckQueryKey: () => ['permission-check', 'voc.triage', null],
   permissionRequestsMineKey: ['permission-requests-mine'],
@@ -79,9 +79,9 @@ vi.mock('../../components/detail/VocDetailPanel', () => ({
   ),
 }));
 
-import { TriageRoute } from '../TriageRoute';
 import { useMe } from '@/lib/auth/useMe';
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import { TriageRoute } from '../TriageRoute';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 

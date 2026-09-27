@@ -13,7 +13,7 @@ import { loadConfig } from '../../../../config.js';
 import { type DbHandle, createDb } from '../../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../../middleware/require-session.js';
 import { buildServer } from '../../../../server.js';
-import { loginAs } from '../../__tests__/_seed-helpers.js';
+import { loginAs } from '../../../../test-support/auth.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -141,11 +141,26 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
       `delete from core.audit_log where workspace_id = $1 and detail->>'source_voc_id' in (${fixtureVocs('id::text')})`,
       [WORKSPACE_ID, `${PREFIX}%`],
     );
-    await ops.pool.query(`delete from voc.voc_recommendation_decisions where source_voc_id in (${vocs})`, [WORKSPACE_ID, `${PREFIX}%`]);
-    await ops.pool.query(`delete from voc_cluster.voc_cluster_members where voc_id in (${vocs})`, [WORKSPACE_ID, `${PREFIX}%`]);
-    await ops.pool.query(`delete from voc_cluster.voc_clusters where workspace_id = $1 and primary_managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`, [WORKSPACE_ID, `${PREFIX}%`]);
-    await ops.pool.query(`delete from voc.voc_embeddings where voc_id in (${vocs})`, [WORKSPACE_ID, `${PREFIX}%`]);
-    await ops.pool.query(`delete from voc.vocs where id in (${vocs})`, [WORKSPACE_ID, `${PREFIX}%`]);
+    await ops.pool.query(
+      `delete from voc.voc_recommendation_decisions where source_voc_id in (${vocs})`,
+      [WORKSPACE_ID, `${PREFIX}%`],
+    );
+    await ops.pool.query(`delete from voc_cluster.voc_cluster_members where voc_id in (${vocs})`, [
+      WORKSPACE_ID,
+      `${PREFIX}%`,
+    ]);
+    await ops.pool.query(
+      `delete from voc_cluster.voc_clusters where workspace_id = $1 and primary_managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2)`,
+      [WORKSPACE_ID, `${PREFIX}%`],
+    );
+    await ops.pool.query(`delete from voc.voc_embeddings where voc_id in (${vocs})`, [
+      WORKSPACE_ID,
+      `${PREFIX}%`,
+    ]);
+    await ops.pool.query(`delete from voc.vocs where id in (${vocs})`, [
+      WORKSPACE_ID,
+      `${PREFIX}%`,
+    ]);
     // Everything with a foreign key onto `core.managed_systems` has to go
     // first, or Postgres raises `permission_grants_managed_system_id_..._fk`
     // and — because cleanup runs in both beforeEach and afterAll — takes every
@@ -160,15 +175,28 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
               or managed_system_id in (select id from core.managed_systems where workspace_id = $1 and slug like $2))`,
       [WORKSPACE_ID, `${PREFIX}%`],
     );
-    await ops.pool.query(`delete from core.managed_systems where workspace_id = $1 and slug like $2`, [WORKSPACE_ID, `${PREFIX}%`]);
-    await ops.pool.query(`delete from core.sessions where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`, [WORKSPACE_ID, `${PREFIX}%`]);
-    await ops.pool.query(`delete from core.actors where workspace_id = $1 and external_id like $2`, [WORKSPACE_ID, `${PREFIX}%`]);
+    await ops.pool.query(
+      `delete from core.managed_systems where workspace_id = $1 and slug like $2`,
+      [WORKSPACE_ID, `${PREFIX}%`],
+    );
+    await ops.pool.query(
+      `delete from core.sessions where actor_id in (select id from core.actors where workspace_id = $1 and external_id like $2)`,
+      [WORKSPACE_ID, `${PREFIX}%`],
+    );
+    await ops.pool.query(
+      `delete from core.actors where workspace_id = $1 and external_id like $2`,
+      [WORKSPACE_ID, `${PREFIX}%`],
+    );
     await ops.pool.query('delete from core.rate_limits');
   }
 
   it('GET returns the service result that parses against the shared discriminated DTO', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');
-    const response = await app.inject({ method: 'GET', url: `/vocs/${sourceId}/recommendations`, headers: headers(cookie) });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/vocs/${sourceId}/recommendations`,
+      headers: headers(cookie),
+    });
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toBe('private, no-cache');
     const body = vocRecommendationsResponseSchema.parse(response.json());
@@ -178,34 +206,70 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
 
   it('dismisses with 204 and writes one complete dismissal audit row', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');
-    const response = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${candidateId}/dismiss`, headers: headers(cookie) });
+    const response = await app.inject({
+      method: 'POST',
+      url: `/vocs/${sourceId}/recommendations/${candidateId}/dismiss`,
+      headers: headers(cookie),
+    });
     expect(response.statusCode).toBe(204);
     expect(response.body).toBe('');
-    const audit = await ops.pool.query<{ event_type: string; subject_type: string; subject_id: string; detail: Record<string, unknown> }>(
-      `select event_type, subject_type, subject_id, detail from core.audit_log where workspace_id = $1 and event_type = 'voc_recommendation_dismissed'`, [WORKSPACE_ID],
+    const audit = await ops.pool.query<{
+      event_type: string;
+      subject_type: string;
+      subject_id: string;
+      detail: Record<string, unknown>;
+    }>(
+      `select event_type, subject_type, subject_id, detail from core.audit_log where workspace_id = $1 and event_type = 'voc_recommendation_dismissed'`,
+      [WORKSPACE_ID],
     );
     expect(audit.rows).toHaveLength(1);
-    expect(audit.rows[0]).toMatchObject({ event_type: 'voc_recommendation_dismissed', subject_type: 'voc', subject_id: sourceId });
-    expect(audit.rows[0]?.detail).toMatchObject({ source_voc_id: sourceId, candidate_voc_id: candidateId, embedding_version: VERSION, scope_key: `ms:${managedSystemId}` });
+    expect(audit.rows[0]).toMatchObject({
+      event_type: 'voc_recommendation_dismissed',
+      subject_type: 'voc',
+      subject_id: sourceId,
+    });
+    expect(audit.rows[0]?.detail).toMatchObject({
+      source_voc_id: sourceId,
+      candidate_voc_id: candidateId,
+      embedding_version: VERSION,
+      scope_key: `ms:${managedSystemId}`,
+    });
   });
 
   it('confirms with the cluster result and one confirmation audit row', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');
-    const response = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${candidateId}/confirm`, headers: headers(cookie) });
+    const response = await app.inject({
+      method: 'POST',
+      url: `/vocs/${sourceId}/recommendations/${candidateId}/confirm`,
+      headers: headers(cookie),
+    });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ cluster_created: true });
     const audit = await ops.pool.query<{ detail: Record<string, unknown> }>(
-      `select detail from core.audit_log where workspace_id = $1 and event_type = 'voc_recommendation_confirmed'`, [WORKSPACE_ID],
+      `select detail from core.audit_log where workspace_id = $1 and event_type = 'voc_recommendation_confirmed'`,
+      [WORKSPACE_ID],
     );
     expect(audit.rows).toHaveLength(1);
-    expect(audit.rows[0]?.detail).toMatchObject({ source_voc_id: sourceId, candidate_voc_id: candidateId, embedding_version: VERSION, primary_managed_system_id: managedSystemId });
+    expect(audit.rows[0]?.detail).toMatchObject({
+      source_voc_id: sourceId,
+      candidate_voc_id: candidateId,
+      embedding_version: VERSION,
+      primary_managed_system_id: managedSystemId,
+    });
   });
 
   it('rejects malformed identifiers before the service and missing sessions in middleware', async () => {
     const cookie = await loginAs(app, 'mock-admin-1');
-    const malformed = await app.inject({ method: 'GET', url: '/vocs/not-a-uuid/recommendations', headers: headers(cookie) });
+    const malformed = await app.inject({
+      method: 'GET',
+      url: '/vocs/not-a-uuid/recommendations',
+      headers: headers(cookie),
+    });
     expect(malformed.statusCode).toBe(422);
-    expect(malformed.json()).toMatchObject({ code: 'validation.failed', detail: { fields: [{ path: ['id'], code: 'invalid' }] } });
+    expect(malformed.json()).toMatchObject({
+      code: 'validation.failed',
+      detail: { fields: [{ path: ['id'], code: 'invalid' }] },
+    });
     // The candidate segment has its own guard on the POST routes; a valid :id
     // with a malformed :candidate_id must be rejected on the candidate path,
     // not blamed on `id` and not passed through to the service.
@@ -221,7 +285,10 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
     }>;
     expect(malformedCandidate.json().code).toBe('validation.failed');
     expect(candidateFields[0]).toEqual({ path: ['candidate_id'], code: 'invalid' });
-    const unauthenticated = await app.inject({ method: 'GET', url: `/vocs/${sourceId}/recommendations` });
+    const unauthenticated = await app.inject({
+      method: 'GET',
+      url: `/vocs/${sourceId}/recommendations`,
+    });
     expect(unauthenticated.statusCode).toBe(401);
   });
 
@@ -230,8 +297,16 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
     const actorId = await insertActor(externalId);
     const cookie = await loginAs(app, externalId);
     const nonexistent = '00000000-0000-4000-8000-000000000000';
-    const sourceHidden = await app.inject({ method: 'GET', url: `/vocs/${sourceId}/recommendations`, headers: headers(cookie) });
-    const sourceMissing = await app.inject({ method: 'GET', url: `/vocs/${nonexistent}/recommendations`, headers: headers(cookie) });
+    const sourceHidden = await app.inject({
+      method: 'GET',
+      url: `/vocs/${sourceId}/recommendations`,
+      headers: headers(cookie),
+    });
+    const sourceMissing = await app.inject({
+      method: 'GET',
+      url: `/vocs/${nonexistent}/recommendations`,
+      headers: headers(cookie),
+    });
     expectIndistinguishableNotFound(sourceHidden, sourceMissing);
 
     await grantRead(actorId, managedSystemId);
@@ -248,8 +323,16 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
     // ADR-0034 D4 covers all three routes, so the confirm route is checked on
     // the same fixture rather than assumed to inherit dismiss's behaviour.
     for (const action of ['dismiss', 'confirm'] as const) {
-      const candidateHidden = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${hiddenCandidateId}/${action}`, headers: headers(cookie) });
-      const candidateMissing = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${nonexistent}/${action}`, headers: headers(cookie) });
+      const candidateHidden = await app.inject({
+        method: 'POST',
+        url: `/vocs/${sourceId}/recommendations/${hiddenCandidateId}/${action}`,
+        headers: headers(cookie),
+      });
+      const candidateMissing = await app.inject({
+        method: 'POST',
+        url: `/vocs/${sourceId}/recommendations/${nonexistent}/${action}`,
+        headers: headers(cookie),
+      });
       expectIndistinguishableNotFound(candidateHidden, candidateMissing);
     }
   });
@@ -265,10 +348,20 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
       [WORKSPACE_ID, otherSystem.rows[0]?.id, adminId],
     );
     const cookie = await loginAs(app, 'mock-admin-1');
-    const response = await app.inject({ method: 'POST', url: `/vocs/${sourceId}/recommendations/${row.rows[0]?.id}/confirm`, headers: headers(cookie) });
+    const response = await app.inject({
+      method: 'POST',
+      url: `/vocs/${sourceId}/recommendations/${row.rows[0]?.id}/confirm`,
+      headers: headers(cookie),
+    });
     expect(response.statusCode).toBe(422);
-    expect(response.json()).toMatchObject({ code: 'validation.failed', detail: { fields: [{ path: ['candidate_voc_id'], code: 'out_of_scope' }] } });
-    const decisions = await ops.pool.query(`select 1 from voc.voc_recommendation_decisions where source_voc_id = $1`, [sourceId]);
+    expect(response.json()).toMatchObject({
+      code: 'validation.failed',
+      detail: { fields: [{ path: ['candidate_voc_id'], code: 'out_of_scope' }] },
+    });
+    const decisions = await ops.pool.query(
+      `select 1 from voc.voc_recommendation_decisions where source_voc_id = $1`,
+      [sourceId],
+    );
     expect(decisions.rows).toHaveLength(0);
     // The rejection happens before the cluster service is reached, so neither
     // Managed System may end up with a cluster row: a decision-only assertion
@@ -296,24 +389,44 @@ describe.skipIf(!runIntegration)('VOC recommendation HTTP routes (#168)', () => 
     );
     expect(grants.rows).toHaveLength(0);
 
-    const own = await app.inject({ method: 'GET', url: `/vocs/${reportedId}/recommendations`, headers: headers(cookie) });
+    const own = await app.inject({
+      method: 'GET',
+      url: `/vocs/${reportedId}/recommendations`,
+      headers: headers(cookie),
+    });
     expect(own.statusCode).toBe(200);
     expect(vocRecommendationsResponseSchema.parse(own.json()).available).toBe(true);
 
     // Control: the same actor still cannot reach a VOC of the same Managed
     // System that someone else reported, so the 200 above is the reporter arm
     // and not a missing check.
-    const notTheirs = await app.inject({ method: 'GET', url: `/vocs/${sourceId}/recommendations`, headers: headers(cookie) });
+    const notTheirs = await app.inject({
+      method: 'GET',
+      url: `/vocs/${sourceId}/recommendations`,
+      headers: headers(cookie),
+    });
     expect(notTheirs.statusCode).toBe(404);
   });
 
   it('boots an explicitly disabled provider and reports provider_disabled', async () => {
-    const disabled = await buildServer({ config: { ...loadConfig(), EMBEDDING_PROVIDER: 'disabled' }, dbHandle: appDb });
+    const disabled = await buildServer({
+      config: { ...loadConfig(), EMBEDDING_PROVIDER: 'disabled' },
+      dbHandle: appDb,
+    });
     await disabled.ready();
     const cookie = await loginAs(disabled, 'mock-admin-1');
-    const response = await disabled.inject({ method: 'GET', url: `/vocs/${sourceId}/recommendations`, headers: headers(cookie) });
+    const response = await disabled.inject({
+      method: 'GET',
+      url: `/vocs/${sourceId}/recommendations`,
+      headers: headers(cookie),
+    });
     expect(response.statusCode).toBe(200);
-    expect(vocRecommendationsResponseSchema.parse(response.json())).toMatchObject({ available: false, reason: 'provider_disabled', items: [], total: 0 });
+    expect(vocRecommendationsResponseSchema.parse(response.json())).toMatchObject({
+      available: false,
+      reason: 'provider_disabled',
+      items: [],
+      total: 0,
+    });
     await disabled.close();
   });
 });

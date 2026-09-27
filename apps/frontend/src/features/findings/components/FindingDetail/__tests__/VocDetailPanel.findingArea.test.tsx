@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
-vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({
+vi.mock('@/lib/cross-system/useVocDetail', () => ({ useVocDetail: vi.fn() }));
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
   useWorkspaceActors: () => ({ actors: [] }),
 }));
 vi.mock('@/lib/cross-system/getPermissionDecision', async (importOriginal) => {
@@ -76,8 +76,8 @@ import {
   makeDetailQuery,
   makeMeQuery,
 } from '@/features/voc/components/detail/__tests__/_fixtures';
-import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
 import { useMe } from '@/lib/auth/useMe';
+import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 
 const AREA_ID = '20000000-0000-4000-8000-000000000001';
 

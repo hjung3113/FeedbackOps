@@ -7,6 +7,7 @@
 import { sql } from 'drizzle-orm';
 
 import type { Db } from '../../db/client.js';
+import { sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 import {
   type Scope,
@@ -64,19 +65,6 @@ export async function actorReadScope(db: Db | Tx, actor: ActorContextLite): Prom
 /** voc.triage scope. Same shape as actorReadScope; admin → 'all'. */
 export async function actorTriageScope(db: Db | Tx, actor: ActorContextLite): Promise<Scope> {
   return actorScopeForCapability(db, actor as ScopeActorContext, 'voc.triage');
-}
-
-// ── SQL array helper ──────────────────────────────────────────────────────────
-// Drizzle's sql`` tag serializes JS arrays as postgres row/record literals, not
-// postgres array literals. To safely use ANY($arr::uuid[]), we build
-// ARRAY[v1, v2, ...]::uuid[] with individual parameterised slots.
-// This avoids string interpolation of user-supplied values.
-
-// Identical to the private helper in repo-read.ts; not exported.
-function sqlUuidArray(ids: string[]): ReturnType<typeof sql> {
-  if (ids.length === 0) return sql`ARRAY[]::uuid[]`;
-  const items = ids.map((id) => sql`${id}::uuid`);
-  return sql`ARRAY[${sql.join(items, sql`, `)}]::uuid[]`;
 }
 
 // ── Similar VOC visibility predicate (ADR-0031) ──────────────────────────────

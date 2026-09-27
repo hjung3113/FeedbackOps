@@ -33,7 +33,7 @@ FE-only mapping inside `useWorkspaceActors`; today every BE row maps to
 
 - Zod: `packages/shared/src/auth/list-actors.ts` → `listActorsResponseSchema`.
 - BE: `apps/backend/src/modules/auth/list-actors-routes.ts`.
-- FE consumer: `apps/frontend/src/features/voc/hooks/useWorkspaceActors.ts`.
+- FE consumer: `apps/frontend/src/lib/cross-system/useWorkspaceActors.ts`.
 
 ## Drift guards
 

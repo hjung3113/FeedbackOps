@@ -1,5 +1,5 @@
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
 import { useMe } from '@/lib/auth/useMe';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 
 /** Capability decisions are authoritative; /me is only a fail-closed readiness gate. */
 export function useSurveyManageGate(managedSystemId?: string) {

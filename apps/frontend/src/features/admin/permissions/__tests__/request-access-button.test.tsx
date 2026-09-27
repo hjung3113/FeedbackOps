@@ -2,8 +2,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import {
+  permissionCheckQueryKey,
+  permissionRequestsMineKey,
+} from '@/lib/cross-system/usePermissionCheck';
 import { RequestAccessButton } from '../request-access-button.js';
-import { permissionCheckQueryKey, permissionRequestsMineKey } from '../use-permission-check.js';
 
 const CAPABILITY = 'finding.manage';
 const MANAGED_SYSTEM_ID = '11111111-1111-4111-8111-111111111111';

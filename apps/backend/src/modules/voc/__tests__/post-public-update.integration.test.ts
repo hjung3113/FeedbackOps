@@ -17,18 +17,13 @@ import { ERROR_CODES } from '@fops/shared';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import {
-  SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
-  insertVocDirectly,
-  loginAs,
-  paragraphDoc,
-  randomUUID as seedRandomUUID,
-  uid,
-} from './_seed-helpers.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -39,7 +34,9 @@ const SLUG_PREFIX = 'it-pubupd';
 
 // ── Audit helpers ─────────────────────────────────────────────────────────────
 
-async function getAuditRows(vocId: string): Promise<Array<{ event_type: string; detail: Record<string, unknown> }>> {
+async function getAuditRows(
+  vocId: string,
+): Promise<Array<{ event_type: string; detail: Record<string, unknown> }>> {
   if (!MIGRATE_URL) return [];
   const ops = createDb(MIGRATE_URL);
   try {
@@ -178,14 +175,21 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     });
 
     expect(res.statusCode).toBe(201);
-    const body = res.json<{ public_update: Record<string, unknown>; voc: Record<string, unknown> }>();
+    const body = res.json<{
+      public_update: Record<string, unknown>;
+      voc: Record<string, unknown>;
+    }>();
     expect(body.public_update.id).toBeDefined();
     expect(body.public_update.skip_public_update).toBe(false);
     expect(body.public_update.skip_reason).toBeNull();
     expect(body.voc.reporter_facing_status).toBe('reviewing');
 
     // DB: voc_public_updates row exists
-    const row = await dbHandle.pool.query<{ id: string; reporter_facing_status_after: string; skip_public_update: boolean }>(
+    const row = await dbHandle.pool.query<{
+      id: string;
+      reporter_facing_status_after: string;
+      skip_public_update: boolean;
+    }>(
       `select id, reporter_facing_status_after, skip_public_update
          from voc.voc_public_updates where id = $1`,
       [body.public_update.id as string],
@@ -225,7 +229,10 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     });
 
     expect(res.statusCode).toBe(201);
-    const resBody = res.json<{ public_update: Record<string, unknown>; voc: Record<string, unknown> }>();
+    const resBody = res.json<{
+      public_update: Record<string, unknown>;
+      voc: Record<string, unknown>;
+    }>();
     expect(resBody.voc.reporter_facing_status).toBe('received');
 
     const vocRow = await dbHandle.pool.query<{ reporter_facing_status: string }>(
@@ -241,7 +248,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   });
 
   it('returns the same hydrated similarity projection as GET detail', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-similar`, 'Similarity MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-similar`,
+      'Similarity MS',
+    );
     const voc = await insertVoc(msId, 'Similarity source');
     const peerOne = await insertVoc(msId, 'Similarity peer one');
     const peerTwo = await insertVoc(msId, 'Similarity peer two');
@@ -258,7 +270,9 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     }>();
     expect(mutationBody.voc.similar_count).toBe(2);
     expect(mutationBody.voc.similar.items).toHaveLength(2);
-    expect(mutationBody.voc.similar.items.map((item) => item.id)).toEqual(expect.arrayContaining([peerOne.id, peerTwo.id]));
+    expect(mutationBody.voc.similar.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([peerOne.id, peerTwo.id]),
+    );
 
     const detail = await app.inject({
       method: 'GET',
@@ -268,7 +282,8 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     expect(detail.statusCode).toBe(200);
 
     const detailBody = detail.json<{
-      similar_count: number; similar: { items: Array<{ id: string }> };
+      similar_count: number;
+      similar: { items: Array<{ id: string }> };
     }>();
     expect(mutationBody.voc.similar_count).toBe(detailBody.similar_count);
     expect(mutationBody.voc.similar.items).toEqual(detailBody.similar.items);
@@ -287,7 +302,10 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     });
 
     expect(res.statusCode).toBe(201);
-    const resBody = res.json<{ public_update: Record<string, unknown>; voc: Record<string, unknown> }>();
+    const resBody = res.json<{
+      public_update: Record<string, unknown>;
+      voc: Record<string, unknown>;
+    }>();
     expect(resBody.public_update.skip_public_update).toBe(true);
     expect(resBody.public_update.body_rich_content).toBeNull();
     expect(resBody.public_update.skip_reason).toBe('skipping this update for now');
@@ -315,7 +333,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── body-only with next not in allowed → 422 reporter_facing_status.invalid_transition ──
 
   it('body-only with invalid next (not in allowed) → 422 reporter_facing_status.invalid_transition', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-inv`, 'Inv MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-inv`,
+      'Inv MS',
+    );
     const voc = await insertVoc(msId, 'Inv VOC');
 
     // 'resolved' is forbidden from 'received' with a reason
@@ -332,7 +355,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── forbidden transition → 422 with detail.reason from seed ──
 
   it('forbidden transition → 422 reporter_facing_status.invalid_transition with detail.reason', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-forb`, 'Forb MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-forb`,
+      'Forb MS',
+    );
     const voc = await insertVoc(msId, 'Forb VOC');
 
     // received → resolved is explicitly forbidden with a Korean reason in seed data
@@ -343,7 +371,10 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     });
 
     expect(res.statusCode).toBe(422);
-    const body = res.json<{ code: string; detail: { detail?: { reason?: unknown }; fields?: unknown[] } }>();
+    const body = res.json<{
+      code: string;
+      detail: { detail?: { reason?: unknown }; fields?: unknown[] };
+    }>();
     expect(body.code).toBe('reporter_facing_status.invalid_transition');
     // The error detail is nested: body.detail.detail.reason (see conversation-service.ts line ~258)
     const nestedDetail = body.detail?.detail;
@@ -358,7 +389,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── skip + next === current → 422 validation.failed ──
 
   it('skip + next === current → 422 validation.failed (skip requires status change)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-skipnoop`, 'Skip Noop MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-skipnoop`,
+      'Skip Noop MS',
+    );
     const voc = await insertVoc(msId, 'Skip Noop VOC');
 
     const res = await postPublicUpdate(adminCookie, voc.id, {
@@ -374,7 +410,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── skip with skip_reason.length < 8 trimmed → 422 validation.failed ──
 
   it('skip with skip_reason too short (< 8 chars trimmed) → 422 validation.failed', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-skipshr`, 'Skip Short MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-skipshr`,
+      'Skip Short MS',
+    );
     const voc = await insertVoc(msId, 'Skip Short VOC');
 
     const res = await postPublicUpdate(adminCookie, voc.id, {
@@ -392,7 +433,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // → zod rejects → 422 validation.failed (issue #16 AC).
 
   it('skip + body_rich_content present → 422 validation.failed', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-skipbody`, 'Skip Body MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-skipbody`,
+      'Skip Body MS',
+    );
     const voc = await insertVoc(msId, 'Skip Body VOC');
 
     const res = await postPublicUpdate(adminCookie, voc.id, {
@@ -409,10 +455,19 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── non-MS dev → 403 permission.scope_required ──
 
   it('developer without MS-scoped voc.triage grant → 403 permission.scope_required', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-dev403`, 'Dev 403 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-dev403`,
+      'Dev 403 MS',
+    );
     const voc = await insertVoc(msId, 'Dev 403 VOC');
 
-    const { externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, `pubupd-dev-${randomUUID().slice(0, 8)}`);
+    const { externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `pubupd-dev-${randomUUID().slice(0, 8)}`,
+    );
     const devCookie = await loginAs(app, externalId);
 
     const res = await postPublicUpdate(devCookie, voc.id, {
@@ -428,7 +483,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── Sanitizer attr-injection (#23) ────────────────────────────────────
 
   it('body with link mark (not in public-update allowlist) + extra target attr → 422 disallowed_node', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-atki`, 'AtKI MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-atki`,
+      'AtKI MS',
+    );
     const voc = await insertVoc(msId, 'AtKI VOC');
 
     // public-update has no attachmentRef; use link mark on paragraph instead.
@@ -460,7 +520,10 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
 
     expect(res.statusCode).toBe(422);
     expect(res.json<{ code: string }>().code).toBe('rich_content.disallowed_node');
-    expect(res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail?.fields?.[0]?.path).toEqual(['body_rich_content']);
+    expect(
+      res.json<{ detail: { fields: Array<{ path: string[]; code: string }> } }>().detail
+        ?.fields?.[0]?.path,
+    ).toEqual(['body_rich_content']);
   });
 
   // ── gate stub: evaluateReporterStatusGate returns null ──
@@ -473,7 +536,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── migration 0012 invariants ──
 
   it('migration 0012: voc_public_updates.body_rich_content is nullable (skip row succeeds)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-mig12`, 'Mig12 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-mig12`,
+      'Mig12 MS',
+    );
     const voc = await insertVoc(msId, 'Mig12 VOC');
 
     // Direct raw INSERT of a skip row with body=NULL — must succeed
@@ -488,7 +556,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   });
 
   it('migration 0012: non-skip row with skip_reason set → CHECK violation', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-chk1`, 'Chk1 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-chk1`,
+      'Chk1 MS',
+    );
     const voc = await insertVoc(msId, 'Chk1 VOC');
 
     await expect(
@@ -502,7 +575,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   });
 
   it('migration 0012: skip row with skip_reason length < 8 trimmed → CHECK violation', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-chk2`, 'Chk2 MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-chk2`,
+      'Chk2 MS',
+    );
     const voc = await insertVoc(msId, 'Chk2 VOC');
 
     await expect(
@@ -523,17 +601,26 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // table must not contain a row for the failed request. This proves the service
   // does not commit partial state.
   it('tx isolation: failed request (403) leaves no voc_public_updates row', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-txrb`, 'TxRb MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-txrb`,
+      'TxRb MS',
+    );
     const voc = await insertVoc(msId, 'TxRb VOC');
 
     const countBefore = await dbHandle.pool.query<{ n: string }>(
       `select count(*)::text as n from voc.voc_public_updates where voc_id = $1`,
       [voc.id],
     );
-    const beforeCount = parseInt(countBefore.rows[0]?.n ?? '0', 10);
+    const beforeCount = Number.parseInt(countBefore.rows[0]?.n ?? '0', 10);
 
     // Use dev actor without grant → 403 before INSERT
-    const { externalId } = await insertDevActor(dbHandle, WORKSPACE_ID, `pubupd-txrb-${randomUUID().slice(0, 8)}`);
+    const { externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `pubupd-txrb-${randomUUID().slice(0, 8)}`,
+    );
     const devCookie = await loginAs(app, externalId);
 
     const res = await postPublicUpdate(devCookie, voc.id, {
@@ -547,13 +634,18 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
       `select count(*)::text as n from voc.voc_public_updates where voc_id = $1`,
       [voc.id],
     );
-    expect(parseInt(countAfter.rows[0]?.n ?? '0', 10)).toBe(beforeCount);
+    expect(Number.parseInt(countAfter.rows[0]?.n ?? '0', 10)).toBe(beforeCount);
   });
 
   // ── idempotency: same key + same body replay → 201 ──
 
   it('idempotency replay: same key+body → 201×2, same public_update.id', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-idem`, 'Idem MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-idem`,
+      'Idem MS',
+    );
     const voc = await insertVoc(msId, 'Idem VOC');
 
     const key = randomUUID();
@@ -578,7 +670,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── idempotency: same key + different body → 409 ──
 
   it('idempotency key reuse with different body → 409 conflict.idempotency_key_reuse', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-idemmm`, 'IdemMm MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-idemmm`,
+      'IdemMm MS',
+    );
     const voc = await insertVoc(msId, 'IdemMm VOC');
 
     const key = randomUUID();
@@ -586,7 +683,11 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     const res1 = await postPublicUpdate(
       adminCookie,
       voc.id,
-      { skip_public_update: false, body_rich_content: paragraphDoc('first'), next_reporter_facing_status: 'received' },
+      {
+        skip_public_update: false,
+        body_rich_content: paragraphDoc('first'),
+        next_reporter_facing_status: 'received',
+      },
       key,
     );
     expect(res1.statusCode).toBe(201);
@@ -594,7 +695,11 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
     const res2 = await postPublicUpdate(
       adminCookie,
       voc.id,
-      { skip_public_update: false, body_rich_content: paragraphDoc('different'), next_reporter_facing_status: 'received' },
+      {
+        skip_public_update: false,
+        body_rich_content: paragraphDoc('different'),
+        next_reporter_facing_status: 'received',
+      },
       key,
     );
     expect(res2.statusCode).toBe(409);
@@ -610,7 +715,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // → idempotency lookup misses → 409 conflict.idempotency_key_reuse.
 
   it('idempotency: same key + same body across different routes → 409 (route discriminator in hash)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-xrt`, 'X-route MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-xrt`,
+      'X-route MS',
+    );
     const voc = await insertVoc(msId, 'X-route VOC');
     const key = randomUUID();
     const sharedBody = { body_rich_content: paragraphDoc('cross-route body') };
@@ -660,7 +770,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── archived VOC → 409 conflict.record_archived ──
 
   it('archived VOC → 409 conflict.record_archived', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-arcvoc`, 'Arc Voc MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-arcvoc`,
+      'Arc Voc MS',
+    );
     const voc = await insertVoc(msId, 'Arc Voc VOC');
 
     await dbHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [voc.id]);
@@ -677,10 +792,17 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
 
   // ── archived parent MS → 409 conflict.parent_archived ──
   it('archived parent MS → 409 conflict.parent_archived', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-arcms`, 'Arc Ms MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-arcms`,
+      'Arc Ms MS',
+    );
     const voc = await insertVoc(msId, 'Arc Ms VOC');
 
-    await dbHandle.pool.query(`update core.managed_systems set archived_at = now() where id = $1`, [msId]);
+    await dbHandle.pool.query(`update core.managed_systems set archived_at = now() where id = $1`, [
+      msId,
+    ]);
 
     const res = await postPublicUpdate(adminCookie, voc.id, {
       skip_public_update: false,
@@ -697,7 +819,11 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   it('rate limit: 11th POST within 60s → 429 rate_limited.actor', async () => {
     const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-rl`, 'RL MS');
     // Use fresh actor to avoid polluting shared rate-limit bucket.
-    const { externalId: devExtId, id: devId } = await insertDevActor(dbHandle, WORKSPACE_ID, `pubupd-rl-${randomUUID().slice(0, 8)}`);
+    const { externalId: devExtId, id: devId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      `pubupd-rl-${randomUUID().slice(0, 8)}`,
+    );
     await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
     const devCookie = await loginAs(app, devExtId);
 
@@ -734,9 +860,18 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   it.skipIf(!MIGRATE_URL)(
     'triage-only actor → 201 and envelope voc.links is [] despite an active link (ADR-0047)',
     async () => {
-      const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-trilnk`, 'Triage Links MS');
+      const msId = await insertMsDirectly(
+        dbHandle,
+        WORKSPACE_ID,
+        `${uid(SLUG_PREFIX)}-trilnk`,
+        'Triage Links MS',
+      );
       // Fresh actor holding only voc.triage on the MS (no voc.read, not reporter).
-      const { externalId: devExtId, id: devId } = await insertDevActor(dbHandle, WORKSPACE_ID, `pubupd-trilnk-${randomUUID().slice(0, 8)}`);
+      const { externalId: devExtId, id: devId } = await insertDevActor(
+        dbHandle,
+        WORKSPACE_ID,
+        `pubupd-trilnk-${randomUUID().slice(0, 8)}`,
+      );
       await grantCapability(dbHandle, WORKSPACE_ID, devId, 'voc.triage', msId, adminActorId);
       const devCookie = await loginAs(app, devExtId);
 
@@ -798,10 +933,17 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   it.skipIf(!MIGRATE_URL)(
     'admin with explicit voc.read deny → 201 and envelope voc.links is [] despite an active link (ADR-0047)',
     async () => {
-      const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-admdeny`, 'Admin Deny Links MS');
+      const msId = await insertMsDirectly(
+        dbHandle,
+        WORKSPACE_ID,
+        `${uid(SLUG_PREFIX)}-admdeny`,
+        'Admin Deny Links MS',
+      );
       // Second admin actor: not the VOC reporter; admins derive voc.read and
       // voc.triage from role, so no grants are needed.
-      const { externalId: adminExtId, id: deniedAdminId } = await insertAdminActor(`pubupd-admdeny-${randomUUID().slice(0, 8)}`);
+      const { externalId: adminExtId, id: deniedAdminId } = await insertAdminActor(
+        `pubupd-admdeny-${randomUUID().slice(0, 8)}`,
+      );
       const deniedAdminCookie = await loginAs(app, adminExtId);
 
       const voc = await insertVoc(msId, 'Admin Deny Links VOC');
@@ -857,7 +999,12 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
   // ── PLAN-22 C7b — attachment_ids linking on body shape ──────────────────
 
   it('attachment_ids on body shape → 201 + linked to public_update (PLAN-22 C7b)', async () => {
-    const msId = await insertMsDirectly(dbHandle, WORKSPACE_ID, `${uid(SLUG_PREFIX)}-puatt`, 'PU Att MS');
+    const msId = await insertMsDirectly(
+      dbHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-puatt`,
+      'PU Att MS',
+    );
     const voc = await insertVoc(msId, 'PU Att VOC');
 
     // Admin uploads — seed owned by admin.
@@ -884,10 +1031,9 @@ describe.skipIf(!runIntegration)('POST /vocs/:id/public-updates (#16 C5)', () =>
       comment_id: string;
       comment_kind: string;
       linked_at: Date | null;
-    }>(
-      `select comment_id, comment_kind, linked_at from voc.voc_attachments where id = $1`,
-      [attachmentId],
-    );
+    }>(`select comment_id, comment_kind, linked_at from voc.voc_attachments where id = $1`, [
+      attachmentId,
+    ]);
     expect(linked.rows[0]?.comment_id).toBe(updateId);
     expect(linked.rows[0]?.comment_kind).toBe('public_update');
     expect(linked.rows[0]?.linked_at).not.toBeNull();

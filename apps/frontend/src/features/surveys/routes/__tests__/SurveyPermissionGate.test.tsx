@@ -7,7 +7,7 @@ const { useMe, usePermissionCheck } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/auth/useMe', () => ({ useMe }));
-vi.mock('@/features/admin/permissions/use-permission-check', () => ({
+vi.mock('@/lib/cross-system/usePermissionCheck', () => ({
   usePermissionCheck,
 }));
 

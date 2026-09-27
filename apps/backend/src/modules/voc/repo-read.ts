@@ -19,29 +19,12 @@ import {
   vocReporterReplies,
   vocs,
 } from '../../db/schema/voc.js';
+import { sqlTextArray, sqlUuidArray } from '../../db/sql-arrays.js';
 import type { Tx } from '../../db/tx.js';
 import { normalizePgTimestampToIso } from '../../lib/pg-timestamp.js';
 import { allManagedSystemIds } from '../managed-systems/read-projections.js';
 import { type Scope, similarVocVisibilityPredicate } from './authorization.js';
 import { SEVERITY_ORDINAL, SORT_CONFIG } from './cursor.js';
-
-// ── SQL array helpers ─────────────────────────────────────────────────────────
-// Drizzle's sql`` tag serializes JS arrays as postgres row/record literals, not
-// postgres array literals. To safely use ANY($arr::uuid[]), we build
-// ARRAY[v1, v2, ...]::uuid[] with individual parameterised slots.
-// This avoids string interpolation of user-supplied values.
-
-function sqlUuidArray(ids: string[]): ReturnType<typeof sql> {
-  if (ids.length === 0) return sql`ARRAY[]::uuid[]`;
-  const items = ids.map((id) => sql`${id}::uuid`);
-  return sql`ARRAY[${sql.join(items, sql`, `)}]::uuid[]`;
-}
-
-function sqlTextArray(values: string[]): ReturnType<typeof sql> {
-  if (values.length === 0) return sql`ARRAY[]::text[]`;
-  const items = values.map((v) => sql`${v}::text`);
-  return sql`ARRAY[${sql.join(items, sql`, `)}]::text[]`;
-}
 
 // ── VocReadRow ────────────────────────────────────────────────────────────────
 

@@ -6,8 +6,8 @@
 
 import type { ReactNode } from 'react';
 
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { PermissionStateView } from './permission-state-view.js';
-import { usePermissionCheck } from './use-permission-check.js';
 
 export interface PermissionGateProps {
   capability: string;

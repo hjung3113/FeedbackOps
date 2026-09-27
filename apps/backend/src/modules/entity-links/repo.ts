@@ -1,13 +1,11 @@
-import { sql } from "drizzle-orm";
+import { sql } from 'drizzle-orm';
 
-import type {
-  EntityLinkEntityType,
-  EntityLinkRelationType,
-} from "@fops/shared";
+import type { EntityLinkEntityType, EntityLinkRelationType } from '@fops/shared';
 
-import type { Db } from "../../db/client.js";
-import { vocs } from "../../db/schema/voc.js";
-import type { Tx } from "../../db/tx.js";
+import type { Db } from '../../db/client.js';
+import { vocs } from '../../db/schema/voc.js';
+import { sqlTextArray } from '../../db/sql-arrays.js';
+import type { Tx } from '../../db/tx.js';
 
 export interface LinkEndpointRow {
   workspace_id: string;
@@ -23,12 +21,8 @@ export interface EntityLinkRow {
   target_type: EntityLinkEntityType;
   target_id: string;
   relation_type: EntityLinkRelationType;
-  visibility:
-    | "internal_only"
-    | "summary_visible"
-    | "visible_to_reporter"
-    | "admin_only";
-  status: "active" | "stale" | "detached" | "revoked";
+  visibility: 'internal_only' | 'summary_visible' | 'visible_to_reporter' | 'admin_only';
+  status: 'active' | 'stale' | 'detached' | 'revoked';
   managed_system_id: string;
   created_by: string;
   created_at: Date;
@@ -82,14 +76,12 @@ function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
     target_type: row.target_type as EntityLinkEntityType,
     target_id: row.target_id as string,
     relation_type: row.relation_type as EntityLinkRelationType,
-    visibility: row.visibility as EntityLinkRow["visibility"],
-    status: row.status as EntityLinkRow["status"],
+    visibility: row.visibility as EntityLinkRow['visibility'],
+    status: row.status as EntityLinkRow['status'],
     managed_system_id: row.managed_system_id as string,
     created_by: row.created_by as string,
     created_at:
-      row.created_at instanceof Date
-        ? row.created_at
-        : new Date(row.created_at as string),
+      row.created_at instanceof Date ? row.created_at : new Date(row.created_at as string),
     updated_at:
       row.updated_at === null || row.updated_at === undefined
         ? null
@@ -105,12 +97,6 @@ function mapEntityLinkRow(row: Record<string, unknown>): EntityLinkRow {
           ? row.detached_at
           : new Date(row.detached_at as string),
   };
-}
-
-function sqlTextArray(values: string[]): ReturnType<typeof sql> {
-  if (values.length === 0) return sql`ARRAY[]::text[]`;
-  const items = values.map((value) => sql`${value}::text`);
-  return sql`ARRAY[${sql.join(items, sql`, `)}]::text[]`;
 }
 
 export async function resolveVocEndpoint(
@@ -145,23 +131,23 @@ export async function insertActiveEntityLink(
     relationType: EntityLinkRelationType;
     managedSystemId: string;
     createdBy: string;
-    visibility: "internal_only" | "summary_visible";
+    visibility: 'internal_only' | 'summary_visible';
     /**
      * Capability for the sole non-public creation path allowed to persist a
      * reporter summary token. This is intentionally not inferred from tuple
      * shape: direct POST /entity-links must remain internal_only.
      */
-    internalWritePath?: "task_request_conversion";
+    internalWritePath?: 'task_request_conversion';
   },
 ): Promise<{ row: EntityLinkRow; inserted: boolean }> {
   const isConversionSummaryLink =
-    input.visibility === "summary_visible" &&
-    input.internalWritePath === "task_request_conversion" &&
-    input.sourceType === "voc" &&
-    input.targetType === "task" &&
-    input.relationType === "evidence_of";
-  if (input.visibility !== "internal_only" && !isConversionSummaryLink) {
-    throw new Error("summary_visible requires the task-request conversion write path");
+    input.visibility === 'summary_visible' &&
+    input.internalWritePath === 'task_request_conversion' &&
+    input.sourceType === 'voc' &&
+    input.targetType === 'task' &&
+    input.relationType === 'evidence_of';
+  if (input.visibility !== 'internal_only' && !isConversionSummaryLink) {
+    throw new Error('summary_visible requires the task-request conversion write path');
   }
 
   const inserted = await (tx as Db).execute<Record<string, unknown>>(sql`
@@ -183,8 +169,7 @@ export async function insertActiveEntityLink(
       created_at, updated_at, detached_by, detach_reason, detached_at
   `);
   const insertedRow = inserted.rows[0];
-  if (insertedRow)
-    return { row: mapEntityLinkRow(insertedRow), inserted: true };
+  if (insertedRow) return { row: mapEntityLinkRow(insertedRow), inserted: true };
 
   const existing = await selectActiveEntityLink(tx, {
     workspaceId: input.workspaceId,
@@ -195,7 +180,7 @@ export async function insertActiveEntityLink(
     relationType: input.relationType,
   });
   if (!existing) {
-    throw new Error("entity link conflict did not return existing active row");
+    throw new Error('entity link conflict did not return existing active row');
   }
   return { row: existing, inserted: false };
 }
@@ -236,13 +221,13 @@ export async function selectActiveLinksForEndpoint(
     workspaceId: string;
     endpointType: EntityLinkEntityType;
     endpointId: string;
-    side?: "source" | "target";
+    side?: 'source' | 'target';
   },
 ): Promise<EntityLinkRow[]> {
   const sidePredicate =
-    input.side === "source"
+    input.side === 'source'
       ? sql`source_type = ${input.endpointType} AND source_id = ${input.endpointId}`
-      : input.side === "target"
+      : input.side === 'target'
         ? sql`target_type = ${input.endpointType} AND target_id = ${input.endpointId}`
         : sql`(
             (source_type = ${input.endpointType} AND source_id = ${input.endpointId})
@@ -267,8 +252,8 @@ export async function selectLinksByWorkspace(
   db: Db | Tx,
   input: {
     workspaceId: string;
-    statuses?: EntityLinkRow["status"][];
-    relationType?: EntityLinkRow["relation_type"];
+    statuses?: EntityLinkRow['status'][];
+    relationType?: EntityLinkRow['relation_type'];
     managedSystemId?: string;
   },
 ): Promise<EntityLinkRow[]> {

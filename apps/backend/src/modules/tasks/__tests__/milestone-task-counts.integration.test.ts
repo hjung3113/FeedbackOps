@@ -16,13 +16,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import {
-  SESSION_COOKIE_NAME,
-  cleanupReadTestTables,
-  insertMsDirectly,
-  loginAs,
-  uid,
-} from '../../voc/__tests__/_seed-helpers.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { cleanupReadTestTables } from '../../../test-support/voc-fixtures.js';
 import { countTasksByMilestone } from '../index.js';
 import { insertTaskRow } from './_seed-helpers.js';
 

@@ -20,26 +20,14 @@
  *   "Area 미지정" color: var(--color-amber) → text-text-warning
  */
 
-import * as React from 'react';
+import { formatRelativeTime } from '@/lib/datetime';
 import type { VocListItem } from '@fops/shared';
-import { SeverityIndicator, ReporterStatusBadge, cn } from '@fops/ui';
+import { ReporterStatusBadge, SeverityIndicator, cn } from '@fops/ui';
+import type * as React from 'react';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function formatRelativeTime(iso: string): string {
-  const now = Date.now();
-  const then = new Date(iso).getTime();
-  const diffMs = then - now;
-  const diffMin = Math.round(diffMs / 60000);
-  const rtf = new Intl.RelativeTimeFormat('ko', { numeric: 'auto' });
-  if (Math.abs(diffMin) < 60) return rtf.format(diffMin, 'minute');
-  const diffHour = Math.round(diffMin / 60);
-  if (Math.abs(diffHour) < 24) return rtf.format(diffHour, 'hour');
-  const diffDay = Math.round(diffHour / 24);
-  return rtf.format(diffDay, 'day');
-}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -119,21 +107,30 @@ export function TriageRow({
 
           {areaMissing && (
             <>
-              <span className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0" aria-hidden="true" />
+              <span
+                className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
+                aria-hidden="true"
+              />
               <span className="text-text-warning">Area 미지정</span>
             </>
           )}
 
           {ownerMissing && (
             <>
-              <span className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0" aria-hidden="true" />
+              <span
+                className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
+                aria-hidden="true"
+              />
               <span className="text-text-danger">Owner 없음</span>
             </>
           )}
 
           {voc.similar_count > 0 && (
             <>
-              <span className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0" aria-hidden="true" />
+              <span
+                className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
+                aria-hidden="true"
+              />
               <span className="text-accent-primary">↔ similar {voc.similar_count}</span>
             </>
           )}

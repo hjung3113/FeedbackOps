@@ -4,13 +4,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/features/voc/hooks/useVocDetail', () => ({ useVocDetail: vi.fn() }));
-vi.mock('@/features/voc/hooks/useWorkspaceActors', () => ({ useWorkspaceActors: vi.fn() }));
+vi.mock('@/lib/cross-system/useVocDetail', () => ({ useVocDetail: vi.fn() }));
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({ useWorkspaceActors: vi.fn() }));
 vi.mock('@/lib/cross-system/getPermissionDecision', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/cross-system/getPermissionDecision')>();
   return { ...actual, getPermissionDecision: vi.fn() };
 });
-vi.mock('@/features/voc/hooks/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
+vi.mock('@/lib/cross-system/useManagedSystem', () => ({ useManagedSystem: vi.fn() }));
 vi.mock('@/features/voc/hooks/useVocConversation', () => ({ useVocConversation: vi.fn() }));
 const navigate = vi.fn();
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -65,14 +65,14 @@ vi.mock('@/features/voc/components/detail/ComposerSection', () => ({
   ),
 }));
 
-import { useManagedSystem } from '@/features/voc/hooks/useManagedSystem';
 import { useVocConversation } from '@/features/voc/hooks/useVocConversation';
-import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
-import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { getTask } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
 import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
+import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { useVocDetail } from '@/lib/cross-system/useVocDetail';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { VocDetailPanel } from '../VocDetailPanel';
 import {
   DETAIL_ENVELOPE,

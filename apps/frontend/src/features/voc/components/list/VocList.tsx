@@ -15,6 +15,8 @@
  */
 
 import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
+import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { VocListItem } from '@fops/shared';
 import { type AvatarUser, Button, EmptyState } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -22,8 +24,6 @@ import { Link } from '@tanstack/react-router';
 import { FileText, Flag, Layers, User } from 'lucide-react';
 import * as React from 'react';
 import { useMemo, useState } from 'react';
-import type { ResolvedManagedSystem } from '../../hooks/useManagedSystem';
-import { useWorkspaceActors } from '../../hooks/useWorkspaceActors';
 import { VocRow } from './VocRow';
 import { VocRowSkeleton } from './VocRowSkeleton';
 

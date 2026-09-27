@@ -1,15 +1,15 @@
 // VocDetailPanel — orchestrator for the read-only VOC detail panel (Slice 3 #20 C8).
 // REV-1 #6: dirty composer close now intercepted — DirtyConfirmation shown before panel close.
 
-import { usePermissionCheck } from '@/features/admin/permissions/use-permission-check';
 import { usePublicUpdateReviewCandidates } from '@/features/voc/hooks/usePublicUpdateReviewCandidates';
 import { useRequestTaskFromVoc } from '@/features/voc/hooks/useRequestTaskFromVoc';
-import { useVocDetail } from '@/features/voc/hooks/useVocDetail';
-import { useWorkspaceActors } from '@/features/voc/hooks/useWorkspaceActors';
 import { type ApiError, errorMapper, getTask, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
 import { getSummarySelfDecision } from '@/lib/cross-system/getPermissionDecision';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import { useVocDetail } from '@/lib/cross-system/useVocDetail';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { EntityLinkDto, VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import {
   Button,

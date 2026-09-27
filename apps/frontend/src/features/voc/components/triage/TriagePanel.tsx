@@ -14,6 +14,7 @@
  */
 
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { VocListItem } from '@fops/shared';
 import {
   AnalyticsAreaPicker,
@@ -33,7 +34,6 @@ import { toast } from 'sonner';
 import { useTriageCommand } from '../../hooks/useTriageCommand';
 import { useTriagePanelState } from '../../hooks/useTriagePanelState';
 import type { CallToken } from '../../hooks/useUndoableMutation';
-import { useWorkspaceActors } from '../../hooks/useWorkspaceActors';
 import type { TriageInput } from '../../lib/triage-types';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { type OwnerCandidate, OwnerPicker } from './OwnerPicker';

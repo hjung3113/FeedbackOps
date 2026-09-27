@@ -22,6 +22,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildEntityLinkProviders } from '../../../entity-link-providers.js';
+import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { uid } from '../../../test-support/ids.js';
+import { grantCapability } from '../../../test-support/permissions-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { createEntityLinksService } from '../../entity-links/index.js';
 import { createCheckService } from '../../permissions/check-service.js';
@@ -30,14 +35,6 @@ import {
   type VocReadService,
   createVocReadService,
 } from '../read-service.js';
-import {
-  cleanupReadTestTables,
-  grantCapability,
-  insertDevActor,
-  insertMsDirectly,
-  insertVocDirectly,
-  uid,
-} from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const WORKSPACE_ID = process.env.WORKSPACE_ID ?? '';

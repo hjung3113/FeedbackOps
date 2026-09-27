@@ -13,8 +13,8 @@ import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import { loginAs } from '../../../test-support/auth.js';
 import { VOC_EMBED_QUEUE } from '../jobs/embed-voc.js';
-import { loginAs } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';

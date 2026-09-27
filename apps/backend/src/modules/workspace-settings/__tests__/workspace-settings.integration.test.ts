@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { buildServer } from '../../../server.js';
-import { SESSION_COOKIE_NAME, loginAs } from '../../voc/__tests__/_seed-helpers.js';
+import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
@@ -115,9 +115,10 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 5,
     });
-    const row = await appHandle.pool.query('select * from core.workspace_settings where workspace_id = $1', [
-      WORKSPACE_ID,
-    ]);
+    const row = await appHandle.pool.query(
+      'select * from core.workspace_settings where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
     expect(row.rowCount).toBe(0);
   });
 
@@ -129,9 +130,10 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
     expect(getResponse.json<{ code: string }>().code).toBe('permission.denied');
     expect(patchResponse.statusCode).toBe(403);
     expect(patchResponse.json<{ code: string }>().code).toBe('permission.denied');
-    const row = await appHandle.pool.query('select * from core.workspace_settings where workspace_id = $1', [
-      WORKSPACE_ID,
-    ]);
+    const row = await appHandle.pool.query(
+      'select * from core.workspace_settings where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
     expect(row.rowCount).toBe(0);
   });
 
@@ -172,9 +174,10 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
       expect(response.statusCode).toBeGreaterThanOrEqual(400);
       expect(response.statusCode).toBeLessThan(500);
     }
-    const row = await appHandle.pool.query('select * from core.workspace_settings where workspace_id = $1', [
-      WORKSPACE_ID,
-    ]);
+    const row = await appHandle.pool.query(
+      'select * from core.workspace_settings where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
     expect(row.rowCount).toBe(0);
   });
 
@@ -191,9 +194,10 @@ describe.skipIf(!runIntegration)('workspace settings (#195)', () => {
       permission_self_approval: 'allowed',
       survey_anonymity_threshold: 5,
     });
-    const row = await appHandle.pool.query('select * from core.workspace_settings where workspace_id = $1', [
-      WORKSPACE_ID,
-    ]);
+    const row = await appHandle.pool.query(
+      'select * from core.workspace_settings where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
     expect(row.rowCount).toBe(0);
   });
 
