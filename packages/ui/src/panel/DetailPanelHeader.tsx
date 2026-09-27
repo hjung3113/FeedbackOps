@@ -28,13 +28,17 @@ const KIND_LABELS: Record<DetailPanelKind, string> = {
   milestone: 'Milestone',
 };
 
+// #525: the underlying tokens are raw RGB triplets (e.g. `165 99 0`) —
+// `var(--color-X)` used directly as a `background-color` is not a valid CSS
+// color and silently no-ops (the accent bar rendered invisible/transparent).
+// Must wrap in `rgb(...)`.
 const KIND_ACCENT: Record<DetailPanelKind, string> = {
-  voc: 'var(--color-aether-blue)',
-  finding: 'var(--color-emerald)',
-  task: 'var(--color-amethyst)',
-  survey: 'var(--color-cyan-spark)',
-  cluster: 'var(--color-amber)',
-  milestone: 'var(--color-amber)',
+  voc: 'rgb(var(--color-aether-blue))',
+  finding: 'rgb(var(--color-emerald))',
+  task: 'rgb(var(--color-amethyst))',
+  survey: 'rgb(var(--color-cyan-spark))',
+  cluster: 'rgb(var(--color-amber))',
+  milestone: 'rgb(var(--color-amber))',
 };
 
 export function DetailPanelHeader({

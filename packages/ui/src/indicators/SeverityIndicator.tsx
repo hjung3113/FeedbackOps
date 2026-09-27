@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { cn } from '../utils/cn.js';
 
 export type SeverityEnum = 'low' | 'medium' | 'high' | 'critical';
@@ -24,7 +23,10 @@ const FILL_COUNT: Record<SeverityEnum, number> = {
  */
 export function SeverityIndicator({ severity, className }: SeverityIndicatorProps) {
   const filled = FILL_COUNT[severity];
-  const tokenVar = `var(--severity-${severity})`;
+  // #525: the token is a raw RGB triplet (e.g. `165 99 0`) — `var(...)` used
+  // directly as a `background-color` is not a valid CSS color and silently
+  // no-ops. Must wrap in `rgb(...)`.
+  const tokenVar = `rgb(var(--severity-${severity}))`;
 
   return (
     <span
