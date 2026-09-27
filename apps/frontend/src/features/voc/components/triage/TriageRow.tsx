@@ -16,8 +16,7 @@
  *   .row-meta → text-[12px] text-text-muted flex items-center gap-2 flex-wrap
  *   .row-meta .dot → w-0.5 h-0.5 rounded-full bg-text-disabled
  *   .row-trailing → flex items-center gap-2 shrink-0
- *   "Owner 없음" color: var(--color-warning-red) → text-text-danger
- *   "Area 미지정" color: var(--color-amber) → text-text-warning
+ *   Semantic row color is limited to SeverityIndicator and ReporterStatusBadge.
  */
 
 import { formatRelativeTime } from '@/lib/datetime';
@@ -111,7 +110,7 @@ export function TriageRow({
                 className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
                 aria-hidden="true"
               />
-              <span className="text-text-warning">Area 미지정</span>
+              <span className="text-text-muted">Area 미지정</span>
             </>
           )}
 
@@ -121,7 +120,7 @@ export function TriageRow({
                 className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
                 aria-hidden="true"
               />
-              <span className="text-text-danger">Owner 없음</span>
+              <span className="text-text-muted">Owner 없음</span>
             </>
           )}
 
@@ -131,7 +130,7 @@ export function TriageRow({
                 className="w-0.5 h-0.5 rounded-full bg-text-disabled shrink-0"
                 aria-hidden="true"
               />
-              <span className="text-accent-primary">↔ similar {voc.similar_count}</span>
+              <span className="text-text-muted">↔ similar {voc.similar_count}</span>
             </>
           )}
         </div>

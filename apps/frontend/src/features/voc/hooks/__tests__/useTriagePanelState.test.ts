@@ -33,6 +33,7 @@ describe('useTriagePanelState', () => {
     expect(result.current.panelState.ownerUserId).toBeNull();
     expect(result.current.panelState.ownerTeamId).toBeNull();
     expect(result.current.panelState.analyticsAreaId).toBeNull();
+    expect(result.current.baseline).toEqual(result.current.panelState);
     expect(result.current.dirty).toBe(false);
   });
 

@@ -132,7 +132,7 @@ describe('TriagePanel — Cluster 추천 section', () => {
     );
 
     // Section-nav entry with the heuristic count (prototype behaviour, unchanged).
-    const navEntry = screen.getByRole('button', { name: /cluster/i });
+    const navEntry = screen.getByRole('button', { name: /similar/i });
     expect(navEntry).toHaveTextContent('4');
 
     // The heuristic badge shows even when recommendations are unavailable —

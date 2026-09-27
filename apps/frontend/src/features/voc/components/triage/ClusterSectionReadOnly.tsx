@@ -133,7 +133,7 @@ export function ClusterSectionReadOnly({
   }
 
   return (
-    <div className="mb-8" data-anchor="cluster" data-testid="cluster-recommendation-section">
+    <div className="mb-8" data-anchor="similar" data-testid="cluster-recommendation-section">
       <div className="flex items-center justify-between">
         <PanelSectionTitle className="mb-0">Cluster 추천</PanelSectionTitle>
         {similarCount > 0 && (

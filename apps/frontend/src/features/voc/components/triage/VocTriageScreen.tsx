@@ -133,7 +133,12 @@ export function VocTriageScreen({
         <span className="ml-1 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm text-[11px] font-medium bg-surface-canvas text-text-muted border border-border-subtle">
           {liveQueue.length} VOC
         </span>
-        <span className="text-xs text-text-muted ml-1">정렬: 미배정 → severity</span>
+        <span
+          className="text-xs text-text-muted ml-1"
+          title="정렬: 미배정 → severity"
+        >
+          미배정 → severity 순
+        </span>
         {/* Processed-count progress — emerald/accent toned. Prototype ref:
             screen-voc-create.jsx:652-656 ("· N건 처리됨"). */}
         {processedCount > 0 && (

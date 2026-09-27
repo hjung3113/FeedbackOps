@@ -57,6 +57,7 @@ function vocToBaseline(voc: VocListItem): TriagePanelLocalState {
 
 export interface UseTriagePanelStateResult {
   panelState: TriagePanelLocalState;
+  baseline: TriagePanelLocalState;
   dispatch: React.Dispatch<TriagePanelAction>;
   dirty: boolean;
 }
@@ -78,5 +79,5 @@ export function useTriagePanelState(voc: VocListItem): UseTriagePanelStateResult
     panelState.ownerTeamId !== baseline.ownerTeamId ||
     panelState.analyticsAreaId !== baseline.analyticsAreaId;
 
-  return { panelState, dispatch, dirty };
+  return { panelState, baseline, dispatch, dirty };
 }

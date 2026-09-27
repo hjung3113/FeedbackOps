@@ -14,8 +14,9 @@
  */
 
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import type { VocListItem } from '@fops/shared';
+import { isTipTapDocStructurallyEmpty, type VocListItem } from '@fops/shared';
 import {
   AnalyticsAreaPicker,
   Button,
@@ -24,8 +25,9 @@ import {
   PanelTitleBlock,
   type PickerOption,
   ReporterStatusBadge,
+  RichContentRenderer,
+  type TipTapDoc,
   UndoToast,
-  cn,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Maximize2, MoreHorizontal } from 'lucide-react';
@@ -67,16 +69,12 @@ export interface TriagePanelProps {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-// Prototype ref (screen-voc-create.jsx:411-418): section IDs for the triage panel.
-// Owner and Cluster sections are always shown; Cluster count badge reflects similarCount.
+// ADR-0051 groups the prototype's seven sections into four; Similar remains conditional on count.
 function buildTriageSections(similarCount: number) {
   return [
     { id: 'overview', label: 'Overview' },
-    { id: 'body', label: 'Body' },
-    { id: 'severity', label: 'Severity' },
-    { id: 'owner', label: 'Owner' },
-    { id: 'area', label: 'Area' },
-    ...(similarCount > 0 ? [{ id: 'cluster', label: 'Cluster', count: similarCount }] : []),
+    { id: 'assignment', label: 'Assignment' },
+    ...(similarCount > 0 ? [{ id: 'similar', label: 'Similar', count: similarCount }] : []),
     { id: 'summary', label: 'Summary' },
   ];
 }
@@ -87,8 +85,9 @@ export function TriagePanel({
   onOptimisticRemove,
   onOptimisticRestore,
 }: TriagePanelProps): React.ReactElement {
-  const { panelState, dispatch, dirty } = useTriagePanelState(voc);
+  const { panelState, baseline, dispatch, dirty } = useTriagePanelState(voc);
   const { actors } = useWorkspaceActors();
+  const vocDetailQuery = useVocDetail(voc.id);
   // Ref for the scrollable body — used by DetailPanelSectionNav to observe anchors
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -138,6 +137,8 @@ export function TriagePanel({
   );
 
   const currentOwnerId = panelState.ownerUserId ?? panelState.ownerTeamId;
+  const baselineAreaName = aaOptions.find((area) => area.id === baseline.analyticsAreaId)?.label;
+  const stagedAreaName = aaOptions.find((area) => area.id === panelState.analyticsAreaId)?.label;
 
   // ── mutation setup ──────────────────────────────────────────────────────────
 
@@ -298,103 +299,110 @@ export function TriagePanel({
         </div>
       </div>
 
-      {/* Section nav — sticky anchor tabs (prototype: screen-voc-create.jsx:428) */}
+      {/* Section nav — grouped per ADR-0051; no shared nav behavior changes. */}
       <DetailPanelSectionNav sections={triageSections} scrollRef={scrollRef} />
 
       {/* Scrollable body — V1b document rhythm (no dividers, typographic-only hierarchy) */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-7 pr-6 pb-8 pl-6">
-        {/* Overview / title block — mirrors prototype .panel-title:
-            lg title + status pill + meta row (date only; no reporter actor
-            available on VocListItem). Mirrors the read-only detail panel
-            IdentitySection for cross-surface consistency. */}
-        <div className="mb-7" data-anchor="overview">
+        {/* ADR-0051 intentionally groups the real description into Overview. */}
+        <div className="mb-8" data-anchor="overview">
           <PanelTitleBlock title={voc.title} className="!px-0 !py-0 mb-2" />
-          <div className="flex items-center gap-2 text-xs text-text-muted">
+          <div className="flex items-center gap-2 text-xs text-text-muted mb-4">
             <ReporterStatusBadge status={voc.reporter_facing_status} />
             <span aria-hidden="true">·</span>
             <span>{new Date(voc.created_at).toLocaleDateString('ko-KR')}</span>
           </div>
-        </div>
-
-        {/* Body — BODY label + tinted card per reference image.
-            DATA-BLOCKED (#90): prototype L441 renders {voc.description}, but the
-            triage list payload (VocListItem) carries only `title`, not
-            `description`. Wiring the body to description requires adding it to the
-            list-item read schema (or a per-VOC detail fetch) — deferred; rendering
-            the available title until the description field is sourced. */}
-        <div className="mb-8" data-anchor="body">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">BODY</p>
-          <div
-            data-testid="triage-body-card"
-            className="rounded-md bg-surface-card-elevated p-4 text-sm text-text-secondary leading-relaxed"
-          >
-            {voc.title}
+          <div data-testid="triage-description-region">
+            {vocDetailQuery.isLoading ? (
+              <p className="text-xs text-text-muted">불러오는 중…</p>
+            ) : vocDetailQuery.isError ? (
+              <div className="rounded-md border border-dashed border-border-subtle p-3 text-sm text-text-muted">
+                본문을 불러오지 못했습니다.
+              </div>
+            ) : vocDetailQuery.data && 'description_rich_content' in vocDetailQuery.data ? (
+              isTipTapDocStructurallyEmpty(vocDetailQuery.data.description_rich_content) ? (
+                <p className="text-sm text-text-muted">본문 없음</p>
+              ) : (
+                <div className="text-sm text-text-secondary leading-relaxed">
+                  <RichContentRenderer
+                    doc={vocDetailQuery.data.description_rich_content as TipTapDoc}
+                    mode="internal"
+                  />
+                </div>
+              )
+            ) : (
+              <div className="rounded-md border border-dashed border-border-subtle p-3 text-sm text-text-muted">
+                본문을 표시할 수 없습니다 — 이 VOC의 상세 내용을 볼 권한이 없습니다.
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Severity section */}
-        <div className={cn('mb-8')} data-anchor="severity">
-          <PanelSectionTitle>Severity 결정</PanelSectionTitle>
-          <SeverityPicker
-            value={(panelState.severity as SeverityLevel) ?? null}
-            onChange={(sev) => {
-              dispatch({ type: 'set_severity', severity: sev });
-            }}
-            disabled={panelLocked || isSubmitting}
-          />
-        </div>
-
-        {/* Owner section */}
-        <div className="mb-8" data-anchor="owner">
-          <PanelSectionTitle>Owner 배정 (선택)</PanelSectionTitle>
-          <OwnerPicker
-            candidates={candidates}
-            value={currentOwnerId}
-            onChange={({ ownerUserId, ownerTeamId }) => {
-              dispatch({ type: 'set_owner', ownerUserId, ownerTeamId });
-            }}
-          />
-          <p className="text-xs text-text-muted mt-2 leading-relaxed">
-            미지정 상태로 확정할 수 있으며 Owner는 나중에 지정할 수 있습니다.
-          </p>
-        </div>
-
-        {/* Analytics Area section */}
-        <div className="mb-8" data-anchor="area">
-          <PanelSectionTitle>Analytics Area 연결</PanelSectionTitle>
-          {analyticsAreasQuery.isLoading ? (
-            <p className="text-xs text-text-muted">Analytics Area를 불러오는 중입니다.</p>
-          ) : analyticsAreasQuery.isError ? (
-            <p className="text-xs text-feedback-error">Analytics Area를 불러오지 못했습니다.</p>
-          ) : aaOptions.length === 0 ? (
-            <p className="text-xs text-text-muted">
-              이 Managed System에 선택할 수 있는 Analytics Area가 없습니다.
-            </p>
-          ) : (
-            <AnalyticsAreaPicker
-              options={aaOptions}
-              value={panelState.analyticsAreaId}
-              onChange={(id) => {
-                dispatch({ type: 'set_analytics_area', analyticsAreaId: id });
+        <div className="mb-8" data-anchor="assignment">
+          <div className="mb-6">
+            <PanelSectionTitle>Severity 결정</PanelSectionTitle>
+            <SeverityPicker
+              value={(panelState.severity as SeverityLevel) ?? null}
+              onChange={(sev) => {
+                dispatch({ type: 'set_severity', severity: sev });
               }}
-              placeholder="Analytics Area 선택"
-              testId="triage-aa-picker"
+              disabled={panelLocked || isSubmitting}
             />
-          )}
-          <p className="text-xs text-text-muted mt-2 leading-relaxed">
-            Analytics Area는 권한 경계가 아닙니다. 분류·기본값 용도로만 사용됩니다.
-          </p>
+          </div>
+
+          <div className="mb-6">
+            <PanelSectionTitle>Owner 배정 (선택)</PanelSectionTitle>
+            <OwnerPicker
+              candidates={candidates}
+              value={currentOwnerId}
+              onChange={({ ownerUserId, ownerTeamId }) => {
+                dispatch({ type: 'set_owner', ownerUserId, ownerTeamId });
+              }}
+            />
+            <p className="text-xs text-text-muted mt-2 leading-relaxed">
+              미지정 상태로 확정할 수 있으며 Owner는 나중에 지정할 수 있습니다.
+            </p>
+          </div>
+
+          <div>
+            <PanelSectionTitle>Analytics Area 연결</PanelSectionTitle>
+            {analyticsAreasQuery.isLoading ? (
+              <p className="text-xs text-text-muted">Analytics Area를 불러오는 중입니다.</p>
+            ) : analyticsAreasQuery.isError ? (
+              <p className="text-xs text-feedback-error">Analytics Area를 불러오지 못했습니다.</p>
+            ) : aaOptions.length === 0 ? (
+              <p className="text-xs text-text-muted">
+                이 Managed System에 선택할 수 있는 Analytics Area가 없습니다.
+              </p>
+            ) : (
+              <AnalyticsAreaPicker
+                options={aaOptions}
+                value={panelState.analyticsAreaId}
+                onChange={(id) => {
+                  dispatch({ type: 'set_analytics_area', analyticsAreaId: id });
+                }}
+                placeholder="Analytics Area 선택"
+                testId="triage-aa-picker"
+              />
+            )}
+            <p className="text-xs text-text-muted mt-2 leading-relaxed">
+              Analytics Area는 권한 경계가 아닙니다. 분류·기본값 용도로만 사용됩니다.
+            </p>
+          </div>
         </div>
 
-        {/* Cluster section */}
+        {/* Similar is the same recommendation content, grouped under a clearer nav label. */}
         <ClusterSectionReadOnly vocId={voc.id} similarCount={voc.similar_count} />
 
-        {/* Triage 결과 미리보기 */}
+        {/* Compact changed-fields summary */}
         <div className="mb-0" data-anchor="summary">
-          <PanelSectionTitle>Triage 결과 미리보기</PanelSectionTitle>
+          <PanelSectionTitle>Summary · 변경 사항</PanelSectionTitle>
           <TriageSummaryCard
             panelState={panelState}
+            baseline={baseline}
             actorMap={actorMap}
+            baselineAnalyticsAreaName={baselineAreaName}
+            analyticsAreaName={stagedAreaName}
             currentReporterStatus={voc.reporter_facing_status}
           />
         </div>
