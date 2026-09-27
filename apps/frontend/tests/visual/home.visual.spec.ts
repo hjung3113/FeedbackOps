@@ -30,7 +30,7 @@ test.describe('/home visual harness', () => {
     await installMockApi(page, { home: 'zero-queues' });
     await page.goto('/home');
     await expect(page.getByTestId('home-zero-queues')).toContainText('처리할 항목 없음');
-    await expect(page.getByRole('link', { name: 'Unassigned VOC 0' })).toHaveAttribute(
+    await expect(page.getByTestId('home-zero-queue-unassigned-voc')).toHaveAttribute(
       'href',
       '/vocs?view=triage&tab=unassigned',
     );
