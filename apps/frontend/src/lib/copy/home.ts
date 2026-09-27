@@ -14,6 +14,7 @@ export const HOME_COPY = {
       return '현재 확인할 운영 큐가 없습니다.';
     }
     const count = queues.reduce((total, queue) => total + queue.count, 0);
+    if (count === 0) return '현재 확인할 운영 큐가 없습니다.';
     return `오늘 워크스페이스에 ${count}개의 운영 갭이 있습니다. 우선순위가 높은 큐부터 확인하세요.`;
   },
   // #280: the "My work" heading pointed at a My Work screen that is out of the

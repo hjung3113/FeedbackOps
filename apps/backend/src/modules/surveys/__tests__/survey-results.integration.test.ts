@@ -512,6 +512,13 @@ describe.skipIf(!runIntegration)('survey result read route (#186)', () => {
         expect(body.response_state).toBe('none');
         expect(body.anonymity_threshold).toBe(6);
       }
+      const expectedZeroQuestionIds = Object.values(zero.questions).sort();
+      expect(readerZero.questions.map((question) => question.question_id).sort()).toEqual(
+        expectedZeroQuestionIds,
+      );
+      expect(holderZero.questions.map((question) => question.question_id).sort()).toEqual(
+        expectedZeroQuestionIds,
+      );
       expect(readerZero.questions.every((question) => question.visibility === 'suppressed')).toBe(
         true,
       );

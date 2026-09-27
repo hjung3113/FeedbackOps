@@ -95,6 +95,8 @@ describe('permission request return routes', () => {
               survey_id: SURVEY_ID,
               status: 'closed',
               identity_protected: true,
+              response_state: 'visible',
+              anonymity_threshold: 5,
               questions: [],
               next_actions: [
                 {

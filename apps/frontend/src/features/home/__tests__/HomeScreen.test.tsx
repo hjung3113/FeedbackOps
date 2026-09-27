@@ -155,6 +155,7 @@ describe('HomeScreen route content', () => {
     expect(screen.getByTestId('home-zero-queues')).toHaveTextContent('처리할 항목 없음');
     expect(screen.getAllByRole('link', { name: / 0$/ })).toHaveLength(3);
     expect(screen.queryByRole('button', { name: /Review|Request|Open/ })).toBeNull();
+    expect(screen.getByText('현재 확인할 운영 큐가 없습니다.')).toBeInTheDocument();
   });
 
   it('omits queue and Coverage sections while the summary is loading', async () => {

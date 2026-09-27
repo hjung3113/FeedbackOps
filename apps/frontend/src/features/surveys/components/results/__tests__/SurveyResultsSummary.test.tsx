@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -227,16 +227,15 @@ describe('SurveyResultsSummary', () => {
 
   it('shows the zero-response state with the configured threshold and no new action', () => {
     renderWithClient(
-      <SurveyResultsSummary
-        survey={survey}
-        results={{ ...results, response_state: 'none', next_actions: [] }}
-      />,
+      <SurveyResultsSummary survey={survey} results={{ ...results, response_state: 'none' }} />,
     );
 
     expect(screen.getByText('아직 응답이 없습니다')).toBeInTheDocument();
     expect(screen.getByText('응답이 5건 이상 모이면 결과가 표시됩니다.')).toBeInTheDocument();
     expect(screen.queryByText('느린 로딩')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    const emptyState = screen.getByText('아직 응답이 없습니다').parentElement;
+    if (emptyState === null) throw new Error('Expected the EmptyState container');
+    expect(within(emptyState).queryByRole('button')).toBeNull();
   });
 
   it('shows below-threshold copy without exposing a response count', () => {
