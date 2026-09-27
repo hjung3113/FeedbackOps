@@ -25,6 +25,8 @@ export const surveyResultsVisualScenarios = z
     z.enum([
       'populated',
       'threshold-suppressed',
+      'zero-response',
+      'below-threshold',
       'no-permission',
       'poor-outcome',
       'empty-next-actions',
@@ -34,6 +36,8 @@ export const surveyResultsVisualScenarios = z
   .parse([
     'populated',
     'threshold-suppressed',
+    'zero-response',
+    'below-threshold',
     'no-permission',
     'poor-outcome',
     'empty-next-actions',
@@ -42,7 +46,7 @@ export const surveyResultsVisualScenarios = z
 export type SurveyResultsVisualScenario = (typeof surveyResultsVisualScenarios)[number];
 
 export function surveyResultsFixtureFor(scenario: SurveyResultsVisualScenario) {
-  const questions = [
+  let questions: unknown[] = [
     {
       question_id: ids.choice,
       visibility: 'visible' as const,
@@ -79,12 +83,28 @@ export function surveyResultsFixtureFor(scenario: SurveyResultsVisualScenario) {
       visibility: 'suppressed' as const,
       response_count: null,
       suppression: { code: 'anonymity_threshold' as const },
-    } as never);
+    });
+  }
+  const response_state =
+    scenario === 'zero-response'
+      ? 'none'
+      : scenario === 'below-threshold'
+        ? 'below_threshold'
+        : 'visible';
+  if (response_state !== 'visible') {
+    questions = [ids.choice, ids.rating, ids.text].map((question_id) => ({
+      question_id,
+      visibility: 'suppressed' as const,
+      response_count: null,
+      suppression: { code: 'anonymity_threshold' as const },
+    }));
   }
   return surveyResultDtoSchema.parse({
     survey_id: surveyResultVisualFixture.id,
     status: 'closed',
     identity_protected: true,
+    response_state,
+    anonymity_threshold: 5,
     questions,
     next_actions:
       scenario === 'empty-next-actions'

@@ -20,8 +20,28 @@ export const homeSummaryFixture = dashboardSummarySchema.parse({
   by_managed_system: [],
 });
 
+export const homeZeroQueueSummaryFixture = dashboardSummarySchema.parse({
+  ...homeSummaryFixture,
+  action_queues: homeSummaryFixture.action_queues.map((queue) =>
+    queue.id === 'unassigned-voc' || queue.id === 'actionable-finding-no-execution'
+      ? { ...queue, count: 0 }
+      : queue,
+  ),
+});
+
+export const homeUnscopedSummaryFixture = dashboardSummarySchema.parse({
+  ...homeSummaryFixture,
+  kpis: {},
+  action_queues: [],
+  coverage: [],
+});
+
+export type HomeVisualScenario = 'populated' | 'empty' | 'zero-queues' | 'unscoped';
+
 export const homeVisualSnapshot = 'home-action-dashboard.png';
 export const homeEmptyVisualSnapshot = 'home-action-dashboard-empty.png';
+export const homeZeroQueuesVisualSnapshot = 'home-action-dashboard-zero-queues.png';
+export const homeUnscopedVisualSnapshot = 'home-summary-unscoped.png';
 export const inboxHighNoLinkSelectedVisualSnapshot = 'inbox-high-no-link-selected.png';
 
 const homeFixtureIds = {

@@ -3,6 +3,7 @@ import type { FindingSeverity, SurveyResultDto } from '@fops/shared';
 import {
   Button,
   Checkbox,
+  EmptyState,
   FieldLabel,
   RadioGroup,
   RadioGroupItem,
@@ -365,14 +366,26 @@ export function SurveyResultsSummary({ survey, results }: SurveyResultsSummaryPr
       </header>
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-4">
-          {results.questions.map((result, index) => (
-            <QuestionResult
-              index={index}
-              key={result.question_id}
-              result={result}
-              survey={survey}
+          {results.response_state === 'none' ? (
+            <EmptyState
+              body={`응답이 ${results.anonymity_threshold}건 이상 모이면 결과가 표시됩니다.`}
+              title="아직 응답이 없습니다"
             />
-          ))}
+          ) : results.response_state === 'below_threshold' ? (
+            <EmptyState
+              body={`익명 보호를 위해 ${results.anonymity_threshold}건 미만일 때는 집계와 정확한 응답 수를 숨깁니다.`}
+              title={`응답이 ${results.anonymity_threshold}건 이상 모이면 결과가 표시됩니다`}
+            />
+          ) : (
+            results.questions.map((result, index) => (
+              <QuestionResult
+                index={index}
+                key={result.question_id}
+                result={result}
+                survey={survey}
+              />
+            ))
+          )}
         </div>
         <NextActions actions={results.next_actions} results={results} surveyId={survey.id} />
       </div>

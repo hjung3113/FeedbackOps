@@ -17,6 +17,10 @@ Home, Dashboard, and Integration are separate action queue-first surfaces:
 Home, Dashboard, and Integration may present the same underlying recovery item,
 but they must not create separate lifecycle state for it.
 
+On Home, only queues with positive counts appear in the main grid; zero-count queues share a
+compact strip of links. Omit the recovery queue section or Coverage section when its API array is
+empty, and show one Managed System scope explanation when both arrays are empty.
+
 ```text
 - Home presents only recovery items the current actor can personally act on now.
 - Dashboard presents aggregate operational context and representative queues.

@@ -55,6 +55,9 @@ import {
   homeMyWorkTasksFixture,
   homeOpenPermissionRequestsFixture,
   homeSummaryFixture,
+  homeUnscopedSummaryFixture,
+  homeZeroQueueSummaryFixture,
+  type HomeVisualScenario,
 } from '../fixtures/home';
 import {
   managedSystemOwnerActors,
@@ -146,7 +149,7 @@ interface InstallOptions {
   /** Declares the saved-view sidebar visual state; its PNG is host-generated. */
   savedViews?: boolean;
   /** Home action dashboard fixture state. */
-  home?: 'populated' | 'empty';
+  home?: HomeVisualScenario;
   /** #513 coverage page fixture state: summary, systems, and analytics areas. */
   coverage?: 'populated' | 'empty';
   /** Request-access confirmation dialog state; screenshot spec is host-owned. */
@@ -272,7 +275,13 @@ export async function installMockApi(
     }
 
     if (options.home && isRequest(route, 'GET', '/dashboard/summary')) {
-      await json(route, 200, dashboardSummarySchema.parse(homeSummaryFixture));
+      const summary =
+        options.home === 'zero-queues'
+          ? homeZeroQueueSummaryFixture
+          : options.home === 'unscoped'
+            ? homeUnscopedSummaryFixture
+            : homeSummaryFixture;
+      await json(route, 200, dashboardSummarySchema.parse(summary));
       return;
     }
 
@@ -298,7 +307,12 @@ export async function installMockApi(
     }
 
     if (options.home && isRequest(route, 'GET', '/tasks')) {
-      await json(route, 200, { items: options.home === 'populated' ? homeMyWorkTasksFixture : [] });
+      await json(route, 200, {
+        items:
+          options.home === 'populated' || options.home === 'unscoped'
+            ? homeMyWorkTasksFixture
+            : [],
+      });
       return;
     }
 
@@ -413,14 +427,20 @@ export async function installMockApi(
 
     if (options.home && isRequest(route, 'GET', '/task-requests')) {
       await json(route, 200, {
-        items: options.home === 'populated' ? homeMyWorkRequestsFixture : [],
+        items:
+          options.home === 'populated' || options.home === 'unscoped'
+            ? homeMyWorkRequestsFixture
+            : [],
       });
       return;
     }
 
     if (options.home && isRequest(route, 'GET', '/permission-requests/mine')) {
       await json(route, 200, {
-        requests: options.home === 'populated' ? homeOpenPermissionRequestsFixture : [],
+        requests:
+          options.home === 'populated' || options.home === 'unscoped'
+            ? homeOpenPermissionRequestsFixture
+            : [],
       });
       return;
     }

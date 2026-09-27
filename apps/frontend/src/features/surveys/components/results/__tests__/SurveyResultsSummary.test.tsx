@@ -125,6 +125,8 @@ const results = {
   survey_id: ids.survey,
   status: 'closed' as const,
   identity_protected: true,
+  response_state: 'visible' as const,
+  anonymity_threshold: 5,
   questions: [
     {
       question_id: ids.choice,
@@ -221,6 +223,50 @@ describe('SurveyResultsSummary', () => {
     const row = screen.getByTestId(`survey-result-suppressed-${ids.suppressed}`);
     expect(row).toHaveTextContent('Results are suppressed to protect anonymity.');
     expect(row).not.toHaveTextContent(/0 responses|12 responses|response count/i);
+  });
+
+  it('shows the zero-response state with the configured threshold and no new action', () => {
+    renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{ ...results, response_state: 'none', next_actions: [] }}
+      />,
+    );
+
+    expect(screen.getByText('아직 응답이 없습니다')).toBeInTheDocument();
+    expect(screen.getByText('응답이 5건 이상 모이면 결과가 표시됩니다.')).toBeInTheDocument();
+    expect(screen.queryByText('느린 로딩')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('shows below-threshold copy without exposing a response count', () => {
+    const questions = results.questions.map((question) => ({
+      question_id: question.question_id,
+      visibility: 'suppressed' as const,
+      response_count: null,
+      suppression: { code: 'anonymity_threshold' as const },
+    }));
+    const { container } = renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{ ...results, response_state: 'below_threshold', questions }}
+      />,
+    );
+
+    expect(screen.getByText('응답이 5건 이상 모이면 결과가 표시됩니다')).toBeInTheDocument();
+    expect(
+      screen.getByText('익명 보호를 위해 5건 미만일 때는 집계와 정확한 응답 수를 숨깁니다.'),
+    ).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\d+\s+responses?/i);
+    expect(screen.getByTestId('survey-result-next-actions')).toBeInTheDocument();
+    expect(screen.queryByText('느린 로딩')).not.toBeInTheDocument();
+  });
+
+  it('keeps visible results on the existing per-question rendering', () => {
+    renderWithClient(<SurveyResultsSummary survey={survey} results={results} />);
+
+    expect(screen.getByText('느린 로딩')).toBeInTheDocument();
+    expect(screen.getAllByText('12 responses')).toHaveLength(2);
   });
 
   it('renders request access for a blocked create-finding action without issuing a request', async () => {
