@@ -8,10 +8,11 @@
 // C3.2: passes optimisticRemove + optimisticRestore from useTriageQueue into
 // TriagePanel so the panel can drive queue side-effects on mutation.
 
+import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import type { VocListItem } from '@fops/shared';
 import { Flag } from 'lucide-react';
 import type * as React from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTriageQueue } from '../../hooks/useTriageQueue';
 import { TriagePanel } from './TriagePanel';
 import { TriageQueue } from './TriageQueue';
@@ -51,6 +52,16 @@ export function VocTriageScreen({
     optimisticRemove,
     optimisticRestore,
   } = useTriageQueue(items);
+
+  // #527: the Finding action commits the triage decision (same PATCH as
+  // Confirm) and then opens Finding creation, mirroring VocDetailPanel's
+  // CreateFindingModal usage. Owned here, not in TriagePanel, since the
+  // optimistic removal above unmounts TriagePanel for this VOC immediately.
+  const [createFindingTarget, setCreateFindingTarget] = useState<{
+    vocId: string;
+    managedSystemId: string;
+    analyticsAreaId: string | null;
+  } | null>(null);
 
   // Processed-count — number of VOCs optimistically removed (triaged/skipped)
   // in this session. Prototype ref: screen-voc-create.jsx:652-656 ("N건 처리됨").
@@ -189,11 +200,9 @@ export function VocTriageScreen({
           <div className="w-[440px] shrink-0">
             <TriagePanel
               voc={selectedVoc}
-              onAct={(kind) => {
-                // Non-mutation side effects per kind
-                if (kind === 'finding') {
-                  // D-3.4: Toast "Finding 생성은 Slice 5에서 제공됩니다" is handled
-                  // inside TriagePanel. No navigation here (Slice 5).
+              onAct={(kind, context) => {
+                if (kind === 'finding' && context) {
+                  setCreateFindingTarget(context);
                 }
               }}
               onOptimisticRemove={(vocId) => {
@@ -211,6 +220,16 @@ export function VocTriageScreen({
           </div>
         )}
       </div>
+
+      {createFindingTarget && (
+        <CreateFindingModal
+          vocId={createFindingTarget.vocId}
+          managedSystemId={createFindingTarget.managedSystemId}
+          sourceAnalyticsAreaId={createFindingTarget.analyticsAreaId}
+          open={createFindingTarget !== null}
+          onClose={() => setCreateFindingTarget(null)}
+        />
+      )}
     </div>
   );
 }
