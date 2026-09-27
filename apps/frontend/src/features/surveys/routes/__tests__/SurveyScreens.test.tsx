@@ -25,7 +25,8 @@ const { apiClient, apiRequest, fetchAnalyticsAreas, fetchCapabilityScope, fetchM
     fetchCapabilityScope: vi.fn(),
     fetchManagedSystems: vi.fn(),
   }));
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api')>()),
   apiClient,
   apiRequest,
   fetchAnalyticsAreas,
