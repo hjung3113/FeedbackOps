@@ -20,6 +20,10 @@ import { createRootLogger } from './lib/logger.js';
 import { getStorage } from './lib/storage/factory.js';
 import { createAuditService } from './modules/core/audit/index.js';
 import { registerCoreJobs } from './modules/core/jobs/index.js';
+import {
+  createNotificationEmailChannel,
+  registerNotificationJobs,
+} from './modules/notifications/index.js';
 import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
 import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
 import { registerVocJobs } from './modules/voc/jobs/index.js';
@@ -79,6 +83,11 @@ await registerVocJobs(boss, {
     db: dbHandle.db,
     auditService: createAuditService(),
   }),
+  log: jobLog,
+});
+await registerNotificationJobs(boss, {
+  db: dbHandle.db,
+  channel: createNotificationEmailChannel(jobLog),
   log: jobLog,
 });
 

@@ -47,6 +47,13 @@ import {
 import { createMilestonesService, milestonesRoutes } from './modules/milestones/index.js';
 import { type NavCountsService, createNavCountsService, navRoutes } from './modules/nav/index.js';
 import {
+  createNoopNotificationDispatcher,
+  createNotificationService,
+  createPgBossNotificationDispatcher,
+  notificationRoutes,
+  type NotificationDispatcher,
+} from './modules/notifications/index.js';
+import {
   createCheckService,
   createDecisionService,
   createRequestService,
@@ -89,6 +96,8 @@ export interface BuildServerOptions {
    * background jobs may omit it.
    */
   boss?: PgBoss;
+  /** Optional notification queue override for route and application tests. */
+  notificationDispatcher?: NotificationDispatcher;
   /**
    * Optional process root logger (ADR-0013, amended 2026-09-22). When given,
    * Fastify attaches it via `loggerInstance` so request logs share the ONE
@@ -538,6 +547,18 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
+  // Keep the dispatcher seam available for the next notification call-site
+  // slices without coupling domain services into this foundation change.
+  const notificationDispatcher =
+    opts.notificationDispatcher ??
+    (boss
+      ? createPgBossNotificationDispatcher(boss)
+      : createNoopNotificationDispatcher());
+  const notificationService = createNotificationService({
+    db: dbHandle.db,
+    notificationDispatcher,
+  });
+
   // VOC conversation command is constructed here so cluster candidate apply can
   // delegate each selected VOC to the canonical per-VOC command.
   const vocService = createVocService({
@@ -610,6 +631,15 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     dashboardService,
     workspaceId,
     rateLimitConfig: { read: app.rateLimitConfig.read },
+  });
+  await app.register(notificationRoutes, {
+    sessionService,
+    notificationService,
+    workspaceId,
+    rateLimitConfig: {
+      read: app.rateLimitConfig.read,
+      mutation: app.rateLimitConfig.mutation,
+    },
   });
 
   // #143 actor-private persisted list filters. This is intentionally a root
