@@ -49,7 +49,8 @@ export function SurveyResultHeader({
         </span>
         <SurveyStatusBadge status={survey.status} />
       </div>
-      {survey.type === 'outcome' && (
+      {/* Two views only exist for personal-response holders; a lone Results tab is noise. */}
+      {canReviewResponses && (
         <nav aria-label="Survey result views" className="flex items-center gap-1">
           <Link
             aria-current={activeTab === 'results' ? 'page' : undefined}
@@ -59,16 +60,14 @@ export function SurveyResultHeader({
           >
             Results
           </Link>
-          {canReviewResponses && (
-            <Link
-              aria-current={activeTab === 'follow-up' ? 'page' : undefined}
-              className={tabClass(activeTab === 'follow-up')}
-              params={{ surveyId: survey.id }}
-              to="/surveys/$surveyId/follow-up"
-            >
-              Follow-up · {openCount}
-            </Link>
-          )}
+          <Link
+            aria-current={activeTab === 'follow-up' ? 'page' : undefined}
+            className={tabClass(activeTab === 'follow-up')}
+            params={{ surveyId: survey.id }}
+            to="/surveys/$surveyId/follow-up"
+          >
+            Follow-up · {openCount}
+          </Link>
         </nav>
       )}
     </header>

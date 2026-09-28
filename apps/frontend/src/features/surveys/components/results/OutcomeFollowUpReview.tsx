@@ -543,7 +543,7 @@ export function OutcomeFollowUpReview({
               );
             })}
             <span className="ml-auto hidden whitespace-nowrap text-xs text-text-muted lg:inline">
-              저조 = 척도 문항 하위 구간 · 마감 · 응답 5건 이상
+              저조 = 척도 문항 하위 구간 · 마감 · 공개 기준 이상 응답
             </span>
           </div>
         }
