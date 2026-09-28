@@ -19,6 +19,7 @@ Backend-specific additions beyond root:
 - Read models may compose approved projections but must not become mutation paths.
 - Core owns Managed System Registry, Product Areas, Actor, Role Level, audit, shared attachment governance, and default owner/reviewer resolution inputs; Task owns Task Request, Task, future Work Initiative / Project grouping, Milestone, and execution views.
 - Mutation services accept the transaction union `Tx` from `db/tx.ts`, never `Db` (the pool). The compiler enforces this — do not re-introduce a `Tx = Db` alias.
+- Every new drizzle migration must be registered in `migrations/meta/_journal.json` in the same chunk. drizzle applies only journaled migrations, so an unregistered `.sql` file is silently skipped while `db:migrate` still reports success.
 
 ## Cross-System Commands
 

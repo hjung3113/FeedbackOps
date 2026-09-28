@@ -22,7 +22,7 @@
 - Right detail panels preserve list context on desktop; they become drill-in panels on mobile.
 - Permission-limited content must show an approved summary or a request path, not a blank failure.
 - Top-level feature folders and route ownership follow root `AGENTS.md` → Implementation Boundaries (canonical list, includes `voc-cluster`).
-- Finding code lives in `apps/frontend/src/features/findings/` (mounted at top-level `/findings`, `/findings/$findingId`). Integration owns Links code and URL (`/integration/links`). Evidence and Coverage routes are planned, not yet built. See `apps/frontend/src/features/findings/AGENTS.md` and `apps/frontend/src/features/integration/AGENTS.md`.
+- Finding code lives in `apps/frontend/src/features/findings/` (mounted at top-level `/findings`, `/findings/$findingId`). Integration owns Links and Coverage code and URLs (`/integration/links`, `/integration/coverage`). The Evidence route is planned, not yet built. See `apps/frontend/src/features/findings/AGENTS.md` and `apps/frontend/src/features/integration/AGENTS.md`.
 - Managed System scope is a filter/defaulting context, not duplicated navigation.
 - Use Role Level labels: Admin, Developer, and User. Backend capability checks remain authoritative.
 - Keep Public Update, Reporter Reply, and Internal Comment as separate communication surfaces.
@@ -47,9 +47,9 @@
 
 `docs/design-prototype/` is the spec — see root `AGENTS.md` → Prototype Is The Spec. Frontend-specific enforcement:
 
-- **Every FE chunk brief MUST quote the prototype path being implemented** (`screen-<feature>.jsx` + relevant `data.js` keys + baseline screenshot path). A brief without these three is rejected.
+- **Every FE chunk brief quotes the prototype path being implemented** (`screen-<feature>.jsx` + relevant `data.js` keys + baseline screenshot path). Review rejects a brief without these three.
 - **First action of any FE chunk:** open the prototype file, open the baseline PNG, write a 5-line "matching plan" listing the shells, sections, copy keys, and interactions being mirrored. Embed that plan in the PR description.
-- **No invention.** If the prototype is silent on a behavior or visual decision, stop and ask — do not fill the gap with framework defaults or personal taste. Document the resolution in PR body.
+- **No invention.** If the prototype is silent on a behavior or visual decision, check `docs/frontend/specs/`, `docs/design/`, and the ADRs first — prototype silence alone is not a ban. If all are silent, stop and ask; do not fill the gap with framework defaults or personal taste. Document the resolution in PR body.
 
 ## Page-Level Pixel-Diff (CP-pixel, BLOCKING)
 
@@ -58,7 +58,7 @@ Every page-level FE issue (route mount, full screen) runs a structured Playwrigh
 **Steps:**
 
 1. Boot dev server + DB seed; authenticate via mock-login.
-2. Capture target page with Playwright MCP at desktop 1440. Capture both the empty-state and the populated-state if the route has both.
+2. Capture the target page at desktop 1440 with the `ego-browser` skill, or with the committed `tests/visual` harness when the route has one. Capture both the empty-state and the populated-state if the route has both.
 3. Place impl screenshot side-by-side with `docs/design-prototype/screenshots/final-baselines/<page>.png` in the report HTML.
 4. **Enumerate every visible difference** in a structured table — no eyeballing, no "looks close". Required columns:
    - **Region** (e.g. `header.title`, `list.row.severity-cell`, `panel.action-footer`)
@@ -82,11 +82,9 @@ Every page-level FE issue (route mount, full screen) runs a structured Playwrigh
 
 ### Durable visual harnesses
 
-For a route with a committed Playwright visual harness (currently `/voc-clusters`), the durable `test:visual` regression run replaces the manual Playwright-MCP recapture step above. The one-time CP-pixel fidelity table against `docs/design-prototype/screenshots/final-baselines/<page>.png` still happens once when introducing the harness, and again for an intentional redesign.
+For a route with a committed Playwright visual harness (a spec in `apps/frontend/tests/visual/*.visual.spec.ts`), the durable `test:visual` regression run replaces the manual recapture step above. The one-time CP-pixel fidelity table against `docs/design-prototype/screenshots/final-baselines/<page>.png` still happens once when introducing the harness, and again for an intentional redesign.
 
-The harness pins a fixed page clock (`FIXED_CLOCK` in `tests/visual/support/visual-test.ts`), so screens that render fixture timestamps as relative time ("3일 전") stay reproducible instead of encoding the capture date. A fixture whose timestamp is newer than the pin will render a future-dated label — move the pin forward with the fixture, and regenerate the affected baselines in that same commit.
-
-The authority prototype baseline is `final-baselines/`, never `pack20-current/`. Committed Playwright screenshot baselines change only in a commit that declares the intended visual change. Blanket `--update-snapshots` to silence red is forbidden. A baseline-change commit must state the intended change, attach or point to the Playwright diff, and have a changed-PNG count equal to the intended-screen count.
+The authority prototype baseline is `final-baselines/`, never `pack20-current/`. Committed Playwright screenshot baselines change only in a commit that declares the intended visual change. Blanket `--update-snapshots` to silence red is forbidden. A baseline-change commit must state the intended change, attach or point to the Playwright diff, and have a changed-PNG count equal to the intended-screen count. Running, extending, and debugging the harness: `apps/frontend/tests/visual/AGENTS.md`.
 
 ## Prototype Copy Authority
 
