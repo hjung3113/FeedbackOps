@@ -8,6 +8,7 @@ import type { Db } from '../../../db/client.js';
 import type { JobLog } from '../../../lib/job-log.js';
 import type { EmbeddingProvider } from '../embedding/port.js';
 import type { PublicUpdateReviewCandidatesService } from '../public-update-review-candidates/service.js';
+import { registerVocClusterAutogenShadow } from './cluster-autogen-shadow.js';
 import { registerEmbedVoc } from './embed-voc.js';
 import { registerVocEmbeddingBackfill } from './embedding-backfill.js';
 import { registerReleasedReviewCandidates } from './released-review-candidates.js';
@@ -36,12 +37,28 @@ export async function registerVocJobs(boss: PgBoss, deps: VocJobDeps): Promise<v
     embeddingEnabled: deps.embeddingEnabled,
     log: deps.log,
   });
+  await registerVocClusterAutogenShadow(boss, {
+    db: deps.db,
+    embeddingVersion: deps.embeddingVersion,
+    embeddingEnabled: deps.embeddingEnabled,
+    log: deps.log,
+  });
   await registerReleasedReviewCandidates(boss, {
     publicUpdateReviewCandidatesService: deps.publicUpdateReviewCandidatesService,
     log: deps.log,
   });
 }
 
+export {
+  VOC_CLUSTER_AUTOGEN_SHADOW_CRON,
+  VOC_CLUSTER_AUTOGEN_SHADOW_MAX_PAIRS_PER_MANAGED_SYSTEM_PER_RUN,
+  VOC_CLUSTER_AUTOGEN_SHADOW_MEASUREMENT_FLOOR,
+  VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE,
+  VOC_CLUSTER_AUTOGEN_SHADOW_STATEMENT_TIMEOUT_MS,
+  runVocClusterAutogenShadow,
+  registerVocClusterAutogenShadow,
+  type VocClusterAutogenShadowResult,
+} from './cluster-autogen-shadow.js';
 export {
   VOC_EMBED_QUEUE,
   embedVoc,

@@ -61,3 +61,7 @@ Switching to BullMQ or Temporal, splitting workers into a separate process, or w
 ## Implementation note — Issue #165
 
 `tasks.create_public_update_review_candidates` is pre-created with the locked retry defaults (5 / 30 / exponential). The release transaction uses pg-boss's Drizzle adapter (`fromDrizzle(tx, sql)`) so the Task status mutation, audit, idempotency record, and publication commit or roll back together. The worker inserts candidates and their audit rows atomically with `ON CONFLICT DO NOTHING`.
+
+## Implementation note — Issue #512
+
+`voc.cluster_autogen_shadow` is pre-created by migration `0051_voc_cluster_autogen_shadow.sql` with the same retry defaults and registered hourly from `registerVocJobs`. It upserts pairwise measurement output into the separate non-domain table `voc.voc_cluster_autogen_shadow_candidates`; this job performs no audited domain action and writes no `core.audit_log` or `system.` event. Its measurement floor and the still-open requirements for any non-human cluster origin are recorded in ADR-0054.
