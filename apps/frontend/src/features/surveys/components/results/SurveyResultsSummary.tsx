@@ -1,4 +1,6 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { RequestTaskModal } from '@/features/findings/components/FindingDetail/RequestTaskModal';
+import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
 import type { FindingSeverity, SurveyResultDto } from '@fops/shared';
 import {
   Button,
@@ -14,7 +16,7 @@ import {
   SelectValue,
 } from '@fops/ui';
 import { FilePlus } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useCreateFindingFromSurveyResponse } from '../../hooks/useCreateFindingFromSurveyResponse';
 import type { Survey } from '../../types';
 
@@ -255,6 +257,34 @@ function CreateFindingDraftPanel({
   );
 }
 
+// Mounted only while a Finding is selected, so the results page needs no
+// QueryClient unless a Request Task action is actually used.
+function SelectedFindingRequest({
+  findingId,
+  onClose,
+  onLoadError,
+  onReady,
+}: {
+  findingId: string;
+  onClose: () => void;
+  onLoadError: (findingId: string) => void;
+  onReady: (findingId: string) => void;
+}) {
+  const finding = useFindingDetail(findingId);
+  const loaded = finding.data?.id === findingId ? finding.data : undefined;
+
+  useEffect(() => {
+    if (loaded) onReady(findingId);
+  }, [findingId, loaded, onReady]);
+
+  useEffect(() => {
+    if (finding.isError && !finding.isFetching && !loaded) onLoadError(findingId);
+  }, [finding.isError, finding.isFetching, findingId, loaded, onLoadError]);
+
+  if (!loaded) return null;
+  return <RequestTaskModal finding={loaded} onClose={onClose} open />;
+}
+
 function NextActions({
   actions,
   results,
@@ -265,7 +295,22 @@ function NextActions({
   surveyId: string;
 }) {
   const [draftOpen, setDraftOpen] = useState(false);
+  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
+  const [readyFindingId, setReadyFindingId] = useState<string | null>(null);
+  const [loadErrorFindingId, setLoadErrorFindingId] = useState<string | null>(null);
   const groups = excerptsByResponse(results);
+
+  const handleReady = useCallback((findingId: string) => setReadyFindingId(findingId), []);
+  const handleLoadError = useCallback((findingId: string) => {
+    setLoadErrorFindingId(findingId);
+    setSelectedFindingId(null);
+  }, []);
+  const handleClose = useCallback(() => {
+    setSelectedFindingId(null);
+    setReadyFindingId(null);
+    setLoadErrorFindingId(null);
+  }, []);
+
   if (actions.length === 0) return null;
 
   return (
@@ -279,10 +324,14 @@ function NextActions({
       <div className="mt-3 space-y-2">
         {actions.map((action) => {
           const label = action.id === 'create_finding' ? 'Create Finding' : 'Request Task';
+          const actionKey =
+            action.id === 'request_task'
+              ? `${action.id}:${action.source_finding_id ?? ''}`
+              : action.id;
           if (action.availability === 'blocked_requestable') {
             if (!action.requestable_permission) {
               return (
-                <div className="space-y-1" data-action-id={action.id} key={action.id}>
+                <div className="space-y-1" data-action-id={action.id} key={actionKey}>
                   <Button disabled type="button" variant="secondary">
                     Request access
                   </Button>
@@ -293,7 +342,7 @@ function NextActions({
               );
             }
             return (
-              <div data-action-id={action.id} key={action.id}>
+              <div data-action-id={action.id} key={actionKey}>
                 <RequestAccessButton
                   capability={action.requestable_permission.permission}
                   managedSystemId={action.requestable_permission.managed_system_id}
@@ -308,7 +357,7 @@ function NextActions({
               <div
                 className="space-y-1"
                 data-testid="survey-result-action-create-finding"
-                key={action.id}
+                key={actionKey}
               >
                 <Button
                   className="w-full justify-start text-left"
@@ -330,13 +379,43 @@ function NextActions({
               </div>
             );
           }
+          const actionLoading =
+            selectedFindingId === action.source_finding_id &&
+            readyFindingId !== action.source_finding_id;
           return (
-            <Button data-action-id={action.id} key={action.id} type="button" variant="secondary">
-              {label}
-            </Button>
+            <div className="space-y-1" key={actionKey}>
+              <Button
+                data-action-id={action.id}
+                disabled={actionLoading}
+                loading={actionLoading}
+                onClick={() => {
+                  setLoadErrorFindingId(null);
+                  setReadyFindingId(null);
+                  setSelectedFindingId(action.source_finding_id);
+                }}
+                type="button"
+                variant="secondary"
+              >
+                {label}
+              </Button>
+              {loadErrorFindingId === action.source_finding_id && (
+                <p className="text-sm text-text-danger" role="alert">
+                  Finding could not be loaded.
+                </p>
+              )}
+            </div>
           );
         })}
       </div>
+      {selectedFindingId && (
+        <SelectedFindingRequest
+          findingId={selectedFindingId}
+          key={selectedFindingId}
+          onClose={handleClose}
+          onLoadError={handleLoadError}
+          onReady={handleReady}
+        />
+      )}
     </aside>
   );
 }
