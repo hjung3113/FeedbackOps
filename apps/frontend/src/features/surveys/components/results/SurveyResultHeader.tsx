@@ -12,9 +12,9 @@ export function SurveyResultHeader({
   activeTab: 'results' | 'follow-up';
   followUpRead?: OutcomeFollowUpReadDto | null | undefined;
 }) {
-  const canReviewResponses = followUpRead?.personal_access === true;
+  const canReviewResponses = survey.type === 'outcome' && followUpRead?.personal_access === true;
   const openCount =
-    followUpRead?.personal_access === true
+    survey.type === 'outcome' && followUpRead?.personal_access === true
       ? followUpRead.items.filter((item) => item.resolution === 'open').length
       : 0;
   const tabClass = (active: boolean) =>

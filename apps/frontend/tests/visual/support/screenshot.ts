@@ -1,6 +1,10 @@
-import { type Locator, type Page, expect } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
-export async function expectVisual(page: Page, finalState: Locator, name: string): Promise<void> {
+export async function expectVisual(
+  page: Page,
+  finalState: Locator,
+  name: string,
+): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await expect(finalState).toBeVisible();
   await page.mouse.move(0, 0);

@@ -14,10 +14,6 @@ test.describe('VOC create pre-submit similar VOC visual harness (#293)', () => {
     await expect(panel).toContainText('2건');
     await expect(panel).toContainText('Tableau 새로고침 실패');
     await expect(panel).toContainText('VOC-2931');
-    await expectVisual(
-      page,
-      page.locator('#voc-create-form').locator('..').locator('..'),
-      'voc-create.png',
-    );
+    await expectVisual(page, page.locator('#voc-create-form').locator('..').locator('..'), 'voc-create.png');
   });
 });

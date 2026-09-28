@@ -1,3 +1,4 @@
+import { SurveyResultHeader } from '@/features/surveys/components/results/SurveyResultHeader';
 import { SurveyResultsSummary } from '@/features/surveys/components/results/SurveyResultsSummary';
 import { useOutcomeFollowUp } from '@/features/surveys/hooks/useOutcomeFollowUp';
 import { useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
@@ -43,11 +44,11 @@ export function SurveyResultsRoute() {
   if (results.isError || !results.data) {
     return <EmptyState body="결과를 불러올 수 없습니다." title="설문 결과를 찾을 수 없습니다." />;
   }
+  const followUp = survey.data.type === 'outcome' ? (followUpRead.data ?? null) : null;
   return (
-    <SurveyResultsSummary
-      followUpRead={survey.data.type === 'outcome' ? (followUpRead.data ?? null) : undefined}
-      results={results.data}
-      survey={survey.data}
-    />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SurveyResultHeader activeTab="results" followUpRead={followUp} survey={survey.data} />
+      <SurveyResultsSummary followUpRead={followUp} results={results.data} survey={survey.data} />
+    </div>
   );
 }

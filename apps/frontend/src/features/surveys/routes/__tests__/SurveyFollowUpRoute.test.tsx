@@ -2,8 +2,9 @@ import { routeTree } from '@/routeTree.gen';
 import { outcomeFollowUpMarkedResultSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useSyncExternalStore } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -15,8 +16,11 @@ const {
   useSurveyReadGate,
   useSurveys,
   useOutcomeFollowUp,
+  apiClient,
   apiRequest,
   markConsumed,
+  toastSuccess,
+  idempotencyKeyState,
 } = vi.hoisted(() => ({
   useCloseSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
   useOpenSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
@@ -26,8 +30,18 @@ const {
   useSurveyReadGate: vi.fn(),
   useSurveys: vi.fn(),
   useOutcomeFollowUp: vi.fn(),
+  apiClient: vi.fn(),
   apiRequest: vi.fn(),
   markConsumed: vi.fn(),
+  toastSuccess: vi.fn(),
+  idempotencyKeyState: {
+    index: 0,
+    values: [
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    ],
+  },
 }));
 
 vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => ({
@@ -48,9 +62,16 @@ vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
 }));
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
+  apiClient,
   fetchMe: vi.fn().mockResolvedValue({}),
   apiRequest,
-  useIdempotencyKey: () => ({ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', markConsumed }),
+  useIdempotencyKey: () => ({
+    key: idempotencyKeyState.values[idempotencyKeyState.index] ?? idempotencyKeyState.values[0]!,
+    markConsumed: () => {
+      markConsumed();
+      idempotencyKeyState.index += 1;
+    },
+  }),
 }));
 vi.mock('@/features/admin/permissions/request-access-button', () => ({
   RequestAccessButton: ({ capability }: { capability: string }) => (
@@ -59,13 +80,19 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
     </button>
   ),
 }));
+vi.mock('sonner', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('sonner')>();
+  return { ...actual, toast: Object.assign(actual.toast, { success: toastSuccess }) };
+});
 
 const surveyId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const responseOpen = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const responseOpenSecond = 'abababab-abab-4bab-8bab-abababababab';
 const responseFinding = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const responseNoFollowUp = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const systemId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 const questionId = '11111111-1111-4111-8111-111111111111';
+const secondExcerptId = '44444444-4444-4444-8444-444444444444';
 
 const survey = {
   id: surveyId,
@@ -163,13 +190,24 @@ const results = {
   next_actions: [],
 };
 
-function renderSurveyRoute(read: unknown = holderRead) {
+function renderSurveyRoute(read: unknown = holderRead, resultData: unknown = results) {
   useSurvey.mockReturnValue({ data: survey, isLoading: false, isError: false });
   useSurveys.mockReturnValue({ data: [survey], isLoading: false, error: null });
   useSurveyManageGate.mockReturnValue({ canManage: false, gateState: 'absent' });
   useSurveyReadGate.mockReturnValue({ canRead: true, gateState: undefined });
-  useOutcomeFollowUp.mockReturnValue({ data: read, isLoading: false, isError: false });
-  useSurveyResults.mockReturnValue({ data: results, isLoading: false, isError: false });
+  // A tiny external store so a changed read actually re-renders the mounted route.
+  let current = read;
+  const listeners = new Set<() => void>();
+  const subscribe = (listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  };
+  useOutcomeFollowUp.mockImplementation(() => ({
+    data: useSyncExternalStore(subscribe, () => current),
+    isLoading: false,
+    isError: false,
+  }));
+  useSurveyResults.mockReturnValue({ data: resultData, isLoading: false, isError: false });
 
   const router = createRouter({
     routeTree,
@@ -177,18 +215,30 @@ function renderSurveyRoute(read: unknown = holderRead) {
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
-  render(
+  const tree = (
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  return { invalidateQueries, router };
+  const rendered = render(tree);
+  return {
+    invalidateQueries,
+    router,
+    rerenderRead(nextRead: unknown) {
+      act(() => {
+        current = nextRead;
+        for (const listener of listeners) listener();
+      });
+    },
+  };
 }
 
 describe('/surveys/:surveyId/follow-up route', () => {
   afterEach(() => vi.clearAllMocks());
   beforeEach(() => {
     apiRequest.mockReset();
+    apiClient.mockReset();
+    idempotencyKeyState.index = 0;
   });
 
   it('defaults to Open, shows only open items, counts filters, and renders the selected response detail', async () => {
@@ -229,6 +279,65 @@ describe('/surveys/:surveyId/follow-up route', () => {
       `/surveys/${surveyId}/results`,
     );
     expect(screen.queryByText(/응답 #\d/)).not.toBeInTheDocument();
+  });
+
+  it('keeps response B and its in-progress reason when response A settles after a switch', async () => {
+    renderSurveyRoute({
+      ...holderRead,
+      items: [item(responseOpen, 4, 'open'), item(responseOpenSecond, 5, 'open')],
+    });
+    const user = userEvent.setup();
+    await screen.findByTestId('follow-up-row-4');
+    await user.click(screen.getByRole('button', { name: '후속 조치 없음…' }));
+    const dialogA = await screen.findByRole('dialog');
+    await user.type(within(dialogA).getByTestId('follow-up-decision-reason'), 'A reason');
+
+    let resolveMark: ((value: unknown) => void) | undefined;
+    apiRequest.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveMark = resolve;
+        }),
+    );
+    await user.click(within(dialogA).getByRole('button', { name: '후속 조치 없음' }));
+    expect(resolveMark).toBeDefined();
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByTestId('follow-up-row-5'));
+    await user.click(screen.getByRole('button', { name: '후속 조치 없음…' }));
+    const reasonB = await screen.findByTestId('follow-up-decision-reason');
+    await user.type(reasonB, 'B draft must stay');
+
+    await act(async () => {
+      resolveMark?.({
+        data: {
+          response_id: responseOpen,
+          resolution: 'no_follow_up',
+          updated_at: '2026-09-22T00:00:00.000Z',
+        },
+      });
+    });
+
+    expect(screen.getByTestId('follow-up-row-5')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('follow-up-decision-reason')).toHaveValue('B draft must stay');
+  });
+
+  it('clears the selected detail when refreshed data moves it outside the active filter', async () => {
+    const { rerenderRead } = renderSurveyRoute({
+      ...holderRead,
+      items: [item(responseOpen, 4, 'open'), item(responseOpenSecond, 5, 'open')],
+    });
+    await screen.findByTestId('follow-up-detail-panel');
+
+    rerenderRead({
+      ...holderRead,
+      items: [item(responseOpen, 4, 'finding'), item(responseOpenSecond, 5, 'open')],
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('follow-up-detail-panel')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('follow-up-row-5')).toBeInTheDocument();
   });
 
   it('explains when the survey is not classifiable without exposing the anonymity threshold', async () => {
@@ -317,7 +426,7 @@ describe('/surveys/:surveyId/follow-up route', () => {
     ['action_no_longer_available', '이 응답은 더 이상 후속 조치 대상이 아닙니다.'],
     ['recovery_item_resolved', '이미 처리된 응답입니다.'],
   ])('shows the structured 409 message for %s and refetches', async (failureCode, message) => {
-    const { invalidateQueries } = renderSurveyRoute({
+    const { invalidateQueries, rerenderRead } = renderSurveyRoute({
       ...holderRead,
       items: [item(responseOpen, 4, 'open')],
     });
@@ -333,11 +442,130 @@ describe('/surveys/:surveyId/follow-up route', () => {
     apiRequest.mockRejectedValue(conflict);
     await user.click(within(dialog).getByRole('button', { name: '후속 조치 없음' }));
 
-    expect(await screen.findByTestId('follow-up-decision-error')).toHaveTextContent(message);
+    expect(await screen.findByTestId('follow-up-decision-notice')).toHaveTextContent(message);
+    expect(markConsumed).toHaveBeenCalledOnce();
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['surveys', surveyId, 'outcome-follow-up'],
     });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['surveys', surveyId, 'results'] });
+
+    rerenderRead({
+      ...holderRead,
+      classifiable: false,
+      follow_up_needed: false,
+      items: [],
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('follow-up-decision-notice')).toHaveTextContent(message),
+    );
+    expect(screen.getByText('후속 검토를 사용할 수 없습니다.')).toBeInTheDocument();
+  });
+
+  it('shows retry guidance and rotates the idempotency key after key reuse conflict', async () => {
+    renderSurveyRoute({
+      ...holderRead,
+      items: [item(responseOpen, 4, 'open')],
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: '후속 조치 없음…' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByTestId('follow-up-decision-reason'), '재시도 사유');
+    apiRequest.mockRejectedValueOnce(
+      new (await import('@/lib/api')).ApiError(409, {
+        code: 'conflict.idempotency_key_reuse',
+        message: 'Key reused',
+        detail: {},
+      }),
+    );
+    await user.click(within(dialog).getByRole('button', { name: '후속 조치 없음' }));
+
+    expect(await screen.findByTestId('follow-up-decision-notice')).toHaveTextContent(
+      '요청 키가 만료되었습니다. 다시 시도해 주세요.',
+    );
+    expect(markConsumed).toHaveBeenCalledOnce();
+
+    await user.clear(within(dialog).getByTestId('follow-up-decision-reason'));
+    await user.type(within(dialog).getByTestId('follow-up-decision-reason'), '수정된 재시도 사유');
+    apiRequest.mockResolvedValueOnce({
+      data: {
+        response_id: responseOpen,
+        resolution: 'no_follow_up',
+        updated_at: '2026-09-22T00:00:00.000Z',
+      },
+    });
+    await user.click(within(dialog).getByRole('button', { name: '후속 조치 없음' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    const requestKeys = apiRequest.mock.calls.map((call) => call[3]?.idempotencyKey);
+    expect(requestKeys).toEqual([
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    ]);
+    expect(markConsumed).toHaveBeenCalledTimes(2);
+  });
+
+  it('creates a Finding with only the selected response approved excerpt ids', async () => {
+    const secondResults = {
+      ...results,
+      questions: [
+        {
+          ...results.questions[0]!,
+          excerpts: [
+            ...results.questions[0]!.excerpts,
+            {
+              id: secondExcerptId,
+              text: '두 번째 응답의 승인된 발췌입니다.',
+              response_id: responseOpenSecond,
+            },
+          ],
+        },
+      ],
+    };
+    renderSurveyRoute(
+      {
+        ...holderRead,
+        items: [item(responseOpen, 4, 'open'), item(responseOpenSecond, 5, 'open')],
+      },
+      secondResults,
+    );
+    const user = userEvent.setup();
+    await screen.findByTestId('follow-up-row-4');
+    await user.click(screen.getByTestId('follow-up-row-5'));
+    await user.click(screen.getByRole('button', { name: 'Create Finding' }));
+
+    expect(screen.queryByText('Choose a response')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId(`survey-finding-excerpt-${secondExcerptId}`));
+    apiClient.mockResolvedValue({
+      data: { id: '99999999-9999-4999-8999-999999999999', display_id: 'FND-424' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Create selected Finding' }));
+
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        `/survey-responses/${responseOpenSecond}/create-finding`,
+        {
+          body: { severity: 'medium', approved_excerpt_ids: [secondExcerptId] },
+        },
+      ),
+    );
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Finding FND-424 created.'));
+    await waitFor(() =>
+      expect(screen.queryByTestId('follow-up-detail-panel')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('disables Create Finding and explains when the selected response has no approved excerpts', async () => {
+    renderSurveyRoute({
+      ...holderRead,
+      items: [item(responseOpenSecond, 5, 'open')],
+    });
+
+    const createFinding = await screen.findByRole('button', { name: 'Create Finding' });
+    expect(createFinding).toBeDisabled();
+    expect(
+      screen.getByText('No approved excerpts are available for a response you can access.'),
+    ).toBeInTheDocument();
   });
 
   it('reopens a no-follow-up response with a required reason', async () => {

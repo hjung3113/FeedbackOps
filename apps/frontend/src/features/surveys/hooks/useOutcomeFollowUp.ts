@@ -40,6 +40,8 @@ export function useOutcomeFollowUp(surveyId: string, enabled = true) {
       ).data,
     enabled: Boolean(surveyId) && enabled,
     retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 

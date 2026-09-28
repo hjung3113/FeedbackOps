@@ -8,7 +8,6 @@ import { FilePlus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { Survey } from '../../types';
 import { CreateFindingDraftPanel, excerptsByResponse } from './CreateFindingDraftPanel';
-import { SurveyResultHeader } from './SurveyResultHeader';
 
 export interface SurveyResultsSummaryProps {
   survey: Survey;
@@ -267,16 +266,15 @@ export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyRe
     (followUpRead === undefined
       ? results.next_actions.length > 0
       : followUpRead?.follow_up_needed === true);
-  const hasOutcomeHeader = followUpRead !== undefined;
-
+  // The route renders SurveyResultHeader above this component for every survey type and always
+  // passes followUpRead (null when not applicable). `undefined` only happens in direct-render
+  // tests, which keep the in-body title below.
+  const directRender = followUpRead === undefined;
   return (
     <main className="flex min-h-0 flex-1 flex-col" data-testid="survey-results-summary">
-      {followUpRead !== undefined && (
-        <SurveyResultHeader activeTab="results" followUpRead={followUpRead} survey={survey} />
-      )}
       <div className="mx-auto w-full max-w-6xl p-6">
         <header className="border-b border-border-subtle pb-5">
-          {!hasOutcomeHeader && (
+          {directRender && (
             <>
               <p className="text-sm text-text-muted">{survey.display_id}</p>
               <h1 className="mt-1 text-xl font-semibold text-text-primary">{survey.title}</h1>
@@ -290,6 +288,7 @@ export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyRe
           )}
           {hasOutcomeFollowUp &&
             (followUpRead === undefined ? (
+              // Legacy direct-render branch keeps the develop-era Summary test green.
               <p className="mt-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-primary">
                 Outcome follow-up is available
               </p>

@@ -16,9 +16,8 @@ import {
 } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { useCreateFindingFromSurveyResponse } from '../../hooks/useCreateFindingFromSurveyResponse';
 import {
   invalidateOutcomeFollowUpAfterConflict,
   useMarkOutcomeFollowUpNoAction,
@@ -77,7 +76,6 @@ function DecisionReasonDialog({
   pending,
   reason,
   setReason,
-  errorMessage,
 }: {
   action: DecisionAction | null;
   onClose: () => void;
@@ -85,7 +83,6 @@ function DecisionReasonDialog({
   pending: boolean;
   reason: string;
   setReason: (value: string) => void;
-  errorMessage: string | null;
 }) {
   const trimmedReason = reason.trim();
   const title = action === 'reopen' ? '후속 조치 다시 열기' : '후속 조치 없음 기록';
@@ -111,15 +108,6 @@ function DecisionReasonDialog({
             value={reason}
           />
         </label>
-        {errorMessage && (
-          <p
-            className="text-sm text-text-danger"
-            data-testid="follow-up-decision-error"
-            role="alert"
-          >
-            {errorMessage}
-          </p>
-        )}
         <DialogFooter className="gap-2 sm:gap-2">
           <Button onClick={onClose} type="button" variant="secondary">
             취소
@@ -146,23 +134,23 @@ function OutcomeFollowUpDetailPanel({
   resultsError,
   resultsLoading,
   onClose,
+  setDecisionNotice,
 }: {
   item: OutcomeFollowUpItem;
   survey: Survey;
   results?: SurveyResultDto | undefined;
   resultsError: boolean;
   resultsLoading: boolean;
-  onClose: () => void;
+  onClose: (responseId: string) => void;
+  setDecisionNotice: (notice: string | null) => void;
 }) {
   const queryClient = useQueryClient();
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
   const mark = useMarkOutcomeFollowUpNoAction(survey.id);
   const reopen = useReopenOutcomeFollowUp(survey.id);
-  const createFinding = useCreateFindingFromSurveyResponse(survey.id);
   const [draftOpen, setDraftOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<DecisionAction | null>(null);
   const [reason, setReason] = useState('');
-  const [decisionError, setDecisionError] = useState<string | null>(null);
   const responseExcerpts = results
     ? (excerptsByResponse(results).find((group) => group[0]?.response_id === item.response_id) ??
       [])
@@ -172,10 +160,11 @@ function OutcomeFollowUpDetailPanel({
   async function submitDecision() {
     const trimmedReason = reason.trim();
     if (!dialogAction || trimmedReason.length === 0 || trimmedReason.length > 2000) return;
-    setDecisionError(null);
+    const submittedResponseId = item.response_id;
+    setDecisionNotice(null);
     try {
       const request = {
-        responseId: item.response_id,
+        responseId: submittedResponseId,
         reason: trimmedReason,
         idempotencyKey,
       };
@@ -189,22 +178,26 @@ function OutcomeFollowUpDetailPanel({
           ? '후속 조치 없음으로 기록했습니다.'
           : '후속 조치를 다시 열었습니다.',
       );
-      onClose();
+      onClose(submittedResponseId);
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         const failureCode = error.detail?.failure_code;
-        if (failureCode === 'action_no_longer_available') {
-          setDecisionError('이 응답은 더 이상 후속 조치 대상이 아닙니다.');
+        if (error.code === 'conflict.idempotency_key_reuse') {
+          setDecisionNotice('요청 키가 만료되었습니다. 다시 시도해 주세요.');
+        } else if (failureCode === 'action_no_longer_available') {
+          setDecisionNotice('이 응답은 더 이상 후속 조치 대상이 아닙니다.');
         } else if (failureCode === 'recovery_item_resolved') {
-          setDecisionError('이미 처리된 응답입니다.');
+          setDecisionNotice('이미 처리된 응답입니다.');
         } else {
-          setDecisionError(errorMapper(error.envelope).message);
+          setDecisionNotice(errorMapper(error.envelope).message);
         }
+        markConsumed();
         await invalidateOutcomeFollowUpAfterConflict(queryClient, survey.id);
       } else if (error instanceof ApiError) {
-        setDecisionError(errorMapper(error.envelope).message);
+        setDecisionNotice(errorMapper(error.envelope).message);
+        markConsumed();
       } else {
-        setDecisionError('요청을 처리하지 못했습니다.');
+        setDecisionNotice('요청을 처리하지 못했습니다.');
       }
     }
   }
@@ -220,7 +213,7 @@ function OutcomeFollowUpDetailPanel({
       <DetailPanelHeader
         kind="survey"
         id={`RESPONSE · 응답 #${displayResponseNumber(item.response_number)}`}
-        onClose={onClose}
+        onClose={() => onClose(item.response_id)}
       />
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
         <h2 className="text-base font-semibold text-text-primary">후속 조치 필요</h2>
@@ -292,11 +285,11 @@ function OutcomeFollowUpDetailPanel({
             return (
               <div className="space-y-1" key={action.id}>
                 <Button
-                  disabled={
-                    resultsLoading || resultsError || excerptsUnavailable || createFinding.isPending
-                  }
-                  loading={createFinding.isPending}
-                  onClick={() => setDraftOpen(true)}
+                  disabled={resultsLoading || resultsError || excerptsUnavailable}
+                  onClick={() => {
+                    setDecisionNotice(null);
+                    setDraftOpen(true);
+                  }}
                   type="button"
                   variant="primary"
                 >
@@ -316,6 +309,11 @@ function OutcomeFollowUpDetailPanel({
                 {draftOpen && (
                   <CreateFindingDraftPanel
                     groups={responseExcerpts.length > 0 ? [responseExcerpts] : []}
+                    onCreated={(finding, responseId) => {
+                      toast.success(`Finding ${finding.display_id} created.`);
+                      setDecisionNotice(null);
+                      onClose(responseId);
+                    }}
                     scopedResponseId={item.response_id}
                     surveyId={survey.id}
                   />
@@ -329,7 +327,7 @@ function OutcomeFollowUpDetailPanel({
                 key={action.id}
                 onClick={() => {
                   setReason('');
-                  setDecisionError(null);
+                  setDecisionNotice(null);
                   setDialogAction('mark');
                 }}
                 type="button"
@@ -344,7 +342,7 @@ function OutcomeFollowUpDetailPanel({
               key={action.id}
               onClick={() => {
                 setReason('');
-                setDecisionError(null);
+                setDecisionNotice(null);
                 setDialogAction('reopen');
               }}
               type="button"
@@ -357,10 +355,9 @@ function OutcomeFollowUpDetailPanel({
       </footer>
       <DecisionReasonDialog
         action={dialogAction}
-        errorMessage={decisionError}
         onClose={() => {
           setDialogAction(null);
-          setDecisionError(null);
+          setDecisionNotice(null);
         }}
         onSubmit={() => void submitDecision()}
         pending={dialogPending}
@@ -376,16 +373,19 @@ function EmptyReviewPage({
   title,
   body,
   followUpRead,
+  notice,
 }: {
   survey: Survey;
   title: string;
   body: string;
   followUpRead?: OutcomeFollowUpReadDto | null | undefined;
+  notice: string | null;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SurveyResultHeader activeTab="follow-up" followUpRead={followUpRead} survey={survey} />
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center p-6">
+        {notice && <DecisionNotice message={notice} />}
         <EmptyState body={body} title={title} />
         <Link
           className="mt-3 text-sm font-medium text-accent-primary underline-offset-2 hover:underline"
@@ -399,10 +399,23 @@ function EmptyReviewPage({
   );
 }
 
+function DecisionNotice({ message }: { message: string }) {
+  return (
+    <p
+      className="mb-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-danger"
+      data-testid="follow-up-decision-notice"
+      role="alert"
+    >
+      {message}
+    </p>
+  );
+}
+
 export function SurveyFollowUpUnavailable({ survey }: { survey: Survey }) {
   return (
     <EmptyReviewPage
       body={NOT_CLASSIFIABLE_BODY}
+      notice={null}
       survey={survey}
       title="후속 검토를 사용할 수 없습니다."
     />
@@ -428,12 +441,25 @@ export function OutcomeFollowUpReview({
       ? (followUpRead.items.find((item) => item.resolution === 'open')?.response_id ?? null)
       : null,
   );
+  const [decisionNotice, setDecisionNotice] = useState<string | null>(null);
+  const allItems = followUpRead.personal_access ? followUpRead.items : [];
+  const visibleItems = allItems.filter((item) => item.resolution === activeFilter);
+
+  useEffect(() => {
+    if (
+      selectedResponseId &&
+      !visibleItems.some((item) => item.response_id === selectedResponseId)
+    ) {
+      setSelectedResponseId(null);
+    }
+  }, [selectedResponseId, visibleItems]);
 
   if (!followUpRead.personal_access) {
     return (
       <EmptyReviewPage
         body="개인 응답 열람 권한이 있어야 응답별로 검토할 수 있습니다."
         followUpRead={followUpRead}
+        notice={decisionNotice}
         survey={survey}
         title="개인 응답 열람 권한이 필요합니다."
       />
@@ -444,16 +470,15 @@ export function OutcomeFollowUpReview({
       <EmptyReviewPage
         body={NOT_CLASSIFIABLE_BODY}
         followUpRead={followUpRead}
+        notice={decisionNotice}
         survey={survey}
         title="후속 검토를 사용할 수 없습니다."
       />
     );
   }
 
-  const allItems = followUpRead.items;
-  const visibleItems = allItems.filter((item) => item.resolution === activeFilter);
   const selectedItem = selectedResponseId
-    ? allItems.find((item) => item.response_id === selectedResponseId)
+    ? visibleItems.find((item) => item.response_id === selectedResponseId)
     : undefined;
 
   function selectFilter(nextFilter: ResolutionFilter) {
@@ -486,7 +511,10 @@ export function OutcomeFollowUpReview({
                   .join(' ')}
                 data-testid={`follow-up-row-${item.response_number}`}
                 key={item.response_id}
-                onClick={() => setSelectedResponseId(item.response_id)}
+                onClick={() => {
+                  setDecisionNotice(null);
+                  setSelectedResponseId(item.response_id);
+                }}
                 type="button"
               >
                 <span className="font-mono text-text-secondary">
@@ -535,7 +563,10 @@ export function OutcomeFollowUpReview({
                         ].join(' '),
                   ].join(' ')}
                   key={filter}
-                  onClick={() => selectFilter(filter)}
+                  onClick={() => {
+                    setDecisionNotice(null);
+                    selectFilter(filter);
+                  }}
                   type="button"
                 >
                   {FILTER_LABELS[filter]} {count}
@@ -552,7 +583,10 @@ export function OutcomeFollowUpReview({
             <OutcomeFollowUpDetailPanel
               item={selectedItem}
               key={selectedItem.response_id}
-              onClose={() => setSelectedResponseId(null)}
+              onClose={(responseId) =>
+                setSelectedResponseId((current) => (current === responseId ? null : current))
+              }
+              setDecisionNotice={setDecisionNotice}
               resultsError={resultsError}
               resultsLoading={resultsLoading}
               results={results}
@@ -561,6 +595,7 @@ export function OutcomeFollowUpReview({
           ) : null
         }
       />
+      {decisionNotice && <DecisionNotice message={decisionNotice} />}
       {resultsError && (
         <output className="sr-only">
           승인된 발췌를 불러오지 못했습니다. Create Finding을 사용할 수 없습니다.

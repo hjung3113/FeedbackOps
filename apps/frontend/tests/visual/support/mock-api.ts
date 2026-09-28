@@ -99,6 +99,8 @@ import {
   surveyResultVisualFixture,
   surveyResultVisualListFixture,
   surveyResultsFixtureFor,
+  surveyResultsNonOutcomeVisualFixture,
+  surveyResultsNonOutcomeVisualListFixture,
 } from '../fixtures/survey-results';
 import {
   type SurveyVisualScenario,
@@ -836,7 +838,13 @@ export async function installMockApi(
     }
 
     if (options.surveyResultsScenario && isRequest(route, 'GET', '/surveys')) {
-      await json(route, 200, surveyResultVisualListFixture);
+      await json(
+        route,
+        200,
+        options.surveyResultsScenario === 'non-outcome'
+          ? surveyResultsNonOutcomeVisualListFixture
+          : surveyResultVisualListFixture,
+      );
       return;
     }
 
@@ -844,7 +852,13 @@ export async function installMockApi(
       options.surveyResultsScenario &&
       isRequest(route, 'GET', `/surveys/${surveyResultVisualFixture.id}`)
     ) {
-      await json(route, 200, surveyResultVisualFixture);
+      await json(
+        route,
+        200,
+        options.surveyResultsScenario === 'non-outcome'
+          ? surveyResultsNonOutcomeVisualFixture
+          : surveyResultVisualFixture,
+      );
       return;
     }
 

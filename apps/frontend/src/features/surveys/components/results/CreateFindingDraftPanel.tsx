@@ -1,4 +1,4 @@
-import type { FindingSeverity, SurveyResultDto } from '@fops/shared';
+import type { FindingDto, FindingSeverity, SurveyResultDto } from '@fops/shared';
 import {
   Button,
   Checkbox,
@@ -34,17 +34,21 @@ export function CreateFindingDraftPanel({
   surveyId,
   groups,
   scopedResponseId,
+  onCreated,
 }: {
   surveyId: string;
   groups: ResponseExcerpt[][];
-  scopedResponseId?: string;
+  scopedResponseId?: string | undefined;
+  onCreated?: ((finding: FindingDto, responseId: string) => void) | undefined;
 }) {
   const [selection, setSelection] = useState<{ responseId?: string; excerptIds: string[] }>(() => ({
     ...(scopedResponseId ? { responseId: scopedResponseId } : {}),
     excerptIds: [],
   }));
   const [severity, setSeverity] = useState<FindingSeverity>('medium');
-  const mutation = useCreateFindingFromSurveyResponse(surveyId);
+  const mutation = useCreateFindingFromSurveyResponse(surveyId, (finding, variables) =>
+    onCreated?.(finding, variables.responseId),
+  );
   const selectedGroup = groups.find((group) => group[0]?.response_id === selection.responseId);
   const selectedExcerptIds = selection.excerptIds.filter((id) =>
     selectedGroup?.some((excerpt) => excerpt.id === id),

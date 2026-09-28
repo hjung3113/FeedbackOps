@@ -32,6 +32,10 @@ test.describe('/surveys/:surveyId/results visual harness', () => {
           ? page.getByText('Survey Result')
           : page.getByTestId('survey-results-summary');
       await expect(target).toBeVisible();
+      if (scenario === 'non-outcome') {
+        await expect(page.getByTestId('survey-result-header')).toBeVisible();
+        await expect(page.getByRole('navigation', { name: 'Survey result views' })).toHaveCount(0);
+      }
       await expectVisual(page, target, `survey-results-${scenario}.png`);
     });
   }
