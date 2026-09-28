@@ -4,6 +4,8 @@ import { useCreateSurvey, useSurvey, useSurveys } from '@/features/surveys/hooks
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
 import type { SurveyType } from '@/features/surveys/types';
 import { fetchAnalyticsAreas, fetchCapabilityScope, fetchManagedSystems } from '@/lib/api';
+import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import {
   Button,
   Dialog,
@@ -52,6 +54,18 @@ export function SurveysIndexRoute() {
   const managedSystemId = search.managedSystem === 'all' ? undefined : search.managedSystem;
   const query = useSurveys(managedSystemId);
   const gate = useSurveyManageGate();
+  const managedSystemNames = useManagedSystemNamesResult();
+  const managedSystemNamesById = managedSystemNames.isSuccess
+    ? managedSystemNames.namesById
+    : undefined;
+  const { actors, isSuccess: actorsResolved } = useWorkspaceActors();
+  const actorNamesById = React.useMemo(
+    () =>
+      actorsResolved
+        ? new Map((actors ?? []).map((actor) => [actor.id, actor.display_name]))
+        : undefined,
+    [actors, actorsResolved],
+  );
   const [createOpen, setCreateOpen] = React.useState(false);
   const selectedId = search.selected ?? null;
   const selected = useSurvey(selectedId ?? '');
@@ -101,6 +115,8 @@ export function SurveysIndexRoute() {
             {...(gate.permissionState !== undefined
               ? { permissionState: gate.permissionState }
               : {})}
+            managedSystemNamesById={managedSystemNamesById}
+            actorNamesById={actorNamesById}
             onCreate={() => setCreateOpen(true)}
             onRetry={() => void query.refetch()}
           />
@@ -111,6 +127,8 @@ export function SurveysIndexRoute() {
               survey={selected.data}
               canManage={selectedGate.canManage}
               onClose={handleClose}
+              managedSystemNamesById={managedSystemNamesById}
+              actorNamesById={actorNamesById}
             />
           ) : undefined
         }

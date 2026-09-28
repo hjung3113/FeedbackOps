@@ -159,7 +159,7 @@ Pack 20 QA refresh: `screenshots/pack20-current/` (headless Chromium, 1440×960,
 | Coverage signals | `#route=integration-coverage` | `screenshots/final-baselines/integration-coverage.png` | PageShell coverage cards, missing-link queries, threshold modal entry points |
 | Entity links | `#route=integration-links` | `screenshots/final-baselines/integration-links.png` | ListShell list/detail layout, bulk-detach, freshness timestamp |
 | Survey list cards | `#route=surveys` | `screenshots/final-baselines/surveys-list.png` | ObjectCard consumer pattern and survey follow-up CTA framing |
-| Survey builder | `#route=survey-builder` | `screenshots/final-baselines/survey-builder.png` | WorkbenchShell builder layout, outline drag-reorder, preview drawer header baseline |
+| Survey builder | `#route=survey-builder` | `screenshots/final-baselines/survey-builder.png` | WorkbenchShell builder layout, outline drag-reorder, preview drawer header baseline; intentional editable zero-question onboarding added |
 | Survey result follow-up | `#route=survey-result` | `screenshots/final-baselines/survey-result.png` | Five allowed follow-up actions, anonymity threshold language, draft-panel entry points |
 | Admin managed systems | `#route=admin` | `screenshots/final-baselines/admin-managed-systems.png` | Managed-system registry density and permission teaser placement |
 | Analytics areas | `#route=admin-areas` | `screenshots/final-baselines/admin-analytics-areas.png` | PageShell analytics-area catalog and slide-over entry affordance |

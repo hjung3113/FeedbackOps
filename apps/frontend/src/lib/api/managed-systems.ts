@@ -1,7 +1,7 @@
 // Managed Systems registry (Slice 2 #10).
 
-import { ApiError, type ApiErrorEnvelope } from './types';
 import { UnauthenticatedError } from './auth';
+import { ApiError, type ApiErrorEnvelope } from './types';
 
 export interface ManagedSystemDto {
   id: string;
@@ -44,10 +44,12 @@ async function readEnvelope(res: Response): Promise<never> {
 
 export async function fetchManagedSystems(options?: {
   includeArchived?: boolean;
+  limit?: number;
   signal?: AbortSignal;
 }): Promise<{ items: ManagedSystemDto[]; total: number }> {
   const params = new URLSearchParams();
   if (options?.includeArchived) params.set('include_archived', 'true');
+  if (options?.limit !== undefined) params.set('limit', String(options.limit));
   const url = `/managed-systems${params.size ? `?${params.toString()}` : ''}`;
   const init: RequestInit = { credentials: 'same-origin' };
   if (options?.signal) init.signal = options.signal;

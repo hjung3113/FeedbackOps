@@ -1,7 +1,7 @@
 import type { ApiError } from '@/lib/api';
 import * as React from 'react';
 import { useOpenSurvey, useSurveyQuestionMutations } from '../../../hooks/useSurveys';
-import type { Survey, SurveyQuestion } from '../../../types';
+import type { QuestionKind, Survey, SurveyQuestion } from '../../../types';
 import { applyServerQuestionId, denseQuestions, newQuestion } from '../lib/questionDraft';
 import { saveSurveyDraft } from '../lib/saveSurveyDraft';
 
@@ -30,7 +30,7 @@ export function useSurveyBuilderController(args: {
   launchError: ApiError | null;
   confirmLaunch: () => void;
   patch: (next: SurveyQuestion) => void;
-  add: () => void;
+  add: (kind?: QuestionKind) => void;
   remove: (id: string) => void;
   reorder: (fromIndex: number, toIndex: number) => void;
   save: () => Promise<void>;
@@ -65,8 +65,8 @@ export function useSurveyBuilderController(args: {
     setSaveFailed(false);
   };
 
-  const add = () => {
-    const localQuestion = newQuestion(survey.id, questionsRef.current.length);
+  const add = (kind: QuestionKind = 'single_choice') => {
+    const localQuestion = newQuestion(survey.id, questionsRef.current.length, kind);
     updateQuestions((all) => [...all, localQuestion]);
     setSelectedId(localQuestion.id);
     setDirty(true);

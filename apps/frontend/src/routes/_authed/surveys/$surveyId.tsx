@@ -3,8 +3,11 @@ import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail'
 import { SurveyList } from '@/features/surveys/components/list/SurveyList';
 import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
+import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
 import { Outlet, createFileRoute, useMatchRoute, useNavigate } from '@tanstack/react-router';
+import { useMemo } from 'react';
 import { z } from 'zod';
 
 const searchSchema = z.object({ builder: z.boolean().optional() }).strict();
@@ -26,6 +29,18 @@ export function SurveyDetailRoute() {
   const query = useSurvey(surveyId);
   const gate = useSurveyManageGate(query.data?.primary_managed_system_id);
   const list = useSurveys();
+  const managedSystemNames = useManagedSystemNamesResult({ enabled: !isResultsRoute });
+  const managedSystemNamesById = managedSystemNames.isSuccess
+    ? managedSystemNames.namesById
+    : undefined;
+  const actorsQuery = useWorkspaceActors({ enabled: !isResultsRoute });
+  const actorNamesById = useMemo(
+    () =>
+      actorsQuery.isSuccess
+        ? new Map((actorsQuery.actors ?? []).map((actor) => [actor.id, actor.display_name]))
+        : undefined,
+    [actorsQuery.actors, actorsQuery.isSuccess],
+  );
 
   if (isResultsRoute) return <Outlet />;
   if (query.isLoading) return <div className="p-6 text-sm text-text-muted">불러오는 중…</div>;
@@ -48,6 +63,7 @@ export function SurveyDetailRoute() {
       <SurveyBuilder
         survey={query.data}
         canManage
+        managedSystemNamesById={managedSystemNamesById}
         {...(gate.gateState ? { gateState: gate.gateState } : {})}
         onBack={() => void navigate({ to: '/surveys/$surveyId', params: { surveyId } })}
       />
@@ -62,6 +78,8 @@ export function SurveyDetailRoute() {
           error={list.error}
           onRetry={() => void list.refetch()}
           selectedId={surveyId}
+          managedSystemNamesById={managedSystemNamesById}
+          actorNamesById={actorNamesById}
           onSelect={(id) =>
             void navigate({
               to: '/surveys/$surveyId',
@@ -75,6 +93,8 @@ export function SurveyDetailRoute() {
           survey={query.data}
           canManage={gate.canManage}
           onClose={() => void navigate({ to: '/surveys' })}
+          managedSystemNamesById={managedSystemNamesById}
+          actorNamesById={actorNamesById}
         />
       }
     />

@@ -1,16 +1,12 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import type { FrontendPermissionState } from '@/lib/api';
-import { Button, Input, Skeleton } from '@fops/ui';
+import { Button, Input, Skeleton, UserAvatar } from '@fops/ui';
 import { Grid2X2, List, Plus } from 'lucide-react';
 import * as React from 'react';
 import type { Survey, SurveyStatus } from '../../types';
-
-const statusLabel: Record<SurveyStatus, string> = {
-  draft: 'Draft',
-  open: 'Open',
-  closed: 'Closed',
-};
+import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
+import { SurveyStatusBadge, surveyStatusLabel } from '../SurveyStatusBadge';
 const tabs: Array<{ label: string; value: SurveyStatus | 'all' }> = [
   { label: 'All', value: 'all' },
   { label: 'Open', value: 'open' },
@@ -28,6 +24,8 @@ export interface SurveyListProps {
   permissionState?: FrontendPermissionState;
   onCreate?: () => void;
   onRetry?: () => void;
+  managedSystemNamesById?: ReadonlyMap<string, string> | undefined;
+  actorNamesById?: ReadonlyMap<string, string> | undefined;
 }
 
 export function SurveyList({
@@ -40,6 +38,8 @@ export function SurveyList({
   permissionState,
   onCreate,
   onRetry,
+  managedSystemNamesById,
+  actorNamesById,
 }: SurveyListProps) {
   const [status, setStatus] = React.useState<SurveyStatus | 'all'>('all');
   const [search, setSearch] = React.useState('');
@@ -68,7 +68,7 @@ export function SurveyList({
       </div>
     );
   const activeConditions = [
-    ...(status !== 'all' ? [`상태: ${statusLabel[status]}`] : []),
+    ...(status !== 'all' ? [`상태: ${surveyStatusLabel(status)}`] : []),
     ...(search.length > 0 ? [`검색어: ${search}`] : []),
   ];
   const isFilteredEmpty = surveys.length > 0 && visible.length === 0 && activeConditions.length > 0;
@@ -181,32 +181,56 @@ export function SurveyList({
           }
           data-testid={viewMode === 'list' ? 'survey-list-rows' : 'survey-list-cards'}
         >
-          {visible.map((survey) => (
-            <button
-              key={survey.id}
-              type="button"
-              onClick={() => onSelect(survey.id)}
-              className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-card ${viewMode === 'card' ? 'rounded border border-border-subtle' : ''} ${selectedId === survey.id ? 'bg-surface-detail' : ''}`}
-              data-testid={`survey-row-${survey.id}`}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium text-text-primary">{survey.title}</span>
-                <span className="flex flex-wrap gap-x-2 text-xs text-text-muted">
-                  <span>{survey.display_id}</span>
-                  <span>{survey.primary_managed_system_id}</span>
-                  <span>{statusLabel[survey.status]}</span>
-                  <span>{survey.type}</span>
+          {visible.map((survey) => {
+            const operatorLookupPending =
+              survey.operator_actor_id !== null && actorNamesById === undefined;
+            const operatorName = survey.operator_actor_id
+              ? actorNamesById === undefined
+                ? '—'
+                : (actorNamesById.get(survey.operator_actor_id) ?? '알 수 없는 사용자')
+              : null;
+            return (
+              <button
+                key={survey.id}
+                type="button"
+                onClick={() => onSelect(survey.id)}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-card ${viewMode === 'card' ? 'rounded border border-border-subtle' : ''} ${selectedId === survey.id ? 'bg-surface-detail' : ''}`}
+                data-testid={`survey-row-${survey.id}`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-text-primary">
+                    {survey.title}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-x-2 text-xs text-text-muted">
+                    <span>{survey.display_id}</span>
+                    <span aria-hidden="true">·</span>
+                    <SurveyStatusBadge status={survey.status} />
+                    <span aria-hidden="true">·</span>
+                    <span>{survey.type}</span>
+                    <span aria-hidden="true">·</span>
+                    <SurveyManagedSystemPill
+                      name={managedSystemNamesById?.get(survey.primary_managed_system_id)}
+                      resolved={managedSystemNamesById !== undefined}
+                    />
+                  </span>
                 </span>
-              </span>
-              <span className="text-right text-xs text-text-muted">
-                <span className="block">Responses</span>
-                <span>— / —</span>
-              </span>
-              <span className="max-w-24 truncate text-xs text-text-muted">
-                {survey.operator_actor_id ?? 'Unassigned'}
-              </span>
-            </button>
-          ))}
+                <span
+                  className={`flex max-w-40 shrink-0 items-center gap-2 truncate text-xs ${operatorLookupPending ? 'text-text-muted' : 'text-text-secondary'}`}
+                >
+                  {operatorName === null ? (
+                    <span>담당자 미지정</span>
+                  ) : operatorLookupPending ? (
+                    <span>—</span>
+                  ) : (
+                    <>
+                      <UserAvatar user={{ display_name: operatorName }} size="sm" />
+                      <span className="truncate">{operatorName}</span>
+                    </>
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

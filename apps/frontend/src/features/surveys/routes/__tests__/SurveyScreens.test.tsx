@@ -11,6 +11,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SurveyStatusBadge } from '../../components/SurveyStatusBadge';
 import { SurveyBuilder } from '../../components/builder/SurveyBuilder';
 import { SurveyDetail } from '../../components/detail/SurveyDetail';
 import { SurveyList } from '../../components/list/SurveyList';
@@ -94,7 +95,13 @@ function renderWithQuery(node: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
 }
 
-function renderDetailWithRouter(detailSurvey: Survey, canManage: boolean) {
+function renderDetailWithRouter(
+  detailSurvey: Survey,
+  canManage: boolean,
+  onClose?: () => void,
+  managedSystemNamesById?: ReadonlyMap<string, string>,
+  actorNamesById?: ReadonlyMap<string, string>,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -102,7 +109,15 @@ function renderDetailWithRouter(detailSurvey: Survey, canManage: boolean) {
   const detail = createRoute({
     getParentRoute: () => root,
     path: '/',
-    component: () => <SurveyDetail survey={detailSurvey} canManage={canManage} />,
+    component: () => (
+      <SurveyDetail
+        survey={detailSurvey}
+        canManage={canManage}
+        {...(onClose !== undefined ? { onClose } : {})}
+        {...(managedSystemNamesById !== undefined ? { managedSystemNamesById } : {})}
+        {...(actorNamesById !== undefined ? { actorNamesById } : {})}
+      />
+    ),
   });
   const router = createRouter({
     routeTree: root.addChildren([detail]),
@@ -145,7 +160,9 @@ describe('Survey screens', () => {
     expect(select).toHaveBeenCalledWith('survey-1');
     fireEvent.click(screen.getByRole('button', { name: '카드 보기' }));
     expect(screen.getByTestId('survey-list-cards')).toBeInTheDocument();
-    expect(screen.getByText('— / —')).toBeInTheDocument();
+    const row = screen.getByTestId('survey-row-survey-1');
+    expect(row).not.toHaveTextContent('Responses');
+    expect(row).not.toHaveTextContent('— / —');
     rerender(<SurveyList surveys={[]} isLoading={false} error={null} onSelect={select} />);
     expect(screen.getByText('생성된 설문이 없습니다.')).toBeInTheDocument();
     rerender(<SurveyList surveys={[]} isLoading error={null} onSelect={select} />);
@@ -160,6 +177,142 @@ describe('Survey screens', () => {
       />,
     );
     expect(screen.getByTestId('survey-list-error')).toBeInTheDocument();
+  });
+
+  it('resolves list row names and removes response placeholders and UUIDs', () => {
+    const managedSystemId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const operatorId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const rowSurvey = {
+      ...survey,
+      primary_managed_system_id: managedSystemId,
+      operator_actor_id: operatorId,
+    };
+    render(
+      <SurveyList
+        surveys={[rowSurvey]}
+        isLoading={false}
+        error={null}
+        onSelect={vi.fn()}
+        managedSystemNamesById={new Map([[managedSystemId, 'Revenue Analytics']])}
+        actorNamesById={new Map([[operatorId, 'Named Operator']])}
+      />,
+    );
+
+    const row = screen.getByTestId('survey-row-survey-1');
+    expect(row).toHaveTextContent('Revenue Analytics');
+    expect(row).toHaveTextContent('Named Operator');
+    expect(row).not.toHaveTextContent(managedSystemId);
+    expect(row).not.toHaveTextContent(operatorId);
+    expect(row).not.toHaveTextContent('Responses');
+    expect(row).not.toHaveTextContent('— / —');
+  });
+
+  it('uses safe list fallbacks for an unassigned operator and unknown lookup ids', () => {
+    const unknownSystemId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const unknownActorId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    const rowSurvey = {
+      ...survey,
+      primary_managed_system_id: unknownSystemId,
+    };
+    const unassignedSurvey = { ...survey, operator_actor_id: null };
+    const { rerender } = render(
+      <SurveyList surveys={[unassignedSurvey]} isLoading={false} error={null} onSelect={vi.fn()} />,
+    );
+    expect(screen.getByTestId('survey-row-survey-1')).toHaveTextContent('담당자 미지정');
+
+    rerender(
+      <SurveyList
+        surveys={[{ ...rowSurvey, operator_actor_id: unknownActorId }]}
+        isLoading={false}
+        error={null}
+        onSelect={vi.fn()}
+        managedSystemNamesById={new Map()}
+        actorNamesById={new Map()}
+      />,
+    );
+    const row = screen.getByTestId('survey-row-survey-1');
+    expect(row).toHaveTextContent('알 수 없는 Managed System');
+    expect(row).toHaveTextContent('알 수 없는 사용자');
+    expect(row).not.toHaveTextContent(unknownSystemId);
+    expect(row).not.toHaveTextContent(unknownActorId);
+  });
+
+  it('uses neutral labels while Managed System and actor lookups are unresolved', () => {
+    const rowSurvey = {
+      ...survey,
+      operator_actor_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    };
+    render(<SurveyList surveys={[rowSurvey]} isLoading={false} error={null} onSelect={vi.fn()} />);
+
+    const row = screen.getByTestId('survey-row-survey-1');
+    expect(within(row).getAllByText('—', { exact: true }).length).toBeGreaterThanOrEqual(2);
+    expect(row).not.toHaveTextContent('알 수 없는 Managed System');
+    expect(row).not.toHaveTextContent('알 수 없는 사용자');
+  });
+
+  it.each([
+    ['draft', 'Draft'],
+    ['open', 'Open'],
+    ['closed', 'Closed'],
+  ] as const)('presents survey status %s as %s', (status, label) => {
+    render(<SurveyStatusBadge status={status} />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.queryByText(status, { exact: true })).not.toBeInTheDocument();
+  });
+
+  it('renders the shared Survey detail header with its canonical close action', async () => {
+    const onClose = vi.fn();
+    renderDetailWithRouter(survey, false, onClose);
+
+    const header = await screen.findByTestId('detail-panel-header-content');
+    expect(header.parentElement).toHaveAttribute('data-kind', 'survey');
+    expect(within(header).getByText('Survey')).toBeInTheDocument();
+    expect(within(header).getByText('SRV-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the Survey detail header close action when no callback is provided', async () => {
+    renderDetailWithRouter(survey, false);
+
+    expect(await screen.findByTestId('detail-panel-header-content')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
+  });
+
+  it('resolves Survey detail and builder Managed System and operator names', async () => {
+    const managedSystemId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const operatorId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const namedSurvey = {
+      ...survey,
+      primary_managed_system_id: managedSystemId,
+      operator_actor_id: operatorId,
+    };
+    const managedSystemNamesById = new Map([[managedSystemId, 'Revenue Analytics']]);
+    const actorNamesById = new Map([[operatorId, 'Named Operator']]);
+
+    const detailView = renderDetailWithRouter(
+      namedSurvey,
+      false,
+      undefined,
+      managedSystemNamesById,
+      actorNamesById,
+    );
+    expect(await screen.findByText('Revenue Analytics')).toBeInTheDocument();
+    expect(screen.getByText('담당자 · Named Operator')).toBeInTheDocument();
+    expect(screen.queryByText(managedSystemId)).not.toBeInTheDocument();
+    expect(screen.queryByText(operatorId)).not.toBeInTheDocument();
+    detailView.unmount();
+
+    renderWithQuery(
+      <SurveyBuilder
+        survey={namedSurvey}
+        canManage
+        managedSystemNamesById={managedSystemNamesById}
+        onBack={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText('Revenue Analytics').length).toBeGreaterThan(0);
+    expect(screen.queryByText(managedSystemId)).not.toBeInTheDocument();
   });
 
   it('refetches the survey list from the error state', async () => {
@@ -203,7 +356,9 @@ describe('Survey screens', () => {
       // negative assertions below have nothing to beat.
       expect(screen.getByTestId('survey-builder')).toBeInTheDocument();
       expect(screen.getAllByText('도움이 되었나요?')).toHaveLength(2);
-      expect(screen.getByText(`${status} 상태 — 질문 변경은 잠겨 있습니다.`)).toBeInTheDocument();
+      const label = status === 'open' ? 'Open' : 'Closed';
+      expect(screen.getByText(`${label} 상태 — 질문 변경은 잠겨 있습니다.`)).toBeInTheDocument();
+      expect(screen.queryByText(status, { exact: true })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '새 질문 추가' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Survey title')).not.toBeInTheDocument();
@@ -213,21 +368,90 @@ describe('Survey screens', () => {
     },
   );
 
-  it('renders the actual closed status in builder and detail lock copy', async () => {
+  it('renders a canonical closed status in builder and detail lock copy', async () => {
     const closedSurvey = { ...survey, status: 'closed' as const };
-    renderWithQuery(<SurveyBuilder survey={closedSurvey} canManage onBack={vi.fn()} />);
-    expect(screen.getByText('closed · discovery')).toBeInTheDocument();
-    expect(screen.getByText('closed 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
+    const builderView = renderWithQuery(
+      <SurveyBuilder survey={closedSurvey} canManage onBack={vi.fn()} />,
+    );
+    expect(screen.getByText('Closed')).toBeInTheDocument();
+    expect(screen.queryByText('closed · discovery')).not.toBeInTheDocument();
+    expect(screen.getByText('Closed 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('closed', { exact: true })).not.toBeInTheDocument();
+    builderView.unmount();
     renderDetailWithRouter(closedSurvey, true);
-    expect(await screen.findByText('closed 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
+    expect(await screen.findByText('Closed 상태 — 질문 변경은 잠겨 있습니다.')).toBeInTheDocument();
+    expect(screen.getByText('Closed')).toBeInTheDocument();
+    expect(screen.queryByText('closed', { exact: true })).not.toBeInTheDocument();
+  });
+
+  it('starts an editable empty builder with question kind cards and adds the selected kind', () => {
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
+    );
+
+    expect(screen.queryByText('Questions 0')).not.toBeInTheDocument();
+    expect(screen.getByText('첫 질문을 추가하세요')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '질문 유형을 고르면 바로 편집을 시작합니다. 나중에 유형을 바꾸거나 질문을 더 추가할 수 있습니다.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByTestId(/^survey-question-kind-/)
+        .map((card) => card.getAttribute('data-question-kind')),
+    ).toEqual(['single_choice', 'multiple_choice', 'rating', 'text']);
+    fireEvent.click(screen.getByRole('button', { name: /^척도/ }));
+
+    expect(screen.getByText('Questions 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('최소 점수')).toBeInTheDocument();
+    expect(screen.queryByText('첫 질문을 추가하세요')).not.toBeInTheDocument();
+  });
+
+  it('creates a rating question with its default bounds from an empty builder', async () => {
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^척도/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        '/surveys/survey-1/questions',
+        expect.objectContaining({
+          body: expect.objectContaining({ kind: 'rating', rating_min: 1, rating_max: 5 }),
+        }),
+      ),
+    );
+  });
+
+  it('keeps an empty read-only builder without question cards or add actions', () => {
+    renderWithQuery(
+      <SurveyBuilder
+        survey={{ ...survey, status: 'open', questions: [] }}
+        canManage
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Questions 0')).not.toBeInTheDocument();
+    expect(screen.getByText('질문이 없습니다.')).toHaveClass('text-text-muted');
+    expect(screen.queryByRole('button', { name: /^단일 선택/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^복수 선택/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^척도/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^주관식/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '새 질문 추가' })).not.toBeInTheDocument();
   });
 
   it('renders a survey detail title, type, status, and questions', async () => {
     renderDetailWithRouter(survey, false);
 
     expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
-    expect(screen.getByText('SRV-1 · discovery')).toBeInTheDocument();
-    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.getByText('SRV-1')).toBeInTheDocument();
+    expect(screen.getByText('discovery')).toBeInTheDocument();
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+    expect(screen.getByText('담당자 · 담당자 미지정')).toBeInTheDocument();
     expect(screen.getByText('Q1. 도움이 되었나요?')).toBeInTheDocument();
   });
 
@@ -688,6 +912,20 @@ describe('Survey screens', () => {
         'PATCH',
         '/surveys/survey-1/questions/question-created',
         expect.objectContaining({ body: expect.objectContaining({ prompt: 'POST 중 수정' }) }),
+      ),
+    );
+  });
+
+  it('creates a single-choice question from the populated builder add button', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        '/surveys/survey-1/questions',
+        expect.objectContaining({ body: expect.objectContaining({ kind: 'single_choice' }) }),
       ),
     );
   });

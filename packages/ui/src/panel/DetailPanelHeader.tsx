@@ -14,7 +14,7 @@ export interface DetailPanelHeaderProps {
    * unavailable record data.
    */
   id?: string;
-  onClose: () => void;
+  onClose?: () => void;
   extras?: React.ReactNode;
   className?: string;
 }
@@ -100,19 +100,21 @@ export function DetailPanelHeader({
         {extras !== undefined && <div className="ml-auto flex items-center">{extras}</div>}
 
         {/* Close button */}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="패널 닫기"
-          className={cn(
-            'flex items-center justify-center rounded p-1',
-            'text-text-muted hover:text-text-primary hover:bg-surface-canvas',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            extras === undefined && 'ml-auto',
-          )}
-        >
-          <X size={16} />
-        </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="패널 닫기"
+            className={cn(
+              'flex items-center justify-center rounded p-1',
+              'text-text-muted hover:text-text-primary hover:bg-surface-canvas',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              extras === undefined && 'ml-auto',
+            )}
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
     </div>
   );

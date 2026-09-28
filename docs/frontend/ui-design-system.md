@@ -424,6 +424,14 @@ Families:
 - permission-request-status
 ```
 
+Survey status labels:
+
+```text
+- draft → Draft (neutral)
+- open → Open (accent)
+- closed → Closed (muted-strong)
+```
+
 Rules:
 
 ```text
