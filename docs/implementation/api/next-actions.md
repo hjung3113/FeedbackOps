@@ -21,7 +21,10 @@ from score thresholds alone. Recommendation reasons must use domain-safe summary
 text and must not expose hidden response detail.
 
 Survey Results returns permission-filtered `next_actions`: `create_finding` is
-always present. `request_task` for Findings derived from Survey Responses is deferred to issue #239.
+always present. A `request_task` action is emitted for each Survey-derived
+Finding connected through an active `generated_finding` link when the actor can
+read that Finding. The client loads the Finding by `source_finding_id` and
+submits the request through `POST /findings/:id/request-task`.
 
 `attach_evidence_to_existing_voc` may be returned only when eligible target VOCs
 exist in the actor's effective Managed System scope, the actor may see

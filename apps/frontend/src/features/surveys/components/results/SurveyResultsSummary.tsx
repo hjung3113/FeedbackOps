@@ -1,4 +1,6 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
+import { RequestTaskModal } from '@/features/findings/components/FindingDetail/RequestTaskModal';
+import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
 import type { FindingSeverity, SurveyResultDto } from '@fops/shared';
 import {
   Button,
@@ -255,6 +257,40 @@ function CreateFindingDraftPanel({
   );
 }
 
+function RequestTaskAction({ findingId }: { findingId: string }) {
+  const [open, setOpen] = useState(false);
+  const finding = useFindingDetail(open ? findingId : null);
+  const loading = open && finding.isFetching && !finding.data;
+
+  function openRequestTask() {
+    if (finding.isError) void finding.refetch();
+    setOpen(true);
+  }
+
+  return (
+    <div className="space-y-1">
+      <Button
+        data-action-id="request_task"
+        disabled={loading}
+        loading={loading}
+        onClick={openRequestTask}
+        type="button"
+        variant="secondary"
+      >
+        Request Task
+      </Button>
+      {open && finding.isError && !finding.data && (
+        <p className="text-sm text-text-danger" role="alert">
+          Finding could not be loaded.
+        </p>
+      )}
+      {finding.data && (
+        <RequestTaskModal finding={finding.data} onClose={() => setOpen(false)} open={open} />
+      )}
+    </div>
+  );
+}
+
 function NextActions({
   actions,
   results,
@@ -279,10 +315,14 @@ function NextActions({
       <div className="mt-3 space-y-2">
         {actions.map((action) => {
           const label = action.id === 'create_finding' ? 'Create Finding' : 'Request Task';
+          const actionKey =
+            action.id === 'request_task'
+              ? `${action.id}:${action.source_finding_id ?? ''}`
+              : action.id;
           if (action.availability === 'blocked_requestable') {
             if (!action.requestable_permission) {
               return (
-                <div className="space-y-1" data-action-id={action.id} key={action.id}>
+                <div className="space-y-1" data-action-id={action.id} key={actionKey}>
                   <Button disabled type="button" variant="secondary">
                     Request access
                   </Button>
@@ -293,7 +333,7 @@ function NextActions({
               );
             }
             return (
-              <div data-action-id={action.id} key={action.id}>
+              <div data-action-id={action.id} key={actionKey}>
                 <RequestAccessButton
                   capability={action.requestable_permission.permission}
                   managedSystemId={action.requestable_permission.managed_system_id}
@@ -308,7 +348,7 @@ function NextActions({
               <div
                 className="space-y-1"
                 data-testid="survey-result-action-create-finding"
-                key={action.id}
+                key={actionKey}
               >
                 <Button
                   className="w-full justify-start text-left"
@@ -331,9 +371,9 @@ function NextActions({
             );
           }
           return (
-            <Button data-action-id={action.id} key={action.id} type="button" variant="secondary">
-              {label}
-            </Button>
+            <div key={actionKey}>
+              <RequestTaskAction findingId={action.source_finding_id} />
+            </div>
           );
         })}
       </div>
