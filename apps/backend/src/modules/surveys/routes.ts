@@ -152,6 +152,20 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       });
     return reply.send(await opts.surveysService.getSurveyResults(actor(req), id));
   });
+  app.get(
+    '/surveys/:id/outcome-follow-up',
+    { preHandler: pre, ...rate('read') },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+      const q = emptyQuery.safeParse(req.query);
+      if (!q.success)
+        return sendError(reply, 'validation.failed', 'invalid query parameters', {
+          fields: fieldsFromZodIssues(q.error.issues),
+        });
+      return reply.send(await opts.surveysService.getOutcomeFollowUp(actor(req), id));
+    },
+  );
   app.post(
     '/survey-responses/:id/create-finding',
     { preHandler: pre, ...rate('mutation') },

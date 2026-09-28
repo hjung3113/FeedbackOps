@@ -145,12 +145,26 @@ use the survey response as subject; detail is strict
 - Marked responses drop out of the active queue and re-enter on reopen or when
   the linked Finding becomes `not_actionable` or `archived`; the audit trail,
   not the queue, remains the decision history.
-- Parts C/D of #510 remain open: the review read endpoint
-  (`GET /surveys/:id/outcome-follow-up`) with permission-gated
-  `next_actions`/`recommended_action_id`, and the Survey-owned review UI. The
-  per-response `subject_id`/poor-flag disclosure rules of the research
-  (personal-grain only behind `survey.read_personal_responses`) bind those
-  parts; this ADR does not add any read surface.
+- Part C shipped: `GET /surveys/:id/outcome-follow-up` (migration 0053)
+  returns strict `{ survey_id, classifiable, follow_up_needed,
+  personal_access, items }`. An actor without `survey.read_personal_responses`
+  receives only the survey-grain booleans — no counts, no response ids, no
+  per-response flags, so no small-number disclosure is possible. A holder
+  receives `items`: exactly the poor responses at every resolution, each with
+  `response_id`, the 1-based `response_number` by `(submitted_at, id)`,
+  low-band `low_answers`, `resolution`, the qualifying Finding (its metadata
+  only within the caller's Finding read scope — the Finding may even sit on a
+  different Managed System than the Survey; outside that scope the item keeps
+  `resolution: 'finding'` with `finding: null`), the current
+  decision, and permission-filtered `next_actions` (`create_finding` +
+  `mark_no_follow_up` when open, `reopen_follow_up` when no-follow-up, none
+  when a Finding resolves; `allowed` iff `finding.manage` with the Admin role
+  bypass on the Survey's primary Managed System). Items are read through the
+  definer `survey.read_outcome_follow_up_items_personal` only after the
+  personal seam, and each exposed (response, low-answer question) pair writes
+  one `survey_response_personal_read` audit row in the same transaction.
+  Part D, the Survey-owned review UI (`/surveys/$surveyId/follow-up`),
+  remains open; the per-response disclosure rules above bind it.
 
 ## Reopening triggers
 
