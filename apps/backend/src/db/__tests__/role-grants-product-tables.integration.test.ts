@@ -54,6 +54,8 @@ type DmlPrivilege = (typeof DML_PRIVILEGES)[number];
 const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
 const SURVEY_AGGREGATE_FUNCTIONS = [
   'count_negative_outcome_without_followup',
+  'rating_band_for_value',
+  'read_outcome_follow_up_state',
   'read_result_aggregates',
   'read_result_response_count',
 ] as const;
@@ -127,6 +129,9 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // Issue #512 measurements are durable, but application code cannot erase
   // an observation; migration 0051 grants only the shadow worker's DML needs.
   'voc.voc_cluster_autogen_shadow_candidates': ['SELECT', 'INSERT', 'UPDATE'],
+  // Migration 0052 (ADR-0055): the current follow-up decision is updated in
+  // place, never deleted. UPDATE is column-scoped and asserted below.
+  'survey.outcome_follow_up_decisions': ['SELECT', 'INSERT'],
 };
 
 describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice 3 #22)', () => {
@@ -246,6 +251,39 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'UPDATE') as has_table_update,
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'DELETE') as has_delete,
            has_table_privilege('fops_app', 'voc.public_update_review_candidates', 'TRUNCATE') as has_truncate`,
+    );
+    expect(tablePrivileges[0]).toEqual({
+      has_table_update: false,
+      has_delete: false,
+      has_truncate: false,
+    });
+  });
+
+  it('fops_app UPDATE on outcome follow-up decisions is limited to transition columns', async () => {
+    const { rows } = await migrateHandle.pool.query<{ column_name: string }>(
+      `select column_name
+           from information_schema.column_privileges
+          where grantee = 'fops_app'
+            and table_schema = 'survey'
+            and table_name = 'outcome_follow_up_decisions'
+            and privilege_type = 'UPDATE'
+          order by column_name`,
+    );
+    expect(rows.map((row) => row.column_name)).toEqual([
+      'decided_by_actor_id',
+      'reason',
+      'state',
+      'updated_at',
+    ]);
+    const { rows: tablePrivileges } = await migrateHandle.pool.query<{
+      has_table_update: boolean;
+      has_delete: boolean;
+      has_truncate: boolean;
+    }>(
+      `select
+           has_table_privilege('fops_app', 'survey.outcome_follow_up_decisions', 'UPDATE') as has_table_update,
+           has_table_privilege('fops_app', 'survey.outcome_follow_up_decisions', 'DELETE') as has_delete,
+           has_table_privilege('fops_app', 'survey.outcome_follow_up_decisions', 'TRUNCATE') as has_truncate`,
     );
     expect(tablePrivileges[0]).toEqual({
       has_table_update: false,

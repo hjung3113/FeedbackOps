@@ -38,3 +38,29 @@ export async function readSurveyResultResponseCount(
   );
   return Number(result.rows[0]?.response_count ?? 0);
 }
+
+export type OutcomeFollowUpStateRow = {
+  survey_id: string;
+  survey_status: 'draft' | 'open' | 'closed';
+  is_outcome: boolean;
+  meets_threshold: boolean;
+  is_poor: boolean;
+  resolution: 'open' | 'finding' | 'no_follow_up';
+};
+
+/**
+ * Per-response follow-up classification through the ADR-0055 definer. Unlike
+ * the aggregate readers above, this one is response-scoped: the surveys
+ * module may call it only after the caller crossed the audited
+ * personal-response seam. It never returns answer values or respondent ids.
+ */
+export async function readOutcomeFollowUpState(
+  db: Db,
+  workspaceId: string,
+  responseId: string,
+): Promise<OutcomeFollowUpStateRow | null> {
+  const result = await db.execute<OutcomeFollowUpStateRow>(
+    sql`select survey_id, survey_status, is_outcome, meets_threshold, is_poor, resolution from survey.read_outcome_follow_up_state(${workspaceId}, ${responseId})`,
+  );
+  return result.rows[0] ?? null;
+}

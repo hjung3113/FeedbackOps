@@ -64,6 +64,13 @@ workflow capability, a non-empty reason, managed_system_id, source object,
 previous recovery state, and affected recovery item ids. Reversal uses a
 separate audited reopen-follow-up action that supersedes the decision and
 triggers recovery item re-evaluation.
+
+For `POST /survey-responses/:id/mark-no-follow-up` and
+`POST /survey-responses/:id/reopen-follow-up` (ADR-0055), these failure codes
+are carried as `detail.failure_code` on `409 conflict.stale_write`: the
+subject that is no longer classifiable as a poor outcome (or reopen with no
+current decision) returns `action_no_longer_available`, and an already
+resolved follow-up returns `recovery_item_resolved`.
 Undoing Survey evidence attachment detaches or revokes the entity_link through a
 separate audited action. It must not hard-delete the Evidence Highlight or erase
 canonical link history.

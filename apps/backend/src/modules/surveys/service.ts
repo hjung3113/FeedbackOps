@@ -5,6 +5,7 @@ import type { IdempotencyService } from '../core/idempotency/idempotency-service
 import type { CheckService } from '../permissions/check-service.js';
 import { createSurveyAuthoring } from './authoring.js';
 import { createSurveyEvidenceAccess } from './evidence-access.js';
+import { createSurveyFollowUp } from './follow-up.js';
 import { createSurveyResults } from './results.js';
 
 export interface SurveysActor {
@@ -31,6 +32,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     ...createSurveyAuthoring(deps),
     ...createSurveyResults(deps),
     ...createSurveyEvidenceAccess(deps),
+    ...createSurveyFollowUp(deps),
   };
 }
 export type SurveysService = ReturnType<typeof createSurveysService>;

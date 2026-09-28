@@ -451,26 +451,60 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
   }
 
   async function seedSurveyGaps(msId: string, total: number) {
-    for (let index = 0; index < total; index += 1) {
-      const survey = await migrateHandle.pool.query<{ id: string }>(
-        `insert into survey.surveys (workspace_id, display_id, type, status, title, primary_managed_system_id, operator_actor_id, responses_identity_protected, created_by, opened_at) values ($1, $2, 'outcome', 'open', $3, $4, $5, true, $5, now()) returning id`,
-        [WORKSPACE_ID, `SRV-${uid('dashboard')}`, `dashboard outcome ${index}`, msId, adminActorId],
+    // 0052 predicate (ADR-0055): only CLOSED outcome surveys whose cohort
+    // meets the workspace anonymity threshold count, with low-band ratings.
+    // One survey per call; `total` poor responses plus high-band filler up to
+    // the threshold, so the queue delta still equals `total`.
+    const settings = await migrateHandle.pool.query<{ threshold: number }>(
+      'select coalesce(max(survey_anonymity_threshold), 5)::int as threshold from core.workspace_settings where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    const threshold = settings.rows[0]?.threshold ?? 5;
+    const survey = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.surveys (workspace_id, display_id, type, status, title, primary_managed_system_id, operator_actor_id, responses_identity_protected, created_by, opened_at, closed_at) values ($1, $2, 'outcome', 'closed', $3, $4, $5, true, $5, now(), now()) returning id`,
+      [
+        WORKSPACE_ID,
+        `SRV-${uid('dashboard')}`,
+        `dashboard outcome ${total}-${uid('dashboard')}`,
+        msId,
+        adminActorId,
+      ],
+    );
+    const surveyId = survey.rows[0]?.id;
+    if (!surveyId) throw new Error('survey seed failed');
+    const question = await migrateHandle.pool.query<{ id: string }>(
+      `insert into survey.survey_questions (workspace_id, survey_id, kind, prompt, is_required, rating_min, rating_max, sort_order, branch_depth) values ($1, $2, 'rating', 'Outcome', false, 1, 5, 0, 0) returning id`,
+      [WORKSPACE_ID, surveyId],
+    );
+    const questionId = question.rows[0]?.id;
+    if (!questionId) throw new Error('question seed failed');
+    const respondents = total + Math.max(0, threshold - total);
+    for (let index = 0; index < respondents; index += 1) {
+      // Distinct respondent per response (unique per survey); the external_id
+      // prefix keeps cleanupFixtures' existing actor delete in scope.
+      const respondent = await migrateHandle.pool.query<{ id: string }>(
+        `insert into core.actors (workspace_id, external_id, email, display_name, role_level, actor_type)
+         values ($1, $2, $3, $2, 'user', 'internal_member') returning id`,
+        [
+          WORKSPACE_ID,
+          `mock-dev-read-dashboard-217-respondent-${uid('dashboard')}`,
+          `respondent-${uid('dashboard')}@example.test`,
+        ],
       );
-      const surveyId = survey.rows[0]?.id;
-      if (!surveyId) throw new Error('survey seed failed');
-      const question = await migrateHandle.pool.query<{ id: string }>(
-        `insert into survey.survey_questions (workspace_id, survey_id, kind, prompt, is_required, rating_min, rating_max, sort_order, branch_depth) values ($1, $2, 'rating', 'Outcome', false, 1, 5, 0, 0) returning id`,
-        [WORKSPACE_ID, surveyId],
-      );
-      const questionId = question.rows[0]?.id;
-      if (!questionId) throw new Error('question seed failed');
       const response = await migrateHandle.pool.query<{ id: string }>(
         `insert into survey.survey_responses (workspace_id, survey_id, respondent_actor_id, identity_protected, submitted_at) values ($1, $2, $3, true, now()) returning id`,
-        [WORKSPACE_ID, surveyId, reporterActorId],
+        [WORKSPACE_ID, surveyId, respondent.rows[0]?.id],
       );
+      // 1-5 low band is 1-2: poor responses rate 1, filler rates 5.
       await migrateHandle.pool.query(
-        `insert into survey.survey_response_answers (workspace_id, survey_id, response_id, question_id, answer_kind, answer_value) values ($1, $2, $3, $4, 'rating', '1'::jsonb)`,
-        [WORKSPACE_ID, surveyId, response.rows[0]?.id, questionId],
+        `insert into survey.survey_response_answers (workspace_id, survey_id, response_id, question_id, answer_kind, answer_value) values ($1, $2, $3, $4, 'rating', $5::jsonb)`,
+        [
+          WORKSPACE_ID,
+          surveyId,
+          response.rows[0]?.id,
+          questionId,
+          JSON.stringify(index < total ? 1 : 5),
+        ],
       );
     }
   }

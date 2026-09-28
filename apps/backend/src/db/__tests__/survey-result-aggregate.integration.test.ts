@@ -84,12 +84,18 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
        returning id, kind`,
       [workspaceId, surveyId],
     );
-    choiceQuestionId = requiredId(questions.rows.find((row) => row.kind === 'single_choice'), 'choice question');
+    choiceQuestionId = requiredId(
+      questions.rows.find((row) => row.kind === 'single_choice'),
+      'choice question',
+    );
     multipleChoiceQuestionId = requiredId(
       questions.rows.find((row) => row.kind === 'multiple_choice'),
       'multiple-choice question',
     );
-    ratingQuestionId = requiredId(questions.rows.find((row) => row.kind === 'rating'), 'rating question');
+    ratingQuestionId = requiredId(
+      questions.rows.find((row) => row.kind === 'rating'),
+      'rating question',
+    );
     const textQuestions = questions.rows.filter((row) => row.kind === 'text');
     textQuestionId = requiredId(textQuestions[0], 'text question');
     mismatchedTextQuestionId = requiredId(textQuestions[1], 'mismatched text question');
@@ -144,23 +150,28 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
   });
 
   afterAll(async () => {
-    await migrateHandle?.pool.query('delete from survey.survey_response_answers where workspace_id = $1', [
-      workspaceId,
-    ]);
+    await migrateHandle?.pool.query(
+      'delete from survey.survey_response_answers where workspace_id = $1',
+      [workspaceId],
+    );
     await migrateHandle?.pool.query('delete from survey.survey_responses where workspace_id = $1', [
       workspaceId,
     ]);
     await migrateHandle?.pool.query('delete from survey.survey_questions where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle?.pool.query('delete from survey.surveys where workspace_id = $1', [workspaceId]);
+    await migrateHandle?.pool.query('delete from survey.surveys where workspace_id = $1', [
+      workspaceId,
+    ]);
     await migrateHandle?.pool.query('delete from core.display_counters where workspace_id = $1', [
       workspaceId,
     ]);
     await migrateHandle?.pool.query('delete from core.managed_systems where workspace_id = $1', [
       workspaceId,
     ]);
-    await migrateHandle?.pool.query('delete from core.actors where workspace_id = $1', [workspaceId]);
+    await migrateHandle?.pool.query('delete from core.actors where workspace_id = $1', [
+      workspaceId,
+    ]);
     await migrateHandle?.pool.query('delete from core.workspaces where id = $1', [workspaceId]);
     await appHandle?.close();
     await migrateHandle?.close();
@@ -180,16 +191,66 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
       [workspaceId, surveyId],
     );
     expect(aggregates.rows).toEqual([
-      { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: 'alpha', bucket_count: '2' },
-      { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: 'beta', bucket_count: '2' },
-      { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: 'gamma', bucket_count: '2' },
-      { question_id: multipleChoiceQuestionId, question_kind: 'multiple_choice', bucket_key: null, bucket_count: '3' },
-      { question_id: ratingQuestionId, question_kind: 'rating', bucket_key: '3', bucket_count: '2' },
-      { question_id: ratingQuestionId, question_kind: 'rating', bucket_key: '5', bucket_count: '1' },
-      { question_id: ratingQuestionId, question_kind: 'rating', bucket_key: null, bucket_count: '3' },
-      { question_id: choiceQuestionId, question_kind: 'single_choice', bucket_key: 'no', bucket_count: '1' },
-      { question_id: choiceQuestionId, question_kind: 'single_choice', bucket_key: 'yes', bucket_count: '2' },
-      { question_id: choiceQuestionId, question_kind: 'single_choice', bucket_key: null, bucket_count: '3' },
+      {
+        question_id: multipleChoiceQuestionId,
+        question_kind: 'multiple_choice',
+        bucket_key: 'alpha',
+        bucket_count: '2',
+      },
+      {
+        question_id: multipleChoiceQuestionId,
+        question_kind: 'multiple_choice',
+        bucket_key: 'beta',
+        bucket_count: '2',
+      },
+      {
+        question_id: multipleChoiceQuestionId,
+        question_kind: 'multiple_choice',
+        bucket_key: 'gamma',
+        bucket_count: '2',
+      },
+      {
+        question_id: multipleChoiceQuestionId,
+        question_kind: 'multiple_choice',
+        bucket_key: null,
+        bucket_count: '3',
+      },
+      {
+        question_id: ratingQuestionId,
+        question_kind: 'rating',
+        bucket_key: '3',
+        bucket_count: '2',
+      },
+      {
+        question_id: ratingQuestionId,
+        question_kind: 'rating',
+        bucket_key: '5',
+        bucket_count: '1',
+      },
+      {
+        question_id: ratingQuestionId,
+        question_kind: 'rating',
+        bucket_key: null,
+        bucket_count: '3',
+      },
+      {
+        question_id: choiceQuestionId,
+        question_kind: 'single_choice',
+        bucket_key: 'no',
+        bucket_count: '1',
+      },
+      {
+        question_id: choiceQuestionId,
+        question_kind: 'single_choice',
+        bucket_key: 'yes',
+        bucket_count: '2',
+      },
+      {
+        question_id: choiceQuestionId,
+        question_kind: 'single_choice',
+        bucket_key: null,
+        bucket_count: '3',
+      },
       { question_id: textQuestionId, question_kind: 'text', bucket_key: null, bucket_count: '3' },
     ]);
     expect(JSON.stringify(aggregates.rows)).not.toContain(textAnswer);
@@ -258,12 +319,13 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
         where n.nspname = 'survey'
           and p.proname in (
             'count_negative_outcome_without_followup',
+            'read_outcome_follow_up_state',
             'read_result_aggregates',
             'read_result_response_count'
           )
         order by p.proname`,
     );
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
     for (const row of rows) {
       expect(row.owner).toBe('fops_survey_aggregate_owner');
       expect(row.prosecdef).toBe(true);
@@ -287,8 +349,12 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
         order by table_name, column_name, privilege_type`,
     );
     expect(columnPrivileges.rows.map((row) => row.privilege)).toEqual([
+      'outcome_follow_up_decisions.response_id.SELECT',
+      'outcome_follow_up_decisions.state.SELECT',
+      'outcome_follow_up_decisions.workspace_id.SELECT',
       'survey_questions.id.SELECT',
       'survey_questions.kind.SELECT',
+      'survey_questions.rating_max.SELECT',
       'survey_questions.rating_min.SELECT',
       'survey_questions.survey_id.SELECT',
       'survey_questions.workspace_id.SELECT',
@@ -303,6 +369,7 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
       'survey_responses.workspace_id.SELECT',
       'surveys.id.SELECT',
       'surveys.primary_managed_system_id.SELECT',
+      'surveys.status.SELECT',
       'surveys.type.SELECT',
       'surveys.workspace_id.SELECT',
     ]);
@@ -316,12 +383,46 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
         order by table_name, column_name, privilege_type`,
     );
     expect(linkColumnPrivileges.rows.map((row) => row.privilege)).toEqual([
+      'entity_links.relation_type.SELECT',
       'entity_links.source_id.SELECT',
       'entity_links.source_type.SELECT',
       'entity_links.status.SELECT',
+      'entity_links.target_id.SELECT',
       'entity_links.target_type.SELECT',
       'entity_links.workspace_id.SELECT',
     ]);
+
+    // 0052: the classifier reads the anonymity threshold and the linked
+    // Finding's current status through the same least-privilege pattern.
+    const settingsColumnPrivileges = await migrateHandle.pool.query<{ privilege: string }>(
+      `select column_name || '.' || privilege_type as privilege
+         from information_schema.column_privileges
+        where grantee = 'fops_survey_aggregate_owner'
+          and table_schema = 'core'
+          and table_name = 'workspace_settings'
+        order by privilege`,
+    );
+    expect(settingsColumnPrivileges.rows.map((row) => row.privilege)).toEqual([
+      'survey_anonymity_threshold.SELECT',
+      'workspace_id.SELECT',
+    ]);
+
+    const findingColumnPrivileges = await migrateHandle.pool.query<{ privilege: string }>(
+      `select table_name || '.' || column_name || '.' || privilege_type as privilege
+         from information_schema.column_privileges
+        where grantee = 'fops_survey_aggregate_owner'
+          and table_schema = 'finding'
+        order by privilege`,
+    );
+    expect(findingColumnPrivileges.rows.map((row) => row.privilege)).toEqual([
+      'findings.id.SELECT',
+      'findings.status.SELECT',
+      'findings.workspace_id.SELECT',
+    ]);
+    const findingSchemaUsage = await migrateHandle.pool.query<{ schema_usage: boolean }>(
+      `select pg_catalog.has_schema_privilege('fops_survey_aggregate_owner', 'finding', 'USAGE') as schema_usage`,
+    );
+    expect(findingSchemaUsage.rows[0]?.schema_usage).toBe(true);
 
     const tablePrivileges = await migrateHandle.pool.query<{
       table_schema: string;
@@ -342,6 +443,8 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
       `select pg_catalog.pg_has_role('fops_migrate', 'fops_survey_aggregate_owner', 'MEMBER') as migrate_is_owner_member,
               pg_catalog.pg_has_role('fops_survey_aggregate_owner', 'fops_migrate', 'MEMBER') as owner_is_migrate_member`,
     );
-    expect(membership.rows).toEqual([{ migrate_is_owner_member: true, owner_is_migrate_member: false }]);
+    expect(membership.rows).toEqual([
+      { migrate_is_owner_member: true, owner_is_migrate_member: false },
+    ]);
   });
 });

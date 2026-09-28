@@ -222,3 +222,46 @@ export const surveyResponseExcerptApprovals = surveySchema.table(
     }),
   }),
 );
+
+export const outcomeFollowUpDecisions = surveySchema.table(
+  'outcome_follow_up_decisions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    surveyId: uuid('survey_id')
+      .notNull()
+      .references(() => surveys.id),
+    responseId: uuid('response_id').notNull(),
+    managedSystemId: uuid('managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    state: text('state').notNull(),
+    reason: text('reason').notNull(),
+    decidedByActorId: uuid('decided_by_actor_id')
+      .notNull()
+      .references(() => actors.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workspaceResponseUq: unique('outcome_follow_up_decisions_workspace_response_uq').on(
+      t.workspaceId,
+      t.responseId,
+    ),
+    stateCheck: check(
+      'outcome_follow_up_decisions_state_check',
+      sql`${t.state} in ('no_follow_up','reopened')`,
+    ),
+    reasonNonemptyCheck: check(
+      'outcome_follow_up_decisions_reason_nonempty',
+      sql`${t.reason} <> ''`,
+    ),
+    responseSurveyFk: foreignKey({
+      name: 'outcome_follow_up_decisions_response_survey_fk',
+      columns: [t.surveyId, t.responseId],
+      foreignColumns: [surveyResponses.surveyId, surveyResponses.id],
+    }),
+  }),
+);

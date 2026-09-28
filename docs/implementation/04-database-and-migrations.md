@@ -95,6 +95,7 @@ survey
 - surveys
 - survey_responses
 - survey_results
+- outcome_follow_up_decisions (ADR-0055 follow-up decision state; one current row per response, column-scoped UPDATE, no DELETE)
 
 permission
 - permission_requests
@@ -267,6 +268,26 @@ table. Rows are unique by workspace, sorted VOC pair, and embedding version;
 `fops_app` has `SELECT`, `INSERT`, and `UPDATE`, with no `DELETE`. The shadow
 handler never writes cluster, membership, recommendation-decision, VOC, or audit
 rows; see ADR-0054 for its eligibility and reporting rules.
+
+## Issue #510: outcome follow-up decisions
+
+Migration `0052_outcome_follow_up_decisions.sql` creates
+`survey.outcome_follow_up_decisions` (ADR-0055 storage option (b): state row
+plus `core.audit_log` history) and the `SECURITY DEFINER` classifier
+`survey.read_outcome_follow_up_state`, and replaces
+`survey.count_negative_outcome_without_followup` in place with the ADR-0055
+predicate: low rating band via the IMMUTABLE `survey.rating_band_for_value`
+helper (parity-tested against `getRatingBandForValue`), closed outcome
+surveys only, workspace `survey_anonymity_threshold` respected, resolution
+only by an active `generated_finding` link to a `draft`/`active`/`converted`
+Finding or a current `no_follow_up` decision. `fops_app` holds `SELECT`,
+`INSERT`, and `UPDATE` scoped to `state`, `reason`, `decided_by_actor_id`,
+`updated_at`, with no `DELETE`; `fops_survey_aggregate_owner` gained only the
+column grants the new predicate reads (`surveys.status`,
+`survey_questions.rating_max`, `entity_links.relation_type`/`target_id`,
+`finding.findings(id, workspace_id, status)` plus schema `USAGE`,
+`core.workspace_settings(workspace_id, survey_anonymity_threshold)`, and
+column-scoped `SELECT` on the decision table).
 
 ## Issue #182: conversion-link visibility backfill
 

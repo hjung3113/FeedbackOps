@@ -91,6 +91,7 @@ describe.skipIf(!runIntegration)('Survey foundation migration 0036', () => {
       `select table_name from information_schema.tables where table_schema = 'survey' order by table_name`,
     );
     expect(rows.map((row) => row.table_name)).toEqual([
+      'outcome_follow_up_decisions',
       'survey_questions',
       'survey_response_answers',
       'survey_response_excerpt_approvals',

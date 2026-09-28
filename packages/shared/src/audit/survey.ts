@@ -164,6 +164,34 @@ export type SurveyResponseExcerptRevokedDetail = z.infer<
   typeof surveyResponseExcerptRevokedDetailSchema
 >;
 
+// ── survey_outcome_no_follow_up_marked / survey_outcome_follow_up_reopened ─
+// ADR-0055 follow-up decisions. Subject is the survey response; the detail
+// records the decision scope and the operator's reason, never answer values
+// or respondent identity. Reopen carries the superseded reason because the
+// state row keeps only the current one (history lives in this audit log).
+export const surveyOutcomeNoFollowUpMarkedDetailSchema = z
+  .object({
+    survey_id: uuid(),
+    managed_system_id: uuid(),
+    reason: z.string().min(1),
+  })
+  .strict();
+export type SurveyOutcomeNoFollowUpMarkedDetail = z.infer<
+  typeof surveyOutcomeNoFollowUpMarkedDetailSchema
+>;
+
+export const surveyOutcomeFollowUpReopenedDetailSchema = z
+  .object({
+    survey_id: uuid(),
+    managed_system_id: uuid(),
+    reason: z.string().min(1),
+    previous_reason: z.string().min(1),
+  })
+  .strict();
+export type SurveyOutcomeFollowUpReopenedDetail = z.infer<
+  typeof surveyOutcomeFollowUpReopenedDetailSchema
+>;
+
 export const SURVEY_AUDIT_EVENT_TYPES = [
   'survey_created',
   'survey_updated',
@@ -177,6 +205,8 @@ export const SURVEY_AUDIT_EVENT_TYPES = [
   'survey_response_personal_read',
   'survey_response_excerpt_approved',
   'survey_response_excerpt_revoked',
+  'survey_outcome_no_follow_up_marked',
+  'survey_outcome_follow_up_reopened',
 ] as const;
 
 export const SURVEY_AUDIT_EVENT_DETAIL_SCHEMAS = {
@@ -192,4 +222,6 @@ export const SURVEY_AUDIT_EVENT_DETAIL_SCHEMAS = {
   survey_response_personal_read: surveyResponsePersonalReadDetailSchema,
   survey_response_excerpt_approved: surveyResponseExcerptApprovedDetailSchema,
   survey_response_excerpt_revoked: surveyResponseExcerptRevokedDetailSchema,
+  survey_outcome_no_follow_up_marked: surveyOutcomeNoFollowUpMarkedDetailSchema,
+  survey_outcome_follow_up_reopened: surveyOutcomeFollowUpReopenedDetailSchema,
 } as const satisfies Record<(typeof SURVEY_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;
