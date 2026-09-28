@@ -34,7 +34,11 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { outcomeFollowUpDecisions } from '../../db/schema/survey.js';
 import { HttpError } from '../../lib/errors.js';
-import { checkFindingManage } from '../findings/authorization.js';
+import {
+  actorFindingReadScope,
+  checkFindingManage,
+  isFindingInReadScope,
+} from '../findings/authorization.js';
 import { checkSurveyPersonalResponseRead, checkSurveyRead } from './authorization.js';
 import { resolveSurveyResponseEvidenceAccess } from './evidence-access.js';
 import { findSurvey } from './repo-read.js';
@@ -290,6 +294,14 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
       const rows = holder
         ? await readOutcomeFollowUpItemsPersonal(tx, actor.workspace_id, survey.id)
         : [];
+      // Finding metadata follows the caller's Finding read scope (the
+      // results.ts request_task precedent): a created Finding may even sit on
+      // a different Managed System than the survey, so the definer returns
+      // the Finding's own primary Managed System for this check. The
+      // resolution itself stays Survey-owned and keeps saying 'finding'.
+      const findingReadScope = holder
+        ? await actorFindingReadScope(tx, actor, { requireElevatedRole: true })
+        : null;
       const items: OutcomeFollowUpItem[] = [];
       const exposed: Array<{ responseId: string; questionId: string }> = [];
       for (const row of rows) {
@@ -302,7 +314,12 @@ export function createSurveyFollowUp(deps: SurveysServiceDeps) {
             low_answers: [],
             resolution: row.resolution,
             finding:
-              row.finding_id && row.finding_display_id && row.finding_status
+              row.finding_id &&
+              row.finding_display_id &&
+              row.finding_status &&
+              row.finding_managed_system_id &&
+              findingReadScope &&
+              isFindingInReadScope(findingReadScope, row.finding_managed_system_id)
                 ? {
                     id: row.finding_id,
                     display_id: row.finding_display_id,

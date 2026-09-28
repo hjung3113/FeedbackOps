@@ -99,6 +99,7 @@ export type OutcomeFollowUpItemRow = {
   finding_id: string | null;
   finding_display_id: string | null;
   finding_status: 'draft' | 'active' | 'converted' | null;
+  finding_managed_system_id: string | null;
   decision_state: 'no_follow_up' | 'reopened' | null;
   decision_reason: string | null;
   decision_updated_at: Date | string | null;
@@ -118,7 +119,7 @@ export async function readOutcomeFollowUpItemsPersonal(
   surveyId: string,
 ): Promise<OutcomeFollowUpItemRow[]> {
   const result = await db.execute<OutcomeFollowUpItemRow>(
-    sql`select response_id, response_number, submitted_at, question_id, question_label, answer_value, rating_min, rating_max, resolution, finding_id, finding_display_id, finding_status, decision_state, decision_reason, decision_updated_at
+    sql`select response_id, response_number, submitted_at, question_id, question_label, answer_value, rating_min, rating_max, resolution, finding_id, finding_display_id, finding_status, finding_managed_system_id, decision_state, decision_reason, decision_updated_at
         from survey.read_outcome_follow_up_items_personal(${workspaceId}, ${surveyId})`,
   );
   return result.rows;

@@ -34,7 +34,7 @@ GRANT SELECT ("prompt", "sort_order") ON "survey"."survey_questions"
 GRANT SELECT ("reason", "updated_at") ON "survey"."outcome_follow_up_decisions"
   TO fops_survey_aggregate_owner;
 --> statement-breakpoint
-GRANT SELECT ("created_at", "display_id") ON "finding"."findings"
+GRANT SELECT ("created_at", "display_id", "primary_managed_system_id") ON "finding"."findings"
   TO fops_survey_aggregate_owner;
 --> statement-breakpoint
 
@@ -144,8 +144,11 @@ $$;
 -- (submitted_at, id) ordinal over ALL responses of the survey), then
 -- question sort_order. Never returns text answers, excerpts, or respondent
 -- actor ids. The qualifying Finding is the earliest-created live
--- generated_finding (deterministic when several exist); resolution follows
--- the read_outcome_follow_up_state precedence exactly.
+-- generated_finding (deterministic when several exist), returned together
+-- with its primary Managed System so the service can apply the caller's
+-- Finding read scope; resolution follows the read_outcome_follow_up_state
+-- precedence exactly and stays 'finding' even when that scope hides the
+-- Finding metadata.
 CREATE FUNCTION "survey"."read_outcome_follow_up_items_personal"(
   p_workspace_id uuid,
   p_survey_id uuid
@@ -163,6 +166,7 @@ RETURNS TABLE(
   finding_id uuid,
   finding_display_id text,
   finding_status text,
+  finding_managed_system_id uuid,
   decision_state text,
   decision_reason text,
   decision_updated_at timestamptz
@@ -240,6 +244,7 @@ AS $$
       live_finding.qualifying_finding_id,
       live_finding.qualifying_display_id,
       live_finding.qualifying_status,
+      live_finding.qualifying_managed_system_id,
       current_decision.current_state,
       current_decision.current_reason,
       current_decision.current_updated_at,
@@ -253,7 +258,8 @@ AS $$
       SELECT
         f.id AS qualifying_finding_id,
         f.display_id AS qualifying_display_id,
-        f.status AS qualifying_status
+        f.status AS qualifying_status,
+        f.primary_managed_system_id AS qualifying_managed_system_id
       FROM core.entity_links AS el
       JOIN finding.findings AS f
         ON f.id = el.target_id
@@ -292,6 +298,7 @@ AS $$
     classified.qualifying_finding_id,
     classified.qualifying_display_id,
     classified.qualifying_status,
+    classified.qualifying_managed_system_id,
     classified.current_state,
     classified.current_reason,
     classified.current_updated_at

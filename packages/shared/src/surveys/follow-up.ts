@@ -116,17 +116,29 @@ export type OutcomeFollowUpItem = z.infer<typeof outcomeFollowUpItemSchema>;
 /**
  * `GET /surveys/:id/outcome-follow-up` (ADR-0055 part C). The survey-grain
  * booleans are the only classification data a non-holder of
- * `survey.read_personal_responses` receives: `items` is null for a
- * non-holder, so no count, response id, or per-response flag can be
- * represented or parsed.
+ * `survey.read_personal_responses` receives. The union on `personal_access`
+ * enforces that disclosure rule at the schema level: a non-holder payload
+ * carries `items: null` and cannot represent or parse any count, response
+ * id, or per-response flag; a holder payload always carries the items array.
  */
-export const outcomeFollowUpReadDtoSchema = z
-  .object({
-    survey_id: z.string().uuid(),
-    classifiable: z.boolean(),
-    follow_up_needed: z.boolean(),
-    personal_access: z.boolean(),
-    items: z.array(outcomeFollowUpItemSchema).nullable(),
-  })
-  .strict();
+export const outcomeFollowUpReadDtoSchema = z.discriminatedUnion('personal_access', [
+  z
+    .object({
+      survey_id: z.string().uuid(),
+      classifiable: z.boolean(),
+      follow_up_needed: z.boolean(),
+      personal_access: z.literal(false),
+      items: z.null(),
+    })
+    .strict(),
+  z
+    .object({
+      survey_id: z.string().uuid(),
+      classifiable: z.boolean(),
+      follow_up_needed: z.boolean(),
+      personal_access: z.literal(true),
+      items: z.array(outcomeFollowUpItemSchema),
+    })
+    .strict(),
+]);
 export type OutcomeFollowUpReadDto = z.infer<typeof outcomeFollowUpReadDtoSchema>;

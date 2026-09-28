@@ -152,7 +152,10 @@ use the survey response as subject; detail is strict
   per-response flags, so no small-number disclosure is possible. A holder
   receives `items`: exactly the poor responses at every resolution, each with
   `response_id`, the 1-based `response_number` by `(submitted_at, id)`,
-  low-band `low_answers`, `resolution`, the qualifying Finding, the current
+  low-band `low_answers`, `resolution`, the qualifying Finding (its metadata
+  only within the caller's Finding read scope — the Finding may even sit on a
+  different Managed System than the Survey; outside that scope the item keeps
+  `resolution: 'finding'` with `finding: null`), the current
   decision, and permission-filtered `next_actions` (`create_finding` +
   `mark_no_follow_up` when open, `reopen_follow_up` when no-follow-up, none
   when a Finding resolves; `allowed` iff `finding.manage` with the Admin role

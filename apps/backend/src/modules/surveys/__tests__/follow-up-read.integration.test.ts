@@ -26,15 +26,24 @@ const runIntegration = Boolean(APP_URL && MIGRATE_URL && WORKSPACE_ID);
 const TEST_PREFIX = `survey-followup-read-${randomUUID()}`;
 
 type Actor = { id: string; externalId: string; roleLevel: string; cookie: string };
-type Resolution = 'open' | 'finding' | 'no_follow_up' | 'reopened';
+type Resolution =
+  | 'open'
+  | 'finding'
+  | 'no_follow_up'
+  | 'reopened'
+  | 'archived_finding'
+  | 'finding_and_no_follow_up';
 type SeededSurvey = {
   msId: string;
   surveyId: string;
   lowQuestionId: string;
   midQuestionId: string;
+  /** extra low-band question answered only by the first response, when requested */
+  qualityQuestionId: string | null;
   /** submission order, oldest first — response_number is index + 1 */
   responseIds: string[];
   poorResponseIds: string[];
+  /** every seeded Finding, earliest-created first within a response */
   findings: Array<{ id: string; display_id: string }>;
 };
 type FollowUpItem = {
@@ -205,13 +214,20 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
    * One survey with two rating questions on a 1-5 scale (low band 1-2, mid
    * 3-4): "Did this release help?" carries the per-response rating under
    * test, "How was the speed?" always answers 3 so a mid-band answer exists
-   * on every response and must never be listed as a low answer.
+   * on every response and must never be listed as a low answer. `resolve`
+   * seeds per-response resolution state: 'finding' creates two live
+   * generated_finding links (the earlier-created Finding must win),
+   * 'archived_finding' links a Finding whose status reopens the gap, and
+   * 'finding_and_no_follow_up' stacks a live link on a no-follow-up decision
+   * (Finding precedence). `secondLowOnFirst` adds a third low-band question
+   * answered only by the first response.
    */
   async function seedSurvey(options: {
     type?: 'outcome' | 'discovery';
     status?: 'draft' | 'open' | 'closed';
     ratings: number[];
     resolve?: Resolution[];
+    secondLowOnFirst?: boolean;
   }): Promise<SeededSurvey> {
     const type = options.type ?? 'outcome';
     const status = options.status ?? 'closed';
@@ -272,6 +288,16 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     );
     const midQuestionId = midQuestion.rows[0]?.id;
     if (!midQuestionId) throw new Error('mid question seed failed');
+    let qualityQuestionId: string | null = null;
+    if (options.secondLowOnFirst) {
+      const qualityQuestion = await migrateDb.pool.query<{ id: string }>(
+        `insert into survey.survey_questions (workspace_id, survey_id, kind, prompt, rating_min, rating_max, sort_order, branch_depth)
+         values ($1, $2, 'rating', 'How was the quality?', 1, 5, 2, 0) returning id`,
+        [WORKSPACE_ID, surveyId],
+      );
+      qualityQuestionId = qualityQuestion.rows[0]?.id ?? null;
+      if (!qualityQuestionId) throw new Error('quality question seed failed');
+    }
     const localResponseIds: string[] = [];
     const poorResponseIds: string[] = [];
     const findings: Array<{ id: string; display_id: string }> = [];
@@ -297,21 +323,65 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
           [WORKSPACE_ID, surveyId, responseId, questionId, JSON.stringify(value)],
         );
       }
+      if (index === 0 && qualityQuestionId) {
+        await migrateDb.pool.query(
+          `insert into survey.survey_response_answers (workspace_id, survey_id, response_id, question_id, answer_kind, answer_value)
+           values ($1, $2, $3, $4, 'rating', $5::jsonb)`,
+          [WORKSPACE_ID, surveyId, responseId, qualityQuestionId, JSON.stringify(1)],
+        );
+      }
       const poor = rating <= 2;
       if (poor) poorResponseIds.push(responseId);
       const resolution = resolve[index] ?? 'open';
       if (!poor || resolution === 'open') continue;
-      if (resolution === 'finding') {
+      const insertDecision = async (state: 'no_follow_up' | 'reopened', reason: string) => {
+        await migrateDb.pool.query(
+          `insert into survey.outcome_follow_up_decisions (
+             workspace_id, survey_id, response_id, managed_system_id, state, reason, decided_by_actor_id
+           ) values ($1, $2, $3, $4, $5, $6, $7)`,
+          [WORKSPACE_ID, surveyId, responseId, msId, state, reason, grantorActorId],
+        );
+      };
+      if (resolution === 'finding' || resolution === 'finding_and_no_follow_up') {
+        // 'finding' seeds two live links so the earliest-created Finding must
+        // win; the combined case stacks one live link on a no-follow-up
+        // decision to pin the Finding precedence.
+        const liveLinks = resolution === 'finding' ? 2 : 1;
+        for (let number = 0; number < liveLinks; number += 1) {
+          const finding = await migrateDb.pool.query<{ id: string; display_id: string }>(
+            `insert into finding.findings (
+               workspace_id, display_id, primary_managed_system_id, title, summary,
+               source_type, source_id, severity, status, created_by, created_at
+             ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Follow-up finding', 'summary',
+               'survey_response', $3, 'medium', 'active', $4, now() - ($5 || ' hours')::interval)
+             returning id, display_id`,
+            [WORKSPACE_ID, msId, responseId, grantorActorId, String(2 - number)],
+          );
+          const row = finding.rows[0];
+          if (!row) throw new Error('finding seed failed');
+          findingIds.push(row.id);
+          findings.push(row);
+          await migrateDb.pool.query(
+            `insert into core.entity_links (
+               workspace_id, source_type, source_id, target_type, target_id, relation_type,
+               visibility, status, managed_system_id, created_by
+             ) values ($1, 'survey_response', $2, 'finding', $3, 'generated_finding', 'internal_only', 'active', $4, $5)`,
+            [WORKSPACE_ID, responseId, row.id, msId, grantorActorId],
+          );
+        }
+        if (resolution === 'finding_and_no_follow_up')
+          await insertDecision('no_follow_up', 'Handled outside the tool.');
+      } else if (resolution === 'archived_finding') {
         const finding = await migrateDb.pool.query<{ id: string; display_id: string }>(
           `insert into finding.findings (
              workspace_id, display_id, primary_managed_system_id, title, summary,
              source_type, source_id, severity, status, created_by
-           ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Follow-up finding', 'summary',
-             'survey_response', $3, 'medium', 'active', $4) returning id, display_id`,
+           ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Archived finding', 'summary',
+             'survey_response', $3, 'medium', 'archived', $4) returning id, display_id`,
           [WORKSPACE_ID, msId, responseId, grantorActorId],
         );
         const row = finding.rows[0];
-        if (!row) throw new Error('finding seed failed');
+        if (!row) throw new Error('archived finding seed failed');
         findingIds.push(row.id);
         findings.push(row);
         await migrateDb.pool.query(
@@ -322,21 +392,11 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
           [WORKSPACE_ID, responseId, row.id, msId, grantorActorId],
         );
       } else {
-        await migrateDb.pool.query(
-          `insert into survey.outcome_follow_up_decisions (
-             workspace_id, survey_id, response_id, managed_system_id, state, reason, decided_by_actor_id
-           ) values ($1, $2, $3, $4, $5, $6, $7)`,
-          [
-            WORKSPACE_ID,
-            surveyId,
-            responseId,
-            msId,
-            resolution,
-            resolution === 'no_follow_up'
-              ? 'Handled outside the tool.'
-              : 'Linked Finding archived; follow-up needed again.',
-            grantorActorId,
-          ],
+        await insertDecision(
+          resolution,
+          resolution === 'no_follow_up'
+            ? 'Handled outside the tool.'
+            : 'Linked Finding archived; follow-up needed again.',
         );
       }
     }
@@ -345,6 +405,7 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
       surveyId,
       lowQuestionId,
       midQuestionId,
+      qualityQuestionId,
       responseIds: localResponseIds,
       poorResponseIds,
       findings,
@@ -482,14 +543,18 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     });
   });
 
-  it('returns every poor response with ordinals, low answers only, and per-case resolution', async () => {
+  it('returns every poor response with all-response ordinals, low answers only, and per-case resolution', async () => {
     const subject = await seedSurvey({
-      ratings: [2, 2, 2, 2, 5],
-      resolve: ['open', 'finding', 'no_follow_up', 'reopened'],
+      // Poor responses sit at submission positions 2/4/5/6 of 6, so the
+      // ordinals prove the numbering runs over ALL responses, not the poor
+      // subset (and not by id alone).
+      ratings: [5, 2, 5, 2, 2, 2],
+      resolve: ['open', 'open', 'open', 'finding', 'no_follow_up', 'reopened'],
     });
+    // finding.read is needed for item.finding to be disclosed (Finding read scope).
     const actor = await createActor(
       'developer',
-      ['survey.read', 'survey.read_personal_responses', 'finding.manage'],
+      ['survey.read', 'survey.read_personal_responses', 'finding.manage', 'finding.read'],
       subject.msId,
     );
     const body = await readFollowUp(subject.surveyId, actor);
@@ -498,10 +563,10 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     expect(body.follow_up_needed).toBe(true);
     const items = body.items ?? [];
     expect(items.map((item) => item.response_id)).toEqual(subject.poorResponseIds);
-    expect(items.map((item) => item.response_number)).toEqual([1, 2, 3, 4]);
+    expect(items.map((item) => item.response_number)).toEqual([2, 4, 5, 6]);
     for (const item of items) expect(Date.parse(item.submitted_at)).not.toBeNaN();
     expect(items[0]).toMatchObject({
-      response_id: subject.responseIds[0],
+      response_id: subject.responseIds[1],
       resolution: 'open',
       finding: null,
       decision: null,
@@ -518,11 +583,13 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     // The same response's mid-band answer must not be listed.
     expect(JSON.stringify(items[0]?.low_answers)).not.toContain(subject.midQuestionId);
     expect(items[1]?.resolution).toBe('finding');
+    // The earlier-created of the two live Findings is the qualifying one.
     expect(items[1]?.finding).toEqual({
       id: subject.findings[0]?.id,
       display_id: subject.findings[0]?.display_id,
       status: 'active',
     });
+    expect(items[1]?.finding?.id).not.toBe(subject.findings[1]?.id);
     expect(items[2]?.resolution).toBe('no_follow_up');
     expect(items[2]?.finding).toBeNull();
     expect(items[2]?.decision).toMatchObject({
@@ -592,6 +659,34 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
     ]);
   });
 
+  it('filters item.finding by the caller Finding read scope while resolution stays finding', async () => {
+    const subject = await seedSurvey({ ratings: [2, 5, 5, 5, 5], resolve: ['finding'] });
+    const withoutFindingRead = await createActor(
+      'developer',
+      ['survey.read', 'survey.read_personal_responses'],
+      subject.msId,
+    );
+    const hidden = await readFollowUp(subject.surveyId, withoutFindingRead);
+    expect(hidden.personal_access).toBe(true);
+    expect(hidden.items?.[0]).toMatchObject({
+      response_id: subject.responseIds[0],
+      resolution: 'finding',
+      finding: null,
+    });
+    const withFindingRead = await createActor(
+      'developer',
+      ['survey.read', 'survey.read_personal_responses', 'finding.read'],
+      subject.msId,
+    );
+    const visible = await readFollowUp(subject.surveyId, withFindingRead);
+    expect(visible.items?.[0]?.resolution).toBe('finding');
+    expect(visible.items?.[0]?.finding).toEqual({
+      id: subject.findings[0]?.id,
+      display_id: subject.findings[0]?.display_id,
+      status: 'active',
+    });
+  });
+
   it('does not grant personal access to Admin without the explicit capability', async () => {
     const subject = await seedSurvey({ ratings: [2, 5, 5, 5, 5] });
     const actor = await createActor('admin');
@@ -605,7 +700,9 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
   });
 
   it('audits one personal read per (response, low-answer question) for holders only', async () => {
-    const subject = await seedSurvey({ ratings: [2, 5, 5, 5, 5] });
+    // The poor response answers TWO low-band questions, so the audit must
+    // carry one row per question, not one per response.
+    const subject = await seedSurvey({ ratings: [2, 5, 5, 5, 5], secondLowOnFirst: true });
     const poorResponseId = subject.responseIds[0] ?? '';
     const nonHolder = await createActor('developer', ['survey.read'], subject.msId);
     expect((await readFollowUp(subject.surveyId, nonHolder)).personal_access).toBe(false);
@@ -615,23 +712,39 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
       ['survey.read', 'survey.read_personal_responses'],
       subject.msId,
     );
-    await readFollowUp(subject.surveyId, holder);
+    const body = await readFollowUp(subject.surveyId, holder);
+    expect(body.items?.[0]?.low_answers.map((answer) => answer.question_id).sort()).toEqual(
+      [subject.lowQuestionId, subject.qualityQuestionId].filter(Boolean).sort(),
+    );
     const rows = await personalReadRows(poorResponseId);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toEqual({
-      actor_id: holder.id,
-      detail: {
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.detail.question_id).sort()).toEqual(
+      [subject.lowQuestionId, subject.qualityQuestionId].filter(Boolean).sort(),
+    );
+    for (const row of rows) {
+      expect(row.actor_id).toBe(holder.id);
+      expect(row.detail).toMatchObject({
         survey_id: subject.surveyId,
         survey_response_id: poorResponseId,
-        question_id: subject.lowQuestionId,
-      },
-    });
+      });
+    }
   });
 
   it('matches read_outcome_follow_up_state resolution for every seeded response', async () => {
     const subject = await seedSurvey({
-      ratings: [2, 2, 2, 2, 5],
-      resolve: ['open', 'finding', 'no_follow_up', 'reopened'],
+      // Poor at positions 2/4/5/6/7/8; the last two pin the archived-Finding
+      // reopen and the Finding-over-decision precedence.
+      ratings: [5, 2, 5, 2, 2, 2, 2, 2],
+      resolve: [
+        'open',
+        'open',
+        'open',
+        'finding',
+        'no_follow_up',
+        'reopened',
+        'archived_finding',
+        'finding_and_no_follow_up',
+      ],
     });
     const actor = await createActor(
       'developer',
@@ -639,20 +752,38 @@ describe.skipIf(!runIntegration)('GET /surveys/:id/outcome-follow-up (#510)', ()
       subject.msId,
     );
     const body = await readFollowUp(subject.surveyId, actor);
-    for (const item of body.items ?? []) {
+    const items = body.items ?? [];
+    // Non-vacuity guard: the returned set must be exactly the seeded poor set
+    // before any per-item comparison runs.
+    expect(items).toHaveLength(subject.poorResponseIds.length);
+    expect([...items.map((item) => item.response_id)].sort()).toEqual(
+      [...subject.poorResponseIds].sort(),
+    );
+    for (const item of items) {
       const state = await db.pool.query<{ resolution: string }>(
         'select resolution from survey.read_outcome_follow_up_state($1::uuid, $2::uuid)',
         [WORKSPACE_ID, item.response_id],
       );
       expect(state.rows[0]?.resolution).toBe(item.resolution);
     }
-    const goodResponseId = subject.responseIds[4] ?? '';
-    const good = await db.pool.query<{ is_poor: boolean }>(
-      'select is_poor from survey.read_outcome_follow_up_state($1::uuid, $2::uuid)',
-      [WORKSPACE_ID, goodResponseId],
-    );
-    expect(good.rows[0]?.is_poor).toBe(false);
-    expect((body.items ?? []).some((item) => item.response_id === goodResponseId)).toBe(false);
+    // An archived Finding does not resolve the gap.
+    const archived = items.find((item) => item.response_id === subject.responseIds[6]);
+    expect(archived?.resolution).toBe('open');
+    expect(archived?.finding).toBeNull();
+    // A live Finding wins over a standing no-follow-up decision.
+    const both = items.find((item) => item.response_id === subject.responseIds[7]);
+    expect(both?.resolution).toBe('finding');
+    expect(both?.decision).toMatchObject({ state: 'no_follow_up' });
+    // The non-poor responses are classified but never listed.
+    for (const goodIndex of [0, 2]) {
+      const goodResponseId = subject.responseIds[goodIndex] ?? '';
+      const good = await db.pool.query<{ is_poor: boolean }>(
+        'select is_poor from survey.read_outcome_follow_up_state($1::uuid, $2::uuid)',
+        [WORKSPACE_ID, goodResponseId],
+      );
+      expect(good.rows[0]?.is_poor).toBe(false);
+      expect(items.some((item) => item.response_id === goodResponseId)).toBe(false);
+    }
   });
 
   it('classifies open surveys as not classifiable and guards draft/type/workspace/id', async () => {

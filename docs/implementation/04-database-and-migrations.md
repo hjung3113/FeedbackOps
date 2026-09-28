@@ -298,14 +298,16 @@ the two survey-grain booleans (`classifiable`, `follow_up_needed`) for any
 `survey.read` caller, and `survey.read_outcome_follow_up_items_personal`
 returns the per-poor-response review rows — response id, 1-based submission
 ordinal, low-band answers with question label and bounds, resolution, the
-qualifying Finding (earliest-created live `generated_finding`), and the
+qualifying Finding (earliest-created live `generated_finding`, returned with
+its primary Managed System so the service can apply the caller's Finding read
+scope), and the
 current decision — only for callers that already crossed the
 personal-response seam. Both reuse `survey.rating_band_for_value` and the
 same predicate as `read_outcome_follow_up_state`. The owner gained only the
 display columns the review list needs: `survey_responses.submitted_at`,
 `survey_questions.prompt`/`sort_order`,
 `outcome_follow_up_decisions.reason`/`updated_at`, and
-`finding.findings.created_at`/`display_id`.
+`finding.findings.created_at`/`display_id`/`primary_managed_system_id`.
 
 ## Issue #182: conversion-link visibility backfill
 

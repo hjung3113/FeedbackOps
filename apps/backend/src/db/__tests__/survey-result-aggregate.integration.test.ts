@@ -425,6 +425,7 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
       'findings.created_at.SELECT',
       'findings.display_id.SELECT',
       'findings.id.SELECT',
+      'findings.primary_managed_system_id.SELECT',
       'findings.status.SELECT',
       'findings.workspace_id.SELECT',
     ]);
