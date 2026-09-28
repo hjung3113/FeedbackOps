@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { DetailPanelSlotContext } from '@fops/ui';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Survey } from '../../types';
 
@@ -35,7 +37,8 @@ const {
   useRouteSearch: vi.fn(() => ({})),
 }));
 
-vi.mock('@/features/surveys/hooks/useSurveys', () => ({
+vi.mock('@/features/surveys/hooks/useSurveys', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/surveys/hooks/useSurveys')>()),
   useCloseSurvey,
   useOpenSurvey,
   useSurvey,
@@ -57,6 +60,23 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 }));
 
 import { SurveyDetailRoute } from '@/routes/_authed/surveys/$surveyId';
+
+function DetailPanelHost({ children }: { children: React.ReactNode }) {
+  const [panel, setPanel] = React.useState<React.ReactNode>();
+  const setContent = React.useCallback(
+    (_key: string, node: React.ReactNode) => setPanel(node),
+    [],
+  );
+  const clear = React.useCallback((_key: string) => setPanel(undefined), []);
+  const context = React.useMemo(() => ({ setContent, clear }), [setContent, clear]);
+
+  return (
+    <DetailPanelSlotContext.Provider value={context}>
+      {children}
+      {panel}
+    </DetailPanelSlotContext.Provider>
+  );
+}
 
 const survey: Survey = {
   id: 'survey-1',
@@ -127,7 +147,11 @@ describe('/surveys/:surveyId route', () => {
       isSuccess: true,
     });
 
-    const detailView = render(<SurveyDetailRoute />);
+    const detailView = render(
+      <DetailPanelHost>
+        <SurveyDetailRoute />
+      </DetailPanelHost>,
+    );
     expect(screen.getByTestId('survey-detail')).toHaveTextContent('Revenue Analytics');
     expect(screen.getByText('담당자 · Named Operator')).toBeInTheDocument();
     detailView.unmount();
