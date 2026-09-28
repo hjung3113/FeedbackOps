@@ -4,15 +4,17 @@ import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
 export function SurveySettings({
   survey,
   managedSystemName,
+  managedSystemResolved,
 }: {
   survey: Survey;
   managedSystemName?: string | undefined;
+  managedSystemResolved?: boolean | undefined;
 }) {
   return (
     <aside className="border-l border-border-subtle p-4">
       <p className="text-xs uppercase text-text-muted">Survey settings</p>
       <p className="mt-3 text-sm">Managed System</p>
-      <SurveyManagedSystemPill name={managedSystemName} />
+      <SurveyManagedSystemPill name={managedSystemName} resolved={managedSystemResolved} />
       <p className="mt-5 text-sm">응답 익명성</p>
       <p className="text-xs text-text-muted">
         {survey.responses_identity_protected

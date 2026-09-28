@@ -134,4 +134,9 @@ describe('DetailPanelHeader — onClose', () => {
     await user.click(screen.getByRole('button', { name: '패널 닫기' }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it('omits the close button when no callback is provided', () => {
+    render(<DetailPanelHeader kind="survey" id="SRV-1" />);
+    expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
+  });
 });

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { useManagedSystem } from '../useManagedSystem';
+import { useManagedSystemNamesResult } from '../useManagedSystemNames';
 
 // Mock the fetchManagedSystems import
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -114,5 +115,20 @@ describe('useManagedSystem', () => {
     await waitFor(() => expect(r1.current).not.toBeNull());
     await waitFor(() => expect(r2.current).not.toBeNull());
     expect(r1.current?.mark).toBe(r2.current?.mark);
+  });
+});
+
+describe('useManagedSystemNames', () => {
+  test('requests the route maximum including archived systems', async () => {
+    mockFetchManagedSystems.mockResolvedValue({ items: MS_LIST, total: 2 });
+    const { result } = renderHook(() => useManagedSystemNamesResult(), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockFetchManagedSystems).toHaveBeenCalledWith(
+      expect.objectContaining({ includeArchived: true, limit: 500 }),
+    );
+    expect(result.current.namesById.get('ms-bbb')).toBe('Salesforce');
   });
 });

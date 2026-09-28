@@ -24,8 +24,8 @@ export interface SurveyListProps {
   permissionState?: FrontendPermissionState;
   onCreate?: () => void;
   onRetry?: () => void;
-  managedSystemNamesById?: ReadonlyMap<string, string>;
-  actorNamesById?: ReadonlyMap<string, string>;
+  managedSystemNamesById?: ReadonlyMap<string, string> | undefined;
+  actorNamesById?: ReadonlyMap<string, string> | undefined;
 }
 
 export function SurveyList({
@@ -182,8 +182,12 @@ export function SurveyList({
           data-testid={viewMode === 'list' ? 'survey-list-rows' : 'survey-list-cards'}
         >
           {visible.map((survey) => {
+            const operatorLookupPending =
+              survey.operator_actor_id !== null && actorNamesById === undefined;
             const operatorName = survey.operator_actor_id
-              ? (actorNamesById?.get(survey.operator_actor_id) ?? '알 수 없는 사용자')
+              ? actorNamesById === undefined
+                ? '—'
+                : (actorNamesById.get(survey.operator_actor_id) ?? '알 수 없는 사용자')
               : null;
             return (
               <button
@@ -206,12 +210,17 @@ export function SurveyList({
                     <span aria-hidden="true">·</span>
                     <SurveyManagedSystemPill
                       name={managedSystemNamesById?.get(survey.primary_managed_system_id)}
+                      resolved={managedSystemNamesById !== undefined}
                     />
                   </span>
                 </span>
-                <span className="flex max-w-40 shrink-0 items-center gap-2 truncate text-xs text-text-secondary">
+                <span
+                  className={`flex max-w-40 shrink-0 items-center gap-2 truncate text-xs ${operatorLookupPending ? 'text-text-muted' : 'text-text-secondary'}`}
+                >
                   {operatorName === null ? (
                     <span>담당자 미지정</span>
+                  ) : operatorLookupPending ? (
+                    <span>—</span>
                   ) : (
                     <>
                       <UserAvatar user={{ display_name: operatorName }} size="sm" />

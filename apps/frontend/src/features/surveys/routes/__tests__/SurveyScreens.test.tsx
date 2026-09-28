@@ -237,14 +237,26 @@ describe('Survey screens', () => {
     expect(row).not.toHaveTextContent(unknownActorId);
   });
 
+  it('uses neutral labels while Managed System and actor lookups are unresolved', () => {
+    const rowSurvey = {
+      ...survey,
+      operator_actor_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    };
+    render(<SurveyList surveys={[rowSurvey]} isLoading={false} error={null} onSelect={vi.fn()} />);
+
+    const row = screen.getByTestId('survey-row-survey-1');
+    expect(within(row).getAllByText('—', { exact: true }).length).toBeGreaterThanOrEqual(2);
+    expect(row).not.toHaveTextContent('알 수 없는 Managed System');
+    expect(row).not.toHaveTextContent('알 수 없는 사용자');
+  });
+
   it.each([
     ['draft', 'Draft'],
     ['open', 'Open'],
     ['closed', 'Closed'],
   ] as const)('presents survey status %s as %s', (status, label) => {
-    const { rerender } = render(<SurveyStatusBadge status={status} />);
+    render(<SurveyStatusBadge status={status} />);
     expect(screen.getByText(label)).toBeInTheDocument();
-    rerender(<SurveyStatusBadge status={status} />);
     expect(screen.queryByText(status, { exact: true })).not.toBeInTheDocument();
   });
 
@@ -258,6 +270,13 @@ describe('Survey screens', () => {
     expect(within(header).getByText('SRV-1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the Survey detail header close action when no callback is provided', async () => {
+    renderDetailWithRouter(survey, false);
+
+    expect(await screen.findByTestId('detail-panel-header-content')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '패널 닫기' })).not.toBeInTheDocument();
   });
 
   it('resolves Survey detail and builder Managed System and operator names', async () => {
@@ -778,11 +797,11 @@ describe('Survey screens', () => {
     fireEvent.click(screen.getByTestId('survey-empty-create-button'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '신규 설문 제목' } });
-    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Survey type' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Survey type' }));
     fireEvent.click(screen.getByRole('option', { name: 'validation' }));
-    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Managed System' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Managed System' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Tableau' }));
-    fireEvent.keyDown(screen.getByRole('combobox', { name: '응답 익명 보호' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('combobox', { name: '응답 익명 보호' }));
     fireEvent.click(screen.getByRole('option', { name: '보호함' }));
     fireEvent.click(screen.getByTestId('survey-create-submit'));
 
@@ -817,7 +836,7 @@ describe('Survey screens', () => {
     'sends a strict PATCH payload when changing to %s',
     async (kind) => {
       renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
-      fireEvent.keyDown(screen.getByRole('combobox', { name: 'Question kind' }), { key: 'Enter' });
+      fireEvent.click(screen.getByRole('combobox', { name: 'Question kind' }));
       fireEvent.click(screen.getByRole('option', { name: kind }));
       if (kind === 'single_choice') {
         fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {

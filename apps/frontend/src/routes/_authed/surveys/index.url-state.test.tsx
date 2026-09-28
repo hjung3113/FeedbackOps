@@ -63,6 +63,7 @@ const MS_2 = '99999999-9999-9999-9999-999999999902';
 const S1_ID = '11111111-1111-4111-8111-111111111111';
 const S2_ID = '44444444-4444-4444-4444-444444444444';
 const STALE_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const ACTOR_1 = '33333333-3333-4333-8333-333333333333';
 
 const S1 = {
   id: S1_ID,
@@ -108,9 +109,15 @@ interface FetchCase {
   /** Every requested URL, in order — used for the managed_system_id assertions. */
   requested: string[];
   failList?: boolean;
+  namedLookups?: boolean;
 }
 
 function installFetch(c: FetchCase): void {
+  const surveys = c.namedLookups
+    ? SURVEYS.map((survey) =>
+        survey.id === S1_ID ? { ...survey, operator_actor_id: ACTOR_1 } : survey,
+      )
+    : SURVEYS;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     c.requested.push(url);
@@ -119,14 +126,30 @@ function installFetch(c: FetchCase): void {
       if (c.failList) return jsonResponse({ code: 'internal.unexpected' }, 500);
       const msFilter = path.searchParams.get('managed_system_id');
       const items = msFilter
-        ? SURVEYS.filter((survey) => survey.primary_managed_system_id === msFilter)
-        : SURVEYS;
+        ? surveys.filter((survey) => survey.primary_managed_system_id === msFilter)
+        : surveys;
       return jsonResponse(items);
     }
-    if (path.pathname === '/managed-systems') return jsonResponse({ items: [], total: 0 });
-    if (path.pathname === '/actors') return jsonResponse({ actors: [] });
+    if (path.pathname === '/managed-systems')
+      return jsonResponse({
+        items: c.namedLookups ? [{ id: MS_1, name: 'Revenue Analytics' }] : [],
+        total: c.namedLookups ? 1 : 0,
+      });
+    if (path.pathname === '/actors')
+      return jsonResponse({
+        actors: c.namedLookups
+          ? [
+              {
+                id: ACTOR_1,
+                display_name: 'Named Operator',
+                email: 'operator@example.com',
+                role_level: 'user',
+              },
+            ]
+          : [],
+      });
     if (path.pathname.startsWith('/surveys/')) {
-      const survey = SURVEYS.find((entry) => entry.id === path.pathname.split('/')[2]);
+      const survey = surveys.find((entry) => entry.id === path.pathname.split('/')[2]);
       return survey ? jsonResponse(survey) : jsonResponse({ code: 'not_found.record' }, 404);
     }
     if (path.pathname === '/me')
@@ -194,6 +217,18 @@ describe('/surveys URL state', () => {
     // List rendered alongside the detail — restore is not detail-only.
     expect(screen.getByTestId(`survey-row-${S1_ID}`)).toBeInTheDocument();
     expect(router.state.location.search).toEqual({ selected: S1_ID });
+  });
+
+  test('wires successful Managed System and actor lookups into the list row and detail panel', async () => {
+    renderUrlState({ requested: [], namedLookups: true }, `/surveys?selected=${S1_ID}`);
+
+    const row = await screen.findByTestId(`survey-row-${S1_ID}`);
+    await waitFor(() => {
+      expect(row).toHaveTextContent('Revenue Analytics');
+      expect(row).toHaveTextContent('Named Operator');
+    });
+    expect(await screen.findByText('담당자 · Named Operator')).toBeInTheDocument();
+    expect(screen.getByTestId('survey-detail')).toHaveTextContent('Revenue Analytics');
   });
 
   test('row click pushes selected and Back returns to no selection', async () => {

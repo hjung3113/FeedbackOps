@@ -18,24 +18,31 @@ export function SurveyDetail({
   survey: Survey;
   canManage: boolean;
   onClose?: () => void;
-  managedSystemNamesById?: ReadonlyMap<string, string>;
-  actorNamesById?: ReadonlyMap<string, string>;
+  managedSystemNamesById?: ReadonlyMap<string, string> | undefined;
+  actorNamesById?: ReadonlyMap<string, string> | undefined;
 }) {
   const questions = survey.questions ?? [];
   const [closeOpen, setCloseOpen] = React.useState(false);
   const closeSurvey = useCloseSurvey(survey.id);
   const operatorName = survey.operator_actor_id
-    ? (actorNamesById?.get(survey.operator_actor_id) ?? '알 수 없는 사용자')
+    ? actorNamesById === undefined
+      ? '—'
+      : (actorNamesById.get(survey.operator_actor_id) ?? '알 수 없는 사용자')
     : '담당자 미지정';
   return (
     <aside
       className="flex h-full flex-col border-l border-border-subtle bg-surface-detail"
       data-testid="survey-detail"
     >
-      <DetailPanelHeader kind="survey" id={survey.display_id} onClose={() => onClose?.()} />
+      <DetailPanelHeader
+        kind="survey"
+        id={survey.display_id}
+        {...(onClose !== undefined ? { onClose } : {})}
+      />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="border-b border-border-subtle pb-4">
           <PanelTitleBlock
+            className="px-5"
             title={survey.title}
             badges={
               <>
@@ -45,16 +52,17 @@ export function SurveyDetail({
                 </span>
                 <SurveyManagedSystemPill
                   name={managedSystemNamesById?.get(survey.primary_managed_system_id)}
+                  resolved={managedSystemNamesById !== undefined}
                 />
               </>
             }
           />
-          <p className="px-4 text-xs text-text-muted">담당자 · {operatorName}</p>
-          <p className="mt-2 px-4 text-sm text-text-muted">
+          <p className="px-5 text-xs text-text-muted">담당자 · {operatorName}</p>
+          <p className="mt-2 px-5 text-sm text-text-muted">
             {survey.description || '설명이 없습니다.'}
           </p>
           {canManage && survey.status === 'open' && (
-            <div className="mt-3 px-4">
+            <div className="mt-3 px-5">
               <Button variant="secondary" size="sm" onClick={() => setCloseOpen(true)}>
                 Close survey
               </Button>

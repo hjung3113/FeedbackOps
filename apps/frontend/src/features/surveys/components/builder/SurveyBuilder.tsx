@@ -60,7 +60,7 @@ export function SurveyBuilder({
   survey: Survey;
   canManage: boolean;
   gateState?: 'loading' | 'error' | 'absent';
-  managedSystemNamesById?: ReadonlyMap<string, string>;
+  managedSystemNamesById?: ReadonlyMap<string, string> | undefined;
   onBack: () => void;
 }) {
   const {
@@ -95,22 +95,23 @@ export function SurveyBuilder({
         <Button variant="ghost" size="sm" onClick={onBack}>
           Back
         </Button>
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {editable ? (
             <Input
               aria-label="Survey title"
-              className="w-80 max-w-full border-transparent bg-transparent font-semibold"
+              className="w-80 min-w-0 max-w-full border-transparent bg-transparent font-semibold"
               value={title}
               onChange={(event) => onTitleChange(event.target.value)}
             />
           ) : (
-            <h1 className="truncate font-semibold">{title}</h1>
+            <h1 className="min-w-0 truncate font-semibold">{title}</h1>
           )}
-          <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-text-muted">
             <SurveyStatusBadge status={survey.status} />
-            <span>{survey.type}</span>
+            <span className="shrink-0">{survey.type}</span>
             <SurveyManagedSystemPill
               name={managedSystemNamesById?.get(survey.primary_managed_system_id)}
+              resolved={managedSystemNamesById !== undefined}
             />
           </div>
         </div>
@@ -192,6 +193,7 @@ export function SurveyBuilder({
         <SurveySettings
           survey={survey}
           managedSystemName={managedSystemNamesById?.get(survey.primary_managed_system_id)}
+          managedSystemResolved={managedSystemNamesById !== undefined}
         />
       </div>
       {preview && (
