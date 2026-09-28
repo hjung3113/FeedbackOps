@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DetailPanelSlotContext } from '@fops/ui';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as React from 'react';
@@ -63,10 +63,7 @@ import { SurveyDetailRoute } from '@/routes/_authed/surveys/$surveyId';
 
 function DetailPanelHost({ children }: { children: React.ReactNode }) {
   const [panel, setPanel] = React.useState<React.ReactNode>();
-  const setContent = React.useCallback(
-    (_key: string, node: React.ReactNode) => setPanel(node),
-    [],
-  );
+  const setContent = React.useCallback((_key: string, node: React.ReactNode) => setPanel(node), []);
   const clear = React.useCallback((_key: string) => setPanel(undefined), []);
   const context = React.useMemo(() => ({ setContent, clear }), [setContent, clear]);
 
