@@ -2,13 +2,13 @@
 
 ## Ownership
 
-Tasks owns frontend route composition for Task Requests, Tasks, Managed System-scoped task views, Work Initiatives, backlog, board, and task detail panels.
+Tasks owns frontend route composition for Task Requests, Tasks, Milestones, Managed System-scoped task views, backlog, board, and task detail panels. Work Initiative grouping is future work and has no route yet.
 
 It does not own reporter-facing VOC status or source evidence visibility rules.
 
 ## Route Boundary
 
-- Owns `/tasks` and `/tasks/initiatives`.
+- Owns `/tasks`, a single view-switching route (`?view=requests|backlog|board|my|inbox|milestones`; see `apps/frontend/src/routes/_authed/tasks.tsx`). There is no `/tasks/initiatives` route.
 - Task Requests are Tasks intake routes, not top-level routes.
 - Managed Systems are scope/defaulting surfaces; they do not create per-Managed-System route trees.
 

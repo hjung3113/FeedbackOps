@@ -1,0 +1,42 @@
+#!/bin/sh
+# .githooks/pre-commit
+#
+# Refuse commits on `main` and `develop`.
+# Per AGENTS.md §"Git Workflow": work happens on per-issue branches
+# (feature/<n>-<slug>, fix/<n>-<slug>, chore/<slug>) and reaches `develop` and
+# `main` only through PRs. The one exception mirrors .githooks/pre-push: a
+# README-only commit on `main` is allowed.
+#
+# Limitations:
+#   - Client-side hook. Bypassable with `git commit --no-verify`.
+#   - Each clone must enable: `git config core.hooksPath .githooks`
+#   - Detached HEAD (e.g. mid-rebase) is not checked.
+
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || exit 0
+
+case "$branch" in
+  main | develop) ;;
+  *) exit 0 ;;
+esac
+
+if [ "$branch" = "main" ]; then
+  staged=$(git diff --cached --name-only)
+  if [ -n "$staged" ] &&
+    ! printf '%s\n' "$staged" | grep -Ev '^README(\.[A-Za-z0-9.-]+)?$' >/dev/null; then
+    exit 0
+  fi
+fi
+
+{
+  echo ""
+  echo "pre-commit: refusing to commit on '$branch'."
+  echo ""
+  echo "Per AGENTS.md §Git Workflow, never commit directly to 'develop' or 'main'."
+  echo "Create a branch from develop and commit there, e.g.:"
+  echo "  git switch -c feature/<issue-number>-<slug>"
+  echo ""
+  echo "Bypass (use sparingly, e.g. authorised by the repo owner):"
+  echo "  git commit --no-verify"
+  echo ""
+} >&2
+exit 1
