@@ -169,7 +169,7 @@ export function SurveyBuilder({
             selectedId={selectedId}
             onSelect={select}
             onRemove={remove}
-            onAdd={add}
+            onAdd={() => add()}
             onReorder={reorder}
           />
         )}

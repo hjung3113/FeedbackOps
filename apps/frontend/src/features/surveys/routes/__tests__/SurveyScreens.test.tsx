@@ -389,6 +389,24 @@ describe('Survey screens', () => {
     expect(screen.queryByText('첫 질문을 추가하세요')).not.toBeInTheDocument();
   });
 
+  it('creates a rating question with its default bounds from an empty builder', async () => {
+    renderWithQuery(
+      <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^척도/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        '/surveys/survey-1/questions',
+        expect.objectContaining({
+          body: expect.objectContaining({ kind: 'rating', rating_min: 1, rating_max: 5 }),
+        }),
+      ),
+    );
+  });
+
   it('keeps an empty read-only builder without question cards or add actions', () => {
     renderWithQuery(
       <SurveyBuilder
@@ -875,6 +893,20 @@ describe('Survey screens', () => {
         'PATCH',
         '/surveys/survey-1/questions/question-created',
         expect.objectContaining({ body: expect.objectContaining({ prompt: 'POST 중 수정' }) }),
+      ),
+    );
+  });
+
+  it('creates a single-choice question from the populated builder add button', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        '/surveys/survey-1/questions',
+        expect.objectContaining({ body: expect.objectContaining({ kind: 'single_choice' }) }),
       ),
     );
   });

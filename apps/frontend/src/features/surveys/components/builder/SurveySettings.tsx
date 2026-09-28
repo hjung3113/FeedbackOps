@@ -6,7 +6,7 @@ export function SurveySettings({
   managedSystemName,
 }: {
   survey: Survey;
-  managedSystemName?: string;
+  managedSystemName?: string | undefined;
 }) {
   return (
     <aside className="border-l border-border-subtle p-4">
