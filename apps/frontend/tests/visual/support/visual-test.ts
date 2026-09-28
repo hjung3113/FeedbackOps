@@ -1,4 +1,4 @@
-import { expect, test as base } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 
 // Fixtures carry absolute timestamps, but screens render them as Korean
 // relative time off `Date.now()` (see `formatVocCreatedAt`), so an unpinned

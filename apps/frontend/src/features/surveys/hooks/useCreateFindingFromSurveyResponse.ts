@@ -20,6 +20,10 @@ export function useCreateFindingFromSurveyResponse(
           body,
         })
       ).data,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: surveyKeys.results(surveyId) }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: surveyKeys.results(surveyId) }),
+        queryClient.invalidateQueries({ queryKey: surveyKeys.outcomeFollowUp(surveyId) }),
+      ]),
   });
 }

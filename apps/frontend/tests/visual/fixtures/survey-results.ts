@@ -4,6 +4,7 @@ import { surveyVisualFixture, surveyVisualFixtureSchema } from './surveys';
 
 export const surveyResultVisualFixture = surveyVisualFixtureSchema.parse({
   ...surveyVisualFixture,
+  type: 'outcome' as const,
   status: 'closed' as const,
 });
 

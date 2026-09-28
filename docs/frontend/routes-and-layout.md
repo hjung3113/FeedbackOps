@@ -19,6 +19,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /surveys/:surveyId
 /surveys/:surveyId?builder=true
 /surveys/:surveyId/results
+/surveys/:surveyId/follow-up
 /tasks?view=my&managedSystem=:managedSystemId|all&selected=:taskId
 /tasks?view=inbox&managedSystem=:managedSystemId|all
 /tasks?view=requests&status=pending_review&managedSystem=:managedSystemId|all&selected=:requestId

@@ -26,14 +26,20 @@ export function SurveyDetailRoute() {
     params: { surveyId },
     fuzzy: false,
   });
+  const isFollowUpRoute = matchRoute({
+    to: '/surveys/$surveyId/follow-up',
+    params: { surveyId },
+    fuzzy: false,
+  });
+  const isOutcomeReviewRoute = isResultsRoute || isFollowUpRoute;
   const query = useSurvey(surveyId);
   const gate = useSurveyManageGate(query.data?.primary_managed_system_id);
   const list = useSurveys();
-  const managedSystemNames = useManagedSystemNamesResult({ enabled: !isResultsRoute });
+  const managedSystemNames = useManagedSystemNamesResult({ enabled: !isOutcomeReviewRoute });
   const managedSystemNamesById = managedSystemNames.isSuccess
     ? managedSystemNames.namesById
     : undefined;
-  const actorsQuery = useWorkspaceActors({ enabled: !isResultsRoute });
+  const actorsQuery = useWorkspaceActors({ enabled: !isOutcomeReviewRoute });
   const actorNamesById = useMemo(
     () =>
       actorsQuery.isSuccess
@@ -42,7 +48,7 @@ export function SurveyDetailRoute() {
     [actorsQuery.actors, actorsQuery.isSuccess],
   );
 
-  if (isResultsRoute) return <Outlet />;
+  if (isOutcomeReviewRoute) return <Outlet />;
   if (query.isLoading) return <div className="p-6 text-sm text-text-muted">불러오는 중…</div>;
   if (query.isError || !query.data)
     return (
