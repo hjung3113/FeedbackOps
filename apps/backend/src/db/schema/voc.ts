@@ -18,6 +18,7 @@ import {
   boolean,
   check,
   customType,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -215,6 +216,57 @@ export const vocRecommendationDecisions = vocSchema.table(
     clusterMatchesState: check(
       'voc_recommendation_decisions_cluster_matches_state',
       sql`(${t.state} = 'confirmed') = (${t.clusterId} IS NOT NULL)`,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// voc.voc_cluster_autogen_shadow_candidates — non-domain measurement output
+// for Issue #512. This records scored pairs only; it is not a cluster, member,
+// recommendation decision, or audit event.
+// ─────────────────────────────────────────────────────────────────────────
+export const vocClusterAutogenShadowCandidates = vocSchema.table(
+  'voc_cluster_autogen_shadow_candidates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    primaryManagedSystemId: uuid('primary_managed_system_id')
+      .notNull()
+      .references(() => managedSystems.id),
+    vocIdLow: uuid('voc_id_low')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    vocIdHigh: uuid('voc_id_high')
+      .notNull()
+      .references(() => vocs.id, { onDelete: 'cascade' }),
+    embeddingVersion: integer('embedding_version').notNull(),
+    score: doublePrecision('score').notNull(),
+    wouldForm: boolean('would_form').notNull(),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    lastRunId: text('last_run_id').notNull(),
+    seenCount: integer('seen_count').notNull().default(1),
+  },
+  (t) => ({
+    pairVersionUq: uniqueIndex('voc_cluster_autogen_shadow_candidates_pair_version_uq').on(
+      t.workspaceId,
+      t.vocIdLow,
+      t.vocIdHigh,
+      t.embeddingVersion,
+    ),
+    sortedPair: check(
+      'voc_cluster_autogen_shadow_candidates_sorted_pair',
+      sql`${t.vocIdLow} < ${t.vocIdHigh}`,
+    ),
+    embeddingVersionPositive: check(
+      'voc_cluster_autogen_shadow_candidates_version_positive',
+      sql`${t.embeddingVersion} > 0`,
+    ),
+    seenCountPositive: check(
+      'voc_cluster_autogen_shadow_candidates_seen_count_positive',
+      sql`${t.seenCount} > 0`,
     ),
   }),
 );

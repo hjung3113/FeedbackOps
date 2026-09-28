@@ -66,6 +66,7 @@ core
 voc
 - vocs
 - voc_embeddings (versioned pgvector rows; workspace scope is denormalized for active-version scans)
+- voc_cluster_autogen_shadow_candidates (non-domain pairwise measurements; ADR-0054)
 - voc_public_updates
 - voc_reporter_replies
 - voc_internal_comments
@@ -256,6 +257,16 @@ CHECK validates pending/dismissed/actioned fields, and its terminal-immutability
 trigger rejects every rewrite of an actioned or dismissed candidate. A later
 Task release must create a new candidate row; it must never reopen or mutate a
 terminal decision.
+
+## Issue #512: VOC cluster shadow measurements
+
+Migration `0051_voc_cluster_autogen_shadow.sql` pre-creates the hourly
+`voc.cluster_autogen_shadow` queue with ADR-0009 retry defaults and creates
+`voc.voc_cluster_autogen_shadow_candidates` as a separate non-domain measurement
+table. Rows are unique by workspace, sorted VOC pair, and embedding version;
+`fops_app` has `SELECT`, `INSERT`, and `UPDATE`, with no `DELETE`. The shadow
+handler never writes cluster, membership, recommendation-decision, VOC, or audit
+rows; see ADR-0054 for its eligibility and reporting rules.
 
 ## Issue #182: conversion-link visibility backfill
 

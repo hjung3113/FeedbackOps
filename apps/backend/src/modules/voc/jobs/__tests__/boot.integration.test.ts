@@ -3,11 +3,17 @@
 // check is that the backfill cron actually lands in pgboss.schedule and that
 // both queues were pre-created by migration 0043 with ADR-0009 retry config.
 
+import type { PgBoss } from 'pg-boss';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../../db/client.js';
 import { initBoss, shutdownBoss } from '../../../../lib/jobs.js';
 import { createFakeEmbeddingProvider } from '../../embedding/fake.js';
+import {
+  VOC_CLUSTER_AUTOGEN_SHADOW_CRON,
+  VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE,
+  registerVocClusterAutogenShadow,
+} from '../cluster-autogen-shadow.js';
 import { registerVocJobs } from '../index.js';
 import { VOC_EMBED_QUEUE } from '../embed-voc.js';
 import {
@@ -78,4 +84,43 @@ describe.skipIf(!runIntegration)('VOC embedding job boot wiring (#168)', () => {
       expect(row.rows[0]?.retry_backoff).toBe(true);
     });
   }
+
+  it('registers the hourly shadow cron in pgboss.schedule', async () => {
+    const schedules = await boss.getSchedules(VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE);
+    const ours = schedules.find(
+      (schedule: { name: string }) => schedule.name === VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE,
+    );
+    expect(ours).toBeDefined();
+    expect(ours?.cron).toBe(VOC_CLUSTER_AUTOGEN_SHADOW_CRON);
+  });
+
+  it('records the shadow queue with ADR-0009 retry config', async () => {
+    const row = await dbHandle.pool.query<{
+      retry_limit: number;
+      retry_delay: number;
+      retry_backoff: boolean;
+    }>(
+      `select retry_limit, retry_delay, retry_backoff from pgboss.queue where name = $1`,
+      [VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE],
+    );
+    expect(row.rowCount).toBe(1);
+    expect(row.rows[0]?.retry_limit).toBe(5);
+    expect(row.rows[0]?.retry_delay).toBe(30);
+    expect(row.rows[0]?.retry_backoff).toBe(true);
+  });
+
+  it('fails registration when the shadow queue was not pre-created', async () => {
+    const missingQueueBoss = {
+      getQueues: async () => [],
+    } as unknown as PgBoss;
+
+    await expect(
+      registerVocClusterAutogenShadow(missingQueueBoss, {
+        db: dbHandle.db,
+        embeddingVersion: 1,
+        embeddingEnabled: false,
+        log: { info: () => {}, warn: () => {}, error: () => {} },
+      }),
+    ).rejects.toThrow(`pg-boss queue '${VOC_CLUSTER_AUTOGEN_SHADOW_QUEUE}' is not pre-created`);
+  });
 });

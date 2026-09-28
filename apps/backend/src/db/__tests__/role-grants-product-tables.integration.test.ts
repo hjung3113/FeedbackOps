@@ -124,6 +124,9 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // for the one legal transition out of a terminal state — a dismissed pair
   // promoted to `confirmed` in place (ADR-0034 D3).
   'voc.voc_recommendation_decisions': ['SELECT', 'INSERT', 'UPDATE'],
+  // Issue #512 measurements are durable, but application code cannot erase
+  // an observation; migration 0051 grants only the shadow worker's DML needs.
+  'voc.voc_cluster_autogen_shadow_candidates': ['SELECT', 'INSERT', 'UPDATE'],
 };
 
 describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice 3 #22)', () => {
