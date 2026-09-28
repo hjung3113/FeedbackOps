@@ -1,7 +1,11 @@
-import { createFindingFromSurveyResponseRequestSchema } from '@fops/shared';
+import {
+  createFindingFromSurveyResponseRequestSchema,
+  outcomeFollowUpDecisionRequestSchema,
+} from '@fops/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
+import { requireIdempotencyKey } from '../../lib/http-headers.js';
 import { requireSession } from '../../middleware/require-session.js';
 import { requireWorkspace } from '../../middleware/require-workspace.js';
 import type { SessionService } from '../auth/session-service.js';
@@ -170,6 +174,35 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       return reply.code(r.status).send(r.body);
     },
   );
+  const followUpCommand = (
+    suffix: 'mark-no-follow-up' | 'reopen-follow-up',
+    op: 'markNoFollowUp' | 'reopenFollowUp',
+  ) =>
+    app.post(
+      `/survey-responses/:id/${suffix}`,
+      { preHandler: pre, ...rate('mutation') },
+      async (req, reply) => {
+        const id = (req.params as { id: string }).id;
+        if (!validId(id)) return sendError(reply, 'validation.failed', 'id must be a valid UUID');
+        const body = parse(outcomeFollowUpDecisionRequestSchema, req.body, reply);
+        if (!body) return;
+        const idempotencyKey = requireIdempotencyKey(req.headers as Record<string, unknown>);
+        const r = await opts.surveysService[op]({
+          actor: actor(req),
+          responseId: id,
+          input: body,
+          idempotencyKey,
+          requestHash: hashRequestBody({
+            body,
+            route: `survey_response.${suffix === 'mark-no-follow-up' ? 'mark_no_follow_up' : 'reopen_follow_up'}`,
+            responseId: id,
+          }),
+        });
+        return reply.code(r.status).send(r.body);
+      },
+    );
+  followUpCommand('mark-no-follow-up', 'markNoFollowUp');
+  followUpCommand('reopen-follow-up', 'reopenFollowUp');
   app.delete(
     '/survey-responses/:id/approved-excerpts/:approved_excerpt_id',
     { preHandler: pre, ...rate('mutation') },

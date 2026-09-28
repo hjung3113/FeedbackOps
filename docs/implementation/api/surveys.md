@@ -22,6 +22,8 @@ POST /survey-responses/:id/evidence-excerpt-candidates
 POST /survey-responses/:id/approved-excerpts
 DELETE /survey-responses/:id/approved-excerpts/:approved_excerpt_id
 POST /survey-responses/:id/create-finding
+POST /survey-responses/:id/mark-no-follow-up
+POST /survey-responses/:id/reopen-follow-up
 POST /survey-findings/:id/request-task (not implemented)
 POST /survey-findings/:id/link-task (not implemented)
 # future: POST /survey-findings/:id/link-milestone
@@ -132,6 +134,69 @@ The Finding has database provenance `source_type='survey_response'` and stores t
 Same actor/key/body/source replays the original Finding with no duplicate side effects; changed reuse returns `409 conflict.idempotency_key_reuse`; a new key intentionally creates another Finding. Evidence reads of approved snapshots require only same workspace and `survey.read`, not personal-response permission. Their source projection is `Survey response` and `<survey_type> · <survey_display_id> · Identity protected`; it never returns response UUID, respondent identity, raw answer, or Survey title. Generic survey-response highlight attachment remains deferred.
 
 Evidence-read projections never return response UUIDs, respondent identity, raw answer, or Survey title. Result-excerpt `response_id` is a distinct surface, returned only behind the `survey.read_personal_responses` gate. A holder result read whose payload includes `response_id` writes one `survey_response_personal_read` audit event per exposed response/question pair; a non-holder result read writes none. This GET route takes no `Idempotency-Key`. Error codes: `validation.failed`, `not_found.record`, `conflict.survey_results_unavailable`, `rate_limited.actor`.
+
+### POST /survey-responses/:id/mark-no-follow-up and /reopen-follow-up — outcome follow-up decisions (ADR-0055)
+
+Both commands record or reverse an outcome follow-up decision on one survey
+response. They require a session and matching workspace context, a required
+`Idempotency-Key` UUIDv4 header (missing → `422 validation.failed` with
+`fields: [{ path: ['headers', 'idempotency-key'], code: 'required' }]`;
+malformed → `422 validation.malformed_idempotency_key`), mutation rate
+limiting, and a strict body `{ reason }` that is non-empty after trimming and
+at most 2000 characters (blank or over-long → `422 validation.failed`).
+
+Authorization follows create-finding's order exactly. The command first
+resolves the response through the Survey evidence seam: source existence,
+workspace scope, `survey.read`, and explicit `survey.read_personal_responses`
+all collapse missing, foreign, denied-read, and denied-personal into the same
+`404 not_found.record`, and Admin role never bypasses the personal-response
+gate. It then requires `finding.manage` on the survey's primary Managed
+System; denial returns `403 permission.denied` (Admin role bypass intact).
+
+Classification is evaluated inside the transaction through the
+`SECURITY DEFINER` classifier `survey.read_outcome_follow_up_state`: a
+response is classifiable as poor only when its survey has `type: 'outcome'`
+and `status: 'closed'`, the survey's total response count meets the workspace
+`survey_anonymity_threshold`, and at least one rating answer falls in the
+`getRatingBandForValue` low band. The two commands have separate
+preconditions. **Mark** requires the subject to be classifiable as poor and
+its resolution to be `open`; a subject that is not poor, or whose gap is
+already cleared by an active `generated_finding` link to a
+`draft`/`active`/`converted` Finding or by a current `no_follow_up` decision,
+rejects with `409 conflict.stale_write` carrying `detail.failure_code`
+`action_no_longer_available` or `recovery_item_resolved` respectively.
+**Reopen** requires only that the current decision row is `no_follow_up`; it
+does not re-run the classifier, and any other row state (or no row) rejects
+with `action_no_longer_available`. After a reopen the response re-enters the
+`bad-outcome-no-followup` queue only if it is still poor and above the
+threshold and no qualifying Finding link exists. Rejected commands write no
+state row and no audit row.
+
+`mark-no-follow-up` upserts the single current row in
+`survey.outcome_follow_up_decisions` to `no_follow_up` with the trimmed
+reason, the deciding actor, and the survey's primary Managed System, and
+returns `200 { response_id, resolution: 'no_follow_up', updated_at }`.
+`reopen-follow-up` is legal only on a current `no_follow_up` row; it sets
+`reopened` and returns `200 { response_id, resolution: 'open', updated_at }`.
+There is no `DELETE`: history lives in `core.audit_log`.
+
+Audit events (same transaction, subject `survey_response`): mark writes
+`survey_outcome_no_follow_up_marked` with strict detail
+`{ survey_id, managed_system_id, reason }`; reopen writes
+`survey_outcome_follow_up_reopened` with
+`{ survey_id, managed_system_id, reason, previous_reason }`. Neither detail
+ever contains answer values or respondent identity. Dashboard queues
+affected: `bad-outcome-no-followup` (marked responses leave the count;
+reopened responses re-enter it). Same actor/key/body replays the stored `200`
+response with no second audit row; changed reuse returns `409
+conflict.idempotency_key_reuse`. Entity links are neither created nor
+detached by these commands.
+
+Error codes: `validation.failed`, `validation.malformed_idempotency_key`,
+`permission.denied`, `not_found.record`, `conflict.stale_write`,
+`conflict.survey_results_unavailable` (draft survey, raised by the evidence
+seam before the manage check), `conflict.idempotency_key_reuse`, and
+`rate_limited.actor`.
 
 ## Forbidden Endpoint
 

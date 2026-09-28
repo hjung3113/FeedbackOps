@@ -82,6 +82,8 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'survey_response_personal_read',
   'survey_response_excerpt_approved',
   'survey_response_excerpt_revoked',
+  'survey_outcome_no_follow_up_marked',
+  'survey_outcome_follow_up_reopened',
   'finding_created_from_survey_response',
   'workspace_settings_updated',
   'voc_recommendation_dismissed',
@@ -91,7 +93,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
 describe('audit event registry', () => {
   it('locks event-type order, uniqueness, and detail-map key coverage', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
-    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(71);
+    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(73);
     expect(Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS)).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
   });
 });

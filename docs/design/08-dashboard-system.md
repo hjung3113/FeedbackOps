@@ -139,7 +139,7 @@ Finding or Task is not a gap unless one of the expected-link conditions applies.
 - Survey Finding without Task
 - Task without Evidence
 - 완료됐지만 고객 상태가 갱신되지 않은 VOC
-- Outcome Survey 결과가 나쁜데 configured follow-up이 없는 항목
+- Outcome Survey 결과가 나쁜데 configured follow-up이 없는 항목 (ADR-0055: closed 상태의 outcome Survey에서 응답 수가 anonymity threshold 이상이고, rating 답변이 low band에 하나 이상 있으며, 활성 generated_finding 링크의 Finding 현재 상태가 draft/active/converted도 아니고 현재 no_follow_up 결정도 없는 응답)
 ```
 
 Attaching Survey evidence to an existing VOC is context enrichment, not follow-up

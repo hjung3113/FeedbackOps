@@ -7,8 +7,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { AUDIT_EVENT_DETAIL_SCHEMAS, AUDIT_EVENT_TYPES } from '../../enums/audit-events.js';
-import { findingCreatedFromSurveyResponseDetailSchema } from '../finding.js';
 import { CAPABILITIES, CAPABILITY_META } from '../../enums/capabilities.js';
+import { findingCreatedFromSurveyResponseDetailSchema } from '../finding.js';
 import {
   SURVEY_QUESTION_AUDIT_FIELDS,
   surveyClosedDetailSchema,
@@ -17,10 +17,10 @@ import {
   surveyQuestionCreatedDetailSchema,
   surveyQuestionDeletedDetailSchema,
   surveyQuestionUpdatedDetailSchema,
+  surveyQuestionsReorderedDetailSchema,
   surveyResponseExcerptApprovedDetailSchema,
   surveyResponsePersonalReadDetailSchema,
   surveyResponseSubmittedDetailSchema,
-  surveyQuestionsReorderedDetailSchema,
   surveyUpdatedDetailSchema,
 } from '../survey.js';
 
@@ -273,6 +273,8 @@ describe('Survey audit event registration', () => {
     'survey_response_submitted',
     'survey_response_personal_read',
     'survey_response_excerpt_approved',
+    'survey_outcome_no_follow_up_marked',
+    'survey_outcome_follow_up_reopened',
     'finding_created_from_survey_response',
   ] as const;
 
@@ -286,6 +288,45 @@ describe('Survey audit event registration', () => {
 
     expect(schema.parse(surveyResponseSubmitted)).toEqual(surveyResponseSubmitted);
     expect(() => schema.parse({ ...surveyResponseSubmitted, question_count: 0 })).toThrow();
+  });
+});
+
+describe('Survey outcome follow-up audit details (ADR-0055)', () => {
+  const marked = {
+    survey_id: U,
+    managed_system_id: V,
+    reason: 'Already handled by the release checklist.',
+  } as const;
+  const reopened = {
+    ...marked,
+    previous_reason: 'Superseded: the Finding was archived.',
+  } as const;
+
+  it('survey_outcome_no_follow_up_marked keeps its detail strict', () => {
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS.survey_outcome_no_follow_up_marked.parse(marked)).toEqual(
+      marked,
+    );
+    expect(() =>
+      AUDIT_EVENT_DETAIL_SCHEMAS.survey_outcome_no_follow_up_marked.parse({
+        ...marked,
+        respondent_actor_id: U,
+      }),
+    ).toThrow();
+  });
+
+  it('survey_outcome_follow_up_reopened requires previous_reason and stays strict', () => {
+    expect(AUDIT_EVENT_DETAIL_SCHEMAS.survey_outcome_follow_up_reopened.parse(reopened)).toEqual(
+      reopened,
+    );
+    expect(() =>
+      AUDIT_EVENT_DETAIL_SCHEMAS.survey_outcome_follow_up_reopened.parse(marked),
+    ).toThrow();
+    expect(() =>
+      AUDIT_EVENT_DETAIL_SCHEMAS.survey_outcome_follow_up_reopened.parse({
+        ...reopened,
+        unexpected_field: 'unknown fields must fail',
+      }),
+    ).toThrow();
   });
 });
 

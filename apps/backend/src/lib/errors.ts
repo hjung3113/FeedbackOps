@@ -62,6 +62,10 @@ export type DetailShape =
     }
   | { current_updated_at: string }
   | { current_triage_state: string }
+  | {
+      /** api/next-actions.md structured action failure carried on a 409. */
+      failure_code: 'action_no_longer_available' | 'recovery_item_resolved';
+    }
   | undefined;
 
 export class HttpError extends Error {
