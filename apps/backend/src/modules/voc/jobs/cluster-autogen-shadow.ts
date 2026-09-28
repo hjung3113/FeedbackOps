@@ -24,6 +24,9 @@ export const VOC_CLUSTER_AUTOGEN_SHADOW_MEASUREMENT_FLOOR = 0.6;
 /** Bound persisted pairs for each workspace/Managed System in one run. */
 export const VOC_CLUSTER_AUTOGEN_SHADOW_MAX_PAIRS_PER_MANAGED_SYSTEM_PER_RUN = 200;
 
+/** Bound one pairwise scan so an oversized system cannot monopolize a worker. */
+export const VOC_CLUSTER_AUTOGEN_SHADOW_STATEMENT_TIMEOUT_MS = 120_000;
+
 export interface VocClusterAutogenShadowPayload {
   correlation_id: string;
 }
@@ -40,6 +43,7 @@ export interface VocClusterAutogenShadowManagedSystemSummary {
 
 export interface VocClusterAutogenShadowResult {
   skipped: boolean;
+  timed_out: boolean;
   embedding_version: number;
   managed_systems: VocClusterAutogenShadowManagedSystemSummary[];
 }
@@ -49,6 +53,7 @@ export interface VocClusterAutogenShadowDeps {
   db: Db;
   embeddingVersion: number;
   embeddingEnabled: boolean;
+  statementTimeoutMs?: number;
   log?: JobLog;
 }
 
@@ -62,6 +67,10 @@ interface SummaryDbRow extends Record<string, unknown> {
   remaining: number | string;
 }
 
+function isStatementTimeoutError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === '57014';
+}
+
 /**
  * Records active-version same-Managed-System pairs above the measurement
  * floor, with an atomic upsert so a retry updates one row per distinct pair.
@@ -73,6 +82,7 @@ export async function runVocClusterAutogenShadow(
   if (!deps.embeddingEnabled) {
     const result: VocClusterAutogenShadowResult = {
       skipped: true,
+      timed_out: false,
       embedding_version: deps.embeddingVersion,
       managed_systems: [],
     };
@@ -81,12 +91,23 @@ export async function runVocClusterAutogenShadow(
       correlation_id: payload.correlation_id,
       embedding_version: deps.embeddingVersion,
       skipped: true,
+      timed_out: false,
       managed_systems: [],
     });
     return result;
   }
 
-  const result = await (deps.db as Db).execute<SummaryDbRow>(sql`
+  const statementTimeoutMs =
+    deps.statementTimeoutMs ?? VOC_CLUSTER_AUTOGEN_SHADOW_STATEMENT_TIMEOUT_MS;
+  if (!Number.isSafeInteger(statementTimeoutMs) || statementTimeoutMs < 1) {
+    throw new RangeError('statementTimeoutMs must be a positive safe integer');
+  }
+
+  let queryRows: SummaryDbRow[] = [];
+  try {
+    const queryResult = await deps.db.transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL statement_timeout = ${statementTimeoutMs}`));
+      return tx.execute<SummaryDbRow>(sql`
     WITH scoped_systems AS (
       SELECT DISTINCT v.workspace_id, v.primary_managed_system_id
         FROM voc.vocs v
@@ -193,7 +214,11 @@ export async function runVocClusterAutogenShadow(
         score = excluded.score,
         would_form = excluded.would_form,
         last_run_id = excluded.last_run_id,
-        seen_count = voc_cluster_autogen_shadow_candidates.seen_count + 1
+        seen_count = CASE
+          WHEN voc_cluster_autogen_shadow_candidates.last_run_id = excluded.last_run_id
+            THEN voc_cluster_autogen_shadow_candidates.seen_count
+          ELSE voc_cluster_autogen_shadow_candidates.seen_count + 1
+        END
       RETURNING workspace_id, primary_managed_system_id
     ),
     eligible_counts AS (
@@ -229,9 +254,29 @@ export async function runVocClusterAutogenShadow(
         ON recorded_counts.workspace_id = scoped_systems.workspace_id
        AND recorded_counts.primary_managed_system_id = scoped_systems.primary_managed_system_id
      ORDER BY scoped_systems.workspace_id, scoped_systems.primary_managed_system_id
-  `);
+      `);
+    });
+    queryRows = queryResult.rows;
+  } catch (error) {
+    if (!isStatementTimeoutError(error)) throw error;
 
-  const managedSystems = result.rows.map((row) => ({
+    const summary: VocClusterAutogenShadowResult = {
+      skipped: false,
+      timed_out: true,
+      embedding_version: deps.embeddingVersion,
+      managed_systems: [],
+    };
+    deps.log?.warn('voc.cluster_autogen_shadow timed out', {
+      event: 'voc.cluster_autogen_shadow.timeout',
+      correlation_id: payload.correlation_id,
+      embedding_version: deps.embeddingVersion,
+      statement_timeout_ms: statementTimeoutMs,
+      timed_out: true,
+    });
+    return summary;
+  }
+
+  const managedSystems = queryRows.map((row) => ({
     workspace_id: row.workspace_id,
     primary_managed_system_id: row.primary_managed_system_id,
     embedding_version: Number(row.embedding_version),
@@ -242,6 +287,7 @@ export async function runVocClusterAutogenShadow(
   }));
   const summary: VocClusterAutogenShadowResult = {
     skipped: false,
+    timed_out: false,
     embedding_version: deps.embeddingVersion,
     managed_systems: managedSystems,
   };
@@ -258,6 +304,7 @@ export async function runVocClusterAutogenShadow(
     correlation_id: payload.correlation_id,
     embedding_version: deps.embeddingVersion,
     skipped: false,
+    timed_out: false,
     workspaces: Array.from(workspaces, ([workspace_id, systems]) => ({
       workspace_id,
       managed_systems: systems,

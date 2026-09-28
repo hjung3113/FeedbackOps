@@ -53,13 +53,29 @@ The non-domain measurement table grows by distinct workspace/pair/version rows,
 not by job runs. Its app grant permits reads and upserts while withholding
 `DELETE`. A single structured job summary reports the correlation id, active
 embedding version, and each workspace/Managed System's eligible, would-form,
-recorded, and remaining counts.
+recorded, and remaining counts. The pairwise statement runs in a transaction
+with a 120-second local statement timeout; a timeout rolls the transaction back
+and is reported without retrying into the same wall.
 
 The §4.6 join-newest behavior is a latent requirement: before any non-human
 cluster origin can be written, a decision must establish either that
 `selectClusterIdForVoc` ignores auto-origin drafts or that a human add promotes
 the cluster to manual and makes it non-discardable. This shadow job creates no
 drafts, so neither rule is selected here.
+
+## Limitations
+
+The join enumerates O(n²) pairs per Managed System within each workspace. The
+statement timeout bounds runtime; before enabling this scan for a large corpus,
+a follow-up should add a Managed-System-partitioned join or an incremental scan.
+The 200-row cap keeps the highest scores, so the 0.60–0.75 band may not be
+persisted per pair in busy systems even though its aggregate count is logged; a
+band-split cap is a follow-up if calibration needs those rows.
+
+Rows are not marked when a pair stops being eligible. The current set is the
+rows recorded in the latest run, identified by its `last_run_id` or
+`last_seen_at`. A pair that a human confirmed and later removed from a cluster
+can be measured again because exclusion checks current membership only.
 
 ## Open questions for later choices
 

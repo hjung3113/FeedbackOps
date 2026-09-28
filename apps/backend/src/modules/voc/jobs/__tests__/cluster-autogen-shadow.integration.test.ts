@@ -8,6 +8,7 @@ import { type DbHandle, createDb } from '../../../../db/client.js';
 import type { JobLog } from '../../../../lib/job-log.js';
 import { insertMsDirectly } from '../../../../test-support/core-fixtures.js';
 import { insertVocDirectly } from '../../../../test-support/voc-fixtures.js';
+import { VOC_RECOMMENDATION_SIMILARITY_THRESHOLD } from '../../recommendations/constants.js';
 import {
   VOC_CLUSTER_AUTOGEN_SHADOW_MAX_PAIRS_PER_MANAGED_SYSTEM_PER_RUN,
   runVocClusterAutogenShadow,
@@ -38,15 +39,19 @@ interface RecordedInfo {
   meta: Record<string, unknown> | undefined;
 }
 
-function recordingLog(): { log: JobLog; info: RecordedInfo[] } {
+function recordingLog(): { log: JobLog; info: RecordedInfo[]; warnings: RecordedInfo[] } {
   const info: RecordedInfo[] = [];
+  const warnings: RecordedInfo[] = [];
   return {
     info,
+    warnings,
     log: {
       info(msg, meta) {
         info.push({ msg, meta });
       },
-      warn() {},
+      warn(msg, meta) {
+        warnings.push({ msg, meta });
+      },
       error() {},
     },
   };
@@ -188,16 +193,32 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     reporterId = actorId,
     version = ACTIVE_VERSION,
   ): Promise<[string, string]> {
-    const lowCandidate = await seedVoc('pair low', { workspaceId, managedSystemId, reporterId });
-    const highCandidate = await seedVoc('pair high', { workspaceId, managedSystemId, reporterId });
-    await seedEmbedding(lowCandidate, workspaceId, vectors[0], version);
-    await seedEmbedding(highCandidate, workspaceId, vectors[1], version);
-    return [lowCandidate, highCandidate];
+    const pair = [
+      await seedVoc('pair first', { workspaceId, managedSystemId, reporterId }),
+      await seedVoc('pair second', { workspaceId, managedSystemId, reporterId }),
+    ].sort() as [string, string];
+    await seedEmbedding(pair[0], workspaceId, vectors[0], version);
+    await seedEmbedding(pair[1], workspaceId, vectors[1], version);
+    return pair;
+  }
+
+  async function seedPairWithEmbeddingVersions(
+    lowVersion: number,
+    highVersion: number,
+  ): Promise<[string, string]> {
+    const pair = [await seedVoc('versioned pair low'), await seedVoc('versioned pair high')].sort() as [
+      string,
+      string,
+    ];
+    await seedEmbedding(pair[0], WORKSPACE_ID, '[1,0]', lowVersion);
+    await seedEmbedding(pair[1], WORKSPACE_ID, '[0.8,0.6]', highVersion);
+    return pair;
   }
 
   async function runShadow(options: {
     embeddingVersion?: number;
     embeddingEnabled?: boolean;
+    statementTimeoutMs?: number;
     correlationId?: string;
     log?: JobLog;
   } = {}): Promise<VocClusterAutogenShadowResult> {
@@ -206,6 +227,9 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
         db: appHandle.db,
         embeddingVersion: options.embeddingVersion ?? ACTIVE_VERSION,
         embeddingEnabled: options.embeddingEnabled ?? true,
+        ...(options.statementTimeoutMs === undefined
+          ? {}
+          : { statementTimeoutMs: options.statementTimeoutMs }),
         ...(options.log ? { log: options.log } : {}),
       },
       { correlation_id: options.correlationId ?? randomUUID() },
@@ -227,38 +251,80 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
   it('records a sorted same-system pair above 0.75 with would_form=true', async () => {
     const [firstId, secondId] = await seedPair();
 
-    await runShadow();
+    const result = await runShadow();
 
     const rows = await rowsForManagedSystem();
+    expect(result.timed_out).toBe(false);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.voc_id_low).toBe(firstId < secondId ? firstId : secondId);
-    expect(rows[0]?.voc_id_high).toBe(firstId < secondId ? secondId : firstId);
+    expect(rows[0]?.voc_id_low).toBe(firstId);
+    expect(rows[0]?.voc_id_high).toBe(secondId);
     expect((rows[0]?.voc_id_low ?? '') < (rows[0]?.voc_id_high ?? '')).toBe(true);
     expect(rows[0]?.would_form).toBe(true);
     expect(Number(rows[0]?.score)).toBeCloseTo(0.8, 6);
   });
 
-  it('records scores from 0.60 through 0.75 as non-forming and drops scores below 0.60', async () => {
-    const belowRecommendation = await seedPair(['[1,0]', '[0.6,0.8]']);
-    const secondMs = await insertMsDirectly(
+  it('records the measurement band and compares would_form to the stored score', async () => {
+    const interiorBandPair = await seedPair(['[1,0]', '[0.7,0.714142842854285]']);
+    const floorMs = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${FIXTURE_PREFIX}-${randomUUID().slice(0, 8)}`,
+      'Measurement floor boundary',
+    );
+    await seedPair(['[1,0]', '[0.6,0.8]'], floorMs);
+    const nearCutMs = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${FIXTURE_PREFIX}-${randomUUID().slice(0, 8)}`,
+      'Near recommendation cut',
+    );
+    await seedPair(['[1,0]', '[0.751,0.66]'], nearCutMs);
+    const exactCutMs = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${FIXTURE_PREFIX}-${randomUUID().slice(0, 8)}`,
+      'Exact recommendation cut vector',
+    );
+    await seedPair(['[1,0]', '[0.75,0.6614378277661477]'], exactCutMs);
+    const belowFloorMs = await insertMsDirectly(
       migrateHandle,
       WORKSPACE_ID,
       `${FIXTURE_PREFIX}-${randomUUID().slice(0, 8)}`,
       'Below measurement floor',
     );
-    await seedPair(['[1,0]', '[0.5,0.8660254037844386]'], secondMs);
+    await seedPair(['[1,0]', '[0.5,0.8660254037844386]'], belowFloorMs);
 
     await runShadow();
 
-    const rows = await rowsForManagedSystem();
-    expect(rows).toHaveLength(1);
-    expect(new Set([rows[0]?.voc_id_low, rows[0]?.voc_id_high])).toEqual(
-      new Set(belowRecommendation),
+    const interiorBandRows = await rowsForManagedSystem();
+    expect(interiorBandRows).toHaveLength(1);
+    expect(new Set([interiorBandRows[0]?.voc_id_low, interiorBandRows[0]?.voc_id_high])).toEqual(
+      new Set(interiorBandPair),
     );
-    expect(rows[0]?.would_form).toBe(false);
-    expect(Number(rows[0]?.score)).toBeCloseTo(0.6, 6);
-    const belowFloor = await rowsForManagedSystem(secondMs);
-    expect(belowFloor).toEqual([]);
+    expect(Number(interiorBandRows[0]?.score)).toBeCloseTo(0.7, 5);
+    expect(interiorBandRows[0]?.would_form).toBe(false);
+
+    const floorRows = await rowsForManagedSystem(floorMs);
+    expect(floorRows).toHaveLength(1);
+    expect(Number(floorRows[0]?.score)).toBeCloseTo(0.6, 5);
+    expect(floorRows[0]?.would_form).toBe(false);
+
+    const nearCutRows = await rowsForManagedSystem(nearCutMs);
+    expect(nearCutRows).toHaveLength(1);
+    const nearCutScore = Number(nearCutRows[0]?.score);
+    expect(nearCutScore).toBeGreaterThanOrEqual(VOC_RECOMMENDATION_SIMILARITY_THRESHOLD);
+    expect(nearCutRows[0]?.would_form).toBe(
+      nearCutScore >= VOC_RECOMMENDATION_SIMILARITY_THRESHOLD,
+    );
+
+    const exactCutRows = await rowsForManagedSystem(exactCutMs);
+    expect(exactCutRows).toHaveLength(1);
+    const exactCutScore = Number(exactCutRows[0]?.score);
+    expect(exactCutScore).toBeCloseTo(VOC_RECOMMENDATION_SIMILARITY_THRESHOLD, 5);
+    expect(exactCutRows[0]?.would_form).toBe(
+      exactCutScore >= VOC_RECOMMENDATION_SIMILARITY_THRESHOLD,
+    );
+    expect(await rowsForManagedSystem(belowFloorMs)).toEqual([]);
   });
 
   it('does not pair VOCs from different Primary Managed Systems', async () => {
@@ -279,10 +345,11 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     expect(await rowsForManagedSystem(secondMs)).toEqual([]);
   });
 
-  it('does not pair a VOC when either record is archived', async () => {
-    const [, second] = await seedPair();
+  it.each(['low', 'high'] as const)('does not pair when the %s VOC is archived', async (side) => {
+    const pair = await seedPair();
+    const archivedVocId = pair[side === 'low' ? 0 : 1];
     await migrateHandle.pool.query(`update voc.vocs set archived_at = now() where id = $1`, [
-      second,
+      archivedVocId,
     ]);
 
     await runShadow();
@@ -290,33 +357,43 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     expect(await rowsForManagedSystem()).toEqual([]);
   });
 
-  it('ignores embeddings that exist only at a non-active version', async () => {
-    await seedPair(['[1,0]', '[0.8,0.6]'], msId, WORKSPACE_ID, actorId, ACTIVE_VERSION - 1);
+  it.each(['low', 'high'] as const)(
+    'does not pair mixed embedding versions when the active embedding is on the %s VOC',
+    async (activeSide) => {
+      await seedPairWithEmbeddingVersions(
+        activeSide === 'low' ? ACTIVE_VERSION : ACTIVE_VERSION - 1,
+        activeSide === 'high' ? ACTIVE_VERSION : ACTIVE_VERSION - 1,
+      );
 
-    await runShadow();
+      await runShadow();
 
-    expect(await rowsForManagedSystem()).toEqual([]);
-  });
+      expect(await rowsForManagedSystem()).toEqual([]);
+    },
+  );
 
-  it('excludes a pair when either VOC already belongs to a cluster in that system', async () => {
-    const [first] = await seedPair();
-    const cluster = await migrateHandle.pool.query<{ id: string }>(
-      `insert into voc_cluster.voc_clusters
-         (workspace_id, display_id, title, primary_managed_system_id, created_by)
-       values ($1, $2, 'Shadow exclusion fixture', $3, $4)
-       returning id`,
-      [WORKSPACE_ID, `${FIXTURE_PREFIX}-cluster`, msId, actorId],
-    );
-    await migrateHandle.pool.query(
-      `insert into voc_cluster.voc_cluster_members (cluster_id, voc_id, added_by)
-       values ($1, $2, $3)`,
-      [cluster.rows[0]?.id, first, actorId],
-    );
+  it.each(['low', 'high'] as const)(
+    'excludes a pair when the %s VOC already belongs to a cluster in that system',
+    async (side) => {
+      const pair = await seedPair();
+      const clusteredVocId = pair[side === 'low' ? 0 : 1];
+      const cluster = await migrateHandle.pool.query<{ id: string }>(
+        `insert into voc_cluster.voc_clusters
+           (workspace_id, display_id, title, primary_managed_system_id, created_by)
+         values ($1, $2, 'Shadow exclusion fixture', $3, $4)
+         returning id`,
+        [WORKSPACE_ID, `${FIXTURE_PREFIX}-cluster`, msId, actorId],
+      );
+      await migrateHandle.pool.query(
+        `insert into voc_cluster.voc_cluster_members (cluster_id, voc_id, added_by)
+         values ($1, $2, $3)`,
+        [cluster.rows[0]?.id, clusteredVocId, actorId],
+      );
 
-    await runShadow();
+      await runShadow();
 
-    expect(await rowsForManagedSystem()).toEqual([]);
-  });
+      expect(await rowsForManagedSystem()).toEqual([]);
+    },
+  );
 
   async function dismissPair(
     pair: [string, string],
@@ -339,23 +416,17 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     );
   }
 
-  it('excludes a dismissed source-to-candidate pair', async () => {
-    const pair = await seedPair();
-    await dismissPair(pair);
+  it.each(['low', 'high'] as const)(
+    'excludes a dismissal whose source VOC is the %s pair member',
+    async (sourceSide) => {
+      const pair = await seedPair();
+      await dismissPair(pair, pair[sourceSide === 'low' ? 0 : 1]);
 
-    await runShadow();
+      await runShadow();
 
-    expect(await rowsForManagedSystem()).toEqual([]);
-  });
-
-  it('excludes a dismissed candidate-to-source pair', async () => {
-    const pair = await seedPair();
-    await dismissPair(pair, pair[1]);
-
-    await runShadow();
-
-    expect(await rowsForManagedSystem()).toEqual([]);
-  });
+      expect(await rowsForManagedSystem()).toEqual([]);
+    },
+  );
 
   it('does not let a dismissal at an old embedding version suppress the active version', async () => {
     const pair = await seedPair();
@@ -375,12 +446,26 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     const result = await runShadow({ embeddingEnabled: false, log });
 
     expect(result.skipped).toBe(true);
+    expect(result.timed_out).toBe(false);
     expect(await rowsForManagedSystem()).toEqual([]);
     expect(info).toHaveLength(1);
     expect(info[0]?.meta?.skipped).toBe(true);
   });
 
-  it('upserts a repeated pair and advances its run id and seen count', async () => {
+  it('does not count a replay with the same run id twice', async () => {
+    await seedPair();
+    const firstRun = randomUUID();
+
+    await runShadow({ correlationId: firstRun });
+    await runShadow({ correlationId: firstRun });
+
+    const rows = await rowsForManagedSystem();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.seen_count).toBe(1);
+    expect(rows[0]?.last_run_id).toBe(firstRun);
+  });
+
+  it('advances the run id and seen count for a distinct run', async () => {
     await seedPair();
     const firstRun = randomUUID();
     const secondRun = randomUUID();
@@ -392,6 +477,21 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.seen_count).toBe(2);
     expect(rows[0]?.last_run_id).toBe(secondRun);
+  });
+
+  it('returns a timeout summary without persisting partial rows', async () => {
+    for (let index = 0; index < 100; index += 1) {
+      const id = await seedVoc(`timeout ${index}`);
+      await seedEmbedding(id, WORKSPACE_ID, index % 2 === 0 ? '[1,0]' : '[0.8,0.6]');
+    }
+    const { log, warnings } = recordingLog();
+
+    const result = await runShadow({ statementTimeoutMs: 1, log });
+
+    expect(result.timed_out).toBe(true);
+    expect(await rowsForManagedSystem()).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.meta).toMatchObject({ timed_out: true, statement_timeout_ms: 1 });
   });
 
   it('caps recorded pairs per system and reports the uncapped tail and highest scores', async () => {
@@ -450,33 +550,50 @@ describe.skipIf(!runIntegration)('voc.cluster_autogen_shadow (#512)', () => {
     );
     const secondActorId = secondActor.rows[0]?.id;
     if (!secondActorId) throw new Error('second workspace actor fixture was not created');
-    // The schema has single-column VOC/MS FKs, so this deliberately shares the
-    // same MS id across workspaces to prove the pair query honors workspace_id.
+    const secondManagedSystemId = await insertMsDirectly(
+      migrateHandle,
+      secondWorkspaceId,
+      `${FIXTURE_PREFIX}-workspace-two-ms`,
+      'Workspace two cluster shadow target',
+    );
     const workspaceTwoPair = await seedPair(
       ['[1,0]', '[0.8,0.6]'],
-      msId,
+      secondManagedSystemId,
       secondWorkspaceId,
       secondActorId,
     );
 
     await runShadow();
 
-    const result = await appHandle.pool.query<{ workspace_id: string; count: number }>(
-      `select workspace_id, count(*)::int as count
+    const result = await appHandle.pool.query<ShadowRow>(
+      `select workspace_id, primary_managed_system_id, voc_id_low, voc_id_high,
+              embedding_version, score, would_form, last_run_id, seen_count
          from voc.voc_cluster_autogen_shadow_candidates
-        where workspace_id in ($1::uuid, $2::uuid)
-        group by workspace_id
+        where (workspace_id = $1::uuid and primary_managed_system_id = $3::uuid)
+           or (workspace_id = $2::uuid and primary_managed_system_id = $4::uuid)
         order by workspace_id`,
-      [WORKSPACE_ID, secondWorkspaceId],
+      [WORKSPACE_ID, secondWorkspaceId, msId, secondManagedSystemId],
     );
-    expect(result.rows).toHaveLength(1);
-    expect(result.rows[0]).toEqual({ workspace_id: WORKSPACE_ID, count: 1 });
-    const rows = await rowsForManagedSystem();
-    expect(rows).toHaveLength(1);
-    expect(new Set([rows[0]?.voc_id_low, rows[0]?.voc_id_high])).toEqual(
+    expect(result.rows).toHaveLength(2);
+    const workspaceOneRows = result.rows.filter((row) => row.workspace_id === WORKSPACE_ID);
+    const workspaceTwoRows = result.rows.filter((row) => row.workspace_id === secondWorkspaceId);
+    expect(workspaceOneRows).toHaveLength(1);
+    expect(workspaceTwoRows).toHaveLength(1);
+    expect(workspaceOneRows[0]).toMatchObject({
+      workspace_id: WORKSPACE_ID,
+      primary_managed_system_id: msId,
+    });
+    expect(workspaceTwoRows[0]).toMatchObject({
+      workspace_id: secondWorkspaceId,
+      primary_managed_system_id: secondManagedSystemId,
+    });
+    expect(new Set([workspaceOneRows[0]?.voc_id_low, workspaceOneRows[0]?.voc_id_high])).toEqual(
       new Set(workspaceOnePair),
     );
-    expect(rows.some((row) => workspaceTwoPair.includes(row.voc_id_low))).toBe(false);
+    expect(new Set([workspaceTwoRows[0]?.voc_id_low, workspaceTwoRows[0]?.voc_id_high])).toEqual(
+      new Set(workspaceTwoPair),
+    );
+    expect(workspaceOnePair.some((id) => workspaceTwoPair.includes(id))).toBe(false);
   });
 
   it('does not alter clusters, members, decisions, or audit rows', async () => {
