@@ -66,7 +66,8 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   fetchMe: vi.fn().mockResolvedValue({}),
   apiRequest,
   useIdempotencyKey: () => ({
-    key: idempotencyKeyState.values[idempotencyKeyState.index] ?? idempotencyKeyState.values[0]!,
+    key:
+      idempotencyKeyState.values[idempotencyKeyState.index] ?? idempotencyKeyState.values[0] ?? '',
     markConsumed: () => {
       markConsumed();
       idempotencyKeyState.index += 1;
@@ -220,7 +221,7 @@ function renderSurveyRoute(read: unknown = holderRead, resultData: unknown = res
       <RouterProvider router={router} />
     </QueryClientProvider>
   );
-  const rendered = render(tree);
+  render(tree);
   return {
     invalidateQueries,
     router,
@@ -505,13 +506,15 @@ describe('/surveys/:surveyId/follow-up route', () => {
   });
 
   it('creates a Finding with only the selected response approved excerpt ids', async () => {
+    const [textQuestion] = results.questions;
+    if (!textQuestion) throw new Error('fixture needs a text question');
     const secondResults = {
       ...results,
       questions: [
         {
-          ...results.questions[0]!,
+          ...textQuestion,
           excerpts: [
-            ...results.questions[0]!.excerpts,
+            ...textQuestion.excerpts,
             {
               id: secondExcerptId,
               text: '두 번째 응답의 승인된 발췌입니다.',
