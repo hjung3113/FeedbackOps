@@ -13,6 +13,7 @@ export const surveyKeys = {
   listScoped: (managedSystemId: string) => ['surveys', { managedSystemId }] as const,
   detail: (id: string) => ['surveys', id] as const,
   results: (id: string) => ['surveys', id, 'results'] as const,
+  outcomeFollowUp: (id: string) => ['surveys', id, 'outcome-follow-up'] as const,
 };
 
 // Optional managed_system_id filter mirrors the backend GET /surveys query

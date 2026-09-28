@@ -79,6 +79,7 @@ Spec column references — short names map onto files:
 | `surveys` | `screen-surveys.jsx`·`SurveysScreen` | 07 survey · routes | ✓ | Follow-up = 5 allowed CTAs; Pack 19 split |
 | `survey-builder` | `screen-survey-builder.jsx` | 07 survey §FR-SURVEY-002 | — | One-level branch · option preservation · outline drag-reorder |
 | `survey-result` | `screen-survey-result.jsx` | 07 survey §FR-SURVEY-004 | — | Anonymity threshold reminder |
+| `survey-follow-up` | ADR-0055 option B / Issue #510 part D | ADR-0055 part C and #510 part D | — | Intentional new Survey-owned per-response review screen |
 | `admin` | `screen-admin.jsx`·`AdminScreen` | 03 core §FR-CORE-002 · api/core.md · routes | — | MS registry + Permission teaser; Pack 19 split |
 | `admin-areas` | `screen-admin.jsx`·`AdminAreasScreen` | 03 core §FR-CORE-003 · 01 domain §Analytics Area · routes | — | AA slide-over (Pack 10); Pack 19 split |
 | `admin-permissions` | `screen-permissions.jsx` | 09 permission §FR-PERM-002 | ✓ | Pending → Approved/Rejected/Expired/Revoked. Self-approval audit capture (Pack 8). |
@@ -118,6 +119,7 @@ Status vocabulary: `registered` — route file exists and renders the screen · 
 | (folded into list) | `screen-surveys.jsx` detail | `/surveys/:surveyId` | `routes/_authed/surveys/$surveyId.tsx` | `SurveyDetail` inside `ListShell` when `builder` is absent | `registered-extra` — path form of the list's selected panel | `api/surveys.md` |
 | `survey-builder` | `screen-survey-builder.jsx` (+ `screen-survey-builder-preview.jsx`) | `/surveys/:surveyId?builder=true` | same `$surveyId.tsx`, `search.builder` | `SurveyBuilder`. Route file does not wrap `WorkbenchShell` | `registered` under the nested URL, not a top-level `survey-builder` path | `api/surveys.md` |
 | `survey-result` | `screen-survey-result.jsx` | `/surveys/:surveyId/results` | `routes/_authed/surveys/$surveyId.results.tsx` | `SurveyResultsSummary`. No `WorkbenchShell` in that route file; the parent returns `<Outlet />` for the results match | `registered` under the nested URL. §4 calling this `WorkbenchShell` stays a prototype fact | `api/surveys.md` (`GET` results section) |
+| `survey-follow-up` (intentional addition, ADR-0055 option B) | Issue #510 part D / ADR-0055 option B | `/surveys/:surveyId/follow-up` | `routes/_authed/surveys/$surveyId.follow-up.tsx` | `SurveyFollowUpRouteView` in `ListShell`; parent returns `<Outlet />` for the follow-up match | `registered-extra` — #510 part D addition; no `docs/design-prototype/screen-*.jsx` source yet | `api/surveys.md` (`GET /surveys/:id/outcome-follow-up` and decision POSTs) |
 | `admin` | `screen-admin.jsx` `AdminScreen` | `/admin/managed-systems` | `routes/_authed/admin/managed-systems.tsx` | inline page, `PageShell` | `registered` | `api/core.md` |
 | `admin-areas` | `screen-admin.jsx` `AdminAreasScreen` | `/admin/analytics-areas` | `routes/_authed/admin/analytics-areas.tsx` | inline page, `PageShell` | `registered` | `api/core.md` |
 | `admin-permissions` | `screen-permissions.jsx` | `/admin/permissions/requests` | `routes/_authed/admin/permissions/requests.tsx` | inline page, `ListShell` | `registered` | `api/permissions.md` |

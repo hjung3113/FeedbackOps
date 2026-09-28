@@ -1,28 +1,18 @@
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import { RequestTaskModal } from '@/features/findings/components/FindingDetail/RequestTaskModal';
 import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
-import type { FindingSeverity, SurveyResultDto } from '@fops/shared';
-import {
-  Button,
-  Checkbox,
-  EmptyState,
-  FieldLabel,
-  RadioGroup,
-  RadioGroupItem,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@fops/ui';
+import type { OutcomeFollowUpReadDto, SurveyResultDto } from '@fops/shared';
+import { Button, EmptyState } from '@fops/ui';
+import { Link } from '@tanstack/react-router';
 import { FilePlus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { useCreateFindingFromSurveyResponse } from '../../hooks/useCreateFindingFromSurveyResponse';
 import type { Survey } from '../../types';
+import { CreateFindingDraftPanel, excerptsByResponse } from './CreateFindingDraftPanel';
 
 export interface SurveyResultsSummaryProps {
   survey: Survey;
   results: SurveyResultDto;
+  followUpRead?: OutcomeFollowUpReadDto | null | undefined;
 }
 
 function questionPrompt(survey: Survey, questionId: string): string {
@@ -100,159 +90,6 @@ function QuestionResult({
           )}
         </div>
       )}
-    </section>
-  );
-}
-
-type ResponseExcerpt = { id: string; text: string; response_id: string };
-
-function excerptsByResponse(results: SurveyResultDto): ResponseExcerpt[][] {
-  const grouped = new Map<string, ResponseExcerpt[]>();
-  for (const question of results.questions) {
-    if (question.visibility !== 'visible') continue;
-    if (question.kind !== 'text') continue;
-    for (const excerpt of question.excerpts) {
-      if (!excerpt.response_id) continue;
-      const group = grouped.get(excerpt.response_id) ?? [];
-      group.push({ ...excerpt, response_id: excerpt.response_id });
-      grouped.set(excerpt.response_id, group);
-    }
-  }
-  return [...grouped.values()];
-}
-
-function CreateFindingDraftPanel({
-  surveyId,
-  groups,
-}: {
-  surveyId: string;
-  groups: ResponseExcerpt[][];
-}) {
-  const [selection, setSelection] = useState<{ responseId?: string; excerptIds: string[] }>({
-    excerptIds: [],
-  });
-  const [severity, setSeverity] = useState<FindingSeverity>('medium');
-  const mutation = useCreateFindingFromSurveyResponse(surveyId);
-  const selectedGroup = groups.find((group) => group[0]?.response_id === selection.responseId);
-  const selectedExcerptIds = selection.excerptIds.filter((id) =>
-    selectedGroup?.some((excerpt) => excerpt.id === id),
-  );
-
-  function selectResponse(nextResponseId: string) {
-    setSelection({ responseId: nextResponseId, excerptIds: [] });
-  }
-
-  function setExcerptSelected(id: string, checked: boolean) {
-    setSelection((current) => ({
-      ...current,
-      excerptIds: checked
-        ? [...current.excerptIds, id]
-        : current.excerptIds.filter((excerptId) => excerptId !== id),
-    }));
-  }
-
-  function submit() {
-    if (!selectedGroup || selectedExcerptIds.length === 0) return;
-    const first = selectedGroup[0];
-    if (!first) return;
-    mutation.mutate({
-      responseId: first.response_id,
-      body: { severity, approved_excerpt_ids: selectedExcerptIds },
-    });
-  }
-
-  return (
-    <section
-      className="mt-3 space-y-3 border-t border-border-subtle pt-3"
-      data-testid="survey-create-finding-draft"
-    >
-      <p className="text-sm font-medium text-text-primary">Create or link Finding</p>
-      <fieldset className="space-y-2">
-        <legend className="text-sm text-text-secondary" id="survey-finding-response-label">
-          Choose a response
-        </legend>
-        <RadioGroup
-          aria-labelledby="survey-finding-response-label"
-          onValueChange={selectResponse}
-          value={selection.responseId ?? ''}
-        >
-          {groups.map((group, index) => {
-            const first = group[0];
-            if (!first) return null;
-            return (
-              <label
-                className="flex items-center gap-2 text-sm text-text-secondary"
-                htmlFor={`survey-finding-response-${first.response_id}`}
-                key={first.response_id}
-              >
-                <RadioGroupItem
-                  data-testid={`survey-finding-response-${index}`}
-                  id={`survey-finding-response-${first.response_id}`}
-                  value={first.response_id}
-                />
-                Response {index + 1}
-              </label>
-            );
-          })}
-        </RadioGroup>
-      </fieldset>
-      {selectedGroup && (
-        <fieldset className="space-y-2">
-          <legend className="text-sm text-text-secondary">Approved excerpts</legend>
-          {selectedGroup.map((excerpt) => (
-            <label
-              className="flex gap-2 text-sm text-text-secondary"
-              htmlFor={`survey-finding-excerpt-${excerpt.id}`}
-              key={excerpt.id}
-            >
-              <Checkbox
-                checked={selectedExcerptIds.includes(excerpt.id)}
-                data-testid={`survey-finding-excerpt-${excerpt.id}`}
-                id={`survey-finding-excerpt-${excerpt.id}`}
-                onCheckedChange={(checked) => setExcerptSelected(excerpt.id, checked === true)}
-              />
-              <span>{excerpt.text}</span>
-            </label>
-          ))}
-        </fieldset>
-      )}
-      <FieldLabel
-        className="block text-sm text-text-secondary"
-        htmlFor="survey-finding-severity"
-        id="survey-finding-severity-label"
-      >
-        Severity
-      </FieldLabel>
-      <Select onValueChange={(value) => setSeverity(value as FindingSeverity)} value={severity}>
-        <SelectTrigger
-          aria-labelledby="survey-finding-severity-label"
-          className="mt-1"
-          data-testid="survey-finding-severity"
-          id="survey-finding-severity"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="low">Low</SelectItem>
-          <SelectItem value="medium">Medium</SelectItem>
-          <SelectItem value="high">High</SelectItem>
-          <SelectItem value="critical">Critical</SelectItem>
-        </SelectContent>
-      </Select>
-      {mutation.error && (
-        <p className="text-sm text-text-danger" role="alert">
-          {mutation.error.message}
-        </p>
-      )}
-      <Button
-        data-testid="survey-create-finding-submit"
-        disabled={!selectedGroup || selectedExcerptIds.length === 0}
-        loading={mutation.isPending}
-        onClick={submit}
-        type="button"
-      >
-        Create selected Finding
-      </Button>
     </section>
   );
 }
@@ -420,53 +257,91 @@ function NextActions({
   );
 }
 
-export function SurveyResultsSummary({ survey, results }: SurveyResultsSummaryProps) {
+export function SurveyResultsSummary({ survey, results, followUpRead }: SurveyResultsSummaryProps) {
   // The aggregate DTO has no outcome score or poor-result flag. Keep this
   // annotation tied to backend-provided follow-up availability rather than
   // deriving a poor outcome from response distributions.
-  const hasOutcomeFollowUp = survey.type === 'outcome' && results.next_actions.length > 0;
-
+  const hasOutcomeFollowUp =
+    survey.type === 'outcome' &&
+    (followUpRead === undefined
+      ? results.next_actions.length > 0
+      : followUpRead?.follow_up_needed === true);
+  // The route renders SurveyResultHeader above this component for every survey type and always
+  // passes followUpRead (null when not applicable). `undefined` only happens in direct-render
+  // tests, which keep the in-body title below.
+  const directRender = followUpRead === undefined;
   return (
-    <main className="mx-auto max-w-6xl p-6" data-testid="survey-results-summary">
-      <header className="border-b border-border-subtle pb-5">
-        <p className="text-sm text-text-muted">{survey.display_id}</p>
-        <h1 className="mt-1 text-xl font-semibold text-text-primary">{survey.title}</h1>
-        <p className="mt-2 text-sm text-text-muted">
-          Question summaries and response distributions
-        </p>
-        {results.identity_protected && (
-          <p className="mt-3 text-sm text-text-muted">Identity protected responses</p>
-        )}
-        {hasOutcomeFollowUp && (
-          <p className="mt-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-primary">
-            Outcome follow-up is available
-          </p>
-        )}
-      </header>
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="space-y-4">
-          {results.response_state === 'none' ? (
-            <EmptyState
-              body={`응답이 ${results.anonymity_threshold}건 이상 모이면 결과가 표시됩니다.`}
-              title="아직 응답이 없습니다"
-            />
-          ) : results.response_state === 'below_threshold' ? (
-            <EmptyState
-              body={`익명 보호를 위해 ${results.anonymity_threshold}건 미만일 때는 집계와 정확한 응답 수를 숨깁니다.`}
-              title={`응답이 ${results.anonymity_threshold}건 이상 모이면 결과가 표시됩니다`}
-            />
-          ) : (
-            results.questions.map((result, index) => (
-              <QuestionResult
-                index={index}
-                key={result.question_id}
-                result={result}
-                survey={survey}
-              />
-            ))
+    <main className="flex min-h-0 flex-1 flex-col" data-testid="survey-results-summary">
+      <div className="mx-auto w-full max-w-6xl p-6">
+        <header className="border-b border-border-subtle pb-5">
+          {directRender && (
+            <>
+              <p className="text-sm text-text-muted">{survey.display_id}</p>
+              <h1 className="mt-1 text-xl font-semibold text-text-primary">{survey.title}</h1>
+            </>
           )}
+          <p className="mt-2 text-sm text-text-muted">
+            Question summaries and response distributions
+          </p>
+          {results.identity_protected && (
+            <p className="mt-3 text-sm text-text-muted">Identity protected responses</p>
+          )}
+          {hasOutcomeFollowUp &&
+            (followUpRead === undefined ? (
+              // Legacy direct-render branch keeps the develop-era Summary test green.
+              <p className="mt-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-primary">
+                Outcome follow-up is available
+              </p>
+            ) : (
+              <div
+                className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent-danger/30 bg-surface-card p-3 text-sm text-text-primary"
+                data-testid="outcome-follow-up-callout"
+              >
+                <div>
+                  <p className="font-medium">후속 조치가 필요한 저조한 응답이 있습니다</p>
+                  {followUpRead?.personal_access !== true && (
+                    <p className="mt-1 text-text-muted">
+                      개인 응답 열람 권한이 있어야 응답별로 검토할 수 있습니다.
+                    </p>
+                  )}
+                </div>
+                {followUpRead?.personal_access === true && (
+                  <Link
+                    className="shrink-0 font-medium text-accent-primary underline-offset-2 hover:underline"
+                    params={{ surveyId: survey.id }}
+                    to="/surveys/$surveyId/follow-up"
+                  >
+                    Follow-up 검토
+                  </Link>
+                )}
+              </div>
+            ))}
+        </header>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="space-y-4">
+            {results.response_state === 'none' ? (
+              <EmptyState
+                body={`응답이 ${results.anonymity_threshold}건 이상 모이면 결과가 표시됩니다.`}
+                title="아직 응답이 없습니다"
+              />
+            ) : results.response_state === 'below_threshold' ? (
+              <EmptyState
+                body={`익명 보호를 위해 ${results.anonymity_threshold}건 미만일 때는 집계와 정확한 응답 수를 숨깁니다.`}
+                title={`응답이 ${results.anonymity_threshold}건 이상 모이면 결과가 표시됩니다`}
+              />
+            ) : (
+              results.questions.map((result, index) => (
+                <QuestionResult
+                  index={index}
+                  key={result.question_id}
+                  result={result}
+                  survey={survey}
+                />
+              ))
+            )}
+          </div>
+          <NextActions actions={results.next_actions} results={results} surveyId={survey.id} />
         </div>
-        <NextActions actions={results.next_actions} results={results} surveyId={survey.id} />
       </div>
     </main>
   );

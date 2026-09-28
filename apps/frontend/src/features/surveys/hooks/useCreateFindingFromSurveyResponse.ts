@@ -8,8 +8,14 @@ export interface CreateFindingFromSurveyResponseVariables {
   body: CreateFindingFromSurveyResponseRequest;
 }
 
+type CreateFindingSuccess = (
+  finding: FindingDto,
+  variables: CreateFindingFromSurveyResponseVariables,
+) => void;
+
 export function useCreateFindingFromSurveyResponse(
   surveyId: string,
+  onSuccess?: CreateFindingSuccess,
 ): UseMutationResult<FindingDto, ApiError, CreateFindingFromSurveyResponseVariables> {
   const queryClient = useQueryClient();
 
@@ -20,6 +26,12 @@ export function useCreateFindingFromSurveyResponse(
           body,
         })
       ).data,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: surveyKeys.results(surveyId) }),
+    onSuccess: (finding, variables) => {
+      onSuccess?.(finding, variables);
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: surveyKeys.results(surveyId) }),
+        queryClient.invalidateQueries({ queryKey: surveyKeys.outcomeFollowUp(surveyId) }),
+      ]);
+    },
   });
 }

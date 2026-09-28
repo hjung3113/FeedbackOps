@@ -4,12 +4,22 @@ import { surveyVisualFixture, surveyVisualFixtureSchema } from './surveys';
 
 export const surveyResultVisualFixture = surveyVisualFixtureSchema.parse({
   ...surveyVisualFixture,
+  type: 'outcome' as const,
   status: 'closed' as const,
+});
+
+export const surveyResultsNonOutcomeVisualFixture = surveyVisualFixtureSchema.parse({
+  ...surveyResultVisualFixture,
+  type: 'discovery' as const,
 });
 
 export const surveyResultVisualListFixture = z
   .array(surveyVisualFixtureSchema)
   .parse([surveyResultVisualFixture]);
+
+export const surveyResultsNonOutcomeVisualListFixture = z
+  .array(surveyVisualFixtureSchema)
+  .parse([surveyResultsNonOutcomeVisualFixture]);
 
 const ids = {
   choice: '11111111-1111-4111-8111-111111111111',
@@ -31,6 +41,7 @@ export const surveyResultsVisualScenarios = z
       'poor-outcome',
       'empty-next-actions',
       'finding-draft',
+      'non-outcome',
     ]),
   )
   .parse([
@@ -42,6 +53,7 @@ export const surveyResultsVisualScenarios = z
     'poor-outcome',
     'empty-next-actions',
     'finding-draft',
+    'non-outcome',
   ]);
 export type SurveyResultsVisualScenario = (typeof surveyResultsVisualScenarios)[number];
 

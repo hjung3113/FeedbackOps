@@ -88,10 +88,19 @@ import {
 } from '../fixtures/permissions';
 import { railScopeManagedSystems } from '../fixtures/rail-scope';
 import {
+  surveyFollowUpReadVisualFixture,
+  surveyFollowUpResultsVisualFixture,
+  surveyFollowUpVisualFixture,
+  surveyFollowUpVisualListFixture,
+  surveyResultsFollowUpReadVisualFixture,
+} from '../fixtures/survey-follow-up';
+import {
   type SurveyResultsVisualScenario,
   surveyResultVisualFixture,
   surveyResultVisualListFixture,
   surveyResultsFixtureFor,
+  surveyResultsNonOutcomeVisualFixture,
+  surveyResultsNonOutcomeVisualListFixture,
 } from '../fixtures/survey-results';
 import {
   type SurveyVisualScenario,
@@ -146,6 +155,8 @@ interface InstallOptions {
   vocReporterTaskSummary?: boolean;
   surveyScenario?: SurveyVisualScenario;
   surveyResultsScenario?: SurveyResultsVisualScenario;
+  /** ADR-0055 outcome follow-up review screen, with a holder response fixture. */
+  surveyFollowUp?: boolean;
   adminSettingsScenario?: AdminSettingsVisualScenario;
   /** Rail/scope fixture uses two systems to make scope selector snapshots meaningful. */
   railScope?: boolean;
@@ -827,7 +838,13 @@ export async function installMockApi(
     }
 
     if (options.surveyResultsScenario && isRequest(route, 'GET', '/surveys')) {
-      await json(route, 200, surveyResultVisualListFixture);
+      await json(
+        route,
+        200,
+        options.surveyResultsScenario === 'non-outcome'
+          ? surveyResultsNonOutcomeVisualListFixture
+          : surveyResultVisualListFixture,
+      );
       return;
     }
 
@@ -835,7 +852,13 @@ export async function installMockApi(
       options.surveyResultsScenario &&
       isRequest(route, 'GET', `/surveys/${surveyResultVisualFixture.id}`)
     ) {
-      await json(route, 200, surveyResultVisualFixture);
+      await json(
+        route,
+        200,
+        options.surveyResultsScenario === 'non-outcome'
+          ? surveyResultsNonOutcomeVisualFixture
+          : surveyResultVisualFixture,
+      );
       return;
     }
 
@@ -844,6 +867,43 @@ export async function installMockApi(
       isRequest(route, 'GET', `/surveys/${surveyResultVisualFixture.id}/results`)
     ) {
       await json(route, 200, surveyResultsFixtureFor(options.surveyResultsScenario));
+      return;
+    }
+
+    if (
+      options.surveyResultsScenario &&
+      isRequest(route, 'GET', `/surveys/${surveyResultVisualFixture.id}/outcome-follow-up`)
+    ) {
+      await json(route, 200, surveyResultsFollowUpReadVisualFixture);
+      return;
+    }
+
+    if (options.surveyFollowUp && isRequest(route, 'GET', '/surveys')) {
+      await json(route, 200, surveyFollowUpVisualListFixture);
+      return;
+    }
+
+    if (
+      options.surveyFollowUp &&
+      isRequest(route, 'GET', `/surveys/${surveyFollowUpVisualFixture.id}`)
+    ) {
+      await json(route, 200, surveyFollowUpVisualFixture);
+      return;
+    }
+
+    if (
+      options.surveyFollowUp &&
+      isRequest(route, 'GET', `/surveys/${surveyFollowUpVisualFixture.id}/outcome-follow-up`)
+    ) {
+      await json(route, 200, surveyFollowUpReadVisualFixture);
+      return;
+    }
+
+    if (
+      options.surveyFollowUp &&
+      isRequest(route, 'GET', `/surveys/${surveyFollowUpVisualFixture.id}/results`)
+    ) {
+      await json(route, 200, surveyFollowUpResultsVisualFixture);
       return;
     }
 

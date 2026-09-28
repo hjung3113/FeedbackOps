@@ -8,7 +8,7 @@ It does not own VOC creation, Finding persistence, Task mutation, or permission 
 
 ## Route Boundary
 
-- Owns `/surveys`, `/surveys/:surveyId`, and `/surveys/:surveyId/results`.
+- Owns `/surveys`, `/surveys/:surveyId`, `/surveys/:surveyId/results`, and `/surveys/:surveyId/follow-up`.
 - Survey-derived actions may link into Integration or Tasks through approved API contracts.
 
 ## Invariants
