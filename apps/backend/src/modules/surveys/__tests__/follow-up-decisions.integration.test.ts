@@ -255,6 +255,30 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
     return { msId, surveyId, responseId: subjectResponseId };
   }
 
+  /** Poor subject already resolved by an active generated_finding link. */
+  async function seedResolvedSubject(): Promise<Subject> {
+    const subject = await seedSubject();
+    const finding = await migrateDb.pool.query<{ id: string }>(
+      `insert into finding.findings (
+         workspace_id, display_id, primary_managed_system_id, title, summary,
+         source_type, source_id, severity, status, created_by
+       ) values ($1, core.next_display_id($1::uuid, 'finding'), $2, 'Resolved finding', 'summary',
+         'survey_response', $3, 'medium', 'active', $4) returning id`,
+      [WORKSPACE_ID, subject.msId, subject.responseId, grantorActorId],
+    );
+    const findingId = finding.rows[0]?.id;
+    if (!findingId) throw new Error('resolved finding seed failed');
+    findingIds.push(findingId);
+    await migrateDb.pool.query(
+      `insert into core.entity_links (
+         workspace_id, source_type, source_id, target_type, target_id, relation_type,
+         visibility, status, managed_system_id, created_by
+       ) values ($1, 'survey_response', $2, 'finding', $3, 'generated_finding', 'internal_only', 'active', $4, $5)`,
+      [WORKSPACE_ID, subject.responseId, findingId, subject.msId, grantorActorId],
+    );
+    return subject;
+  }
+
   async function decisionRow(responseId: string) {
     const { rows } = await db.pool.query<{
       state: string;
@@ -360,6 +384,80 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
     });
   });
 
+  it('rejects a second reopen while the current row is reopened, without another audit row', async () => {
+    const subject = await seedSubject();
+    const actor = await createActor(
+      'developer',
+      ['survey.read', 'survey.read_personal_responses', 'finding.manage'],
+      subject.msId,
+    );
+    const marked = await post(`/survey-responses/${subject.responseId}/mark-no-follow-up`, actor, {
+      reason: 'First decision.',
+    });
+    expect(marked.statusCode).toBe(200);
+    const reopened = await post(`/survey-responses/${subject.responseId}/reopen-follow-up`, actor, {
+      reason: 'Reopen once.',
+    });
+    expect(reopened.statusCode).toBe(200);
+    // A new key makes this a fresh command, not an idempotent replay.
+    const secondReopen = await post(
+      `/survey-responses/${subject.responseId}/reopen-follow-up`,
+      actor,
+      { reason: 'Reopen twice.' },
+    );
+    expect(secondReopen.statusCode).toBe(409);
+    const body = secondReopen.json() as {
+      code: string;
+      detail?: { failure_code?: string };
+    };
+    expect(body.code).toBe('conflict.stale_write');
+    expect(body.detail?.failure_code).toBe('action_no_longer_available');
+    expect(await decisionRow(subject.responseId)).toMatchObject({ state: 'reopened' });
+    expect(await auditRows(subject.responseId, 'survey_outcome_follow_up_reopened')).toHaveLength(
+      1,
+    );
+  });
+
+  it('re-marks after reopen with a new key, adding a second mark audit row', async () => {
+    const subject = await seedSubject();
+    const actor = await createActor(
+      'developer',
+      ['survey.read', 'survey.read_personal_responses', 'finding.manage'],
+      subject.msId,
+    );
+    expect(
+      (
+        await post(`/survey-responses/${subject.responseId}/mark-no-follow-up`, actor, {
+          reason: 'One.',
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await post(`/survey-responses/${subject.responseId}/reopen-follow-up`, actor, {
+          reason: 'Two.',
+        })
+      ).statusCode,
+    ).toBe(200);
+    const reMarked = await post(
+      `/survey-responses/${subject.responseId}/mark-no-follow-up`,
+      actor,
+      {
+        reason: 'Three.',
+      },
+    );
+    expect(reMarked.statusCode).toBe(200);
+    expect(reMarked.json()).toMatchObject({
+      response_id: subject.responseId,
+      resolution: 'no_follow_up',
+    });
+    expect(await decisionRow(subject.responseId)).toMatchObject({ state: 'no_follow_up' });
+    expect(await auditRows(subject.responseId, 'survey_outcome_no_follow_up_marked')).toHaveLength(
+      2,
+    );
+    expect(await gapCount(subject.msId)).toBe(0);
+  });
+
   it('replays a stored response for the same key with exactly one audit row', async () => {
     const subject = await seedSubject();
     const actor = await createActor(
@@ -410,6 +508,61 @@ describe.skipIf(!runIntegration)('POST /survey-responses/:id/mark-no-follow-up (
       statusCode: 404,
       code: 'not_found.record',
     });
+  });
+
+  // Gate-order oracle: the personal-response 404 must fire before the
+  // classifier's 409, so a non-poor or already-resolved subject still yields
+  // the plain 404 with no structured failure code.
+  it('returns a plain 404, not a classifier 409, for a non-poor subject without personal read', async () => {
+    const subject = await seedSubject({ subjectRating: 3 });
+    const actor = await createActor('developer', ['survey.read'], subject.msId);
+    const res = await post(`/survey-responses/${subject.responseId}/mark-no-follow-up`, actor, {
+      reason: 'x',
+    });
+    expect(res.statusCode).toBe(404);
+    const body = res.json() as { code: string; detail?: { failure_code?: string } };
+    expect(body.code).toBe('not_found.record');
+    expect(body.detail?.failure_code).toBeUndefined();
+    expect(await decisionRow(subject.responseId)).toBeNull();
+  });
+
+  it('returns a plain 404, not a classifier 409, for a resolved subject without personal read', async () => {
+    const subject = await seedResolvedSubject();
+    const actor = await createActor('developer', ['survey.read'], subject.msId);
+    const res = await post(`/survey-responses/${subject.responseId}/mark-no-follow-up`, actor, {
+      reason: 'x',
+    });
+    expect(res.statusCode).toBe(404);
+    const body = res.json() as { code: string; detail?: { failure_code?: string } };
+    expect(body.code).toBe('not_found.record');
+    expect(body.detail?.failure_code).toBeUndefined();
+    expect(await decisionRow(subject.responseId)).toBeNull();
+  });
+
+  it('Admin without personal read gets a plain 404 for a non-poor subject, not a classifier 409', async () => {
+    const subject = await seedSubject({ subjectRating: 3 });
+    const actor = await createActor('admin');
+    const res = await post(`/survey-responses/${subject.responseId}/mark-no-follow-up`, actor, {
+      reason: 'x',
+    });
+    expect(res.statusCode).toBe(404);
+    const body = res.json() as { code: string; detail?: { failure_code?: string } };
+    expect(body.code).toBe('not_found.record');
+    expect(body.detail?.failure_code).toBeUndefined();
+    expect(await decisionRow(subject.responseId)).toBeNull();
+  });
+
+  it('Admin without personal read gets a plain 404 for a resolved subject, not a classifier 409', async () => {
+    const subject = await seedResolvedSubject();
+    const actor = await createActor('admin');
+    const res = await post(`/survey-responses/${subject.responseId}/mark-no-follow-up`, actor, {
+      reason: 'x',
+    });
+    expect(res.statusCode).toBe(404);
+    const body = res.json() as { code: string; detail?: { failure_code?: string } };
+    expect(body.code).toBe('not_found.record');
+    expect(body.detail?.failure_code).toBeUndefined();
+    expect(await decisionRow(subject.responseId)).toBeNull();
   });
 
   it('returns 403 with personal read but without finding.manage on that Managed System', async () => {

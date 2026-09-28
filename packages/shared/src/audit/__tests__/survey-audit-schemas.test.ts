@@ -319,10 +319,12 @@ describe('Survey outcome follow-up audit details (ADR-0055)', () => {
       reopened,
     );
     expect(() =>
+      AUDIT_EVENT_DETAIL_SCHEMAS.survey_outcome_follow_up_reopened.parse(marked),
+    ).toThrow();
+    expect(() =>
       AUDIT_EVENT_DETAIL_SCHEMAS.survey_outcome_follow_up_reopened.parse({
-        ...marked,
-        previous_reason: 'a missing managed_system_id must fail',
-        managed_system_id: undefined,
+        ...reopened,
+        unexpected_field: 'unknown fields must fail',
       }),
     ).toThrow();
   });

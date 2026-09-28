@@ -158,13 +158,19 @@ Classification is evaluated inside the transaction through the
 response is classifiable as poor only when its survey has `type: 'outcome'`
 and `status: 'closed'`, the survey's total response count meets the workspace
 `survey_anonymity_threshold`, and at least one rating answer falls in the
-`getRatingBandForValue` low band. Commands reject stale workflow state with
-`409 conflict.stale_write` carrying `detail.failure_code`:
-`action_no_longer_available` when the subject is not classifiable as poor
-(including reopen with no current `no_follow_up` decision) and
-`recovery_item_resolved` when an active `generated_finding` link to a
-`draft`/`active`/`converted` Finding or a current `no_follow_up` decision is
-already in force. Rejected commands write no state row and no audit row.
+`getRatingBandForValue` low band. The two commands have separate
+preconditions. **Mark** requires the subject to be classifiable as poor and
+its resolution to be `open`; a subject that is not poor, or whose gap is
+already cleared by an active `generated_finding` link to a
+`draft`/`active`/`converted` Finding or by a current `no_follow_up` decision,
+rejects with `409 conflict.stale_write` carrying `detail.failure_code`
+`action_no_longer_available` or `recovery_item_resolved` respectively.
+**Reopen** requires only that the current decision row is `no_follow_up`; it
+does not re-run the classifier, and any other row state (or no row) rejects
+with `action_no_longer_available`. After a reopen the response re-enters the
+`bad-outcome-no-followup` queue only if it is still poor and above the
+threshold and no qualifying Finding link exists. Rejected commands write no
+state row and no audit row.
 
 `mark-no-follow-up` upserts the single current row in
 `survey.outcome_follow_up_decisions` to `no_follow_up` with the trimmed
@@ -188,7 +194,9 @@ detached by these commands.
 
 Error codes: `validation.failed`, `validation.malformed_idempotency_key`,
 `permission.denied`, `not_found.record`, `conflict.stale_write`,
-`conflict.idempotency_key_reuse`, and `rate_limited.actor`.
+`conflict.survey_results_unavailable` (draft survey, raised by the evidence
+seam before the manage check), `conflict.idempotency_key_reuse`, and
+`rate_limited.actor`.
 
 ## Forbidden Endpoint
 

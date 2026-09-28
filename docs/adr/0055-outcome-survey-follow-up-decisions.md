@@ -73,10 +73,14 @@ them.
    `survey.outcome_follow_up_decisions` (`no_follow_up` | `reopened`,
    non-empty reason, deciding actor, survey's primary Managed System at
    decision time), plus decision history in `core.audit_log` (ADR-0008).
-   `fops_app` gets `SELECT`, `INSERT`, and `UPDATE` scoped to the transitioning
-   columns (`state`, `reason`, `decided_by_actor_id`, `updated_at`), and no
-   `DELETE` — the `voc.voc_recommendation_decisions` precedent. Reopen updates
-   the row in place; it does not delete or supersede by insertion.
+   The stored `managed_system_id` is the survey's primary Managed System at
+   the **first** decision: a later re-mark does not refresh it, while each
+   command's audit detail records the Managed System current at that
+   transition. `fops_app` gets `SELECT`, `INSERT`, and `UPDATE` scoped to the
+   transitioning columns (`state`, `reason`, `decided_by_actor_id`,
+   `updated_at`), and no `DELETE` — the `voc.voc_recommendation_decisions`
+   precedent. Reopen updates the row in place; it does not delete or supersede
+   by insertion.
 9. **Command authorization** — both commands require, in create-finding's
    order: the Survey personal-response gate
    (`survey.read` then explicit `survey.read_personal_responses` with no Admin
@@ -95,8 +99,8 @@ them.
 - `survey.read_outcome_follow_up_state(workspace, response)` returns only
   `survey_id`, survey status, `is_outcome`, `meets_threshold`, `is_poor`, and
   `resolution` (`open` | `finding` | `no_follow_up`). No answer values, no
-  text, no respondent id. It is called only behind the audited
-  personal-response seam.
+  text, no respondent id. It is called only behind the personal-response
+  authorization seam.
 - `survey.count_negative_outcome_without_followup` keeps its aggregate-only
   contract and signature; its body now implements decisions 1–6. The owner's
   column grants are extended narrowly for this: `surveys.status`,
@@ -108,20 +112,27 @@ them.
 ## Structured failures
 
 Both commands reject with `409 conflict.stale_write` carrying
-`detail.failure_code` (no new error codes):
-`action_no_longer_available` when the subject is not classifiable as poor
-(non-outcome, not closed, below threshold, or no low-band answer, including
-reopen when no current `no_follow_up` row exists), and
+`detail.failure_code` (no new error codes), with separate preconditions.
+**Mark** requires the subject to be classifiable as poor with an `open`
+resolution: `action_no_longer_available` when it is not classifiable as poor
+(non-outcome, not closed, below threshold, or no low-band answer), and
 `recovery_item_resolved` when a Finding resolution or a current `no_follow_up`
-decision is already in force. This is the `api/next-actions.md` structured
-action-failure payload applied to these two commands.
+decision is already in force. **Reopen** requires only that the current
+decision row is `no_follow_up`; it does not re-run the classifier, and any
+other row state (or no row) rejects with `action_no_longer_available`. After
+a reopen the response re-enters the `bad-outcome-no-followup` queue only if it
+is still poor and above the threshold and no qualifying Finding link exists.
+This is the `api/next-actions.md` structured action-failure payload applied to
+these two commands.
 
 ## Commands and audit
 
 `POST /survey-responses/:id/mark-no-follow-up` and
 `POST /survey-responses/:id/reopen-follow-up` (strict `{ reason }`, non-empty
 after trim, max 2000; required `Idempotency-Key` UUIDv4; mutation rate tier;
-`runIdempotent` with state checks inside the miss path). Audit events
+`runIdempotent` with state checks inside the miss path). The commands' audit
+events record only successful transitions; a rejected command writes neither a
+state row nor an audit row. Audit events
 `survey_outcome_no_follow_up_marked` and `survey_outcome_follow_up_reopened`
 use the survey response as subject; detail is strict
 `{ survey_id, managed_system_id, reason }` and reopen adds `previous_reason`.
