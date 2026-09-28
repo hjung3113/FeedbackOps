@@ -455,8 +455,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
   it('returns the same 404 for a request in another workspace', async () => {
     const caller = await createLoggedInActor();
     const otherWorkspaceId = await createWorkspace();
-    const owner = await createActor('developer', otherWorkspaceId);
-    const requestId = await seedRequest(owner.id, { workspaceId: otherWorkspaceId });
+    const requestId = await seedRequest(caller.id, { workspaceId: otherWorkspaceId });
     const before = await captureState(requestId);
     const response = await submit(requestId, caller.cookie);
     await expectRejectedUnchanged(requestId, before, response, 404, 'not_found.record');
@@ -483,6 +482,31 @@ describe.skipIf(!runIntegration)('POST /permission-requests/:id/submit-more-info
     const requestId = await seedRequest(actor.id, { capability: 'voc.triage' });
     const before = await captureState(requestId);
     const response = await submit(requestId, actor.cookie, { reason: ' ' });
+    await expectRejectedUnchanged(requestId, before, response, 422, 'validation.failed');
+    expect(response.json<{ detail: { fields: unknown[] } }>().detail.fields).toEqual([
+      { path: ['reason'], code: 'too_small' },
+    ]);
+  });
+
+  it('does not recheck capability when the stored scope is unchanged', async () => {
+    const actor = await createLoggedInActor();
+    const managedSystemId = await createManagedSystem();
+    const requestId = await seedRequest(actor.id, { managedSystemId });
+    await migrateDb.pool.query(
+      `insert into permission.permission_grants
+        (workspace_id, actor_id, capability, managed_system_id, granted_by_actor_id)
+       values ($1, $2, 'voc.triage', $3, $4)`,
+      [WORKSPACE_ID, actor.id, managedSystemId, actor.id],
+    );
+
+    await assertSuccess(requestId, actor.id, actor.cookie, { reason: 'more detail' });
+  });
+
+  it('rejects an omitted reason when the stored reason is whitespace only', async () => {
+    const actor = await createLoggedInActor();
+    const requestId = await seedRequest(actor.id, { reason: '   ' });
+    const before = await captureState(requestId);
+    const response = await submit(requestId, actor.cookie, {});
     await expectRejectedUnchanged(requestId, before, response, 422, 'validation.failed');
     expect(response.json<{ detail: { fields: unknown[] } }>().detail.fields).toEqual([
       { path: ['reason'], code: 'too_small' },

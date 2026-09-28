@@ -50,7 +50,10 @@ reason; other capabilities return `validation.failed` with a `reason` field
 error. Unknown keys and malformed values return `422 validation.failed`.
 An invalid UUIDv4 `Idempotency-Key` returns
 `422 validation.malformed_idempotency_key`; a stored capability outside the
-current vocabulary returns `422 validation.unknown_capability`.
+current vocabulary returns `422 validation.unknown_capability`. An unknown
+managed-system id or one from another workspace returns `422 validation.failed`
+with `fields: [{ path: ['requested_managed_system_id'], code: 'custom' }]`. A
+non-UUID `:id` returns `422 validation.failed`.
 
 ```json
 {
