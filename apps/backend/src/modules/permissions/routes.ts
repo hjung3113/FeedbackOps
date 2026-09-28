@@ -13,6 +13,7 @@ import {
   isCapability,
   needMoreInfoPermissionRequestSchema,
   rejectPermissionRequestSchema,
+  submitMoreInfoPermissionRequestSchema,
 } from '@fops/shared';
 import { HttpError, fieldsFromZodIssues, sendError } from '../../lib/errors.js';
 import { IDEMPOTENCY_KEY_REGEX } from '../../lib/http-headers.js';
@@ -210,6 +211,60 @@ export const permissionsRoutes: FastifyPluginAsync<PermissionsRoutesOptions> = a
         idempotencyKey !== undefined ? { idempotencyKey } : {},
       );
 
+      return reply.code(result.status).send(result.body);
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/permission-requests/:id/submit-more-info',
+    preHandler: [requireSession(sessionService), requireWorkspace(workspaceId)],
+    ...(rateLimitConfig ? { config: { rateLimit: rateLimitConfig.mutation as never } } : {}),
+    handler: async (req, reply) => {
+      const sess = req.session;
+      if (!sess) throw new HttpError('internal.unexpected', 'session missing after middleware');
+
+      const rawKey = req.headers['idempotency-key'];
+      const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+      if (
+        typeof idempotencyKey === 'string' &&
+        idempotencyKey.length > 0 &&
+        !IDEMPOTENCY_KEY_REGEX.test(idempotencyKey)
+      ) {
+        return sendError(
+          reply,
+          'validation.malformed_idempotency_key',
+          'Idempotency-Key must be a UUIDv4',
+        );
+      }
+
+      const parsedParams = z.object({ id: z.string().uuid() }).safeParse(req.params);
+      if (!parsedParams.success) {
+        return sendError(reply, 'validation.failed', 'invalid permission request id', {
+          fields: fieldsFromZodIssues(parsedParams.error.issues),
+        });
+      }
+
+      const parsedBody = submitMoreInfoPermissionRequestSchema.safeParse(
+        req.body === undefined ? {} : req.body,
+      );
+      if (!parsedBody.success) {
+        return sendError(reply, 'validation.failed', 'invalid request body', {
+          fields: fieldsFromZodIssues(parsedBody.error.issues),
+        });
+      }
+
+      const actor: ActorContext = {
+        actor_id: sess.actor_id,
+        workspace_id: sess.workspace_id,
+        role_level: sess.role_level,
+      };
+      const result = await requestService.submitMoreInfoRequest(
+        actor,
+        parsedParams.data.id,
+        parsedBody.data,
+        idempotencyKey ? { idempotencyKey } : {},
+      );
       return reply.code(result.status).send(result.body);
     },
   });

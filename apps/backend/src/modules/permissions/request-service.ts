@@ -28,11 +28,14 @@ import type { DatabaseError } from 'pg';
 import {
   type AuditEventType,
   type Capability,
+  type SubmitMoreInfoPermissionRequest,
+  type SubmitMoreInfoPermissionRequestResult,
   isCapability,
   isSensitiveCapability,
 } from '@fops/shared';
 
 import type { Db } from '../../db/client.js';
+import { managedSystems } from '../../db/schema/core.js';
 import { permissionRequests } from '../../db/schema/permission.js';
 import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
@@ -68,6 +71,11 @@ export interface CreatePermissionRequestOptions {
   idempotencyKey?: string;
 }
 
+export interface SubmitMoreInfoPermissionRequestResultEnvelope {
+  status: number;
+  body: SubmitMoreInfoPermissionRequestResult;
+}
+
 export interface RequestServiceDeps {
   db: Db;
   checkService: CheckService;
@@ -78,6 +86,7 @@ export interface RequestServiceDeps {
 export type RequestService = ReturnType<typeof createRequestService>;
 
 const PERMISSION_REQUESTED: AuditEventType = 'permission_requested';
+const PERMISSION_MORE_INFO_SUBMITTED: AuditEventType = 'permission_more_info_submitted';
 
 const ACTIVE_STATUSES = ['pending', 'needs_more_info'] as const;
 const REVIEW_STATUSES = ['pending', 'needs_more_info', 'approved', 'rejected'] as const;
@@ -248,6 +257,207 @@ export function createRequestService(deps: RequestServiceDeps) {
     });
   }
 
+  async function submitMoreInfoRequest(
+    actor: ActorContext,
+    requestId: string,
+    body: SubmitMoreInfoPermissionRequest,
+    options: CreatePermissionRequestOptions = {},
+  ): Promise<SubmitMoreInfoPermissionRequestResultEnvelope> {
+    const idempotency = options.idempotencyKey
+      ? {
+          key: options.idempotencyKey,
+          requestHash: hashRequestBody({
+            request_id: requestId,
+            action: 'submit_more_info',
+            ...body,
+          }),
+        }
+      : undefined;
+
+    return await db.transaction(async (tx) => {
+      const run = async (): Promise<SubmitMoreInfoPermissionRequestResultEnvelope> => {
+        const requests = await tx
+          .select()
+          .from(permissionRequests)
+          .where(
+            and(
+              eq(permissionRequests.id, requestId),
+              eq(permissionRequests.workspaceId, actor.workspace_id),
+              eq(permissionRequests.requesterActorId, actor.actor_id),
+            ),
+          )
+          .for('update');
+        const request = requests[0];
+        if (!request) {
+          throw new HttpError('not_found.record', 'permission request not found');
+        }
+        if (request.status !== 'needs_more_info') {
+          throw new HttpError(
+            'conflict.stale_write',
+            'permission request is not awaiting requester supplementation',
+          );
+        }
+        if (!isCapability(request.requestedCapability)) {
+          throw new HttpError('validation.unknown_capability', 'unknown capability', {
+            capability: request.requestedCapability,
+          });
+        }
+
+        const capability: Capability = request.requestedCapability;
+        const sensitive = isSensitiveCapability(capability);
+        const reason = body.reason === undefined ? request.reason : body.reason.trim();
+        if (reason.trim().length === 0) {
+          if (sensitive) {
+            throw new HttpError(
+              'validation.sensitive_reason_required',
+              'a non-empty reason is required for sensitive capabilities',
+              { capability },
+            );
+          }
+          throw new HttpError('validation.failed', 'reason must not be empty', {
+            fields: [{ path: ['reason'], code: 'too_small' }],
+          });
+        }
+
+        const requestedManagedSystemId =
+          body.requested_managed_system_id === undefined
+            ? request.requestedManagedSystemId
+            : body.requested_managed_system_id;
+        const requestedObjectType =
+          body.requested_object_type === undefined
+            ? request.requestedObjectType
+            : body.requested_object_type;
+        const requestedObjectId =
+          body.requested_object_id === undefined
+            ? request.requestedObjectId
+            : body.requested_object_id;
+        const requestedExpiration =
+          body.requested_expiration === undefined
+            ? request.requestedExpiration
+            : body.requested_expiration === null
+              ? null
+              : new Date(body.requested_expiration);
+
+        if (requestedManagedSystemId !== null) {
+          const managedSystemRows = await tx
+            .select({ id: managedSystems.id })
+            .from(managedSystems)
+            .where(
+              and(
+                eq(managedSystems.id, requestedManagedSystemId),
+                eq(managedSystems.workspaceId, actor.workspace_id),
+              ),
+            )
+            .limit(1);
+          if (!managedSystemRows[0]) {
+            throw new HttpError('validation.failed', 'managed system is outside this workspace', {
+              fields: [{ path: ['requested_managed_system_id'], code: 'custom' }],
+            });
+          }
+        }
+
+        const scopeChanged =
+          requestedManagedSystemId !== request.requestedManagedSystemId ||
+          requestedObjectType !== request.requestedObjectType ||
+          requestedObjectId !== request.requestedObjectId;
+        if (scopeChanged) {
+          const decision = await checkService.checkCapability(
+            actor,
+            capability,
+            {
+              workspace_id: actor.workspace_id,
+              ...(requestedManagedSystemId !== null
+                ? { managed_system_id: requestedManagedSystemId }
+                : {}),
+            },
+            { tx },
+          );
+          if (decision.allow === true) {
+            throw new HttpError(
+              'conflict.capability_already_granted',
+              'actor already holds the requested capability',
+            );
+          }
+        }
+
+        let updatedAt: Date;
+        try {
+          const updatedRows = await tx
+            .update(permissionRequests)
+            .set({
+              reason,
+              requestedManagedSystemId,
+              requestedObjectType,
+              requestedObjectId,
+              requestedExpiration,
+              status: 'pending',
+              updatedAt: sql`now()`,
+            })
+            .where(eq(permissionRequests.id, request.id))
+            .returning({ updatedAt: permissionRequests.updatedAt });
+          const updated = updatedRows[0];
+          if (!updated) {
+            throw new HttpError('internal.unexpected', 'permission request update returned no row');
+          }
+          updatedAt = updated.updatedAt;
+        } catch (err) {
+          const pgErr = err as DatabaseError;
+          if (pgErr?.code === '23505') {
+            throw new HttpError(
+              'conflict.permission_request_duplicate',
+              'an open permission request already exists for this capability and scope',
+            );
+          }
+          throw err;
+        }
+
+        await auditService.record(tx, {
+          workspace_id: actor.workspace_id,
+          actor_id: actor.actor_id,
+          event_type: PERMISSION_MORE_INFO_SUBMITTED,
+          subject_type: 'permission_request',
+          subject_id: request.id,
+          summary: 'Permission request more info submitted',
+          detail: {
+            capability,
+            managed_system_id: requestedManagedSystemId,
+            requester_actor_id: request.requesterActorId,
+            reason,
+            sensitive,
+            requested_object_type: requestedObjectType,
+            requested_object_id: requestedObjectId,
+            requested_expiration: requestedExpiration?.toISOString() ?? null,
+            previous: {
+              reason: request.reason,
+              managed_system_id: request.requestedManagedSystemId,
+              requested_object_type: request.requestedObjectType,
+              requested_object_id: request.requestedObjectId,
+              requested_expiration: request.requestedExpiration?.toISOString() ?? null,
+            },
+          },
+        });
+
+        return {
+          status: 200,
+          body: {
+            id: request.id,
+            status: 'pending',
+            updated_at: updatedAt.toISOString(),
+          },
+        };
+      };
+
+      if (!idempotency) return await run();
+      return await idempotencyService.runIdempotent(
+        tx,
+        actor.actor_id,
+        idempotency.key,
+        idempotency.requestHash,
+        run,
+      );
+    });
+  }
+
   async function findOpenRequestSummary(
     actor: ActorContext,
     capability: Capability,
@@ -367,5 +577,5 @@ export function createRequestService(deps: RequestServiceDeps) {
     }));
   }
 
-  return { createRequest, findOpenRequestSummary, listMine, listAllActive };
+  return { createRequest, submitMoreInfoRequest, findOpenRequestSummary, listMine, listAllActive };
 }

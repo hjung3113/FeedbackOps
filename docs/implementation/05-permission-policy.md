@@ -249,6 +249,7 @@ permission_approved
 permission_rejected
 permission_needs_more_info
 permission_denied
+permission_more_info_submitted
 task_request_approved
 task_request_rejected
 task_request_needs_more_evidence
@@ -262,7 +263,6 @@ task_linked_to_request
 Revoke and expiry endpoints are not implemented yet. Planned event names remain:
 
 ```text
-permission_more_info_submitted
 permission_revoked
 permission_expired
 ```

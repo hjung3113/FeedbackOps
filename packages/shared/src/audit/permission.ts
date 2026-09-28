@@ -11,6 +11,7 @@ export const PERMISSION_AUDIT_EVENT_TYPES = [
   'permission_rejected',
   'permission_needs_more_info',
   'permission_denied',
+  'permission_more_info_submitted',
 ] as const;
 
 // `permission_requested` detail shape — locked by issue #5 application
@@ -78,10 +79,38 @@ export const permissionDeniedDetailSchema = z
   .strict();
 export type PermissionDeniedDetail = z.infer<typeof permissionDeniedDetailSchema>;
 
+export const permissionMoreInfoPreviousSchema = z
+  .object({
+    reason: z.string().min(1),
+    managed_system_id: z.string().uuid().nullable(),
+    requested_object_type: z.string().nullable(),
+    requested_object_id: z.string().uuid().nullable(),
+    requested_expiration: z.string().datetime().nullable(),
+  })
+  .strict();
+
+export const permissionMoreInfoSubmittedDetailSchema = z
+  .object({
+    capability: z.string().min(1),
+    managed_system_id: z.string().uuid().nullable(),
+    requester_actor_id: z.string().uuid(),
+    reason: z.string().min(1),
+    sensitive: z.boolean(),
+    requested_object_type: z.string().nullable(),
+    requested_object_id: z.string().uuid().nullable(),
+    requested_expiration: z.string().datetime().nullable(),
+    previous: permissionMoreInfoPreviousSchema,
+  })
+  .strict();
+export type PermissionMoreInfoSubmittedDetail = z.infer<
+  typeof permissionMoreInfoSubmittedDetailSchema
+>;
+
 export const PERMISSION_AUDIT_EVENT_DETAIL_SCHEMAS = {
   permission_requested: permissionRequestedDetailSchema,
   permission_approved: permissionApprovedDetailSchema,
   permission_rejected: permissionRejectedDetailSchema,
   permission_needs_more_info: permissionNeedsMoreInfoDetailSchema,
   permission_denied: permissionDeniedDetailSchema,
+  permission_more_info_submitted: permissionMoreInfoSubmittedDetailSchema,
 } as const satisfies Record<(typeof PERMISSION_AUDIT_EVENT_TYPES)[number], z.ZodTypeAny>;

@@ -20,6 +20,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
   'permission_rejected',
   'permission_needs_more_info',
   'permission_denied',
+  'permission_more_info_submitted',
   'managed_system_registered',
   'managed_system_updated',
   'managed_system_archived',
@@ -90,7 +91,7 @@ const EXPECTED_AUDIT_EVENT_TYPES = [
 describe('audit event registry', () => {
   it('locks event-type order, uniqueness, and detail-map key coverage', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
-    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(70);
+    expect(new Set(AUDIT_EVENT_TYPES).size).toBe(71);
     expect(Object.keys(AUDIT_EVENT_DETAIL_SCHEMAS)).toEqual([...EXPECTED_AUDIT_EVENT_TYPES]);
   });
 });
