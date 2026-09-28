@@ -55,7 +55,9 @@ const FULL_DML: readonly DmlPrivilege[] = DML_PRIVILEGES;
 const SURVEY_AGGREGATE_FUNCTIONS = [
   'count_negative_outcome_without_followup',
   'rating_band_for_value',
+  'read_outcome_follow_up_items_personal',
   'read_outcome_follow_up_state',
+  'read_outcome_follow_up_survey_state',
   'read_result_aggregates',
   'read_result_response_count',
 ] as const;

@@ -319,13 +319,15 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
         where n.nspname = 'survey'
           and p.proname in (
             'count_negative_outcome_without_followup',
+            'read_outcome_follow_up_items_personal',
             'read_outcome_follow_up_state',
+            'read_outcome_follow_up_survey_state',
             'read_result_aggregates',
             'read_result_response_count'
           )
         order by p.proname`,
     );
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(6);
     for (const row of rows) {
       expect(row.owner).toBe('fops_survey_aggregate_owner');
       expect(row.prosecdef).toBe(true);
@@ -349,13 +351,17 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
         order by table_name, column_name, privilege_type`,
     );
     expect(columnPrivileges.rows.map((row) => row.privilege)).toEqual([
+      'outcome_follow_up_decisions.reason.SELECT',
       'outcome_follow_up_decisions.response_id.SELECT',
       'outcome_follow_up_decisions.state.SELECT',
+      'outcome_follow_up_decisions.updated_at.SELECT',
       'outcome_follow_up_decisions.workspace_id.SELECT',
       'survey_questions.id.SELECT',
       'survey_questions.kind.SELECT',
+      'survey_questions.prompt.SELECT',
       'survey_questions.rating_max.SELECT',
       'survey_questions.rating_min.SELECT',
+      'survey_questions.sort_order.SELECT',
       'survey_questions.survey_id.SELECT',
       'survey_questions.workspace_id.SELECT',
       'survey_response_answers.answer_kind.SELECT',
@@ -365,6 +371,7 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
       'survey_response_answers.survey_id.SELECT',
       'survey_response_answers.workspace_id.SELECT',
       'survey_responses.id.SELECT',
+      'survey_responses.submitted_at.SELECT',
       'survey_responses.survey_id.SELECT',
       'survey_responses.workspace_id.SELECT',
       'surveys.id.SELECT',
@@ -415,6 +422,8 @@ describe.skipIf(!runIntegration)('Survey aggregate security boundary (0038, 0046
         order by privilege`,
     );
     expect(findingColumnPrivileges.rows.map((row) => row.privilege)).toEqual([
+      'findings.created_at.SELECT',
+      'findings.display_id.SELECT',
       'findings.id.SELECT',
       'findings.status.SELECT',
       'findings.workspace_id.SELECT',

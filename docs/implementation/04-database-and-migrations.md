@@ -289,6 +289,24 @@ column grants the new predicate reads (`surveys.status`,
 `core.workspace_settings(workspace_id, survey_anonymity_threshold)`, and
 column-scoped `SELECT` on the decision table).
 
+Migration `0053_outcome_follow_up_read.sql` adds the part C read surface as
+two more `SECURITY DEFINER` functions owned by `fops_survey_aggregate_owner`
+(chosen over the evidence-reader owner because its grants already cover the
+whole ADR-0055 classifier predicate; the items reader crosses no raw-text or
+excerpt boundary): `survey.read_outcome_follow_up_survey_state` returns only
+the two survey-grain booleans (`classifiable`, `follow_up_needed`) for any
+`survey.read` caller, and `survey.read_outcome_follow_up_items_personal`
+returns the per-poor-response review rows — response id, 1-based submission
+ordinal, low-band answers with question label and bounds, resolution, the
+qualifying Finding (earliest-created live `generated_finding`), and the
+current decision — only for callers that already crossed the
+personal-response seam. Both reuse `survey.rating_band_for_value` and the
+same predicate as `read_outcome_follow_up_state`. The owner gained only the
+display columns the review list needs: `survey_responses.submitted_at`,
+`survey_questions.prompt`/`sort_order`,
+`outcome_follow_up_decisions.reason`/`updated_at`, and
+`finding.findings.created_at`/`display_id`.
+
 ## Issue #182: conversion-link visibility backfill
 
 Migration `0035_voc_task_conversion_summary_visible.sql` changes only
