@@ -1,6 +1,9 @@
+import { surveyQuestionKindSchema } from '@fops/shared';
 import { Button, Input } from '@fops/ui';
 import { Check, Eye, Megaphone } from 'lucide-react';
-import type { Survey } from '../../types';
+import type { QuestionKind, Survey } from '../../types';
+import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
+import { SurveyStatusBadge, surveyStatusLabel } from '../SurveyStatusBadge';
 import { SurveyStatusConfirmationDialog } from '../SurveyStatusConfirmationDialog';
 import { PreviewPane } from './PreviewPane';
 import { QuestionEditor } from './QuestionEditor';
@@ -8,15 +11,56 @@ import { QuestionList } from './QuestionList';
 import { SurveySettings } from './SurveySettings';
 import { useSurveyBuilderController } from './hooks/useSurveyBuilderController';
 
+const FIRST_QUESTION_COPY: Record<QuestionKind, { label: string; help: string }> = {
+  single_choice: { label: '단일 선택', help: '하나의 답변을 고릅니다.' },
+  multiple_choice: { label: '복수 선택', help: '여러 개의 답변을 고릅니다.' },
+  rating: { label: '척도', help: '점수 범위로 평가합니다.' },
+  text: { label: '주관식', help: '직접 답변을 작성합니다.' },
+};
+
+function FirstQuestionOnboarding({ onAdd }: { onAdd: (kind: QuestionKind) => void }) {
+  return (
+    <div className="flex min-h-full items-center justify-center px-6 py-8">
+      <div className="w-full max-w-2xl text-center">
+        <h2 className="text-base font-semibold text-text-primary">첫 질문을 추가하세요</h2>
+        <p className="mt-2 text-sm text-text-muted">
+          질문 유형을 고르면 바로 편집을 시작합니다. 나중에 유형을 바꾸거나 질문을 더 추가할 수
+          있습니다.
+        </p>
+        <div className="mt-6 grid grid-cols-2 gap-3 text-left">
+          {surveyQuestionKindSchema.options.map((kind) => {
+            const copy = FIRST_QUESTION_COPY[kind];
+            return (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => onAdd(kind)}
+                className="rounded-md border border-border-subtle bg-surface-detail p-4 text-left hover:border-border-strong hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
+                data-testid={`survey-question-kind-${kind}`}
+                data-question-kind={kind}
+              >
+                <span className="block text-sm font-medium text-text-primary">{copy.label}</span>
+                <span className="mt-1 block text-xs text-text-muted">{copy.help}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SurveyBuilder({
   survey,
   canManage,
   gateState,
+  managedSystemNamesById,
   onBack,
 }: {
   survey: Survey;
   canManage: boolean;
   gateState?: 'loading' | 'error' | 'absent';
+  managedSystemNamesById?: ReadonlyMap<string, string>;
   onBack: () => void;
 }) {
   const {
@@ -62,9 +106,13 @@ export function SurveyBuilder({
           ) : (
             <h1 className="truncate font-semibold">{title}</h1>
           )}
-          <span className="text-xs text-text-muted">
-            {survey.status} · {survey.type}
-          </span>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+            <SurveyStatusBadge status={survey.status} />
+            <span>{survey.type}</span>
+            <SurveyManagedSystemPill
+              name={managedSystemNamesById?.get(survey.primary_managed_system_id)}
+            />
+          </div>
         </div>
         {editable && (
           <>
@@ -100,7 +148,7 @@ export function SurveyBuilder({
       {!editable && (
         <div className="border-b border-border-subtle bg-surface-detail px-4 py-3 text-sm text-text-muted">
           {survey.status !== 'draft'
-            ? `${survey.status} 상태 — 질문 변경은 잠겨 있습니다.`
+            ? `${surveyStatusLabel(survey.status)} 상태 — 질문 변경은 잠겨 있습니다.`
             : '설문 관리 권한이 없습니다.'}
         </div>
       )}
@@ -109,16 +157,22 @@ export function SurveyBuilder({
           저장하지 못했습니다.
         </div>
       )}
-      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_300px]">
-        <QuestionList
-          questions={questions}
-          editable={editable}
-          selectedId={selectedId}
-          onSelect={select}
-          onRemove={remove}
-          onAdd={add}
-          onReorder={reorder}
-        />
+      <div
+        className={`grid min-h-0 flex-1 ${questions.length === 0 && editable ? 'grid-cols-[minmax(0,1fr)_300px]' : 'grid-cols-[280px_minmax(0,1fr)_300px]'}`}
+      >
+        {questions.length === 0 ? (
+          !editable && <div aria-hidden="true" className="border-r border-border-subtle" />
+        ) : (
+          <QuestionList
+            questions={questions}
+            editable={editable}
+            selectedId={selectedId}
+            onSelect={select}
+            onRemove={remove}
+            onAdd={add}
+            onReorder={reorder}
+          />
+        )}
         <section className="min-w-0 overflow-auto p-5">
           {selected ? (
             <QuestionEditor
@@ -127,11 +181,18 @@ export function SurveyBuilder({
               editable={editable}
               onChange={patch}
             />
+          ) : questions.length === 0 && editable ? (
+            <FirstQuestionOnboarding onAdd={add} />
+          ) : questions.length === 0 ? (
+            <p className="text-sm text-text-muted">질문이 없습니다.</p>
           ) : (
             <p className="text-sm text-text-muted">질문을 선택하거나 새로 추가하세요.</p>
           )}
         </section>
-        <SurveySettings survey={survey} />
+        <SurveySettings
+          survey={survey}
+          managedSystemName={managedSystemNamesById?.get(survey.primary_managed_system_id)}
+        />
       </div>
       {preview && (
         <PreviewPane survey={{ ...survey, questions }} onClose={() => setPreview(false)} />

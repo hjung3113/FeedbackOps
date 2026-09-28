@@ -97,8 +97,11 @@ import {
   type SurveyVisualScenario,
   surveyBuilderDragOverVisualFixture,
   surveyDetailVisualFixture,
+  surveyEmptyBuilderVisualFixture,
+  surveyVisualActorsFixture,
   surveyVisualFixture,
   surveyVisualFixtureSchema,
+  surveyVisualManagedSystemsFixture,
 } from '../fixtures/surveys';
 import {
   TRIAGE_AREA_IDS,
@@ -667,6 +670,11 @@ export async function installMockApi(
       return;
     }
 
+    if (options.surveyScenario && isRequest(route, 'GET', '/actors')) {
+      await json(route, 200, surveyVisualActorsFixture);
+      return;
+    }
+
     if (isRequest(route, 'GET', '/actors')) {
       await json(
         route,
@@ -843,9 +851,11 @@ export async function installMockApi(
       const fixture =
         options.surveyScenario === 'detail'
           ? surveyDetailVisualFixture
-          : options.surveyScenario === 'builder-drag-over'
-            ? surveyBuilderDragOverVisualFixture
-            : surveyVisualFixture;
+          : options.surveyScenario === 'builder-empty'
+            ? surveyEmptyBuilderVisualFixture
+            : options.surveyScenario === 'builder-drag-over'
+              ? surveyBuilderDragOverVisualFixture
+              : surveyVisualFixture;
       await json(route, 200, surveyVisualFixtureSchema.parse(fixture));
       return;
     }
@@ -891,6 +901,11 @@ export async function installMockApi(
           ? { items: scenario.list.items }
           : errorEnvelope(scenario.list.status),
       );
+      return;
+    }
+
+    if (options.surveyScenario && isRequest(route, 'GET', '/managed-systems')) {
+      await json(route, 200, surveyVisualManagedSystemsFixture);
       return;
     }
 

@@ -123,6 +123,8 @@ function installFetch(c: FetchCase): void {
         : SURVEYS;
       return jsonResponse(items);
     }
+    if (path.pathname === '/managed-systems') return jsonResponse({ items: [], total: 0 });
+    if (path.pathname === '/actors') return jsonResponse({ actors: [] });
     if (path.pathname.startsWith('/surveys/')) {
       const survey = SURVEYS.find((entry) => entry.id === path.pathname.split('/')[2]);
       return survey ? jsonResponse(survey) : jsonResponse({ code: 'not_found.record' }, 404);

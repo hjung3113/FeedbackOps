@@ -1,15 +1,23 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-const { useCloseSurvey, useOpenSurvey, useSurvey, useSurveys, useSurveyManageGate } = vi.hoisted(
-  () => ({
-    useCloseSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
-    useOpenSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
-    useSurvey: vi.fn(),
-    useSurveys: vi.fn(),
-    useSurveyManageGate: vi.fn(),
-  }),
-);
+const {
+  useCloseSurvey,
+  useManagedSystemNames,
+  useOpenSurvey,
+  useSurvey,
+  useSurveys,
+  useSurveyManageGate,
+  useWorkspaceActors,
+} = vi.hoisted(() => ({
+  useCloseSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+  useManagedSystemNames: vi.fn(() => new Map()),
+  useOpenSurvey: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+  useSurvey: vi.fn(),
+  useSurveys: vi.fn(),
+  useSurveyManageGate: vi.fn(),
+  useWorkspaceActors: vi.fn(() => ({ actors: [] })),
+}));
 
 vi.mock('@/features/surveys/hooks/useSurveys', () => ({
   useCloseSurvey,
@@ -20,6 +28,8 @@ vi.mock('@/features/surveys/hooks/useSurveys', () => ({
 vi.mock('@/features/surveys/routes/SurveyPermissionGate', () => ({
   useSurveyManageGate,
 }));
+vi.mock('@/lib/cross-system/useManagedSystemNames', () => ({ useManagedSystemNames }));
+vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({ useWorkspaceActors }));
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
   useNavigate: () => vi.fn(),

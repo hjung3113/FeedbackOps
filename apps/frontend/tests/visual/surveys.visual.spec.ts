@@ -10,7 +10,9 @@ test.describe('/surveys visual harness', () => {
         surveyScenario: scenario,
         role: scenario === 'no-permission' || scenario === 'empty-no-permission' ? 'user' : 'admin',
       });
-      const isBuilder = ['builder', 'builder-dirty', 'builder-drag-over'].includes(scenario);
+      const isBuilder = ['builder', 'builder-empty', 'builder-dirty', 'builder-drag-over'].includes(
+        scenario,
+      );
       const url =
         scenario === 'detail'
           ? `/surveys/${surveyVisualFixture.id}`
