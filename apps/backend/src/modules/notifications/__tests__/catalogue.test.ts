@@ -1,3 +1,4 @@
+import { notificationEventTypeSchema } from '@fops/shared';
 import { describe, expect, it } from 'vitest';
 
 import type { NotificationTx } from '../port.js';
@@ -7,6 +8,12 @@ import { createNotificationNotifier } from '../dispatcher.js';
 import { createRecordingNotificationDispatcher } from '../port.js';
 
 describe('notification catalogue', () => {
+  it('keeps the catalogue keys identical to the shared event-type enum the frontend parses', () => {
+    expect(Object.keys(notificationCatalogue).sort()).toEqual(
+      [...notificationEventTypeSchema.options].sort(),
+    );
+  });
+
   it('pins the implemented event keys and email flags', () => {
     expect(Object.keys(notificationCatalogue)).toEqual([
       'voc.assigned_to_me',
