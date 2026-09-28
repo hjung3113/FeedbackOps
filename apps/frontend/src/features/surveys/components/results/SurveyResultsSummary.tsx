@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from '@fops/ui';
 import { FilePlus } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useCreateFindingFromSurveyResponse } from '../../hooks/useCreateFindingFromSurveyResponse';
 import type { Survey } from '../../types';
 
@@ -257,38 +257,32 @@ function CreateFindingDraftPanel({
   );
 }
 
-function RequestTaskAction({ findingId }: { findingId: string }) {
-  const [open, setOpen] = useState(false);
-  const finding = useFindingDetail(open ? findingId : null);
-  const loading = open && finding.isFetching && !finding.data;
+// Mounted only while a Finding is selected, so the results page needs no
+// QueryClient unless a Request Task action is actually used.
+function SelectedFindingRequest({
+  findingId,
+  onClose,
+  onLoadError,
+  onReady,
+}: {
+  findingId: string;
+  onClose: () => void;
+  onLoadError: (findingId: string) => void;
+  onReady: (findingId: string) => void;
+}) {
+  const finding = useFindingDetail(findingId);
+  const loaded = finding.data?.id === findingId ? finding.data : undefined;
 
-  function openRequestTask() {
-    if (finding.isError) void finding.refetch();
-    setOpen(true);
-  }
+  useEffect(() => {
+    if (loaded) onReady(findingId);
+  }, [findingId, loaded, onReady]);
 
-  return (
-    <div className="space-y-1">
-      <Button
-        data-action-id="request_task"
-        disabled={loading}
-        loading={loading}
-        onClick={openRequestTask}
-        type="button"
-        variant="secondary"
-      >
-        Request Task
-      </Button>
-      {open && finding.isError && !finding.data && (
-        <p className="text-sm text-text-danger" role="alert">
-          Finding could not be loaded.
-        </p>
-      )}
-      {finding.data && (
-        <RequestTaskModal finding={finding.data} onClose={() => setOpen(false)} open={open} />
-      )}
-    </div>
-  );
+  useEffect(() => {
+    if (finding.isError && !finding.isFetching && !loaded) onLoadError(findingId);
+  }, [finding.isError, finding.isFetching, findingId, loaded, onLoadError]);
+
+  if (!loaded) return null;
+  return <RequestTaskModal finding={loaded} onClose={onClose} open />;
 }
 
 function NextActions({
@@ -301,7 +295,22 @@ function NextActions({
   surveyId: string;
 }) {
   const [draftOpen, setDraftOpen] = useState(false);
+  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
+  const [readyFindingId, setReadyFindingId] = useState<string | null>(null);
+  const [loadErrorFindingId, setLoadErrorFindingId] = useState<string | null>(null);
   const groups = excerptsByResponse(results);
+
+  const handleReady = useCallback((findingId: string) => setReadyFindingId(findingId), []);
+  const handleLoadError = useCallback((findingId: string) => {
+    setLoadErrorFindingId(findingId);
+    setSelectedFindingId(null);
+  }, []);
+  const handleClose = useCallback(() => {
+    setSelectedFindingId(null);
+    setReadyFindingId(null);
+    setLoadErrorFindingId(null);
+  }, []);
+
   if (actions.length === 0) return null;
 
   return (
@@ -370,13 +379,43 @@ function NextActions({
               </div>
             );
           }
+          const actionLoading =
+            selectedFindingId === action.source_finding_id &&
+            readyFindingId !== action.source_finding_id;
           return (
-            <div key={actionKey}>
-              <RequestTaskAction findingId={action.source_finding_id} />
+            <div className="space-y-1" key={actionKey}>
+              <Button
+                data-action-id={action.id}
+                disabled={actionLoading}
+                loading={actionLoading}
+                onClick={() => {
+                  setLoadErrorFindingId(null);
+                  setReadyFindingId(null);
+                  setSelectedFindingId(action.source_finding_id);
+                }}
+                type="button"
+                variant="secondary"
+              >
+                {label}
+              </Button>
+              {loadErrorFindingId === action.source_finding_id && (
+                <p className="text-sm text-text-danger" role="alert">
+                  Finding could not be loaded.
+                </p>
+              )}
             </div>
           );
         })}
       </div>
+      {selectedFindingId && (
+        <SelectedFindingRequest
+          findingId={selectedFindingId}
+          key={selectedFindingId}
+          onClose={handleClose}
+          onLoadError={handleLoadError}
+          onReady={handleReady}
+        />
+      )}
     </aside>
   );
 }

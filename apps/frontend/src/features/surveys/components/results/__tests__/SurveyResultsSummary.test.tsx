@@ -1,6 +1,6 @@
 import { findingDtoSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -31,6 +31,7 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
   ),
 }));
 
+import { ApiParseError } from '@/lib/api';
 import { SurveyResultsSummary } from '../SurveyResultsSummary';
 
 beforeAll(() => {
@@ -82,6 +83,14 @@ function makeFinding(id: string, summary: string) {
     updated_at: '2026-07-20T00:00:00.000Z',
     source_type: 'survey_response',
   });
+}
+
+function makeDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 const survey = {
@@ -927,5 +936,172 @@ describe('SurveyResultsSummary', () => {
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(
       secondFinding.summary,
     );
+  });
+
+  it('opens only the latest Finding when overlapping detail requests resolve out of order', async () => {
+    const user = userEvent.setup();
+    const firstFinding = makeFinding(ids.finding, 'First Finding summary.');
+    const secondFinding = makeFinding(ids.findingTwo, 'Second Finding summary.');
+    const firstLoad = makeDeferred<{ data: typeof firstFinding }>();
+    const secondLoad = makeDeferred<{ data: typeof secondFinding }>();
+    apiRequest.mockImplementation((_method, path) => {
+      if (path === `/findings/${ids.finding}`) return firstLoad.promise;
+      if (path === `/findings/${ids.findingTwo}`) return secondLoad.promise;
+      throw new Error(`Unexpected request: ${String(path)}`);
+    });
+    apiClient.mockResolvedValue({ data: { id: ids.responseTwo } });
+    renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          next_actions: [
+            {
+              id: 'request_task',
+              availability: 'allowed',
+              intent: 'open_task_request_draft',
+              source_finding_id: ids.finding,
+            },
+            {
+              id: 'request_task',
+              availability: 'allowed',
+              intent: 'open_task_request_draft',
+              source_finding_id: ids.findingTwo,
+            },
+          ],
+        }}
+      />,
+    );
+
+    const [firstButton, secondButton] = screen.getAllByRole('button', { name: 'Request Task' });
+    if (!firstButton || !secondButton) throw new Error('expected two Request Task buttons');
+    await user.click(firstButton);
+    await waitFor(() =>
+      expect(
+        apiRequest.mock.calls.some(
+          ([method, path]) => method === 'GET' && path === `/findings/${ids.finding}`,
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() => expect(firstButton).toBeDisabled());
+    await user.click(secondButton);
+    await waitFor(() =>
+      expect(
+        apiRequest.mock.calls.some(
+          ([method, path]) => method === 'GET' && path === `/findings/${ids.findingTwo}`,
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() => expect(secondButton).toBeDisabled());
+    expect(apiRequest.mock.calls.filter(([method]) => method === 'GET')).toHaveLength(2);
+
+    await act(async () => {
+      firstLoad.resolve({ data: firstFinding });
+      await firstLoad.promise;
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await act(async () => {
+      secondLoad.resolve({ data: secondFinding });
+      await secondLoad.promise;
+    });
+    await screen.findByRole('dialog');
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(
+      secondFinding.summary,
+    );
+
+    await user.type(
+      screen.getByTestId('request-task-requested-outcome-input'),
+      'Reduce export wait time',
+    );
+    await user.click(screen.getByTestId('request-task-submit'));
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        'POST',
+        `/findings/${ids.findingTwo}/request-task`,
+        expect.objectContaining({
+          body: {
+            evidence_summary: secondFinding.summary,
+            requested_outcome: 'Reduce export wait time',
+          },
+          idempotencyKey: expect.any(String),
+        }),
+      ),
+    );
+  });
+
+  it('retries a failed Finding load when Request Task is clicked again', async () => {
+    const user = userEvent.setup();
+    const finding = makeFinding(ids.finding, 'Finding available after retry.');
+    apiRequest
+      .mockRejectedValueOnce(new ApiParseError(200, `/findings/${ids.finding}`, []))
+      .mockResolvedValueOnce({ data: finding });
+    renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          next_actions: [
+            {
+              id: 'request_task',
+              availability: 'allowed',
+              intent: 'open_task_request_draft',
+              source_finding_id: ids.finding,
+            },
+          ],
+        }}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Request Task' });
+    await user.click(button);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(button);
+    await screen.findByRole('dialog');
+    expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(finding.summary);
+    expect(
+      apiRequest.mock.calls.filter(([, path]) => path === `/findings/${ids.finding}`),
+    ).toHaveLength(2);
+  });
+
+  it('does not open a modal when an errored Finding query later succeeds without another click', async () => {
+    const user = userEvent.setup();
+    const finding = makeFinding(ids.finding, 'Finding returned by background refetch.');
+    apiRequest
+      .mockRejectedValueOnce(new ApiParseError(200, `/findings/${ids.finding}`, []))
+      .mockResolvedValueOnce({ data: finding });
+    const { queryClient } = renderWithClient(
+      <SurveyResultsSummary
+        survey={survey}
+        results={{
+          ...results,
+          next_actions: [
+            {
+              id: 'request_task',
+              availability: 'allowed',
+              intent: 'open_task_request_draft',
+              source_finding_id: ids.finding,
+            },
+          ],
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Request Task' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['finding', ids.finding], type: 'all' });
+    });
+    expect(
+      apiRequest.mock.calls.filter(([, path]) => path === `/findings/${ids.finding}`),
+    ).toHaveLength(2);
+    expect(queryClient.getQueryData(['finding', ids.finding])).toEqual(finding);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Finding could not be loaded.');
   });
 });
