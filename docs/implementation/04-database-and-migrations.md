@@ -59,6 +59,7 @@ core
 - analytics_areas
 - entity_links
 - audit_log
+- notifications
 - rate_limits
 - idempotency_keys
 - display_counters
@@ -183,6 +184,7 @@ The archive-over-delete invariant is enforced in `apps/backend/src/modules/attac
   - workspace_id, relation_type
   - workspace_id, source_type, source_id, relation_type
 - audit_logs index workspace_id, actor_id, event_type, created_at.
+- notifications index workspace_id, actor_id, read_at, created_at DESC.
 ```
 
 ## Migration Naming
@@ -308,6 +310,25 @@ display columns the review list needs: `survey_responses.submitted_at`,
 `survey_questions.prompt`/`sort_order`,
 `outcome_follow_up_decisions.reason`/`updated_at`, and
 `finding.findings.created_at`/`display_id`/`primary_managed_system_id`.
+
+## Issue #509: notification inbox and dispatch
+
+Migration `0054_notifications.sql` creates `core.notifications` with a
+workspace and recipient Actor foreign key, a UUID `correlation_id`, and the
+unique idempotency key `(workspace_id, actor_id, event_type, subject_id,
+correlation_id)`. The table intentionally has no database CHECK on
+`event_type`; the application catalogue owns that allowlist. Its inbox index
+is `(workspace_id, actor_id, read_at, created_at DESC)`. `fops_app` has
+`SELECT`, `INSERT`, and column-scoped `UPDATE` on `read_at`, `archived_at`, and
+`email_sent_at`, with no `DELETE` or table-wide `UPDATE`; `fops_migrate` retains
+`ALL` on the table.
+
+The same migration pre-creates the `notifications.dispatch` pg-boss queue
+with ADR-0009 retry defaults (5 retries, 30 second delay, backoff enabled).
+Notification jobs are enqueued in the caller's transaction; the handler
+persists one actor-scoped inbox row and makes the email claim while holding
+that row transaction open. Email delivery is at-least-once because a process
+can send successfully and fail before the transaction commits.
 
 ## Issue #182: conversion-link visibility backfill
 

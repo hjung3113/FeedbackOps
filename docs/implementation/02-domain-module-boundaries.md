@@ -22,6 +22,7 @@ The following directories are the server-registered module surfaces (with
 | Finding | `apps/backend/src/modules/findings` |
 | Managed System Registry | `apps/backend/src/modules/managed-systems` |
 | Navigation | `apps/backend/src/modules/nav` |
+| Notifications | `apps/backend/src/modules/notifications` |
 | Permission | `apps/backend/src/modules/permissions` |
 | Saved Views | `apps/backend/src/modules/saved-views` |
 | Survey | `apps/backend/src/modules/surveys` |
@@ -66,6 +67,7 @@ Core owns:
 - Customer / Account reference data only if explicitly retained by data contracts
 - Contact reference data only if explicitly retained by data contracts; never Reporter identity
 - Analytics Area
+- Notification concept and shared notification storage contract
 - Attachment governance and storage interfaces when shared across modules
 - Audit Log
 
@@ -109,6 +111,10 @@ Consumers read the barrel seam (`getResolvedWorkspaceSettings`, `getResolvedWork
 ```
 
 The fence above is ownership. The table above it is the directory. They differ where a domain is implemented outside the owner's folder: Core's Managed System Registry, Analytics Area, and attachment governance live in `managed-systems/`, `analytics-areas/`, and `attachments/`; VOC's clusters, recommendations, and pre-submit peers live in `voc-clusters/` and under `voc/recommendations/` and `voc/pre-submit-peers/`; Task's Task Request lives in `task-requests/`. Authentication, Navigation, Saved Views, and Workspace Settings match in both places.
+
+Core owns the Notification concept and shared storage contract. The
+`modules/notifications` directory owns its catalogue, dispatch, delivery job,
+and actor-scoped in-app read model; it does not own domain event production.
 
 ## Cross-Module Access Rules
 
@@ -160,6 +166,7 @@ Allowed:
 - Analytics Area tree, with each Analytics Area belonging to one Managed System
 - shared attachment governance
 - Audit log append API
+- Notification concept and shared notification storage contract
 - shared identifiers and base types
 ```
 

@@ -28,6 +28,8 @@
  * Skipped without DATABASE_URL / DATABASE_URL_MIGRATE / WORKSPACE_ID,
  * matching the existing role-grants integration test.
  */
+import { randomUUID } from 'node:crypto';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../client.js';
@@ -73,6 +75,9 @@ const EXPECTED_GRANTS: Record<string, readonly DmlPrivilege[]> = {
   // Migration 0000 makes the audit log append-only so application writes retain
   // an immutable history.
   'core.audit_log': ['SELECT', 'INSERT'],
+  // Migration 0054 keeps inbox rows durable; only read/archive/email claim
+  // state has column-scoped UPDATE grants.
+  'core.notifications': ['SELECT', 'INSERT'],
   // Migration 0027 keeps counter mutation inside next_display_id, a SECURITY
   // DEFINER function; the application can only read the backing counter rows.
   'core.display_counters': ['SELECT'],
@@ -292,6 +297,78 @@ describe.skipIf(!runIntegration)('ADR-0008 role grants — product tables (Slice
       has_delete: false,
       has_truncate: false,
     });
+  });
+
+  it('fops_app UPDATE on notifications is limited to read, archive, and email claim columns', async () => {
+    const { rows: columns } = await migrateHandle.pool.query<{ column_name: string }>(
+      `select column_name
+           from information_schema.column_privileges
+          where grantee = 'fops_app'
+            and table_schema = 'core'
+            and table_name = 'notifications'
+            and privilege_type = 'UPDATE'
+          order by column_name`,
+    );
+    expect(columns.map((row) => row.column_name)).toEqual([
+      'archived_at',
+      'email_sent_at',
+      'read_at',
+    ]);
+
+    const { rows: tablePrivileges } = await migrateHandle.pool.query<{
+      has_table_update: boolean;
+      has_delete: boolean;
+      has_truncate: boolean;
+    }>(
+      `select
+           has_table_privilege('fops_app', 'core.notifications', 'UPDATE') as has_table_update,
+           has_table_privilege('fops_app', 'core.notifications', 'DELETE') as has_delete,
+           has_table_privilege('fops_app', 'core.notifications', 'TRUNCATE') as has_truncate`,
+    );
+    expect(tablePrivileges[0]).toEqual({
+      has_table_update: false,
+      has_delete: false,
+      has_truncate: false,
+    });
+
+    const actor = await migrateHandle.pool.query<{ id: string }>(
+      'select id from core.actors where workspace_id = $1 order by created_at limit 1',
+      [WORKSPACE_ID],
+    );
+    const actorId = actor.rows[0]?.id;
+    if (!actorId) throw new Error('seed must contain an actor');
+    const notification = await appHandle.pool.query<{ id: string }>(
+      `insert into core.notifications
+         (workspace_id, actor_id, event_type, subject_type, subject_id, summary, correlation_id)
+       values ($1, $2, 'voc.reporter_replied', 'voc', $3, 'Role grant notification', $4)
+       returning id`,
+      [WORKSPACE_ID, actorId, randomUUID(), randomUUID()],
+    );
+    const id = notification.rows[0]?.id;
+    if (!id) throw new Error('notification insert returned no id');
+
+    try {
+      await expect(
+        appHandle.pool.query('update core.notifications set summary = $2 where id = $1', [
+          id,
+          'rewritten summary',
+        ]),
+      ).rejects.toMatchObject({ code: '42501' });
+      await expect(
+        appHandle.pool.query('update core.notifications set actor_id = $2 where id = $1', [
+          id,
+          actorId,
+        ]),
+      ).rejects.toMatchObject({ code: '42501' });
+      await expect(
+        appHandle.pool.query('delete from core.notifications where id = $1', [id]),
+      ).rejects.toMatchObject({ code: '42501' });
+      await expect(
+        appHandle.pool.query('update core.notifications set read_at = now() where id = $1', [id]),
+      ).resolves.toBeDefined();
+    } finally {
+      await migrateHandle.pool.query('delete from core.notifications where id = $1', [id]);
+    }
   });
 
   it('fops_app may submit survey responses (INSERT-only, #185 migration 0037)', async () => {

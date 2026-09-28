@@ -22,6 +22,7 @@ This file owns global API rules, standard error codes, the endpoint contract tem
 | [`api/surveys.md`](api/surveys.md) | Survey; Forbidden Endpoint |
 | [`api/core.md`](api/core.md) | Core / Managed System / Analytics Area |
 | [`api/permissions.md`](api/permissions.md) | Permission |
+| [`api/notifications.md`](api/notifications.md) | Notifications Inbox |
 | [`api/entity-links.md`](api/entity-links.md) | Entity Links |
 | [`api/next-actions.md`](api/next-actions.md) | Next Action Contract |
 | [`api/cross-system.md`](api/cross-system.md) | Reporter Summary Contract; Cross-System Endpoint Decisions |

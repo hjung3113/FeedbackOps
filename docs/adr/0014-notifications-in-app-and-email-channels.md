@@ -108,3 +108,30 @@ Adding per-Actor preferences, switching to a third-party transactional email ser
 ## Implementation note — Issue #165
 
 Issue #165 creates the durable review candidate only; notification delivery remains deferred until the notification-system slice exists. That slice must emit `task.released` once per newly inserted candidate (not merely per Task transition), target the candidate VOC's current owner, and deduplicate using the release `correlation_id`. The releasing actor, Task assignee, Reporter, and worker actor are not recipients by default.
+
+## Amendment 2026-09-29 (#509)
+
+Issue #509 part 1 narrows the initial catalogue to the ten implemented rows:
+`voc.assigned_to_me`, `voc.reporter_replied`,
+`voc.severity_set_high_or_critical`, `task_request.approved`,
+`task_request.rejected`, `task_request.needs_more_evidence`,
+`task.assigned_to_me`, `task.released`, `permission_request.submitted`, and
+`permission_request.decided`. It adds
+`task_request.needs_more_evidence` (recipient: Task Request creator) and defers
+`survey.assigned_to_me` and `task_request.assigned_to_me`, which have no
+producer in this slice. No notification row is created for denied self-approval
+or permission `needs_more_info` / `permission_denied` outcomes.
+
+Callers resolve recipients in their request transaction and pass Actor IDs to
+the dispatcher. "Admins of the Managed System" means all workspace Actors
+whose `role_level` is `admin`; team-owned VOCs with no user owner resolve to an
+empty recipient list and enqueue no jobs. Self-notification is allowed with no
+global suppression. The `task.released` exclusions from the Issue #165 note
+remain a caller-side rule; the catalogue documents that policy but does not
+resolve recipients.
+
+Email delivery is at-least-once. The handler holds the email claim and inbox
+insert in one transaction while calling the channel. If email succeeds but
+the transaction fails before commit, retry may deliver the email again.
+This slice provides only the Pino-backed `MockEmailChannel`; SMTP remains a
+later slice, and selecting `smtp` fails with a clear not-configured error.
