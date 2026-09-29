@@ -275,3 +275,6 @@ apps/backend/src/modules/voc/read/scope.ts lint/style/noNonNullAssertion -- move
 apps/backend/src/modules/voc/conversation/frame.ts lint/style/noNonNullAssertion -- moved verbatim from voc/conversation-service.ts (pre-existing on develop; #517 Phase 3)
 apps/frontend/src/features/home/InboxPanel.tsx lint/complexity/useLiteralKeys -- detail is Record<string, unknown>; noPropertyAccessFromIndexSignature requires detail['voc_id'] (#509 part 4)
 apps/backend/src/lib/rate-limit-tiers.ts format -- pre-existing on develop (measured 2026-09-30; #509 part 4 only adds the notificationState tier)
+apps/backend/src/modules/task-requests/__tests__/create-task-request-display-id.integration.test.ts format -- pre-existing on develop (measured 2026-09-30; #574 changes one import line)
+apps/backend/src/modules/task-requests/__tests__/create-task-request-display-id.integration.test.ts lint/style/noUnusedTemplateLiteral -- pre-existing on develop (10x, measured 2026-09-30; #574 changes one import line)
+apps/backend/src/modules/voc-clusters/__tests__/linked-findings.integration.test.ts lint/style/noNonNullAssertion -- pre-existing on develop (8x, measured 2026-09-30; #574 changes one import line)

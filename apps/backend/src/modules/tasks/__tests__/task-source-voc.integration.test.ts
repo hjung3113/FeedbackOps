@@ -27,11 +27,11 @@ import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
-import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
-import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
+import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
