@@ -146,12 +146,7 @@ export const integrationDashboardSummaryFixture = dashboardSummarySchema.parse({
         value: row.coveragePercent,
         total: 100,
         percent: row.coveragePercent,
-        status:
-          row.coveragePercent >= 75
-            ? 'good'
-            : row.coveragePercent >= 40
-              ? 'warn'
-              : 'bad',
+        status: row.coveragePercent >= 75 ? 'good' : row.coveragePercent >= 40 ? 'warn' : 'bad',
       },
     },
     action_queues: { 'unassigned-voc': row.unassigned },

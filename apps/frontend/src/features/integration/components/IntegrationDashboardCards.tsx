@@ -81,7 +81,9 @@ export function IntegrationDashboardQueueCard({
           <h3 className="text-sm font-medium text-text-primary">{copy.title}</h3>
           <p className="mt-1 text-xs leading-5 text-text-muted">{copy.detail(queue.count)}</p>
         </div>
-        <span className={`shrink-0 rounded px-1.5 py-1 text-[10px] font-medium uppercase ${tone.badge}`}>
+        <span
+          className={`shrink-0 rounded px-1.5 py-1 text-[10px] font-medium uppercase ${tone.badge}`}
+        >
           {tone.label}
         </span>
       </div>

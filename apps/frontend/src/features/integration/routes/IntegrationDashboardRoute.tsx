@@ -1,12 +1,6 @@
 import { ApiError, fetchDashboardSummary, fetchManagedSystems } from '@/lib/api';
-import {
-  Button,
-  PageShell,
-  PanelSectionTitle,
-  PermissionBlockedPanel,
-  Skeleton,
-} from '@fops/ui';
 import type { DashboardSummary } from '@fops/shared';
+import { Button, PageShell, PanelSectionTitle, PermissionBlockedPanel, Skeleton } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
 import { Layers, Link2, RefreshCw } from 'lucide-react';
@@ -91,8 +85,8 @@ export function IntegrationDashboardRoute(): React.ReactElement {
               Integration Action Dashboard
             </h1>
             <p className="mt-3 text-sm text-text-muted">
-              VOC · Finding · Task · Survey 사이의 흐름이 끊긴 지점을 추적합니다. 차트가 아니라
-              다음 행동이 우선합니다.
+              VOC · Finding · Task · Survey 사이의 흐름이 끊긴 지점을 추적합니다. 차트가 아니라 다음
+              행동이 우선합니다.
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -231,12 +225,24 @@ function ManagedSystemOverview({
       >
         <thead>
           <tr className="border-b border-border-subtle text-[10px] uppercase tracking-wide text-text-muted">
-            <th scope="col" className="px-4 py-2 font-medium">System</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">Open VOC</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">Findings</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">Tasks</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">Unassigned</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">Coverage</th>
+            <th scope="col" className="px-4 py-2 font-medium">
+              System
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Open VOC
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Findings
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Tasks
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Unassigned
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Coverage
+            </th>
           </tr>
         </thead>
         <tbody>

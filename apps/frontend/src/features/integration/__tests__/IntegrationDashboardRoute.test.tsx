@@ -241,12 +241,10 @@ describe('integration action dashboard route', () => {
     expect(surfaces.queryByRole('link', { name: /Evidence/ })).toBeNull();
     expect(surfaces.getByTestId('integration-surface-coverage-stat').textContent).toBe('60%');
     expect(surfaces.queryByText('active links')).toBeNull();
-    expect(
-      screen.getByTestId(`integration-managed-system-open-voc-${MS_A}`).textContent,
-    ).toBe('18');
-    expect(
-      screen.getByTestId(`integration-managed-system-findings-${MS_A}`).textContent,
-    ).toBe('7');
+    expect(screen.getByTestId(`integration-managed-system-open-voc-${MS_A}`).textContent).toBe(
+      '18',
+    );
+    expect(screen.getByTestId(`integration-managed-system-findings-${MS_A}`).textContent).toBe('7');
     expect(screen.getByTestId(`integration-managed-system-tasks-${MS_A}`).textContent).toBe('9');
     expect(screen.getByTestId(`integration-managed-system-unassigned-${MS_A}`).textContent).toBe(
       '0',
@@ -254,19 +252,15 @@ describe('integration action dashboard route', () => {
     expect(screen.getByTestId(`integration-managed-system-coverage-${MS_A}`).textContent).toBe(
       '66%',
     );
-    expect(
-      screen.getByTestId(`integration-managed-system-open-voc-${MS_B}`).textContent,
-    ).toBe('4');
-    expect(
-      screen.getByTestId(`integration-managed-system-findings-${MS_B}`).textContent,
-    ).toBe('3');
+    expect(screen.getByTestId(`integration-managed-system-open-voc-${MS_B}`).textContent).toBe('4');
+    expect(screen.getByTestId(`integration-managed-system-findings-${MS_B}`).textContent).toBe('3');
     expect(screen.getByTestId(`integration-managed-system-tasks-${MS_B}`).textContent).toBe('2');
-    expect(
-      screen.getByTestId(`integration-managed-system-unassigned-${MS_B}`).textContent,
-    ).toBe('5');
-    expect(
-      screen.getByTestId(`integration-managed-system-coverage-${MS_B}`).textContent,
-    ).toBe('46%');
+    expect(screen.getByTestId(`integration-managed-system-unassigned-${MS_B}`).textContent).toBe(
+      '5',
+    );
+    expect(screen.getByTestId(`integration-managed-system-coverage-${MS_B}`).textContent).toBe(
+      '46%',
+    );
     expect(
       screen
         .getByTestId(`integration-managed-system-coverage-${MS_A}`)
@@ -329,12 +323,12 @@ describe('integration action dashboard route', () => {
       '—',
     );
     expect(screen.getByTestId(`integration-managed-system-tasks-${MS_A}`)).toHaveTextContent('—');
-    expect(
-      screen.getByTestId(`integration-managed-system-unassigned-${MS_A}`),
-    ).toHaveTextContent('0');
-    expect(
-      screen.getByTestId(`integration-managed-system-coverage-${MS_A}`),
-    ).toHaveTextContent('45%');
+    expect(screen.getByTestId(`integration-managed-system-unassigned-${MS_A}`)).toHaveTextContent(
+      '0',
+    );
+    expect(screen.getByTestId(`integration-managed-system-coverage-${MS_A}`)).toHaveTextContent(
+      '45%',
+    );
     expect(
       screen
         .getByTestId(`integration-managed-system-coverage-${MS_A}`)
@@ -364,9 +358,7 @@ describe('integration action dashboard route', () => {
     });
 
     await screen.findByTestId('integration-managed-system-table');
-    expect(screen.getByTestId(`integration-managed-system-${cell}-${MS_A}`)).toHaveTextContent(
-      '—',
-    );
+    expect(screen.getByTestId(`integration-managed-system-${cell}-${MS_A}`)).toHaveTextContent('—');
     expect(screen.getByTestId(`integration-managed-system-${cell}-${MS_A}`)).not.toHaveTextContent(
       '0',
     );
@@ -376,7 +368,11 @@ describe('integration action dashboard route', () => {
     const summary = dashboardSummarySchema.parse({
       ...SUMMARY,
       by_managed_system: [
-        { managed_system_id: MS_A, kpis: { open_voc: 5 }, action_queues: { 'bad-outcome-no-followup': 2 } },
+        {
+          managed_system_id: MS_A,
+          kpis: { open_voc: 5 },
+          action_queues: { 'bad-outcome-no-followup': 2 },
+        },
       ],
     });
     await renderDashboard('/integration', async (input) => {
@@ -387,9 +383,9 @@ describe('integration action dashboard route', () => {
     });
 
     await screen.findByTestId('integration-managed-system-table');
-    expect(
-      screen.getByTestId(`integration-managed-system-unassigned-${MS_A}`),
-    ).toHaveTextContent('—');
+    expect(screen.getByTestId(`integration-managed-system-unassigned-${MS_A}`)).toHaveTextContent(
+      '—',
+    );
   });
 
   test('passes the selected Managed System to the summary request', async () => {

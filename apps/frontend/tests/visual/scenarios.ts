@@ -1,6 +1,11 @@
 import type { FindingDto, VocClusterDto } from '@fops/shared';
 
 import {
+  integrationDashboardEmptySummaryFixture,
+  integrationDashboardManagedSystemsFixture,
+  integrationDashboardSummaryFixture,
+} from './fixtures/integration-dashboard';
+import {
   IDS,
   candidatePeers,
   confirmedLinkedFinding,
@@ -10,11 +15,6 @@ import {
   existingFinding,
   populatedList,
 } from './fixtures/voc-clusters';
-import {
-  integrationDashboardEmptySummaryFixture,
-  integrationDashboardManagedSystemsFixture,
-  integrationDashboardSummaryFixture,
-} from './fixtures/integration-dashboard';
 
 export type ScenarioName =
   | 'populated'

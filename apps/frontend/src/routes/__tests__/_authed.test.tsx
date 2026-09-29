@@ -12,7 +12,7 @@
 import { redirect } from '@tanstack/react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthenticatedError, fetchMe } from '../../lib/api';
-import { isSidebarEntryActive, NAV_TREE, SIDEBAR_ENTRIES } from '../_authed';
+import { NAV_TREE, SIDEBAR_ENTRIES, isSidebarEntryActive } from '../_authed';
 
 // Re-implement beforeLoad logic verbatim from _authed.tsx so we can
 // exercise it in isolation without the TanStack file-route type brands.
@@ -128,7 +128,9 @@ describe('_authed sidebar navigation tree', () => {
   });
 
   it('#532 activates Action dashboard only on the exact /integration route', () => {
-    const dashboardEntry = NAV_TREE.integration.find((entry) => entry.id === 'integration-dashboard');
+    const dashboardEntry = NAV_TREE.integration.find(
+      (entry) => entry.id === 'integration-dashboard',
+    );
     if (dashboardEntry === undefined) throw new Error('missing integration-dashboard nav entry');
     expect(isSidebarEntryActive(dashboardEntry, '/integration', '')).toBe(true);
     expect(isSidebarEntryActive(dashboardEntry, '/integration/links', '')).toBe(false);

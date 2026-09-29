@@ -14,7 +14,9 @@ test.describe('/integration action dashboard visual harness', () => {
       integrationDashboard: createIntegrationDashboardScenario('populated'),
     });
     await page.goto('/integration');
-    await expect(page.getByRole('heading', { level: 1, name: 'Integration Action Dashboard' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Integration Action Dashboard' }),
+    ).toBeVisible();
     await expect(page.getByTestId('integration-queue-card-unassigned-voc')).toBeVisible();
     await expect(page.getByTestId('integration-managed-system-table')).toBeVisible();
     await expect(page.getByTestId('sidebar-nav-integration-dashboard')).toHaveAttribute(
