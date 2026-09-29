@@ -1,14 +1,19 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { initBoss, shutdownBoss } from '../../../lib/jobs.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
-import { createRecordingNotificationDispatcher } from '../../notifications/port.js';
+import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
+import {
+  NOTIFICATION_DISPATCH_QUEUE,
+  createRecordingNotificationDispatcher,
+} from '../../notifications/port.js';
 import { createCheckService } from '../check-service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -40,22 +45,33 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   let db: DbHandle;
   let migrateDb: DbHandle;
   let app: FastifyInstance;
+  let rollbackApp: FastifyInstance;
+  let boss: Awaited<ReturnType<typeof initBoss>>;
   let adminCookie: string;
   let adminId: string;
   let requesterId: string;
   let requesterExternalId: string;
   const notifications = createRecordingNotificationDispatcher();
+  let failAfterEnqueue: ReturnType<typeof createFailAfterEnqueueNotificationDispatcher>;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     db = createDb(APP_URL);
     migrateDb = createDb(MIGRATE_URL);
+    boss = await initBoss({ connectionString: APP_URL, log: { info() {}, warn() {}, error() {} } });
+    failAfterEnqueue = createFailAfterEnqueueNotificationDispatcher(boss);
     app = await buildServer({
       config: loadConfig(),
       dbHandle: db,
       notificationDispatcher: notifications,
     });
+    rollbackApp = await buildServer({
+      config: loadConfig(),
+      dbHandle: db,
+      notificationDispatcher: failAfterEnqueue.dispatcher,
+    });
     await app.ready();
+    await rollbackApp.ready();
     adminCookie = await loginAs(app, 'mock-admin-1');
     const admin = await db.pool.query<{ id: string }>(
       `select id from core.actors where workspace_id = $1 and external_id = 'mock-admin-1'`,
@@ -66,7 +82,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   });
 
   beforeEach(async () => {
+    await cleanupFailedNotificationJobs();
     notifications.jobs.splice(0);
+    failAfterEnqueue.attemptedPayloads.length = 0;
     await db.pool.query('delete from core.idempotency_keys');
     await db.pool.query('delete from core.rate_limits');
     const actor = await insertDevActor(db, WORKSPACE_ID, `perm-decision-${randomUUID()}`);
@@ -74,8 +92,13 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     requesterExternalId = actor.externalId;
   });
 
+  afterEach(cleanupFailedNotificationJobs);
+
   afterAll(async () => {
+    await cleanupFailedNotificationJobs();
     await cleanupFixtures();
+    await shutdownBoss(boss).catch(() => {});
+    await rollbackApp?.close();
     await app?.close();
     await db?.close();
     await migrateDb?.close();
@@ -130,6 +153,19 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
           and (slug like 'perm-decision-%' or slug like 'deny-scope-%')`,
       [WORKSPACE_ID],
     );
+  }
+
+  async function cleanupFailedNotificationJobs(): Promise<void> {
+    const correlationIds =
+      failAfterEnqueue?.attemptedPayloads.map((payload) => payload.correlation_id) ?? [];
+    if (migrateDb && correlationIds.length > 0) {
+      await migrateDb.pool.query(
+        `delete from pgboss.job
+          where name = $1 and data ->> 'correlation_id' = any($2::text[])`,
+        [NOTIFICATION_DISPATCH_QUEUE, correlationIds],
+      );
+    }
+    if (failAfterEnqueue) failAfterEnqueue.attemptedPayloads.length = 0;
   }
 
   async function seedRequest(
@@ -371,6 +407,44 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       expect(response.json<{ status: string }>().status).toBe(outcome);
     },
   );
+
+  it('rolls back permission approval and audit after successful notification enqueue', async () => {
+    const requestId = await seedRequest();
+    const response = await rollbackApp.inject({
+      method: 'POST',
+      url: `/permissions/requests/${requestId}/approve`,
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${adminCookie}`,
+        'content-type': 'application/json',
+      },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    expect(response.statusCode).toBeLessThan(600);
+    expect(failAfterEnqueue.attemptedPayloads).toHaveLength(1);
+    const [payload] = failAfterEnqueue.attemptedPayloads;
+    if (!payload) throw new Error('notification enqueue payload missing');
+    expect(payload).toMatchObject({
+      actor_id: requesterId,
+      event_type: 'permission_request.decided',
+      subject_id: requestId,
+    });
+
+    expect(await requestStatus(requestId)).toBe('pending');
+    const audits = await migrateDb.pool.query(
+      `select 1 from core.audit_log
+        where workspace_id = $1 and event_type = 'permission_approved' and subject_id = $2`,
+      [WORKSPACE_ID, requestId],
+    );
+    expect(audits.rowCount).toBe(0);
+    const jobs = await migrateDb.pool.query(
+      `select 1 from pgboss.job
+        where name = $1 and data ->> 'correlation_id' = $2`,
+      [NOTIFICATION_DISPATCH_QUEUE, payload.correlation_id],
+    );
+    expect(jobs.rowCount).toBe(0);
+  });
 
   it('denies only the managed-system scope requested', async () => {
     const systems = await Promise.all(

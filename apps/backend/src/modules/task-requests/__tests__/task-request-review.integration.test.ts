@@ -6,20 +6,22 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { initBoss, shutdownBoss } from '../../../lib/jobs.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables } from '../../../test-support/voc-fixtures.js';
 import {
   createRecordingNotificationDispatcher,
-  type NotificationJobPayload,
+  NOTIFICATION_DISPATCH_QUEUE,
   type RecordingNotificationDispatcher,
 } from '../../notifications/port.js';
 import { insertTaskRequestRow } from './_seed-helpers.js';
@@ -35,31 +37,34 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
   let dbHandle: DbHandle;
   let migrateHandle: DbHandle;
   let app: FastifyInstance;
+  let rollbackApp: FastifyInstance;
+  let boss: Awaited<ReturnType<typeof initBoss>>;
   let adminCookie: string;
   let userCookie: string;
   let adminActorId: string;
   let userActorId: string;
   let notifications: RecordingNotificationDispatcher;
-  let failNotificationEnqueue = false;
-  const notificationAttempts: NotificationJobPayload[] = [];
+  let failAfterEnqueue: ReturnType<typeof createFailAfterEnqueueNotificationDispatcher>;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
     migrateHandle = createDb(MIGRATE_URL);
+    boss = await initBoss({ connectionString: APP_URL, log: { info() {}, warn() {}, error() {} } });
     notifications = createRecordingNotificationDispatcher();
-    const recordNotification = notifications.enqueue.bind(notifications);
-    notifications.enqueue = async (tx, payload) => {
-      notificationAttempts.push(payload);
-      if (failNotificationEnqueue) throw new Error('notification enqueue unavailable');
-      await recordNotification(tx, payload);
-    };
+    failAfterEnqueue = createFailAfterEnqueueNotificationDispatcher(boss);
     app = await buildServer({
       config: loadConfig(),
       dbHandle,
       notificationDispatcher: notifications,
     });
+    rollbackApp = await buildServer({
+      config: loadConfig(),
+      dbHandle,
+      notificationDispatcher: failAfterEnqueue.dispatcher,
+    });
     await app.ready();
+    await rollbackApp.ready();
 
     adminCookie = await loginAs(app, 'mock-admin-1');
     userCookie = await loginAs(app, 'mock-user-1');
@@ -79,16 +84,31 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
   beforeEach(async () => {
     await cleanupFixtures();
     notifications.jobs.splice(0);
-    notificationAttempts.length = 0;
-    failNotificationEnqueue = false;
+    failAfterEnqueue.attemptedPayloads.length = 0;
   });
 
+  afterEach(cleanupFailedNotificationJobs);
+
   afterAll(async () => {
+    await cleanupFailedNotificationJobs();
     await cleanupFixtures();
+    await shutdownBoss(boss).catch(() => {});
+    await rollbackApp?.close();
     await app?.close();
     await dbHandle?.close();
     await migrateHandle?.close();
   });
+
+  async function cleanupFailedNotificationJobs(): Promise<void> {
+    const correlationIds =
+      failAfterEnqueue?.attemptedPayloads.map((payload) => payload.correlation_id) ?? [];
+    if (!migrateHandle || correlationIds.length === 0) return;
+    await migrateHandle.pool.query(
+      `delete from pgboss.job
+        where name = $1 and data ->> 'correlation_id' = any($2::text[])`,
+      [NOTIFICATION_DISPATCH_QUEUE, correlationIds],
+    );
+  }
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
@@ -183,8 +203,9 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     action: 'approve' | 'reject' | 'request-more-evidence',
     payload: Record<string, unknown>,
     idempotencyKey = randomUUID(),
+    targetApp: FastifyInstance = app,
   ) {
-    return app.inject({
+    return targetApp.inject({
       method: 'POST',
       url: `/task-requests/${taskRequestId}/${action}`,
       headers: {
@@ -411,27 +432,51 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(auditCount.rows[0]?.n).toBe(1);
   });
 
-  it('rolls back the Task Request decision and audit when notification enqueue fails', async () => {
-    const request = await seedTaskRequest();
-    failNotificationEnqueue = true;
+  it.each([
+    ['approve', { reason: 'Transactional notification check.' }, 'task_request_approved'],
+    ['reject', { reason: 'Transactional notification check.' }, 'task_request_rejected'],
+    [
+      'request-more-evidence',
+      { note: 'Transactional notification check.' },
+      'task_request_needs_more_evidence',
+    ],
+  ] as const)(
+    'rolls back Task Request %s after successful notification enqueue',
+    async (action, payload, auditEventType) => {
+      const request = await seedTaskRequest();
 
-    const response = await decide(adminCookie, request.id, 'approve', {
-      reason: 'Transactional notification check.',
-    });
+      const response = await decide(
+        adminCookie,
+        request.id,
+        action,
+        payload,
+        randomUUID(),
+        rollbackApp,
+      );
 
-    expect(response.statusCode).toBe(500);
-    expect(notificationAttempts).toHaveLength(1);
-    expect(notifications.jobs).toEqual([]);
-    const row = await dbHandle.pool.query<{ status: string }>(
-      'select status from task_request.task_requests where id = $1',
-      [request.id],
-    );
-    expect(row.rows[0]?.status).toBe('pending_review');
-    const audit = await dbHandle.pool.query(
-      `select 1 from core.audit_log
-        where workspace_id = $1 and event_type = 'task_request_approved' and subject_id = $2`,
-      [WORKSPACE_ID, request.id],
-    );
-    expect(audit.rowCount).toBe(0);
-  });
+      expect(response.statusCode).toBeGreaterThanOrEqual(500);
+      expect(response.statusCode).toBeLessThan(600);
+      expect(failAfterEnqueue.attemptedPayloads).toHaveLength(1);
+      expect(failAfterEnqueue.attemptedPayloads[0]).toMatchObject({
+        subject_id: request.id,
+      });
+      const row = await dbHandle.pool.query<{ status: string }>(
+        'select status from task_request.task_requests where id = $1',
+        [request.id],
+      );
+      expect(row.rows[0]?.status).toBe('pending_review');
+      const audit = await migrateHandle.pool.query(
+        `select 1 from core.audit_log
+          where workspace_id = $1 and event_type = $2 and subject_id = $3`,
+        [WORKSPACE_ID, auditEventType, request.id],
+      );
+      expect(audit.rowCount).toBe(0);
+      const jobs = await migrateHandle.pool.query(
+        `select 1 from pgboss.job
+          where name = $1 and data ->> 'subject_id' = $2`,
+        [NOTIFICATION_DISPATCH_QUEUE, request.id],
+      );
+      expect(jobs.rowCount).toBe(0);
+    },
+  );
 });

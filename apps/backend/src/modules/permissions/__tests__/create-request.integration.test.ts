@@ -11,11 +11,16 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { initBoss, shutdownBoss } from '../../../lib/jobs.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
+import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
-import { createRecordingNotificationDispatcher } from '../../notifications/port.js';
+import {
+  NOTIFICATION_DISPATCH_QUEUE,
+  createRecordingNotificationDispatcher,
+} from '../../notifications/port.js';
 import { createCheckService } from '../check-service.js';
 import { createRequestService } from '../request-service.js';
 
@@ -28,39 +33,44 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
   let dbHandle: DbHandle;
   let migrateHandle: DbHandle;
   let app: FastifyInstance;
+  let rollbackApp: FastifyInstance;
+  let boss: Awaited<ReturnType<typeof initBoss>>;
   const notifications = createRecordingNotificationDispatcher();
   const fixtureActorIds: string[] = [];
   const fixtureSessionIds: string[] = [];
+  let failAfterEnqueue: ReturnType<typeof createFailAfterEnqueueNotificationDispatcher>;
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
     migrateHandle = createDb(MIGRATE_URL);
+    boss = await initBoss({ connectionString: APP_URL, log: { info() {}, warn() {}, error() {} } });
+    failAfterEnqueue = createFailAfterEnqueueNotificationDispatcher(boss);
     app = await buildServer({
       config: loadConfig(),
       dbHandle,
       notificationDispatcher: notifications,
     });
+    rollbackApp = await buildServer({
+      config: loadConfig(),
+      dbHandle,
+      notificationDispatcher: failAfterEnqueue.dispatcher,
+    });
     await app.ready();
+    await rollbackApp.ready();
   });
 
   afterAll(async () => {
-    if (fixtureSessionIds.length > 0) {
-      await migrateHandle.pool.query('delete from core.sessions where id = any($1::text[])', [
-        fixtureSessionIds,
-      ]);
-    }
-    if (fixtureActorIds.length > 0) {
-      await migrateHandle.pool.query('delete from core.actors where id = any($1::uuid[])', [
-        fixtureActorIds,
-      ]);
-    }
+    await cleanupFailedNotificationJobs();
+    await shutdownBoss(boss).catch(() => {});
+    await rollbackApp?.close();
     await app?.close();
     await dbHandle?.close();
     await migrateHandle?.close();
   });
 
   afterEach(async () => {
+    await cleanupFailedNotificationJobs();
     if (fixtureSessionIds.length > 0) {
       await migrateHandle.pool.query('delete from core.sessions where id = any($1::text[])', [
         fixtureSessionIds,
@@ -79,6 +89,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
   // permission_requests, audit_log, idempotency_keys, and integration-test
   // sessions. audit_log is INSERT-only for fops_app — delete as fops_migrate.
   beforeEach(async () => {
+    await cleanupFailedNotificationJobs();
     notifications.jobs.splice(0);
     await dbHandle.pool.query(
       `delete from core.sessions
@@ -96,6 +107,19 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       `delete from core.audit_log where event_type = 'permission_requested'`,
     );
   });
+
+  async function cleanupFailedNotificationJobs(): Promise<void> {
+    const correlationIds =
+      failAfterEnqueue?.attemptedPayloads.map((payload) => payload.correlation_id) ?? [];
+    if (migrateHandle && correlationIds.length > 0) {
+      await migrateHandle.pool.query(
+        `delete from pgboss.job
+          where name = $1 and data ->> 'correlation_id' = any($2::text[])`,
+        [NOTIFICATION_DISPATCH_QUEUE, correlationIds],
+      );
+    }
+    if (failAfterEnqueue) failAfterEnqueue.attemptedPayloads.length = 0;
+  }
 
   async function insertActor(roleLevel: 'admin' | 'developer'): Promise<string> {
     const externalId = `notification-submit-${randomUUID()}`;
@@ -132,19 +156,12 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
   }
 
   it('user submits valid request → 201 + one request row + one audit row', async () => {
-    const [firstAdminId, secondAdminId] = await Promise.all([
-      insertActor('admin'),
-      insertActor('admin'),
-    ]);
-    const developerId = await insertActor('developer');
     const cookie = await loginAs('mock-user-1');
-    const idempotencyKey = randomUUID();
     const res = await app.inject({
       method: 'POST',
       url: '/permission-requests',
       headers: {
         cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
-        'idempotency-key': idempotencyKey,
         'content-type': 'application/json',
       },
       payload: {
@@ -173,6 +190,30 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     expect(auditRows.rowCount).toBe(1);
     expect(auditRows.rows[0]?.subject_type).toBe('permission_request');
     expect(auditRows.rows[0]?.subject_id).toBe(requestRows.rows[0]?.id);
+  });
+
+  it('notifies every workspace admin and excludes developers on submit', async () => {
+    const [firstAdminId, secondAdminId] = await Promise.all([
+      insertActor('admin'),
+      insertActor('admin'),
+    ]);
+    const developerId = await insertActor('developer');
+    const cookie = await loginAs('mock-user-1');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/permission-requests',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${cookie}`,
+        'idempotency-key': randomUUID(),
+        'content-type': 'application/json',
+      },
+      payload: {
+        requested_capability: 'workspace.admin',
+        reason: 'I need admin to do thing',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const requestId = res.json<{ id: string }>().id;
 
     const adminIds = await dbHandle.pool.query<{ id: string }>(
       `select id from core.actors where workspace_id = $1 and role_level = 'admin'`,
@@ -187,27 +228,21 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
           workspace_id: WORKSPACE_ID,
           event_type: 'permission_request.submitted',
           subject_type: 'permission_request',
-          subject_id: requestRows.rows[0]?.id,
+          subject_id: requestId,
           summary: '새 권한 요청이 등록되었습니다.',
-          detail: { permission_request_id: requestRows.rows[0]?.id },
+          detail: { permission_request_id: requestId },
           correlation_id: expect.any(String),
         }),
       ),
     );
     expect(notifications.jobs.map((job) => job.actor_id)).not.toContain(developerId);
-    expect(notifications.jobs.map((job) => job.actor_id)).not.toContain(
-      (
-        await dbHandle.pool.query<{ id: string }>(
-          `select id from core.actors where workspace_id = $1 and external_id = 'mock-user-1'`,
-          [WORKSPACE_ID],
-        )
-      ).rows[0]?.id,
-    );
     expect(notifications.jobs.map((job) => job.actor_id)).toContain(firstAdminId);
     expect(notifications.jobs.map((job) => job.actor_id)).toContain(secondAdminId);
+  });
 
-    notifications.jobs.splice(0);
-    const duplicate = await app.inject({
+  it('rolls back permission request and audit after successful notification enqueue', async () => {
+    const cookie = await loginAs('mock-user-1');
+    const response = await rollbackApp.inject({
       method: 'POST',
       url: '/permission-requests',
       headers: {
@@ -217,12 +252,34 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       },
       payload: {
         requested_capability: 'workspace.admin',
-        reason: 'I need admin to do thing',
+        reason: 'Transactional notification check.',
       },
     });
-    expect(duplicate.statusCode).toBe(409);
-    expect(duplicate.json().code).toBe('conflict.permission_request_duplicate');
-    expect(notifications.jobs).toEqual([]);
+
+    expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    expect(response.statusCode).toBeLessThan(600);
+    expect(failAfterEnqueue.attemptedPayloads).toHaveLength(1);
+    const [payload] = failAfterEnqueue.attemptedPayloads;
+    if (!payload) throw new Error('notification enqueue payload missing');
+    expect(payload.event_type).toBe('permission_request.submitted');
+
+    const requests = await dbHandle.pool.query(
+      'select 1 from permission.permission_requests where workspace_id = $1',
+      [WORKSPACE_ID],
+    );
+    expect(requests.rowCount).toBe(0);
+    const audits = await migrateHandle.pool.query(
+      `select 1 from core.audit_log
+        where workspace_id = $1 and event_type = 'permission_requested'`,
+      [WORKSPACE_ID],
+    );
+    expect(audits.rowCount).toBe(0);
+    const jobs = await migrateHandle.pool.query(
+      `select 1 from pgboss.job
+        where name = $1 and data ->> 'correlation_id' = $2`,
+      [NOTIFICATION_DISPATCH_QUEUE, payload.correlation_id],
+    );
+    expect(jobs.rowCount).toBe(0);
   });
 
   // F-005: two concurrent first-time requests with the same Idempotency-Key
@@ -357,6 +414,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
       payload,
     });
     expect(first.statusCode).toBe(201);
+    notifications.jobs.splice(0);
     const second = await app.inject({
       method: 'POST',
       url: '/permission-requests',
@@ -365,6 +423,7 @@ describe.skipIf(!runIntegration)('POST /permission-requests', () => {
     });
     expect(second.statusCode).toBe(409);
     expect(second.json().code).toBe('conflict.permission_request_duplicate');
+    expect(notifications.jobs).toEqual([]);
   });
 
   it('admin requesting capability they already hold → 409 conflict.capability_already_granted', async () => {
