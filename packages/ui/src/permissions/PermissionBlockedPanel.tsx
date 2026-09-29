@@ -14,7 +14,7 @@ export interface PermissionBlockedPanelProps {
   state: PermissionState;
   /** Category label, e.g. 'VOC 상세' or 'Linked Finding' */
   category: string;
-  /** Reason string returned by BE in the decision envelope */
+  /** Domain-safe reason for the blocked state. */
   reason?: string;
   /** Canonical `required_scope` strings from permissionDecisionSchema. */
   requiredScope?: readonly string[];
@@ -69,6 +69,7 @@ export function PermissionBlockedPanel({
       {state === 'request_access' && (
         <div className="flex flex-col gap-2">
           <p className="text-sm text-text-secondary">이 항목에 접근하려면 권한 요청이 필요합니다.</p>
+          {reason !== undefined ? <p className="text-sm text-text-secondary">{reason}</p> : null}
           {requiredScope !== undefined && requiredScope.length > 0 && (
             <p className="text-xs text-text-muted">{requiredScope.join(' · ')}</p>
           )}

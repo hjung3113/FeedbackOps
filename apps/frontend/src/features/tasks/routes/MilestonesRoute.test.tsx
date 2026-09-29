@@ -489,7 +489,12 @@ describe('MilestonesRoute counts suppression (R5)', () => {
 
     // The denial presents in the list slot; retained rows stay hidden while
     // the shell (and the draft) survive.
-    expect(await screen.findByText('finding.manage required')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Milestone 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /SSO Stabilization/ })).not.toBeInTheDocument();
     // …and neither do the retained totals or status/task badges.
     expect(screen.getByTestId('milestone-summary-total')).toHaveTextContent('—');

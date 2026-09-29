@@ -1,4 +1,5 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { ListShell, ListToolbar, PermissionBlockedPanel } from '@fops/ui';
 
 import { TaskRequestPanel } from './task-requests/TaskRequestPanel';
@@ -31,7 +32,7 @@ export function TaskRequestsRoute({
       <PermissionBlockedPanel
         state="denied"
         category="Task Request queue"
-        reason={queue.permissionDeniedError.message}
+        reason={PERMISSION_BLOCKED_REASONS.taskRequestQueue}
         className="m-4"
       />
     );

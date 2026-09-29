@@ -75,9 +75,18 @@ vi.mock('@fops/ui', async () => {
     OutlineBadge: ({ children, ...props }: { children: React.ReactNode }) => (
       <span {...props}>{children}</span>
     ),
-    PermissionBlockedPanel: ({ state, category }: { state: string; category: string }) => (
+    PermissionBlockedPanel: ({
+      state,
+      category,
+      reason,
+    }: {
+      state: string;
+      category: string;
+      reason?: string;
+    }) => (
       <div data-testid="permission-blocked" data-state={state}>
         {category}
+        {reason}
       </div>
     ),
     Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
@@ -252,6 +261,12 @@ describe('FindingsListPage', () => {
     await renderFindingsPage();
 
     expect(screen.getByTestId('permission-blocked')).toHaveAttribute('data-state', 'denied');
+    expect(
+      screen.getByText(
+        'Finding 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('finding.read capability required')).not.toBeInTheDocument();
     expect(screen.queryByTestId('finding-list-error')).not.toBeInTheDocument();
     expect(screen.queryByText('0개')).not.toBeInTheDocument();
   });

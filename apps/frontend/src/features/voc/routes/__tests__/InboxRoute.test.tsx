@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const navigateMock = vi.fn();
 let searchState: Record<string, unknown> = {};
 const apiClientMock = vi.hoisted(() => vi.fn());
+const openRequestAccessMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (options: unknown) => ({ options }),
@@ -44,13 +45,28 @@ vi.mock('@/features/admin/permissions/request-access-button', () => ({
   RequestAccessButton: ({
     capability,
     managedSystemId,
+    returnRouteIntent,
+    renderTrigger,
   }: {
     capability: string;
     managedSystemId?: string;
+    returnRouteIntent: string;
+    renderTrigger?: (open: () => void) => React.ReactNode;
   }) => (
-    <button type="button" data-managed-system-id={managedSystemId} data-testid="request-access">
-      {capability}
-    </button>
+    <div
+      data-testid="request-access-flow"
+      data-capability={capability}
+      data-managed-system-id={managedSystemId}
+      data-return-route-intent={returnRouteIntent}
+    >
+      {renderTrigger !== undefined ? (
+        renderTrigger(openRequestAccessMock)
+      ) : (
+        <button type="button" data-testid="request-access">
+          {capability}
+        </button>
+      )}
+    </div>
   ),
 }));
 
@@ -191,6 +207,7 @@ describe('useInboxRoute', () => {
     searchState = {};
     navigateMock.mockClear();
     apiClientMock.mockReset();
+    openRequestAccessMock.mockReset();
     apiClientMock.mockResolvedValue({ data: { items: [] } });
     useVocListMock.mockReturnValue({
       data: { items: MOCK_VOC_ITEMS, next_cursor: undefined },
@@ -457,9 +474,16 @@ describe('useInboxRoute', () => {
     searchState = { view: 'inbox' };
     render(<InboxTestHarness view="inbox" />);
 
-    expect(await screen.findByTestId('request-access')).toHaveTextContent('voc.read');
-    expect(screen.getByTestId('request-access')).toHaveAttribute('data-managed-system-id', 'ms-1');
-    expect(document.querySelector('[data-state="denied"]')).toBeInTheDocument();
+    const panel = await screen.findByText('VOC Inbox');
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'request_access');
+    const requestButton = screen.getByRole('button', { name: '권한 요청하기' });
+    expect(screen.getAllByRole('button', { name: '권한 요청하기' })).toHaveLength(1);
+    const requestFlow = screen.getByTestId('request-access-flow');
+    expect(requestFlow).toHaveAttribute('data-capability', 'voc.read');
+    expect(requestFlow).toHaveAttribute('data-managed-system-id', 'ms-1');
+    expect(requestFlow).toHaveAttribute('data-return-route-intent', '/vocs?view=inbox');
+    fireEvent.click(requestButton);
+    expect(openRequestAccessMock).toHaveBeenCalledTimes(1);
     // #562: an out-of-scope Managed System is not "no Inbox access" — no My VOCs detour.
     expect(
       screen.getByText('선택한 Managed System의 VOC를 볼 권한이 없습니다.'),

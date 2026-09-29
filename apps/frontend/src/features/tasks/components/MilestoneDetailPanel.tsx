@@ -1,6 +1,7 @@
 import { createMilestone, getMilestone, updateMilestone } from '@/lib/api/milestones';
 import { listTasks } from '@/lib/api/tasks';
 import { ApiError } from '@/lib/api/types';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import type {
   CreateMilestoneRequest,
   MilestoneDetailDto,
@@ -201,7 +202,7 @@ export function MilestoneDetailPanel({
             <PermissionBlockedPanel
               state="denied"
               category="Milestone detail"
-              reason={error.message}
+              reason={PERMISSION_BLOCKED_REASONS.milestoneDetail}
               className="m-4"
             />
           ) : (
@@ -1026,12 +1027,12 @@ function MilestoneDetailContent({
             isPermissionDenied(childTasksQuery.error) ? (
               // B2d fixup F1 — a denied child-list read is the permission
               // contract, not an outage: the same classification as the
-              // milestone read and TaskListRoute drives the approved blocked
-              // panel with the server's reason.
+              // milestone read and TaskListRoute drives the blocked panel
+              // with domain-safe copy.
               <PermissionBlockedPanel
                 state="denied"
                 category="Task list"
-                reason={childTasksQuery.error.message}
+                reason={PERMISSION_BLOCKED_REASONS.milestoneTasks}
               />
             ) : (
               // Same terminal copy as the Tasks list route (TaskListRoute).

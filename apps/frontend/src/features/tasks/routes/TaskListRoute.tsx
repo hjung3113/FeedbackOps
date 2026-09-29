@@ -2,6 +2,7 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { listTasks } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { TaskDto } from '@fops/shared';
 import {
@@ -93,7 +94,7 @@ export function TaskListRoute({
       <PermissionBlockedPanel
         state="denied"
         category="Task list"
-        reason={tasksQuery.error.message}
+        reason={PERMISSION_BLOCKED_REASONS.taskList}
         className="m-4"
       />
     );

@@ -319,21 +319,42 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
       {outOfScopeBanner}
       {isPermissionDenied(vocList.error) ? (
         <div className="m-4 space-y-3">
-          <PermissionBlockedPanel
-            // docs/frontend/specs/voc.md R-VOC-INBOX: no read scope and nothing requestable
-            // -> blocked_not_requestable (#562).
-            state={
-              vocList.error.envelope.requestable_permission ? 'denied' : 'blocked_not_requestable'
-            }
-            category="VOC Inbox"
-            // #562 copy (no prototype string; user-delegated decision). A 403 naming one
-            // Managed System means the selected scope is out of reach, not the whole Inbox.
-            reason={
-              typeof vocList.error.envelope.requestable_permission?.managed_system_id === 'string'
-                ? '선택한 Managed System의 VOC를 볼 권한이 없습니다.'
-                : 'VOC Inbox를 볼 권한이 없습니다. 내가 접수한 VOC는 My VOCs에서 확인할 수 있습니다.'
-            }
-          />
+          {vocList.error.envelope.requestable_permission ? (
+            <RequestAccessButton
+              capability={vocList.error.envelope.requestable_permission.permission}
+              returnRouteIntent={`/vocs?view=${view}`}
+              {...(typeof vocList.error.envelope.requestable_permission.managed_system_id ===
+              'string'
+                ? {
+                    managedSystemId:
+                      vocList.error.envelope.requestable_permission.managed_system_id,
+                  }
+                : {})}
+              renderTrigger={(onRequestAccess) => (
+                <PermissionBlockedPanel
+                  // The server marks the capability requestable, so its panel state owns the CTA.
+                  state="request_access"
+                  category="VOC Inbox"
+                  // #562 copy: a named Managed System means this selected scope is out of reach.
+                  reason={
+                    typeof vocList.error.envelope.requestable_permission?.managed_system_id ===
+                    'string'
+                      ? '선택한 Managed System의 VOC를 볼 권한이 없습니다.'
+                      : 'VOC Inbox를 볼 권한이 없습니다. 내가 접수한 VOC는 My VOCs에서 확인할 수 있습니다.'
+                  }
+                  onRequestAccess={onRequestAccess}
+                />
+              )}
+            />
+          ) : (
+            <PermissionBlockedPanel
+              // docs/frontend/specs/voc.md R-VOC-INBOX: no read scope and nothing requestable
+              // -> blocked_not_requestable (#562).
+              state="blocked_not_requestable"
+              category="VOC Inbox"
+              reason="VOC Inbox를 볼 권한이 없습니다. 내가 접수한 VOC는 My VOCs에서 확인할 수 있습니다."
+            />
+          )}
           {view === 'inbox' &&
           typeof vocList.error.envelope.requestable_permission?.managed_system_id !== 'string' ? (
             <Button
@@ -348,19 +369,6 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </Button>
-          ) : null}
-          {vocList.error.envelope.requestable_permission ? (
-            <RequestAccessButton
-              capability={vocList.error.envelope.requestable_permission.permission}
-              returnRouteIntent={`/vocs?view=${view}`}
-              {...(typeof vocList.error.envelope.requestable_permission.managed_system_id ===
-              'string'
-                ? {
-                    managedSystemId:
-                      vocList.error.envelope.requestable_permission.managed_system_id,
-                  }
-                : {})}
-            />
           ) : null}
         </div>
       ) : (

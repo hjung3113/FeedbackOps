@@ -250,6 +250,8 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Milestone detail' })).toBeInTheDocument();
+    expect(screen.getByText('이 Milestone을 볼 권한이 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '패널 닫기' })).toBeInTheDocument();
     expect(screen.queryByText('SSO 세션 만료 후 재인증 흐름이 없습니다.')).not.toBeInTheDocument();
 
@@ -319,7 +321,8 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
         expect(
           await screen.findByRole('heading', { name: 'Milestone detail' }),
         ).toBeInTheDocument();
-        expect(screen.getByText('finding.manage required')).toBeInTheDocument();
+        expect(screen.getByText('이 Milestone을 볼 권한이 없습니다.')).toBeInTheDocument();
+        expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
         expect(screen.queryByText('Milestone detail unavailable.')).not.toBeInTheDocument();
       } else {
         expect(await screen.findByText('Milestone detail unavailable.')).toBeInTheDocument();
@@ -571,7 +574,8 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     renderPanel(linkedDetail);
 
     expect(await screen.findByRole('heading', { name: 'Task list' })).toBeInTheDocument();
-    expect(screen.getByText('finding.manage required')).toBeInTheDocument();
+    expect(screen.getByText('이 Milestone의 Task를 볼 권한이 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
     // The generic outage copy never explains a 403.
     expect(screen.queryByText('Task list unavailable.')).not.toBeInTheDocument();
     // The milestone itself stays readable.
@@ -606,7 +610,8 @@ describe('MilestoneDetailPanel (#514 B2d)', () => {
     await queryClient.refetchQueries({ queryKey: ['tasks', { milestone_id: MILESTONE_ID }] });
 
     expect(await screen.findByRole('heading', { name: 'Task list' })).toBeInTheDocument();
-    expect(screen.getByText('finding.manage required')).toBeInTheDocument();
+    expect(screen.getByText('이 Milestone의 Task를 볼 권한이 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
     // Retained success data no longer feeds the nav entry or section count.
     expect(screen.queryByText('Tasks · 1')).not.toBeInTheDocument();
     const nav = screen.getByRole('button', { name: 'Overview' }).closest('div');
