@@ -412,9 +412,35 @@ describe('useInboxRoute', () => {
     render(<InboxTestHarness view="inbox" />);
 
     const panel = await screen.findByText('VOC Inbox');
-    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    // #562: specs/voc.md R-VOC-INBOX — nothing requestable -> blocked_not_requestable.
+    expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'blocked_not_requestable');
     expect(screen.queryByText('불러오기 실패')).not.toBeInTheDocument();
     expect(screen.queryByTestId('request-access')).not.toBeInTheDocument();
+  });
+
+  it('shows the Korean denied reason and links to My VOCs for a 403', async () => {
+    useVocListMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError(403, {
+        code: 'permission.denied',
+        message: 'no voc.read scope for actor',
+      }),
+      refetch: vi.fn(),
+    });
+    searchState = { view: 'inbox' };
+    render(<InboxTestHarness view="inbox" />);
+
+    expect(
+      await screen.findByText(
+        'VOC Inbox를 볼 권한이 없습니다. 내가 접수한 VOC는 My VOCs에서 확인할 수 있습니다.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('no voc.read scope for actor')).not.toBeInTheDocument();
+
+    const myVocsLink = screen.getByRole('link', { name: 'My VOCs' });
+    expect(myVocsLink).toHaveAttribute('href', '/vocs');
+    expect(myVocsLink).toHaveAttribute('data-search', JSON.stringify({ view: 'my' }));
   });
 
   it('adds a request-access CTA only when the Inbox error provides the permission', async () => {
@@ -433,6 +459,12 @@ describe('useInboxRoute', () => {
 
     expect(await screen.findByTestId('request-access')).toHaveTextContent('voc.read');
     expect(screen.getByTestId('request-access')).toHaveAttribute('data-managed-system-id', 'ms-1');
+    expect(document.querySelector('[data-state="denied"]')).toBeInTheDocument();
+    // #562: an out-of-scope Managed System is not "no Inbox access" — no My VOCs detour.
+    expect(
+      screen.getByText('선택한 Managed System의 VOC를 볼 권한이 없습니다.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('voc-inbox-denied-my-vocs')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission error on VocList failed-load copy', async () => {

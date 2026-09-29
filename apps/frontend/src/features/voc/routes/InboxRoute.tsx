@@ -17,7 +17,7 @@ import {
   type SortOption,
 } from '@fops/ui';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import * as React from 'react';
 import { VocDetailPanel } from '../components/detail/VocDetailPanel';
 import { VocList } from '../components/list/VocList';
@@ -320,10 +320,35 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
       {isPermissionDenied(vocList.error) ? (
         <div className="m-4 space-y-3">
           <PermissionBlockedPanel
-            state="denied"
+            // docs/frontend/specs/voc.md R-VOC-INBOX: no read scope and nothing requestable
+            // -> blocked_not_requestable (#562).
+            state={
+              vocList.error.envelope.requestable_permission ? 'denied' : 'blocked_not_requestable'
+            }
             category="VOC Inbox"
-            reason={vocList.error.message}
+            // #562 copy (no prototype string; user-delegated decision). A 403 naming one
+            // Managed System means the selected scope is out of reach, not the whole Inbox.
+            reason={
+              typeof vocList.error.envelope.requestable_permission?.managed_system_id === 'string'
+                ? '선택한 Managed System의 VOC를 볼 권한이 없습니다.'
+                : 'VOC Inbox를 볼 권한이 없습니다. 내가 접수한 VOC는 My VOCs에서 확인할 수 있습니다.'
+            }
           />
+          {view === 'inbox' &&
+          typeof vocList.error.envelope.requestable_permission?.managed_system_id !== 'string' ? (
+            <Button
+              asChild
+              variant="subtle"
+              size="sm"
+              className="gap-1.5"
+              data-testid="voc-inbox-denied-my-vocs"
+            >
+              <Link to="/vocs" search={{ view: 'my' }}>
+                My VOCs
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
+          ) : null}
           {vocList.error.envelope.requestable_permission ? (
             <RequestAccessButton
               capability={vocList.error.envelope.requestable_permission.permission}
