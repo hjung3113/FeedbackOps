@@ -2,6 +2,9 @@
 // Pure view: all state, queries and handlers come from useFindingDetailController.
 
 import { ProgressNotesSection } from '@/features/cross-system/progress-notes/ProgressNotesSection';
+import { useRequestTaskFromFinding } from '@/features/findings/hooks/useRequestTaskFromFinding';
+import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
+import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import type { FindingDto, FindingStatus } from '@fops/shared';
 import {
   Button,
@@ -15,11 +18,11 @@ import {
 } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
 import type * as React from 'react';
+import { toast } from 'sonner';
 import { AddEvidenceModal } from './AddEvidenceModal';
 import { EvidenceHighlightsSection } from './EvidenceHighlights';
 import { LinkEvidenceModal } from './LinkEvidenceModal';
 import { LinkTaskModal } from './LinkTaskModal';
-import { RequestTaskModal } from './RequestTaskModal';
 import { FitBadge, SectionDivider, shortId } from './detail-primitives';
 import { useFindingDetailController } from './useFindingDetailController';
 
@@ -45,12 +48,55 @@ const CONFIDENCE_LABEL: Record<NonNullable<FindingDto['confidence']>, string> = 
   medium: '중간',
   high: '높음',
 };
+
+function FindingRequestTaskDraft({
+  finding,
+  idempotencyKey,
+  markConsumed,
+  onClose,
+}: {
+  finding: FindingDto;
+  idempotencyKey: string;
+  markConsumed: () => void;
+  onClose: () => void;
+}): React.ReactElement {
+  const mutation = useRequestTaskFromFinding({
+    findingId: finding.id,
+    idempotencyKey,
+    onError: (err: ApiError) => {
+      toast.error(errorMapper(err.envelope).message);
+    },
+  });
+
+  return (
+    <TaskRequestDraftCard
+      sourceKind="Finding"
+      sourceDisplayId={finding.display_id}
+      evidenceSummaryDefault={finding.summary}
+      isSubmitting={mutation.isPending}
+      source={{ type: 'finding', id: finding.id }}
+      onClose={onClose}
+      onSubmit={(values) => {
+        mutation.mutate(values, {
+          onSuccess: () => {
+            markConsumed();
+            mutation.reset();
+            onClose();
+            toast.success('Task Request가 생성되었습니다.');
+          },
+        });
+      }}
+    />
+  );
+}
+
 // ── Full detail view ─────────────────────────────────────────────────────────
 
 interface FullFindingDetailProps {
   finding: FindingDto;
 }
 export function FullFindingDetail({ finding }: FullFindingDetailProps): React.ReactElement {
+  const { key: requestTaskKey, markConsumed: markRequestTaskConsumed } = useIdempotencyKey();
   const {
     sections: DETAIL_SECTIONS,
     scrollRef,
@@ -202,6 +248,14 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
               )}
             </FieldRow>
           </div>
+          {requestTaskOpen && (
+            <FindingRequestTaskDraft
+              finding={finding}
+              idempotencyKey={requestTaskKey}
+              markConsumed={markRequestTaskConsumed}
+              onClose={() => setRequestTaskOpen(false)}
+            />
+          )}
 
           <SectionDivider />
 
@@ -286,11 +340,6 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
         findingId={finding.id}
         open={linkEvidenceOpen}
         onClose={() => setLinkEvidenceOpen(false)}
-      />
-      <RequestTaskModal
-        finding={finding}
-        open={requestTaskOpen}
-        onClose={() => setRequestTaskOpen(false)}
       />
       <LinkTaskModal finding={finding} open={linkTaskOpen} onClose={() => setLinkTaskOpen(false)} />
     </>

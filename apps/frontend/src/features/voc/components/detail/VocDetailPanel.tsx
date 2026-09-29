@@ -24,7 +24,7 @@ import * as React from 'react';
 import { toast } from 'sonner';
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
-import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
+import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
 import { ComposerSection } from './ComposerSection';
 import { ConversationTimeline } from './ConversationTimeline';
 import { DescriptionSection } from './DescriptionSection';
@@ -163,6 +163,7 @@ export function VocDetailPanel({
 
   return (
     <FullDetailView
+      key={voc.id}
       voc={voc}
       vocId={vocId}
       onClose={onClose}
@@ -306,7 +307,7 @@ function FullDetailView({
     setDirtyConfirmOpen(false);
   }
 
-  function closeRequestTaskModal(): void {
+  function closeRequestTaskDraft(): void {
     requestTaskMutation.reset();
     setRequestTaskOpen(false);
   }
@@ -400,6 +401,26 @@ function FullDetailView({
                 void navigate({ to: '/tasks', search: { param: taskId } });
               }}
             />
+            {requestTaskOpen && (
+              <TaskRequestDraftCard
+                sourceKind="VOC"
+                sourceDisplayId={voc.display_id}
+                evidenceSummaryDefault={`VOC ${voc.display_id}: ${voc.title}`}
+                isSubmitting={requestTaskMutation.isPending}
+                source={{ type: 'voc', id: vocId }}
+                onClose={closeRequestTaskDraft}
+                onSubmit={(values) => {
+                  requestTaskMutation.mutate(values, {
+                    onSuccess: () => {
+                      markRequestTaskConsumed();
+                      setRequestTaskOpen(false);
+                      requestTaskMutation.reset();
+                      toast.success('Task Request가 생성되었습니다.');
+                    },
+                  });
+                }}
+              />
+            )}
           </div>
           {showsSimilarVocSection && (
             <div data-anchor="similar">
@@ -442,6 +463,7 @@ function FullDetailView({
                     label: 'Task 요청',
                     onClick: () => setRequestTaskOpen(true),
                     testId: 'voc-request-task-button',
+                    afterMenuClose: true,
                   },
                 ]
               : []),
@@ -463,23 +485,6 @@ function FullDetailView({
         sourceAnalyticsAreaId={voc.analytics_area_id ?? null}
         open={createFindingOpen}
         onClose={() => setCreateFindingOpen(false)}
-      />
-      <RequestTaskModal
-        open={requestTaskOpen}
-        evidenceSummaryDefault={`VOC ${voc.display_id}: ${voc.title}`}
-        isSubmitting={requestTaskMutation.isPending}
-        source={{ type: 'voc', id: vocId }}
-        onClose={closeRequestTaskModal}
-        onSubmit={(values) => {
-          requestTaskMutation.mutate(values, {
-            onSuccess: () => {
-              markRequestTaskConsumed();
-              setRequestTaskOpen(false);
-              requestTaskMutation.reset();
-              toast.success('Task Request가 생성되었습니다.');
-            },
-          });
-        }}
       />
       <PublicUpdateReviewModal voc={voc} open={reviewOpen} onOpenChange={setReviewOpen} />
     </>

@@ -101,5 +101,5 @@ export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): Reac
   }
 
   // 3. Full detail
-  return <FullFindingDetail finding={data} />;
+  return <FullFindingDetail key={data.id} finding={data} />;
 }

@@ -848,7 +848,9 @@ describe('SurveyResultsSummary', () => {
 
     expect(apiRequest).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Request Task' }));
-    await screen.findByTestId('request-task-modal');
+    const draft = await screen.findByTestId('request-task-draft');
+    expect(draft).toHaveTextContent('From FND-510 · Finding');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(
       apiRequest.mock.calls.some(
         ([method, path]) => method === 'GET' && path === `/findings/${ids.finding}`,
@@ -918,11 +920,12 @@ describe('SurveyResultsSummary', () => {
     expect(screen.getAllByRole('button', { name: 'Request Task' })).toHaveLength(2);
     if (!firstButton || !secondButton) throw new Error('expected two Request Task buttons');
     await user.click(firstButton);
-    await screen.findByTestId('request-task-modal');
+    const firstDraft = await screen.findByTestId('request-task-draft');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(
       firstFinding.summary,
     );
-    await user.click(screen.getByRole('button', { name: '취소' }));
+    await user.click(within(firstDraft).getByRole('button', { name: 'Close draft' }));
 
     await user.click(secondButton);
     await waitFor(() =>
@@ -932,7 +935,8 @@ describe('SurveyResultsSummary', () => {
         ),
       ).toBe(true),
     );
-    await screen.findByTestId('request-task-modal');
+    await screen.findByTestId('request-task-draft');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(
       secondFinding.summary,
     );
@@ -999,14 +1003,14 @@ describe('SurveyResultsSummary', () => {
       firstLoad.resolve({ data: firstFinding });
       await firstLoad.promise;
     });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
 
     await act(async () => {
       secondLoad.resolve({ data: secondFinding });
       await secondLoad.promise;
     });
-    await screen.findByRole('dialog');
-    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    await screen.findByRole('region', { name: 'Task Request draft' });
+    expect(screen.getAllByRole('region', { name: 'Task Request draft' })).toHaveLength(1);
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(
       secondFinding.summary,
     );
@@ -1057,10 +1061,10 @@ describe('SurveyResultsSummary', () => {
     const button = screen.getByRole('button', { name: 'Request Task' });
     await user.click(button);
     expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
 
     await user.click(button);
-    await screen.findByRole('dialog');
+    await screen.findByRole('region', { name: 'Task Request draft' });
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(finding.summary);
     expect(
       apiRequest.mock.calls.filter(([, path]) => path === `/findings/${ids.finding}`),
@@ -1092,7 +1096,7 @@ describe('SurveyResultsSummary', () => {
 
     await user.click(screen.getByRole('button', { name: 'Request Task' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
 
     await act(async () => {
       await queryClient.refetchQueries({ queryKey: ['finding', ids.finding], type: 'all' });
@@ -1101,7 +1105,7 @@ describe('SurveyResultsSummary', () => {
       apiRequest.mock.calls.filter(([, path]) => path === `/findings/${ids.finding}`),
     ).toHaveLength(2);
     expect(queryClient.getQueryData(['finding', ids.finding])).toEqual(finding);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Finding could not be loaded.');
   });
 });

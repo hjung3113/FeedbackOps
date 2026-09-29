@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@fops/ui';
 import { Ellipsis } from 'lucide-react';
-import type * as React from 'react';
+import * as React from 'react';
 
 // Runtime shape we narrow to.
 interface NextAction {
@@ -32,7 +32,12 @@ function isNextAction(v: unknown): v is NextAction {
 
 export interface NextActionFooterProps {
   voc: VocDetailEnvelope;
-  overflowActions?: Array<{ label: string; onClick: () => void; testId?: string }>;
+  overflowActions?: Array<{
+    label: string;
+    onClick: () => void;
+    testId?: string;
+    afterMenuClose?: boolean;
+  }>;
 }
 
 export function NextActionFooter({
@@ -42,6 +47,7 @@ export function NextActionFooter({
   const actions = voc.next_actions.filter(isNextAction);
   const primaryAction = actions.find((a) => a.available && a.primary !== false);
   const restCount = actions.filter((a) => a !== primaryAction).length;
+  const pendingAfterCloseRef = React.useRef<(() => void) | null>(null);
 
   return (
     <div className="sticky bottom-0 bg-surface-canvas border-t border-border-subtle px-4 py-3 flex items-center gap-3">
@@ -64,11 +70,27 @@ export function NextActionFooter({
               <Ellipsis className="h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent
+            align="end"
+            onCloseAutoFocus={(event) => {
+              const pending = pendingAfterCloseRef.current;
+              if (pending) {
+                pendingAfterCloseRef.current = null;
+                event.preventDefault();
+                pending();
+              }
+            }}
+          >
             {overflowActions.map((action) => (
               <DropdownMenuItem
                 key={action.label}
-                onSelect={action.onClick}
+                onSelect={() => {
+                  if (action.afterMenuClose) {
+                    pendingAfterCloseRef.current = action.onClick;
+                  } else {
+                    action.onClick();
+                  }
+                }}
                 data-testid={action.testId}
               >
                 {action.label}

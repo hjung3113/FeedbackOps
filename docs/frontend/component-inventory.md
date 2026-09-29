@@ -73,6 +73,10 @@ UserPicker
 AuditTimeline
 ```
 
+## Implemented Shared Flow Components
+
+- `TaskRequestDraftCard` — inline source request card with the contract fields Evidence Summary and Requested Outcome.
+
 ## Status And Signal Catalog
 
 ```text

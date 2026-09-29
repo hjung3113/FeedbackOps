@@ -1,7 +1,5 @@
 // VOC Cluster detail panel: detail query, role gate, Execution / Members /
-// Properties sections, CTA footer, and the cross-system modal mounts. Modal
-// hooks stay inside the modals — lifting them would fetch pickers before the
-// detail data loads and change mount behavior.
+// Properties sections, CTA footer, and cross-system flow mounts.
 
 import type { LinkedFindingDto } from '@fops/shared';
 import {
@@ -23,7 +21,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { EntityRelationRow } from '@/features/integration/components/EntityRelationRow';
-import { RequestTaskModal } from '@/features/tasks/components/RequestTaskModal';
+import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
 import { useConfirmCluster } from '@/features/voc-cluster/hooks/useConfirmCluster';
 import { useRemoveClusterMember } from '@/features/voc-cluster/hooks/useRemoveClusterMember';
 import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useRequestTaskFromCluster';
@@ -154,7 +152,7 @@ export function VocClusterDetailPanel({
     );
   }
 
-  function closeRequestTaskModal(): void {
+  function closeRequestTaskDraft(): void {
     requestTaskMutation.reset();
     setRequestTaskOpen(false);
   }
@@ -295,6 +293,26 @@ export function VocClusterDetailPanel({
                   기존 Finding 연결
                 </Button>
               </div>
+            )}
+            {canMutate && requestTaskOpen && (
+              <TaskRequestDraftCard
+                sourceKind="VOC Cluster"
+                sourceDisplayId={data.display_id}
+                evidenceSummaryDefault={data.summary ?? data.title}
+                isSubmitting={requestTaskMutation.isPending}
+                source={{ type: 'voc_cluster', id: clusterId }}
+                onClose={closeRequestTaskDraft}
+                onSubmit={(values) => {
+                  requestTaskMutation.mutate(values, {
+                    onSuccess: () => {
+                      markRequestTaskConsumed();
+                      setRequestTaskOpen(false);
+                      requestTaskMutation.reset();
+                      toast.success('Task Request가 생성되었습니다.');
+                    },
+                  });
+                }}
+              />
             )}
           </section>
 
@@ -457,25 +475,6 @@ export function VocClusterDetailPanel({
           open={linkFindingOpen}
           clusterId={clusterId}
           onClose={() => setLinkFindingOpen(false)}
-        />
-      )}
-      {canMutate && (
-        <RequestTaskModal
-          open={requestTaskOpen}
-          evidenceSummaryDefault={data.summary ?? data.title}
-          isSubmitting={requestTaskMutation.isPending}
-          source={{ type: 'voc_cluster', id: clusterId }}
-          onClose={closeRequestTaskModal}
-          onSubmit={(values) => {
-            requestTaskMutation.mutate(values, {
-              onSuccess: () => {
-                markRequestTaskConsumed();
-                setRequestTaskOpen(false);
-                requestTaskMutation.reset();
-                toast.success('Task Request가 생성되었습니다.');
-              },
-            });
-          }}
         />
       )}
     </aside>
