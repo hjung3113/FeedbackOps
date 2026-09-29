@@ -12,6 +12,8 @@
 //
 // Spec: .review/SLICE-3-16-PLAN.md §C3
 
+import { randomUUID } from 'node:crypto';
+
 import { and, eq, inArray } from 'drizzle-orm';
 
 import type {
@@ -31,11 +33,13 @@ import {
   linkAttachments,
   linkRejectedFields,
 } from '../attachments/index.js';
+import { listWorkspaceAdminActorIds } from '../auth/index.js';
 import type { RoleLevel } from '../auth/session-service.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { VocReadService } from './read-service.js';
 import {
@@ -189,6 +193,7 @@ export function createConversationService(deps: {
   checkService: CheckService;
   /** #392 — required: commands own the idempotency frame per Layer Rules. */
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
   vocReadService: VocReadService;
 }) {
   // ── postPublicUpdate ──────────────────────────────────────────────────────
@@ -481,6 +486,22 @@ export function createConversationService(deps: {
         actor_id: actor.actor_id,
         attachment_ids: input.attachment_ids ?? [],
       },
+    });
+
+    const adminActorIds = await listWorkspaceAdminActorIds(tx, actor.workspace_id);
+    const actorIds = row.ownerUserId
+      ? [...new Set([row.ownerUserId, ...adminActorIds])]
+      : adminActorIds;
+    await deps.notify(tx, 'voc.reporter_replied', {
+      workspace_id: actor.workspace_id,
+      actor_ids: actorIds,
+      subject_id: vocId,
+      correlation_id: randomUUID(),
+      detail: {
+        voc_id: vocId,
+        primary_managed_system_id: row.primaryManagedSystemId,
+      },
+      params: {},
     });
 
     // 7. Refresh envelope.
