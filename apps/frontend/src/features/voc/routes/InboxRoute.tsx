@@ -200,6 +200,10 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
     filters: apiFilters,
     sort: currentSort,
   });
+  // Captured outside JSX: property narrowing does not survive into the renderTrigger callback.
+  const deniedMsScoped =
+    isPermissionDenied(vocList.error) &&
+    typeof vocList.error.envelope.requestable_permission?.managed_system_id === 'string';
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -337,8 +341,7 @@ export function useInboxRoute(view: 'inbox' | 'my'): InboxRouteSlots {
                   category="VOC Inbox"
                   // #562 copy: a named Managed System means this selected scope is out of reach.
                   reason={
-                    typeof vocList.error.envelope.requestable_permission?.managed_system_id ===
-                    'string'
+                    deniedMsScoped
                       ? '선택한 Managed System의 VOC를 볼 권한이 없습니다.'
                       : 'VOC Inbox를 볼 권한이 없습니다. 내가 접수한 VOC는 My VOCs에서 확인할 수 있습니다.'
                   }
