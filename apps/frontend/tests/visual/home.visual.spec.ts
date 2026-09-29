@@ -1,4 +1,5 @@
 import {
+  homeInboxPopulatedVisualSnapshot,
   homeEmptyVisualSnapshot,
   homeUnscopedVisualSnapshot,
   homeVisualSnapshot,
@@ -15,6 +16,20 @@ test.describe('/home visual harness', () => {
     await page.goto('/home');
     await expect(page.getByTestId('home-screen')).toBeVisible();
     await expectVisual(page, page.locator('[data-app-frame]'), homeVisualSnapshot);
+  });
+
+  test('renders the populated inbox tab', async ({ page }) => {
+    await installMockApi(page, { home: 'populated', notifications: 'populated' });
+    await page.goto('/home?tab=inbox');
+    await expect(page.getByTestId('home-inbox-list')).toBeVisible();
+    await expect(
+      page.getByTestId('home-inbox-row-11111111-1111-4111-8111-111111111111'),
+    ).toBeVisible();
+    await expectVisual(
+      page,
+      page.locator('[data-app-frame]'),
+      homeInboxPopulatedVisualSnapshot,
+    );
   });
 
   // #280 removed the dead My Work entry point, not the panel — the panel still

@@ -377,15 +377,15 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     expect(invalidId.json<{ code: string }>().code).toBe('validation.failed');
   });
 
-  it('applies the 10-per-minute mutation tier per Actor', async () => {
+  it('applies the 60-per-minute notification_state tier per Actor', async () => {
     const row = await insertNotification(actorB, { createdAt: new Date().toISOString() });
     await migrateDb.pool.query('delete from core.rate_limits where key = $1 and route_group = $2', [
       `${actorB.workspaceId}:${actorB.id}`,
-      'mutation',
+      'notification_state',
     ]);
 
     const responses = [];
-    for (let attempt = 0; attempt < 11; attempt += 1) {
+    for (let attempt = 0; attempt < 61; attempt += 1) {
       responses.push(
         await app.inject({
           method: 'POST',
@@ -394,8 +394,38 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
         }),
       );
     }
-    expect(responses.slice(0, 10).every((response) => response.statusCode === 200)).toBe(true);
-    expect(responses[10]?.statusCode).toBe(429);
-    expect(responses[10]?.json<{ code: string }>().code).toBe('rate_limited.actor');
+    expect(responses.slice(0, 60).every((response) => response.statusCode === 200)).toBe(true);
+    expect(responses[60]?.statusCode).toBe(429);
+    expect(responses[60]?.json<{ code: string }>().code).toBe('rate_limited.actor');
+  });
+
+  it('allows notification reads when the Actor mutation bucket is exhausted', async () => {
+    const row = await insertNotification(actorA, { createdAt: new Date().toISOString() });
+    const key = `${actorA.workspaceId}:${actorA.id}`;
+    await migrateDb.pool.query('delete from core.rate_limits where key = $1', [key]);
+    await migrateDb.pool.query(
+      `insert into core.rate_limits (key, route_group, counter, expires_at)
+       values ($1, 'mutation', 10, now() + interval '1 minute')`,
+      [key],
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/notifications/${row.id}/read`,
+      headers: cookieHeader(actorA),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ id: string }>().id).toBe(row.id);
+    const rateRows = await migrateDb.pool.query<{ route_group: string; counter: number }>(
+      `select route_group, counter from core.rate_limits
+       where key = $1 and route_group in ('mutation', 'notification_state')
+       order by route_group`,
+      [key],
+    );
+    expect(rateRows.rows).toEqual([
+      { route_group: 'mutation', counter: 10 },
+      { route_group: 'notification_state', counter: 1 },
+    ]);
   });
 });

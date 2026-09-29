@@ -48,7 +48,7 @@ const response = {
 
 function installFetch(
   summary: unknown = response,
-  options: { pendingSummary?: boolean } = {},
+  options: { pendingSummary?: boolean; unreadCount?: number } = {},
 ): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -74,6 +74,15 @@ function installFetch(
       return new Response(JSON.stringify({ items: [] }), { status: 200 });
     if (url.startsWith('/permission-requests/mine'))
       return new Response(JSON.stringify({ requests: [] }), { status: 200 });
+    if (url.startsWith('/notifications'))
+      return new Response(
+        JSON.stringify({
+          items: [],
+          page: { has_more: false },
+          unread_count: options.unreadCount ?? 0,
+        }),
+        { status: 200 },
+      );
     return new Response('not mocked', { status: 500 });
   });
   globalThis.fetch = fetchMock as typeof globalThis.fetch;
@@ -92,11 +101,12 @@ function buildHarness(initialPath: string) {
 function renderHome(initialPath = '/home') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = buildHarness(initialPath);
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return { ...rendered, router };
 }
 
 function ScopeHarness(): React.ReactElement {
@@ -465,5 +475,37 @@ describe('HomeScreen route content', () => {
     expect(links).toHaveLength(2);
     expect(links[0]).toHaveAttribute('href', '/tasks?view=board&param=task-a1');
     expect(links[1]).toHaveAttribute('href', '/tasks?view=requests&param=req-b2');
+  });
+
+  it('restores the Inbox tab from /home?tab=inbox', async () => {
+    installFetch(response, { unreadCount: 3 });
+    renderHome('/home?tab=inbox');
+
+    await screen.findByTestId('home-inbox-list');
+    expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveTextContent('3');
+  });
+
+  it('switches Home tabs while retaining managedSystem and removes tab for Dashboard', async () => {
+    const managedSystemId = '33333333-3333-4333-8333-333333333333';
+    installFetch(response, { unreadCount: 4 });
+    const { router } = renderHome(`/home?managedSystem=${managedSystemId}`);
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^Inbox/ }));
+    await screen.findByTestId('home-inbox-list');
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({
+        managedSystem: managedSystemId,
+        tab: 'inbox',
+      }),
+    );
+    expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveTextContent('4');
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /^Dashboard/ }));
+    await screen.findByTestId('home-kpis');
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ managedSystem: managedSystemId }),
+    );
+    expect(screen.getByTestId('home-action-queues')).toBeInTheDocument();
   });
 });

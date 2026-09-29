@@ -24,7 +24,7 @@ export const notificationRoutes: FastifyPluginAsync<{
   workspaceId: string;
   rateLimitConfig?: {
     read?: Record<string, unknown>;
-    mutation?: Record<string, unknown>;
+    notificationState?: Record<string, unknown>;
   };
 }> = async (app, opts) => {
   app.get(
@@ -61,8 +61,8 @@ export const notificationRoutes: FastifyPluginAsync<{
     '/notifications/:id/read',
     {
       preHandler: [requireSession(opts.sessionService), requireWorkspace(opts.workspaceId)],
-      ...(opts.rateLimitConfig?.mutation
-        ? { config: { rateLimit: opts.rateLimitConfig.mutation as never } }
+      ...(opts.rateLimitConfig?.notificationState
+        ? { config: { rateLimit: opts.rateLimitConfig.notificationState as never } }
         : {}),
     },
     async (req, reply) => {
@@ -87,8 +87,8 @@ export const notificationRoutes: FastifyPluginAsync<{
     '/notifications/:id/archive',
     {
       preHandler: [requireSession(opts.sessionService), requireWorkspace(opts.workspaceId)],
-      ...(opts.rateLimitConfig?.mutation
-        ? { config: { rateLimit: opts.rateLimitConfig.mutation as never } }
+      ...(opts.rateLimitConfig?.notificationState
+        ? { config: { rateLimit: opts.rateLimitConfig.notificationState as never } }
         : {}),
     },
     async (req, reply) => {
