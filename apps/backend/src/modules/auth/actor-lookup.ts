@@ -32,3 +32,11 @@ export async function findWorkspaceActor(
   }
   return { id: row.id, role_level: row.role_level };
 }
+
+export async function listWorkspaceAdminActorIds(tx: Tx, workspaceId: string): Promise<string[]> {
+  const rows = await tx
+    .select({ id: actors.id })
+    .from(actors)
+    .where(and(eq(actors.workspaceId, workspaceId), eq(actors.roleLevel, 'admin')));
+  return rows.map((row) => row.id);
+}

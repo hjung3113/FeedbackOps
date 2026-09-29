@@ -48,6 +48,7 @@ import { createMilestonesService, milestonesRoutes } from './modules/milestones/
 import { type NavCountsService, createNavCountsService, navRoutes } from './modules/nav/index.js';
 import {
   createNoopNotificationDispatcher,
+  createNotificationNotifier,
   createNotificationService,
   createPgBossNotificationDispatcher,
   notificationRoutes,
@@ -364,17 +365,23 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   const checkService = createCheckService({ db: dbHandle.db });
   const auditService = createAuditService();
   const idempotencyService = createIdempotencyService();
+  const notificationDispatcher =
+    opts.notificationDispatcher ??
+    (boss ? createPgBossNotificationDispatcher(boss) : createNoopNotificationDispatcher());
+  const notify = createNotificationNotifier(notificationDispatcher);
   const requestService = createRequestService({
     db: dbHandle.db,
     checkService,
     auditService,
     idempotencyService,
+    notify,
   });
   const decisionService = createDecisionService({
     db: dbHandle.db,
     checkService,
     auditService,
     idempotencyService,
+    notify,
     resolveWorkspaceSettings: getResolvedWorkspaceSettings,
   });
   await app.register(permissionsRoutes, {
@@ -492,6 +499,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     auditService,
     checkService,
     idempotencyService,
+    notify,
   });
   await app.register(taskRequestsRoutes, {
     sessionService,
@@ -518,6 +526,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     checkService,
     idempotencyService,
     vocReadService,
+    notify,
     ...(boss ? { boss } : {}),
   });
   await app.register(tasksRoutes, {
@@ -547,13 +556,6 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     },
   });
 
-  // Keep the dispatcher seam available for the next notification call-site
-  // slices without coupling domain services into this foundation change.
-  const notificationDispatcher =
-    opts.notificationDispatcher ??
-    (boss
-      ? createPgBossNotificationDispatcher(boss)
-      : createNoopNotificationDispatcher());
   const notificationService = createNotificationService({
     db: dbHandle.db,
     notificationDispatcher,

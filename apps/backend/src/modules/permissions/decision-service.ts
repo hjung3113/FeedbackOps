@@ -2,6 +2,8 @@
 // grant/deny rows consumed by check-service; they never execute the originally
 // blocked domain action.
 
+import { randomUUID } from 'node:crypto';
+
 import { and, eq, sql } from 'drizzle-orm';
 import type { DatabaseError } from 'pg';
 
@@ -24,6 +26,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import { getResolvedWorkspaceSettingsForUpdate } from '../workspace-settings/index.js';
 import type { ActorContext, CheckService } from './check-service.js';
 
@@ -32,6 +35,7 @@ export interface DecisionServiceDeps {
   checkService: CheckService;
   auditService: AuditService;
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
   resolveWorkspaceSettings: (
     dbOrTx: Db | Tx,
     workspaceId: string,
@@ -249,6 +253,17 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           summary: `Permission request ${action.replaceAll('_', ' ')}`,
           detail,
         });
+
+        if (action === 'approve' || action === 'reject') {
+          await deps.notify(tx, 'permission_request.decided', {
+            workspace_id: actor.workspace_id,
+            actor_ids: [request.requesterActorId],
+            subject_id: request.id,
+            correlation_id: randomUUID(),
+            detail: { permission_request_id: request.id },
+            params: { outcome: action === 'approve' ? 'approved' : 'rejected' },
+          });
+        }
 
         return {
           status: 200,

@@ -7,17 +7,24 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../../../config.js';
 import { type DbHandle, createDb } from '../../../db/client.js';
+import { initBoss, shutdownBoss } from '../../../lib/jobs.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
 import { SESSION_COOKIE_NAME, loginAs } from '../../../test-support/auth.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
+import { createFailAfterEnqueueNotificationDispatcher } from '../../../test-support/fail-after-enqueue-dispatcher.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
+import {
+  createRecordingNotificationDispatcher,
+  NOTIFICATION_DISPATCH_QUEUE,
+  type RecordingNotificationDispatcher,
+} from '../../notifications/port.js';
 import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
 import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
 import { insertTaskRow } from './_seed-helpers.js';
@@ -33,17 +40,36 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   let dbHandle: DbHandle;
   let migrateHandle: DbHandle;
   let app: FastifyInstance;
+  let rollbackApp: FastifyInstance;
+  let boss: Awaited<ReturnType<typeof initBoss>>;
   let adminCookie: string;
   let userCookie: string;
   let adminActorId: string;
   let userActorId: string;
+  let notifications: RecordingNotificationDispatcher;
+  let failAfterEnqueue: ReturnType<typeof createFailAfterEnqueueNotificationDispatcher>;
+  const foreignActorIds: string[] = [];
+  const foreignWorkspaceIds: string[] = [];
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
     migrateHandle = createDb(MIGRATE_URL);
-    app = await buildServer({ config: loadConfig(), dbHandle });
+    boss = await initBoss({ connectionString: APP_URL, log: { info() {}, warn() {}, error() {} } });
+    notifications = createRecordingNotificationDispatcher();
+    failAfterEnqueue = createFailAfterEnqueueNotificationDispatcher(boss);
+    app = await buildServer({
+      config: loadConfig(),
+      dbHandle,
+      notificationDispatcher: notifications,
+    });
+    rollbackApp = await buildServer({
+      config: loadConfig(),
+      dbHandle,
+      notificationDispatcher: failAfterEnqueue.dispatcher,
+    });
     await app.ready();
+    await rollbackApp.ready();
 
     adminCookie = await loginAs(app, 'mock-admin-1');
     userCookie = await loginAs(app, 'mock-user-1');
@@ -62,14 +88,32 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
 
   beforeEach(async () => {
     await cleanupFixtures();
+    notifications.jobs.splice(0);
+    failAfterEnqueue.attemptedPayloads.length = 0;
   });
 
+  afterEach(cleanupFailedNotificationJobs);
+
   afterAll(async () => {
+    await cleanupFailedNotificationJobs();
     await cleanupFixtures();
+    await shutdownBoss(boss).catch(() => {});
+    await rollbackApp?.close();
     await app?.close();
     await dbHandle?.close();
     await migrateHandle?.close();
   });
+
+  async function cleanupFailedNotificationJobs(): Promise<void> {
+    const correlationIds =
+      failAfterEnqueue?.attemptedPayloads.map((payload) => payload.correlation_id) ?? [];
+    if (!migrateHandle || correlationIds.length === 0) return;
+    await migrateHandle.pool.query(
+      `delete from pgboss.job
+        where name = $1 and data ->> 'correlation_id' = any($2::text[])`,
+      [NOTIFICATION_DISPATCH_QUEUE, correlationIds],
+    );
+  }
 
   async function cleanupFixtures(): Promise<void> {
     if (!migrateHandle) return;
@@ -113,6 +157,18 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
           )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
+    if (foreignActorIds.length > 0) {
+      await migrateHandle.pool.query('delete from core.actors where id = any($1::uuid[])', [
+        foreignActorIds,
+      ]);
+      foreignActorIds.length = 0;
+    }
+    if (foreignWorkspaceIds.length > 0) {
+      await migrateHandle.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
+        foreignWorkspaceIds,
+      ]);
+      foreignWorkspaceIds.length = 0;
+    }
     // Milestones before their Managed Systems; after tasks (FK RESTRICT).
     await migrateHandle.pool.query(
       `delete from task.milestones
@@ -302,8 +358,9 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     taskRequestId: string,
     payload: Record<string, unknown>,
     idempotencyKey = randomUUID(),
+    targetApp: FastifyInstance = app,
   ) {
-    return app.inject({
+    return targetApp.inject({
       method: 'POST',
       url: `/task-requests/${taskRequestId}/convert`,
       headers: {
@@ -429,6 +486,22 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       primary_managed_system_id: request.msId,
       source_task_request_id: request.id,
     });
+    expect(notifications.jobs).toEqual([
+      expect.objectContaining({
+        workspace_id: WORKSPACE_ID,
+        actor_id: userActorId,
+        event_type: 'task.assigned_to_me',
+        subject_type: 'task',
+        subject_id: body.id,
+        summary: '작업 담당자로 지정되었습니다.',
+        detail: {
+          task_id: body.id,
+          primary_managed_system_id: request.msId,
+          source_task_request_id: request.id,
+        },
+        correlation_id: expect.any(String),
+      }),
+    ]);
 
     const taskRequest = await dbHandle.pool.query<{ status: string }>(
       'select status from task_request.task_requests where id = $1',
@@ -466,6 +539,80 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       source_task_request_id: request.id,
       primary_managed_system_id: request.msId,
     });
+  });
+
+  it('conversion without an assignee creates no assignment notification', async () => {
+    const request = await seedApprovedTaskRequest();
+
+    const response = await convert(adminCookie, request.id, { title: 'Unassigned task' });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json<{ assignee_actor_id: string | null }>().assignee_actor_id).toBeNull();
+    expect(notifications.jobs).toEqual([]);
+  });
+
+  it('does not notify an assignee outside the workspace', async () => {
+    const foreignWorkspace = await migrateHandle.pool.query<{ id: string }>(
+      'insert into core.workspaces (name) values ($1) returning id',
+      [`${SLUG_PREFIX}-foreign-${randomUUID()}`],
+    );
+    const foreignWorkspaceId = foreignWorkspace.rows[0]?.id;
+    if (!foreignWorkspaceId) throw new Error('foreign workspace seed failed');
+    foreignWorkspaceIds.push(foreignWorkspaceId);
+    const foreignActor = await migrateHandle.pool.query<{ id: string }>(
+      `insert into core.actors
+         (workspace_id, external_id, email, display_name, role_level, actor_type)
+       values ($1, $2, $3, 'Foreign assignee', 'developer', 'internal_member')
+       returning id`,
+      [
+        foreignWorkspaceId,
+        `${SLUG_PREFIX}-foreign-${randomUUID()}`,
+        `${randomUUID()}@example.test`,
+      ],
+    );
+    const foreignActorId = foreignActor.rows[0]?.id;
+    if (!foreignActorId) throw new Error('foreign actor seed failed');
+    foreignActorIds.push(foreignActorId);
+    const request = await seedApprovedTaskRequest();
+
+    const response = await convert(adminCookie, request.id, {
+      title: 'Foreign assignee task',
+      assignee_actor_id: foreignActorId,
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(notifications.jobs).toEqual([]);
+  });
+
+  it('rolls back task conversion and audit after successful notification enqueue', async () => {
+    const request = await seedApprovedTaskRequest();
+
+    const response = await convert(
+      adminCookie,
+      request.id,
+      { title: 'Transactional assignment', assignee_actor_id: userActorId },
+      randomUUID(),
+      rollbackApp,
+    );
+
+    expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    expect(response.statusCode).toBeLessThan(600);
+    expect(failAfterEnqueue.attemptedPayloads).toHaveLength(1);
+    const [payload] = failAfterEnqueue.attemptedPayloads;
+    if (!payload) throw new Error('notification enqueue payload missing');
+    expect(payload).toMatchObject({
+      actor_id: userActorId,
+      event_type: 'task.assigned_to_me',
+      subject_type: 'task',
+    });
+    await expectNoConversionSideEffects(request.id);
+
+    const jobs = await migrateHandle.pool.query(
+      `select 1 from pgboss.job
+        where name = $1 and data ->> 'correlation_id' = $2`,
+      [NOTIFICATION_DISPATCH_QUEUE, payload.correlation_id],
+    );
+    expect(jobs.rowCount).toBe(0);
   });
 
   it('AC-C7a: conversion projects the exact new task id onto its Finding', async () => {
@@ -1132,6 +1279,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       task_id: taskId,
       task_request_id: request.id,
     });
+    expect(notifications.jobs).toEqual([]);
   });
 
   it('link-task denies an existing task from another Managed System', async () => {

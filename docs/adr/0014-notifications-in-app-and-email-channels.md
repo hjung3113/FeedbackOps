@@ -135,3 +135,8 @@ insert in one transaction while calling the channel. If email succeeds but
 the transaction fails before commit, retry may deliver the email again.
 This slice provides only the Pino-backed `MockEmailChannel`; SMTP remains a
 later slice, and selecting `smtp` fails with a clear not-configured error.
+
+Issue #509 part 2b wires the Task Request decision, Task conversion assignment,
+and Permission Request submission and decision producers described in the
+notifications API contract. `notify()` filters recipients to Actors in the
+event workspace before enqueueing.

@@ -180,6 +180,51 @@ describe.skipIf(!runIntegration)('notification dispatch integration', () => {
     expect(emptyJobs.rowCount).toBe(0);
   });
 
+  it('filters recipients to workspace members and accepts an all-foreign list', async () => {
+    const notify = createNotificationNotifier(createPgBossNotificationDispatcher(boss));
+    const member = actorIds[0] ?? '';
+    const foreign = randomUUID();
+    const mixed = notificationPayload('task_request.approved', member);
+
+    await appDb.db.transaction(async (tx) => {
+      await notify(tx, 'task_request.approved', {
+        workspace_id: WORKSPACE_ID,
+        actor_ids: [member, foreign],
+        subject_id: mixed.subject_id,
+        correlation_id: mixed.correlation_id,
+        params: {},
+      });
+    });
+
+    const mixedJobs = await migrateDb.pool.query<{ data: NotificationJobPayload }>(
+      `select data from pgboss.job_common
+        where name = 'notifications.dispatch' and data ->> 'correlation_id' = $1`,
+      [mixed.correlation_id],
+    );
+    expect(mixedJobs.rows.map((row) => row.data.actor_id)).toEqual([member]);
+
+    const noMembers = notificationPayload('task_request.approved', foreign);
+    const unknown = randomUUID();
+    await appDb.db.transaction(async (tx) => {
+      await expect(
+        notify(tx, 'task_request.approved', {
+          workspace_id: WORKSPACE_ID,
+          actor_ids: [foreign, unknown],
+          subject_id: noMembers.subject_id,
+          correlation_id: noMembers.correlation_id,
+          params: {},
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    const allForeignJobs = await migrateDb.pool.query(
+      `select 1 from pgboss.job_common
+        where name = 'notifications.dispatch' and data ->> 'correlation_id' = $1`,
+      [noMembers.correlation_id],
+    );
+    expect(allForeignJobs.rowCount).toBe(0);
+  });
+
   it('deduplicates in-app rows and claims an email channel only once', async () => {
     const payload = notificationPayload('task_request.rejected');
     const sent: NotificationEmailEnvelope[] = [];

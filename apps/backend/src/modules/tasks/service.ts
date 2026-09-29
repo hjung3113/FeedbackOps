@@ -37,6 +37,7 @@ import { checkFindingManage, hasElevatedFindingRole } from '../findings/authoriz
 import { linkTaskToFinding } from '../findings/commands.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import { lockMilestone } from '../milestones/index.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   type TaskRequestRow,
@@ -73,6 +74,7 @@ export interface TasksServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
   /** Narrow read seam (#378): Task detail resolves its source VOC's visibility
    *  verdict through the canonical VOC read-authority path — never a copied
    *  predicate (see #423) and never a VOC repo import (module-seams guard). */
@@ -695,6 +697,21 @@ export function createTasksService(deps: TasksServiceDeps) {
               preserved_links: preservedLinks.map((link) => link.id),
             },
           });
+
+          if (task.assignee_actor_id) {
+            await deps.notify(tx, 'task.assigned_to_me', {
+              workspace_id: args.actor.workspace_id,
+              actor_ids: [task.assignee_actor_id],
+              subject_id: task.id,
+              correlation_id: randomUUID(),
+              detail: {
+                task_id: task.id,
+                primary_managed_system_id: task.primary_managed_system_id,
+                source_task_request_id: taskRequest.id,
+              },
+              params: {},
+            });
+          }
 
           return { status: 201, body: taskToDto(task) };
         },

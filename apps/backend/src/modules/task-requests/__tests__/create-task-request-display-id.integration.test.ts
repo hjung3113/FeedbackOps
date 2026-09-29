@@ -36,6 +36,7 @@ describe.skipIf(!runIntegration)('task request display_id assignment (#142)', ()
       auditService: createAuditService(),
       checkService: createCheckService({ db: dbHandle.db }),
       idempotencyService: createIdempotencyService(),
+      notify: async () => {},
     });
 
     await migrateHandle.pool.query(`insert into core.workspaces (id, name) values ($1, $2)`, [

@@ -1,3 +1,5 @@
+import { sql } from 'drizzle-orm';
+
 import {
   type NotificationEventType,
   type NotificationSubjectType,
@@ -16,7 +18,15 @@ export interface NotificationEnvelope<K extends NotificationEventType> {
   params: NotificationSummaryParamsByEvent[K];
 }
 
-export function createNotificationNotifier(dispatcher: NotificationDispatcher) {
+export type NotificationNotifier = <K extends NotificationEventType>(
+  tx: NotificationTx,
+  eventType: K,
+  envelope: NotificationEnvelope<K>,
+) => Promise<void>;
+
+export function createNotificationNotifier(
+  dispatcher: NotificationDispatcher,
+): NotificationNotifier {
   return async function notify<K extends NotificationEventType>(
     tx: NotificationTx,
     eventType: K,
@@ -29,12 +39,22 @@ export function createNotificationNotifier(dispatcher: NotificationDispatcher) {
     const recipientIds = [...new Set(envelope.actor_ids)];
     if (recipientIds.length === 0) return;
 
+    const { rows: memberRows } = await tx.execute(
+      sql`select id from core.actors where workspace_id = ${envelope.workspace_id} and id in (${sql.join(
+        recipientIds.map((actorId) => sql`${actorId}`),
+        sql`, `,
+      )})`,
+    );
+    const workspaceMemberIds = new Set<string>(memberRows.map((row: { id: string }) => row.id));
+    const workspaceRecipientIds = recipientIds.filter((actorId) => workspaceMemberIds.has(actorId));
+    if (workspaceRecipientIds.length === 0) return;
+
     const definition = notificationCatalogue[eventType] as {
       subject_type: NotificationSubjectType;
       summary: (params: NotificationSummaryParamsByEvent[K]) => string;
     };
     const summary = definition.summary(envelope.params);
-    for (const actorId of recipientIds) {
+    for (const actorId of workspaceRecipientIds) {
       await dispatcher.enqueue(tx, {
         workspace_id: envelope.workspace_id,
         actor_id: actorId,

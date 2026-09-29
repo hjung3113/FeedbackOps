@@ -1,11 +1,16 @@
 import { notificationEventTypeSchema } from '@fops/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { NotificationTx } from '../port.js';
 
 import { notificationCatalogue } from '../catalogue.js';
 import { createNotificationNotifier } from '../dispatcher.js';
 import { createRecordingNotificationDispatcher } from '../port.js';
+
+function txWithActorRows(rows: Array<{ id: string }>) {
+  const execute = vi.fn().mockResolvedValue({ rows });
+  return { tx: { execute } as unknown as NotificationTx };
+}
 
 describe('notification catalogue', () => {
   it('keeps the catalogue keys identical to the shared event-type enum the frontend parses', () => {
@@ -103,5 +108,30 @@ describe('notification catalogue', () => {
     await expect(
       notify(tx, 'unsupported.event' as never, { ...base, actor_ids: ['actor'] } as never),
     ).rejects.toThrow("Unknown notification event_type 'unsupported.event'.");
+  });
+
+  it('enqueues only workspace members and silently drops unknown or foreign recipients', async () => {
+    const dispatcher = createRecordingNotificationDispatcher();
+    const notify = createNotificationNotifier(dispatcher);
+    const memberTx = txWithActorRows([{ id: 'member' }]);
+    const envelope = {
+      workspace_id: 'a9f5593a-cfc7-472d-a008-cf8d965371c6',
+      actor_ids: ['member', 'foreign-or-unknown', 'member'],
+      subject_id: '2dd696db-60bf-4ab1-b5df-76c028e7020a',
+      correlation_id: '6db8368e-dd72-49d2-9abc-27091ac16eca',
+      params: {},
+    };
+
+    await expect(notify(memberTx.tx, 'task.assigned_to_me', envelope)).resolves.toBeUndefined();
+    expect(dispatcher.jobs.map((job) => job.actor_id)).toEqual(['member']);
+
+    const noMembersTx = txWithActorRows([]);
+    await expect(
+      notify(noMembersTx.tx, 'task.assigned_to_me', {
+        ...envelope,
+        actor_ids: ['foreign', 'unknown'],
+      }),
+    ).resolves.toBeUndefined();
+    expect(dispatcher.jobs).toHaveLength(1);
   });
 });
