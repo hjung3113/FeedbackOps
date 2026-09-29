@@ -273,4 +273,3 @@ apps/backend/src/modules/voc/read/repository-conversation.ts lint/style/noNonNul
 apps/backend/src/modules/voc/read/list.ts lint/correctness/noUnusedVariables -- moved verbatim from voc/read-service.ts (pre-existing 1x on develop; #517 Phase 3)
 apps/backend/src/modules/voc/read/scope.ts lint/style/noNonNullAssertion -- moved verbatim from voc/read-service.ts (pre-existing 1x on develop; #517 Phase 3)
 apps/backend/src/modules/voc/conversation/frame.ts lint/style/noNonNullAssertion -- moved verbatim from voc/conversation-service.ts (pre-existing on develop; #517 Phase 3)
-apps/backend/src/modules/voc/conversation-service.ts lint/style/noNonNullAssertion -- pre-existing on develop (2x -> 1x after #517 Phase 3 moved one into conversation/frame.ts)
