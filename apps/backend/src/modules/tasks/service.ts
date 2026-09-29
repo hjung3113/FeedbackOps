@@ -24,6 +24,7 @@ import { HttpError } from '../../lib/errors.js';
 import { encodeCommentCursor } from '../../lib/pg-timestamp.js';
 import { sanitizeRichContentOrThrow } from '../../lib/rich-content/sanitize-or-throw.js';
 import { lockAnalyticsArea } from '../analytics-areas/index.js';
+import { findWorkspaceActor } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
@@ -647,6 +648,17 @@ export function createTasksService(deps: TasksServiceDeps) {
                 'milestone does not belong to the task request managed system',
                 { fields: [{ path: ['milestone_id'], code: 'out_of_scope' }] },
               );
+            }
+          }
+
+          // #554 — reject unknown or foreign-workspace assignees before insertTask.
+          if (args.input.assignee_actor_id != null) {
+            const assignee = await findWorkspaceActor(tx, {
+              workspaceId: args.actor.workspace_id,
+              actorId: args.input.assignee_actor_id,
+            });
+            if (!assignee) {
+              throw new HttpError('not_found.record', 'assignee actor not found');
             }
           }
 

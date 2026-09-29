@@ -114,6 +114,7 @@ validation errors:
   - archived Analytics Area: 409 conflict.parent_archived with parent_archived on analytics_area_id
   - unknown or cross-workspace Milestone: 404 not_found.record
   - Milestone on another Managed System: 422 validation.failed with out_of_scope on milestone_id
+  - unknown or cross-workspace assignee_actor_id: 404 not_found.record
 side effects:
   - create task.tasks with status backlog and source_task_request_id
   - create active entity link (task_request, task, converted_to)
