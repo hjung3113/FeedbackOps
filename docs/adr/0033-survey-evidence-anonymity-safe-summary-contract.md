@@ -95,6 +95,6 @@ and grants no operator read access. Self-history reads are not audited because
 the reader is the data subject. The projection omits response IDs as defense in
 depth: it adds no new respondent-to-response link. (At the database-role level
 `fops_app` can already join `survey_response_submitted` audit rows to excerpt
-approvals; that pre-existing path is tracked in #ISSUE.) All other
+approvals; that pre-existing path is tracked in #569.) All other
 personal-response reads and exports retain the explicit capability requirements
 in this ADR.
