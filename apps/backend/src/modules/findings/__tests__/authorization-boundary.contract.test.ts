@@ -168,6 +168,7 @@ describe.skipIf(!runIntegration)('Finding authorization consumer contract (#169)
       auditService,
       checkService,
       idempotencyService,
+      notify: async () => {},
       vocReadService: {
         // #378 read seam. Only reached by getTask after every permission
         // gate passes; this suite only asserts rejections, so the stub is
@@ -180,6 +181,7 @@ describe.skipIf(!runIntegration)('Finding authorization consumer contract (#169)
       auditService,
       checkService,
       idempotencyService,
+      notify: async () => {},
     });
 
     await migrateHandle.pool.query('insert into core.workspaces (id, name) values ($1, $2)', [

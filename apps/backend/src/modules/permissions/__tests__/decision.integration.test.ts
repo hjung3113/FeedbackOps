@@ -8,6 +8,7 @@ import { type DbHandle, createDb } from '../../../db/client.js';
 import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { insertDevActor } from '../../../test-support/actor-fixtures.js';
+import { createRecordingNotificationDispatcher } from '../../notifications/port.js';
 import { createCheckService } from '../check-service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -43,12 +44,17 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   let adminId: string;
   let requesterId: string;
   let requesterExternalId: string;
+  const notifications = createRecordingNotificationDispatcher();
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     db = createDb(APP_URL);
     migrateDb = createDb(MIGRATE_URL);
-    app = await buildServer({ config: loadConfig(), dbHandle: db });
+    app = await buildServer({
+      config: loadConfig(),
+      dbHandle: db,
+      notificationDispatcher: notifications,
+    });
     await app.ready();
     adminCookie = await loginAs(app, 'mock-admin-1');
     const admin = await db.pool.query<{ id: string }>(
@@ -60,6 +66,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   });
 
   beforeEach(async () => {
+    notifications.jobs.splice(0);
     await db.pool.query('delete from core.idempotency_keys');
     await db.pool.query('delete from core.rate_limits');
     const actor = await insertDevActor(db, WORKSPACE_ID, `perm-decision-${randomUUID()}`);
@@ -289,6 +296,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       [id],
     );
     expect(Number(audit.rows[0]?.count)).toBe(1);
+    expect(notifications.jobs).toEqual([]);
   });
 
   it('reject and need-more-info only transition the request and mint no grant', async () => {
@@ -321,7 +329,48 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
         { event_type: 'permission_needs_more_info', count: '1' },
       ]),
     );
+    expect(notifications.jobs).toMatchObject([
+      expect.objectContaining({
+        workspace_id: WORKSPACE_ID,
+        actor_id: requesterId,
+        event_type: 'permission_request.decided',
+        subject_id: rejected,
+        summary: '권한 요청이 반려되었습니다.',
+        detail: { permission_request_id: rejected },
+        correlation_id: expect.any(String),
+      }),
+    ]);
   });
+
+  it.each([
+    ['approve', 'approved', '권한 요청이 승인되었습니다.'],
+    ['reject', 'rejected', '권한 요청이 반려되었습니다.'],
+  ] as const)(
+    'notifies the requester for permission %s with outcome %s',
+    async (action, outcome, summary) => {
+      const requestId = await seedRequest();
+      const response = await decide(
+        requestId,
+        action,
+        action === 'reject' ? { reason: 'Not justified.' } : {},
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(notifications.jobs).toEqual([
+        expect.objectContaining({
+          workspace_id: WORKSPACE_ID,
+          actor_id: requesterId,
+          event_type: 'permission_request.decided',
+          subject_type: 'permission_request',
+          subject_id: requestId,
+          summary,
+          detail: { permission_request_id: requestId },
+          correlation_id: expect.any(String),
+        }),
+      ]);
+      expect(response.json<{ status: string }>().status).toBe(outcome);
+    },
+  );
 
   it('denies only the managed-system scope requested', async () => {
     const systems = await Promise.all(
@@ -397,6 +446,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     const stale = await decide(approved, 'reject', { reason: 'late' });
     expect(stale.statusCode).toBe(409);
     expect(stale.json().code).toBe('conflict.stale_write');
+    expect(notifications.jobs).toHaveLength(1);
   });
 
   it('returns the specific duplicate-grant conflict', async () => {
@@ -407,6 +457,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     expect((await decide(duplicate, 'approve', {})).json().code).toBe(
       'conflict.capability_already_granted',
     );
+    expect(notifications.jobs).toHaveLength(1);
   });
 
   it('returns the specific duplicate-deny conflict', async () => {
@@ -426,6 +477,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     const first = await decide(keyed, 'approve', {}, adminCookie, key);
     const replay = await decide(keyed, 'approve', {}, adminCookie, key);
     expect(replay.json()).toEqual(first.json());
+    expect(notifications.jobs).toHaveLength(1);
     const grantCount = await db.pool.query<{ count: string }>(
       `select count(*) from permission.permission_grants where actor_id = $1 and capability = 'finding.manage'`,
       [requesterId],

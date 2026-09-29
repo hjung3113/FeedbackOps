@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   type ApproveTaskRequestRequest,
   type CreateTaskRequestFromFindingRequest,
@@ -23,6 +25,7 @@ import {
 } from '../entity-links/index.js';
 import { checkFindingManage, hasElevatedFindingRole } from '../findings/authorization.js';
 import { lockFindingForUpdate as lockFindingById } from '../findings/index.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import { lockVocClusterById } from '../voc-clusters/index.js';
 import { selectVocForUpdate } from '../voc/index.js';
@@ -46,6 +49,7 @@ export interface TaskRequestsServiceDeps {
   auditService: AuditService;
   checkService: CheckService;
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
 }
 
 type TaskRequestDecisionAction = 'approve' | 'reject' | 'request_more_evidence';
@@ -72,6 +76,15 @@ const EVENT_TYPE_BY_ACTION: Record<
   approve: 'task_request_approved',
   reject: 'task_request_rejected',
   request_more_evidence: 'task_request_needs_more_evidence',
+};
+
+const NOTIFICATION_EVENT_BY_ACTION: Record<
+  TaskRequestDecisionAction,
+  'task_request.approved' | 'task_request.rejected' | 'task_request.needs_more_evidence'
+> = {
+  approve: 'task_request.approved',
+  reject: 'task_request.rejected',
+  request_more_evidence: 'task_request.needs_more_evidence',
 };
 
 function taskRequestToDto(
@@ -617,6 +630,20 @@ export function createTaskRequestsService(deps: TaskRequestsServiceDeps) {
             summary: 'Task Request review decision recorded',
             detail,
           });
+
+          if (taskRequest.requester_actor_id) {
+            await deps.notify(tx, NOTIFICATION_EVENT_BY_ACTION[args.action], {
+              workspace_id: args.actor.workspace_id,
+              actor_ids: [taskRequest.requester_actor_id],
+              subject_id: taskRequest.id,
+              correlation_id: randomUUID(),
+              detail: {
+                task_request_id: taskRequest.id,
+                primary_managed_system_id: taskRequest.primary_managed_system_id,
+              },
+              params: {},
+            });
+          }
 
           return { status: 200, body: taskRequestToDto(updated) };
         },

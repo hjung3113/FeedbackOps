@@ -1,1 +1,5 @@
-export { findWorkspaceActor, type WorkspaceActor } from './actor-lookup.js';
+export {
+  findWorkspaceActor,
+  listWorkspaceAdminActorIds,
+  type WorkspaceActor,
+} from './actor-lookup.js';

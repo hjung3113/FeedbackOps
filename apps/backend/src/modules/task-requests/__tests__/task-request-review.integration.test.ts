@@ -17,6 +17,11 @@ import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables } from '../../../test-support/voc-fixtures.js';
+import {
+  createRecordingNotificationDispatcher,
+  type NotificationJobPayload,
+  type RecordingNotificationDispatcher,
+} from '../../notifications/port.js';
 import { insertTaskRequestRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
@@ -34,12 +39,26 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
   let userCookie: string;
   let adminActorId: string;
   let userActorId: string;
+  let notifications: RecordingNotificationDispatcher;
+  let failNotificationEnqueue = false;
+  const notificationAttempts: NotificationJobPayload[] = [];
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
     migrateHandle = createDb(MIGRATE_URL);
-    app = await buildServer({ config: loadConfig(), dbHandle });
+    notifications = createRecordingNotificationDispatcher();
+    const recordNotification = notifications.enqueue.bind(notifications);
+    notifications.enqueue = async (tx, payload) => {
+      notificationAttempts.push(payload);
+      if (failNotificationEnqueue) throw new Error('notification enqueue unavailable');
+      await recordNotification(tx, payload);
+    };
+    app = await buildServer({
+      config: loadConfig(),
+      dbHandle,
+      notificationDispatcher: notifications,
+    });
     await app.ready();
 
     adminCookie = await loginAs(app, 'mock-admin-1');
@@ -59,6 +78,9 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
 
   beforeEach(async () => {
     await cleanupFixtures();
+    notifications.jobs.splice(0);
+    notificationAttempts.length = 0;
+    failNotificationEnqueue = false;
   });
 
   afterAll(async () => {
@@ -207,71 +229,89 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(denied.json<{ code: string }>().code).toBe('permission.denied');
   });
 
-  it('approve: pending_review -> approved records audit and does not create a Task row', async () => {
-    const request = await seedTaskRequest();
+  it.each([
+    [
+      'approve',
+      { reason: 'Ready for execution.' },
+      'approved',
+      'task_request.approved',
+      'task_request_approved',
+      '작업 요청이 승인되었습니다.',
+    ],
+    [
+      'reject',
+      { reason: 'Not actionable yet.' },
+      'rejected',
+      'task_request.rejected',
+      'task_request_rejected',
+      '작업 요청이 반려되었습니다.',
+    ],
+    [
+      'request-more-evidence',
+      { note: 'Please attach the source evidence.' },
+      'needs_more_evidence',
+      'task_request.needs_more_evidence',
+      'task_request_needs_more_evidence',
+      '작업 요청에 추가 근거가 필요합니다.',
+    ],
+  ] as const)(
+    'notifies the creator after Task Request %s',
+    async (action, payload, status, eventType, auditEventType, summary) => {
+      const request = await seedTaskRequest();
+      const response = await decide(adminCookie, request.id, action, payload);
 
-    const res = await decide(adminCookie, request.id, 'approve', {
-      reason: 'Ready for execution.',
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({
-      id: request.id,
-      status: 'approved',
-      reviewer_actor_id: adminActorId,
-      decision_reason: 'Ready for execution.',
-    });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ id: request.id, status });
+      expect(notifications.jobs).toEqual([
+        expect.objectContaining({
+          workspace_id: WORKSPACE_ID,
+          actor_id: userActorId,
+          event_type: eventType,
+          subject_type: 'task_request',
+          subject_id: request.id,
+          summary,
+          detail: {
+            task_request_id: request.id,
+            primary_managed_system_id: request.msId,
+          },
+          correlation_id: expect.any(String),
+        }),
+      ]);
 
-    const audit = await dbHandle.pool.query<{ detail: Record<string, unknown> }>(
-      `select detail
-         from core.audit_log
-        where workspace_id = $1
-          and event_type = 'task_request_approved'
-          and subject_id = $2`,
-      [WORKSPACE_ID, request.id],
-    );
-    expect(audit.rowCount).toBe(1);
-    expect(audit.rows[0]?.detail).toMatchObject({
-      task_request_id: request.id,
-      from_status: 'pending_review',
-      to_status: 'approved',
-      reviewer_actor_id: adminActorId,
-      reason: 'Ready for execution.',
-    });
-
-    const taskTable = await dbHandle.pool.query<{ exists: boolean }>(
-      `select to_regclass('task.tasks') is not null as exists`,
-    );
-    if (taskTable.rows[0]?.exists) {
-      const tasks = await dbHandle.pool.query<{ n: number }>(
-        `select count(*)::int as n from task.tasks where workspace_id = $1`,
-        [WORKSPACE_ID],
+      const audit = await dbHandle.pool.query(
+        `select 1 from core.audit_log
+          where workspace_id = $1 and event_type = $2 and subject_id = $3`,
+        [WORKSPACE_ID, auditEventType, request.id],
       );
-      expect(tasks.rows[0]?.n).toBe(0);
-    }
-  });
+      expect(audit.rowCount).toBe(1);
 
-  it('reject requires reason; request-more-evidence moves pending_review to needs_more_evidence', async () => {
-    const toReject = await seedTaskRequest();
-    const missingReason = await decide(adminCookie, toReject.id, 'reject', {});
+      if (action === 'approve') {
+        const alreadyApproved = await decide(adminCookie, request.id, 'approve', {
+          reason: 'Already approved.',
+        });
+        expect(alreadyApproved.statusCode).toBe(200);
+        expect(notifications.jobs).toHaveLength(1);
+
+        const taskTable = await dbHandle.pool.query<{ exists: boolean }>(
+          `select to_regclass('task.tasks') is not null as exists`,
+        );
+        if (taskTable.rows[0]?.exists) {
+          const tasks = await dbHandle.pool.query<{ n: number }>(
+            `select count(*)::int as n from task.tasks where workspace_id = $1`,
+            [WORKSPACE_ID],
+          );
+          expect(tasks.rows[0]?.n).toBe(0);
+        }
+      }
+    },
+  );
+
+  it('reject requires a reason and emits no notification when validation fails', async () => {
+    const request = await seedTaskRequest();
+    const missingReason = await decide(adminCookie, request.id, 'reject', {});
     expect(missingReason.statusCode).toBe(422);
     expect(missingReason.json<{ code: string }>().code).toBe('validation.failed');
-
-    const rejected = await decide(adminCookie, toReject.id, 'reject', {
-      reason: 'Not actionable yet.',
-    });
-    expect(rejected.statusCode).toBe(200);
-    expect(rejected.json()).toMatchObject({ id: toReject.id, status: 'rejected' });
-
-    const needsEvidence = await seedTaskRequest();
-    const res = await decide(adminCookie, needsEvidence.id, 'request-more-evidence', {
-      note: 'Please attach the source evidence.',
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({
-      id: needsEvidence.id,
-      status: 'needs_more_evidence',
-      decision_reason: 'Please attach the source evidence.',
-    });
+    expect(notifications.jobs).toEqual([]);
   });
 
   it('invalid transition: approve rejected request -> validation.failed invalid_transition', async () => {
@@ -309,6 +349,7 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
       reason_present: true,
       capability_present: false,
     });
+    expect(notifications.jobs).toEqual([]);
   });
 
   it('self-approval by requester with admin role and reason is approved with sensitive audit detail', async () => {
@@ -333,6 +374,17 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
       sensitive: true,
       reason: 'Emergency owner approval.',
     });
+    expect(notifications.jobs).toMatchObject([
+      expect.objectContaining({
+        actor_id: adminActorId,
+        event_type: 'task_request.approved',
+        subject_id: request.id,
+        detail: {
+          task_request_id: request.id,
+          primary_managed_system_id: request.msId,
+        },
+      }),
+    ]);
   });
 
   it('idempotency: same Idempotency-Key replays the same decision result', async () => {
@@ -346,6 +398,7 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
     expect(second.json()).toEqual(first.json());
+    expect(notifications.jobs).toHaveLength(1);
 
     const auditCount = await dbHandle.pool.query<{ n: number }>(
       `select count(*)::int as n
@@ -356,5 +409,29 @@ describe.skipIf(!runIntegration)('task-request review queue and decisions (#133)
       [WORKSPACE_ID, request.id],
     );
     expect(auditCount.rows[0]?.n).toBe(1);
+  });
+
+  it('rolls back the Task Request decision and audit when notification enqueue fails', async () => {
+    const request = await seedTaskRequest();
+    failNotificationEnqueue = true;
+
+    const response = await decide(adminCookie, request.id, 'approve', {
+      reason: 'Transactional notification check.',
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(notificationAttempts).toHaveLength(1);
+    expect(notifications.jobs).toEqual([]);
+    const row = await dbHandle.pool.query<{ status: string }>(
+      'select status from task_request.task_requests where id = $1',
+      [request.id],
+    );
+    expect(row.rows[0]?.status).toBe('pending_review');
+    const audit = await dbHandle.pool.query(
+      `select 1 from core.audit_log
+        where workspace_id = $1 and event_type = 'task_request_approved' and subject_id = $2`,
+      [WORKSPACE_ID, request.id],
+    );
+    expect(audit.rowCount).toBe(0);
   });
 });

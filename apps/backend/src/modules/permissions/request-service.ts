@@ -22,6 +22,8 @@
 // values inside the index so duplicate inserts with all-NULL scope/source
 // still collide as expected.
 
+import { randomUUID } from 'node:crypto';
+
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { DatabaseError } from 'pg';
 
@@ -38,9 +40,11 @@ import type { Db } from '../../db/client.js';
 import { managedSystems } from '../../db/schema/core.js';
 import { permissionRequests } from '../../db/schema/permission.js';
 import { HttpError } from '../../lib/errors.js';
+import { listWorkspaceAdminActorIds } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { hashRequestBody } from '../core/idempotency/canonicalize.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import type { ActorContext, CheckScope, CheckService } from './check-service.js';
 import type { OpenRequestSummary } from './state-mapper.js';
 
@@ -81,6 +85,7 @@ export interface RequestServiceDeps {
   checkService: CheckService;
   auditService: AuditService;
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
 }
 
 export type RequestService = ReturnType<typeof createRequestService>;
@@ -233,6 +238,16 @@ export function createRequestService(deps: RequestServiceDeps) {
           source_object_id: body.source_object_id ?? null,
           source_action_id: body.source_action_id ?? null,
         },
+      });
+
+      const adminActorIds = await listWorkspaceAdminActorIds(tx, actor.workspace_id);
+      await deps.notify(tx, 'permission_request.submitted', {
+        workspace_id: actor.workspace_id,
+        actor_ids: adminActorIds,
+        subject_id: insertedId,
+        correlation_id: randomUUID(),
+        detail: { permission_request_id: insertedId },
+        params: {},
       });
 
       const responseBody = {

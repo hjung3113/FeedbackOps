@@ -3,6 +3,26 @@
 Index and global rules: [03-api-contracts.md](../03-api-contracts.md). This
 file is the normative contract for the endpoints below.
 
+## Producers
+
+Each producer resolves recipients inside the request transaction, writes the
+domain change and audit row, then calls `notify()` in that same transaction.
+The dispatcher drops recipient Actor ids that do not belong to the event's
+workspace before enqueueing jobs.
+
+| Event | Producer | Recipients |
+| --- | --- | --- |
+| `task_request.approved`, `task_request.rejected`, `task_request.needs_more_evidence` | `task-requests/service.ts` `decideTaskRequest` | The Task Request creator (`requester_actor_id`), including self-approval. |
+| `task.assigned_to_me` | `tasks/service.ts` `convertTaskRequest` | The new assignee, only when `assignee_actor_id` is set. |
+| `permission_request.submitted` | `permissions/request-service.ts` `createRequest` | Every workspace Actor whose `role_level` is `admin`. `core.actors` has no active/deactivated flag. |
+| `permission_request.decided` | `permissions/decision-service.ts` `decide` | The requester, for `approve` (`approved`) and `reject` (`rejected`) only. |
+
+No notification is created for Permission Request `need_more_info` or explicit
+`deny` (`permission_denied`), Task Request `self_approval_denied`, idempotent
+replays, or no-op Task Request decisions that already have the target status.
+Notification details contain ids only; decision reasons, notes, and other free
+text stay in their domain records and audit events.
+
 ## Notifications Inbox
 
 `GET /notifications`

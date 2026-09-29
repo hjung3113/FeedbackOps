@@ -7,7 +7,11 @@ export {
   type NotificationSubjectType,
   type NotificationSummaryParamsByEvent,
 } from './catalogue.js';
-export { createNotificationNotifier, type NotificationEnvelope } from './dispatcher.js';
+export {
+  createNotificationNotifier,
+  type NotificationEnvelope,
+  type NotificationNotifier,
+} from './dispatcher.js';
 export {
   createNoopNotificationDispatcher,
   createPgBossNotificationDispatcher,

@@ -18,6 +18,10 @@ import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
+import {
+  createRecordingNotificationDispatcher,
+  type RecordingNotificationDispatcher,
+} from '../../notifications/port.js';
 import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
 import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
 import { insertTaskRow } from './_seed-helpers.js';
@@ -37,12 +41,20 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
   let userCookie: string;
   let adminActorId: string;
   let userActorId: string;
+  let notifications: RecordingNotificationDispatcher;
+  const foreignActorIds: string[] = [];
+  const foreignWorkspaceIds: string[] = [];
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
     dbHandle = createDb(APP_URL);
     migrateHandle = createDb(MIGRATE_URL);
-    app = await buildServer({ config: loadConfig(), dbHandle });
+    notifications = createRecordingNotificationDispatcher();
+    app = await buildServer({
+      config: loadConfig(),
+      dbHandle,
+      notificationDispatcher: notifications,
+    });
     await app.ready();
 
     adminCookie = await loginAs(app, 'mock-admin-1');
@@ -62,6 +74,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
 
   beforeEach(async () => {
     await cleanupFixtures();
+    notifications.jobs.splice(0);
   });
 
   afterAll(async () => {
@@ -113,6 +126,18 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
           )`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
+    if (foreignActorIds.length > 0) {
+      await migrateHandle.pool.query('delete from core.actors where id = any($1::uuid[])', [
+        foreignActorIds,
+      ]);
+      foreignActorIds.length = 0;
+    }
+    if (foreignWorkspaceIds.length > 0) {
+      await migrateHandle.pool.query('delete from core.workspaces where id = any($1::uuid[])', [
+        foreignWorkspaceIds,
+      ]);
+      foreignWorkspaceIds.length = 0;
+    }
     // Milestones before their Managed Systems; after tasks (FK RESTRICT).
     await migrateHandle.pool.query(
       `delete from task.milestones
@@ -429,6 +454,22 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       primary_managed_system_id: request.msId,
       source_task_request_id: request.id,
     });
+    expect(notifications.jobs).toEqual([
+      expect.objectContaining({
+        workspace_id: WORKSPACE_ID,
+        actor_id: userActorId,
+        event_type: 'task.assigned_to_me',
+        subject_type: 'task',
+        subject_id: body.id,
+        summary: '작업 담당자로 지정되었습니다.',
+        detail: {
+          task_id: body.id,
+          primary_managed_system_id: request.msId,
+          source_task_request_id: request.id,
+        },
+        correlation_id: expect.any(String),
+      }),
+    ]);
 
     const taskRequest = await dbHandle.pool.query<{ status: string }>(
       'select status from task_request.task_requests where id = $1',
@@ -466,6 +507,50 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       source_task_request_id: request.id,
       primary_managed_system_id: request.msId,
     });
+  });
+
+  it('conversion without an assignee creates no assignment notification', async () => {
+    const request = await seedApprovedTaskRequest();
+
+    const response = await convert(adminCookie, request.id, { title: 'Unassigned task' });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json<{ assignee_actor_id: string | null }>().assignee_actor_id).toBeNull();
+    expect(notifications.jobs).toEqual([]);
+  });
+
+  it('conversion with an assignee from another workspace succeeds without notifying them', async () => {
+    const foreignWorkspace = await migrateHandle.pool.query<{ id: string }>(
+      'insert into core.workspaces (name) values ($1) returning id',
+      [`${SLUG_PREFIX}-foreign-${randomUUID()}`],
+    );
+    const foreignWorkspaceId = foreignWorkspace.rows[0]?.id;
+    if (!foreignWorkspaceId) throw new Error('foreign workspace seed failed');
+    foreignWorkspaceIds.push(foreignWorkspaceId);
+    const foreignActor = await migrateHandle.pool.query<{ id: string }>(
+      `insert into core.actors
+         (workspace_id, external_id, email, display_name, role_level, actor_type)
+       values ($1, $2, $3, 'Foreign assignee', 'developer', 'internal_member')
+       returning id`,
+      [
+        foreignWorkspaceId,
+        `${SLUG_PREFIX}-foreign-${randomUUID()}`,
+        `${randomUUID()}@example.test`,
+      ],
+    );
+    const foreignActorId = foreignActor.rows[0]?.id;
+    if (!foreignActorId) throw new Error('foreign actor seed failed');
+    foreignActorIds.push(foreignActorId);
+    const request = await seedApprovedTaskRequest();
+
+    const response = await convert(adminCookie, request.id, {
+      title: 'Foreign assignee task',
+      assignee_actor_id: foreignActorId,
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json<{ assignee_actor_id: string }>().assignee_actor_id).toBe(foreignActorId);
+    expect(notifications.jobs).toEqual([]);
   });
 
   it('AC-C7a: conversion projects the exact new task id onto its Finding', async () => {
@@ -1132,6 +1217,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       task_id: taskId,
       task_request_id: request.id,
     });
+    expect(notifications.jobs).toEqual([]);
   });
 
   it('link-task denies an existing task from another Managed System', async () => {
