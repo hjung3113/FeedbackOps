@@ -10,11 +10,11 @@ import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
-import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
-import type { ReporterFacingStatus } from './transitions.js';
 import { createVocCreateCommands } from './commands/create.js';
 import { createVocEditDescriptionCommands } from './commands/edit-description.js';
 import { createVocUpdateTriageCommands } from './commands/update-triage.js';
+import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
+import type { ReporterFacingStatus } from './transitions.js';
 
 export interface CreateVocActor {
   actor_id: string;
@@ -65,7 +65,6 @@ export interface VocServiceDeps {
    */
   embeddingEnqueuer?: VocEmbeddingEnqueuer;
 }
-
 
 export function createVocService(deps: VocServiceDeps) {
   const createCommands = createVocCreateCommands(deps);

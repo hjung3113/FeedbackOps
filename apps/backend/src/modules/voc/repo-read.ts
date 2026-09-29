@@ -7,7 +7,6 @@
 // this file is read SQL on voc.* plus the managed-system id projection
 // outOfScopeSummary already uses. Do not import permission schema here either.
 
-
 export type { VocReadRow } from './read/repository-shared.js';
 
 export {

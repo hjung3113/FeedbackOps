@@ -37,7 +37,6 @@ import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
-import type { VocReadService } from './read-service.js';
 import {
   checkTriageCapability,
   dedupe,
@@ -49,6 +48,7 @@ import {
   sanitizeOrThrow,
   setsEqual,
 } from './conversation/frame.js';
+import type { VocReadService } from './read-service.js';
 import {
   insertInternalComment,
   insertPublicUpdate,
