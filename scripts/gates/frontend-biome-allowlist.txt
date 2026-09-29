@@ -257,3 +257,7 @@ packages/ui/src/panel/DetailPanelSectionNav.tsx lint/correctness/useExhaustiveDe
 apps/frontend/src/features/voc/hooks/useTriagePanelState.ts lint/correctness/useExhaustiveDependencies -- pre-existing on develop (2x, measured on the develop copy; #520 only adds `baseline` to the return value; the voc.id reset effect carries an eslint-disable comment biome does not recognize)
 apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx lint/a11y/useSemanticElements -- pre-existing on develop (2x, measured on the develop copy 2026-09-28; #521 only changes the empty/error branch)
 apps/frontend/src/features/integration/components/EntityLinksInventoryTable.tsx lint/a11y/useKeyWithClickEvents -- pre-existing on develop (1x, measured on the develop copy 2026-09-28; row click handler unchanged by #521)
+apps/frontend/src/lib/api/errorMapper.ts format -- pre-existing on develop (column-aligned CATALOG rows; #561 adds a null-envelope guard and mapUnknownError only)
+apps/frontend/src/lib/api/errorMapper.ts lint/complexity/useLiteralKeys -- pre-existing on develop (measured on the develop copy 2026-09-30; unchanged by #561)
+apps/frontend/src/lib/api/__tests__/errorMapper.test.ts format -- pre-existing on develop (measured on the develop copy 2026-09-30; #561 appends one describe block)
+apps/frontend/src/lib/api/__tests__/errorMapper.test.ts organizeImports -- pre-existing on develop (measured on the develop copy 2026-09-30; #561 adds two imports in the existing order)
