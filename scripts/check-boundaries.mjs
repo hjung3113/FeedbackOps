@@ -9,7 +9,7 @@
 //   6. apps/backend/src/modules/* MUST NOT import another top-level module's repo*.js.
 //   7. Files outside modules/voc MUST NOT import from modules/voc/jobs/.
 //   8. Non-VOC frontend features and src/lib MUST NOT import VOC hooks/lib internals.
-//   9. Backend modules outside VOC MUST NOT import voc/__tests__/_seed-helpers.
+//   9. Backend modules MUST NOT import another module's __tests__/_seed-helpers.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -62,7 +62,7 @@ const RULES = [
   {
     scope: 'apps/backend/src/modules',
     kind: 'foreign-test-seed-helpers',
-    msg: 'backend modules outside VOC must not import voc/__tests__/_seed-helpers; generic helpers live in src/test-support',
+    msg: "backend modules must not import another module's __tests__/_seed-helpers; shared helpers live in src/test-support",
   },
 ];
 
@@ -240,9 +240,7 @@ for (const rule of RULES) {
           );
           targetModule = match?.[1] ?? null;
         }
-        // #517 AC scope: VOC's seed helpers only. Other modules' cross-module seed-helper
-        // imports are pre-existing and tracked in #574.
-        if (srcSegment && targetModule === 'voc' && srcSegment !== targetModule) {
+        if (srcSegment && targetModule && srcSegment !== targetModule) {
           violations++;
           const displayTarget = resolvedTarget ? relative(ROOT, resolvedTarget) : specifier;
           console.error(

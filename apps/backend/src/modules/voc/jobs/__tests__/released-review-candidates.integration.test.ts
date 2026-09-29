@@ -7,6 +7,7 @@ import { initBoss, shutdownBoss } from '../../../../lib/jobs.js';
 import { insertMsDirectly } from '../../../../test-support/core-fixtures.js';
 import { createFailAfterEnqueueNotificationDispatcher } from '../../../../test-support/fail-after-enqueue-dispatcher.js';
 import { uid } from '../../../../test-support/ids.js';
+import { insertTaskRow } from '../../../../test-support/task-fixtures.js';
 import { insertPublicUpdate, insertVocDirectly } from '../../../../test-support/voc-fixtures.js';
 import { createAuditService } from '../../../core/audit/index.js';
 import { createNotificationNotifier } from '../../../notifications/dispatcher.js';
@@ -14,7 +15,6 @@ import {
   NOTIFICATION_DISPATCH_QUEUE,
   createRecordingNotificationDispatcher,
 } from '../../../notifications/port.js';
-import { insertTaskRow } from '../../../tasks/__tests__/_seed-helpers.js';
 import { createPublicUpdateReviewCandidatesService } from '../../../voc/public-update-review-candidates/service.js';
 import { releasedReviewCandidatesHandler } from '../released-review-candidates.js';
 
