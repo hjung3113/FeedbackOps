@@ -221,7 +221,7 @@ describe.skipIf(!runIntegration)('my survey response history route (#548)', () =
 
     const before = await migrateHandle.pool.query<{ count: string }>(
       `select count(*)::text as count from core.audit_log
-        where actor_id=$1 and event_type like 'survey_response%'`,
+        where actor_id=$1`,
       [actorA.id],
     );
     const response = await get(actorA.cookie);
@@ -230,7 +230,7 @@ describe.skipIf(!runIntegration)('my survey response history route (#548)', () =
     expect(body.items).toHaveLength(1);
     const after = await migrateHandle.pool.query<{ count: string }>(
       `select count(*)::text as count from core.audit_log
-        where actor_id=$1 and event_type like 'survey_response%'`,
+        where actor_id=$1`,
       [actorA.id],
     );
     expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
@@ -265,25 +265,28 @@ describe.skipIf(!runIntegration)('my survey response history route (#548)', () =
   });
 
   it('paginates by submitted_at then survey_id without gaps or overlap', async () => {
+    const newerSurvey = await seedSurvey(`${SLUG} pagination newer`);
     const firstTieSurvey = await seedSurvey(`${SLUG} pagination tie first`);
     const secondTieSurvey = await seedSurvey(`${SLUG} pagination tie second`);
-    const olderSurvey = await seedSurvey(`${SLUG} pagination older`);
     const tiedTimestamp = '2026-09-30T13:00:00.000Z';
+    await seedResponse(newerSurvey.id, actorA.id, {
+      submittedAt: '2026-09-30T13:00:01.000Z',
+    });
     await seedResponse(firstTieSurvey.id, actorA.id, {
       submittedAt: tiedTimestamp,
     });
     await seedResponse(secondTieSurvey.id, actorA.id, {
       submittedAt: tiedTimestamp,
     });
-    await seedResponse(olderSurvey.id, actorA.id, {
-      submittedAt: '2026-09-29T13:00:00.000Z',
-    });
     const tiedSurveyIds = [firstTieSurvey.id, secondTieSurvey.id].sort().reverse();
 
     const firstResponse = await get(actorA.cookie, '?limit=2');
     expect(firstResponse.statusCode).toBe(200);
     const firstPage = mySurveyResponsesResponseSchema.parse(firstResponse.json());
-    expect(firstPage.items.map((item) => item.survey_id)).toEqual(tiedSurveyIds);
+    expect(firstPage.items.map((item) => item.survey_id)).toEqual([
+      newerSurvey.id,
+      tiedSurveyIds[0],
+    ]);
     expect(firstPage.page.has_more).toBe(true);
     expect(firstPage.page.cursor).toBeTruthy();
 
@@ -293,7 +296,7 @@ describe.skipIf(!runIntegration)('my survey response history route (#548)', () =
     );
     expect(secondResponse.statusCode).toBe(200);
     const secondPage = mySurveyResponsesResponseSchema.parse(secondResponse.json());
-    expect(secondPage.items.map((item) => item.survey_id)).toEqual([olderSurvey.id]);
+    expect(secondPage.items.map((item) => item.survey_id)).toEqual([tiedSurveyIds[1]]);
     expect(secondPage.page).toEqual({ has_more: false });
     expect(
       secondPage.items.some((item) =>

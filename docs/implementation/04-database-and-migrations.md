@@ -24,7 +24,8 @@ Applied migrations are the final database authority.
   by `fops_survey_aggregate_owner`. The `survey.read_approved_result_excerpts_personal`
   and `survey.read_my_survey_response_history` functions are narrow
   `SECURITY DEFINER` projections owned by `fops_survey_evidence_reader_owner`:
-  the former returns `response_id` only behind `survey.read_personal_responses`,
+  the former returns `response_id` and is called by the app only behind
+  `survey.read_personal_responses` (an app-layer gate),
   and the latter returns only `survey_id`, Survey title, `submitted_at`, and
   `identity_protected` for the session Actor's responses after the Surveys
   service supplies the session `workspace_id` and `actor_id`. The latter does

@@ -126,8 +126,8 @@ contains the last returned `(submitted_at, survey_id)` pair, so equal
 submission timestamps remain ordered without gaps. The strict response shape
 is `{ items: [{ survey_id, survey_title, submitted_at, identity_protected }],
 page: { has_more, cursor? } }`; `page.cursor` is present only when `has_more`
-is true. The list includes responses for Surveys in any status, including
-open, closed, and archived Surveys.
+is true. The list includes responses for Surveys in any status (currently open
+or closed; a response cannot exist for a draft).
 
 The respondent can see their own row even when `identity_protected` is true;
 that flag is returned as `true` and does not reveal the respondent to another

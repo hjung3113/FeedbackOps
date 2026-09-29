@@ -1,6 +1,8 @@
 -- Issue #548: return only a session Actor's own response-history metadata.
 -- The app role still cannot select survey responses directly; this narrow
 -- projection returns no response id, respondent actor id, answers, or other actors' rows.
+-- Owner: fops_survey_evidence_reader_owner (existing NOLOGIN owner of survey definer readers; only fops_migrate is a member).
+-- First respondent_actor_id grant to this owner, which also reads answer/excerpt text: no function under it may project respondent identity with text (grants pinned by src/db/__tests__/survey-response-evidence.integration.test.ts).
 DO $$
 BEGIN
   IF NOT EXISTS (
