@@ -551,7 +551,7 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
     expect(notifications.jobs).toEqual([]);
   });
 
-  it('does not notify an assignee outside the workspace', async () => {
+  it('convert rejects an assignee from another workspace with not_found and persists nothing (#554)', async () => {
     const foreignWorkspace = await migrateHandle.pool.query<{ id: string }>(
       'insert into core.workspaces (name) values ($1) returning id',
       [`${SLUG_PREFIX}-foreign-${randomUUID()}`],
@@ -580,7 +580,23 @@ describe.skipIf(!runIntegration)('task conversion and link-existing (#134)', () 
       assignee_actor_id: foreignActorId,
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(404);
+    expect(response.json<{ code: string }>().code).toBe('not_found.record');
+    await expectNoConversionSideEffects(request.id);
+    expect(notifications.jobs).toEqual([]);
+  });
+
+  it('convert rejects an unknown assignee with not_found and persists nothing (#554)', async () => {
+    const request = await seedApprovedTaskRequest();
+
+    const response = await convert(adminCookie, request.id, {
+      title: 'Unknown assignee conversion',
+      assignee_actor_id: randomUUID(),
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json<{ code: string }>().code).toBe('not_found.record');
+    await expectNoConversionSideEffects(request.id);
     expect(notifications.jobs).toEqual([]);
   });
 
