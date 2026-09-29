@@ -8,6 +8,8 @@
 //   5. apps/backend MUST NOT import from apps/frontend or packages/ui.
 //   6. apps/backend/src/modules/* MUST NOT import another top-level module's repo*.js.
 //   7. Files outside modules/voc MUST NOT import from modules/voc/jobs/.
+//   8. Non-VOC frontend features and src/lib MUST NOT import VOC hooks/lib internals.
+//   9. Backend modules outside VOC MUST NOT import voc/__tests__/_seed-helpers.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -51,6 +53,16 @@ const RULES = [
     scope: 'apps/backend',
     kind: 'outside-voc-imports-voc-jobs',
     msg: 'files outside the VOC module must import job behavior through the VOC public seam',
+  },
+  {
+    scope: 'apps/frontend/src',
+    kind: 'feature-imports-voc-internals',
+    msg: 'non-VOC frontend features and src/lib must not import VOC hooks or lib internals',
+  },
+  {
+    scope: 'apps/backend/src/modules',
+    kind: 'foreign-test-seed-helpers',
+    msg: 'backend modules outside VOC must not import voc/__tests__/_seed-helpers; generic helpers live in src/test-support',
   },
 ];
 
@@ -165,6 +177,76 @@ for (const rule of RULES) {
           violations++;
           console.error(
             `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${specifier})`,
+          );
+        }
+      }
+      continue;
+    }
+    if (rule.kind === 'feature-imports-voc-internals') {
+      const frontendSrc = join(ROOT, 'apps/frontend/src');
+      const featureRoot = join(frontendSrc, 'features');
+      const libRoot = join(frontendSrc, 'lib');
+      const vocHooksDir = join(featureRoot, 'voc/hooks');
+      const vocLibDir = join(featureRoot, 'voc/lib');
+      const frontendParts = relative(frontendSrc, file).split(sep);
+      const featureParts = relative(featureRoot, file).split(sep);
+      const isNonVocFeature =
+        isWithinPath(featureRoot, file) && featureParts.length > 1 && featureParts[0] !== 'voc';
+      const isLibFile = isWithinPath(libRoot, file);
+      const isTestFile = frontendParts.includes('__tests__') || /\.test\./.test(basename(file));
+      if ((!isNonVocFeature && !isLibFile) || isTestFile) continue;
+
+      for (const { specifier, line } of collectImportSpecifiers(file, content)) {
+        const normalizedSpecifier = specifier.replaceAll('\\', '/');
+        const isVocAlias = /^@\/features\/voc\/(?:hooks|lib)(?:\/|$)/.test(normalizedSpecifier);
+        const resolvedTarget = normalizedSpecifier.startsWith('.')
+          ? resolve(dirname(file), normalizedSpecifier)
+          : null;
+        const targetsVocInternals =
+          isVocAlias ||
+          (resolvedTarget !== null &&
+            (isWithinPath(vocHooksDir, resolvedTarget) || isWithinPath(vocLibDir, resolvedTarget)));
+        if (targetsVocInternals) {
+          violations++;
+          console.error(
+            `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${specifier})`,
+          );
+        }
+      }
+      continue;
+    }
+    if (rule.kind === 'foreign-test-seed-helpers') {
+      const moduleRoot = join(ROOT, 'apps/backend/src/modules');
+      const srcSegment = moduleSegment(file);
+      for (const { specifier, line } of collectImportSpecifiers(file, content)) {
+        const normalizedSpecifier = specifier.replaceAll('\\', '/');
+        let targetModule = null;
+        let resolvedTarget = null;
+        if (normalizedSpecifier.startsWith('.')) {
+          resolvedTarget = resolve(dirname(file), normalizedSpecifier);
+          const targetRel = relative(moduleRoot, resolvedTarget);
+          if (targetRel !== '..' && !targetRel.startsWith(`..${sep}`)) {
+            const targetParts = targetRel.split(sep);
+            if (
+              targetParts[1] === '__tests__' &&
+              /^_seed-helpers(?:$|[./])/.test(targetParts[2] ?? '')
+            ) {
+              targetModule = targetParts[0];
+            }
+          }
+        } else {
+          const match = normalizedSpecifier.match(
+            /(?:^|\/)modules\/([^/]+)\/__tests__\/_seed-helpers(?:\/|\.|$)/,
+          );
+          targetModule = match?.[1] ?? null;
+        }
+        // #517 AC scope: VOC's seed helpers only. Other modules' cross-module seed-helper
+        // imports are pre-existing and tracked in #574.
+        if (srcSegment && targetModule === 'voc' && srcSegment !== targetModule) {
+          violations++;
+          const displayTarget = resolvedTarget ? relative(ROOT, resolvedTarget) : specifier;
+          console.error(
+            `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${displayTarget})`,
           );
         }
       }
