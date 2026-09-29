@@ -28,6 +28,7 @@
     "drizzle-orm": "0.38.2",
     "fastify": "5.2.0",
     "fastify-type-provider-zod": "4.0.2",
+    "nodemailer": "^10.0.12",
     "openid-client": "^6.8.8",
     "pg": "8.13.1",
     "pg-boss": "^12.18.2",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "22.10.2",
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "8.11.10",
     "aws-sdk-client-mock": "^4.1.0",
     "drizzle-kit": "0.30.1",
