@@ -33,11 +33,11 @@ vi.mock('@/features/findings/hooks/useEvidenceHighlights', () => ({
 }));
 
 vi.mock('@/features/findings/hooks/useFindingDetail', () => ({
-  useFindingDetail: () => ({
+  useFindingDetail: (findingId: string) => ({
     data: {
-      id: '10000000-0000-0000-0000-000000000001',
+      id: findingId,
       workspace_id: '90000000-0000-0000-0000-000000000009',
-      display_id: 'FIN-179',
+      display_id: findingId.endsWith('2') ? 'FIN-180' : 'FIN-179',
       primary_managed_system_id: '30000000-0000-0000-0000-000000000003',
       title: '리포트 속도 저하',
       summary: '쿼리 플랜 개선 필요',
@@ -149,5 +149,23 @@ describe('FindingDetailPanel', () => {
       ),
     );
     await waitFor(() => expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument());
+  });
+
+  it('drops an open draft when the selection moves to another Finding', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const panel = (findingId: string) => (
+      <QueryClientProvider client={queryClient}>
+        <FindingDetailPanel findingId={findingId} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(panel('10000000-0000-0000-0000-000000000001'));
+
+    await user.click(screen.getByTestId('request-task-btn'));
+    await user.type(screen.getByTestId('request-task-requested-outcome-input'), 'A only');
+    rerender(panel('10000000-0000-0000-0000-000000000002'));
+
+    expect(screen.getByText('FIN-180')).toBeInTheDocument();
+    expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument();
   });
 });

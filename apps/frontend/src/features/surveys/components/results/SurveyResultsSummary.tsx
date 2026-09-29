@@ -253,7 +253,7 @@ function NextActions({
             <div className="space-y-1" key={actionKey}>
               <Button
                 data-action-id={action.id}
-                disabled={actionLoading}
+                disabled={actionLoading || readyFindingId === action.source_finding_id}
                 loading={actionLoading}
                 onClick={() => {
                   setLoadErrorFindingId(null);

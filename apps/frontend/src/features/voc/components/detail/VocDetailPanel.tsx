@@ -163,6 +163,7 @@ export function VocDetailPanel({
 
   return (
     <FullDetailView
+      key={voc.id}
       voc={voc}
       vocId={vocId}
       onClose={onClose}
@@ -462,6 +463,7 @@ function FullDetailView({
                     label: 'Task 요청',
                     onClick: () => setRequestTaskOpen(true),
                     testId: 'voc-request-task-button',
+                    afterMenuClose: true,
                   },
                 ]
               : []),

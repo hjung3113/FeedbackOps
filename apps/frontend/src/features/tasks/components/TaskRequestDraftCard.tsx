@@ -6,7 +6,7 @@ import {
 import { Button, FieldLabel, OutlineBadge, Textarea } from '@fops/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Check, ClipboardList, RotateCcw, X } from 'lucide-react';
+import { ArrowRight, Check, ClipboardList, X } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -40,8 +40,18 @@ export function TaskRequestDraftCard({
     mode: 'onBlur',
   });
 
+  const baseId = React.useId();
+  const summaryId = `${baseId}-evidence-summary`;
+  const outcomeId = `${baseId}-requested-outcome`;
+
   React.useEffect(() => {
+    const opener = document.activeElement;
     form.setFocus('evidence_summary');
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) {
+        opener.focus();
+      }
+    };
   }, [form.setFocus]);
 
   const pendingRequests = useQuery({
@@ -87,9 +97,10 @@ export function TaskRequestDraftCard({
         </div>
         <Button
           aria-label="Close draft"
-          className="h-8 w-8 shrink-0 p-0"
+          className="shrink-0 px-2"
           disabled={isSubmitting}
           onClick={onClose}
+          size="sm"
           title="Close draft"
           type="button"
           variant="ghost"
@@ -115,46 +126,54 @@ export function TaskRequestDraftCard({
 
       <form className="flex flex-col gap-3" noValidate onSubmit={form.handleSubmit(onSubmit)}>
         <div className="flex flex-col gap-1.5">
-          <FieldLabel required htmlFor="task-request-evidence-summary">
+          <FieldLabel required htmlFor={summaryId}>
             Evidence Summary
           </FieldLabel>
           <Textarea
-            id="task-request-evidence-summary"
+            id={summaryId}
             rows={4}
             placeholder="Task 검토자가 볼 근거 요약을 입력하세요."
             {...form.register('evidence_summary')}
-            aria-describedby="task-request-evidence-summary-help"
+            aria-describedby={
+              form.formState.errors.evidence_summary
+                ? `${summaryId}-help ${summaryId}-error`
+                : `${summaryId}-help`
+            }
             aria-invalid={Boolean(form.formState.errors.evidence_summary)}
             data-testid="request-task-evidence-summary-input"
           />
-          <p className="text-xs text-text-muted" id="task-request-evidence-summary-help">
+          <p className="text-xs text-text-muted" id={`${summaryId}-help`}>
             왜 필요한가를 설명하는 근거를 작성하세요.
           </p>
           {form.formState.errors.evidence_summary?.message && (
-            <p className="text-xs text-text-danger" role="alert">
+            <p className="text-xs text-text-danger" id={`${summaryId}-error`} role="alert">
               {form.formState.errors.evidence_summary.message}
             </p>
           )}
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <FieldLabel required htmlFor="task-request-requested-outcome">
+          <FieldLabel required htmlFor={outcomeId}>
             Requested Outcome
           </FieldLabel>
           <Textarea
-            id="task-request-requested-outcome"
+            id={outcomeId}
             rows={3}
             placeholder="기대하는 실행 결과를 입력하세요."
             {...form.register('requested_outcome')}
-            aria-describedby="task-request-requested-outcome-help"
+            aria-describedby={
+              form.formState.errors.requested_outcome
+                ? `${outcomeId}-help ${outcomeId}-error`
+                : `${outcomeId}-help`
+            }
             aria-invalid={Boolean(form.formState.errors.requested_outcome)}
             data-testid="request-task-requested-outcome-input"
           />
-          <p className="text-xs text-text-muted" id="task-request-requested-outcome-help">
+          <p className="text-xs text-text-muted" id={`${outcomeId}-help`}>
             승인되면 무엇이 달성돼야 하는지 작성하세요.
           </p>
           {form.formState.errors.requested_outcome?.message && (
-            <p className="text-xs text-text-danger" role="alert">
+            <p className="text-xs text-text-danger" id={`${outcomeId}-error`} role="alert">
               {form.formState.errors.requested_outcome.message}
             </p>
           )}
@@ -165,6 +184,7 @@ export function TaskRequestDraftCard({
           <Button
             disabled={isSubmitting}
             data-testid="request-task-submit"
+            size="sm"
             type="submit"
             variant="primary"
           >
@@ -177,8 +197,7 @@ export function TaskRequestDraftCard({
               Review in Task Requests
             </a>
           </Button>
-          <Button disabled={isSubmitting} onClick={resetDraft} type="button" variant="subtle">
-            <RotateCcw aria-hidden className="h-3.5 w-3.5" />
+          <Button disabled={isSubmitting} onClick={resetDraft} size="sm" type="button" variant="subtle">
             Reset
           </Button>
         </div>

@@ -548,7 +548,7 @@ describe('<VocDetailPanel>', () => {
     expect(screen.getByRole('menuitem', { name: 'Conversation' })).toBeInTheDocument();
   });
 
-  it('shows both permission actions and submits an inline Task Request draft for an admin actor', async () => {
+  it('submits an inline Task Request draft from the footer menu for an admin actor', async () => {
     vi.mocked(useMe).mockReturnValue(
       makeMeQuery({
         data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
@@ -566,7 +566,7 @@ describe('<VocDetailPanel>', () => {
     // established pattern (apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx).
     fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Task 요청' }));
-    const draft = screen.getByRole('region', { name: 'Task Request draft' });
+    const draft = await screen.findByRole('region', { name: 'Task Request draft' });
     expect(draft).toHaveTextContent('From VOC-0001 · VOC');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.change(screen.getByTestId('request-task-requested-outcome-input'), {
@@ -586,7 +586,21 @@ describe('<VocDetailPanel>', () => {
         }),
       ),
     );
-    expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('opens the Create Finding flow from the footer menu for an admin actor', () => {
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Finding 생성' }));
+    expect(document.querySelector('[role="dialog"]')).toBeInTheDocument();
   });
 
   it('omits the footer overflow menu entirely for a plain user actor', () => {

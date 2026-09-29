@@ -150,6 +150,38 @@ describe('TaskRequestDraftCard', () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
+  it('returns focus to the element that opened it when it unmounts', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+    trigger.focus();
+    const { unmount } = render(
+      <TaskRequestDraftCard
+        sourceKind="VOC"
+        sourceDisplayId="VOC-100"
+        evidenceSummaryDefault="Prefilled evidence summary"
+        isSubmitting={false}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveFocus();
+
+    unmount();
+    expect(trigger).toHaveFocus();
+    trigger.remove();
+  });
+
+  it('links the validation error to the outcome field', async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.click(screen.getByTestId('request-task-submit'));
+
+    const outcome = screen.getByTestId('request-task-requested-outcome-input');
+    const errorId = outcome.getAttribute('aria-describedby')?.split(' ').pop();
+    expect(document.getElementById(errorId ?? '')).toHaveAttribute('role', 'alert');
+  });
+
   it('does not render Convert to Task fields and disables submit while submitting', () => {
     renderCard({ isSubmitting: true });
 

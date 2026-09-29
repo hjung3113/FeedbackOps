@@ -51,12 +51,15 @@ const CONFIDENCE_LABEL: Record<NonNullable<FindingDto['confidence']>, string> = 
 
 function FindingRequestTaskDraft({
   finding,
+  idempotencyKey,
+  markConsumed,
   onClose,
 }: {
   finding: FindingDto;
+  idempotencyKey: string;
+  markConsumed: () => void;
   onClose: () => void;
 }): React.ReactElement {
-  const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
   const mutation = useRequestTaskFromFinding({
     findingId: finding.id,
     idempotencyKey,
@@ -93,6 +96,7 @@ interface FullFindingDetailProps {
   finding: FindingDto;
 }
 export function FullFindingDetail({ finding }: FullFindingDetailProps): React.ReactElement {
+  const { key: requestTaskKey, markConsumed: markRequestTaskConsumed } = useIdempotencyKey();
   const {
     sections: DETAIL_SECTIONS,
     scrollRef,
@@ -245,7 +249,12 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
             </FieldRow>
           </div>
           {requestTaskOpen && (
-            <FindingRequestTaskDraft finding={finding} onClose={() => setRequestTaskOpen(false)} />
+            <FindingRequestTaskDraft
+              finding={finding}
+              idempotencyKey={requestTaskKey}
+              markConsumed={markRequestTaskConsumed}
+              onClose={() => setRequestTaskOpen(false)}
+            />
           )}
 
           <SectionDivider />
