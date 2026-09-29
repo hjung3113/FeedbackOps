@@ -114,6 +114,7 @@ export function isVocVisibleToActor(
 ): boolean {
   if (readScope.kind === 'all') return true;
   return (
-    readScope.managedSystemIds.includes(voc.primary_managed_system_id) || voc.reporter_id === actorId
+    readScope.managedSystemIds.includes(voc.primary_managed_system_id) ||
+    voc.reporter_id === actorId
   );
 }

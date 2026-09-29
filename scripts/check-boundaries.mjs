@@ -160,9 +160,7 @@ for (const rule of RULES) {
         const pathNamesVocJobs =
           /(^|\/)voc\/jobs(?:\/|$)/.test(normalizedSpecifier) ||
           /(^|\/)modules\/voc\/jobs(?:\/|$)/.test(normalizedSpecifier);
-        const resolvedTarget = specifier.startsWith('.')
-          ? resolve(dirname(file), specifier)
-          : null;
+        const resolvedTarget = specifier.startsWith('.') ? resolve(dirname(file), specifier) : null;
         const targetsVocJobs =
           (resolvedTarget !== null && isWithinPath(vocJobsDir, resolvedTarget)) || pathNamesVocJobs;
         if (targetsVocJobs) {

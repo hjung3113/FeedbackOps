@@ -1,7 +1,6 @@
 import type { PgBoss } from 'pg-boss';
 
-export const TASK_RELEASED_REVIEW_CANDIDATES_QUEUE =
-  'tasks.create_public_update_review_candidates';
+export const TASK_RELEASED_REVIEW_CANDIDATES_QUEUE = 'tasks.create_public_update_review_candidates';
 
 export interface TaskReleasedReviewCandidatesPayload {
   workspace_id: string;
