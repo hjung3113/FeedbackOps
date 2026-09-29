@@ -17,7 +17,7 @@ import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables } from '../../../test-support/voc-fixtures.js';
-import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
+import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';

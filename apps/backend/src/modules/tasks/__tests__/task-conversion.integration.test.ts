@@ -25,8 +25,8 @@ import {
   NOTIFICATION_DISPATCH_QUEUE,
   type RecordingNotificationDispatcher,
 } from '../../notifications/port.js';
-import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
-import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
+import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
 import { insertTaskRow } from './_seed-helpers.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';

@@ -14,7 +14,7 @@ import {
   NOTIFICATION_DISPATCH_QUEUE,
   createRecordingNotificationDispatcher,
 } from '../../../notifications/port.js';
-import { insertTaskRow } from '../../../tasks/__tests__/_seed-helpers.js';
+import { insertTaskRow } from '../../../../test-support/task-fixtures.js';
 import { createPublicUpdateReviewCandidatesService } from '../../../voc/public-update-review-candidates/service.js';
 import { releasedReviewCandidatesHandler } from '../released-review-candidates.js';
 

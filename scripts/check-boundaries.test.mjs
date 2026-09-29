@@ -212,14 +212,14 @@ runCase(
 );
 
 runCase(
-  'rule 9 #574 carve-out: tasks to findings seed helpers remain outside the VOC-only guard',
+  'rule 9 rejects any cross-module seed-helper import (#574)',
   {
     ...zero,
     [join(MODULES, 'tasks', '__tests__', 'a.test.ts')]:
       "import { seed } from '../../findings/__tests__/_seed-helpers.js';\n",
   },
-  true,
-  'boundaries: OK',
+  false,
+  'apps/backend/src/modules/tasks/__tests__/a.test.ts:1',
 );
 
 runCase(

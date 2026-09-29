@@ -18,18 +18,18 @@ import { createAuditService } from '../../core/audit/audit-service.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
 import { type EntityLinksService, createEntityLinksService } from '../../entity-links/service.js';
 import { createCheckService } from '../../permissions/check-service.js';
-import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
+import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
 import {
   type TaskRequestsService,
   createTaskRequestsService,
 } from '../../task-requests/service.js';
-import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
+import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { type TasksService, createTasksService } from '../../tasks/service.js';
 import {
   cleanupVocClusterFixtures,
   insertActorRow,
   insertVocClusterRow,
-} from '../../voc-clusters/__tests__/_seed-helpers.js';
+} from '../../../test-support/voc-cluster-fixtures.js';
 import { type VocClustersService, createVocClustersService } from '../../voc-clusters/service.js';
 import { type FindingsService, createFindingsService } from '../service.js';
 import { insertFindingRow } from './_seed-helpers.js';

@@ -20,7 +20,7 @@ import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { paragraphDoc } from '../../../test-support/rich-content-fixtures.js';
 import { insertVocDirectly } from '../../../test-support/voc-fixtures.js';
 import { createAuditService } from '../../core/audit/index.js';
-import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
+import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { createPublicUpdateReviewCandidatesService } from '../public-update-review-candidates/service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';

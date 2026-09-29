@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
 import { createAuditService } from '../../core/audit/audit-service.js';
-import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
 import { createIdempotencyService } from '../../core/idempotency/idempotency-service.js';
 import { createCheckService } from '../../permissions/check-service.js';
 import { createTaskRequestsService, type TaskRequestsService } from '../service.js';

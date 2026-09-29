@@ -22,10 +22,10 @@ import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { uid } from '../../../test-support/ids.js';
 import { grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
-import { insertFindingRow } from '../../findings/__tests__/_seed-helpers.js';
-import { insertTaskRequestRow } from '../../task-requests/__tests__/_seed-helpers.js';
-import { insertTaskRow } from '../../tasks/__tests__/_seed-helpers.js';
-import { insertVocClusterRow } from '../../voc-clusters/__tests__/_seed-helpers.js';
+import { insertFindingRow } from '../../../test-support/findings-fixtures.js';
+import { insertTaskRequestRow } from '../../../test-support/task-fixtures.js';
+import { insertTaskRow } from '../../../test-support/task-fixtures.js';
+import { insertVocClusterRow } from '../../../test-support/voc-cluster-fixtures.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';
