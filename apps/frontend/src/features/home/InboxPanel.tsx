@@ -52,6 +52,7 @@ function reportMutationError(error: ApiError): void {
 
 export function InboxPanel(): React.ReactElement {
   const [filter, setFilter] = React.useState<InboxFilter>('unread');
+  const [pendingActionCounts, setPendingActionCounts] = React.useState<Record<string, number>>({});
   const queryClient = useQueryClient();
   const list = useInfiniteQuery({
     queryKey: [...notificationsQueryKey, 'list', filter] as const,
@@ -67,20 +68,33 @@ export function InboxPanel(): React.ReactElement {
   });
   const invalidateNotifications = (): Promise<void> =>
     queryClient.invalidateQueries({ queryKey: notificationsQueryKey }).then(() => undefined);
+  const updatePendingActionCount = (id: string, change: number): void => {
+    setPendingActionCounts((current) => {
+      const nextCount = (current[id] ?? 0) + change;
+      if (nextCount <= 0) {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      }
+      return { ...current, [id]: nextCount };
+    });
+  };
   const markRead = useMutation<NotificationDto, ApiError, string>({
     mutationFn: markNotificationRead,
+    onMutate: (id) => updatePendingActionCount(id, 1),
+    onSettled: (_data, _error, id) => updatePendingActionCount(id, -1),
     onSuccess: invalidateNotifications,
     onError: reportMutationError,
   });
   const archive = useMutation<NotificationDto, ApiError, string>({
     mutationFn: archiveNotification,
+    onMutate: (id) => updatePendingActionCount(id, 1),
+    onSettled: (_data, _error, id) => updatePendingActionCount(id, -1),
     onSuccess: invalidateNotifications,
     onError: reportMutationError,
   });
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
-  const rowActionPending = (id: string): boolean =>
-    (markRead.isPending && markRead.variables === id) ||
-    (archive.isPending && archive.variables === id);
+  const rowActionPending = (id: string): boolean => (pendingActionCounts[id] ?? 0) > 0;
 
   return (
     <section className="space-y-3" data-testid="home-inbox-list">

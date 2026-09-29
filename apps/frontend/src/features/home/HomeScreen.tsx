@@ -20,8 +20,8 @@ import { useMe } from '@/lib/auth/useMe';
 import {
   HOME_COPY,
   HOME_COVERAGE_COPY,
-  HOME_KPI_COPY,
   HOME_INBOX_COPY,
+  HOME_KPI_COPY,
   HOME_QUEUE_COPY,
   homeSeverityLabel,
 } from '@/lib/copy/home';

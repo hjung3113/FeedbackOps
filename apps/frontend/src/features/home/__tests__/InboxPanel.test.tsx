@@ -248,7 +248,7 @@ describe('InboxPanel', () => {
         ),
       ).toBe(true),
     );
-    expect(push).toHaveBeenCalledWith(`/vocs?view=inbox&selected=${VOC_ID}`);
+    expect(push.mock.calls[0]?.[0]).toBe(`/vocs?view=inbox&selected=${VOC_ID}`);
   });
 
   it('navigates from an already-read row without sending a read request', async () => {
@@ -257,6 +257,7 @@ describe('InboxPanel', () => {
     ]);
     const { push } = renderInbox();
 
+    fireEvent.click(await screen.findByRole('radio', { name: 'All' }));
     fireEvent.click(await screen.findByRole('link', { name: 'VOC 담당자로 지정되었습니다.' }));
     await act(async () => {
       await Promise.resolve();
@@ -265,7 +266,7 @@ describe('InboxPanel', () => {
     expect(calls.filter(({ method, path }) => method === 'POST' && path.endsWith('/read'))).toEqual(
       [],
     );
-    expect(push).toHaveBeenCalledWith(`/vocs?view=inbox&selected=${VOC_ID}`);
+    expect(push.mock.calls[0]?.[0]).toBe(`/vocs?view=inbox&selected=${VOC_ID}`);
   });
 
   it('marks a permission decision as read without navigating', async () => {

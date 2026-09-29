@@ -483,7 +483,7 @@ describe('HomeScreen route content', () => {
 
     await screen.findByTestId('home-inbox-list');
     expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveTextContent('3');
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveTextContent('3'));
   });
 
   it('switches Home tabs while retaining managedSystem and removes tab for Dashboard', async () => {
@@ -491,7 +491,7 @@ describe('HomeScreen route content', () => {
     installFetch(response, { unreadCount: 4 });
     const { router } = renderHome(`/home?managedSystem=${managedSystemId}`);
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /^Inbox/ }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /^Inbox/ }));
     await screen.findByTestId('home-inbox-list');
     await waitFor(() =>
       expect(router.state.location.search).toEqual({
@@ -501,7 +501,7 @@ describe('HomeScreen route content', () => {
     );
     expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveTextContent('4');
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /^Dashboard/ }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /^Dashboard/ }));
     await screen.findByTestId('home-kpis');
     await waitFor(() =>
       expect(router.state.location.search).toEqual({ managedSystem: managedSystemId }),

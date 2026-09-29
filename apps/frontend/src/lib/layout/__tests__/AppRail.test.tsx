@@ -1,12 +1,4 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  Outlet,
-  RouterProvider,
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-} from '@tanstack/react-router';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,19 +39,9 @@ const ACTOR = {
 
 function renderRail(props: ComponentProps<typeof AppRail> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const root = createRootRoute({ component: () => <Outlet /> });
-  const home = createRoute({
-    getParentRoute: () => root,
-    path: '/home',
-    component: () => <AppRail {...props} />,
-  });
-  const router = createRouter({
-    routeTree: root.addChildren([home]),
-    history: createMemoryHistory({ initialEntries: ['/home'] }),
-  });
   render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <AppRail {...props} />
     </QueryClientProvider>,
   );
   return queryClient;
@@ -129,6 +111,10 @@ describe('AppRail', () => {
     renderRail();
 
     expect(await screen.findByTestId('app-rail')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Notifications' })).toHaveAttribute(
+      'href',
+      '/home?tab=inbox',
+    );
     expect(screen.queryByText('99+')).not.toBeInTheDocument();
   });
 });
