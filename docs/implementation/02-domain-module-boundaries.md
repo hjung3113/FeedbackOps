@@ -96,6 +96,8 @@ Attachments owns:
 - the shared attachment storage seam and its upload/download commands
 - filename and MIME allowlist
 This is the implementation of Core's attachment-governance bullet, not a second owner. Other modules reference attachments; they do not own the storage seam.
+VOC owns the read projections of its own attachment links (`selectVocAttachments`,
+`selectAttachmentsForComments` in `voc/repo-read.ts`); Attachments does not provide a read projection for them.
 
 Navigation owns:
 - the read-only sidebar badge-count aggregation
@@ -141,9 +143,9 @@ Another module is reached only through one of these:
 
 Importing another module's `repo.ts` or `repo-read.ts` is not a surface. A module reading its own repo, including `voc/jobs` reading `voc/embedding/repo.ts`, is internal.
 
-These imports are read surfaces, not repo bypasses, and the repo-import lint must leave them alone: Surveys importing `findings/authorization.ts`; Dashboard importing `findings/authorization.ts`, `surveys/authorization.ts`, and `voc/read-service.ts`.
+These imports are read surfaces, not repo bypasses, and the repo-import lint must leave them alone: Surveys importing `findings/authorization.ts`; Dashboard importing `findings/authorization.ts`, `surveys/authorization.ts`, and the VOC barrel's reader contract types (`voc/read-contract.ts`).
 
-Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs` rule was #480. `scripts/check-boundaries.mjs` header rule 6 (`kind: 'cross-module-repo-import'`) now rejects any import of a foreign module's `repo*.js` and fails closed with no baseline. This document does not list those call sites. `allManagedSystemIds` stays a direct `read-projections.ts` import until the barrel cycle above is gone.
+Wrapping the cross-module `repo.js` imports and adding the `check-boundaries.mjs` rule was #480. `scripts/check-boundaries.mjs` header rule 6 (`kind: 'cross-module-repo-import'`) now rejects any import of a foreign module's `repo*.js` and fails closed with no baseline. This document does not list those call sites. `allManagedSystemIds` stays a direct `read-projections.ts` import until the barrel cycle above is gone. Rule 7 (`outside-voc-imports-voc-jobs`, #517) rejects imports of `modules/voc/jobs/*` from outside VOC; reach job behavior through the VOC barrel (`enqueueReleasedTaskReviewCandidates`, `registerVocJobs`).
 
 ## Core Boundary
 

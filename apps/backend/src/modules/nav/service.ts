@@ -1,5 +1,5 @@
 import { isAuthorizationAbsence } from '../permissions/read-utility.js';
-import type { CountVocsQuery } from '../voc/read-service.js';
+import type { CountVocsQuery, VocCountReader } from '../voc/index.js';
 
 export interface NavActor {
   actor_id: string;
@@ -8,9 +8,7 @@ export interface NavActor {
 }
 
 type NavCountsDeps = {
-  vocReadService: {
-    countVocs(args: { actor: NavActor; query: CountVocsQuery }): Promise<number>;
-  };
+  vocReadService: VocCountReader;
   findingsService: {
     listFindings(args: { actor: NavActor; managedSystemId?: string }): Promise<{
       items: readonly unknown[];

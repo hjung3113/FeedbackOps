@@ -28,7 +28,7 @@ import {
 } from './modules/notifications/index.js';
 import { createPublicUpdateReviewCandidatesService } from './modules/voc/public-update-review-candidates/service.js';
 import { createEmbeddingProvider, isEmbeddingEnabled } from './modules/voc/embedding/factory.js';
-import { registerVocJobs } from './modules/voc/jobs/index.js';
+import { registerVocJobs } from './modules/voc/index.js';
 import { buildServer } from './server.js';
 
 const config = loadConfig();

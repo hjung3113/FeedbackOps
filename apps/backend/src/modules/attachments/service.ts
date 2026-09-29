@@ -35,7 +35,7 @@ import { HttpError } from '../../lib/errors.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
-import type { VocReadService } from '../voc/read-service.js';
+import type { VocDetailReader } from '../voc/index.js';
 import { insertAttachment } from './repo.js';
 
 export interface UploadAttachmentActor {
@@ -65,7 +65,7 @@ export interface AttachmentsServiceDeps {
   auditService: AuditService;
   db: Db;
   idempotencyService: IdempotencyService;
-  vocReadService: VocReadService;
+  vocReadService: VocDetailReader;
 }
 
 export interface DownloadAttachmentActor {

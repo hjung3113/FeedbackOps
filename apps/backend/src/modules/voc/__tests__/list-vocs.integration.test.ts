@@ -21,7 +21,8 @@ import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import { randomUUID, uid } from '../../../test-support/ids.js';
 import { denyCapability, grantCapability } from '../../../test-support/permissions-fixtures.js';
 import { cleanupReadTestTables, insertVocDirectly } from '../../../test-support/voc-fixtures.js';
-import { type CountVocsQuery, createVocReadService } from '../read-service.js';
+import type { CountVocsQuery } from '../index.js';
+import { createVocReadService } from '../read-service.js';
 
 const APP_URL = process.env.DATABASE_URL ?? '';
 const MIGRATE_URL = process.env.DATABASE_URL_MIGRATE ?? '';

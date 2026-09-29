@@ -2,18 +2,10 @@ import type { Job, PgBoss } from "pg-boss";
 
 import { JOB_WORK_OPTIONS, withJobLogging, type JobLog } from "../../../lib/job-log.js";
 import type { PublicUpdateReviewCandidatesService } from "../public-update-review-candidates/service.js";
-
-export const TASK_RELEASED_REVIEW_CANDIDATES_QUEUE =
-  "tasks.create_public_update_review_candidates";
-
-export interface TaskReleasedReviewCandidatesPayload {
-  workspace_id: string;
-  task_id: string;
-  release_event_id: string;
-  correlation_id: string;
-  triggered_by_actor_id: string;
-  linked_vocs: Array<{ voc_id: string; entity_link_id: string }>;
-}
+import {
+  TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
+  type TaskReleasedReviewCandidatesPayload,
+} from './released-review-candidates-contract.js';
 
 export function releasedReviewCandidatesHandler(deps: {
   publicUpdateReviewCandidatesService: PublicUpdateReviewCandidatesService;

@@ -46,10 +46,10 @@ import {
   markTaskRequestConverted,
 } from '../task-requests/commands.js';
 import {
-  TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,
-} from '../voc/jobs/released-review-candidates.js';
-import type { VocReadService } from '../voc/read-service.js';
+  type VocReferenceReader,
+  enqueueReleasedTaskReviewCandidates,
+} from '../voc/index.js';
 import {
   type TaskCommentRow,
   type TaskRow,
@@ -79,7 +79,7 @@ export interface TasksServiceDeps {
   /** Narrow read seam (#378): Task detail resolves its source VOC's visibility
    *  verdict through the canonical VOC read-authority path — never a copied
    *  predicate (see #423) and never a VOC repo import (module-seams guard). */
-  vocReadService: Pick<VocReadService, 'resolveVocReference'>;
+  vocReadService: VocReferenceReader;
   boss?: PgBoss;
 }
 
@@ -900,7 +900,7 @@ export function createTasksService(deps: TasksServiceDeps) {
                   entity_link_id: link.entity_link_id,
                 })),
               };
-              await deps.boss.send(TASK_RELEASED_REVIEW_CANDIDATES_QUEUE, payload, {
+              await enqueueReleasedTaskReviewCandidates(deps.boss, payload, {
                 db: fromDrizzle(tx, sql),
               });
             }

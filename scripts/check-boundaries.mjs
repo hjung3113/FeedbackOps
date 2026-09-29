@@ -7,6 +7,7 @@
 //   4. apps/frontend MUST NOT import from apps/backend.
 //   5. apps/backend MUST NOT import from apps/frontend or packages/ui.
 //   6. apps/backend/src/modules/* MUST NOT import another top-level module's repo*.js.
+//   7. Files outside modules/voc MUST NOT import from modules/voc/jobs/.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -46,6 +47,11 @@ const RULES = [
     targetBasename: /^repo[^/]*\.js$/,
     msg: 'backend modules must import another module through its approved public seam, not repo*.js',
   },
+  {
+    scope: 'apps/backend',
+    kind: 'outside-voc-imports-voc-jobs',
+    msg: 'files outside the VOC module must import job behavior through the VOC public seam',
+  },
 ];
 
 const EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx']);
@@ -67,6 +73,11 @@ function moduleSegment(file) {
   const rel = relative(join(ROOT, 'apps/backend/src/modules'), file);
   if (rel.startsWith('..')) return null;
   return rel.split(sep)[0];
+}
+
+function isWithinPath(directory, file) {
+  const rel = relative(directory, file);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`));
 }
 
 function collectImportSpecifiers(file, content) {
@@ -135,6 +146,25 @@ for (const rule of RULES) {
           violations++;
           console.error(
             `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${relative(ROOT, target)})`,
+          );
+        }
+      }
+      continue;
+    }
+    if (rule.kind === 'outside-voc-imports-voc-jobs') {
+      const vocModuleDir = join(ROOT, 'apps/backend/src/modules/voc');
+      const vocJobsDir = join(vocModuleDir, 'jobs');
+      if (isWithinPath(vocModuleDir, file)) continue;
+      for (const { specifier, line } of collectImportSpecifiers(file, content)) {
+        const normalizedSpecifier = specifier.replaceAll('\\', '/');
+        const pathNamesVocJobs = /(^|\/)voc\/jobs(?:\/|$)/.test(normalizedSpecifier);
+        const resolvedTarget = specifier.startsWith('.') ? resolve(dirname(file), specifier) : null;
+        const targetsVocJobs =
+          (resolvedTarget !== null && isWithinPath(vocJobsDir, resolvedTarget)) || pathNamesVocJobs;
+        if (targetsVocJobs) {
+          violations++;
+          console.error(
+            `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${specifier})`,
           );
         }
       }
