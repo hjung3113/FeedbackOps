@@ -241,7 +241,7 @@ for (const rule of RULES) {
           targetModule = match?.[1] ?? null;
         }
         // #517 AC scope: VOC's seed helpers only. Other modules' cross-module seed-helper
-        // imports are pre-existing and tracked separately.
+        // imports are pre-existing and tracked in #574.
         if (srcSegment && targetModule === 'voc' && srcSegment !== targetModule) {
           violations++;
           const displayTarget = resolvedTarget ? relative(ROOT, resolvedTarget) : specifier;

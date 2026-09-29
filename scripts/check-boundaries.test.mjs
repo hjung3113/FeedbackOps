@@ -154,6 +154,85 @@ runCase(
   'apps/backend/src/modules/surveys/results.ts:2',
 );
 
+runCase(
+  'rule 8 rejects VOC hook imports through the feature alias',
+  {
+    ...zero,
+    [join('apps', 'frontend', 'src', 'features', 'findings', 'x.ts')]:
+      "import { useThing } from '@/features/voc/hooks/useThing';\n",
+  },
+  false,
+  'apps/frontend/src/features/findings/x.ts:1',
+);
+
+runCase(
+  'rule 8 rejects relative VOC lib imports from src/lib',
+  {
+    ...zero,
+    [join('apps', 'frontend', 'src', 'lib', 'x.ts')]:
+      "import { helper } from '../features/voc/lib/helper';\n",
+  },
+  false,
+  'apps/frontend/src/lib/x.ts:1',
+);
+
+runCase(
+  'rule 8 treats voc-cluster as a non-VOC feature',
+  {
+    ...zero,
+    [join('apps', 'frontend', 'src', 'features', 'voc-cluster', 'x.ts')]:
+      "import { useThing } from '@/features/voc/hooks/useThing';\n",
+  },
+  false,
+  'apps/frontend/src/features/voc-cluster/x.ts:1',
+);
+
+runCase(
+  'rule 8 excludes frontend tests and allows VOC feature internals',
+  {
+    ...zero,
+    [join('apps', 'frontend', 'src', 'features', 'findings', '__tests__', 'x.test.ts')]:
+      "import { useThing } from '@/features/voc/hooks/useThing';\n",
+    [join('apps', 'frontend', 'src', 'features', 'voc', 'components', 'x.tsx')]:
+      "import { helper } from '@/features/voc/lib/helper';\n",
+  },
+  true,
+  'boundaries: OK',
+);
+
+runCase(
+  'rule 9 rejects foreign imports of VOC seed helpers',
+  {
+    ...zero,
+    [join(MODULES, 'voc-clusters', '__tests__', 'a.test.ts')]:
+      "import { seed } from '../../voc/__tests__/_seed-helpers.js';\n",
+  },
+  false,
+  'apps/backend/src/modules/voc-clusters/__tests__/a.test.ts:1',
+);
+
+runCase(
+  'rule 9 #574 carve-out: tasks to findings seed helpers remain outside the VOC-only guard',
+  {
+    ...zero,
+    [join(MODULES, 'tasks', '__tests__', 'a.test.ts')]:
+      "import { seed } from '../../findings/__tests__/_seed-helpers.js';\n",
+  },
+  true,
+  'boundaries: OK',
+);
+
+runCase(
+  'rule 9 allows same-module VOC jobs seed-helper imports',
+  {
+    ...zero,
+    [join(MODULES, 'voc', 'jobs', '__tests__', 'a.test.ts')]:
+      "import { seed } from '../../__tests__/_seed-helpers.js';\n",
+  },
+  true,
+  'boundaries: OK',
+);
+
 if (failures > 0) {
   console.error(`\n${failures} test case(s) failed`);
   process.exit(1);
