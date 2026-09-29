@@ -1,7 +1,4 @@
-import {
-  listNotificationsResponseSchema,
-  notificationDtoSchema,
-} from '@fops/shared';
+import { listNotificationsResponseSchema, notificationDtoSchema } from '@fops/shared';
 
 export const populatedInboxNotifications = listNotificationsResponseSchema.parse({
   items: [

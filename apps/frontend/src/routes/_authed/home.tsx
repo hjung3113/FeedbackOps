@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
-import { z } from 'zod';
 import type * as React from 'react';
+import { z } from 'zod';
 
 import { HomeScreen, type HomeTab } from '@/features/home/HomeScreen';
 
@@ -25,10 +25,8 @@ export function HomeRoute(): React.ReactElement {
   const onTabChange = (nextTab: HomeTab): void => {
     void navigate({
       search: (previous) => {
-        const search = { ...previous };
-        if (nextTab === 'inbox') search.tab = 'inbox';
-        else delete search.tab;
-        return search;
+        const { tab: _previousTab, ...rest } = previous;
+        return nextTab === 'inbox' ? { ...rest, tab: 'inbox' as const } : rest;
       },
     });
   };

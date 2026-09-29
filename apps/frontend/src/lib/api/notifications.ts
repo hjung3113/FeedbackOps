@@ -1,8 +1,8 @@
 import {
-  listNotificationsResponseSchema,
-  notificationDtoSchema,
   type ListNotificationsResponse,
   type NotificationDto,
+  listNotificationsResponseSchema,
+  notificationDtoSchema,
 } from '@fops/shared';
 
 import { apiRequest } from './client';

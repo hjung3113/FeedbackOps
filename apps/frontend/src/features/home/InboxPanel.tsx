@@ -3,8 +3,8 @@ import { Button, Skeleton, ToggleGroup, ToggleGroupItem } from '@fops/ui';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Archive, Check } from 'lucide-react';
-import { toast } from 'sonner';
 import * as React from 'react';
+import { toast } from 'sonner';
 
 import {
   type ApiError,
@@ -14,8 +14,8 @@ import {
   markNotificationRead,
   notificationsQueryKey,
 } from '@/lib/api';
-import { formatRelativeTime } from '@/lib/datetime';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
+import { formatRelativeTime } from '@/lib/datetime';
 
 type InboxFilter = 'unread' | 'all';
 
@@ -62,8 +62,7 @@ export function InboxPanel(): React.ReactElement {
         ...(pageParam !== undefined ? { cursor: pageParam } : {}),
         signal,
       }),
-    getNextPageParam: (lastPage) =>
-      lastPage.page.has_more ? lastPage.page.cursor : undefined,
+    getNextPageParam: (lastPage) => (lastPage.page.has_more ? lastPage.page.cursor : undefined),
     retry: false,
   });
   const invalidateNotifications = (): Promise<void> =>
@@ -165,8 +164,7 @@ function NotificationRow({
   onArchive: () => void;
 }): React.ReactElement {
   const target = notificationTarget(notification);
-  const targetLocation =
-    target === null ? null : new URL(target, 'http://feedbackops.local');
+  const targetLocation = target === null ? null : new URL(target, 'http://feedbackops.local');
   const mainClassName =
     'flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left hover:bg-surface-row-hover';
   const mainContent = (
@@ -187,10 +185,7 @@ function NotificationRow({
           <span className="truncate text-sm text-text-primary">{notification.summary}</span>
         </span>
       </span>
-      <time
-        className="shrink-0 text-xs text-text-muted"
-        dateTime={notification.created_at}
-      >
+      <time className="shrink-0 text-xs text-text-muted" dateTime={notification.created_at}>
         {formatRelativeTime(notification.created_at)}
       </time>
     </>

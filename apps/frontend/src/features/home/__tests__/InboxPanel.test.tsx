@@ -1,7 +1,7 @@
 import {
-  notificationDtoSchema,
   type NotificationDto,
   type NotificationEventType,
+  notificationDtoSchema,
 } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -196,22 +196,20 @@ afterEach(() => {
 });
 
 describe('notificationTarget', () => {
-  it.each(TARGET_CASES)('maps $eventType to its in-app destination', ({
-    eventType,
-    subjectType,
-    detail,
-    target,
-  }) => {
-    expect(
-      notificationTarget(
-        makeNotification({
-          event_type: eventType,
-          subject_type: subjectType,
-          detail,
-        }),
-      ),
-    ).toBe(target);
-  });
+  it.each(TARGET_CASES)(
+    'maps $eventType to its in-app destination',
+    ({ eventType, subjectType, detail, target }) => {
+      expect(
+        notificationTarget(
+          makeNotification({
+            event_type: eventType,
+            subject_type: subjectType,
+            detail,
+          }),
+        ),
+      ).toBe(target);
+    },
+  );
 
   it('treats a VOC event without a string detail.voc_id as having no destination', () => {
     expect(notificationTarget(makeNotification({ detail: {} }))).toBeNull();
@@ -227,9 +225,9 @@ describe('InboxPanel', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: 'All' }));
     await waitFor(() =>
-      expect(
-        calls.some(({ path, method }) => method === 'GET' && path === '/notifications'),
-      ).toBe(true),
+      expect(calls.some(({ path, method }) => method === 'GET' && path === '/notifications')).toBe(
+        true,
+      ),
     );
 
     expect(calls.some(({ path }) => path.includes('unread=true'))).toBe(true);
@@ -240,9 +238,7 @@ describe('InboxPanel', () => {
     const { calls } = installNotificationFetch([makeNotification()]);
     const { push } = renderInbox();
 
-    fireEvent.click(
-      await screen.findByRole('link', { name: 'VOC 담당자로 지정되었습니다.' }),
-    );
+    fireEvent.click(await screen.findByRole('link', { name: 'VOC 담당자로 지정되었습니다.' }));
 
     await waitFor(() =>
       expect(
@@ -261,9 +257,7 @@ describe('InboxPanel', () => {
     ]);
     const { push } = renderInbox();
 
-    fireEvent.click(
-      await screen.findByRole('link', { name: 'VOC 담당자로 지정되었습니다.' }),
-    );
+    fireEvent.click(await screen.findByRole('link', { name: 'VOC 담당자로 지정되었습니다.' }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -284,9 +278,7 @@ describe('InboxPanel', () => {
     const { calls } = installNotificationFetch([permissionDecision]);
     const { push } = renderInbox();
 
-    fireEvent.click(
-      await screen.findByRole('button', { name: '권한 요청이 처리되었습니다.' }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: '권한 요청이 처리되었습니다.' }));
 
     await waitFor(() =>
       expect(

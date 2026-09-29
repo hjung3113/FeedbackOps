@@ -1,6 +1,6 @@
 import {
-  homeInboxPopulatedVisualSnapshot,
   homeEmptyVisualSnapshot,
+  homeInboxPopulatedVisualSnapshot,
   homeUnscopedVisualSnapshot,
   homeVisualSnapshot,
   homeZeroQueuesVisualSnapshot,
@@ -25,11 +25,7 @@ test.describe('/home visual harness', () => {
     await expect(
       page.getByTestId('home-inbox-row-11111111-1111-4111-8111-111111111111'),
     ).toBeVisible();
-    await expectVisual(
-      page,
-      page.locator('[data-app-frame]'),
-      homeInboxPopulatedVisualSnapshot,
-    );
+    await expectVisual(page, page.locator('[data-app-frame]'), homeInboxPopulatedVisualSnapshot);
   });
 
   // #280 removed the dead My Work entry point, not the panel — the panel still
