@@ -1,15 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.mock factories are hoisted above module-level const declarations, so the
 // doubles have to be created inside vi.hoisted or the factories close over
 // uninitialised bindings.
-const { navigate, logout, useMe } = vi.hoisted(() => ({
+const { navigate, logout, useMe, fetchUnreadNotificationCount } = vi.hoisted(() => ({
   navigate: vi.fn(),
   logout: vi.fn(),
   useMe: vi.fn(),
+  fetchUnreadNotificationCount: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -18,6 +19,10 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 }));
 vi.mock('@/lib/api/auth', () => ({ logout }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe }));
+vi.mock('@/lib/api/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/notifications')>()),
+  fetchUnreadNotificationCount,
+}));
 
 import { AppRail, railForPathname } from '../AppRail';
 
@@ -56,6 +61,8 @@ beforeEach(() => {
   navigate.mockReset();
   logout.mockReset();
   useMe.mockReturnValue({ data: ACTOR });
+  fetchUnreadNotificationCount.mockReset();
+  fetchUnreadNotificationCount.mockResolvedValue(0);
 });
 
 describe('AppRail', () => {
@@ -78,6 +85,47 @@ describe('AppRail', () => {
     renderRail({ activeDomain: 'home' });
     const railButtons = screen.getAllByRole('link');
     expect(railButtons[0]).toHaveAttribute('data-testid', 'rail-home');
+  });
+
+  it('links the bell to Inbox without an unread badge', async () => {
+    renderRail();
+
+    await waitFor(() => expect(fetchUnreadNotificationCount).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const notifications = screen.getByRole('link', { name: 'Notifications' });
+    expect(notifications).toHaveAttribute('href', '/home?tab=inbox');
+    expect(notifications).not.toHaveTextContent('0');
+  });
+
+  it('caps the unread badge and keeps the full count in its accessible name', async () => {
+    fetchUnreadNotificationCount.mockResolvedValue(120);
+    renderRail();
+
+    expect(await screen.findByText('99+')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Notifications, 120 unread' })).toHaveAttribute(
+      'href',
+      '/home?tab=inbox',
+    );
+  });
+
+  it('keeps the rail rendered when the notification count request fails', async () => {
+    fetchUnreadNotificationCount.mockRejectedValue(new Error('network failed'));
+    renderRail();
+
+    await waitFor(() => expect(fetchUnreadNotificationCount).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('app-rail')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Notifications' })).toHaveAttribute(
+      'href',
+      '/home?tab=inbox',
+    );
+    expect(screen.queryByText('99+')).not.toBeInTheDocument();
   });
 });
 

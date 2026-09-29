@@ -22,6 +22,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { logout } from '@/lib/api/auth';
 import { useMe } from '@/lib/auth/useMe';
+import { HOME_INBOX_COPY } from '@/lib/copy/home';
+import {
+  formatUnreadBadge,
+  useUnreadNotificationCount,
+} from '@/lib/cross-system/useUnreadNotificationCount';
 
 export type RailDomain = 'home' | 'voc' | 'findings' | 'tasks' | 'integration' | 'surveys' | 'admin';
 
@@ -60,6 +65,10 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
   const head = RAIL_ITEMS.filter((item) => item.key !== 'admin');
   const admin = RAIL_ITEMS.find((item) => item.key === 'admin');
   const { data: me } = useMe();
+  const unreadNotificationCount = useUnreadNotificationCount();
+  const unreadCount = unreadNotificationCount.data;
+  const unreadBadge =
+    unreadCount !== undefined && unreadCount > 0 ? formatUnreadBadge(unreadCount) : undefined;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
@@ -109,13 +118,21 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
       {admin && <div className="my-1 w-6 border-t border-border-subtle" aria-hidden="true" />}
       {admin && <RailButton item={admin} active={activeDomain === admin.key} />}
       <div className="flex-1" />
-      <button
-        type="button"
+      {/* Plain anchor like the RailButton entries above (the rail renders outside routes in tests too). */}
+      <a
+        href="/home?tab=inbox"
         className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary"
-        aria-label="Notifications"
+        aria-label={HOME_INBOX_COPY.railNotificationsLabel(unreadCount)}
       >
-        <Bell className="h-4 w-4" />
-      </button>
+        <span className="relative inline-flex">
+          <Bell className="h-4 w-4" />
+          {unreadBadge !== undefined && (
+            <span className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-danger px-1 text-[9px] font-semibold leading-none text-white">
+              {unreadBadge}
+            </span>
+          )}
+        </span>
+      </a>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button

@@ -22,6 +22,8 @@ export default defineConfig({
       '/nav': 'http://127.0.0.1:3011',
       // #143 actor-private saved-view CRUD is a backend-only root resource.
       '/saved-views': 'http://127.0.0.1:3011',
+      // #509 notification inbox and state actions are backend-only root routes.
+      '/notifications': 'http://127.0.0.1:3011',
       // #217 Home action-dashboard summary is a backend-only root path.
       '/dashboard': 'http://127.0.0.1:3011',
       // #197 workspace policy endpoints are backend-only root paths, so

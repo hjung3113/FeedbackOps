@@ -273,3 +273,5 @@ apps/backend/src/modules/voc/read/repository-conversation.ts lint/style/noNonNul
 apps/backend/src/modules/voc/read/list.ts lint/correctness/noUnusedVariables -- moved verbatim from voc/read-service.ts (pre-existing 1x on develop; #517 Phase 3)
 apps/backend/src/modules/voc/read/scope.ts lint/style/noNonNullAssertion -- moved verbatim from voc/read-service.ts (pre-existing 1x on develop; #517 Phase 3)
 apps/backend/src/modules/voc/conversation/frame.ts lint/style/noNonNullAssertion -- moved verbatim from voc/conversation-service.ts (pre-existing on develop; #517 Phase 3)
+apps/frontend/src/features/home/InboxPanel.tsx lint/complexity/useLiteralKeys -- detail is Record<string, unknown>; noPropertyAccessFromIndexSignature requires detail['voc_id'] (#509 part 4)
+apps/backend/src/lib/rate-limit-tiers.ts format -- pre-existing on develop (measured 2026-09-30; #509 part 4 only adds the notificationState tier)

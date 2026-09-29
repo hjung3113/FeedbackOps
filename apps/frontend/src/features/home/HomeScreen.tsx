@@ -4,7 +4,7 @@ import {
   type TaskDto,
   type TaskRequestDto,
 } from '@fops/shared';
-import { Button, PageShell } from '@fops/ui';
+import { Button, PageShell, Tabs, TabsContent, TabsList, TabsTrigger } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import type * as React from 'react';
@@ -20,17 +20,37 @@ import { useMe } from '@/lib/auth/useMe';
 import {
   HOME_COPY,
   HOME_COVERAGE_COPY,
+  HOME_INBOX_COPY,
   HOME_KPI_COPY,
   HOME_QUEUE_COPY,
   homeSeverityLabel,
 } from '@/lib/copy/home';
 import { permissionRequestsMineKey } from '@/lib/cross-system/usePermissionCheck';
+import {
+  formatUnreadBadge,
+  useUnreadNotificationCount,
+} from '@/lib/cross-system/useUnreadNotificationCount';
+import { InboxPanel } from './InboxPanel';
 
 export const HOME_COVERAGE_HREF = '/integration/coverage';
 
-export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): React.ReactElement {
+export type HomeTab = 'dashboard' | 'inbox';
+
+export function HomeScreen({
+  managedSystemId,
+  activeTab = 'dashboard',
+  onTabChange,
+}: {
+  managedSystemId?: string;
+  activeTab?: HomeTab;
+  onTabChange?: (tab: HomeTab) => void;
+}): React.ReactElement {
   const me = useMe();
   const queryClient = useQueryClient();
+  const unreadNotifications = useUnreadNotificationCount();
+  const unreadCount = unreadNotifications.data;
+  const unreadBadge =
+    unreadCount !== undefined && unreadCount > 0 ? formatUnreadBadge(unreadCount) : undefined;
   const summary = useQuery({
     queryKey: ['dashboard-summary', managedSystemId] as const,
     queryFn: ({ signal }) =>
@@ -66,58 +86,81 @@ export function HomeScreen({ managedSystemId }: { managedSystemId?: string }): R
   };
 
   return (
-    <PageShell contentClassName="max-w-none">
-      <section data-testid="home-screen">
-        <header className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-text-primary">
-              {HOME_COPY.title(actorName)}
-            </h1>
-            <p className="mt-3 text-sm text-text-muted">
-              {HOME_COPY.subtitle(summary.data?.action_queues, summary.data?.coverage)}
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <Button variant="subtle" size="sm" onClick={refresh} data-testid="home-refresh">
-              <RefreshCw className="h-3.5 w-3.5" />
-              {HOME_COPY.refresh}
-            </Button>
-            <Button asChild variant="primary" size="sm">
-              <a href="/vocs?action=create">
-                <Plus className="h-3.5 w-3.5" />
-                {HOME_COPY.newVoc}
-              </a>
-            </Button>
-          </div>
-        </header>
-        {summary.isError ? (
-          <p className="mb-5 text-sm text-accent-danger">Home summary unavailable.</p>
-        ) : (
-          <HomeSummary summary={summary.data} />
-        )}
-        <div
-          className={`mt-9 grid gap-7 ${
-            summary.data !== undefined && summary.data.coverage.length > 0
-              ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
-              : 'grid-cols-1'
-          }`}
-        >
-          <MyWorkPanel
-            tasks={myTasks.data?.items ?? []}
-            requests={pendingRequests.data?.items ?? []}
-          />
-          {summary.data !== undefined && summary.data.coverage.length > 0 && (
-            <CoveragePanel
-              coverage={summary.data.coverage}
-              {...(managedSystemId !== undefined ? { managedSystemId } : {})}
-            />
-          )}
-        </div>
-        <div className="mt-9">
-          <OpenRequestsPanel requests={openPermissionRequests.data?.requests ?? []} />
-        </div>
-      </section>
-    </PageShell>
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => {
+        if (value === 'dashboard' || value === 'inbox') onTabChange?.(value);
+      }}
+    >
+      <PageShell contentClassName="max-w-none">
+        <section data-testid="home-screen">
+          <header className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-text-primary">
+                {HOME_COPY.title(actorName)}
+              </h1>
+              <p className="mt-3 text-sm text-text-muted">
+                {HOME_COPY.subtitle(summary.data?.action_queues, summary.data?.coverage)}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button variant="subtle" size="sm" onClick={refresh} data-testid="home-refresh">
+                <RefreshCw className="h-3.5 w-3.5" />
+                {HOME_COPY.refresh}
+              </Button>
+              <Button asChild variant="primary" size="sm">
+                <a href="/vocs?action=create">
+                  <Plus className="h-3.5 w-3.5" />
+                  {HOME_COPY.newVoc}
+                </a>
+              </Button>
+            </div>
+          </header>
+          <TabsList aria-label={HOME_INBOX_COPY.tabListLabel} className="mb-4">
+            <TabsTrigger value="dashboard">{HOME_INBOX_COPY.tabs.dashboard}</TabsTrigger>
+            <TabsTrigger value="inbox" className="gap-2">
+              {HOME_INBOX_COPY.tabs.inbox}
+              {unreadBadge !== undefined && (
+                <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-accent-primary px-1 text-[10px] font-semibold leading-4 text-white">
+                  {unreadBadge}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="dashboard" className="mt-0">
+            {summary.isError ? (
+              <p className="mb-5 text-sm text-accent-danger">Home summary unavailable.</p>
+            ) : (
+              <HomeSummary summary={summary.data} />
+            )}
+            <div
+              className={`mt-9 grid gap-7 ${
+                summary.data !== undefined && summary.data.coverage.length > 0
+                  ? 'grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
+                  : 'grid-cols-1'
+              }`}
+            >
+              <MyWorkPanel
+                tasks={myTasks.data?.items ?? []}
+                requests={pendingRequests.data?.items ?? []}
+              />
+              {summary.data !== undefined && summary.data.coverage.length > 0 && (
+                <CoveragePanel
+                  coverage={summary.data.coverage}
+                  {...(managedSystemId !== undefined ? { managedSystemId } : {})}
+                />
+              )}
+            </div>
+            <div className="mt-9">
+              <OpenRequestsPanel requests={openPermissionRequests.data?.requests ?? []} />
+            </div>
+          </TabsContent>
+          <TabsContent value="inbox" className="mt-0">
+            <InboxPanel />
+          </TabsContent>
+        </section>
+      </PageShell>
+    </Tabs>
   );
 }
 

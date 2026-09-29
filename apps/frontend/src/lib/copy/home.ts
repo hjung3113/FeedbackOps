@@ -102,6 +102,36 @@ export const HOME_COVERAGE_COPY: Record<DashboardSummary['coverage'][number]['id
   'analytics-area': 'Analytics area coverage',
 };
 
+export const HOME_INBOX_COPY = {
+  tabs: {
+    dashboard: 'Dashboard',
+    inbox: 'Inbox',
+  },
+  tabListLabel: 'Home views',
+  filterLabel: 'Notification filter',
+  unread: 'Unread',
+  all: 'All',
+  categories: {
+    voc: 'VOC',
+    task_request: 'Task Request',
+    task: 'Task',
+    permission_request: 'Permission Request',
+    public_update_review_candidate: 'Public Update',
+  },
+  emptyUnread: '읽지 않은 알림이 없습니다.',
+  emptyAll: '받은 알림이 없습니다.',
+  error: '알림을 불러오지 못했습니다.',
+  retry: 'Retry',
+  loadMore: 'Load more',
+  loadingMore: 'Loading…',
+  markAsRead: 'Mark as read',
+  archive: 'Archive',
+  railNotificationsLabel: (unreadCount: number | undefined) =>
+    unreadCount !== undefined && unreadCount > 0
+      ? `Notifications, ${unreadCount} unread`
+      : 'Notifications',
+} as const;
+
 export function homeSeverityLabel(
   severity: DashboardSummary['action_queues'][number]['severity'],
 ): string {

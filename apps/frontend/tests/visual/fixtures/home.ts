@@ -100,6 +100,7 @@ export const homeVisualSnapshot = 'home-action-dashboard.png';
 export const homeEmptyVisualSnapshot = 'home-action-dashboard-empty.png';
 export const homeZeroQueuesVisualSnapshot = 'home-action-dashboard-zero-queues.png';
 export const homeUnscopedVisualSnapshot = 'home-summary-unscoped.png';
+export const homeInboxPopulatedVisualSnapshot = 'home-inbox-populated.png';
 export const inboxHighNoLinkSelectedVisualSnapshot = 'inbox-high-no-link-selected.png';
 
 const homeFixtureIds = {

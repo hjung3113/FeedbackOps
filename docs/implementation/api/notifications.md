@@ -66,12 +66,14 @@ titles, and other free text stay in their domain records and audit events.
   `not_found.record` (404).
 - Sets `read_at` once and returns the updated notification. Repeating the
   request preserves the first `read_at`; no `Idempotency-Key` is required.
-- Uses the `mutation` rate-limit tier (10 requests per minute per Actor).
+- Uses the `notification_state` rate-limit tier (60 requests per minute per
+  Actor, its own bucket separate from `mutation`).
 
 `POST /notifications/:id/archive`
 
 - Uses the same authentication, Actor/workspace scope, 404 behavior, response,
-  and `mutation` rate-limit tier as the read endpoint.
+  and `notification_state` rate-limit tier (60 requests per minute per Actor,
+  its own bucket separate from `mutation`) as the read endpoint.
 - Sets `archived_at` once and preserves `read_at`; archiving does not mark the
   notification as read. No `Idempotency-Key` is required.
 

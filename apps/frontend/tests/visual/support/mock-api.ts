@@ -59,6 +59,7 @@ import {
   homeUnscopedSummaryFixture,
   homeZeroQueueSummaryFixture,
 } from '../fixtures/home';
+import { populatedInboxNotifications } from '../fixtures/notifications';
 import {
   managedSystemOwnerActors,
   managedSystemOwnerList,
@@ -169,6 +170,8 @@ interface InstallOptions {
   savedViews?: boolean;
   /** Home action dashboard fixture state. */
   home?: HomeVisualScenario;
+  /** Populated Home Inbox state; the default notification response remains empty. */
+  notifications?: 'populated';
   /** #513 coverage page fixture state: summary, systems, and analytics areas. */
   coverage?: 'populated' | 'empty';
   /** #532 Integration Action Dashboard summary and Managed System fixtures. */
@@ -251,6 +254,8 @@ export async function installMockApi(
       updated_at: '2026-07-28T00:00:00.000Z',
     });
   }
+  let notificationItems =
+    options.notifications === 'populated' ? [...populatedInboxNotifications.items] : [];
   const role = options.role ?? 'admin';
   const reporterActorId = options.vocReporterTaskSummary
     ? VOC_REPORTER_TASK_SUMMARY_IDS.reporter
@@ -276,6 +281,45 @@ export async function installMockApi(
         },
         workspace_id: IDS.workspace,
       });
+      return;
+    }
+
+    if (isRequest(route, 'GET', '/notifications')) {
+      const unread = url.searchParams.get('unread');
+      const includeArchived = url.searchParams.get('include_archived') === 'true';
+      const limit = Number(url.searchParams.get('limit') ?? '50');
+      const visible = notificationItems.filter(
+        (item) =>
+          (includeArchived || item.archived_at === null) &&
+          (unread === null || (unread === 'true' ? item.read_at === null : item.read_at !== null)),
+      );
+      const unreadCount = notificationItems.filter(
+        (item) => item.read_at === null && item.archived_at === null,
+      ).length;
+      await json(route, 200, {
+        items: visible.slice(0, limit),
+        page: { has_more: false },
+        unread_count: unreadCount,
+      });
+      return;
+    }
+
+    const notificationMutation = url.pathname.match(/^\/notifications\/([^/]+)\/(read|archive)$/);
+    if (notificationMutation && request.method() === 'POST') {
+      const [, id, action] = notificationMutation;
+      const item = notificationItems.find((candidate) => candidate.id === id);
+      if (!item) {
+        await json(route, 404, errorEnvelope(404));
+        return;
+      }
+      const updated =
+        action === 'read'
+          ? { ...item, read_at: item.read_at ?? '2026-07-21T09:00:00.000Z' }
+          : { ...item, archived_at: item.archived_at ?? '2026-07-21T09:00:00.000Z' };
+      notificationItems = notificationItems.map((candidate) =>
+        candidate.id === id ? updated : candidate,
+      );
+      await json(route, 200, updated);
       return;
     }
 

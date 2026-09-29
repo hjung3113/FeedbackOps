@@ -1,10 +1,15 @@
-import { createFileRoute, useSearch } from '@tanstack/react-router';
-import { z } from 'zod';
+import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import type * as React from 'react';
+import { z } from 'zod';
 
-import { HomeScreen } from '@/features/home/HomeScreen';
+import { HomeScreen, type HomeTab } from '@/features/home/HomeScreen';
 
-const homeSearchSchema = z.object({ managedSystem: z.string().uuid().optional() }).strict();
+const homeSearchSchema = z
+  .object({
+    managedSystem: z.string().uuid().optional(),
+    tab: z.enum(['dashboard', 'inbox']).optional(),
+  })
+  .strict();
 
 export const Route = createFileRoute('/_authed/home')({
   validateSearch: (raw) => homeSearchSchema.parse(raw),
@@ -12,6 +17,24 @@ export const Route = createFileRoute('/_authed/home')({
 });
 
 export function HomeRoute(): React.ReactElement {
-  const { managedSystem } = useSearch({ strict: false }) as { managedSystem?: string };
-  return <HomeScreen {...(managedSystem !== undefined ? { managedSystemId: managedSystem } : {})} />;
+  const { managedSystem, tab } = useSearch({ strict: false }) as {
+    managedSystem?: string;
+    tab?: HomeTab;
+  };
+  const navigate = useNavigate({ from: '/home' });
+  const onTabChange = (nextTab: HomeTab): void => {
+    void navigate({
+      search: (previous) => {
+        const { tab: _previousTab, ...rest } = previous;
+        return nextTab === 'inbox' ? { ...rest, tab: 'inbox' as const } : rest;
+      },
+    });
+  };
+  return (
+    <HomeScreen
+      {...(managedSystem !== undefined ? { managedSystemId: managedSystem } : {})}
+      activeTab={tab ?? 'dashboard'}
+      onTabChange={onTabChange}
+    />
+  );
 }
