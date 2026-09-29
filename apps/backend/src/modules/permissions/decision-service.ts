@@ -254,7 +254,7 @@ export function createDecisionService(deps: DecisionServiceDeps) {
           detail,
         });
 
-        if (action === 'approve' || action === 'reject') {
+        if (action === 'approve' || action === 'reject' || action === 'deny') {
           await deps.notify(tx, 'permission_request.decided', {
             workspace_id: actor.workspace_id,
             actor_ids: [request.requesterActorId],

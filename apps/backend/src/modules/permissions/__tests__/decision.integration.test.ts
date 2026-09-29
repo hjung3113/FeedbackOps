@@ -332,7 +332,6 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       [id],
     );
     expect(Number(audit.rows[0]?.count)).toBe(1);
-    expect(notifications.jobs).toEqual([]);
   });
 
   it('reject and need-more-info only transition the request and mint no grant', async () => {
@@ -381,6 +380,7 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
   it.each([
     ['approve', 'approved', '권한 요청이 승인되었습니다.'],
     ['reject', 'rejected', '권한 요청이 반려되었습니다.'],
+    ['deny', 'rejected', '권한 요청이 반려되었습니다.'],
   ] as const)(
     'notifies the requester for permission %s with outcome %s',
     async (action, outcome, summary) => {
@@ -388,7 +388,9 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
       const response = await decide(
         requestId,
         action,
-        action === 'reject' ? { reason: 'Not justified.' } : {},
+        action === 'approve' ? {} : { reason: 'Not justified.' },
+        adminCookie,
+        action === 'deny' ? randomUUID() : undefined,
       );
 
       expect(response.statusCode).toBe(200);
