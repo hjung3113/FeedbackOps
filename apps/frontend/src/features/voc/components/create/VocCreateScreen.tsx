@@ -25,7 +25,7 @@ import {
 import type { CreateVocRequest } from '@fops/shared';
 
 import { fetchManagedSystems, fetchAnalyticsAreas } from '@/lib/api';
-import { errorMapper } from '@/lib/api';
+import { errorMapper, mapUnknownError } from '@/lib/api';
 import { useIdempotencyKey } from '@/lib/api';
 import type { ApiError, ApiErrorEnvelope } from '@/lib/api';
 import { useVocCreateMutation } from '../../hooks/useVocCreateMutation';
@@ -281,7 +281,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                 </div>
               ) : msQuery.isError ? (
                 <p className="text-sm text-text-danger">
-                  {errorMapper((msQuery.error as ApiError).envelope).message}
+                  {mapUnknownError(msQuery.error).message}
                 </p>
               ) : msOptions.length === 0 ? (
                 <p className="text-sm text-text-muted">
