@@ -166,7 +166,7 @@ describe.skipIf(!runIntegration)('released Task review-candidate worker (#165)',
       input.ownerUserId ? { ownerUserId: input.ownerUserId } : {},
     );
     if (input.ownerTeamId) {
-      await migrateHandle.pool.query(`update voc.vocs set owner_team_id = $2 where id = $1`, [
+      await migrateHandle.pool.query('update voc.vocs set owner_team_id = $2 where id = $1', [
         voc.id,
         input.ownerTeamId,
       ]);
@@ -406,6 +406,11 @@ describe.skipIf(!runIntegration)('released Task review-candidate worker (#165)',
       }),
     });
     await handler([{ data: graph.payload }]);
+    const candidates = await migrateHandle.pool.query(
+      'select 1 from voc.public_update_review_candidates where source_task_id = $1 and voc_id = $2',
+      [graph.taskId, graph.vocId],
+    );
+    expect(candidates.rowCount).toBe(1);
     expect(notifications.jobs).toHaveLength(0);
   });
 
@@ -419,6 +424,11 @@ describe.skipIf(!runIntegration)('released Task review-candidate worker (#165)',
       }),
     });
     await handler([{ data: graph.payload }]);
+    const candidates = await migrateHandle.pool.query(
+      'select 1 from voc.public_update_review_candidates where source_task_id = $1 and voc_id = $2',
+      [graph.taskId, graph.vocId],
+    );
+    expect(candidates.rowCount).toBe(1);
     expect(notifications.jobs).toHaveLength(0);
   });
 

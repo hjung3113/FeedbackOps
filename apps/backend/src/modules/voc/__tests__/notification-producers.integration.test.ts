@@ -38,6 +38,7 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
   let managedSystemId: string;
   let teamId: string;
   let admin: TestActor;
+  let secondAdmin: TestActor;
   let owner: TestActor;
   let replacementOwner: TestActor;
   let developer: TestActor;
@@ -59,6 +60,7 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
     managedSystemId = await createManagedSystem();
     teamId = await createTeam();
     admin = await createActor('admin');
+    secondAdmin = await createActor('admin');
     owner = await createActor('user');
     replacementOwner = await createActor('user');
     developer = await createActor('developer');
@@ -213,6 +215,7 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
       );
     }
     const state = await getVocState(inserted.id);
+    expect(state.triage_state).toBe('untriaged');
     return { id: inserted.id, updatedAt: state.updated_at.toISOString() };
   }
 
@@ -220,15 +223,20 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
     owner_user_id: string | null;
     owner_team_id: string | null;
     severity: string | null;
+    triage_state: string;
+    triage_state_review_postponed_at: Date | null;
     updated_at: Date;
   }> {
     const result = await migrateHandle.pool.query<{
       owner_user_id: string | null;
       owner_team_id: string | null;
       severity: string | null;
+      triage_state: string;
+      triage_state_review_postponed_at: Date | null;
       updated_at: Date;
     }>(
-      `select owner_user_id, owner_team_id, severity, updated_at
+      `select owner_user_id, owner_team_id, severity, triage_state,
+              triage_state_review_postponed_at, updated_at
          from voc.vocs where id = $1`,
       [vocId],
     );
@@ -389,7 +397,7 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
     const response = await postReporterReply(app, reporter, voc.id);
     expect(response.statusCode).toBe(201);
     expect(notifications.jobs.map((job) => job.actor_id).sort()).toEqual(
-      [admin.id, owner.id].sort(),
+      [admin.id, secondAdmin.id, owner.id].sort(),
     );
     assertVocJob(
       'voc.reporter_replied',
@@ -411,13 +419,17 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
     const adminOwnedVoc = await seedVoc({ ownerUserId: admin.id });
     const adminOwnerReply = await postReporterReply(app, reporter, adminOwnedVoc.id);
     expect(adminOwnerReply.statusCode).toBe(201);
-    expect(notifications.jobs.map((job) => job.actor_id)).toEqual([admin.id]);
+    expect(notifications.jobs.map((job) => job.actor_id).sort()).toEqual(
+      [admin.id, secondAdmin.id].sort(),
+    );
 
     notifications.jobs.splice(0);
     const teamOwnedVoc = await seedVoc({ ownerTeamId: teamId });
     const teamReply = await postReporterReply(app, reporter, teamOwnedVoc.id);
     expect(teamReply.statusCode).toBe(201);
-    expect(notifications.jobs.map((job) => job.actor_id)).toEqual([admin.id]);
+    expect(notifications.jobs.map((job) => job.actor_id).sort()).toEqual(
+      [admin.id, secondAdmin.id].sort(),
+    );
   });
 
   it.each([
@@ -427,10 +439,10 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
     'notifies owner and admins when severity changes to %s',
     async (severity, summary) => {
       const voc = await seedVoc({ ownerUserId: owner.id });
-      const response = await patchVoc(app, admin, voc.id, voc.updatedAt, { severity });
+      const response = await patchVoc(app, secondAdmin, voc.id, voc.updatedAt, { severity });
       expect(response.statusCode).toBe(200);
       expect(notifications.jobs.map((job) => job.actor_id).sort()).toEqual(
-        [admin.id, owner.id].sort(),
+        [admin.id, secondAdmin.id, owner.id].sort(),
       );
       assertVocJob(
         'voc.severity_set_high_or_critical',
@@ -440,6 +452,133 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
       );
     },
   );
+
+  it('notifies the new owner and both admins when severity and ownership change together', async () => {
+    const voc = await seedVoc({ ownerUserId: owner.id });
+    const response = await patchVoc(app, secondAdmin, voc.id, voc.updatedAt, {
+      owner_user_id: replacementOwner.id,
+      severity: 'high',
+    });
+    expect(response.statusCode).toBe(200);
+    const severityJobs = notifications.jobs.filter(
+      (job) => job.event_type === 'voc.severity_set_high_or_critical',
+    );
+    expect(severityJobs.map((job) => job.actor_id).sort()).toEqual(
+      [admin.id, secondAdmin.id, replacementOwner.id].sort(),
+    );
+    expect(severityJobs.map((job) => job.actor_id)).not.toContain(owner.id);
+    const assignmentJobs = notifications.jobs.filter(
+      (job) => job.event_type === 'voc.assigned_to_me',
+    );
+    expect(assignmentJobs.map((job) => job.actor_id)).toEqual([replacementOwner.id]);
+    expect(notifications.jobs).toHaveLength(4);
+    assertVocJob(
+      'voc.severity_set_high_or_critical',
+      voc.id,
+      { voc_id: voc.id, primary_managed_system_id: managedSystemId },
+      'VOC 심각도가 높음으로 설정되었습니다.',
+    );
+    assertVocJob(
+      'voc.assigned_to_me',
+      voc.id,
+      { voc_id: voc.id, primary_managed_system_id: managedSystemId },
+      'VOC 담당자로 지정되었습니다.',
+    );
+  });
+
+  it.each([
+    ['high', 'VOC 심각도가 높음으로 설정되었습니다.'],
+    ['critical', 'VOC 심각도가 매우 높음으로 설정되었습니다.'],
+  ] as const)(
+    'notifies owner and admins when postponing with %s severity',
+    async (severity, summary) => {
+      const voc = await seedVoc({ ownerUserId: owner.id });
+      const response = await patchVoc(app, secondAdmin, voc.id, voc.updatedAt, {
+        postpone_review: true,
+        severity,
+      });
+      expect(response.statusCode).toBe(200);
+      expect(notifications.jobs.map((job) => job.actor_id).sort()).toEqual(
+        [admin.id, secondAdmin.id, owner.id].sort(),
+      );
+      assertVocJob(
+        'voc.severity_set_high_or_critical',
+        voc.id,
+        { voc_id: voc.id, primary_managed_system_id: managedSystemId },
+        summary,
+      );
+    },
+  );
+
+  it('notifies the new owner and both admins when postponing with severity and ownership changes', async () => {
+    const voc = await seedVoc({ ownerUserId: owner.id });
+    const response = await patchVoc(app, secondAdmin, voc.id, voc.updatedAt, {
+      postpone_review: true,
+      owner_user_id: replacementOwner.id,
+      severity: 'high',
+    });
+    expect(response.statusCode).toBe(200);
+    const severityJobs = notifications.jobs.filter(
+      (job) => job.event_type === 'voc.severity_set_high_or_critical',
+    );
+    expect(severityJobs.map((job) => job.actor_id).sort()).toEqual(
+      [admin.id, secondAdmin.id, replacementOwner.id].sort(),
+    );
+    expect(severityJobs.map((job) => job.actor_id)).not.toContain(owner.id);
+    const assignmentJobs = notifications.jobs.filter(
+      (job) => job.event_type === 'voc.assigned_to_me',
+    );
+    expect(assignmentJobs.map((job) => job.actor_id)).toEqual([replacementOwner.id]);
+    expect(notifications.jobs).toHaveLength(4);
+    assertVocJob(
+      'voc.severity_set_high_or_critical',
+      voc.id,
+      { voc_id: voc.id, primary_managed_system_id: managedSystemId },
+      'VOC 심각도가 높음으로 설정되었습니다.',
+    );
+    assertVocJob(
+      'voc.assigned_to_me',
+      voc.id,
+      { voc_id: voc.id, primary_managed_system_id: managedSystemId },
+      'VOC 담당자로 지정되었습니다.',
+    );
+  });
+
+  it('notifies the newly assigned owner when postponing an unowned VOC', async () => {
+    const voc = await seedVoc();
+    const response = await patchVoc(app, admin, voc.id, voc.updatedAt, {
+      postpone_review: true,
+      owner_user_id: owner.id,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(notifications.jobs.map((job) => job.actor_id)).toEqual([owner.id]);
+    assertVocJob(
+      'voc.assigned_to_me',
+      voc.id,
+      { voc_id: voc.id, primary_managed_system_id: managedSystemId },
+      'VOC 담당자로 지정되었습니다.',
+    );
+  });
+
+  it.each([
+    {
+      label: 'a low severity change',
+      initialSeverity: undefined,
+      patch: { postpone_review: true, severity: 'low' },
+    },
+    {
+      label: 'unchanged high severity and owner',
+      initialSeverity: 'high',
+      patch: { postpone_review: true },
+    },
+  ] as const)('does not notify for $label when review is postponed', async (scenario) => {
+    const voc = await seedVoc(
+      scenario.initialSeverity === 'high' ? { ownerUserId: owner.id, severity: 'high' } : {},
+    );
+    const response = await patchVoc(app, admin, voc.id, voc.updatedAt, scenario.patch);
+    expect(response.statusCode).toBe(200);
+    expect(notifications.jobs).toHaveLength(0);
+  });
 
   it.each([
     [null, 'low'],
@@ -467,7 +606,7 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
     expect(first.statusCode).toBe(201);
     expect(replay.statusCode).toBe(201);
     expect(notifications.jobs.map((job) => job.actor_id).sort()).toEqual(
-      [admin.id, owner.id].sort(),
+      [admin.id, secondAdmin.id, owner.id].sort(),
     );
   });
 
@@ -512,9 +651,11 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
     expect(await notificationJobCount(payload.correlation_id)).toBe(0);
   });
 
-  it('rolls back the severity change, audit row, and enqueued job when severity enqueue fails', async () => {
+  it('rolls back postponed severity, its audits, and its enqueued job when enqueue fails', async () => {
     const voc = await seedVoc({ ownerUserId: owner.id, severity: 'low' });
+    const before = await getVocState(voc.id);
     const response = await patchVoc(rollbackApp, admin, voc.id, voc.updatedAt, {
+      postpone_review: true,
       severity: 'high',
     });
     expect(response.statusCode).toBeGreaterThanOrEqual(500);
@@ -522,9 +663,44 @@ describe.skipIf(!runIntegration)('VOC notification producers (#509 part 2a)', ()
     expect(failAfterEnqueue.attemptedPayloads).toHaveLength(1);
     const payload = failAfterEnqueue.attemptedPayloads[0];
     if (!payload) throw new Error('severity rollback notification payload missing');
-    expect((await getVocState(voc.id)).severity).toBe('low');
+    expect(await getVocState(voc.id)).toMatchObject({
+      severity: before.severity,
+      owner_user_id: before.owner_user_id,
+      triage_state: 'untriaged',
+      triage_state_review_postponed_at: null,
+    });
     const audits = await migrateHandle.pool.query(
-      `select 1 from core.audit_log where subject_id = $1 and event_type = 'voc_severity_set'`,
+      `select 1 from core.audit_log
+        where subject_id = $1
+          and event_type in ('voc_severity_set', 'voc_owner_assigned', 'voc_triage_postponed')`,
+      [voc.id],
+    );
+    expect(audits.rowCount).toBe(0);
+    expect(await notificationJobCount(payload.correlation_id)).toBe(0);
+  });
+
+  it('rolls back postponed ownership, its audits, and its enqueued job when enqueue fails', async () => {
+    const voc = await seedVoc();
+    const before = await getVocState(voc.id);
+    const response = await patchVoc(rollbackApp, admin, voc.id, voc.updatedAt, {
+      postpone_review: true,
+      owner_user_id: owner.id,
+    });
+    expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    expect(response.statusCode).toBeLessThan(600);
+    expect(failAfterEnqueue.attemptedPayloads).toHaveLength(1);
+    const payload = failAfterEnqueue.attemptedPayloads[0];
+    if (!payload) throw new Error('postponed assignment rollback notification payload missing');
+    expect(await getVocState(voc.id)).toMatchObject({
+      severity: before.severity,
+      owner_user_id: before.owner_user_id,
+      triage_state: 'untriaged',
+      triage_state_review_postponed_at: null,
+    });
+    const audits = await migrateHandle.pool.query(
+      `select 1 from core.audit_log
+        where subject_id = $1
+          and event_type in ('voc_severity_set', 'voc_owner_assigned', 'voc_triage_postponed')`,
       [voc.id],
     );
     expect(audits.rowCount).toBe(0);

@@ -124,8 +124,10 @@ or permission `needs_more_info` / `permission_denied` outcomes.
 
 Callers resolve recipients in their request transaction and pass Actor IDs to
 the dispatcher. "Admins of the Managed System" means all workspace Actors
-whose `role_level` is `admin`; team-owned VOCs with no user owner resolve to an
-empty recipient list and enqueue no jobs. Self-notification is allowed with no
+whose `role_level` is `admin`; a team-owned VOC with no user owner contributes no owner recipient, so
+`voc.assigned_to_me` and `task.released` (owner only) enqueue no jobs, while
+`voc.reporter_replied` and `voc.severity_set_high_or_critical` still reach the
+workspace admins. Self-notification is allowed with no
 global suppression. The `task.released` exclusions from the Issue #165 note
 remain a caller-side rule; the catalogue documents that policy but does not
 resolve recipients.

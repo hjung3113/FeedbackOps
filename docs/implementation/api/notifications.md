@@ -25,8 +25,11 @@ No notification is created for Permission Request `need_more_info` or explicit
 `deny` (`permission_denied`), Task Request `self_approval_denied`, idempotent
 replays, no-op Task Request decisions that already have the target status,
 no-op VOC owner or severity updates, `low`/`medium`/null VOC severity changes,
-team-only VOC ownership, or a `task.released` candidate insert skipped by its
-unique key. The `task.released` policy excludes the releasing actor, Task
+`voc.assigned_to_me` or `task.released` for a team-only VOC (no user owner), or
+a `task.released` candidate insert skipped by its unique key. Team-only ownership
+removes only the owner from `voc.reporter_replied` and
+`voc.severity_set_high_or_critical` recipients; workspace admins are still
+notified. The `task.released` policy excludes the releasing actor, Task
 assignee, Reporter, and worker actor when the owner matches; this producer can
 compare the first three ids, while the release payload and linked rows expose
 no worker Actor id. VOC create requests do not accept owner or severity fields.
