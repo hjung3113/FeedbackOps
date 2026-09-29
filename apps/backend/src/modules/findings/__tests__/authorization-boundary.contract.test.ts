@@ -27,9 +27,9 @@ import { insertTaskRow } from '../../../test-support/task-fixtures.js';
 import { type TasksService, createTasksService } from '../../tasks/service.js';
 import {
   cleanupVocClusterFixtures,
-  insertActorRow,
   insertVocClusterRow,
 } from '../../../test-support/voc-cluster-fixtures.js';
+import { insertActorRow } from '../../../test-support/actor-fixtures.js';
 import { type VocClustersService, createVocClustersService } from '../../voc-clusters/service.js';
 import { type FindingsService, createFindingsService } from '../service.js';
 import { insertFindingRow } from './_seed-helpers.js';
