@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@fops/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { logout } from '@/lib/api/auth';
 import { useMe } from '@/lib/auth/useMe';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
@@ -113,9 +113,9 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
       {admin && <div className="my-1 w-6 border-t border-border-subtle" aria-hidden="true" />}
       {admin && <RailButton item={admin} active={activeDomain === admin.key} />}
       <div className="flex-1" />
-      <Link
-        to="/home"
-        search={{ tab: 'inbox' }}
+      {/* Plain anchor like the RailButton entries above (the rail renders outside routes in tests too). */}
+      <a
+        href="/home?tab=inbox"
         className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-row-hover hover:text-text-primary"
         aria-label={HOME_INBOX_COPY.railNotificationsLabel(unreadCount)}
       >
@@ -127,7 +127,7 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
             </span>
           )}
         </span>
-      </Link>
+      </a>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
