@@ -35,7 +35,7 @@ import { ReporterCard } from './ReporterCard';
 import { SimilarVocPanel } from './SimilarVocPanel';
 import { SeverityDisclaimerCard } from './SeverityDisclaimerCard';
 import { vocDescriptionToolbar } from './VocDescriptionToolbar';
-import { uploadAttachment } from '@/lib/api/attachments';
+import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 
 const SECTION_LABEL_CLASS = 'text-xs font-semibold uppercase tracking-wide text-text-muted';
 
@@ -226,15 +226,7 @@ export function VocCreateScreen({ initialManagedSystemId, onCancel, onDirtyChang
                         toast.error(msg);
                       },
                     })}
-                    onAttach={async (file) => {
-                      const result = await uploadAttachment(file);
-                      return {
-                        attachment_id: result.id,
-                        name: result.name,
-                        size_bytes: result.size_bytes,
-                        mime_type: result.mime_type,
-                      };
-                    }}
+                    onAttach={uploadRichEditorAttachment}
                   />
                 )}
               />

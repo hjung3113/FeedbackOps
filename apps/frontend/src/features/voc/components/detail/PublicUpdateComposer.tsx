@@ -67,7 +67,7 @@ import {
 } from '@/features/voc/hooks/useReporterStatusTransitions';
 import { useVocPublicUpdateMutation } from '@/features/voc/hooks/useVocPublicUpdateMutation';
 import type { ApiError } from '@/lib/api';
-import { uploadAttachment } from '@/lib/api/attachments';
+import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import {
@@ -283,15 +283,7 @@ export function PublicUpdateComposer({
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="공개 업데이트 내용을 입력하세요..."
         minHeight={84}
-        onAttach={async (file) => {
-          const r = await uploadAttachment(file);
-          return {
-            attachment_id: r.id,
-            name: r.name,
-            size_bytes: r.size_bytes,
-            mime_type: r.mime_type,
-          };
-        }}
+        onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => (
           <PublicUpdateToolbar
             editor={editor}
