@@ -460,6 +460,9 @@ describe('useInboxRoute', () => {
     expect(await screen.findByTestId('request-access')).toHaveTextContent('voc.read');
     expect(screen.getByTestId('request-access')).toHaveAttribute('data-managed-system-id', 'ms-1');
     expect(document.querySelector('[data-state="denied"]')).toBeInTheDocument();
+    // #562: an out-of-scope Managed System is not "no Inbox access" — no My VOCs detour.
+    expect(screen.getByText('선택한 Managed System의 VOC를 볼 권한이 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByTestId('voc-inbox-denied-my-vocs')).not.toBeInTheDocument();
   });
 
   it('keeps a non-permission error on VocList failed-load copy', async () => {
