@@ -86,7 +86,7 @@ vi.mock('@fops/ui', async () => {
     }) => (
       <div data-testid="permission-blocked" data-state={state}>
         {category}
-        {reason}
+        {reason !== undefined ? <p>{reason}</p> : null}
       </div>
     ),
     Skeleton: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
