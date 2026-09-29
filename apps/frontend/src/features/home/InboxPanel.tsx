@@ -9,8 +9,8 @@ import { toast } from 'sonner';
 import {
   type ApiError,
   archiveNotification,
-  errorMapper,
   fetchNotifications,
+  mapUnknownError,
   markNotificationRead,
   notificationsQueryKey,
 } from '@/lib/api';
@@ -18,6 +18,13 @@ import { HOME_INBOX_COPY } from '@/lib/copy/home';
 import { formatRelativeTime } from '@/lib/datetime';
 
 type InboxFilter = 'unread' | 'all';
+
+const selectedFilterItemClassName = [
+  'data-[state=on]:border-border-selected',
+  'data-[state=on]:bg-surface-row-selected',
+  'data-[state=on]:text-text-primary',
+  'data-[state=on]:font-semibold',
+].join(' ');
 
 function vocTarget(notification: NotificationDto): string | null {
   const vocId = notification.detail['voc_id'];
@@ -40,14 +47,14 @@ export function notificationTarget(notification: NotificationDto): string | null
     case 'task_request.needs_more_evidence':
       return `/tasks?view=requests&param=${subjectId}`;
     case 'permission_request.submitted':
-      return `/admin/permissions/requests?selected=${subjectId}`;
+      return `/admin/permissions/requests?tab=all&selected=${subjectId}`;
     case 'permission_request.decided':
       return null;
   }
 }
 
 function reportMutationError(error: ApiError): void {
-  toast.error(errorMapper(error.envelope).message);
+  toast.error(mapUnknownError(error).message);
 }
 
 export function InboxPanel(): React.ReactElement {
@@ -109,8 +116,12 @@ export function InboxPanel(): React.ReactElement {
         className="w-fit rounded-md border border-border-subtle bg-surface-card p-0.5"
         aria-label={HOME_INBOX_COPY.filterLabel}
       >
-        <ToggleGroupItem value="unread">{HOME_INBOX_COPY.unread}</ToggleGroupItem>
-        <ToggleGroupItem value="all">{HOME_INBOX_COPY.all}</ToggleGroupItem>
+        <ToggleGroupItem value="unread" className={selectedFilterItemClassName}>
+          {HOME_INBOX_COPY.unread}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="all" className={selectedFilterItemClassName}>
+          {HOME_INBOX_COPY.all}
+        </ToggleGroupItem>
       </ToggleGroup>
 
       {list.isPending ? (
@@ -155,7 +166,7 @@ export function InboxPanel(): React.ReactElement {
           <Button
             variant="subtle"
             size="sm"
-            disabled={list.isFetchingNextPage}
+            disabled={list.isFetching}
             onClick={() => void list.fetchNextPage()}
           >
             {list.isFetchingNextPage ? HOME_INBOX_COPY.loadingMore : HOME_INBOX_COPY.loadMore}
@@ -179,8 +190,8 @@ function NotificationRow({
 }): React.ReactElement {
   const target = notificationTarget(notification);
   const targetLocation = target === null ? null : new URL(target, 'http://feedbackops.local');
-  const mainClassName =
-    'flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left hover:bg-surface-row-hover';
+  const mainClassName = 'flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left';
+  const interactiveClassName = `${mainClassName} hover:bg-surface-row-hover`;
   const mainContent = (
     <>
       <span
@@ -191,6 +202,7 @@ function NotificationRow({
         }
         aria-hidden="true"
       />
+      {notification.read_at === null && <span className="sr-only">{HOME_INBOX_COPY.unread}</span>}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className="shrink-0 text-[10px] font-medium tracking-wide text-text-muted">
@@ -202,6 +214,9 @@ function NotificationRow({
       <time className="shrink-0 text-xs text-text-muted" dateTime={notification.created_at}>
         {formatRelativeTime(notification.created_at)}
       </time>
+      {target === null && notification.read_at === null && (
+        <span className="sr-only"> — {HOME_INBOX_COPY.markAsRead}</span>
+      )}
     </>
   );
   const onMainClick = (): void => {
@@ -217,21 +232,17 @@ function NotificationRow({
         <Link
           to={targetLocation.pathname as never}
           search={Object.fromEntries(targetLocation.searchParams) as never}
-          className={mainClassName}
-          aria-label={notification.summary}
+          className={interactiveClassName}
           onClick={onMainClick}
         >
           {mainContent}
         </Link>
-      ) : (
-        <button
-          type="button"
-          className={mainClassName}
-          aria-label={notification.summary}
-          onClick={onMainClick}
-        >
+      ) : notification.read_at === null ? (
+        <button type="button" className={interactiveClassName} onClick={onMainClick}>
           {mainContent}
         </button>
+      ) : (
+        <div className={mainClassName}>{mainContent}</div>
       )}
       <span className="flex shrink-0 items-center gap-1 px-2">
         {notification.read_at === null && (

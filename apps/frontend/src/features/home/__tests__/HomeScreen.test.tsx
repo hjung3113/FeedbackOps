@@ -48,8 +48,13 @@ const response = {
 
 function installFetch(
   summary: unknown = response,
-  options: { pendingSummary?: boolean; unreadCount?: number } = {},
+  options: {
+    pendingSummary?: boolean;
+    unreadCount?: number;
+    failUnreadCountAfterFirst?: boolean;
+  } = {},
 ): ReturnType<typeof vi.fn> {
+  let unreadCountRequests = 0;
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith('/me'))
@@ -74,7 +79,17 @@ function installFetch(
       return new Response(JSON.stringify({ items: [] }), { status: 200 });
     if (url.startsWith('/permission-requests/mine'))
       return new Response(JSON.stringify({ requests: [] }), { status: 200 });
-    if (url.startsWith('/notifications'))
+    if (url.startsWith('/notifications')) {
+      const notificationUrl = new URL(url, 'http://localhost');
+      if (notificationUrl.searchParams.has('limit')) {
+        unreadCountRequests += 1;
+        if (options.failUnreadCountAfterFirst && unreadCountRequests > 1) {
+          return new Response(
+            JSON.stringify({ code: 'internal.unexpected', message: 'temporary failure' }),
+            { status: 500 },
+          );
+        }
+      }
       return new Response(
         JSON.stringify({
           items: [],
@@ -83,6 +98,7 @@ function installFetch(
         }),
         { status: 200 },
       );
+    }
     return new Response('not mocked', { status: 500 });
   });
   globalThis.fetch = fetchMock as typeof globalThis.fetch;
@@ -106,7 +122,7 @@ function renderHome(initialPath = '/home') {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  return { ...rendered, router };
+  return { ...rendered, router, queryClient: client };
 }
 
 function ScopeHarness(): React.ReactElement {
@@ -484,6 +500,28 @@ describe('HomeScreen route content', () => {
     await screen.findByTestId('home-inbox-list');
     expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
     await waitFor(() => expect(screen.getByRole('tab', { name: /^Inbox/ })).toHaveTextContent('3'));
+  });
+
+  it('caps the Inbox tab badge and hides it after its count refetch fails', async () => {
+    const fetchMock = installFetch(response, {
+      unreadCount: 120,
+      failUnreadCountAfterFirst: true,
+    });
+    const { queryClient } = renderHome();
+    const inboxTab = await screen.findByRole('tab', { name: /^Inbox/ });
+
+    await waitFor(() => expect(inboxTab).toHaveTextContent('99+'));
+    expect(inboxTab).not.toHaveTextContent('120');
+
+    await queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+
+    await waitFor(() => expect(inboxTab).not.toHaveTextContent('99+'));
+    expect(inboxTab).not.toHaveTextContent('120');
+    expect(
+      fetchMock.mock.calls.filter(([input]) =>
+        String(input).startsWith('/notifications?unread=true&limit=1'),
+      ),
+    ).toHaveLength(2);
   });
 
   it('switches Home tabs while retaining managedSystem and removes tab for Dashboard', async () => {

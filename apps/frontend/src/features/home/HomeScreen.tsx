@@ -26,7 +26,10 @@ import {
   homeSeverityLabel,
 } from '@/lib/copy/home';
 import { permissionRequestsMineKey } from '@/lib/cross-system/usePermissionCheck';
-import { useUnreadNotificationCount } from '@/lib/cross-system/useUnreadNotificationCount';
+import {
+  formatUnreadBadge,
+  useUnreadNotificationCount,
+} from '@/lib/cross-system/useUnreadNotificationCount';
 import { InboxPanel } from './InboxPanel';
 
 export const HOME_COVERAGE_HREF = '/integration/coverage';
@@ -45,6 +48,9 @@ export function HomeScreen({
   const me = useMe();
   const queryClient = useQueryClient();
   const unreadNotifications = useUnreadNotificationCount();
+  const unreadCount = unreadNotifications.data;
+  const unreadBadge =
+    unreadCount !== undefined && unreadCount > 0 ? formatUnreadBadge(unreadCount) : undefined;
   const summary = useQuery({
     queryKey: ['dashboard-summary', managedSystemId] as const,
     queryFn: ({ signal }) =>
@@ -114,9 +120,9 @@ export function HomeScreen({
             <TabsTrigger value="dashboard">{HOME_INBOX_COPY.tabs.dashboard}</TabsTrigger>
             <TabsTrigger value="inbox" className="gap-2">
               {HOME_INBOX_COPY.tabs.inbox}
-              {(unreadNotifications.data ?? 0) > 0 && (
+              {unreadBadge !== undefined && (
                 <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-accent-primary px-1 text-[10px] font-semibold leading-4 text-white">
-                  {unreadNotifications.data}
+                  {unreadBadge}
                 </span>
               )}
             </TabsTrigger>

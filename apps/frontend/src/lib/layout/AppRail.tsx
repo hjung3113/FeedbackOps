@@ -23,7 +23,10 @@ import { useNavigate } from '@tanstack/react-router';
 import { logout } from '@/lib/api/auth';
 import { useMe } from '@/lib/auth/useMe';
 import { HOME_INBOX_COPY } from '@/lib/copy/home';
-import { useUnreadNotificationCount } from '@/lib/cross-system/useUnreadNotificationCount';
+import {
+  formatUnreadBadge,
+  useUnreadNotificationCount,
+} from '@/lib/cross-system/useUnreadNotificationCount';
 
 export type RailDomain = 'home' | 'voc' | 'findings' | 'tasks' | 'integration' | 'surveys' | 'admin';
 
@@ -63,7 +66,9 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
   const admin = RAIL_ITEMS.find((item) => item.key === 'admin');
   const { data: me } = useMe();
   const unreadNotificationCount = useUnreadNotificationCount();
-  const unreadCount = unreadNotificationCount.isError ? undefined : unreadNotificationCount.data;
+  const unreadCount = unreadNotificationCount.data;
+  const unreadBadge =
+    unreadCount !== undefined && unreadCount > 0 ? formatUnreadBadge(unreadCount) : undefined;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
@@ -121,9 +126,9 @@ export function AppRail({ activeDomain = 'voc', className }: AppRailProps) {
       >
         <span className="relative inline-flex">
           <Bell className="h-4 w-4" />
-          {unreadCount !== undefined && unreadCount > 0 && (
+          {unreadBadge !== undefined && (
             <span className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-danger px-1 text-[9px] font-semibold leading-none text-white">
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {unreadBadge}
             </span>
           )}
         </span>

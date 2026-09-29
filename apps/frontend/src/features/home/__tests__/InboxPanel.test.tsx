@@ -12,7 +12,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { InboxPanel, notificationTarget } from '../InboxPanel';
@@ -93,7 +93,7 @@ const TARGET_CASES: Array<{
     eventType: 'permission_request.submitted',
     subjectType: 'permission_request',
     detail: {},
-    target: `/admin/permissions/requests?selected=${NOTIFICATION_ID}`,
+    target: `/admin/permissions/requests?tab=all&selected=${NOTIFICATION_ID}`,
   },
   {
     eventType: 'permission_request.decided',
@@ -112,10 +112,15 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function installNotificationFetch(
   initialItems: NotificationDto[],
-  options: { failFirstListRequest?: boolean } = {},
+  options: {
+    failFirstListRequest?: boolean;
+    hasMore?: boolean;
+    holdSecondListRequest?: boolean;
+  } = {},
 ) {
   let items = [...initialItems];
   let listRequests = 0;
+  let releaseHeldListRequest: (() => void) | undefined;
   const calls: Array<{ path: string; method: string }> = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
@@ -132,11 +137,20 @@ function installNotificationFetch(
       const visible = items.filter((item) => item.archived_at === null);
       const filtered =
         unread === 'true' ? visible.filter((item) => item.read_at === null) : visible;
-      return jsonResponse({
+      const response = jsonResponse({
         items: filtered,
-        page: { has_more: false },
+        page: {
+          has_more: options.hasMore ?? false,
+          ...(options.hasMore ? { cursor: 'next-page' } : {}),
+        },
         unread_count: visible.filter((item) => item.read_at === null).length,
       });
+      if (options.holdSecondListRequest && listRequests === 2) {
+        return new Promise<Response>((resolve) => {
+          releaseHeldListRequest = () => resolve(response);
+        });
+      }
+      return response;
     }
 
     const mutation = url.pathname.match(/^\/notifications\/([^/]+)\/(read|archive)$/);
@@ -157,7 +171,7 @@ function installNotificationFetch(
     return jsonResponse({ code: 'internal.unexpected', message: 'not mocked' }, 500);
   });
   globalThis.fetch = fetchMock as typeof globalThis.fetch;
-  return { calls, fetchMock };
+  return { calls, fetchMock, releaseHeldListRequest: () => releaseHeldListRequest?.() };
 }
 
 function renderInbox() {
@@ -223,6 +237,9 @@ describe('InboxPanel', () => {
     renderInbox();
     await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
 
+    expect(screen.getByRole('radio', { name: 'Unread' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'All' })).toHaveAttribute('aria-checked', 'false');
+
     fireEvent.click(screen.getByRole('radio', { name: 'All' }));
     await waitFor(() =>
       expect(calls.some(({ path, method }) => method === 'GET' && path === '/notifications')).toBe(
@@ -232,13 +249,15 @@ describe('InboxPanel', () => {
 
     expect(calls.some(({ path }) => path.includes('unread=true'))).toBe(true);
     expect(calls.some(({ path }) => path === '/notifications?unread=false')).toBe(false);
+    expect(screen.getByRole('radio', { name: 'Unread' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('radio', { name: 'All' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('marks an unread VOC as read and navigates to its detail route', async () => {
     const { calls } = installNotificationFetch([makeNotification()]);
     const { push } = renderInbox();
 
-    fireEvent.click(await screen.findByRole('link', { name: 'VOC 담당자로 지정되었습니다.' }));
+    fireEvent.click(await screen.findByRole('link', { name: /VOC 담당자로/ }));
 
     await waitFor(() =>
       expect(
@@ -258,7 +277,7 @@ describe('InboxPanel', () => {
     const { push } = renderInbox();
 
     fireEvent.click(await screen.findByRole('radio', { name: 'All' }));
-    fireEvent.click(await screen.findByRole('link', { name: 'VOC 담당자로 지정되었습니다.' }));
+    fireEvent.click(await screen.findByRole('link', { name: /VOC 담당자로/ }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -279,7 +298,9 @@ describe('InboxPanel', () => {
     const { calls } = installNotificationFetch([permissionDecision]);
     const { push } = renderInbox();
 
-    fireEvent.click(await screen.findByRole('button', { name: '권한 요청이 처리되었습니다.' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /권한 요청이 처리되었습니다.*Mark as read/ }),
+    );
 
     await waitFor(() =>
       expect(
@@ -290,6 +311,50 @@ describe('InboxPanel', () => {
       ).toBe(true),
     );
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it('keeps an already-read permission decision main area noninteractive while allowing Archive', async () => {
+    const permissionDecision = makeNotification({
+      event_type: 'permission_request.decided',
+      subject_type: 'permission_request',
+      summary: '권한 요청이 처리되었습니다.',
+      detail: {},
+      read_at: '2026-07-27T01:00:00.000Z',
+    });
+    installNotificationFetch([permissionDecision]);
+    renderInbox();
+
+    fireEvent.click(await screen.findByRole('radio', { name: 'All' }));
+    const row = await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
+
+    expect(within(row).queryByRole('link')).not.toBeInTheDocument();
+    expect(
+      within(row).queryByRole('button', { name: /권한 요청이 처리되었습니다/ }),
+    ).not.toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+    expect(within(row).getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('disables Load more while the notification list refetches', async () => {
+    const { calls, releaseHeldListRequest } = installNotificationFetch([makeNotification()], {
+      hasMore: true,
+      holdSecondListRequest: true,
+    });
+    renderInbox();
+    await screen.findByTestId(`home-inbox-row-${NOTIFICATION_ID}`);
+
+    const loadMore = screen.getByRole('button', { name: 'Load more' });
+    expect(loadMore).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    await waitFor(() =>
+      expect(
+        calls.filter(({ method, path }) => method === 'GET' && path.startsWith('/notifications')),
+      ).toHaveLength(2),
+    );
+    await waitFor(() => expect(loadMore).toBeDisabled());
+
+    releaseHeldListRequest();
+    await waitFor(() => expect(loadMore).toBeEnabled());
   });
 
   it('archives a row and removes it after the list refetches', async () => {

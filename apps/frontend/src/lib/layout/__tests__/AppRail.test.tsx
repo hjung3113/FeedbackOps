@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -90,7 +90,12 @@ describe('AppRail', () => {
   it('links the bell to Inbox without an unread badge', async () => {
     renderRail();
 
-    const notifications = await screen.findByRole('link', { name: 'Notifications' });
+    await waitFor(() => expect(fetchUnreadNotificationCount).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const notifications = screen.getByRole('link', { name: 'Notifications' });
     expect(notifications).toHaveAttribute('href', '/home?tab=inbox');
     expect(notifications).not.toHaveTextContent('0');
   });
@@ -110,7 +115,12 @@ describe('AppRail', () => {
     fetchUnreadNotificationCount.mockRejectedValue(new Error('network failed'));
     renderRail();
 
-    expect(await screen.findByTestId('app-rail')).toBeInTheDocument();
+    await waitFor(() => expect(fetchUnreadNotificationCount).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('app-rail')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Notifications' })).toHaveAttribute(
       'href',
       '/home?tab=inbox',
