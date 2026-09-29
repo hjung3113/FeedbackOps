@@ -1,7 +1,7 @@
 import { mySurveyResponsesResponseSchema } from '@fops/shared';
 
-import type { SurveysServiceDeps, SurveysActor } from './service.js';
 import { decodeSurveyResponseHistoryCursor, listMySurveyResponseHistory } from './repo-read.js';
+import type { SurveysActor, SurveysServiceDeps } from './service.js';
 
 export interface MySurveyResponsesQuery {
   limit: number;

@@ -129,14 +129,12 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
       return sendError(reply, 'validation.failed', 'invalid query parameters', {
         fields: fieldsFromZodIssues(query.error.issues),
       });
-    return reply
-      .header('cache-control', 'private, no-cache')
-      .send(
-        await opts.surveysService.getMySurveyResponses(actor(req), {
-          limit: query.data.limit,
-          ...(query.data.cursor === undefined ? {} : { cursor: query.data.cursor }),
-        }),
-      );
+    return reply.header('cache-control', 'private, no-cache').send(
+      await opts.surveysService.getMySurveyResponses(actor(req), {
+        limit: query.data.limit,
+        ...(query.data.cursor === undefined ? {} : { cursor: query.data.cursor }),
+      }),
+    );
   });
   app.get('/surveys', { preHandler: pre, ...rate('read') }, async (req, reply) => {
     const q = z
