@@ -92,7 +92,7 @@ await registerVocJobs(boss, {
 });
 await registerNotificationJobs(boss, {
   db: dbHandle.db,
-  channel: createNotificationEmailChannel(jobLog),
+  channel: await createNotificationEmailChannel(jobLog, config),
   log: jobLog,
 });
 

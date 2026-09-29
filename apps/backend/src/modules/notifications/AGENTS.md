@@ -21,8 +21,11 @@
   row.
 - Application DML may update only `read_at`, `archived_at`, and
   `email_sent_at` on `core.notifications`; there is no hard-delete path.
-- The email channel in this slice is Pino-backed `MockEmailChannel` only. It
-  never opens a socket; SMTP is a later slice.
+- The email channel defaults to Pino-backed `MockEmailChannel`; setting
+  `NOTIFICATION_EMAIL_CHANNEL=smtp` selects `SmtpEmailChannel` after SMTP config
+  validation. Delivery is at-least-once through the held-open email claim.
+  `nodemailer` is imported only by `smtp.ts`, which the channel factory loads
+  lazily.
 
 ## Verification
 

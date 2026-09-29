@@ -38,6 +38,7 @@ function config(): AppConfig {
     SEED_MODE: 'core',
     PUBLIC_ATTACHMENT_ORIGIN: "'self'",
     TRUSTED_PROXY_HOPS: 0,
+    NOTIFICATION_EMAIL_CHANNEL: 'mock',
     EMBEDDING_PROVIDER: 'disabled',
     EMBEDDING_VERSION: 1,
     OIDC_SCOPES: 'openid email profile',

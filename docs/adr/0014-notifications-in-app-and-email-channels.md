@@ -135,8 +135,8 @@ resolve recipients.
 Email delivery is at-least-once. The handler holds the email claim and inbox
 insert in one transaction while calling the channel. If email succeeds but
 the transaction fails before commit, retry may deliver the email again.
-This slice provides only the Pino-backed `MockEmailChannel`; SMTP remains a
-later slice, and selecting `smtp` fails with a clear not-configured error.
+Part 1 provided only the Pino-backed `MockEmailChannel`; SMTP was deferred to
+part 3 (see the part 3 amendment below).
 
 Issue #509 part 2b wires the Task Request decision, Task conversion assignment,
 and Permission Request submission and decision producers described in the
@@ -147,3 +147,17 @@ Issue #509 part 2a wires the VOC owner assignment, reporter reply, and
 high-or-critical severity producers, plus `task.released` after a new Public
 Update review candidate is inserted, as described in the notifications API
 contract.
+
+Issue #509 part 3 adds `SmtpEmailChannel`, selected by
+`NOTIFICATION_EMAIL_CHANNEL=smtp`; the setting defaults to `mock`, which keeps
+CI and local development from sending mail. SMTP requires `SMTP_HOST`, a
+positive integer `SMTP_PORT`, and `SMTP_FROM`. `SMTP_USERNAME` and
+`SMTP_PASSWORD` must either both be set or both be unset for an unauthenticated
+internal relay. The Nodemailer transport uses 10-second connection and greeting
+timeouts and a 30-second socket timeout, and is loaded lazily only for the SMTP
+channel. When credentials are set on any port other than 465, the transport
+requires STARTTLS so the relay password is never sent in cleartext. A transport
+failure is rethrown as a fixed-message error that keeps only bounded diagnostic
+codes, because pg-boss persists thrown errors and a rejected recipient's address
+would otherwise land in the job failure record. Delivery remains at-least-once
+through the held-open email claim.

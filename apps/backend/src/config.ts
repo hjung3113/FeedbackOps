@@ -3,6 +3,15 @@ import { z } from 'zod';
 import { validateAttachmentOrigin } from './config-attachment-origin.js';
 import { validateOidcConfig } from './config-oidc.js';
 
+const optionalEnvString = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().optional(),
+);
+const optionalPositiveInt = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.coerce.number().int().positive().optional(),
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
@@ -45,6 +54,12 @@ const envSchema = z.object({
   // single ingress; 0 disables trust, identical to `false`). Defaults to
   // 0 outside production so dev/test/CI cannot spoof.
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+  NOTIFICATION_EMAIL_CHANNEL: z.enum(['mock', 'smtp']).default('mock'),
+  SMTP_HOST: optionalEnvString,
+  SMTP_PORT: optionalPositiveInt,
+  SMTP_USERNAME: optionalEnvString,
+  SMTP_PASSWORD: optionalEnvString,
+  SMTP_FROM: optionalEnvString,
   EMBEDDING_PROVIDER: z.enum(['voyage', 'fake', 'disabled']).default('disabled'),
   EMBEDDING_API_KEY: z.string().min(1).optional(),
   EMBEDDING_VERSION: z.coerce.number().int().positive().default(1),
@@ -78,6 +93,25 @@ const envSchema = z.object({
       path: ['EMBEDDING_API_KEY'],
       message: 'EMBEDDING_API_KEY is required when EMBEDDING_PROVIDER=voyage',
     });
+  }
+  if (config.NOTIFICATION_EMAIL_CHANNEL === 'smtp') {
+    for (const variable of ['SMTP_HOST', 'SMTP_PORT', 'SMTP_FROM'] as const) {
+      if (config[variable] === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [variable],
+          message: `${variable} is required when NOTIFICATION_EMAIL_CHANNEL=smtp`,
+        });
+      }
+    }
+    if (Boolean(config.SMTP_USERNAME) !== Boolean(config.SMTP_PASSWORD)) {
+      const missingCredential = config.SMTP_USERNAME ? 'SMTP_PASSWORD' : 'SMTP_USERNAME';
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [missingCredential],
+        message: 'SMTP_USERNAME and SMTP_PASSWORD must be set together when NOTIFICATION_EMAIL_CHANNEL=smtp',
+      });
+    }
   }
 });
 
