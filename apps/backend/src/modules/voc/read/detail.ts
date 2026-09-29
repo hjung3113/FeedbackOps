@@ -2,13 +2,9 @@
 import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import type { Tx } from '../../../db/tx.js';
 import { HttpError } from '../../../lib/errors.js';
-import {
-  actorEffectiveScope,
-  actorReadScope,
-  actorTriageScope,
-} from '../authorization.js';
-import * as repoRead from '../repo-read.js';
+import { actorEffectiveScope, actorReadScope, actorTriageScope } from '../authorization.js';
 import type { ReadActorContext, VocReadServiceDeps } from '../read-service.js';
+import * as repoRead from '../repo-read.js';
 import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 import { encodeConversationCursor } from './cursor.js';
 import {
@@ -78,7 +74,11 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
     if (kind === 'summary') {
       // ── SUMMARY path ────────────────────────────────────────────────────
       const decision = await deps.checkService.checkCapability(
-        { actor_id: actor.actor_id, workspace_id: actor.workspace_id, role_level: actor.role_level },
+        {
+          actor_id: actor.actor_id,
+          workspace_id: actor.workspace_id,
+          role_level: actor.role_level,
+        },
         'voc.read',
         { workspace_id: actor.workspace_id, managed_system_id: primaryMs },
       );
@@ -108,7 +108,8 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
         id: row.id,
         display_id: row.displayId,
         primary_managed_system_id: primaryMs,
-        reporter_facing_status: row.reporterFacingStatus as VocSummaryEnvelope['reporter_facing_status'],
+        reporter_facing_status:
+          row.reporterFacingStatus as VocSummaryEnvelope['reporter_facing_status'],
         created_at: row.createdAt.toISOString(),
         permission_decisions: { _self: selfDecision },
       };
@@ -171,7 +172,11 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
     );
 
     // ── 7. Permission decisions seed ─────────────────────────────────────────
-    const permissionDecisionsSeed = await repoRead.selectPermissionDecisionsSeed(deps.db, actor.workspace_id, vocId);
+    const permissionDecisionsSeed = await repoRead.selectPermissionDecisionsSeed(
+      deps.db,
+      actor.workspace_id,
+      vocId,
+    );
 
     const permissionDecisions: Record<string, unknown> =
       permissionDecisionsSeed !== null && typeof permissionDecisionsSeed === 'object'
@@ -186,7 +191,8 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       primary_managed_system_id: primaryMs,
       reporter_id: row.reporterId,
       severity: row.severity,
-      reporter_facing_status: row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
+      reporter_facing_status:
+        row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],
       source_context: row.sourceContext as VocDetailEnvelope['source_context'],
       created_at: row.createdAt.toISOString(),
@@ -207,15 +213,19 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       next_actions: [],
       next_reporter_states: {
         allowed: nextStates.allowed,
-        forbidden: nextStates.forbidden as Record<VocDetailEnvelope['reporter_facing_status'], string>,
+        forbidden: nextStates.forbidden as Record<
+          VocDetailEnvelope['reporter_facing_status'],
+          string
+        >,
       },
       linked_execution: { findingRef: null, taskRef: null },
       links,
       conversation_timeline: conversationTimeline,
       // conversation_page.cursor uses exactOptionalPropertyTypes: build without key when absent.
-      conversation_page: convNextCursor !== undefined
-        ? { cursor: convNextCursor, has_more: convResult.hasMore }
-        : { has_more: convResult.hasMore },
+      conversation_page:
+        convNextCursor !== undefined
+          ? { cursor: convNextCursor, has_more: convResult.hasMore }
+          : { has_more: convResult.hasMore },
       permission_decisions: permissionDecisions,
       // PLAN-22 §Bug-1: VOC-body linked attachments.
       attachments: vocAttRows.map(mapAttachmentRow),
@@ -318,7 +328,11 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
     );
 
     // Permission decisions seed.
-    const permissionDecisionsSeed = await repoRead.selectPermissionDecisionsSeed(tx, actor.workspace_id, vocId);
+    const permissionDecisionsSeed = await repoRead.selectPermissionDecisionsSeed(
+      tx,
+      actor.workspace_id,
+      vocId,
+    );
     const permissionDecisions: Record<string, unknown> =
       permissionDecisionsSeed !== null && typeof permissionDecisionsSeed === 'object'
         ? (permissionDecisionsSeed as Record<string, unknown>)
@@ -331,7 +345,8 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       primary_managed_system_id: primaryMs,
       reporter_id: row.reporterId,
       severity: row.severity,
-      reporter_facing_status: row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
+      reporter_facing_status:
+        row.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       triage_state: row.triageState as VocDetailEnvelope['triage_state'],
       source_context: row.sourceContext as VocDetailEnvelope['source_context'],
       created_at: row.createdAt.toISOString(),
@@ -350,14 +365,18 @@ export function createVocDetailReaders(deps: VocReadServiceDeps) {
       next_actions: [],
       next_reporter_states: {
         allowed: nextStates.allowed,
-        forbidden: nextStates.forbidden as Record<VocDetailEnvelope['reporter_facing_status'], string>,
+        forbidden: nextStates.forbidden as Record<
+          VocDetailEnvelope['reporter_facing_status'],
+          string
+        >,
       },
       linked_execution: { findingRef: null, taskRef: null },
       links,
       conversation_timeline: conversationTimeline,
-      conversation_page: convNextCursor !== undefined
-        ? { cursor: convNextCursor, has_more: convResult.hasMore }
-        : { has_more: convResult.hasMore },
+      conversation_page:
+        convNextCursor !== undefined
+          ? { cursor: convNextCursor, has_more: convResult.hasMore }
+          : { has_more: convResult.hasMore },
       permission_decisions: permissionDecisions,
       attachments: vocAttRows.map(mapAttachmentRow),
     };

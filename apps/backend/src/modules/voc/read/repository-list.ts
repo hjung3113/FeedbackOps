@@ -10,7 +10,7 @@ import type { Tx } from '../../../db/tx.js';
 import { allManagedSystemIds } from '../../managed-systems/read-projections.js';
 import type { Scope } from '../authorization.js';
 import { SEVERITY_ORDINAL, SORT_CONFIG } from '../cursor.js';
-import { mapVocRow, type VocReadRow } from './repository-shared.js';
+import { type VocReadRow, mapVocRow } from './repository-shared.js';
 
 // ── listVocsForRead ──────────────────────────────────────────────────────────
 

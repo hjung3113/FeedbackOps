@@ -13,8 +13,8 @@ import {
 } from '../../attachments/index.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
 import { insertVoc } from '../repo.js';
-import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 import type { CreateVocActor, VocEnvelope, VocServiceDeps } from '../service.js';
+import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 
 export function createVocCreateCommands(deps: VocServiceDeps) {
   async function createVoc(args: {

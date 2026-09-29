@@ -14,7 +14,11 @@ import type {
 
 // ── Row mappers ──────────────────────────────────────────────────────────────
 
-export function mapRowToListItem(row: VocReadRow, attachmentCount = 0, similarCount = 0): VocListItem {
+export function mapRowToListItem(
+  row: VocReadRow,
+  attachmentCount = 0,
+  similarCount = 0,
+): VocListItem {
   return {
     id: row.id,
     display_id: row.displayId,
@@ -42,7 +46,8 @@ export function mapSimilarItems(items: SimilarVocReadItem[]): VocDetailEnvelope[
       id: item.id,
       display_id: item.displayId,
       title: item.title,
-      reporter_facing_status: item.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
+      reporter_facing_status:
+        item.reporterFacingStatus as VocDetailEnvelope['reporter_facing_status'],
       severity: item.severity,
     })),
   };

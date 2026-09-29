@@ -6,7 +6,7 @@ import { vocPermissionDecisionsSeedFixture, vocs } from '../../../db/schema/voc.
 import { sqlUuidArray } from '../../../db/sql-arrays.js';
 import type { Tx } from '../../../db/tx.js';
 import type { Scope } from '../authorization.js';
-import { mapVocRow, type VocReadRow } from './repository-shared.js';
+import { type VocReadRow, mapVocRow } from './repository-shared.js';
 
 // ── selectVocByIdForRead ─────────────────────────────────────────────────────
 

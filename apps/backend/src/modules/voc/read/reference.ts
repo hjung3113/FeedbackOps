@@ -1,15 +1,16 @@
 // VOC reference visibility resolution for cross-module read consumers.
 import { HttpError } from '../../../lib/errors.js';
-import type { VocReadRow } from '../repo-read.js';
 import type {
   ReadActorContext,
   VocReadServiceDeps,
   VocReferenceResolution,
 } from '../read-service.js';
+import type { VocReadRow } from '../repo-read.js';
 
-type ResolveVocAccess = (
-  args: { actor: ReadActorContext; vocId: string },
-) => Promise<{ kind: 'full' | 'summary'; row: VocReadRow }>;
+type ResolveVocAccess = (args: { actor: ReadActorContext; vocId: string }) => Promise<{
+  kind: 'full' | 'summary';
+  row: VocReadRow;
+}>;
 
 export function createVocReferenceReader(
   deps: VocReadServiceDeps,

@@ -1,6 +1,6 @@
+import type { VocEnvelope } from '../service.js';
 // Shared VOC mutation envelope projection.
 import type { ReporterFacingStatus } from '../transitions.js';
-import type { VocEnvelope } from '../service.js';
 
 export function composeEnvelope(
   row: {

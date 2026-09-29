@@ -46,9 +46,10 @@ export function resolveVocListScope(args: {
       });
     }
     return {
-      scopeFilter: managed_system_id && managed_system_id !== 'all'
-        ? { kind: 'scoped', managedSystemIds: [managed_system_id] }
-        : { kind: 'all' },
+      scopeFilter:
+        managed_system_id && managed_system_id !== 'all'
+          ? { kind: 'scoped', managedSystemIds: [managed_system_id] }
+          : { kind: 'all' },
       actorIdForMyFilter: actor.actor_id,
     };
   }
@@ -56,19 +57,29 @@ export function resolveVocListScope(args: {
   if (view === 'inbox') {
     if (readScope.kind === 'scoped' && readScope.managedSystemIds.length === 0) {
       if (actor.role_level === 'developer') {
-        throw new HttpError('permission.scope_required', 'voc.read capability required; developer needs MS-scoped grant', {
-          requiredScope: [],
-          requestable_permission: { permission: 'voc.read', managed_system_id: null },
-        });
+        throw new HttpError(
+          'permission.scope_required',
+          'voc.read capability required; developer needs MS-scoped grant',
+          {
+            requiredScope: [],
+            requestable_permission: { permission: 'voc.read', managed_system_id: null },
+          },
+        );
       }
-      throw new HttpError('permission.denied', 'no voc.read scope for actor', { reason: 'no_grant' });
+      throw new HttpError('permission.denied', 'no voc.read scope for actor', {
+        reason: 'no_grant',
+      });
     }
     if (managed_system_id && managed_system_id !== 'all') {
       if (!msInScope(readScope, managed_system_id)) {
-        throw new HttpError('permission.scope_required', 'managed_system_id not in voc.read scope', {
-          requiredScope: [managed_system_id],
-          requestable_permission: { permission: 'voc.read', managed_system_id },
-        });
+        throw new HttpError(
+          'permission.scope_required',
+          'managed_system_id not in voc.read scope',
+          {
+            requiredScope: [managed_system_id],
+            requestable_permission: { permission: 'voc.read', managed_system_id },
+          },
+        );
       }
       return { scopeFilter: { kind: 'scoped', managedSystemIds: [managed_system_id] } };
     }
@@ -83,10 +94,14 @@ export function resolveVocListScope(args: {
   }
   if (managed_system_id && managed_system_id !== 'all') {
     if (!msInScope(intersected, managed_system_id)) {
-      throw new HttpError('permission.scope_required', 'managed_system_id not in voc.triage scope', {
-        requiredScope: [managed_system_id],
-        requestable_permission: { permission: 'voc.triage', managed_system_id },
-      });
+      throw new HttpError(
+        'permission.scope_required',
+        'managed_system_id not in voc.triage scope',
+        {
+          requiredScope: [managed_system_id],
+          requestable_permission: { permission: 'voc.triage', managed_system_id },
+        },
+      );
     }
     return { scopeFilter: { kind: 'scoped', managedSystemIds: [managed_system_id] } };
   }

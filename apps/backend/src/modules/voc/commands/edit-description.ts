@@ -12,12 +12,12 @@ import {
   linkRejectedFields,
   toAttachmentRefForAudit,
 } from '../../attachments/index.js';
+import { runIdempotentCommand } from '../../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
 import { selectVocForUpdate, updateVocDescriptionFields } from '../repo.js';
-import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 import type { VocEnvelope, VocServiceDeps } from '../service.js';
+import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 import { composeEnvelope } from './compose-envelope.js';
-import { runIdempotentCommand } from '../../core/idempotency/idempotent-command.js';
 
 export function createVocEditDescriptionCommands(deps: VocServiceDeps) {
   // ── editVocDescription ────────────────────────────────────────────────────

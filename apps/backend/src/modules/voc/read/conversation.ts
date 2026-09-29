@@ -2,8 +2,8 @@
 import type { ConversationEntry, GetConversationQuery } from '@fops/shared';
 import { HttpError } from '../../../lib/errors.js';
 import { actorEffectiveScope, actorReadScope, actorTriageScope } from '../authorization.js';
-import * as repoRead from '../repo-read.js';
 import type { ReadActorContext, VocReadServiceDeps } from '../read-service.js';
+import * as repoRead from '../repo-read.js';
 import { decodeConversationCursor, encodeConversationCursor } from './cursor.js';
 import { mapConversationRowsWithAttachments } from './mappers.js';
 import { msInScope } from './scope.js';

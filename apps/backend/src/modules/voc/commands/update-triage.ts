@@ -13,8 +13,8 @@ import type { RoleLevel } from '../../auth/session-service.js';
 import { runIdempotentCommand } from '../../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../../managed-systems/index.js';
 import { selectVocForUpdate } from '../repo.js';
-import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 import type { VocEnvelope, VocServiceDeps } from '../service.js';
+import { type ReporterFacingStatus, nextReporterStates } from '../transitions.js';
 import { composeEnvelope } from './compose-envelope.js';
 
 export function createVocUpdateTriageCommands(deps: VocServiceDeps) {

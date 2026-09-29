@@ -9,13 +9,16 @@ import {
 } from '../authorization.js';
 import { decodeCursor, encodeCursor } from '../cursor.js';
 import type { CountVocsQuery } from '../read-contract.js';
-import * as repoRead from '../repo-read.js';
 import type { ReadActorContext, VocReadServiceDeps } from '../read-service.js';
+import * as repoRead from '../repo-read.js';
 import { mapRowToListItem } from './mappers.js';
 import { resolveVocListScope } from './scope.js';
 
 export function createVocListReaders(deps: VocReadServiceDeps) {
-  async function countVocs(args: { actor: ReadActorContext; query: CountVocsQuery }): Promise<number> {
+  async function countVocs(args: {
+    actor: ReadActorContext;
+    query: CountVocsQuery;
+  }): Promise<number> {
     const { actor, query } = args;
     const { view, tab } = query;
     const filterSeverity = query['filter.severity'];
@@ -31,7 +34,12 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       actorReadScope(deps.db, actor),
       view === 'triage' ? actorTriageScope(deps.db, actor) : Promise.resolve(undefined),
     ]);
-    const { scopeFilter, actorIdForMyFilter } = resolveVocListScope({ actor, query, readScope, triageScope });
+    const { scopeFilter, actorIdForMyFilter } = resolveVocListScope({
+      actor,
+      query,
+      readScope,
+      triageScope,
+    });
     return repoRead.countVocsForRead(deps.db, {
       workspaceId: actor.workspace_id,
       scopeFilter,
@@ -95,7 +103,7 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
     } else {
       const rawSort = query.sort ?? 'created_at:desc';
       // triage_pinned is not in the listVocsQuerySchema sort enum so this
-    // branch is unreachable at runtime — guard kept for belt-and-suspenders.
+      // branch is unreachable at runtime — guard kept for belt-and-suspenders.
       sortKey = rawSort;
       sortDir = rawSort.endsWith(':asc') ? 'asc' : 'desc';
     }
@@ -144,12 +152,17 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
     if (actorIdForMyFilter !== undefined) repoArgs.actorIdForMyFilter = actorIdForMyFilter;
     if (tab !== undefined) repoArgs.tab = tab;
     if (filterSeverity !== undefined) repoArgs.filterSeverity = filterSeverity;
-    if (filterReporterFacingStatus !== undefined) repoArgs.filterReporterFacingStatus = filterReporterFacingStatus;
+    if (filterReporterFacingStatus !== undefined)
+      repoArgs.filterReporterFacingStatus = filterReporterFacingStatus;
     if (filterOwner !== undefined) repoArgs.filterOwner = filterOwner;
     if (filterAnalyticsAreaUnset) repoArgs.filterAnalyticsAreaUnset = true;
     if (decodedCursor !== undefined) repoArgs.cursor = decodedCursor;
 
-    const { rows, hasMore, nextCursor: repoCursor } = await repoRead.listVocsForRead(deps.db, repoArgs);
+    const {
+      rows,
+      hasMore,
+      nextCursor: repoCursor,
+    } = await repoRead.listVocsForRead(deps.db, repoArgs);
 
     // ── 8. Pin the re-triage deep-link target (#383) ─────────────────────────
     // The triage queue predicate excludes already-triaged VOCs, so a deep link
@@ -187,20 +200,25 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
     ]);
 
     // ── 9b. Map rows → VocListItem with attachment_count ─────────────────────
-    const items = pinnedRows.map((r) => mapRowToListItem(
-      r,
-      attachmentCounts.get(r.id) ?? 0,
-      similarCounts.get(r.id) ?? 0,
-    ));
+    const items = pinnedRows.map((r) =>
+      mapRowToListItem(r, attachmentCounts.get(r.id) ?? 0, similarCounts.get(r.id) ?? 0),
+    );
 
     // ── 10. Encode nextCursor ──────────────────────────────────────────────────
     let nextCursorStr: string | undefined;
     if (hasMore && repoCursor) {
-      nextCursorStr = encodeCursor({ s: sortKey, d: sortDir, sv: repoCursor.sv, id: repoCursor.id });
+      nextCursorStr = encodeCursor({
+        s: sortKey,
+        d: sortDir,
+        sv: repoCursor.sv,
+        id: repoCursor.id,
+      });
     }
 
     // ── 11. out_of_scope_summary (inbox only) ──────────────────────────────────
-    let out_of_scope_summary: { count: number; severity_distribution: Record<string, number> } | undefined;
+    let out_of_scope_summary:
+      | { count: number; severity_distribution: Record<string, number> }
+      | undefined;
     if (view === 'inbox' && readScope.kind === 'scoped') {
       const summary = await repoRead.outOfScopeSummary(deps.db, {
         workspaceId: actor.workspace_id,

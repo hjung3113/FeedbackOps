@@ -130,4 +130,3 @@ export async function selectVocAttachmentCounts(
   }
   return out;
 }
-
