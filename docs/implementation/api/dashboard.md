@@ -23,11 +23,16 @@ not replace them with sums or averages of the per-system rows.
 Within each row, metric keys are independently omitted when the caller lacks
 that metric's capability for the system. An omitted key means the actor cannot
 receive that projection; it does not mean zero. A permitted empty result is
-present with zero. This distinction applies to both `coverage` and
-`action_queues`. `analytics_areas` is omitted unless a readable system has at
-least one non-archived VOC assigned to an Analytics Area; it contains only VOC
-coverage and queues. `permission-requests-pending` remains workspace-level and
-is not included in system rows.
+present with zero. `kpis` contains `open_voc`, `active_finding`,
+`tasks_in_flight`, and `coverage_percent`, each under the corresponding
+VOC, Finding, or Task capability. It has no `pending_request` key because that
+projection combines workspace and permission-request data. These row KPI
+values are per-system projections, not sums or averages of the workspace-level
+roll-up. The same absence rule applies to `coverage` and `action_queues`.
+`analytics_areas` is omitted unless a readable system has at least one
+non-archived VOC assigned to an Analytics Area; it contains only VOC coverage
+and queues. `permission-requests-pending` remains workspace-level and is not
+included in system rows.
 
 `coverage.released-update` is **Released Task with public update**: its total
 is released Tasks in scope with at least one active `voc → task` `evidence_of`

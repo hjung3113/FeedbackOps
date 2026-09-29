@@ -12,7 +12,7 @@
 import { redirect } from '@tanstack/react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthenticatedError, fetchMe } from '../../lib/api';
-import { NAV_TREE, SIDEBAR_ENTRIES } from '../_authed';
+import { NAV_TREE, SIDEBAR_ENTRIES, isSidebarEntryActive } from '../_authed';
 
 // Re-implement beforeLoad logic verbatim from _authed.tsx so we can
 // exercise it in isolation without the TanStack file-route type brands.
@@ -118,12 +118,27 @@ describe('_authed sidebar navigation tree', () => {
     );
   });
 
-  it('#522 has no Integration nav entry pointing at a route that only redirects elsewhere', () => {
-    // /integration itself has no independent surface — it immediately
-    // redirects to /integration/links (apps/frontend/src/routes/_authed/
-    // integration/index.tsx). A nav entry that claims to be an "Action
-    // dashboard" but lands there misrepresents the destination.
-    expect(NAV_TREE.integration.map((entry) => entry.href)).not.toContain('/integration');
-    expect(NAV_TREE.integration.map((entry) => entry.id)).not.toContain('integration-dashboard');
+  it('#532 puts the Action dashboard first in Integration navigation', () => {
+    expect(NAV_TREE.integration[0]).toMatchObject({
+      id: 'integration-dashboard',
+      label: 'Action dashboard',
+      href: '/integration',
+      section: 'INTEGRATION',
+    });
+  });
+
+  it('#532 activates Action dashboard only on the exact /integration route', () => {
+    const dashboardEntry = NAV_TREE.integration.find(
+      (entry) => entry.id === 'integration-dashboard',
+    );
+    if (dashboardEntry === undefined) throw new Error('missing integration-dashboard nav entry');
+    expect(isSidebarEntryActive(dashboardEntry, '/integration', '')).toBe(true);
+    expect(isSidebarEntryActive(dashboardEntry, '/integration/links', '')).toBe(false);
+  });
+
+  it('keeps other parent navigation entries active on their detail routes', () => {
+    const findingsEntry = NAV_TREE.findings[0];
+    if (findingsEntry === undefined) throw new Error('missing findings nav entry');
+    expect(isSidebarEntryActive(findingsEntry, '/findings/finding-a', '')).toBe(true);
   });
 });

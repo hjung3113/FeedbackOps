@@ -44,8 +44,10 @@ type CoverageCell = {
   percent: number;
   status: 'good' | 'warn' | 'bad';
 };
+type SystemKpis = NonNullable<Summary['by_managed_system'][number]['kpis']>;
 type SystemRow = {
   managed_system_id: string;
+  kpis?: SystemKpis;
   coverage?: Partial<Record<SystemCoverageId, CoverageCell>>;
   action_queues?: Partial<Record<QueueId, number>>;
   analytics_areas?: Array<{
@@ -531,6 +533,18 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expectDelta(body.kpis.pending_request, before.kpis.pending_request, 19, 'pending_request');
     expectDelta(body.kpis.tasks_in_flight, before.kpis.tasks_in_flight, 14, 'tasks_in_flight');
     expect(body.kpis.coverage_percent).toBe(coverage(body, 'voc-task')?.percent);
+    expect(systemRow(body, seed.msA)?.kpis).toEqual({
+      open_voc: 10,
+      active_finding: 7,
+      tasks_in_flight: 9,
+      coverage_percent: 30,
+    });
+    expect(systemRow(body, seed.msB)?.kpis).toEqual({
+      open_voc: 7,
+      active_finding: 5,
+      tasks_in_flight: 5,
+      coverage_percent: 29,
+    });
     expect(queue(body, 'unassigned-voc')).toMatchObject({
       severity: 'urgent',
       next_action: { route: '/vocs?view=inbox&tab=unassigned' },
@@ -754,6 +768,7 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(rowA?.action_queues).not.toHaveProperty('bad-outcome-no-followup');
     expect(rowB?.coverage).toEqual({ 'finding-execution': expect.any(Object) });
     expect(rowB?.action_queues).toEqual({ 'actionable-finding-no-execution': expect.any(Number) });
+    expect(rowB?.kpis).toEqual({ active_finding: 1 });
   });
 
   it('keeps VOC metrics present at zero for a system in voc.read with no VOCs', async () => {
@@ -765,6 +780,12 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
       'voc-task': { value: 0, total: 0, percent: 0 },
       'analytics-area': { value: 0, total: 0, percent: 0 },
       'high-followup': { value: 0, total: 0, percent: 0 },
+    });
+    expect(row?.kpis).toEqual({
+      open_voc: 0,
+      active_finding: 0,
+      tasks_in_flight: 0,
+      coverage_percent: 0,
     });
     expect(row?.action_queues).toMatchObject({ 'unassigned-voc': 0, 'high-severity-unlinked': 0 });
   });

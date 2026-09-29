@@ -59,6 +59,7 @@ function includesManagedSystem(scope: Scope | undefined, managedSystemId: string
 
 type SystemCoverage = NonNullable<DashboardSummary['by_managed_system'][number]['coverage']>;
 type SystemQueues = NonNullable<DashboardSummary['by_managed_system'][number]['action_queues']>;
+type SystemKpis = NonNullable<DashboardSummary['by_managed_system'][number]['kpis']>;
 
 function coverageCell(value: number, total: number) {
   const coveragePercent = percent(value, total);
@@ -389,6 +390,7 @@ export function createDashboardService(deps: DashboardDeps) {
     const byManagedSystem: DashboardSummary['by_managed_system'] = [];
     for (const systemId of managedSystemIds) {
       const row: DashboardSummary['by_managed_system'][number] = { managed_system_id: systemId };
+      const rowKpis: SystemKpis = {};
       const rowCoverage: SystemCoverage = {};
       const rowQueues: SystemQueues = {};
 
@@ -402,6 +404,8 @@ export function createDashboardService(deps: DashboardDeps) {
             repo.countVocsWithTask(deps.db, actor.workspace_id, vocScope, systemId),
             repo.countAnalyticsAreaVocCoverage(deps.db, actor.workspace_id, vocScope, systemId),
           ]);
+        rowKpis.open_voc = systemVoc;
+        rowKpis.coverage_percent = percent(vocTask.value, vocTask.total);
         rowCoverage['voc-task'] = coverageCell(vocTask.value, systemVoc);
         rowCoverage['analytics-area'] = coverageCell(analytics.value, systemVoc);
         rowQueues['unassigned-voc'] = unassigned;
@@ -455,12 +459,14 @@ export function createDashboardService(deps: DashboardDeps) {
             systemId,
           ),
         ]);
+        rowKpis.active_finding = active;
         rowCoverage['finding-execution'] = coverageCell(executed, active);
         rowQueues['actionable-finding-no-execution'] = noExecution;
       }
 
       if (includesManagedSystem(taskScope, systemId)) {
-        const [unresolved, releasedUpdate] = await Promise.all([
+        const [tasksInFlight, unresolved, releasedUpdate] = await Promise.all([
+          repo.countTasksInFlight(deps.db, actor.workspace_id, taskScope, systemId),
           repo.countReleasedTasksWithUnresolvedVoc(
             deps.db,
             actor.workspace_id,
@@ -469,6 +475,7 @@ export function createDashboardService(deps: DashboardDeps) {
           ),
           repo.countReleasedTasksWithPublicUpdate(deps.db, actor.workspace_id, taskScope, systemId),
         ]);
+        rowKpis.tasks_in_flight = tasksInFlight;
         rowCoverage['released-update'] = coverageCell(releasedUpdate.value, releasedUpdate.total);
         rowQueues['released-task-unresolved-voc'] = unresolved;
       }
@@ -490,6 +497,7 @@ export function createDashboardService(deps: DashboardDeps) {
 
       if (Object.keys(rowCoverage).length > 0) row.coverage = rowCoverage;
       if (Object.keys(rowQueues).length > 0) row.action_queues = rowQueues;
+      if (Object.keys(rowKpis).length > 0) row.kpis = rowKpis;
       byManagedSystem.push(row);
     }
     return { kpis, action_queues: queues, coverage, by_managed_system: byManagedSystem };
