@@ -5,12 +5,11 @@ import type {
   VocReadServiceDeps,
   VocReferenceResolution,
 } from '../read-service.js';
-import type { VocReadRow } from '../repo-read.js';
+import type { createVocDetailReaders } from './detail.js';
 
-type ResolveVocAccess = (args: { actor: ReadActorContext; vocId: string }) => Promise<{
-  kind: 'full' | 'summary';
-  row: VocReadRow;
-}>;
+// Derived from the real function so a new access kind cannot silently fall
+// through to summary_visible here (#423-style drift).
+type ResolveVocAccess = ReturnType<typeof createVocDetailReaders>['resolveVocAccess'];
 
 export function createVocReferenceReader(
   deps: VocReadServiceDeps,

@@ -158,6 +158,13 @@ export function createVocCreateCommands(deps: VocServiceDeps) {
       permission_decisions: {},
     };
   }
+  // ── Application commands (#392) ───────────────────────────────────────────
+  // Caller contract for HTTP and non-HTTP entry: each command owns the
+  // complete atomic frame — transaction, advisory lock, idempotency
+  // lookup/replay/record — and returns exactly what the routes used to
+  // assemble (`{ status, body }`). The Tx-aware functions (createVoc,
+  // updateVoc, editVocDescription) are internals shared with cluster
+  // candidate-apply and existing tests.
   async function createVocCommand(args: {
     actor: CreateVocActor;
     input: CreateVocRequest;

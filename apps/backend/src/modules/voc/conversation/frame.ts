@@ -13,6 +13,8 @@ import { selectVocForUpdate } from '../repo.js';
 
 type LockedConversationVoc = NonNullable<Awaited<ReturnType<typeof selectVocForUpdate>>>;
 
+// Step 1 of every conversation surface: FOR UPDATE lock + archive checks;
+// 1b. parent Managed System archive guard (issue #16 AC — archived parent → 409).
 export async function lockVocForConversationCommand(
   tx: Tx,
   workspaceId: string,
