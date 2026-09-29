@@ -3,6 +3,7 @@ import { getTask } from '@/lib/api';
 import { getMilestone } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import type { TaskDetailDto, TaskStatus } from '@fops/shared';
 import {
@@ -107,7 +108,7 @@ export function TaskDetailPanel({
       <PermissionBlockedPanel
         state="denied"
         category="Task detail"
-        reason={taskQuery.error.message}
+        reason={PERMISSION_BLOCKED_REASONS.taskDetail}
         className="m-4"
       />
     );

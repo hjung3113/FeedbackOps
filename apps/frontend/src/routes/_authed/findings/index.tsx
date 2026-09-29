@@ -4,6 +4,7 @@ import { ListStateMessage } from '@/components/ListStateMessage';
 import { FindingDetailPanel } from '@/features/findings/components/FindingDetail';
 import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
 import { ApiError } from '@/lib/api/types';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { FindingDto } from '@fops/shared';
 import {
@@ -205,7 +206,7 @@ function FindingsListBody({
         <PermissionBlockedPanel
           state="denied"
           category="Findings"
-          reason={error.message}
+          reason={PERMISSION_BLOCKED_REASONS.findingsList}
           className="m-4"
         />
       ) : isError ? (

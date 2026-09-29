@@ -25,7 +25,7 @@ import {
   Textarea,
 } from '@fops/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 
 import {
   permissionCheckQueryKey,
@@ -42,6 +42,8 @@ export interface RequestAccessButtonProps {
   managedSystemId?: string;
   returnRouteIntent: string;
   onRequestSubmitted?: () => void;
+  /** Uses a caller-owned trigger while this component retains the request dialog and flow. */
+  renderTrigger?: (open: () => void) => ReactNode;
 }
 
 const RECOVERABLE_CONFLICT_CODES = new Set([
@@ -151,9 +153,13 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
 
   return (
     <div>
-      <Button variant="primary" size="md" onClick={() => setOpen(true)}>
-        Request access
-      </Button>
+      {props.renderTrigger !== undefined ? (
+        props.renderTrigger(() => setOpen(true))
+      ) : (
+        <Button variant="primary" size="md" onClick={() => setOpen(true)}>
+          Request access
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent data-testid="permission-request-dialog">
           {submitted ? (

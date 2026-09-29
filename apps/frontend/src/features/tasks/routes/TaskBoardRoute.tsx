@@ -3,6 +3,7 @@ import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { updateTaskStatus, listTasks } from '@/lib/api/tasks';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import { ApiError } from '@/lib/api/types';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import type { TaskDto, TaskStatus } from '@fops/shared';
 import {
   Button,
@@ -162,7 +163,14 @@ export function TaskBoardRoute({ selectedParam, managedSystem, publicUpdate }: {
   }
   if (tasksQuery.isLoading) return <div className="p-4 text-sm text-text-muted">Loading Tasks...</div>;
   if (isPermissionDenied(tasksQuery.error)) {
-    return <PermissionBlockedPanel state="denied" category="Task board" reason={tasksQuery.error.message} className="m-4" />;
+    return (
+      <PermissionBlockedPanel
+        state="denied"
+        category="Task board"
+        reason={PERMISSION_BLOCKED_REASONS.taskList}
+        className="m-4"
+      />
+    );
   }
   if (tasksQuery.error) return <div className="p-4 text-sm text-accent-danger">Task board unavailable.</div>;
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;

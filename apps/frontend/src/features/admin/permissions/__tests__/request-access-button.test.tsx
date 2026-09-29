@@ -1,3 +1,6 @@
+import type { ReactNode } from 'react';
+
+import { PermissionBlockedPanel } from '@fops/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -21,7 +24,7 @@ function success(id = 'PR-D8-001') {
   });
 }
 
-function wrap() {
+function wrap(renderTrigger?: (open: () => void) => ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
   render(
@@ -30,6 +33,7 @@ function wrap() {
         capability={CAPABILITY}
         managedSystemId={MANAGED_SYSTEM_ID}
         returnRouteIntent={RETURN_ROUTE}
+        {...(renderTrigger !== undefined ? { renderTrigger } : {})}
       />
     </QueryClientProvider>,
   );
@@ -83,6 +87,21 @@ describe('<RequestAccessButton>', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  test('a request-access panel trigger opens the existing permission request form', () => {
+    const fetchMock = vi.fn(async () => success());
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    wrap((open) => (
+      <PermissionBlockedPanel state="request_access" category="VOC Inbox" onRequestAccess={open} />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: '권한 요청하기' }));
+
+    expect(screen.getByTestId('permission-request-form')).toBeInTheDocument();
+    expect(screen.getByText(CAPABILITY)).toBeInTheDocument();
+    expect(screen.getByText(MANAGED_SYSTEM_ID)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test('AC-D8b submitting sends exactly one matching non-hardcoded reason', async () => {

@@ -268,6 +268,8 @@ describe('integration links route', () => {
     });
     const panel = screen.getByText('Entity links');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.getByText('Entity link 목록을 볼 권한이 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('entity_link.read capability required')).not.toBeInTheDocument();
     expect(screen.queryByText('Entity Link 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
   });
 

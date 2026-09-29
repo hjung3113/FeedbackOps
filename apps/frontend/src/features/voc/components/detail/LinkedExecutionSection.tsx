@@ -2,7 +2,7 @@
 
 import type { VocDetailEnvelope } from '@fops/shared';
 import { EmptyState, OutlineBadge, PanelSectionTitle, PermissionBlockedPanel } from '@fops/ui';
-import * as React from 'react';
+import type * as React from 'react';
 
 import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
 
@@ -27,7 +27,10 @@ export function LinkedExecutionSection({
         <PermissionBlockedPanel
           state={linkedFindingDecision.state}
           category="Linked Finding"
-          {...(linkedFindingDecision.reason !== undefined
+          // #564: request_access now renders reason, and this decision's reason is a
+          // machine code (e.g. developer_outside_managed_system_scope), so keep it out there.
+          {...(linkedFindingDecision.reason !== undefined &&
+          linkedFindingDecision.state !== 'request_access'
             ? { reason: linkedFindingDecision.reason }
             : {})}
           {...(linkedFindingDecision.required_scope !== undefined

@@ -171,6 +171,12 @@ describe('TaskListRoute display ids', () => {
 
     const panel = await screen.findByText('Task list');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(
+      screen.getByText(
+        'Task 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage capability required')).not.toBeInTheDocument();
     expect(screen.queryByText('Task 목록을 불러오지 못했습니다')).not.toBeInTheDocument();
   });
 
@@ -208,6 +214,8 @@ describe('TaskListRoute display ids', () => {
 
     const panel = await screen.findByText('Task detail');
     expect(panel.closest('[data-state]')).toHaveAttribute('data-state', 'denied');
+    expect(screen.getByText('이 Task를 볼 권한이 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('finding.manage capability required')).not.toBeInTheDocument();
     expect(screen.queryByText('Task detail unavailable.')).not.toBeInTheDocument();
   });
 

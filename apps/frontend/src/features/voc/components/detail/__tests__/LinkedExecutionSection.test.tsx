@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/cross-system/getPermissionDecision', () => ({
   getPermissionDecision: vi.fn(),
@@ -41,5 +41,17 @@ describe('<LinkedExecutionSection>', () => {
     expect(screen.getByText('연결된 실행')).toBeInTheDocument();
     // EmptyState should NOT appear
     expect(screen.queryByText('아직 연결된 Finding/Task가 없습니다.')).not.toBeInTheDocument();
+  });
+
+  it('does not show the machine reason code of a request_access decision (#564)', () => {
+    vi.mocked(getPermissionDecision).mockReturnValue({
+      state: 'request_access',
+      reason: 'developer_outside_managed_system_scope',
+      required_scope: ['tableau'],
+    });
+    render(<LinkedExecutionSection voc={DETAIL_ENVELOPE} />);
+
+    expect(screen.getByText('이 항목에 접근하려면 권한 요청이 필요합니다.')).toBeInTheDocument();
+    expect(screen.queryByText('developer_outside_managed_system_scope')).not.toBeInTheDocument();
   });
 });

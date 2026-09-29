@@ -1,5 +1,6 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { ApiError } from '@/lib/api/types';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import type { EntityLinkDto } from '@fops/shared';
 import { Checkbox, ManagedSystemPill, PermissionBlockedPanel, cn } from '@fops/ui';
 import { EntityRelationRow } from './EntityRelationRow';
@@ -64,7 +65,7 @@ export function EntityLinksInventoryTable({
         <PermissionBlockedPanel
           state="denied"
           category="Entity links"
-          reason={error.message}
+          reason={PERMISSION_BLOCKED_REASONS.entityLinks}
           className="m-4"
           {...(onRetry !== undefined
             ? {
