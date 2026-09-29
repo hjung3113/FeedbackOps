@@ -72,6 +72,12 @@ const responseSubmission = z
   })
   .strict();
 const emptyQuery = z.object({}).strict();
+const mySurveyResponsesQuery = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().optional(),
+  })
+  .strict();
 const evidenceCandidate = z.object({ question_id: uuid }).strict();
 const approvedExcerpt = z
   .object({ question_id: uuid, redacted_excerpt: z.string().min(1) })
@@ -117,6 +123,21 @@ export const surveysRoutes: FastifyPluginAsync<SurveysRoutesOptions> = async (ap
     }
     return x.data;
   };
+  app.get('/me/survey-responses', { preHandler: pre, ...rate('read') }, async (req, reply) => {
+    const query = mySurveyResponsesQuery.safeParse(req.query);
+    if (!query.success)
+      return sendError(reply, 'validation.failed', 'invalid query parameters', {
+        fields: fieldsFromZodIssues(query.error.issues),
+      });
+    return reply
+      .header('cache-control', 'private, no-cache')
+      .send(
+        await opts.surveysService.getMySurveyResponses(actor(req), {
+          limit: query.data.limit,
+          ...(query.data.cursor === undefined ? {} : { cursor: query.data.cursor }),
+        }),
+      );
+  });
   app.get('/surveys', { preHandler: pre, ...rate('read') }, async (req, reply) => {
     const q = z
       .object({ managed_system_id: z.union([uuid, z.literal('all')]).optional() })

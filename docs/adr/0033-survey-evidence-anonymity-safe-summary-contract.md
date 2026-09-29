@@ -82,3 +82,17 @@ The configured value retains a hard floor of five, which remains this ADR's
 baseline protection; values below five are invalid. Storage and the admin
 settings API land in #195. Survey result and other consumer wiring is deferred
 to #196, so this addendum does not weaken the safe-summary contract.
+
+## Addendum — #548 respondent-owned response history
+
+The authenticated session Actor may read their own response-history metadata
+through `GET /me/survey-responses` without `survey.read_personal_responses`.
+The projection is restricted in SQL to the session workspace and respondent
+Actor and returns only Survey ID and title, submission time, and the immutable
+`identity_protected` flag. Identity protection does not hide a response from
+its own respondent; this route reveals no answers or other respondents' rows
+and grants no operator read access. Self-history reads are not audited because
+the reader is the data subject. The projection omits response IDs because they
+would let a `fops_app` reader join respondent identity to approved excerpt
+text and de-anonymize identity-protected excerpts. All other personal-response
+reads and exports retain the explicit capability requirements in this ADR.
