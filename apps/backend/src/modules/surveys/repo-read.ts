@@ -1,6 +1,36 @@
 import { sql } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Db } from '../../db/client.js';
 import type { Tx } from '../../db/tx.js';
+import { HttpError } from '../../lib/errors.js';
+import { normalizePgTimestampToIso } from '../../lib/pg-timestamp.js';
+
+const surveyResponseHistoryCursorSchema = z
+  .object({
+    submittedAt: z.string().datetime({ offset: true }),
+    surveyId: z.string().uuid(),
+  })
+  .strict();
+
+export type SurveyResponseHistoryCursor = z.infer<typeof surveyResponseHistoryCursorSchema>;
+
+export function decodeSurveyResponseHistoryCursor(raw: string): SurveyResponseHistoryCursor {
+  const fail = () =>
+    new HttpError('validation.failed', 'invalid cursor', {
+      fields: [{ path: ['cursor'], code: 'invalid_cursor' }],
+    });
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) throw fail();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+  } catch {
+    throw fail();
+  }
+  const result = surveyResponseHistoryCursorSchema.safeParse(parsed);
+  if (!result.success) throw fail();
+  return result.data;
+}
 
 export type SurveyStatus = 'draft' | 'open' | 'closed';
 export type QuestionKind = 'single_choice' | 'multiple_choice' | 'rating' | 'text';
@@ -86,6 +116,62 @@ export function mapQuestion(r: Record<string, unknown>): QuestionRow {
     updated_at: date(r.updated_at),
   };
 }
+
+export async function listMySurveyResponseHistory(
+  db: Db | Tx,
+  args: {
+    workspace_id: string;
+    actor_id: string;
+    limit: number;
+    cursor?: SurveyResponseHistoryCursor;
+  },
+) {
+  const result = await db.execute<Record<string, unknown>>(sql`
+    select survey_id, survey_title, submitted_at::text as submitted_at_raw,
+           identity_protected
+      from survey.read_my_survey_response_history(
+        ${args.workspace_id}::uuid,
+        ${args.actor_id}::uuid,
+        ${args.limit + 1},
+        ${args.cursor?.submittedAt ?? null}::timestamptz,
+        ${args.cursor?.surveyId ?? null}::uuid
+      )
+  `);
+  const rows = result.rows.map((row) => ({
+    survey_id: row.survey_id as string,
+    survey_title: row.survey_title as string,
+    submitted_at_raw: row.submitted_at_raw as string,
+    identity_protected: row.identity_protected as boolean,
+  }));
+  const has_more = rows.length > args.limit;
+  const pageRows = rows.slice(0, args.limit);
+  const items = pageRows.map((row) => ({
+    survey_id: row.survey_id,
+    survey_title: row.survey_title,
+    submitted_at: normalizePgTimestampToIso(row.submitted_at_raw),
+    identity_protected: row.identity_protected,
+  }));
+  const last = pageRows.at(-1);
+  const cursor =
+    has_more && last
+      ? Buffer.from(
+          JSON.stringify({
+            submittedAt: normalizePgTimestampToIso(last.submitted_at_raw),
+            surveyId: last.survey_id,
+          }),
+          'utf8',
+        ).toString('base64')
+      : undefined;
+
+  return {
+    items,
+    page: {
+      has_more,
+      ...(cursor === undefined ? {} : { cursor }),
+    },
+  };
+}
+
 const surveyCols = sql`id, workspace_id, display_id, type, status, title, description, primary_managed_system_id, analytics_area_id, operator_actor_id, responses_identity_protected, created_by, opened_at, closed_at, created_at, updated_at`;
 export async function findSurvey(db: Db | Tx, workspaceId: string, id: string) {
   const x = await db.execute<Record<string, unknown>>(

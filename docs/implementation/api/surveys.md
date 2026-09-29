@@ -17,6 +17,7 @@ POST /surveys/:id/open
 POST /surveys/:id/close
 GET /surveys/:id/form
 POST /surveys/:id/responses
+GET /me/survey-responses
 GET /surveys/:id/results
 GET /surveys/:id/outcome-follow-up
 POST /survey-responses/:id/evidence-excerpt-candidates
@@ -107,6 +108,34 @@ different payload returns `409 conflict.idempotency_key_reuse`. The `422
 validation.failed` matrix covers malformed or duplicate question IDs, unknown
 or inactive-branch answers, missing required answers, answer-kind/value and
 choice mismatches, rating bounds, and trimmed text length.
+
+### GET /me/survey-responses — the session Actor's own response history
+
+This read-only endpoint requires a session and matching workspace context and
+uses the Survey read rate-limit tier. It has no `survey.read` capability check:
+the SQL projection filters on both `workspace_id = session.workspace_id` and
+`respondent_actor_id = session.actor_id`, so it returns only rows submitted by
+the caller. Unknown query keys are rejected. The strict query is
+`{ limit?: integer 1..100, cursor?: opaque string }`; `limit` defaults to `50`.
+An invalid cursor returns `422 validation.failed` with
+`fields: [{ path: ['cursor'], code: 'invalid_cursor' }]`. The response sets
+`cache-control: private, no-cache`.
+
+Items are ordered by `submitted_at DESC, survey_id DESC`. The opaque cursor
+contains the last returned `(submitted_at, survey_id)` pair, so equal
+submission timestamps remain ordered without gaps. The strict response shape
+is `{ items: [{ survey_id, survey_title, submitted_at, identity_protected }],
+page: { has_more, cursor? } }`; `page.cursor` is present only when `has_more`
+is true. The list includes responses for Surveys in any status (currently open
+or closed; a response cannot exist for a draft).
+
+The respondent can see their own row even when `identity_protected` is true;
+that flag is returned as `true` and does not reveal the respondent to another
+reader. This route returns no answers, operator data, other respondents, or
+counts. Self-history reads write no audit events because the reader is the
+data subject. An Actor with no responses receives
+`200 { items: [], page: { has_more: false } }`, which confirms zero responses.
+Errors: `validation.failed`, `auth.session_invalid`, and `rate_limited.actor`.
 
 ### GET /surveys/:id/results — aggregate-only safe result summary
 

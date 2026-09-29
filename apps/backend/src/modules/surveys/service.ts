@@ -6,6 +6,7 @@ import type { CheckService } from '../permissions/check-service.js';
 import { createSurveyAuthoring } from './authoring.js';
 import { createSurveyEvidenceAccess } from './evidence-access.js';
 import { createSurveyFollowUp } from './follow-up.js';
+import { createMySurveyResponseHistory } from './response-history.js';
 import { createSurveyResults } from './results.js';
 
 export interface SurveysActor {
@@ -33,6 +34,7 @@ export function createSurveysService(deps: SurveysServiceDeps) {
     ...createSurveyResults(deps),
     ...createSurveyEvidenceAccess(deps),
     ...createSurveyFollowUp(deps),
+    ...createMySurveyResponseHistory(deps),
   };
 }
 export type SurveysService = ReturnType<typeof createSurveysService>;

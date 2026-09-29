@@ -19,7 +19,7 @@ This file owns global API rules, standard error codes, the endpoint contract tem
 | [`api/findings.md`](api/findings.md) | Finding; Progress notes |
 | [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; Progress notes; PATCH /tasks/:id — Task status transition (Slice 7 #138) |
 | [`api/milestones.md`](api/milestones.md) | Milestone Create Contract; Milestone List Contract; Milestone Detail Contract; Milestone Update Contract; Status; Not implemented |
-| [`api/surveys.md`](api/surveys.md) | Survey; Forbidden Endpoint |
+| [`api/surveys.md`](api/surveys.md) | Survey; GET /me/survey-responses — the session Actor's own response history; Forbidden Endpoint |
 | [`api/core.md`](api/core.md) | Core / Managed System / Analytics Area |
 | [`api/permissions.md`](api/permissions.md) | Permission |
 | [`api/notifications.md`](api/notifications.md) | Notifications Inbox |
