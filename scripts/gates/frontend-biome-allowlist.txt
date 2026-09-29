@@ -47,7 +47,6 @@ apps/frontend/src/features/tasks/routes/TaskListRoute.tsx format -- pre-existing
 apps/frontend/src/features/tasks/routes/TaskListRoute.tsx organizeImports -- pre-existing on develop; import order predates biome
 apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx format -- pre-existing on develop; the file predates biome formatting
 apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx organizeImports -- pre-existing on develop; import order predates biome
-apps/frontend/src/features/voc/components/create/VocCreateScreen.tsx lint/complexity/useLiteralKeys -- pre-existing on develop (2x, unchanged)
 apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx format -- pre-existing on develop; the file predates biome formatting
 apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx organizeImports -- pre-existing on develop; import order predates biome
 apps/frontend/src/features/voc/components/create/__tests__/VocCreateScreen.integration.test.tsx lint/style/useImportType -- pre-existing on develop (1x, unchanged)
