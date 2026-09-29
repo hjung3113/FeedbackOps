@@ -18,6 +18,7 @@ interface SmtpTransportOptions {
   connectionTimeout: number;
   greetingTimeout: number;
   socketTimeout: number;
+  requireTLS?: boolean;
   auth?: { user: string; pass: string };
 }
 
@@ -52,7 +53,11 @@ function createNodemailerTransport(options: SmtpTransportOptions): SmtpTransport
 function transportOptions(config: SmtpEmailChannelConfig): SmtpTransportOptions {
   const credentials =
     config.username && config.password
-      ? { auth: { user: config.username, pass: config.password } }
+      ? {
+          // Never send relay credentials over an unencrypted session.
+          ...(config.port === 465 ? {} : { requireTLS: true }),
+          auth: { user: config.username, pass: config.password },
+        }
       : {};
 
   return {
@@ -64,6 +69,21 @@ function transportOptions(config: SmtpEmailChannelConfig): SmtpTransportOptions 
     socketTimeout: 30_000,
     ...credentials,
   };
+}
+
+class SmtpSendError extends Error {
+  readonly code?: string;
+  readonly responseCode?: number;
+  readonly command?: string;
+
+  constructor(source: unknown) {
+    super('SMTP send failed.');
+    this.name = 'SmtpSendError';
+    const { code, responseCode, command } = (source ?? {}) as Record<string, unknown>;
+    if (typeof code === 'string') this.code = code;
+    if (typeof responseCode === 'number') this.responseCode = responseCode;
+    if (typeof command === 'string') this.command = command;
+  }
 }
 
 export class SmtpEmailChannel implements NotificationChannel {
@@ -78,12 +98,19 @@ export class SmtpEmailChannel implements NotificationChannel {
   }
 
   async send(envelope: NotificationEmailEnvelope): Promise<void> {
-    const result = await this.transport.sendMail({
-      from: this.config.from,
-      to: envelope.recipient_email,
-      subject: envelope.summary,
-      text: envelope.body ?? envelope.summary,
-    });
+    let result: SmtpSendResult;
+    try {
+      result = await this.transport.sendMail({
+        from: this.config.from,
+        to: envelope.recipient_email,
+        subject: envelope.summary,
+        text: envelope.body ?? envelope.summary,
+      });
+    } catch (error) {
+      // A rejected recipient arrives as a throw carrying the address in message/response/rejected;
+      // pg-boss persists thrown errors, so rethrow only bounded diagnostics (no cause).
+      throw new SmtpSendError(error);
+    }
 
     if (result.rejected && result.rejected.length > 0) {
       throw new Error('SMTP server rejected one or more recipients.');

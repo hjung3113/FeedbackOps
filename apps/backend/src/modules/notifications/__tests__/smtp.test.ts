@@ -120,11 +120,12 @@ describe('SmtpEmailChannel', () => {
     });
   });
 
-  it('uses secure SMTP only on port 465 and applies bounded connection timeouts', async () => {
-    for (const [port, secure] of [
-      [465, true],
-      [587, false],
-    ] as const) {
+  it.each([
+    [465, true, false],
+    [587, false, true],
+  ] as const)(
+    'on port %s uses secure=%s and requireTLS=%s with credentials and bounded timeouts',
+    async (port, secure, requireTLS) => {
       const capturedOptions: { value: unknown } = { value: undefined };
       const { channel } = createChannel(
         { ...smtpConfig, port },
@@ -143,8 +144,9 @@ describe('SmtpEmailChannel', () => {
         socketTimeout: 30_000,
         auth: { user: 'relay-user', pass: 'private-password' },
       });
-    }
-  });
+      expect(Object.hasOwn(capturedOptions.value as object, 'requireTLS')).toBe(requireTLS);
+    },
+  );
 
   it('omits auth options when relay credentials are unset', async () => {
     const capturedOptions: { value: unknown } = { value: undefined };
@@ -159,13 +161,29 @@ describe('SmtpEmailChannel', () => {
     expect(capturedOptions.value).not.toHaveProperty('auth');
   });
 
-  it('propagates transport errors', async () => {
-    const transportError = new Error('relay unavailable');
+  it('rethrows transport failures without the recipient or relay response', async () => {
+    const transportError = Object.assign(
+      new Error(`550 5.1.1 <${envelope.recipient_email}>: Recipient address rejected`),
+      {
+        code: 'EENVELOPE',
+        responseCode: 550,
+        command: 'RCPT TO',
+        response: `550 <${envelope.recipient_email}> unknown`,
+        rejected: [envelope.recipient_email],
+        rejectedErrors: [{ recipient: envelope.recipient_email }],
+      },
+    );
     const { channel } = createChannel(smtpConfig, async () => {
       throw transportError;
     });
 
-    await expect(channel.send(envelope)).rejects.toBe(transportError);
+    const thrown = await channel.send(envelope).catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).toMatchObject({ code: 'EENVELOPE', responseCode: 550, command: 'RCPT TO' });
+    const exposed = JSON.stringify(thrown, Object.getOwnPropertyNames(thrown));
+    expect(exposed).not.toContain(envelope.recipient_email);
+    expect((thrown as Error).cause).toBeUndefined();
   });
 
   it('throws when the relay accepts only part of the recipient set', async () => {

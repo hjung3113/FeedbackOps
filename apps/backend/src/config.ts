@@ -96,7 +96,7 @@ const envSchema = z.object({
   }
   if (config.NOTIFICATION_EMAIL_CHANNEL === 'smtp') {
     for (const variable of ['SMTP_HOST', 'SMTP_PORT', 'SMTP_FROM'] as const) {
-      if (config[variable] === undefined || config[variable] === '') {
+      if (config[variable] === undefined) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: [variable],
