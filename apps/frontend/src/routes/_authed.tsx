@@ -7,6 +7,7 @@ import {
   useRouterState,
 } from '@tanstack/react-router';
 import {
+  Activity,
   Database,
   FileBarChart,
   Flag,
@@ -136,6 +137,13 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
     },
   ],
   integration: [
+    {
+      id: 'integration-dashboard',
+      label: 'Action dashboard',
+      href: '/integration',
+      section: 'INTEGRATION',
+      icon: <Activity className="h-4 w-4" />,
+    },
     { id: 'integration-findings', label: 'Findings', href: '/findings', section: 'INTEGRATION', icon: <ListChecks className="h-4 w-4" />, countKey: 'findings.all' },
     { id: 'integration-links', label: 'Entity links', href: '/integration/links', section: 'INTEGRATION', icon: <Link2 className="h-4 w-4" /> },
     { id: 'integration-coverage', label: 'Coverage', href: '/integration/coverage', section: 'INTEGRATION', icon: <Layers className="h-4 w-4" /> },
@@ -186,6 +194,24 @@ export const ALL_SIDEBAR_ENTRIES = Object.values(NAV_TREE).flat();
 // Compatibility export for route-level tests. New UI composes a per-rail tree.
 export const SIDEBAR_ENTRIES = ALL_SIDEBAR_ENTRIES;
 
+export function isSidebarEntryActive(
+  entry: SidebarNavEntry,
+  pathname: string,
+  searchStr: string,
+): boolean {
+  const [entryPath, entrySearch] = entry.href.split('?');
+  if (entryPath !== pathname) {
+    if (entry.id === 'integration-dashboard' || !pathname.startsWith(`${entryPath}/`)) {
+      return false;
+    }
+  }
+  if (entrySearch === undefined || !entrySearch.includes('view=')) return true;
+  return (
+    new URLSearchParams(entrySearch).get('view') ===
+    new URLSearchParams(searchStr).get('view')
+  );
+}
+
 export const Route = createFileRoute('/_authed')({
   beforeLoad: async ({ location }) => {
     try {
@@ -229,12 +255,7 @@ function AuthedLayout() {
         ? homeSidebarEntries(homeSummary.data, location.pathname === '/home')
         : NAV_TREE[activeDomain].map((entry) => ({
             ...entry,
-            active:
-              entry.href.split('?')[0] === location.pathname &&
-              (entry.href.includes('view=')
-                ? new URLSearchParams(entry.href.split('?')[1]).get('view') ===
-                  new URLSearchParams(location.searchStr).get('view')
-                : true),
+            active: isSidebarEntryActive(entry, location.pathname, location.searchStr),
           })),
     [activeDomain, homeSummary.data, location.pathname, location.searchStr],
   );

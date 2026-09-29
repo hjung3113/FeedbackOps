@@ -10,6 +10,11 @@ import {
   existingFinding,
   populatedList,
 } from './fixtures/voc-clusters';
+import {
+  integrationDashboardEmptySummaryFixture,
+  integrationDashboardManagedSystemsFixture,
+  integrationDashboardSummaryFixture,
+} from './fixtures/integration-dashboard';
 
 export type ScenarioName =
   | 'populated'
@@ -58,6 +63,50 @@ export function createScenario(name: ScenarioName = 'populated'): VisualScenario
       return {
         ...base,
         details: { ...base.details, [IDS.draft]: { status: 500 } },
+      };
+    default:
+      return base;
+  }
+}
+
+export type IntegrationDashboardScenarioName =
+  | 'populated'
+  | 'empty'
+  | 'request-error'
+  | 'permission-denied';
+
+export interface IntegrationDashboardVisualScenario {
+  summaryStatus: number;
+  summaryBody: unknown;
+  managedSystems: unknown;
+}
+
+export function createIntegrationDashboardScenario(
+  name: IntegrationDashboardScenarioName = 'populated',
+): IntegrationDashboardVisualScenario {
+  const base: IntegrationDashboardVisualScenario = {
+    summaryStatus: 200,
+    summaryBody: structuredClone(integrationDashboardSummaryFixture),
+    managedSystems: structuredClone(integrationDashboardManagedSystemsFixture),
+  };
+
+  switch (name) {
+    case 'empty':
+      return {
+        ...base,
+        summaryBody: structuredClone(integrationDashboardEmptySummaryFixture),
+      };
+    case 'request-error':
+      return {
+        ...base,
+        summaryStatus: 500,
+        summaryBody: { code: 'internal.unexpected', message: 'unexpected test error' },
+      };
+    case 'permission-denied':
+      return {
+        ...base,
+        summaryStatus: 403,
+        summaryBody: { code: 'permission.denied', message: 'permission denied' },
       };
     default:
       return base;

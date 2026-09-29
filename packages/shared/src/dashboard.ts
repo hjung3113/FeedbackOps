@@ -51,6 +51,12 @@ export const dashboardSummarySchema = z.object({
   }).strict()),
   by_managed_system: z.array(z.object({
     managed_system_id: z.string().uuid(),
+    kpis: z.object({
+      open_voc: z.number().int().nonnegative().optional(),
+      active_finding: z.number().int().nonnegative().optional(),
+      tasks_in_flight: z.number().int().nonnegative().optional(),
+      coverage_percent: z.number().int().min(0).max(100).optional(),
+    }).strict().optional(),
     coverage: z.object({
       'voc-task': dashboardCoverageCellSchema.optional(),
       'finding-execution': dashboardCoverageCellSchema.optional(),

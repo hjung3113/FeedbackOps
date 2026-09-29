@@ -129,7 +129,12 @@ import {
   vocCreateManagedSystems,
   vocCreatePeersByManagedSystem,
 } from '../fixtures/voc-create';
-import { type ScenarioName, type VisualScenario, createScenario } from '../scenarios';
+import {
+  type IntegrationDashboardVisualScenario,
+  type ScenarioName,
+  type VisualScenario,
+  createScenario,
+} from '../scenarios';
 
 export type RoleLevel = 'admin' | 'developer' | 'user';
 
@@ -166,6 +171,8 @@ interface InstallOptions {
   home?: HomeVisualScenario;
   /** #513 coverage page fixture state: summary, systems, and analytics areas. */
   coverage?: 'populated' | 'empty';
+  /** #532 Integration Action Dashboard summary and Managed System fixtures. */
+  integrationDashboard?: IntegrationDashboardVisualScenario;
   /** Request-access confirmation dialog state; screenshot spec is host-owned. */
   permissionRequestCompose?: boolean;
   /** Managed System registration dialog with owner candidates; screenshot spec is host-owned. */
@@ -285,6 +292,20 @@ export async function installMockApi(
           'surveys.all': 5,
         },
       });
+      return;
+    }
+
+    if (options.integrationDashboard && isRequest(route, 'GET', '/dashboard/summary')) {
+      await json(
+        route,
+        options.integrationDashboard.summaryStatus,
+        options.integrationDashboard.summaryBody,
+      );
+      return;
+    }
+
+    if (options.integrationDashboard && isRequest(route, 'GET', '/managed-systems')) {
+      await json(route, 200, options.integrationDashboard.managedSystems);
       return;
     }
 
