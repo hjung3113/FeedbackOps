@@ -25,7 +25,7 @@ import {
   type TipTapDoc,
 } from '@fops/ui';
 import { Maximize2, MoreHorizontal } from 'lucide-react';
-import * as React from 'react';
+import type * as React from 'react';
 import { ClusterSectionReadOnly } from './ClusterSectionReadOnly';
 import { OwnerPicker } from './OwnerPicker';
 import { type SeverityLevel, SeverityPicker } from './SeverityPicker';

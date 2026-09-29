@@ -1,7 +1,7 @@
 import { getSummarySelfDecision } from '@/lib/cross-system/getPermissionDecision';
 import type { VocSummaryEnvelope } from '@fops/shared';
 import { PermissionBlockedPanel } from '@fops/ui';
-import * as React from 'react';
+import type * as React from 'react';
 
 import { DetailHeader } from './DetailHeader';
 

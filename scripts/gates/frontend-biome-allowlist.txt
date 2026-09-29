@@ -267,3 +267,4 @@ apps/backend/src/modules/attachments/service.ts organizeImports -- pre-existing 
 apps/backend/src/modules/attachments/service.ts lint/suspicious/noImplicitAnyLet -- pre-existing on develop (2x, measured 2026-09-30; untouched lines)
 apps/backend/src/modules/voc/jobs/released-review-candidates.ts format -- pre-existing on develop (measured 2026-09-30; #517 P2 moves the queue constant and payload type to the contract file)
 apps/backend/src/modules/voc/jobs/released-review-candidates.ts organizeImports -- pre-existing on develop (measured 2026-09-30; #517 P2 moves the queue constant and payload type to the contract file)
+apps/frontend/src/features/voc/components/create/useVocCreateController.ts lint/complexity/useLiteralKeys -- moved verbatim from VocCreateScreen.tsx, which carries the same 2x on develop (#517 Phase 3; bracket access kept for noPropertyAccessFromIndexSignature)

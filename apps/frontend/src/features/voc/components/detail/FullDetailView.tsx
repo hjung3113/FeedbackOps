@@ -1,6 +1,6 @@
 import type { VocDetailEnvelope } from '@fops/shared';
 import { Button, DetailPanelSectionNav, DirtyConfirmation } from '@fops/ui';
-import * as React from 'react';
+import type * as React from 'react';
 
 import { CreateFindingModal } from '@/features/cross-system/create-finding/CreateFindingModal';
 import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';

@@ -2,7 +2,7 @@
 // C4+C5 of Slice 3 #19.
 // Left column: react-hook-form wired fields. Right column: reporter info + disclaimer.
 
-import * as React from 'react';
+import type * as React from 'react';
 import { Link } from '@tanstack/react-router';
 import { Controller } from 'react-hook-form';
 

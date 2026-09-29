@@ -1,4 +1,3 @@
-import { useVocCreateMutation } from '../../hooks/useVocCreateMutation';
 import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
 import { errorMapper } from '@/lib/api';
 import { useIdempotencyKey } from '@/lib/api';
@@ -11,6 +10,7 @@ import { useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { useVocCreateMutation } from '../../hooks/useVocCreateMutation';
 
 export function useVocCreateController({
   initialManagedSystemId,
@@ -75,11 +75,16 @@ export function useVocCreateController({
         if (Array.isArray(fields)) {
           let mapped = false;
           for (const f of fields) {
-            if (f && typeof f === 'object' && Array.isArray((f as Record<string, unknown>)['path'])) {
+            if (
+              f &&
+              typeof f === 'object' &&
+              Array.isArray((f as Record<string, unknown>)['path'])
+            ) {
               const field = f as { path: Array<string | number>; code: string; message?: string };
               const fieldPath = field.path.join('.');
-              const msg = field.message
-                ?? errorMapper({ code: 'validation.failed', message: '' } as ApiErrorEnvelope).message;
+              const msg =
+                field.message ??
+                errorMapper({ code: 'validation.failed', message: '' } as ApiErrorEnvelope).message;
               form.setError(fieldPath as keyof CreateVocRequest, { message: msg });
               mapped = true;
             }
@@ -106,7 +111,8 @@ export function useVocCreateController({
   // ── Analytics Areas query (disabled until MS selected) ───────────────────
   const aaQuery = useQuery({
     queryKey: ['analytics-areas', { managedSystemId: selectedMs, includeArchived: false }],
-    queryFn: ({ signal }) => fetchAnalyticsAreas({ managedSystemId: selectedMs, includeArchived: false, signal }),
+    queryFn: ({ signal }) =>
+      fetchAnalyticsAreas({ managedSystemId: selectedMs, includeArchived: false, signal }),
     enabled: Boolean(selectedMs),
   });
 
