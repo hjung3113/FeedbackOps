@@ -4,6 +4,7 @@ import {
   rejectTaskRequest,
   requestMoreEvidenceForTaskRequest,
 } from '@/lib/api';
+import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
 import type { TaskRequestDto } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -104,9 +105,12 @@ export function useTaskRequestDecision({
     onError: (err) => {
       decisionSubmittingRef.current = false;
       setIsDecisionSubmitting(false);
+      // #561: computed outside the updater; React runs updaters during render, so a throw
+      // there (a non-ApiError has no envelope) would take down the whole screen.
+      const message = err?.envelope?.message ?? GENERIC_ERROR_MESSAGE;
       setDecisionDialog((current) => {
-        if (current) return { ...current, error: err.envelope.message };
-        toast.error(err.envelope.message);
+        if (current) return { ...current, error: message };
+        toast.error(message);
         return current;
       });
     },

@@ -1,4 +1,5 @@
 import { fetchPermissionCheck, linkExistingTask, listTasks } from '@/lib/api';
+import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
 import type { TaskDto, TaskRequestDto } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -77,7 +78,7 @@ export function useTaskRequestLink({
       setLinkOpen(false);
     },
     onError: (err) => {
-      toast.error(err.envelope.message);
+      toast.error(err?.envelope?.message ?? GENERIC_ERROR_MESSAGE);
     },
   });
 

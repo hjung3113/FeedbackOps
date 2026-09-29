@@ -2,7 +2,8 @@ import type { ApiError } from '@/lib/api';
 import { Button, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@fops/ui';
 
 function messageFor(error: ApiError | null, target: 'open' | 'close') {
-  const fields = error?.envelope.detail?.fields;
+  // #561: a network TypeError or non-JSON body is not an ApiError and has no envelope.
+  const fields = error?.envelope?.detail?.fields;
   if (!Array.isArray(fields)) return '상태 변경에 실패했습니다. 다시 시도하세요.';
   const hasField = (path: string, code: string) =>
     fields.some(
