@@ -197,7 +197,13 @@ export function TaskRequestDraftCard({
               Review in Task Requests
             </a>
           </Button>
-          <Button disabled={isSubmitting} onClick={resetDraft} size="sm" type="button" variant="subtle">
+          <Button
+            disabled={isSubmitting}
+            onClick={resetDraft}
+            size="sm"
+            type="button"
+            variant="subtle"
+          >
             Reset
           </Button>
         </div>

@@ -75,7 +75,11 @@ export function VocClusterListShell({
       }
       detailPanel={
         selectedId !== null && visibleClusters.some((cluster) => cluster.id === selectedId) ? (
-          <VocClusterDetailPanel key={selectedId} clusterId={selectedId} onClose={() => onCloseDetail()} />
+          <VocClusterDetailPanel
+            key={selectedId}
+            clusterId={selectedId}
+            onClose={() => onCloseDetail()}
+          />
         ) : undefined
       }
     />

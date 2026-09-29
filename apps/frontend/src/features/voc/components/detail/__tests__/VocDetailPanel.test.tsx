@@ -586,9 +586,7 @@ describe('<VocDetailPanel>', () => {
         }),
       ),
     );
-    await waitFor(() =>
-      expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument());
   });
 
   it('opens the Create Finding flow from the footer menu for an admin actor', () => {
