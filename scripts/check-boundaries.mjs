@@ -157,9 +157,7 @@ for (const rule of RULES) {
       if (isWithinPath(vocModuleDir, file)) continue;
       for (const { specifier, line } of collectImportSpecifiers(file, content)) {
         const normalizedSpecifier = specifier.replaceAll('\\', '/');
-        const pathNamesVocJobs =
-          /(^|\/)voc\/jobs(?:\/|$)/.test(normalizedSpecifier) ||
-          /(^|\/)modules\/voc\/jobs(?:\/|$)/.test(normalizedSpecifier);
+        const pathNamesVocJobs = /(^|\/)voc\/jobs(?:\/|$)/.test(normalizedSpecifier);
         const resolvedTarget = specifier.startsWith('.') ? resolve(dirname(file), specifier) : null;
         const targetsVocJobs =
           (resolvedTarget !== null && isWithinPath(vocJobsDir, resolvedTarget)) || pathNamesVocJobs;

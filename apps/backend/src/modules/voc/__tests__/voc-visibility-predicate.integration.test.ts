@@ -7,7 +7,8 @@
 // recommendations/scope.ts (a copy parameterized by alias), and `isVocVisible`
 // (a TypeScript twin for already-loaded rows). Nothing asserted they agreed.
 // There is now one implementation, `similarVocVisibilityPredicate`, and this
-// file is what keeps it honest:
+// file is what keeps it honest. Its object face `isVocVisibleToActor` (#517) is
+// deliberate; the `it.each` agreement matrix below pins it to the SQL face:
 //
 //   1. a verdict matrix over scope shapes, run against the real database
 //      rather than by comparing generated SQL text — comparing SQL strings

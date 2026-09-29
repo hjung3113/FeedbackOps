@@ -17,6 +17,8 @@ export {
   TASK_RELEASED_REVIEW_CANDIDATES_QUEUE,
   type TaskReleasedReviewCandidatesPayload,
 } from './jobs/released-review-candidates-contract.js';
+// Exported for the Tasks release integration test only; production code enqueues
+// through enqueueReleasedTaskReviewCandidates.
 export { releasedReviewCandidatesHandler } from './jobs/released-review-candidates.js';
 export { vocRoutes } from './routes/index.js';
 export {
