@@ -39,7 +39,7 @@
 
 import { useVocReporterReplyMutation } from '@/features/voc/hooks/useVocReporterReplyMutation';
 import type { ApiError } from '@/lib/api';
-import { uploadAttachment } from '@/lib/api/attachments';
+import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
 import { Callout, PreviewModal, RichEditor } from '@fops/ui';
@@ -182,15 +182,7 @@ export function ReporterReplyComposer({
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="리포터에게 보낼 답장 내용을 입력하세요..."
         minHeight={84}
-        onAttach={async (file) => {
-          const r = await uploadAttachment(file);
-          return {
-            attachment_id: r.id,
-            name: r.name,
-            size_bytes: r.size_bytes,
-            mime_type: r.mime_type,
-          };
-        }}
+        onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => (
           <ReporterReplyToolbar
             editor={editor}

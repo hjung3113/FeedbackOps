@@ -28,8 +28,9 @@
 
 import { MentionPickerButton } from '@/features/cross-system/mentions/MentionPickerButton';
 import { extractMentions } from '@/features/cross-system/mentions/extractMentions';
+import { insertMention } from '@/features/cross-system/mentions/insertMention';
 import { useVocInternalCommentMutation } from '@/features/voc/hooks/useVocInternalCommentMutation';
-import { uploadAttachment } from '@/lib/api/attachments';
+import { uploadRichEditorAttachment } from '@/lib/attachments/rich-editor-upload';
 import type { MeResponse } from '@/lib/auth/useMe';
 import { type VocDetailEnvelope, isTipTapDocBlank } from '@fops/shared';
 import type { TipTapDoc, TipTapEditor } from '@fops/ui';
@@ -130,14 +131,7 @@ export function InternalCommentComposer({
 
   // Handler for MentionPickerButton: inserts a mention node into the editor.
   function handleInsertMention(actor: { id: string; display_name: string }) {
-    editorRef.current
-      ?.chain()
-      .focus()
-      .insertContent({
-        type: 'mention',
-        attrs: { actor_id: actor.id },
-      })
-      .run();
+    insertMention(editorRef.current, actor);
   }
 
   // Status hint: prototype "팀원 6명에게 보임" (visible to N team members).
@@ -153,15 +147,7 @@ export function InternalCommentComposer({
         onChange={(doc) => setDraftDoc(doc)}
         placeholder="내부 코멘트를 입력하세요..."
         minHeight={84}
-        onAttach={async (file) => {
-          const r = await uploadAttachment(file);
-          return {
-            attachment_id: r.id,
-            name: r.name,
-            size_bytes: r.size_bytes,
-            mime_type: r.mime_type,
-          };
-        }}
+        onAttach={uploadRichEditorAttachment}
         toolbar={(editor, api) => {
           // Keep editor ref in sync for mention insertion.
           editorRef.current = editor;

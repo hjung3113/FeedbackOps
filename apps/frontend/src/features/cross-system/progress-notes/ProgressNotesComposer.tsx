@@ -19,6 +19,7 @@ import { Bold, Code, Italic, Link, List } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { MentionPickerButton } from '../mentions/MentionPickerButton';
+import { insertMention } from '../mentions/insertMention';
 import { type ProgressNotesResource, useCreateProgressNote } from './useProgressNotes';
 
 const COMPOSER_COPY = {
@@ -163,14 +164,7 @@ export function ProgressNotesComposer({
 
   // Insert a mention node; the submit path extracts actor ids via extractMentions.
   function handleInsertMention(actor: { id: string; display_name: string }) {
-    editorRef.current
-      ?.chain()
-      .focus()
-      .insertContent({
-        type: 'mention',
-        attrs: { actor_id: actor.id },
-      })
-      .run();
+    insertMention(editorRef.current, actor);
   }
 
   return (
