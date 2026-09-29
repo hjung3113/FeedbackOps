@@ -30,6 +30,12 @@ export interface UseAttachmentUploadQueueOptions {
   onChange?: (serverAttachmentIds: string[]) => void;
   onUploadingChange?: (uploading: boolean) => void;
   onErrorCountChange?: (errorCount: number) => void;
+  /**
+   * #354: bump this after a successful post to drop the rows whose attachments
+   * the server has now linked to the published item. Only `uploaded` rows are
+   * dropped — a row still uploading (the user may add files while the post is
+   * in flight) and a row that failed both stay, so nothing is silently lost.
+   */
   resetToken?: number;
 }
 
@@ -69,8 +75,10 @@ export function useAttachmentUploadQueue({
     [rows],
   );
   const anyUploading = rows.some((row) => row.state.kind === 'uploading');
+  // PLAN-22 §Bug-3: track error rows so the parent can render an inline alert.
   const errorCount = rows.filter((row) => row.state.kind === 'error').length;
 
+  // Refs to skip the initial mount-firing of useEffect (no-op notify on mount).
   const lastUploadedRef = React.useRef<string>('');
   const lastUploadingRef = React.useRef<boolean | null>(null);
   const lastErrorCountRef = React.useRef<number | null>(null);
@@ -97,6 +105,10 @@ export function useAttachmentUploadQueue({
     }
   }, [anyUploading, onUploadingChange]);
 
+  // #354: the parent bumps resetToken after a successful post. Rows that are
+  // still uploading or that errored are kept — only the linked ones go away.
+  // Dropping them re-runs the uploadedIds effect above, so the parent's
+  // attachment id list clears through the same onChange path as any other edit.
   React.useEffect(() => {
     if (resetToken === undefined) return;
     setRows((current) =>
