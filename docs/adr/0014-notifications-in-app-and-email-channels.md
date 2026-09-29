@@ -120,7 +120,9 @@ Issue #509 part 1 narrows the initial catalogue to the ten implemented rows:
 `task_request.needs_more_evidence` (recipient: Task Request creator) and defers
 `survey.assigned_to_me` and `task_request.assigned_to_me`, which have no
 producer in this slice. No notification row is created for denied self-approval
-or permission `needs_more_info` / `permission_denied` outcomes.
+or permission `needs_more_info` outcomes. Amended 2026-09-29: an explicit
+`permission_denied` notifies the requester through `permission_request.decided`
+with outcome `rejected`.
 
 Callers resolve recipients in their request transaction and pass Actor IDs to
 the dispatcher. "Admins of the Managed System" means all workspace Actors

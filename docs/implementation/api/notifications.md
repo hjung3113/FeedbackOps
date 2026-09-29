@@ -19,10 +19,9 @@ workspace before enqueueing jobs.
 | `task.assigned_to_me` | `tasks/service.ts` `convertTaskRequest` | The new assignee, only when `assignee_actor_id` is set. |
 | `task.released` | `voc/public-update-review-candidates/service.ts` `createForReleasedTask` | The linked VOC's current user owner, once per newly inserted review candidate, unless that owner is the releasing actor, Task assignee, or Reporter. |
 | `permission_request.submitted` | `permissions/request-service.ts` `createRequest` | Every workspace Actor whose `role_level` is `admin`. `core.actors` has no active/deactivated flag. |
-| `permission_request.decided` | `permissions/decision-service.ts` `decide` | The requester, for `approve` (`approved`) and `reject` (`rejected`) only. |
+| `permission_request.decided` | `permissions/decision-service.ts` `decide` | The requester, for `approve` (`approved`), and `reject` or the explicit `deny` (both `rejected`); `need_more_info` does not notify. |
 
-No notification is created for Permission Request `need_more_info` or explicit
-`deny` (`permission_denied`), Task Request `self_approval_denied`, idempotent
+No notification is created for Permission Request `need_more_info`, Task Request `self_approval_denied`, idempotent
 replays, no-op Task Request decisions that already have the target status,
 no-op VOC owner or severity updates, `low`/`medium`/null VOC severity changes,
 `voc.assigned_to_me` or `task.released` for a team-only VOC (no user owner), or
