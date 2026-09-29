@@ -2,9 +2,7 @@ import type { RichEditorAttachmentResult } from '@fops/ui';
 
 import { uploadAttachment } from '@/lib/api/attachments';
 
-export async function uploadRichEditorAttachment(
-  file: File,
-): Promise<RichEditorAttachmentResult> {
+export async function uploadRichEditorAttachment(file: File): Promise<RichEditorAttachmentResult> {
   const result = await uploadAttachment(file);
   return {
     attachment_id: result.id,

@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import * as React from 'react';
+import type * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as attachmentsApi from '@/lib/api/attachments';
@@ -26,9 +26,7 @@ describe('useAttachmentUploadQueue', () => {
   });
 
   it('handles drag-over and drop, then emits the uploaded attachment id', async () => {
-    const uploadSpy = vi
-      .spyOn(attachmentsApi, 'uploadAttachment')
-      .mockResolvedValue(ATTACHMENT);
+    const uploadSpy = vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue(ATTACHMENT);
     const onChange = vi.fn();
     const { result } = renderHook(() => useAttachmentUploadQueue({ onChange }));
     const file = makeFile();
@@ -67,9 +65,9 @@ describe('useAttachmentUploadQueue', () => {
     const input = { files: [makeFile()], value: 'C:\\fakepath\\shot.png' };
 
     act(() =>
-      result.current.handleInputChange({ target: input } as unknown as React.ChangeEvent<
-        HTMLInputElement
-      >),
+      result.current.handleInputChange({
+        target: input,
+      } as unknown as React.ChangeEvent<HTMLInputElement>),
     );
 
     expect(input.value).toBe('');

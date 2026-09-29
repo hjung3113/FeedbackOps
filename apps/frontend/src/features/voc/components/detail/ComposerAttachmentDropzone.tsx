@@ -20,7 +20,7 @@
 
 import { cn } from '@fops/ui';
 import { Check, Paperclip, X } from 'lucide-react';
-import * as React from 'react';
+import type * as React from 'react';
 
 import { formatFileSize } from '@/features/voc/lib/format-file-size';
 import {

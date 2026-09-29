@@ -14,7 +14,7 @@
 
 import { cn } from '@fops/ui';
 import { Check, FileText, Paperclip, X } from 'lucide-react';
-import * as React from 'react';
+import type * as React from 'react';
 
 import { formatFileSize } from '@/features/voc/lib/format-file-size';
 import {
@@ -71,10 +71,7 @@ export function AttachmentDropzone({
   } = queue;
 
   return (
-    <section
-      data-testid={testId}
-      className="flex flex-col gap-2"
-    >
+    <section data-testid={testId} className="flex flex-col gap-2">
       {/* Label */}
       <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
         <span>{COPY.fieldLabel}</span>
@@ -122,7 +119,10 @@ export function AttachmentDropzone({
 
       {/* Row list */}
       {rows.length > 0 && (
-        <ul className="mt-2 flex flex-col gap-1.5" data-testid={testId ? `${testId}-rows` : undefined}>
+        <ul
+          className="mt-2 flex flex-col gap-1.5"
+          data-testid={testId ? `${testId}-rows` : undefined}
+        >
           {rows.map((row) => (
             <AttachmentRow key={row.rowId} row={row} onRemove={() => removeRow(row.rowId)} />
           ))}

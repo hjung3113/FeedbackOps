@@ -59,7 +59,9 @@ export function useAttachmentUploadQueue({
     () =>
       rows
         .filter(
-          (row): row is AttachmentUploadQueueRow & {
+          (
+            row,
+          ): row is AttachmentUploadQueueRow & {
             state: { kind: 'uploaded'; serverId: string };
           } => row.state.kind === 'uploaded',
         )
