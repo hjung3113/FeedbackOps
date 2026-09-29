@@ -12,16 +12,29 @@ workspace before enqueueing jobs.
 
 | Event | Producer | Recipients |
 | --- | --- | --- |
+| `voc.assigned_to_me` | `voc/service.ts` `updateVoc` | The newly assigned user owner; team-only ownership has no Actor recipient. |
+| `voc.reporter_replied` | `voc/conversation-service.ts` `postReporterReply` | The current user owner, if set, plus every workspace Actor with `role_level = admin`. |
+| `voc.severity_set_high_or_critical` | `voc/service.ts` `updateVoc` | On a change to `high` or `critical`, the current user owner, if set, plus every workspace Actor with `role_level = admin`. |
 | `task_request.approved`, `task_request.rejected`, `task_request.needs_more_evidence` | `task-requests/service.ts` `decideTaskRequest` | The Task Request creator (`requester_actor_id`), including self-approval. |
 | `task.assigned_to_me` | `tasks/service.ts` `convertTaskRequest` | The new assignee, only when `assignee_actor_id` is set. |
+| `task.released` | `voc/public-update-review-candidates/service.ts` `createForReleasedTask` | The linked VOC's current user owner, once per newly inserted review candidate, unless that owner is the releasing actor, Task assignee, or Reporter. |
 | `permission_request.submitted` | `permissions/request-service.ts` `createRequest` | Every workspace Actor whose `role_level` is `admin`. `core.actors` has no active/deactivated flag. |
 | `permission_request.decided` | `permissions/decision-service.ts` `decide` | The requester, for `approve` (`approved`) and `reject` (`rejected`) only. |
 
 No notification is created for Permission Request `need_more_info` or explicit
 `deny` (`permission_denied`), Task Request `self_approval_denied`, idempotent
-replays, or no-op Task Request decisions that already have the target status.
-Notification details contain ids only; decision reasons, notes, and other free
-text stay in their domain records and audit events.
+replays, no-op Task Request decisions that already have the target status,
+no-op VOC owner or severity updates, `low`/`medium`/null VOC severity changes,
+`voc.assigned_to_me` or `task.released` for a team-only VOC (no user owner), or
+a `task.released` candidate insert skipped by its unique key. Team-only ownership
+removes only the owner from `voc.reporter_replied` and
+`voc.severity_set_high_or_critical` recipients; workspace admins are still
+notified. The `task.released` policy excludes the releasing actor, Task
+assignee, Reporter, and worker actor when the owner matches; this producer can
+compare the first three ids, while the release payload and linked rows expose
+no worker Actor id. VOC create requests do not accept owner or severity fields.
+Notification details contain ids only; decision reasons, notes, reply bodies,
+titles, and other free text stay in their domain records and audit events.
 
 ## Notifications Inbox
 

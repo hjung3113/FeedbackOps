@@ -23,11 +23,13 @@ import {
   linkRejectedFields,
   toAttachmentRefForAudit,
 } from '../attachments/index.js';
+import { listWorkspaceAdminActorIds } from '../auth/index.js';
 import type { RoleLevel } from '../auth/session-service.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import { runIdempotentCommand } from '../core/idempotency/idempotent-command.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
+import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import type { VocEmbeddingEnqueuer } from './embedding/enqueue.js';
 import { insertVoc, selectVocForUpdate, updateVocDescriptionFields } from './repo.js';
@@ -73,6 +75,7 @@ export interface VocServiceDeps {
    * constructor must wire the core idempotency service.
    */
   idempotencyService: IdempotencyService;
+  notify: NotificationNotifier;
   /**
    * #168 (ADR-0034 D6) — enqueue-on-write for VOC embeddings. Optional so
    * callers booted without pg-boss stay wired; absent means no enqueue, and
@@ -438,6 +441,23 @@ export function createVocService(deps: VocServiceDeps) {
           summary: `VOC ${pUpdated.displayId} severity set to ${String(pNewSev)}`,
           detail: { voc_id: vocId, from: row.severity, to: pNewSev },
         });
+        if (pNewSev === 'high' || pNewSev === 'critical') {
+          const adminActorIds = await listWorkspaceAdminActorIds(tx, workspaceId);
+          const actorIds = pUpdated.ownerUserId
+            ? [...new Set([pUpdated.ownerUserId, ...adminActorIds])]
+            : adminActorIds;
+          await deps.notify(tx, 'voc.severity_set_high_or_critical', {
+            workspace_id: workspaceId,
+            actor_ids: actorIds,
+            subject_id: vocId,
+            correlation_id: randomUUID(),
+            detail: {
+              voc_id: vocId,
+              primary_managed_system_id: pUpdated.primaryManagedSystemId,
+            },
+            params: { severity: pNewSev },
+          });
+        }
       }
       if (pOwnerChanged) {
         await deps.auditService.record(tx, {
@@ -453,6 +473,19 @@ export function createVocService(deps: VocServiceDeps) {
             to: { user_id: pUpdated.ownerUserId, team_id: pUpdated.ownerTeamId },
           },
         });
+        if (pUpdated.ownerUserId) {
+          await deps.notify(tx, 'voc.assigned_to_me', {
+            workspace_id: workspaceId,
+            actor_ids: [pUpdated.ownerUserId],
+            subject_id: vocId,
+            correlation_id: randomUUID(),
+            detail: {
+              voc_id: vocId,
+              primary_managed_system_id: pUpdated.primaryManagedSystemId,
+            },
+            params: {},
+          });
+        }
       }
       if (pAaChanged) {
         await deps.auditService.record(tx, {
@@ -593,6 +626,23 @@ export function createVocService(deps: VocServiceDeps) {
         summary: `VOC ${updated.displayId} severity set to ${String(newSev)}`,
         detail: { voc_id: vocId, from: row.severity, to: newSev },
       });
+      if (newSev === 'high' || newSev === 'critical') {
+        const adminActorIds = await listWorkspaceAdminActorIds(tx, workspaceId);
+        const actorIds = updated.ownerUserId
+          ? [...new Set([updated.ownerUserId, ...adminActorIds])]
+          : adminActorIds;
+        await deps.notify(tx, 'voc.severity_set_high_or_critical', {
+          workspace_id: workspaceId,
+          actor_ids: actorIds,
+          subject_id: vocId,
+          correlation_id: randomUUID(),
+          detail: {
+            voc_id: vocId,
+            primary_managed_system_id: updated.primaryManagedSystemId,
+          },
+          params: { severity: newSev },
+        });
+      }
     }
 
     // b. voc_owner_assigned
@@ -610,6 +660,19 @@ export function createVocService(deps: VocServiceDeps) {
           to: { user_id: newOwnerUser2, team_id: newOwnerTeam2 },
         },
       });
+      if (updated.ownerUserId) {
+        await deps.notify(tx, 'voc.assigned_to_me', {
+          workspace_id: workspaceId,
+          actor_ids: [updated.ownerUserId],
+          subject_id: vocId,
+          correlation_id: randomUUID(),
+          detail: {
+            voc_id: vocId,
+            primary_managed_system_id: updated.primaryManagedSystemId,
+          },
+          params: {},
+        });
+      }
     }
 
     // c. voc_analytics_area_linked

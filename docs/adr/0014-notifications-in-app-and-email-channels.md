@@ -107,7 +107,7 @@ Adding per-Actor preferences, switching to a third-party transactional email ser
 
 ## Implementation note — Issue #165
 
-Issue #165 creates the durable review candidate only; notification delivery remains deferred until the notification-system slice exists. That slice must emit `task.released` once per newly inserted candidate (not merely per Task transition), target the candidate VOC's current owner, and deduplicate using the release `correlation_id`. The releasing actor, Task assignee, Reporter, and worker actor are not recipients by default.
+At the time Issue #165 shipped, notification delivery remained deferred until the notification-system slice. That slice must emit `task.released` once per newly inserted candidate (not merely per Task transition), target the candidate VOC's current owner, and deduplicate using the release `correlation_id`. The releasing actor, Task assignee, Reporter, and worker actor are not recipients by default.
 
 ## Amendment 2026-09-29 (#509)
 
@@ -124,8 +124,10 @@ or permission `needs_more_info` / `permission_denied` outcomes.
 
 Callers resolve recipients in their request transaction and pass Actor IDs to
 the dispatcher. "Admins of the Managed System" means all workspace Actors
-whose `role_level` is `admin`; team-owned VOCs with no user owner resolve to an
-empty recipient list and enqueue no jobs. Self-notification is allowed with no
+whose `role_level` is `admin`; a team-owned VOC with no user owner contributes no owner recipient, so
+`voc.assigned_to_me` and `task.released` (owner only) enqueue no jobs, while
+`voc.reporter_replied` and `voc.severity_set_high_or_critical` still reach the
+workspace admins. Self-notification is allowed with no
 global suppression. The `task.released` exclusions from the Issue #165 note
 remain a caller-side rule; the catalogue documents that policy but does not
 resolve recipients.
@@ -140,3 +142,8 @@ Issue #509 part 2b wires the Task Request decision, Task conversion assignment,
 and Permission Request submission and decision producers described in the
 notifications API contract. `notify()` filters recipients to Actors in the
 event workspace before enqueueing.
+
+Issue #509 part 2a wires the VOC owner assignment, reporter reply, and
+high-or-critical severity producers, plus `task.released` after a new Public
+Update review candidate is inserted, as described in the notifications API
+contract.

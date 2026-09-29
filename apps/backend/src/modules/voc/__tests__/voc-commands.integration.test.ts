@@ -145,12 +145,14 @@ describe.skipIf(!runIntegration)('VOC application commands (#392)', () => {
       auditService,
       checkService,
       idempotencyService,
+      notify: async () => {},
     });
     conversationService = createConversationService({
       db: dbHandle.db,
       auditService,
       checkService,
       idempotencyService,
+      notify: async () => {},
       vocReadService,
     });
 

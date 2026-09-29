@@ -166,6 +166,7 @@ describe.skipIf(!runIntegration)('released Task review-candidate routes (#180)',
     const service = createPublicUpdateReviewCandidatesService({
       db: dbHandle.db,
       auditService: createAuditService(),
+      notify: async () => {},
     });
     const linkId = link.rows[0]?.id;
     if (!linkId) throw new Error('seed entity link missing');

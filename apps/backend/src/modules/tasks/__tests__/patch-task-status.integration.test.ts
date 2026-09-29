@@ -250,6 +250,7 @@ describe.skipIf(!runIntegration)('PATCH /tasks/:id status transition (#138)', ()
       publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
         db: dbHandle.db,
         auditService: createAuditService(),
+        notify: async () => {},
       }),
     });
     await handler([{ data: asReleasedReviewCandidatesPayload(jobs.rows[0]?.data) }]);
@@ -309,6 +310,7 @@ describe.skipIf(!runIntegration)('PATCH /tasks/:id status transition (#138)', ()
       publicUpdateReviewCandidatesService: createPublicUpdateReviewCandidatesService({
         db: dbHandle.db,
         auditService: createAuditService(),
+        notify: async () => {},
       }),
     });
     await handler([{ data: asReleasedReviewCandidatesPayload(jobRows.rows[0]?.data) }]);

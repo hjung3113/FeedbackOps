@@ -1,5 +1,10 @@
+import { and, eq } from "drizzle-orm";
+
 import type { Db } from "../../../db/client.js";
+import { tasks } from "../../../db/schema/task.js";
+import { vocs } from "../../../db/schema/voc.js";
 import type { AuditService } from "../../core/audit/audit-service.js";
+import type { NotificationNotifier } from "../../notifications/index.js";
 import { insertPublicUpdateReviewCandidate } from "./repo.js";
 
 export interface ReleasedReviewCandidateInput {
@@ -15,6 +20,7 @@ export interface ReleasedReviewCandidateInput {
 export function createPublicUpdateReviewCandidatesService(deps: {
   db: Db;
   auditService: AuditService;
+  notify: NotificationNotifier;
 }) {
   async function createForReleasedTask(
     input: ReleasedReviewCandidateInput,
@@ -33,6 +39,25 @@ export function createPublicUpdateReviewCandidatesService(deps: {
         });
         if (!candidate) continue;
         inserted += 1;
+
+        const releaseContextRows = await tx
+          .select({
+            ownerUserId: vocs.ownerUserId,
+            reporterId: vocs.reporterId,
+            assigneeActorId: tasks.assigneeActorId,
+          })
+          .from(vocs)
+          .innerJoin(
+            tasks,
+            and(eq(tasks.id, input.task_id), eq(tasks.workspaceId, input.workspace_id)),
+          )
+          .where(and(eq(vocs.id, link.voc_id), eq(vocs.workspaceId, input.workspace_id)))
+          .limit(1);
+        const releaseContext = releaseContextRows[0];
+        if (!releaseContext) {
+          throw new Error('released Task review candidate is missing its Task or VOC');
+        }
+
         await deps.auditService.record(tx, {
           workspace_id: input.workspace_id,
           actor_id: input.triggered_by_actor_id,
@@ -49,6 +74,25 @@ export function createPublicUpdateReviewCandidatesService(deps: {
             correlation_id: input.correlation_id,
           },
         });
+
+        const excludedActorIds = new Set(
+          [input.triggered_by_actor_id, releaseContext.assigneeActorId, releaseContext.reporterId]
+            .filter((actorId): actorId is string => actorId !== null)
+            .map(String),
+        );
+        if (
+          releaseContext.ownerUserId &&
+          !excludedActorIds.has(releaseContext.ownerUserId)
+        ) {
+          await deps.notify(tx, 'task.released', {
+            workspace_id: input.workspace_id,
+            actor_ids: [releaseContext.ownerUserId],
+            subject_id: candidate.id,
+            correlation_id: input.correlation_id,
+            detail: { voc_id: link.voc_id, task_id: input.task_id },
+            params: {},
+          });
+        }
       }
       return { inserted };
     });
