@@ -1,8 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { FindingDetailPanel } from './FindingDetailPanel';
+
+const apiClientMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
@@ -62,10 +65,6 @@ vi.mock('@/features/findings/hooks/useFindingStatusMutation', () => ({
   useFindingStatusMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-vi.mock('@/features/findings/hooks/useRequestTaskFromFinding', () => ({
-  useRequestTaskFromFinding: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
-}));
-
 vi.mock('@/lib/cross-system/useVocDetail', () => ({
   useVocDetail: () => ({ data: null }),
 }));
@@ -91,7 +90,9 @@ vi.mock('@/lib/auth/useMe', () => ({
 }));
 
 vi.mock('@/lib/api', () => ({
+  apiClient: apiClientMock,
   errorMapper: () => ({ message: 'mapped error' }),
+  fetchTaskRequests: vi.fn(async () => ({ items: [] })),
   getTask: vi.fn(async () => ({
     id: '20000000-0000-0000-0000-000000000002',
     display_id: 'TASK-901',
@@ -107,7 +108,7 @@ function renderWithClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-describe('FindingDetailPanel display ids', () => {
+describe('FindingDetailPanel', () => {
   it('renders finding display_id in the detail header and linked task display_id in the link chip', async () => {
     renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
 
@@ -116,5 +117,37 @@ describe('FindingDetailPanel display ids', () => {
       expect(screen.getByText('TASK-901')).toBeInTheDocument();
     });
     expect(screen.queryByText(/10000000/)).not.toBeInTheDocument();
+  });
+
+  it('submits a Task Request from the inline draft card with the Finding contract fields', async () => {
+    const user = userEvent.setup();
+    apiClientMock.mockReset();
+    apiClientMock.mockResolvedValue({ data: { id: 'task-request-1' } });
+    renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
+
+    await user.click(screen.getByTestId('request-task-btn'));
+    const draft = await screen.findByRole('region', { name: 'Task Request draft' });
+    expect(draft).toHaveTextContent('From FIN-179 · Finding');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await user.type(
+      screen.getByTestId('request-task-requested-outcome-input'),
+      'Improve the report query plan',
+    );
+    await user.click(screen.getByTestId('request-task-submit'));
+
+    await waitFor(() =>
+      expect(apiClientMock).toHaveBeenCalledWith(
+        'POST',
+        '/findings/10000000-0000-0000-0000-000000000001/request-task',
+        expect.objectContaining({
+          body: {
+            evidence_summary: '쿼리 플랜 개선 필요',
+            requested_outcome: 'Improve the report query plan',
+          },
+          idempotencyKey: 'idem-key',
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument());
   });
 });

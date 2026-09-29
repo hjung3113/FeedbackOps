@@ -108,14 +108,14 @@ test.describe('/findings/$findingId visual harness', () => {
     for (const testId of MANAGE_CTAS) {
       await expect(panel.getByTestId(testId)).toBeDisabled();
     }
-    await expect(page.getByTestId('request-task-modal')).toHaveCount(0);
+    await expect(page.getByTestId('request-task-draft')).toHaveCount(0);
 
     await expectBackgroundSettled(page);
 
     await expectVisual(page, panel, 'finding-detail-permission-limited.png');
   });
 
-  test('requests a Task through the Radix portal and validates the submit body', async ({
+  test('requests a Task with the inline draft card and validates the submit body', async ({
     page,
   }) => {
     const mock = await installMockApi(page, { findingDetail: true });
@@ -123,29 +123,33 @@ test.describe('/findings/$findingId visual harness', () => {
     await page.goto(`/findings/${FINDING_DETAIL_IDS.finding}`);
     await page.getByTestId('request-task-btn').click();
 
-    const dialog = page.getByTestId('request-task-modal');
-    await expect(dialog).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(1);
+    const draft = page.getByTestId('request-task-draft');
+    await expect(draft).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     // Evidence summary is prefilled from the Finding.
-    await expect(dialog.getByTestId('request-task-evidence-summary-input')).toHaveValue(
+    await expect(draft.getByTestId('request-task-evidence-summary-input')).toHaveValue(
       populatedFinding.summary,
     );
-    await dialog
+    await draft
       .getByTestId('request-task-requested-outcome-input')
       .fill(requestTaskBody.requested_outcome);
     await expectBackgroundSettled(page);
-    await expectVisual(page, dialog, 'finding-detail-request-task-modal.png');
+    await expectVisual(
+      page,
+      page.getByTestId('finding-detail-panel'),
+      'finding-detail-request-task-draft.png',
+    );
 
     const post = page.waitForRequest(
       (request) =>
         request.method() === 'POST' &&
         request.url().endsWith(`/findings/${FINDING_DETAIL_IDS.finding}/request-task`),
     );
-    await dialog.getByTestId('request-task-submit').click();
+    await draft.getByTestId('request-task-submit').click();
     expect(JSON.parse((await post).postData() ?? '{}')).toEqual(requestTaskBody);
     await expect.poll(() => mock.postedBodies).toEqual([requestTaskBody]);
     await expect(page.getByText('Task Request가 생성되었습니다.')).toBeVisible();
-    await expect(dialog).toHaveCount(0);
+    await expect(draft).toHaveCount(0);
   });
 
   test('deep-selects the Finding through the list URL state', async ({ page }) => {

@@ -2,7 +2,7 @@
 
 ## Ownership
 
-This folder owns Finding screens and hooks: `FindingDetailPanel` and its panel tree (`FullFindingDetail`, the evidence/link/request modals, `useFindingDetailController`), plus the Finding read/mutation hooks (`useFindingsList`, `useFindingDetail`, `useFindingStatusMutation`, `useEvidenceHighlights`, `useEvidenceMutations`, `useRequestTaskFromFinding`).
+This folder owns Finding screens and hooks: `FindingDetailPanel` and its panel tree (`FullFindingDetail`, the evidence/link modals, inline Task Request draft card, `useFindingDetailController`), plus the Finding read/mutation hooks (`useFindingsList`, `useFindingDetail`, `useFindingStatusMutation`, `useEvidenceHighlights`, `useEvidenceMutations`, `useRequestTaskFromFinding`).
 
 It does not own source object lifecycles or backend authorization truth.
 

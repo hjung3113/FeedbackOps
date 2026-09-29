@@ -749,6 +749,10 @@ export async function installMockApi(
       return;
     }
 
+    if (options.findingDetail && isRequest(route, 'GET', '/task-requests')) {
+      await json(route, 200, { items: [] });
+      return;
+    }
     if (options.findingDetail && isRequest(route, 'GET', '/managed-systems')) {
       await json(route, 200, findingManagedSystems);
       return;

@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const apiClientMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@/lib/cross-system/useVocDetail', () => ({ useVocDetail: vi.fn() }));
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({ useWorkspaceActors: vi.fn() }));
 vi.mock('@/lib/cross-system/getPermissionDecision', async (importOriginal) => {
@@ -19,7 +21,12 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 });
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
-  return { ...actual, getTask: vi.fn() };
+  return {
+    ...actual,
+    apiClient: apiClientMock,
+    fetchTaskRequests: vi.fn(async () => ({ items: [] })),
+    getTask: vi.fn(),
+  };
 });
 vi.mock('@/lib/api/analytics-areas', () => ({ fetchAnalyticsAreas: vi.fn() }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
@@ -95,6 +102,10 @@ function renderWithClient(ui: React.ReactElement, queryClient = createQueryClien
 
 beforeEach(() => {
   navigate.mockReset();
+  apiClientMock.mockReset();
+  apiClientMock.mockImplementation(async (_method: string, path: string) =>
+    path.endsWith('/request-task') ? { data: { id: 'task-request-1' } } : { data: { items: [] } },
+  );
   vi.mocked(getTask).mockReset();
   vi.mocked(useManagedSystem).mockReturnValue(null);
   vi.mocked(getPermissionDecision).mockReturnValue(null);
@@ -537,13 +548,13 @@ describe('<VocDetailPanel>', () => {
     expect(screen.getByRole('menuitem', { name: 'Conversation' })).toBeInTheDocument();
   });
 
-  it('shows both permission actions in one footer menu for an admin actor', () => {
+  it('shows both permission actions and submits an inline Task Request draft for an admin actor', async () => {
     vi.mocked(useMe).mockReturnValue(
       makeMeQuery({
         data: { ...ME_RESPONSE, actor: { ...ME_RESPONSE.actor, role_level: 'admin' } },
       }),
     );
-    const { container, unmount } = renderWithClient(
+    const { container } = renderWithClient(
       <VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />,
     );
 
@@ -555,16 +566,27 @@ describe('<VocDetailPanel>', () => {
     // established pattern (apps/frontend/src/lib/layout/__tests__/AppRail.test.tsx).
     fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Task 요청' }));
-    expect(document.querySelector('[role="dialog"]')).toBeInTheDocument();
-    unmount();
-
-    // Re-render fresh: the RequestTaskModal opened above marks the rest of the
-    // page aria-hidden while it's mounted, so a second dropdown can't be
-    // reliably opened against the same tree without first closing it.
-    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
-    fireEvent.keyDown(screen.getByRole('button', { name: '추가 작업' }), { key: 'Enter' });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Finding 생성' }));
-    expect(document.querySelector('[role="dialog"]')).toBeInTheDocument();
+    const draft = screen.getByRole('region', { name: 'Task Request draft' });
+    expect(draft).toHaveTextContent('From VOC-0001 · VOC');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('request-task-requested-outcome-input'), {
+      target: { value: 'Reduce repeated support contacts' },
+    });
+    fireEvent.click(screen.getByTestId('request-task-submit'));
+    await waitFor(() =>
+      expect(apiClientMock).toHaveBeenCalledWith(
+        'POST',
+        `/vocs/${DETAIL_ENVELOPE.id}/request-task`,
+        expect.objectContaining({
+          body: {
+            evidence_summary: `VOC ${DETAIL_ENVELOPE.display_id}: ${DETAIL_ENVELOPE.title}`,
+            requested_outcome: 'Reduce repeated support contacts',
+          },
+          idempotencyKey: expect.any(String),
+        }),
+      ),
+    );
+    expect(screen.queryByTestId('request-task-draft')).not.toBeInTheDocument();
   });
 
   it('omits the footer overflow menu entirely for a plain user actor', () => {
