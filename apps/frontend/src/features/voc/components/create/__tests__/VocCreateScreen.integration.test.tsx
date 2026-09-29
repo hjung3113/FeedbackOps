@@ -13,7 +13,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // ── Mock modules ──────────────────────────────────────────────────────────────
@@ -184,14 +184,29 @@ function installFetch(
   options: {
     msItems?: unknown[];
     aaItems?: unknown[];
+    managedSystemsResponses?: ReadonlyArray<{
+      status: number;
+      body: unknown;
+      headers?: Record<string, string>;
+    }>;
     postVocsResponse?: { status: number; body: unknown; headers?: Record<string, string> };
   },
 ) {
-  const { msItems = [MS_ITEM], aaItems = [AA_ITEM], postVocsResponse } = options;
+  const {
+    msItems = [MS_ITEM],
+    aaItems = [AA_ITEM],
+    managedSystemsResponses,
+    postVocsResponse,
+  } = options;
   const postBodies: unknown[] = [];
+  let managedSystemsRequestCount = 0;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.includes('/managed-systems') && (!init?.method || init.method === 'GET')) {
+      const response = managedSystemsResponses?.[managedSystemsRequestCount++];
+      if (response) {
+        return jsonResponse(response.body, response.status, response.headers ?? {});
+      }
       return jsonResponse({ items: msItems, total: msItems.length });
     }
     if (url.includes('/analytics-areas') && (!init?.method || init.method === 'GET')) {
@@ -316,6 +331,34 @@ describe('VocCreateScreen integration', () => {
       attachment_ids: [],
     }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('managed-systems background 401 keeps the draft mounted and shows login copy', async () => {
+    installFetch({
+      managedSystemsResponses: [
+        { status: 200, body: { items: [MS_ITEM], total: 1 } },
+        {
+          status: 401,
+          body: { code: 'auth.session_required', message: 'Unauthorized' },
+        },
+      ],
+    });
+
+    const { qc } = renderHarness();
+
+    await waitFor(() => expect(screen.getByTestId('ms-picker')).toBeInTheDocument());
+
+    const titleInput = screen.getByRole('textbox', { name: /제목/i });
+    fireEvent.change(titleInput, { target: { value: '작성 중인 VOC' } });
+
+    await act(async () => {
+      await qc.invalidateQueries({ queryKey: ['managed-systems', { includeArchived: false }] });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: /제목/i })).toHaveValue('작성 중인 VOC');
+      expect(screen.getByText('로그인이 필요합니다.')).toBeInTheDocument();
+    });
   });
 
   // ── 2. 422 validation.failed with detail.fields ───────────────────────────

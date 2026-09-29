@@ -1,5 +1,6 @@
 import type { ErrorCode } from '@fops/shared';
-import type { ApiErrorEnvelope, MappedError, Tone } from './types';
+import { UnauthenticatedError } from './auth';
+import { ApiError, type ApiErrorEnvelope, type MappedError, type Tone } from './types';
 
 export const GENERIC_ERROR_MESSAGE = '일시적 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
 
@@ -101,7 +102,14 @@ function formatRetryAfter(detail?: Record<string, unknown>): string | undefined 
   return `${Math.ceil(secs / 60)}분`;
 }
 
-export function errorMapper(envelope: ApiErrorEnvelope, opts?: { onRetry?: () => void }): MappedError {
+export function errorMapper(
+  envelope: ApiErrorEnvelope | null | undefined,
+  opts?: { onRetry?: () => void },
+): MappedError {
+  if (!envelope || typeof envelope.code !== 'string') {
+    return { tone: 'error', message: GENERIC_ERROR_MESSAGE };
+  }
+
   const entry = CATALOG[envelope.code];
   let message: string;
   let tone: Tone;
@@ -120,6 +128,17 @@ export function errorMapper(envelope: ApiErrorEnvelope, opts?: { onRetry?: () =>
   }
 
   return { tone, message, action };
+}
+
+export function mapUnknownError(
+  error: unknown,
+  opts?: { onRetry?: () => void },
+): MappedError {
+  if (error instanceof ApiError) return errorMapper(error.envelope, opts);
+  if (error instanceof UnauthenticatedError) {
+    return errorMapper({ code: 'auth.session_required', message: '' }, opts);
+  }
+  return errorMapper(undefined, opts);
 }
 
 // 501 tombstone for a server-internal unimplemented endpoint; no user copy by design.
