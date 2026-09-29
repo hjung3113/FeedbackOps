@@ -96,6 +96,8 @@ Attachments owns:
 - the shared attachment storage seam and its upload/download commands
 - filename and MIME allowlist
 This is the implementation of Core's attachment-governance bullet, not a second owner. Other modules reference attachments; they do not own the storage seam.
+VOC owns the read projections of its own attachment links (`selectVocAttachments`,
+`selectAttachmentsForComments` in `voc/repo-read.ts`); Attachments does not provide a read projection for them.
 
 Navigation owns:
 - the read-only sidebar badge-count aggregation

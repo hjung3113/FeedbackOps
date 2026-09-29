@@ -22,9 +22,9 @@ import {
 } from '../findings/authorization.js';
 import { lockManagedSystem } from '../managed-systems/index.js';
 import type { CheckService } from '../permissions/check-service.js';
-import { type Scope, actorReadScope } from '../voc/authorization.js';
+import { actorReadScope } from '../voc/authorization.js';
 import type { ConversationService } from '../voc/conversation-service.js';
-import { selectVocForUpdate } from '../voc/index.js';
+import { isVocVisibleToActor, selectVocForUpdate, type Scope } from '../voc/index.js';
 import { createVocClusterConversion } from './conversion.js';
 import {
   type CreatedFindingForClusterRow,
@@ -150,9 +150,10 @@ function isAuthorizedMember(
     member.archived_at === null &&
     member.primary_managed_system_id === clusterManagedSystemId &&
     member.reporter_id !== undefined &&
-    (readScope.kind === 'all' ||
-      readScope.managedSystemIds.includes(member.primary_managed_system_id) ||
-      member.reporter_id === actorId)
+    isVocVisibleToActor(readScope, actorId, {
+      primary_managed_system_id: member.primary_managed_system_id,
+      reporter_id: member.reporter_id,
+    })
   );
 }
 

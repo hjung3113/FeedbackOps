@@ -22,7 +22,7 @@ import { createAuditService } from '../../core/audit/index.js';
 import {
   type TaskReleasedReviewCandidatesPayload,
   releasedReviewCandidatesHandler,
-} from '../../voc/jobs/released-review-candidates.js';
+} from '../../voc/index.js';
 import { createPublicUpdateReviewCandidatesService } from '../../voc/public-update-review-candidates/service.js';
 import { insertTaskRow } from './_seed-helpers.js';
 

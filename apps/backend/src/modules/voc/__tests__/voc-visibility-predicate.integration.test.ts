@@ -27,7 +27,11 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { type DbHandle, createDb } from '../../../db/client.js';
-import { type Scope, similarVocVisibilityPredicate } from '../authorization.js';
+import {
+  type Scope,
+  isVocVisibleToActor,
+  similarVocVisibilityPredicate,
+} from '../authorization.js';
 import { selectVocRecommendations } from '../recommendations/repo.js';
 import { selectSimilarVocCount, selectSimilarVocItems } from '../repo-read.js';
 
@@ -238,6 +242,40 @@ describe.skipIf(!runIntegration)('ADR-0031 VOC visibility predicate (#168)', () 
     expect(
       await admittedByPredicate({ kind: 'scoped', managedSystemIds: [] }, reporterActorId),
     ).toEqual([a2, b2].sort());
+  });
+
+  it.each([
+    { name: 'all scope', scope: 'all', actor: 'plain' },
+    { name: 'in-scope Managed System', scope: 'msA', actor: 'plain' },
+    { name: 'out-of-scope reporter', scope: 'empty', actor: 'reporter' },
+    { name: 'out-of-scope non-reporter', scope: 'empty', actor: 'plain' },
+  ] as const)('object visibility matches SQL for $name', async ({ scope, actor }) => {
+    const readScope: Scope =
+      scope === 'all'
+        ? { kind: 'all' }
+        : { kind: 'scoped', managedSystemIds: [scope === 'msA' ? msA : msEmpty] };
+    const actorId = actor === 'plain' ? plainActorId : reporterActorId;
+    const visible = similarVocVisibilityPredicate(readScope, actorId, sql`v`);
+    const result = await appHandle.db.execute<{
+      id: string;
+      primary_managed_system_id: string;
+      reporter_id: string;
+      sql_visible: boolean;
+    }>(sql`
+      SELECT v.id, v.primary_managed_system_id, v.reporter_id, ${visible} AS sql_visible
+        FROM voc.vocs v
+       WHERE v.workspace_id = ${WORKSPACE_ID}
+         AND v.id = ANY(ARRAY[${sql.join(
+           [a1, a2, b1, b2].map((id) => sql`${id}::uuid`),
+           sql`, `,
+         )}]::uuid[])
+       ORDER BY v.id
+    `);
+
+    expect(result.rows).toHaveLength(4);
+    for (const row of result.rows) {
+      expect(isVocVisibleToActor(readScope, actorId, row)).toBe(row.sql_visible);
+    }
   });
 
   // ── (2) the two read models agree on one fixture ───────────────────────────

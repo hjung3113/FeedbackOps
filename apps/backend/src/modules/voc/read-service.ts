@@ -37,6 +37,7 @@ import {
   actorTriageScope,
 } from './authorization.js';
 import { decodeCursor, encodeCursor } from './cursor.js';
+import type { CountVocsQuery } from './read-contract.js';
 import type { ConversationRow, VocReadRow } from './repo-read.js';
 import * as repoRead from './repo-read.js';
 import { type ReporterFacingStatus, nextReporterStates } from './transitions.js';
@@ -65,17 +66,6 @@ export type VocReferenceResolution =
   | { visibility_state: 'summary_visible' }
   | { visibility_state: 'denied' }
   | { visibility_state: 'hidden' };
-
-/** Count queries use the same predicates as the list, without list-only fields. */
-export type CountVocsQuery = Pick<
-  ListVocsQuery,
-  | 'view'
-  | 'managed_system_id'
-  | 'tab'
-  | 'filter.severity'
-  | 'filter.reporter_facing_status'
-  | 'filter.owner'
-> & { analyticsAreaId?: string };
 
 // ── Inline conversation cursor (conversation-specific; separate from VOC list cursor) ──
 

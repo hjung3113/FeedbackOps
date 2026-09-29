@@ -14,7 +14,7 @@ VOC Clusters are a separate module directory (`../voc-clusters/`) but logically 
 - Task Done or Released must not automatically mark a VOC as resolved.
 - Public updates are distinct from internal comments.
 - The ADR-0031 visibility rule (Managed System in the actor's `voc.read` scope, or the actor reported it) has one implementation in this module: `similarVocVisibilityPredicate` in `authorization.ts`. Callers pass the row alias. It is pinned by `__tests__/voc-visibility-predicate.integration.test.ts`. Do not add a second copy.
-- One copy still lives outside this module: the private `isAuthorizedMember` helper in the VOC Clusters module. It wraps the same scope-or-reporter disjunction with cluster membership conditions (same Managed System, not archived). A change to the scope semantics here must be applied there in the same commit.
+- VOC Clusters delegates the base scope-or-reporter rule to `isVocVisibleToActor` and adds only cluster membership conditions.
 
 ## Cross-System Rules
 

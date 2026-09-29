@@ -16,7 +16,7 @@ import { isAuthorizationAbsence } from '../permissions/read-utility.js';
 import type { RequestService } from '../permissions/request-service.js';
 import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
 import { actorSurveyReadScope, checkSurveyRead } from '../surveys/authorization.js';
-import type { CountVocsQuery } from '../voc/read-service.js';
+import type { CountVocsQuery, VocCountReader } from '../voc/index.js';
 import * as repo from './repo.js';
 
 export interface DashboardActor {
@@ -29,9 +29,7 @@ type DashboardDeps = {
   db: Db;
   checkService: CheckService;
   requestService: Pick<RequestService, 'listAllActive'>;
-  vocReadService: {
-    countVocs(args: { actor: DashboardActor; query: CountVocsQuery }): Promise<number>;
-  };
+  vocReadService: VocCountReader;
 };
 
 function inRequestedScope(scope: Scope, managedSystemId?: string): Scope | undefined {
