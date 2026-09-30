@@ -80,7 +80,7 @@ Acceptance Criteria:
 - summary_visible exposes only the target system's summary contract.
 - admin_only is restricted to Admin.
 - Source and target permissions are both respected.
-- Linked-object UI visibility is backend-decided as allowed, hidden, summary_visible, request_access, or denied.
+- Linked-object UI visibility is backend-decided as the current effective Entity Link set `allowed`, `hidden`, `summary_visible`, or `denied`; `request_access` remains reserved and is not emitted until a requestable link target exists (ADR-0023 §B). Permission Decision and permission frontend states are separate vocabularies.
 - Frontend must not synthesize linked-object summaries from raw data that the actor cannot otherwise read.
 ```
 
