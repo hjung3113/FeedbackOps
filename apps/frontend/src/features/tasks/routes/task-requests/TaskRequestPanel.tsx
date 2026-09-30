@@ -18,13 +18,7 @@ import { Check, FileSearch, Link2, XCircle } from 'lucide-react';
 import * as React from 'react';
 
 import { TaskRequestDecisionDialog } from './TaskRequestDecisionDialog';
-import {
-  type NameMaps,
-  STATUS_LABELS,
-  TaskRequestBadge,
-  dot,
-  shortId,
-} from './TaskRequestRow';
+import { type NameMaps, STATUS_LABELS, TaskRequestBadge, dot, shortId } from './TaskRequestRow';
 import { formatDate } from './predicates';
 import { TASK_PRIORITIES, useTaskRequestConversion } from './useTaskRequestConversion';
 import { useTaskRequestDecision } from './useTaskRequestDecision';
