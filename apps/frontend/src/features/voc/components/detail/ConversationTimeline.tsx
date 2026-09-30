@@ -14,11 +14,13 @@ import { InternalTimeline } from './InternalTimeline';
 
 export interface ConversationTimelineProps {
   voc: VocDetailEnvelope;
+  canSeeInternalOps: boolean;
   actorNamesById?: ReadonlyMap<string, string> | undefined;
 }
 
 export function ConversationTimeline({
   voc,
+  canSeeInternalOps,
   actorNamesById,
 }: ConversationTimelineProps): React.ReactElement {
   const publicEntries = voc.conversation_timeline.filter(
@@ -28,19 +30,13 @@ export function ConversationTimeline({
     (e) => e.kind === 'internal_comment',
   );
 
-  // TODO(#21): Hide the "내부" tab when viewer is Reporter-only. Server already
-  // returns empty internal_comment array for Reporter-only viewers, but rendering
-  // the tab still hints at the existence of internal traffic they aren't meant
-  // to know about. REV-1 cycle 1 M1 — deferred to #21 alongside composer +
-  // permission-aware viewer logic (needs useMe + voc.reporter_id comparison +
-  // role_level check).
   return (
     <div>
       <PanelSectionTitle>대화</PanelSectionTitle>
       <Tabs defaultValue="public" className="w-full">
         <TabsList>
           <TabsTrigger value="public">공개</TabsTrigger>
-          <TabsTrigger value="internal">내부</TabsTrigger>
+          {canSeeInternalOps && <TabsTrigger value="internal">내부</TabsTrigger>}
         </TabsList>
         <TabsContent value="public">
           <PublicTimeline
@@ -50,14 +46,16 @@ export function ConversationTimeline({
             actorNamesById={actorNamesById}
           />
         </TabsContent>
-        <TabsContent value="internal">
-          <InternalTimeline
-            vocId={voc.id}
-            inline={internalEntries}
-            hasMore={voc.conversation_page.has_more}
-            actorNamesById={actorNamesById}
-          />
-        </TabsContent>
+        {canSeeInternalOps && (
+          <TabsContent value="internal">
+            <InternalTimeline
+              vocId={voc.id}
+              inline={internalEntries}
+              hasMore={voc.conversation_page.has_more}
+              actorNamesById={actorNamesById}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

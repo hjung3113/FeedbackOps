@@ -5,6 +5,7 @@ import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiClientMock = vi.hoisted(() => vi.fn());
+const permissionStates = new Map<string, string>();
 
 vi.mock('@/lib/cross-system/useVocDetail', () => ({ useVocDetail: vi.fn() }));
 vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({ useWorkspaceActors: vi.fn() }));
@@ -30,6 +31,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 vi.mock('@/lib/api/analytics-areas', () => ({ fetchAnalyticsAreas: vi.fn() }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe: vi.fn() }));
+vi.mock('@/lib/cross-system/usePermissionCheck', () => ({ usePermissionCheck: vi.fn() }));
 vi.mock('@fops/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@fops/ui')>();
   return {
@@ -77,6 +79,7 @@ import { getTask } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { useMe } from '@/lib/auth/useMe';
 import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
@@ -101,6 +104,7 @@ function renderWithClient(ui: React.ReactElement, queryClient = createQueryClien
 }
 
 beforeEach(() => {
+  permissionStates.clear();
   navigate.mockReset();
   apiClientMock.mockReset();
   apiClientMock.mockImplementation(async (_method: string, path: string) =>
@@ -128,6 +132,9 @@ beforeEach(() => {
   } as ReturnType<typeof useWorkspaceActors>);
   vi.mocked(fetchAnalyticsAreas).mockResolvedValue({ items: [], total: 0 });
   vi.mocked(useMe).mockReturnValue(makeMeQuery());
+  vi.mocked(usePermissionCheck).mockImplementation(({ capability }) => ({
+    data: { state: permissionStates.get(capability) ?? 'blocked_non_requestable' },
+  }) as unknown as ReturnType<typeof usePermissionCheck>);
 });
 
 describe('<VocDetailPanel>', () => {
@@ -286,6 +293,43 @@ describe('<VocDetailPanel>', () => {
     renderWithClient(<VocDetailPanel vocId="voc-uuid-1111" onClose={vi.fn()} />);
     expect(screen.getByText('테스트 VOC 제목')).toBeInTheDocument();
   });
+
+  it('hides the internal conversation tab when the reporter has no operator capability', () => {
+    vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+    vi.mocked(useMe).mockReturnValue(
+      makeMeQuery({
+        data: {
+          ...ME_RESPONSE,
+          actor: { ...ME_RESPONSE.actor, role_level: 'user' },
+        },
+      }),
+    );
+    renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+    expect(screen.queryByRole('tab', { name: '내부' })).not.toBeInTheDocument();
+  });
+
+  it.each(['voc.read', 'voc.triage'] as const)(
+    'keeps the internal conversation tab for an operator with approved %s capability',
+    (approvedCapability) => {
+      vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());
+      permissionStates.set(approvedCapability, 'approved');
+      vi.mocked(useMe).mockReturnValue(
+        makeMeQuery({
+          data: {
+            ...ME_RESPONSE,
+            actor: { ...ME_RESPONSE.actor, id: OTHER_ACTOR_ID, role_level: 'user' },
+          },
+        }),
+      );
+
+      renderWithClient(<VocDetailPanel vocId={DETAIL_ENVELOPE.id} onClose={vi.fn()} />);
+      expect(screen.getByRole('tab', { name: '내부' })).toBeInTheDocument();
+      expect(usePermissionCheck).toHaveBeenCalledWith({
+        capability: approvedCapability,
+        managedSystemId: DETAIL_ENVELOPE.primary_managed_system_id,
+      });
+    },
+  );
 
   it('closes a mounted detail when the Managed System scope changes outside its envelope', async () => {
     vi.mocked(useVocDetail).mockReturnValue(makeDetailQuery());

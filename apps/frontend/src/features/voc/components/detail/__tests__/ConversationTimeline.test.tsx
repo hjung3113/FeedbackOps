@@ -135,10 +135,21 @@ beforeEach(() => {
 });
 
 describe('<ConversationTimeline>', () => {
-  it('renders both tabs', () => {
-    render(<ConversationTimeline voc={DETAIL_ENVELOPE} />);
+  it('renders both tabs for a viewer with operator capability', () => {
+    render(<ConversationTimeline voc={DETAIL_ENVELOPE} canSeeInternalOps={true} />);
     expect(screen.getByRole('tab', { name: '공개' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '내부' })).toBeInTheDocument();
+  });
+
+  it('hides the internal tab for a reporter-only viewer', () => {
+    const vocWithInternalEntry = {
+      ...DETAIL_ENVELOPE,
+      conversation_timeline: [INTERNAL_ENTRY],
+    };
+    render(<ConversationTimeline voc={vocWithInternalEntry} canSeeInternalOps={false} />);
+    expect(screen.getByRole('tab', { name: '공개' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: '내부' })).not.toBeInTheDocument();
+    expect(screen.queryByText('내부 코멘트')).not.toBeInTheDocument();
   });
 
   it('public tab shows public_update entries', () => {
@@ -146,7 +157,7 @@ describe('<ConversationTimeline>', () => {
       ...DETAIL_ENVELOPE,
       conversation_timeline: [PUBLIC_ENTRY, REPORTER_REPLY_ENTRY, INTERNAL_ENTRY],
     };
-    render(<ConversationTimeline voc={vocWithEntries} />);
+    render(<ConversationTimeline voc={vocWithEntries} canSeeInternalOps={true} />);
     // public tab is default; public + reporter_reply should appear
     expect(screen.getByText('공개 업데이트')).toBeInTheDocument();
     expect(screen.getByText('Reporter 답변')).toBeInTheDocument();
@@ -155,7 +166,7 @@ describe('<ConversationTimeline>', () => {
   });
 
   it('shows empty state when no entries in public tab', () => {
-    render(<ConversationTimeline voc={DETAIL_ENVELOPE} />);
+    render(<ConversationTimeline voc={DETAIL_ENVELOPE} canSeeInternalOps={true} />);
     expect(screen.getByText('아직 대화가 없습니다.')).toBeInTheDocument();
   });
 });

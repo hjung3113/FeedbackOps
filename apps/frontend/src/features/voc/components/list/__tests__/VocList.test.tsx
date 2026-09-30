@@ -3,7 +3,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { VocList } from '../VocList';
+
+const permissionStates = new Map<string, string>();
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -53,6 +56,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     }),
   };
 });
+vi.mock('@/lib/cross-system/usePermissionCheck', () => ({ usePermissionCheck: vi.fn() }));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -96,6 +100,10 @@ describe('<VocList>', () => {
 
   beforeEach(() => {
     onSelect = vi.fn();
+    permissionStates.clear();
+    vi.mocked(usePermissionCheck).mockImplementation(({ capability }) => ({
+      data: { state: permissionStates.get(capability) ?? 'blocked_non_requestable' },
+    }) as unknown as ReturnType<typeof usePermissionCheck>);
   });
 
   it('shows 10 skeletons when loading with no items', () => {
@@ -171,6 +179,40 @@ describe('<VocList>', () => {
     const dataRows = rows.filter((r) => r.getAttribute('aria-busy') !== 'true');
     expect(dataRows).toHaveLength(3);
   });
+
+  it('hides the Owner need chip on My VOCs rows for a reporter-only viewer', () => {
+    render(
+      <VocList
+        items={[makeVoc()]}
+        loading={false}
+        error={null}
+        onSelect={onSelect}
+        view="my"
+      />,
+      { wrapper: makeWrapper() },
+    );
+
+    expect(screen.queryByText('Owner 필요')).not.toBeInTheDocument();
+  });
+
+  it.each(['voc.read', 'voc.triage'] as const)(
+    'keeps the Owner need chip on My VOCs rows for an operator with approved %s capability',
+    (approvedCapability) => {
+      permissionStates.set(approvedCapability, 'approved');
+      render(
+        <VocList
+          items={[makeVoc()]}
+          loading={false}
+          error={null}
+          onSelect={onSelect}
+          view="my"
+        />,
+        { wrapper: makeWrapper() },
+      );
+
+      expect(screen.getByText('Owner 필요')).toBeInTheDocument();
+    },
+  );
 
   it('marks the selected row with aria-selected=true', () => {
     const items = [

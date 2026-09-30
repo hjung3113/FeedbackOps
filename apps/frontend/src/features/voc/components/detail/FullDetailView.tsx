@@ -64,6 +64,7 @@ export function FullDetailView({
     actorNamesById,
     analyticsAreasById,
     canTriage,
+    canSeeInternalOps,
     linkedTask,
     requestTaskIsPending,
     pendingReviewCount,
@@ -190,7 +191,11 @@ export function FullDetailView({
             </div>
           )}
           <div data-anchor="conversation">
-            <ConversationTimeline voc={voc} actorNamesById={actorNamesById} />
+            <ConversationTimeline
+              voc={voc}
+              canSeeInternalOps={canSeeInternalOps}
+              actorNamesById={actorNamesById}
+            />
           </div>
           <div data-anchor="compose">
             <ComposerSection voc={voc} me={me} onDirtyChange={setComposerDirty} />
