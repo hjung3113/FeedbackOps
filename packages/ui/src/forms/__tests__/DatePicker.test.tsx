@@ -75,6 +75,7 @@ describe('DatePicker', () => {
     const trigger = screen.getByRole('button', { name: '달력 열기' });
 
     fireEvent.click(trigger);
+    expect(screen.getByRole('button', { name: '2026년 6월 15일' })).toHaveFocus();
     fireEvent.keyDown(screen.getByRole('button', { name: '2026년 6월 15일' }), {
       key: 'ArrowRight',
     });

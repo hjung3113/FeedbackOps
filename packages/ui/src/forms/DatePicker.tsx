@@ -215,7 +215,14 @@ export function DatePicker({
         <PopoverContent
           align="end"
           className="w-72 p-3"
-          onOpenAutoFocus={(event) => event.preventDefault()}
+          onOpenAutoFocus={(event) => {
+            // Radix mounts the content before this fires; focus the active day
+            // here so arrow keys work right after the calendar opens.
+            event.preventDefault();
+            calendarRef.current
+              ?.querySelector<HTMLButtonElement>(`[data-date="${activeDate}"]`)
+              ?.focus();
+          }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             triggerRef.current?.focus();
