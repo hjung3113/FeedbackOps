@@ -321,6 +321,21 @@ describe('HomeScreen route content', () => {
     expect(screen.queryByTestId('sidebar-count-queue-permission-requests-pending')).toBeNull();
   });
 
+  it.each([
+    { name: 'without queue data', summary: undefined },
+    { name: 'with queue data', summary: dashboardSummarySchema.parse(response) },
+  ])('omits prototype navigation placeholders $name', ({ summary }) => {
+    render(<AppSidebar entries={homeSidebarEntries(summary, true)} />);
+
+    const sidebar = within(screen.getByTestId('app-sidebar'));
+    expect(sidebar.queryByText('Command')).not.toBeInTheDocument();
+    expect(sidebar.queryByText('⌘K')).not.toBeInTheDocument();
+    expect(sidebar.queryByText('RECENT')).not.toBeInTheDocument();
+    expect(sidebar.queryByText('FIN-181 SSO 재인증')).not.toBeInTheDocument();
+    expect(sidebar.queryByText('VOC-2814 사이드 메뉴')).not.toBeInTheDocument();
+    expect(sidebar.queryByText('TASK-901 쿼리 플랜')).not.toBeInTheDocument();
+  });
+
   it('maps urgent, warn, and info queues to their semantic color classes', async () => {
     const summary = dashboardSummarySchema.parse({
       ...response,

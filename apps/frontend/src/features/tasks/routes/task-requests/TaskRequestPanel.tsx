@@ -18,14 +18,7 @@ import { Check, FileSearch, Link2, XCircle } from 'lucide-react';
 import * as React from 'react';
 
 import { TaskRequestDecisionDialog } from './TaskRequestDecisionDialog';
-import {
-  type NameMaps,
-  STATUS_LABELS,
-  STATUS_SEVERITY,
-  TaskRequestBadge,
-  dot,
-  shortId,
-} from './TaskRequestRow';
+import { type NameMaps, STATUS_LABELS, TaskRequestBadge, dot, shortId } from './TaskRequestRow';
 import { formatDate } from './predicates';
 import { TASK_PRIORITIES, useTaskRequestConversion } from './useTaskRequestConversion';
 import { useTaskRequestDecision } from './useTaskRequestDecision';
@@ -65,6 +58,7 @@ export function TaskRequestPanel({
     { id: 'audit', label: 'Audit' },
   ].filter((section): section is PanelSection => section !== null);
 
+  // Task Request has no impact field; omit the prototype's status-derived row (#585).
   return (
     <aside className="flex h-full flex-col bg-surface-detail">
       <DetailPanelHeader
@@ -386,9 +380,6 @@ export function TaskRequestPanel({
                 shortId(item.primary_managed_system_id)
               }
             />
-          </FieldRow>
-          <FieldRow label="Impact">
-            <OutlineBadge>{STATUS_SEVERITY[item.status]}</OutlineBadge>
           </FieldRow>
           <FieldRow label="Reviewer">
             {reviewer ? (

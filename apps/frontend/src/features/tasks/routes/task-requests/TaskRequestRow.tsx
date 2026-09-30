@@ -1,5 +1,5 @@
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
-import { ObjectRow, type ObjectRowSeverity } from '@fops/ui';
+import { ObjectRow } from '@fops/ui';
 import { formatDate } from './predicates';
 
 export const STATUS_LABELS: Record<TaskRequestStatus, string> = {
@@ -16,14 +16,6 @@ const STATUS_CLASS: Record<TaskRequestStatus, string> = {
   approved: 'border-accent-success/30 bg-accent-success/10 text-accent-success',
   rejected: 'border-accent-danger/30 bg-accent-danger/10 text-accent-danger',
   converted: 'border-border-subtle bg-surface-raised text-text-muted',
-};
-
-export const STATUS_SEVERITY: Record<TaskRequestStatus, ObjectRowSeverity> = {
-  pending_review: 'high',
-  needs_more_evidence: 'medium',
-  approved: 'low',
-  rejected: 'critical',
-  converted: 'low',
 };
 
 export function TaskRequestBadge({ status }: { status: TaskRequestStatus }) {
@@ -73,7 +65,6 @@ export function TaskRequestRow({ item, selected, names, onSelect }: TaskRequestR
     <ObjectRow
       id={item.display_id}
       title={item.requested_outcome}
-      severity={STATUS_SEVERITY[item.status]}
       selected={selected}
       density="default"
       onClick={() => onSelect(item.id)}

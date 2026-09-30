@@ -1,5 +1,5 @@
 import { cn } from '@fops/ui';
-import { ChevronDown, ChevronLeft, ChevronRight, Settings, Shield, UserPlus } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Settings, Shield } from 'lucide-react';
 import * as React from 'react';
 
 export type NavCounts = Partial<Record<NavCountKey, number>>;
@@ -72,7 +72,6 @@ export interface AppSidebarProps {
 
 const STORAGE_KEY = 'appSidebarCollapsed';
 const DEFAULT_FOOTER_ITEMS: SidebarFooterItem[] = [
-  { id: 'invite-member', label: 'Invite member', icon: <UserPlus className="h-4 w-4" />, disabled: true },
   { id: 'workspace-settings', label: 'Workspace settings', href: '/admin/settings', icon: <Settings className="h-4 w-4" /> },
 ];
 
