@@ -44,9 +44,10 @@ export function useVocDetailPanelController({
   const [requestTaskOpen, setRequestTaskOpen] = React.useState(false);
   const [reviewOpen, setReviewOpen] = React.useState(false);
   const navigate = useNavigate();
+  const permissionManagedSystemId = managedSystemId ?? voc.primary_managed_system_id;
   const capCheck = usePermissionCheck({
     capability: 'voc.triage',
-    ...(managedSystemId !== undefined ? { managedSystemId } : {}),
+    managedSystemId: permissionManagedSystemId,
   });
   const canTriage = capCheck.data?.state === 'approved';
   const { key: requestTaskIdempotencyKey, markConsumed: markRequestTaskConsumed } =

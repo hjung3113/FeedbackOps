@@ -65,6 +65,8 @@ export interface VocRowProps {
    * `summary_visible` decision on this VOC.
    */
   permissionLimited?: boolean;
+  /** Hides the internal unassigned-ownership cue in a reporter-only My VOCs row. */
+  showOwnerMissing?: boolean;
   /**
    * Optional resolver for the MS pill — caller (VocList) calls useManagedSystem
    * per row and passes the result in. Decouples primitive from the hook.
@@ -91,6 +93,7 @@ export function VocRow({
   selected,
   onSelect,
   permissionLimited,
+  showOwnerMissing = true,
   managedSystem,
   owner,
   reporter,
@@ -234,7 +237,7 @@ export function VocRow({
       {/* TRAILING: owner avatar / "Owner 필요" + reporter avatar */}
       {permissionLimited !== true && (
         <div className="flex items-center gap-2 shrink-0">
-          {ownerMissing ? (
+          {showOwnerMissing && ownerMissing ? (
             <span className="inline-flex items-center rounded-full bg-accent-danger/10 px-2 py-0.5 text-xs font-medium text-accent-danger">
               Owner 필요
             </span>

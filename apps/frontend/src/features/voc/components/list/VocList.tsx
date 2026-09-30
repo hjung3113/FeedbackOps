@@ -16,6 +16,7 @@
 
 import { fetchAnalyticsAreas, fetchManagedSystems } from '@/lib/api';
 import type { ResolvedManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { VocListItem } from '@fops/shared';
 import { type AvatarUser, Button, EmptyState } from '@fops/ui';
@@ -237,31 +238,52 @@ export function VocList({
   return (
     <div role="rowgroup" aria-label="VOC 목록">
       {checked.size > 0 && <BulkActionBar count={checked.size} onClear={clearChecked} />}
-      {items.map((voc) => (
-        <VocRow
-          key={voc.id}
-          voc={voc}
-          selected={selectedId === voc.id}
-          onSelect={() => {
+      {items.map((voc) => {
+        const rowProps = {
+          voc,
+          selected: selectedId === voc.id,
+          onSelect: () => {
             onSelect(voc.id);
-          }}
-          managedSystem={msMap[voc.primary_managed_system_id] ?? null}
-          owner={voc.owner_user_id !== null ? (actorMap[voc.owner_user_id] ?? null) : null}
-          reporter={actorMap[voc.reporter_id] ?? null}
-          areaName={
-            voc.analytics_area_id !== null ? (areaMap[voc.analytics_area_id] ?? null) : null
-          }
-          checked={checked.has(voc.id)}
-          onToggleCheck={() => {
+          },
+          managedSystem: msMap[voc.primary_managed_system_id] ?? null,
+          owner: voc.owner_user_id !== null ? (actorMap[voc.owner_user_id] ?? null) : null,
+          reporter: actorMap[voc.reporter_id] ?? null,
+          areaName:
+            voc.analytics_area_id !== null ? (areaMap[voc.analytics_area_id] ?? null) : null,
+          checked: checked.has(voc.id),
+          onToggleCheck: () => {
             toggleCheck(voc.id);
-          }}
-        />
-      ))}
+          },
+        };
+
+        return view === 'my' ? (
+          <ReporterMyVocRow key={voc.id} {...rowProps} />
+        ) : (
+          <VocRow key={voc.id} {...rowProps} />
+        );
+      })}
     </div>
   );
 }
 
 VocList.displayName = 'VocList';
+
+type ReporterMyVocRowProps = React.ComponentProps<typeof VocRow>;
+
+function ReporterMyVocRow(props: ReporterMyVocRowProps): React.ReactElement {
+  const readCheck = usePermissionCheck({
+    capability: 'voc.read',
+    managedSystemId: props.voc.primary_managed_system_id,
+  });
+  const triageCheck = usePermissionCheck({
+    capability: 'voc.triage',
+    managedSystemId: props.voc.primary_managed_system_id,
+  });
+  const showOwnerMissing =
+    readCheck.data?.state === 'approved' || triageCheck.data?.state === 'approved';
+
+  return <VocRow {...props} showOwnerMissing={showOwnerMissing} />;
+}
 
 // ---------------------------------------------------------------------------
 // BulkActionBar — appears when ≥1 row is checked. Mirrors prototype copy:
