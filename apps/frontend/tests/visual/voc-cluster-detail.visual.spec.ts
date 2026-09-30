@@ -78,7 +78,8 @@ test.describe('/voc-clusters/$clusterId visual harness', () => {
     await page.getByTestId('cluster-link-existing-finding-button').click();
     const dialog = page.getByTestId('link-existing-finding-modal');
     await expect(dialog.getByTestId('link-existing-finding-picker')).toBeVisible();
-    await dialog.getByTestId('link-existing-finding-picker').selectOption(IDS.finding);
+    await dialog.getByTestId('link-existing-finding-picker').click();
+    await page.getByRole('option', { name: /FND-201/ }).click();
     const post = page.waitForRequest(
       (request) =>
         request.method() === 'POST' &&

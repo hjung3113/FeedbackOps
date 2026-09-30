@@ -7,11 +7,20 @@ import {
   taskPrioritySchema,
 } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRequestsRoute } from '../TaskRequestsRoute';
+
+async function chooseOption(label: string, optionName: string): Promise<void> {
+  fireEvent.click(screen.getByRole('combobox', { name: label }));
+  fireEvent.click(await screen.findByRole('option', { name: optionName }));
+}
+
+async function readOptions(label: string): Promise<HTMLElement[]> {
+  fireEvent.click(screen.getByRole('combobox', { name: label }));
+  return screen.findAllByRole('option');
+}
 
 const api = vi.hoisted(() => ({ apiClient: vi.fn(), convertTaskRequest: vi.fn() }));
 const requestedOutcome225 = `핵심 결과 ${'x'.repeat(219)}`;
@@ -200,13 +209,38 @@ describe('TaskRequestsRoute conversion priority labels', () => {
     async (priority) => {
       await openConvertForm();
 
-      const select = screen.getByRole('combobox', { name: '우선순위' });
+      const options = await readOptions('우선순위');
       expect(
-        within(select).getByRole('option', { name: TASK_PRIORITY_LABELS[priority] }),
-      ).toBeInTheDocument();
-      expect(within(select).queryByRole('option', { name: priority })).not.toBeInTheDocument();
+        options.some((option) => option.textContent?.trim() === TASK_PRIORITY_LABELS[priority]),
+      ).toBe(true);
+      expect(options.some((option) => option.textContent?.trim() === priority)).toBe(false);
     },
   );
+
+  it('submits the selected shared priority, due date, and milestone values unchanged', async () => {
+    await openConvertForm();
+    await chooseOption('우선순위', TASK_PRIORITY_LABELS.urgent);
+    fireEvent.change(screen.getByRole('textbox', { name: '마감일' }), {
+      target: { value: '2026-09-30' },
+    });
+    await chooseOption('Milestone', milestoneForRequestSystem.title);
+    fireEvent.click(screen.getByTestId('task-request-convert-submit'));
+
+    await waitFor(() =>
+      expect(api.convertTaskRequest).toHaveBeenCalledWith(
+        taskRequest.id,
+        {
+          title: `${requestedOutcome225.slice(0, taskTitleMaxLength - truncationMarker.length)}${truncationMarker}`,
+          priority: 'urgent',
+          assignee_actor_id: null,
+          due_date: '2026-09-30',
+          milestone_id: milestoneForRequestSystem.id,
+          analytics_area_id: null,
+        },
+        expect.any(String),
+      ),
+    );
+  });
 });
 
 describe('TaskRequestsRoute conversion milestone picker', () => {
@@ -216,13 +250,8 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
 
   it('B3a offers None plus the milestones of the request primary Managed System', async () => {
     await openConvertForm();
-    const select = screen.getByRole('combobox', { name: 'Milestone' });
-    await waitFor(() => {
-      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
-    });
-    const optionNames = within(select)
-      .getAllByRole('option')
-      .map((option) => option.textContent);
+    const options = await readOptions('Milestone');
+    const optionNames = options.map((option) => option.textContent?.trim());
     expect(optionNames).toEqual(['없음', milestoneForRequestSystem.title]);
     expect(optionNames).not.toContain(milestoneForOtherSystem.title);
     expect(vi.mocked(listMilestones)).toHaveBeenCalledWith(
@@ -232,9 +261,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
 
   it('B3a submits the selected milestone id to convertTaskRequest', async () => {
     await openConvertForm();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Milestone' }), {
-      target: { value: milestoneForRequestSystem.id },
-    });
+    await chooseOption('Milestone', milestoneForRequestSystem.title);
     fireEvent.click(screen.getByTestId('task-request-convert-submit'));
     await waitFor(() => {
       expect(api.convertTaskRequest).toHaveBeenCalledWith(
@@ -274,10 +301,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
       );
     const { queryClient } = await openConvertFormReturnsClient();
     const select = screen.getByRole('combobox', { name: 'Milestone' });
-    await waitFor(() => {
-      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
-    });
-    fireEvent.change(select, { target: { value: milestoneForRequestSystem.id } });
+    await chooseOption('Milestone', milestoneForRequestSystem.title);
 
     await queryClient.invalidateQueries({
       queryKey: ['milestones', taskRequest.primary_managed_system_id],
@@ -285,9 +309,11 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     // The retained titles leave the UI, and the denial is distinguishable
     // from an empty list.
     expect(await screen.findByText('finding.manage required')).toBeInTheDocument();
+    fireEvent.click(select);
     expect(
-      within(select).queryByRole('option', { name: milestoneForRequestSystem.title }),
+      screen.queryByRole('option', { name: milestoneForRequestSystem.title }),
     ).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
 
     // The retained selection cannot ride: submitting it would convert with a
     // Milestone the actor can no longer even see. (Call history accumulates
@@ -308,11 +334,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
       })
       .mockRejectedValue(new ApiError(500, { code: 'internal.unexpected', message: 'boom' }));
     const { queryClient } = await openConvertFormReturnsClient();
-    const select = screen.getByRole('combobox', { name: 'Milestone' });
-    await waitFor(() => {
-      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
-    });
-    fireEvent.change(select, { target: { value: milestoneForRequestSystem.id } });
+    await chooseOption('Milestone', milestoneForRequestSystem.title);
 
     await queryClient.invalidateQueries({
       queryKey: ['milestones', taskRequest.primary_managed_system_id],
@@ -324,7 +346,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
 
     // None is an explicit choice, not a retained selection: the form stays
     // usable and converts without a Milestone.
-    fireEvent.change(select, { target: { value: '' } });
+    await chooseOption('Milestone', '없음');
     fireEvent.click(screen.getByTestId('task-request-convert-submit'));
     await waitFor(() => {
       expect(api.convertTaskRequest).toHaveBeenCalledWith(
@@ -355,10 +377,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
       );
     const { queryClient } = await openConvertFormReturnsClient();
     const select = screen.getByRole('combobox', { name: 'Milestone' });
-    await waitFor(() => {
-      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
-    });
-    fireEvent.change(select, { target: { value: milestoneForRequestSystem.id } });
+    await chooseOption('Milestone', milestoneForRequestSystem.title);
 
     await queryClient.invalidateQueries({
       queryKey: ['milestones', taskRequest.primary_managed_system_id],
@@ -367,24 +386,20 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
 
     // The held selection keeps a disabled, identity-free slot: the select
     // shows what is actually held instead of pretending it is None.
-    const unavailable = within(select).getByRole('option', {
-      name: '확인할 수 없음',
-    }) as HTMLOptionElement;
-    expect(unavailable).toBeDisabled();
-    expect(unavailable.value).toBe(milestoneForRequestSystem.id);
+    fireEvent.click(select);
+    const unavailable = await screen.findByRole('option', { name: '확인할 수 없음' });
+    expect(unavailable).toHaveAttribute('aria-disabled', 'true');
     expect(unavailable.textContent).not.toContain(milestoneForRequestSystem.title);
     expect(unavailable.textContent).not.toContain('MLS-3001');
     expect(select).toHaveValue(milestoneForRequestSystem.id);
 
-    // A real user recovers: None is selectable because the displayed option
-    // is the unavailable slot, not None itself (userEvent, not a fabricated
-    // same-value change).
-    const user = userEvent.setup();
-    await user.selectOptions(select, within(select).getByRole('option', { name: '없음' }));
+    // A real user recovers by choosing None while the held selection is
+    // displayed as unavailable.
+    fireEvent.click(screen.getByRole('option', { name: '없음' }));
     expect(select).toHaveValue('');
-    expect(
-      within(select).queryByRole('option', { name: '확인할 수 없음' }),
-    ).not.toBeInTheDocument();
+    fireEvent.click(select);
+    expect(screen.queryByRole('option', { name: '확인할 수 없음' })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
 
     // The deliberate None converts with an explicit null payload.
     const callsBeforeSubmit = api.convertTaskRequest.mock.calls.length;
@@ -416,10 +431,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
       .mockResolvedValue({ items: [] });
     const { queryClient } = await openConvertFormReturnsClient();
     const select = screen.getByRole('combobox', { name: 'Milestone' });
-    await waitFor(() => {
-      expect(within(select).getByRole('option', { name: milestoneForRequestSystem.title }));
-    });
-    fireEvent.change(select, { target: { value: milestoneForRequestSystem.id } });
+    await chooseOption('Milestone', milestoneForRequestSystem.title);
 
     await queryClient.invalidateQueries({
       queryKey: ['milestones', taskRequest.primary_managed_system_id],
@@ -429,14 +441,12 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     // identity-free slot and the select stays honest.
     await waitFor(() => {
       expect(
-        within(select).queryByRole('option', { name: milestoneForRequestSystem.title }),
+        screen.queryByRole('option', { name: milestoneForRequestSystem.title }),
       ).not.toBeInTheDocument();
     });
-    const unavailable = within(select).getByRole('option', {
-      name: '확인할 수 없음',
-    }) as HTMLOptionElement;
-    expect(unavailable).toBeDisabled();
-    expect(unavailable.value).toBe(milestoneForRequestSystem.id);
+    fireEvent.click(select);
+    const unavailable = await screen.findByRole('option', { name: '확인할 수 없음' });
+    expect(unavailable).toHaveAttribute('aria-disabled', 'true');
     expect(unavailable.textContent).not.toContain(milestoneForRequestSystem.title);
     expect(select).toHaveValue(milestoneForRequestSystem.id);
 
@@ -446,8 +456,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     await Promise.resolve();
     expect(api.convertTaskRequest.mock.calls.length).toBe(callsBeforeSubmit);
 
-    const user = userEvent.setup();
-    await user.selectOptions(select, within(select).getByRole('option', { name: '없음' }));
+    fireEvent.click(screen.getByRole('option', { name: '없음' }));
     expect(select).toHaveValue('');
     fireEvent.click(screen.getByTestId('task-request-convert-submit'));
     await waitFor(() => {

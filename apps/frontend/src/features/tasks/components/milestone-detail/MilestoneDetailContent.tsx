@@ -10,6 +10,11 @@ import {
   NestedTextBlock,
   PanelTitleBlock,
   PermissionBlockedPanel,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
@@ -262,19 +267,26 @@ export function MilestoneDetailContent({
                   control offers exactly these four values; PATCH is free
                   among them. The title-block badge above stays read-only. */}
               <span className="flex items-center justify-end gap-2">
-                <select
-                  aria-label="Status"
-                  className={selectClassName}
+                <Select
                   value={milestone.status}
                   disabled={statusMutation.isPending || titleMutation.isPending}
-                  onChange={(event) => handleStatusChange(event, titleMutation.isPending)}
+                  onValueChange={(value) => handleStatusChange(value, titleMutation.isPending)}
                 >
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    aria-label="Status"
+                    value={milestone.status}
+                    className={`${selectClassName} h-8 px-2 py-1`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {statusError !== null && (
                   <span className="text-sm text-accent-danger">{statusError}</span>
                 )}

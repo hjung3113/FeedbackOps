@@ -8,6 +8,7 @@ import { shortId } from '@/lib/identity';
 import type { TaskDto, TaskPriority, TaskRequestDto } from '@fops/shared';
 import {
   Button,
+  DatePicker,
   DetailPanelHeader,
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
@@ -19,6 +20,11 @@ import {
   type PanelSection,
   PanelSectionTitle,
   PanelTitleBlock,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   UserChip,
 } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
@@ -31,6 +37,8 @@ import { formatDate } from './predicates';
 import { TASK_PRIORITIES, useTaskRequestConversion } from './useTaskRequestConversion';
 import { useTaskRequestDecision } from './useTaskRequestDecision';
 import { useTaskRequestLink } from './useTaskRequestLink';
+
+const NO_SELECTION = '__none__';
 
 interface TaskRequestPanelProps {
   item: TaskRequestDto;
@@ -304,91 +312,119 @@ export function TaskRequestPanel({
                     )}
                   </label>
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="flex flex-col gap-1 text-xs text-text-muted">
-                      우선순위
-                      <select
-                        className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                    <div className="flex flex-col gap-1 text-xs text-text-muted">
+                      <label htmlFor="task-request-convert-priority">우선순위</label>
+                      <Select
                         value={conversion.priority}
-                        onChange={(event) =>
-                          conversion.setPriority(event.target.value as TaskPriority)
-                        }
+                        onValueChange={(value) => conversion.setPriority(value as TaskPriority)}
                       >
-                        {TASK_PRIORITIES.map((priority) => (
-                          <option key={priority} value={priority}>
-                            {TASK_PRIORITY_LABELS[priority]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-1 text-xs text-text-muted">
-                      마감일
-                      <input
-                        type="date"
-                        className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                        <SelectTrigger id="task-request-convert-priority" aria-label="우선순위">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TASK_PRIORITIES.map((priority) => (
+                            <SelectItem key={priority} value={priority}>
+                              {TASK_PRIORITY_LABELS[priority]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1 text-xs text-text-muted">
+                      <label htmlFor="task-request-convert-due-date">마감일</label>
+                      <DatePicker
+                        id="task-request-convert-due-date"
+                        aria-label="마감일"
+                        className="bg-surface-detail"
                         value={conversion.dueDate}
-                        onChange={(event) => conversion.setDueDate(event.target.value)}
+                        onChange={(value) => conversion.setDueDate(value ?? '')}
                       />
-                    </label>
+                    </div>
                   </div>
-                  <label className="flex flex-col gap-1 text-xs text-text-muted">
-                    담당자
-                    <select
-                      className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
-                      value={conversion.assigneeId}
-                      onChange={(event) => conversion.setAssigneeId(event.target.value)}
+                  <div className="flex flex-col gap-1 text-xs text-text-muted">
+                    <label htmlFor="task-request-convert-assignee">담당자</label>
+                    <Select
+                      value={conversion.assigneeId || NO_SELECTION}
+                      onValueChange={(value) =>
+                        conversion.setAssigneeId(value === NO_SELECTION ? '' : value)
+                      }
                     >
-                      <option value="">미배정</option>
-                      {Object.values(names.actorsById).map((actor) => (
-                        <option key={actor.id} value={actor.id}>
-                          {actor.display_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1 text-xs text-text-muted">
-                    Analytics Area
-                    <select
-                      className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
-                      value={conversion.analyticsAreaId}
-                      onChange={(event) => conversion.setAnalyticsAreaId(event.target.value)}
+                      <SelectTrigger id="task-request-convert-assignee" aria-label="담당자">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_SELECTION}>미배정</SelectItem>
+                        {Object.values(names.actorsById).map((actor) => (
+                          <SelectItem key={actor.id} value={actor.id}>
+                            {actor.display_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1 text-xs text-text-muted">
+                    <label htmlFor="task-request-convert-analytics-area">Analytics Area</label>
+                    <Select
+                      value={conversion.analyticsAreaId || NO_SELECTION}
+                      onValueChange={(value) =>
+                        conversion.setAnalyticsAreaId(value === NO_SELECTION ? '' : value)
+                      }
                     >
-                      <option value="">없음</option>
-                      {conversion.analyticsAreas?.map((area) => (
-                        <option key={area.id} value={area.id}>
-                          {area.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1 text-xs text-text-muted">
-                    Milestone
-                    <select
-                      className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
-                      value={conversion.milestoneId}
-                      onChange={(event) => conversion.setMilestoneId(event.target.value)}
+                      <SelectTrigger
+                        id="task-request-convert-analytics-area"
+                        aria-label="Analytics Area"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_SELECTION}>없음</SelectItem>
+                        {conversion.analyticsAreas?.map((area) => (
+                          <SelectItem key={area.id} value={area.id}>
+                            {area.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1 text-xs text-text-muted">
+                    <label htmlFor="task-request-convert-milestone">Milestone</label>
+                    <Select
+                      value={conversion.milestoneId || NO_SELECTION}
+                      onValueChange={(value) =>
+                        conversion.setMilestoneId(value === NO_SELECTION ? '' : value)
+                      }
                     >
-                      <option value="">없음</option>
-                      {conversion.milestones?.map((milestone) => (
-                        <option key={milestone.id} value={milestone.id}>
-                          {milestone.title}
-                        </option>
-                      ))}
-                      {/* R2 + R4 (midreview/Astra) — while a held selection is
-                        unavailable (its list read failed terminally, or a
-                        successful refreshed list omitted it), the select must
-                        not silently display None: the held id keeps a
-                        disabled, identity-free slot so the shown value
-                        matches the internal state and choosing None is a
-                        real, reachable change. The retained identity is never
-                        rendered. */}
-                      {(conversion.milestonePickerError !== null ||
-                        conversion.milestoneSelectionUnavailable) &&
-                        conversion.milestoneId !== '' && (
-                          <option value={conversion.milestoneId} disabled>
-                            확인할 수 없음
-                          </option>
-                        )}
-                    </select>
+                      <SelectTrigger
+                        id="task-request-convert-milestone"
+                        aria-label="Milestone"
+                        value={conversion.milestoneId}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_SELECTION}>없음</SelectItem>
+                        {conversion.milestones?.map((milestone) => (
+                          <SelectItem key={milestone.id} value={milestone.id}>
+                            {milestone.title}
+                          </SelectItem>
+                        ))}
+                        {/* R2 + R4 (midreview/Astra) — while a held selection is
+                          unavailable (its list read failed terminally, or a
+                          successful refreshed list omitted it), the select must
+                          not silently display None: the held id keeps a
+                          disabled, identity-free slot so the shown value
+                          matches the internal state and choosing None is a
+                          real, reachable change. The retained identity is never
+                          rendered. */}
+                        {(conversion.milestonePickerError !== null ||
+                          conversion.milestoneSelectionUnavailable) &&
+                          conversion.milestoneId !== '' && (
+                            <SelectItem value={conversion.milestoneId} disabled>
+                              확인할 수 없음
+                            </SelectItem>
+                          )}
+                      </SelectContent>
+                    </Select>
                     {/* R2 (Astra P2-3) — a settled picker read error is shown in
                       place of the retained options: the server's denial reason
                       for a permission failure, the same 'Milestone list
@@ -407,7 +443,7 @@ export function TaskRequestPanel({
                           : 'Milestone 목록을 불러올 수 없습니다.'}
                       </span>
                     )}
-                  </label>
+                  </div>
                   <Button
                     type="submit"
                     variant="primary"

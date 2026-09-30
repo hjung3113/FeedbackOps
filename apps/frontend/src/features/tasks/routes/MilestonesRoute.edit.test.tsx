@@ -219,10 +219,21 @@ function renderWithClient(ui: React.ReactElement) {
 // src/lib/api/__tests__/idempotency.test.ts.
 const UUID_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-function fillCreateForm(managedSystemId: string): void {
-  fireEvent.change(screen.getByLabelText('Managed System'), {
-    target: { value: managedSystemId },
-  });
+async function chooseOption(label: string, optionName: string): Promise<void> {
+  fireEvent.click(screen.getByRole('combobox', { name: label }));
+  fireEvent.click(await screen.findByRole('option', { name: optionName }));
+}
+
+async function readOptionNames(label: string): Promise<string[]> {
+  fireEvent.click(screen.getByRole('combobox', { name: label }));
+  const options = await screen.findAllByRole('option');
+  const names = options.map((option) => option.textContent?.trim() ?? '');
+  fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+  return names;
+}
+
+async function fillCreateForm(managedSystemId: string): Promise<void> {
+  await chooseOption('Managed System', managedSystemId === IDS_F4.msErp ? 'ERP' : 'Power BI');
   fireEvent.change(screen.getByLabelText('Title'), {
     target: { value: 'Launch review hardening' },
   });
@@ -261,7 +272,7 @@ describe('MilestonesRoute create (#514 B2e)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
-    fillCreateForm(IDS.msPowerBi);
+    await fillCreateForm(IDS.msPowerBi);
     fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
 
     await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
@@ -288,7 +299,7 @@ describe('MilestonesRoute create (#514 B2e)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
-    fillCreateForm(IDS.msPowerBi);
+    await fillCreateForm(IDS.msPowerBi);
     fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
 
     await waitFor(() => {
@@ -456,21 +467,14 @@ describe('MilestonesRoute fixup (#514 B2e)', () => {
 // and never carries primary_managed_system_id. An error keeps the prior
 // status locally; a stale write refetches and shows the server row.
 describe('MilestonesRoute status (#514 B2e-status)', () => {
-  const statusSelect = () => screen.getByRole('combobox', { name: 'Status' }) as HTMLSelectElement;
+  const statusSelect = () => screen.getByRole('combobox', { name: 'Status' });
 
   it('offers exactly the ADR-0050 set with the prototype labels', async () => {
     vi.mocked(getMilestone).mockResolvedValue(detailFor(SSO_ROW, 'SSO Stabilization'));
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    expect(Array.from(statusSelect().options).map((option) => option.value)).toEqual([
-      'planning',
-      'in_progress',
-      'blocked',
-      'released',
-    ]);
-    // Labels verbatim from MILESTONE_STATUS_META in screen-milestones.jsx.
-    expect(Array.from(statusSelect().options).map((option) => option.textContent)).toEqual([
+    expect(await readOptionNames('Status')).toEqual([
       'Planning',
       'In progress',
       'Blocked',
@@ -483,25 +487,21 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     vi.mocked(getMilestone)
       .mockResolvedValueOnce(detailFor(SSO_ROW, 'SSO Stabilization'))
       .mockResolvedValue(detailFor({ ...SSO_ROW, status: 'released' }, 'SSO Stabilization'));
-    vi.mocked(updateMilestone).mockResolvedValue({ ...SSO_ROW, status: 'released' });
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    await chooseOption('Status', 'Released');
 
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
     const patchCall = vi.mocked(updateMilestone).mock.calls[0];
-    if (!patchCall) throw new Error('updateMilestone call missing');
+    if (!patchCall) throw new Error('status updateMilestone call missing');
     const [id, body, options] = patchCall;
     expect(id).toBe(IDS.sso);
-    // Exact body — proves primary_managed_system_id (and everything else)
-    // never rides along on a status change.
     expect(body).toEqual({ status: 'released' });
     expect(options.ifMatch).toBe(UPDATED_AT);
     expect(options.idempotencyKey).toMatch(UUID_KEY);
+    expect(body).not.toHaveProperty('primary_managed_system_id');
 
-    // The stored status returns through the refetched detail read; the
-    // select is controlled by it, not by the local choice.
     await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
     expect(statusSelect()).toHaveValue('released');
     expect(screen.queryByText(GENERIC_ERROR_MESSAGE)).not.toBeInTheDocument();
@@ -515,7 +515,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
+    await chooseOption('Status', 'Blocked');
 
     expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
     // The old status is not overwritten locally: the select stays on it and
@@ -537,7 +537,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     renderWithClient(<MilestonesRoute selectedParam={IDS.sso} />);
     await screen.findByRole('heading', { name: 'SSO Stabilization' });
 
-    fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
+    await chooseOption('Status', 'Blocked');
 
     await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
     expect(statusSelect()).toHaveValue('released');
@@ -578,7 +578,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     });
 
     // The status PATCH carries V1 and loses the race against V2.
-    fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
+    await chooseOption('Status', 'Blocked');
 
     // The refetched V2 row wins; the editor and its stale draft are gone, so
     // the draft can never be saved against V2's concurrency token.
@@ -613,7 +613,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
       target: { value: 'Local draft' },
     });
-    fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
+    await chooseOption('Status', 'Blocked');
 
     expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
     expect(statusSelect()).toHaveValue('in_progress');
@@ -633,7 +633,7 @@ describe('MilestonesRoute create retry (Astra finding 3)', () => {
     return (async () => {
       fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
       await screen.findByTestId('milestone-create-panel');
-      fillCreateForm(IDS.msPowerBi);
+      await fillCreateForm(IDS.msPowerBi);
     })();
   }
 
@@ -709,28 +709,16 @@ describe('MilestonesRoute create options (Astra finding 4)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
-    const systemSelect = screen.getByLabelText('Managed System') as HTMLSelectElement;
-    expect(Array.from(systemSelect.options).map((option) => option.textContent)).toEqual([
-      'Select…',
-      'Power BI',
-      'ERP',
-    ]);
+    expect(await readOptionNames('Managed System')).toEqual(['Select…', 'Power BI', 'ERP']);
 
     // With no system selected, no area can be valid yet.
-    const areaSelect = screen.getByLabelText('Analytics Area') as HTMLSelectElement;
-    expect(Array.from(areaSelect.options).map((option) => option.textContent)).toEqual(['—']);
+    expect(await readOptionNames('Analytics Area')).toEqual(['—']);
 
-    fireEvent.change(systemSelect, { target: { value: IDS.msPowerBi } });
-    expect(Array.from(areaSelect.options).map((option) => option.textContent)).toEqual([
-      '—',
-      'Product Usage',
-    ]);
+    await chooseOption('Managed System', 'Power BI');
+    expect(await readOptionNames('Analytics Area')).toEqual(['—', 'Product Usage']);
 
-    fireEvent.change(systemSelect, { target: { value: IDS_F4.msErp } });
-    expect(Array.from(areaSelect.options).map((option) => option.textContent)).toEqual([
-      '—',
-      'ERP Usage',
-    ]);
+    await chooseOption('Managed System', 'ERP');
+    expect(await readOptionNames('Analytics Area')).toEqual(['—', 'ERP Usage']);
   });
 
   it('clears the area selection when the system changes and the area no longer belongs', async () => {
@@ -741,13 +729,12 @@ describe('MilestonesRoute create options (Astra finding 4)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
-    const systemSelect = screen.getByLabelText('Managed System') as HTMLSelectElement;
-    const areaSelect = screen.getByLabelText('Analytics Area') as HTMLSelectElement;
-    fireEvent.change(systemSelect, { target: { value: IDS.msPowerBi } });
-    fireEvent.change(areaSelect, { target: { value: IDS.areaProduct } });
+    const areaSelect = screen.getByRole('combobox', { name: 'Analytics Area' });
+    await chooseOption('Managed System', 'Power BI');
+    await chooseOption('Analytics Area', 'Product Usage');
     expect(areaSelect).toHaveValue(IDS.areaProduct);
 
-    fireEvent.change(systemSelect, { target: { value: IDS_F4.msErp } });
+    await chooseOption('Managed System', 'ERP');
 
     // The stale selection cannot ride along: it would be a 422 out_of_scope
     // create, and the user re-picks deliberately for the new system.
@@ -772,11 +759,7 @@ describe('MilestonesRoute create owner options (Opus P3-2)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
-    const ownerSelect = screen.getByLabelText('Owner') as HTMLSelectElement;
-    expect(Array.from(ownerSelect.options).map((option) => option.textContent)).toEqual([
-      '—',
-      '김지원',
-    ]);
+    expect(await readOptionNames('Owner')).toEqual(['—', '김지원']);
   });
 });
 
@@ -917,7 +900,7 @@ describe('MilestonesRoute status-title coordination (R2)', () => {
     });
 
     // The user's own status change succeeds from the same version V1.
-    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    await chooseOption('Status', 'Released');
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(statusSelect()).toHaveValue('released'));
 
@@ -968,7 +951,7 @@ describe('MilestonesRoute status-title coordination (R2)', () => {
 
     // The status change the user makes now is sent from the externally newer
     // version and succeeds — but it must not lift the stale draft to V3.
-    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    await chooseOption('Status', 'Released');
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(statusSelect()).toHaveValue('released'));
 
@@ -1026,7 +1009,7 @@ describe('MilestonesRoute title/status serialization (R3)', () => {
     });
 
     // The status change is sent and never resolves: the in-flight window.
-    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    await chooseOption('Status', 'Released');
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1));
 
     // Save is disabled and the Enter-driven submit is guarded: no second
@@ -1082,7 +1065,7 @@ describe('MilestonesRoute title/status serialization (R3)', () => {
     // The status select is disabled and its handler ignores the event while
     // the title save is in flight.
     expect(statusSelect()).toBeDisabled();
-    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    fireEvent.click(statusSelect());
     expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(1);
 
     resolveTitle({ ...SSO_ROW, title: 'SSO Stabilization v2', updated_at: OWN_V2 });
@@ -1090,7 +1073,7 @@ describe('MilestonesRoute title/status serialization (R3)', () => {
       expect(screen.getByRole('heading', { name: 'SSO Stabilization v2' })).toBeInTheDocument(),
     );
     expect(statusSelect()).toBeEnabled();
-    fireEvent.change(statusSelect(), { target: { value: 'released' } });
+    await chooseOption('Status', 'Released');
 
     await waitFor(() => expect(vi.mocked(updateMilestone)).toHaveBeenCalledTimes(2));
     const statusCall = vi.mocked(updateMilestone).mock.calls[1];
@@ -1314,7 +1297,7 @@ describe('MilestonesRoute create session (R5)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
-    fillCreateForm(IDS.msPowerBi);
+    await fillCreateForm(IDS.msPowerBi);
     fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
     await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
 
@@ -1350,7 +1333,7 @@ describe('MilestonesRoute create session (R5)', () => {
     // Session A: fill and submit; the response stays pending.
     fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
-    fillCreateForm(IDS.msPowerBi);
+    await fillCreateForm(IDS.msPowerBi);
     fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
     await waitFor(() => expect(vi.mocked(createMilestone)).toHaveBeenCalledTimes(1));
 

@@ -116,9 +116,8 @@ describe('Milestone mutation error copy', () => {
           });
           await user.click(screen.getByRole('button', { name: 'Save' }));
         } else {
-          fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), {
-            target: { value: 'released' },
-          });
+          fireEvent.click(screen.getByRole('combobox', { name: 'Status' }));
+          fireEvent.click(await screen.findByRole('option', { name: 'Released' }));
         }
       }
 

@@ -11,6 +11,11 @@ import {
   DialogHeader,
   DialogTitle,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
 } from '@fops/ui';
 import type * as React from 'react';
@@ -20,6 +25,8 @@ import { toast } from 'sonner';
 import { useFindingsList } from '@/features/findings/hooks/useFindingsList';
 import { useLinkExistingFindingToVocCluster } from '@/features/voc-cluster/hooks/useLinkExistingFindingToVocCluster';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+
+const NO_FINDING = '__none__';
 
 export function LinkExistingFindingModal({
   open,
@@ -82,21 +89,28 @@ export function LinkExistingFindingModal({
           ) : findings.isError ? (
             <p className="text-sm text-accent-danger">연결 가능한 Finding을 불러오지 못했습니다.</p>
           ) : (
-            <select
-              id="cluster-finding-picker"
-              required
-              value={findingId}
-              onChange={(event) => setFindingId(event.target.value)}
-              data-testid="link-existing-finding-picker"
-              className="h-9 w-full rounded-md border border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary"
+            <Select
+              value={findingId || NO_FINDING}
+              onValueChange={(value) => setFindingId(value === NO_FINDING ? '' : value)}
             >
-              <option value="">연결할 Finding을 선택하세요.</option>
-              {(findings.data?.items ?? []).map((finding) => (
-                <option key={finding.id} value={finding.id}>
-                  {finding.display_id} · {finding.title}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                id="cluster-finding-picker"
+                aria-label="Finding"
+                aria-required="true"
+                data-testid="link-existing-finding-picker"
+                className="h-9 w-full rounded-md border-border-default bg-surface-field px-3 py-1 text-sm text-text-primary"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_FINDING}>연결할 Finding을 선택하세요.</SelectItem>
+                {(findings.data?.items ?? []).map((finding) => (
+                  <SelectItem key={finding.id} value={finding.id}>
+                    {finding.display_id} · {finding.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
           {error && (
             <p data-testid="link-existing-finding-error" className="text-sm text-accent-danger">

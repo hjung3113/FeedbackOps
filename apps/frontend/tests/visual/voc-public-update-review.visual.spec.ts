@@ -18,7 +18,9 @@ test.describe('VOC public-update review visual harness (#180)', () => {
 
     const dialog = page.getByTestId('public-update-review-modal');
     await expect(dialog).toBeVisible();
-    await expect(dialog.locator('select').nth(1)).toHaveValue('');
+    await expect(dialog.getByRole('combobox', { name: 'Reporter-facing status' })).toContainText(
+      '상태 선택',
+    );
     await expectVisual(page, dialog, 'voc-public-update-review-empty-status.png');
   });
 

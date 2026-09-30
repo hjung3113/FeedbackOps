@@ -14,13 +14,13 @@
 
 import {
   Button,
+  DatePicker,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
   Label,
   Textarea,
 } from '@fops/ui';
@@ -267,11 +267,11 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="permission-request-expiration">만료일 · 선택</Label>
-                  <Input
+                  <DatePicker
                     id="permission-request-expiration"
-                    type="date"
+                    aria-label="만료일 · 선택"
                     value={expiration}
-                    onChange={(event) => setExpiration(event.target.value)}
+                    onChange={(value) => setExpiration(value ?? '')}
                     data-testid="permission-request-expiration"
                   />
                 </div>

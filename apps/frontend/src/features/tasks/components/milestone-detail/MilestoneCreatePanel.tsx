@@ -1,11 +1,25 @@
 import { mapUnknownError, useIdempotencyKey } from '@/lib/api';
 import { createMilestone } from '@/lib/api/milestones';
 import type { CreateMilestoneRequest, MilestoneDto } from '@fops/shared';
-import { Button, DetailPanelHeader, DirtyConfirmation, FieldRow, Input, Textarea } from '@fops/ui';
+import {
+  Button,
+  DatePicker,
+  DetailPanelHeader,
+  DirtyConfirmation,
+  FieldRow,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+} from '@fops/ui';
 import { useMutation } from '@tanstack/react-query';
 import * as React from 'react';
 import { MilestonePanelSectionTitle } from '../MilestoneIdentity';
-import { selectClassName } from './constants';
+
+const NO_SELECTION = '__none__';
 
 export interface MilestoneCreatePanelProps {
   managedSystems: ReadonlyArray<{ id: string; name: string }>;
@@ -193,9 +207,6 @@ export function MilestoneCreatePanel({
     createMutation.mutate({ payload, idempotencyKey: key });
   }
 
-  const dateClassName =
-    'rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary';
-
   return (
     <aside className="flex h-full flex-col bg-surface-detail">
       {/* No display id exists yet: the header chrome mounts without record
@@ -231,71 +242,80 @@ export function MilestoneCreatePanel({
             />
           </FieldRow>
           <FieldRow label="Managed System">
-            <select
-              aria-label="Managed System"
-              className={selectClassName}
-              value={managedSystemId}
+            <Select
+              value={managedSystemId || NO_SELECTION}
               disabled={createMutation.isPending}
-              onChange={(event) => handleManagedSystemChange(event.target.value)}
+              onValueChange={(value) =>
+                handleManagedSystemChange(value === NO_SELECTION ? '' : value)
+              }
             >
-              <option value="">Select…</option>
-              {managedSystems.map((system) => (
-                <option key={system.id} value={system.id}>
-                  {system.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Managed System" value={managedSystemId} className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SELECTION}>Select…</SelectItem>
+                {managedSystems.map((system) => (
+                  <SelectItem key={system.id} value={system.id}>
+                    {system.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FieldRow>
           <FieldRow label="Analytics Area">
-            <select
-              aria-label="Analytics Area"
-              className={selectClassName}
-              value={analyticsAreaId}
+            <Select
+              value={analyticsAreaId || NO_SELECTION}
               disabled={createMutation.isPending}
-              onChange={(event) => setAnalyticsAreaId(event.target.value)}
+              onValueChange={(value) => setAnalyticsAreaId(value === NO_SELECTION ? '' : value)}
             >
-              <option value="">—</option>
-              {creatableAreas.map((area) => (
-                <option key={area.id} value={area.id}>
-                  {area.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Analytics Area" value={analyticsAreaId} className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SELECTION}>—</SelectItem>
+                {creatableAreas.map((area) => (
+                  <SelectItem key={area.id} value={area.id}>
+                    {area.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FieldRow>
           <FieldRow label="Owner">
-            <select
-              aria-label="Owner"
-              className={selectClassName}
-              value={ownerActorId}
+            <Select
+              value={ownerActorId || NO_SELECTION}
               disabled={createMutation.isPending}
-              onChange={(event) => setOwnerActorId(event.target.value)}
+              onValueChange={(value) => setOwnerActorId(value === NO_SELECTION ? '' : value)}
             >
-              <option value="">—</option>
-              {actors.map((actor) => (
-                <option key={actor.id} value={actor.id}>
-                  {actor.display_name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Owner" value={ownerActorId} className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SELECTION}>—</SelectItem>
+                {actors.map((actor) => (
+                  <SelectItem key={actor.id} value={actor.id}>
+                    {actor.display_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FieldRow>
           <FieldRow label="Start">
-            <input
+            <DatePicker
               aria-label="Start"
-              className={dateClassName}
-              type="date"
+              className="bg-surface-detail"
               disabled={createMutation.isPending}
               value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
+              onChange={(value) => setStartDate(value ?? '')}
             />
           </FieldRow>
           <FieldRow label="Target">
-            <input
+            <DatePicker
               aria-label="Target"
-              className={dateClassName}
-              type="date"
+              className="bg-surface-detail"
               disabled={createMutation.isPending}
               value={targetDate}
-              onChange={(event) => setTargetDate(event.target.value)}
+              onChange={(value) => setTargetDate(value ?? '')}
             />
           </FieldRow>
         </div>

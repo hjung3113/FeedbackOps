@@ -23,11 +23,11 @@
 //       <ReporterStatusBadge status={voc.reporterStatus} />
 //       <span style={{color:'var(--text-muted)'}}>→</span>
 //       <span className="text-xs muted">다음</span>
-//       <select value={nextStatus} onChange={...} style={{...}}>
+//       <Select value={nextStatus} onValueChange={...} style={{...}}>
 //         {pickerOrder.map(key => (
 //           <option key={key} value={key} disabled={!isAllowed}>{label}{suffix}</option>
 //         ))}
-//       </select>
+//       </Select>
 //       {isStaged && !linkedTaskGate && (
 //         <span className="badge" style={{background:'rgba(20,40,160,0.16)',color:'var(--color-neon-lime)'}}>
 //           <Icon name="check" size={9}/>변경 예정
@@ -61,19 +61,30 @@
 //     </div>
 //   </div>
 
-import * as React from 'react';
-import { Megaphone, User, Check, ShieldCheck } from 'lucide-react';
-import { Callout, ReporterStatusBadge, RichContentRenderer, UserAvatar, type TipTapDoc } from '@fops/ui';
-import {
-  isTipTapDocStructurallyEmpty,
-  type VocDetailEnvelope,
-  type ReporterFacingStatusEnum,
-} from '@fops/shared';
-import { REPORTER_FACING_STATUS_ALL, REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
 import {
   isForbiddenTransition,
   useReporterStatusTransitions,
 } from '@/features/voc/hooks/useReporterStatusTransitions';
+import { REPORTER_FACING_STATUS_ALL, REPORTER_STATUS_LABELS } from '@/lib/copy/reporter-status-labels';
+import {
+  type ReporterFacingStatusEnum,
+  type VocDetailEnvelope,
+  isTipTapDocStructurallyEmpty,
+} from '@fops/shared';
+import {
+  Callout,
+  ReporterStatusBadge,
+  RichContentRenderer,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  type TipTapDoc,
+  UserAvatar,
+} from '@fops/ui';
+import { Check, Megaphone, ShieldCheck, User } from 'lucide-react';
+import * as React from 'react';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -162,32 +173,32 @@ export function ReporterStatusChangeBlock({
         </span>
         <span className="text-xs text-text-muted">다음</span>
 
-        {/* Prototype: native <select> with disabled options for forbidden states */}
-        <select
+        <Select
           value={nextStatus}
-          onChange={(e) =>
-            onChangeStatus(e.target.value as ReporterFacingStatusEnum)
-          }
-          className="bg-surface-canvas border border-border-strong rounded-md px-2 py-1 text-text-primary text-sm outline-none focus:ring-1 focus:ring-focus-ring"
-          aria-label="다음 reporter-facing status 선택"
+          onValueChange={(value) => onChangeStatus(value as ReporterFacingStatusEnum)}
         >
-          {pickerOrder.map((key) => {
-            const isCurrent = key === currentStatus;
-            const isAllowed = isCurrent || allowed.includes(key);
-            const label = REPORTER_STATUS_LABELS[key];
-            const suffix = isCurrent
-              ? ' (현재)'
-              : !isAllowed
-              ? ' · 차단됨'
-              : '';
-            return (
-              <option key={key} value={key} disabled={!isAllowed}>
-                {label}
-                {suffix}
-              </option>
-            );
-          })}
-        </select>
+          <SelectTrigger
+            value={nextStatus}
+            className="h-8 w-auto min-w-[9rem] max-w-[10rem] rounded-md border-border-strong bg-surface-canvas px-2 py-1 text-sm text-text-primary outline-none focus:ring-1 focus:ring-focus-ring"
+            aria-label="다음 reporter-facing status 선택"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {pickerOrder.map((key) => {
+              const isCurrent = key === currentStatus;
+              const isAllowed = isCurrent || allowed.includes(key);
+              const label = REPORTER_STATUS_LABELS[key];
+              const suffix = isCurrent ? ' (현재)' : !isAllowed ? ' · 차단됨' : '';
+              return (
+                <SelectItem key={key} value={key} disabled={!isAllowed}>
+                  {label}
+                  {suffix}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
 
         {/* 변경 예정 chip — shown when staged and no gate blocking */}
         {isStaged && !isGateBlocked && !isForbiddenSelected && (

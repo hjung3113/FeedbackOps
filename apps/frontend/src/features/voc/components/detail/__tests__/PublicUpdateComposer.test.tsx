@@ -61,6 +61,11 @@ import type { MeResponse } from '@/lib/auth/useMe';
 import type { VocDetailEnvelope } from '@fops/shared';
 import { PublicUpdateComposer } from '../PublicUpdateComposer';
 
+async function chooseReporterStatus(label: string): Promise<void> {
+  fireEvent.click(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }));
+  fireEvent.click(await screen.findByRole('option', { name: label }));
+}
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const REPORTER_ID = '00000000-0000-0000-0000-000000000001';
@@ -246,9 +251,7 @@ describe('<PublicUpdateComposer>', () => {
     );
 
     fireEvent.click(screen.getByRole('textbox'));
-    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
-      target: { value: 'reviewing' },
-    });
+    await chooseReporterStatus('검토 중');
     fireEvent.click(screen.getByRole('button', { name: /^publish update$/i }));
 
     expect(mutationMock.mutate).toHaveBeenCalledTimes(1);
@@ -261,14 +264,16 @@ describe('<PublicUpdateComposer>', () => {
       expect(
         screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }),
       ).toHaveValue('reviewing');
+      expect(screen.getByText('Reporter-facing status는 그대로 유지됩니다.')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }));
+    await waitFor(() => {
       // The "(현재)" marker tracks the response VOC, and that option is the one
       // selected — i.e. nextStatus was resynced from data.voc, not the stale prop.
       const currentOption = screen.getByRole('option', {
         name: '검토 중 (현재)',
-      }) as HTMLOptionElement;
-      expect(currentOption.value).toBe('reviewing');
-      expect(currentOption.selected).toBe(true);
-      expect(screen.getByText('Reporter-facing status는 그대로 유지됩니다.')).toBeInTheDocument();
+      });
+      expect(currentOption).toHaveAttribute('aria-selected', 'true');
     });
     expect(queryClient.getQueryData(['voc', BASE_VOC.id])).toEqual(UPDATED_VOC);
 
@@ -303,19 +308,17 @@ describe('<PublicUpdateComposer>', () => {
     },
   } as unknown as VocDetailEnvelope;
 
-  function renderThenMoveVoc() {
+  async function renderThenMoveVoc() {
     const { rerender } = render(
       <PublicUpdateComposer voc={BASE_VOC} me={ME_ADMIN} draftDoc={STALE_DRAFT} />,
       { wrapper: makeWrapper() },
     );
-    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
-      target: { value: 'reviewing' },
-    });
+    await chooseReporterStatus('검토 중');
     rerender(<PublicUpdateComposer voc={MOVED_VOC} me={ME_ADMIN} draftDoc={STALE_DRAFT} />);
   }
 
-  it('keeps the staged status instead of silently resyncing it to the moved VOC', () => {
-    renderThenMoveVoc();
+  it('keeps the staged status instead of silently resyncing it to the moved VOC', async () => {
+    await renderThenMoveVoc();
 
     expect(
       screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }),
@@ -328,8 +331,8 @@ describe('<PublicUpdateComposer>', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('blocks Publish when the staged status is no longer an allowed transition', () => {
-    renderThenMoveVoc();
+  it('blocks Publish when the staged status is no longer an allowed transition', async () => {
+    await renderThenMoveVoc();
 
     const publish = screen.getByRole('button', { name: /^publish update$/i });
     expect(publish).toBeDisabled();
@@ -338,8 +341,8 @@ describe('<PublicUpdateComposer>', () => {
     expect(mutationMock.mutate).not.toHaveBeenCalled();
   });
 
-  it('blocks the PreviewModal Publish for a stale staged status too', () => {
-    renderThenMoveVoc();
+  it('blocks the PreviewModal Publish for a stale staged status too', async () => {
+    await renderThenMoveVoc();
 
     fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
     const modalPublish = screen
@@ -353,8 +356,8 @@ describe('<PublicUpdateComposer>', () => {
     expect(mutationMock.mutate).not.toHaveBeenCalled();
   });
 
-  it('tells the user the current status changed rather than blaming their choice', () => {
-    renderThenMoveVoc();
+  it('tells the user the current status changed rather than blaming their choice', async () => {
+    await renderThenMoveVoc();
 
     expect(screen.getByText('선택한 상태로는 더 이상 전환할 수 없습니다')).toBeInTheDocument();
     // The copy must name both statuses — which one it moved to, and which one is
@@ -365,12 +368,10 @@ describe('<PublicUpdateComposer>', () => {
     expect(reason).toContain('다시 선택');
   });
 
-  it('re-enables Publish once the user picks an allowed transition', () => {
-    renderThenMoveVoc();
+  it('re-enables Publish once the user picks an allowed transition', async () => {
+    await renderThenMoveVoc();
 
-    fireEvent.change(screen.getByRole('combobox', { name: '다음 reporter-facing status 선택' }), {
-      target: { value: 'resolved' },
-    });
+    await chooseReporterStatus('해결됨');
 
     expect(
       screen.queryByText('선택한 상태로는 더 이상 전환할 수 없습니다'),

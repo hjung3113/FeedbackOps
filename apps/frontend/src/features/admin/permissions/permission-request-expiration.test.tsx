@@ -194,6 +194,21 @@ describe('permission request expiration visibility and approval', () => {
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
 
+  it('blocks approval when a valid expiration is replaced with an invalid typed draft', () => {
+    renderDetail();
+    chooseApproval();
+    fireEvent.click(screen.getByText('만료일 변경', { exact: true }));
+
+    const input = screen.getByLabelText('새 만료일');
+    fireEvent.change(input, { target: { value: '2099-12-30' } });
+    fireEvent.change(input, { target: { value: '2099-02-30' } });
+    fireEvent.click(screen.getByTestId('permission-decision-submit'));
+
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('alert')).toHaveTextContent('날짜를 YYYY-MM-DD 형식으로 입력하세요.');
+  });
+
   it('shows an expiration field rejection from the server beside the date input', () => {
     const view = renderDetail();
     chooseApproval();
