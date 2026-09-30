@@ -20,6 +20,7 @@ import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react';
 import * as React from 'react';
 import { z } from 'zod';
+import { vocSearchSchema } from '../vocs';
 
 // Selection + Managed System scope are URL state (docs/frontend/routes-and-layout.md
 // §URL State Rules): /findings?managedSystem=:managedSystemId|all&selected=:findingId.
@@ -106,6 +107,7 @@ function FindingsListShell({
   onSelectionReconciled: () => void;
   onResetFilters: () => void;
 }): React.ReactElement {
+  const navigate = useNavigate({ from: '/findings/' });
   const safeReturnTo = getSafeVocReturnTo(returnTo);
   const listQuery = useFindingsList(managedSystemId, execution);
   const findings = listQuery.data?.items ?? [];
@@ -133,11 +135,11 @@ function FindingsListShell({
   }, [actors]);
 
   React.useEffect(() => {
-    if (!listQuery.isSuccess) return;
+    if (!listQuery.isSuccess || listQuery.isFetching) return;
     if (selectedId !== null && !findings.some((finding) => finding.id === selectedId)) {
       onSelectionReconciled();
     }
-  }, [findings, listQuery.isSuccess, onSelectionReconciled, selectedId]);
+  }, [findings, listQuery.isFetching, listQuery.isSuccess, onSelectionReconciled, selectedId]);
 
   return (
     <ListShell
@@ -167,6 +169,19 @@ function FindingsListShell({
               <div className="flex h-10 shrink-0 items-center border-b border-border-subtle px-4">
                 <a
                   href={safeReturnTo}
+                  onClick={(event) => {
+                    if (
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey ||
+                      event.button !== 0
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    void navigate({ href: safeReturnTo });
+                  }}
                   className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-text-muted hover:bg-surface-card hover:text-text-primary"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
@@ -186,19 +201,6 @@ function FindingsListShell({
   );
 }
 
-const VOC_RETURN_SEARCH_KEYS = new Set([
-  'view',
-  'action',
-  'selected',
-  'managedSystem',
-  'tab',
-  'sort',
-  'filter.severity',
-  'filter.reporterStatus',
-  'filter.owner',
-  'filter.analytics_area',
-]);
-
 function getSafeVocReturnTo(value: string | undefined): string | null {
   if (value === undefined || !value.startsWith('/vocs')) return null;
 
@@ -208,13 +210,9 @@ function getSafeVocReturnTo(value: string | undefined): string | null {
       return null;
     }
 
-    let hasOnlyAllowedSearch = true;
-    url.searchParams.forEach((_searchValue, key) => {
-      if (!VOC_RETURN_SEARCH_KEYS.has(key) || url.searchParams.getAll(key).length > 1) {
-        hasOnlyAllowedSearch = false;
-      }
-    });
-    if (!hasOnlyAllowedSearch) return null;
+    const searchEntries = [...url.searchParams.entries()];
+    if (new Set(searchEntries.map(([key]) => key)).size !== searchEntries.length) return null;
+    if (!vocSearchSchema.safeParse(Object.fromEntries(searchEntries)).success) return null;
 
     return `${url.pathname}${url.search}`;
   } catch {

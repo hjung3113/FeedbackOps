@@ -13,7 +13,7 @@ import { useInboxRoute } from '@/features/voc/routes/InboxRoute';
 import { TriageRoute } from '@/features/voc/routes/TriageRoute';
 import { z } from 'zod';
 
-const vocSearchSchema = z
+export const vocSearchSchema = z
   .object({
     view: z.enum(['inbox', 'my', 'triage']).optional(),
     action: z.enum(['create']).optional(),

@@ -28,7 +28,7 @@ import {
 } from '@fops/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import * as React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -53,6 +53,14 @@ const SEVERITY_OPTIONS: { value: FindingSeverity; label: string }[] = [
   { value: 'critical', label: 'Critical' },
 ];
 
+type TextFieldName = 'title' | 'summary';
+type TextFieldInteraction = 'untouched' | 'edited' | 'edited-blurred';
+
+const INITIAL_TEXT_FIELD_INTERACTION: Record<TextFieldName, TextFieldInteraction> = {
+  title: 'untouched',
+  summary: 'untouched',
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function CreateFindingModal({
@@ -63,7 +71,8 @@ export function CreateFindingModal({
   onClose,
 }: CreateFindingModalProps): React.ReactElement {
   const navigate = useNavigate();
-  const dialogTitleRef = React.useRef<HTMLHeadingElement>(null);
+  const location = useLocation();
+  const [editedFields, setEditedFields] = React.useState(INITIAL_TEXT_FIELD_INTERACTION);
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const mutation = useCreateFindingFromVocMutation({ idempotencyKey });
@@ -78,9 +87,11 @@ export function CreateFindingModal({
     },
     mode: 'onBlur',
   });
-  const showTitleError = Boolean(form.formState.touchedFields.title || form.formState.isSubmitted);
+  const showTitleError = Boolean(
+    editedFields.title === 'edited-blurred' || form.formState.isSubmitted,
+  );
   const showSummaryError = Boolean(
-    form.formState.touchedFields.summary || form.formState.isSubmitted,
+    editedFields.summary === 'edited-blurred' || form.formState.isSubmitted,
   );
   const showSeverityError = Boolean(
     form.formState.touchedFields.severity || form.formState.isSubmitted,
@@ -127,9 +138,12 @@ export function CreateFindingModal({
         })),
     [analyticsAreasQuery.data?.items, managedSystemId, sourceAnalyticsAreaId],
   );
+  const titleRegistration = form.register('title');
+  const summaryRegistration = form.register('summary');
 
   function closeAndReset(): void {
     form.reset();
+    setEditedFields(INITIAL_TEXT_FIELD_INTERACTION);
     mutation.reset();
     onClose();
   }
@@ -141,12 +155,10 @@ export function CreateFindingModal({
         onSuccess: (finding) => {
           markConsumed();
           form.reset();
+          setEditedFields(INITIAL_TEXT_FIELD_INTERACTION);
           mutation.reset();
           onClose();
-          const returnTo =
-            window.location.pathname === '/vocs'
-              ? `${window.location.pathname}${window.location.search}`
-              : undefined;
+          const returnTo = location.pathname === '/vocs' ? location.href : undefined;
           void navigate({
             to: '/findings',
             search: {
@@ -171,17 +183,9 @@ export function CreateFindingModal({
         if (!isOpen) closeAndReset();
       }}
     >
-      <DialogContent
-        className="max-w-lg"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          dialogTitleRef.current?.focus();
-        }}
-      >
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle ref={dialogTitleRef} tabIndex={-1}>
-            Finding 생성
-          </DialogTitle>
+          <DialogTitle>Finding 생성</DialogTitle>
         </DialogHeader>
 
         <form
@@ -198,7 +202,18 @@ export function CreateFindingModal({
             <Input
               id="finding-title"
               placeholder="Finding을 한 줄로 요약하세요."
-              {...form.register('title')}
+              {...titleRegistration}
+              onChange={(event) => {
+                void titleRegistration.onChange(event);
+                setEditedFields((current) => ({ ...current, title: 'edited' }));
+              }}
+              onBlur={(event) => {
+                void titleRegistration.onBlur(event);
+                setEditedFields((current) => ({
+                  ...current,
+                  title: current.title === 'edited' ? 'edited-blurred' : current.title,
+                }));
+              }}
               aria-invalid={titleError !== undefined}
             />
             {titleError && (
@@ -217,7 +232,18 @@ export function CreateFindingModal({
               id="finding-summary"
               placeholder="어떤 문제가 있고 왜 실행해야 하는지 설명하세요."
               rows={4}
-              {...form.register('summary')}
+              {...summaryRegistration}
+              onChange={(event) => {
+                void summaryRegistration.onChange(event);
+                setEditedFields((current) => ({ ...current, summary: 'edited' }));
+              }}
+              onBlur={(event) => {
+                void summaryRegistration.onBlur(event);
+                setEditedFields((current) => ({
+                  ...current,
+                  summary: current.summary === 'edited' ? 'edited-blurred' : current.summary,
+                }));
+              }}
               aria-invalid={summaryError !== undefined}
             />
             {summaryError && (

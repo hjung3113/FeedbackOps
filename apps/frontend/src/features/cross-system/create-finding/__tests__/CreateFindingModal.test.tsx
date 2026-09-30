@@ -2,10 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const navigate = vi.fn();
+const { navigate, useLocation } = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  useLocation: vi.fn(),
+}));
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>();
-  return { ...actual, useNavigate: () => navigate };
+  return { ...actual, useNavigate: () => navigate, useLocation };
 });
 vi.mock('@/lib/api/analytics-areas', () => ({ fetchAnalyticsAreas: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
@@ -78,6 +81,8 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
 
   beforeEach(() => {
     navigate.mockReset();
+    useLocation.mockReset();
+    useLocation.mockReturnValue({ pathname: '/', href: '/' });
     vi.mocked(fetchAnalyticsAreas).mockReset();
     vi.mocked(fetchAnalyticsAreas).mockResolvedValue({ items: AREAS, total: AREAS.length });
     globalThis.fetch = vi.fn(
@@ -137,27 +142,20 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
     const origin =
       `/vocs?view=triage&managedSystem=${IDS.managedSystem}` +
       `&selected=${IDS.voc}&tab=high&filter.severity=critical`;
-    const currentUrl =
-      `${window.location.pathname}${window.location.search}` + window.location.hash;
-    window.history.replaceState({}, '', origin);
+    useLocation.mockReturnValue({ pathname: '/vocs', href: origin });
+    renderModal(null);
+    submitValidForm();
 
-    try {
-      renderModal(null);
-      submitValidForm();
-
-      await submittedBody();
-      await waitFor(() =>
-        expect(navigate).toHaveBeenCalledWith({
-          to: '/findings',
-          search: {
-            selected: '10000000-0000-4000-8000-000000000050',
-            returnTo: origin,
-          },
-        }),
-      );
-    } finally {
-      window.history.replaceState({}, '', currentUrl || '/');
-    }
+    await submittedBody();
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({
+        to: '/findings',
+        search: {
+          selected: '10000000-0000-4000-8000-000000000050',
+          returnTo: origin,
+        },
+      }),
+    );
   });
 
   it('keeps pristine fields clear and shows Korean errors after empty submit', async () => {
@@ -166,14 +164,21 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
 
     const title = screen.getByLabelText(/제목/);
     const summary = screen.getByLabelText(/요약/);
+    expect(title).toHaveFocus();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(title).not.toHaveAttribute('aria-invalid', 'true');
     expect(summary).not.toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.blur(title);
+    expect(screen.queryByText('제목을 입력해 주세요.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(title).not.toHaveAttribute('aria-invalid', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));
 
     expect(await screen.findByText('제목을 입력해 주세요.')).toBeInTheDocument();
     expect(screen.getByText('요약을 입력해 주세요.')).toBeInTheDocument();
+    expect(screen.getAllByRole('alert')).toHaveLength(2);
     expect(title).toHaveValue('');
     expect(summary).toHaveValue('');
     expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -190,6 +195,23 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
     expect(screen.queryByText('요약을 입력해 주세요.')).not.toBeInTheDocument();
     expect(title).toHaveValue('   ');
     expect(summary).not.toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('shows only the title error after the user types, clears, and blurs it', async () => {
+    renderModal(null);
+    const title = screen.getByLabelText(/제목/);
+
+    fireEvent.blur(title);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.focus(title);
+    fireEvent.change(title, { target: { value: '임시 제목' } });
+    fireEvent.change(title, { target: { value: '' } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.blur(title);
+
+    expect(await screen.findByText('제목을 입력해 주세요.')).toBeInTheDocument();
+    expect(screen.queryByText('요약을 입력해 주세요.')).not.toBeInTheDocument();
+    expect(title).toHaveValue('');
   });
 
   it.each([
