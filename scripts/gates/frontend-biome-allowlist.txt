@@ -310,3 +310,5 @@ apps/frontend/src/features/voc/hooks/useConfirmVocRecommendation.ts organizeImpo
 apps/frontend/src/features/voc/hooks/useVocCreateMutation.ts format -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
 apps/frontend/src/features/voc/hooks/useVocCreateMutation.ts lint/style/useImportType -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
 apps/frontend/src/features/voc/hooks/useVocCreateMutation.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #586 only adds the nav-counts invalidation import/call
+apps/frontend/src/lib/auth/useMe.ts organizeImports -- pre-existing on develop (measured 2026-09-30); #583 adds the cached identity helpers
+apps/frontend/src/routes/__root.tsx organizeImports -- pre-existing on develop (measured 2026-09-30); #583 switches to createRootRouteWithContext

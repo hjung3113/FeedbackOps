@@ -55,9 +55,7 @@ describe('ensureMe', () => {
 
   it('stops after bounded 429 retries and keeps typed status and retry-after', async () => {
     const queryClient = new QueryClient();
-    const fetchMock = vi.fn(async () =>
-      jsonResponse(429, {}, { 'retry-after': '0' }),
-    );
+    const fetchMock = vi.fn(async () => jsonResponse(429, {}, { 'retry-after': '0' }));
     globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
     let thrown: unknown;

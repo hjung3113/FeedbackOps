@@ -42,9 +42,7 @@ export function meQueryOptions() {
     queryFn: ({ signal }: { signal: AbortSignal }) => fetchMe(signal),
     staleTime: ME_STALE_TIME,
     retry: (failureCount: number, error: unknown) =>
-      error instanceof MeRequestError &&
-      error.status === 429 &&
-      failureCount < MAX_429_RETRIES,
+      error instanceof MeRequestError && error.status === 429 && failureCount < MAX_429_RETRIES,
     retryDelay: meRetryDelay,
   } as const;
 }

@@ -8,9 +8,9 @@ import { UnauthenticatedError } from '../lib/api';
 import { ensureMe } from '../lib/auth/useMe';
 import type { AppRouterContext } from './__root';
 
-export async function rootBeforeLoad(
-  { context }: { context?: Partial<AppRouterContext> } = {},
-): Promise<never> {
+export async function rootBeforeLoad({
+  context,
+}: { context?: Partial<AppRouterContext> } = {}): Promise<never> {
   // Tests that call the entry guard without a router context get an isolated
   // cache; the app always supplies its shared QueryClient through RouterContext.
   const queryClient = context?.queryClient ?? new QueryClient();
