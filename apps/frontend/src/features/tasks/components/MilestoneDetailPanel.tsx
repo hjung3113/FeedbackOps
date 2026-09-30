@@ -1,7 +1,7 @@
 import { ApiError } from '@/lib/api';
-import { isPermissionDenied } from '@/lib/api/types';
 import { createMilestone, getMilestone, updateMilestone } from '@/lib/api/milestones';
 import { listTasks } from '@/lib/api/tasks';
+import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import type {
   CreateMilestoneRequest,

@@ -3,9 +3,9 @@ import { SurveyDetail } from '@/features/surveys/components/detail/SurveyDetail'
 import { SurveyList } from '@/features/surveys/components/list/SurveyList';
 import { useSurvey, useSurveys } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionGate';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
-import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
 import { Outlet, createFileRoute, useMatchRoute, useNavigate } from '@tanstack/react-router';
 import { useMemo } from 'react';

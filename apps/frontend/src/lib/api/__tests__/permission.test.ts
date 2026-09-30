@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { isPermissionDenied } from '@/lib/api';
+import { describe, expect, it } from 'vitest';
 import { ApiError } from '../types';
 
 describe('isPermissionDenied', () => {
