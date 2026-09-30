@@ -57,6 +57,10 @@ This document fills the frontend gaps:
 
 ## Global Layout Contracts
 
+### Three Route Shells (ADR-0020)
+
+Every AppShell route classifies as one of three shells (ADR-0020): `PageShell` for page-body routes, `ListShell` for filter/list/detail routes, and `WorkbenchShell` for work surfaces that are not simple object lists. Do not introduce a fourth shell; extend one of these three when a route needs a new layout pattern.
+
 ### AppShell
 
 Purpose:
