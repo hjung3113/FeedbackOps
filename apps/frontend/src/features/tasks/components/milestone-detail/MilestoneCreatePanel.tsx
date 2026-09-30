@@ -57,6 +57,7 @@ export function MilestoneCreatePanel({
   // B2e fixup — the header close confirms before discarding an unsaved draft.
   const [confirmingClose, setConfirmingClose] = React.useState(false);
 
+  // Same literal field order every render, so retry equality below is sound.
   const payload: CreateMilestoneRequest = {
     title: title.trim(),
     why: why.trim(),
@@ -68,10 +69,8 @@ export function MilestoneCreatePanel({
     ...(ownerActorId !== '' ? { owner_actor_id: ownerActorId } : {}),
     ...(analyticsAreaId !== '' ? { analytics_area_id: analyticsAreaId } : {}),
   };
-  const { key: idempotencyKey, markConsumed } = useIdempotencyKey(
-    undefined,
-    JSON.stringify(payload),
-  );
+  const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
+  const lastAttemptFingerprintRef = React.useRef<string | null>(null);
 
   // Any deviation from the initial fields is an unsaved draft; derived from
   // the controlled state so no change path can bypass it.
@@ -144,6 +143,7 @@ export function MilestoneCreatePanel({
     onSuccess: (created) => {
       // The creation completed: the form hands over to the detail panel, and
       // any later session must not inherit this key.
+      lastAttemptFingerprintRef.current = null;
       markConsumed();
       // R5 — a completion arriving after dismissal/unmount is a stale
       // session: ignore it so it cannot close a newer create form or select
@@ -174,7 +174,23 @@ export function MilestoneCreatePanel({
       return;
     }
     setFormError(null);
-    createMutation.mutate({ payload, idempotencyKey });
+    // Astra finding 3 — an uncertain create (the server may have committed the
+    // row but the response was lost) leaves the form open with an error. Keep
+    // the key and submitted fingerprint together so an identical retry replays
+    // the stored response instead of creating a second Milestone. Rotate only
+    // when a changed payload is submitted or a creation succeeds; reusing a key
+    // with another body would be 409 conflict.idempotency_key_reuse.
+    const fingerprint = JSON.stringify(payload);
+    let key = idempotencyKey;
+    if (
+      lastAttemptFingerprintRef.current !== null &&
+      lastAttemptFingerprintRef.current !== fingerprint
+    ) {
+      const k = markConsumed();
+      key = k;
+    }
+    lastAttemptFingerprintRef.current = fingerprint;
+    createMutation.mutate({ payload, idempotencyKey: key });
   }
 
   const dateClassName =

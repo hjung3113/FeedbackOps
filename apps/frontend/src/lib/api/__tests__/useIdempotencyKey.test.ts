@@ -42,7 +42,11 @@ describe('useIdempotencyKey', () => {
   it('markConsumed() mints a fresh key', () => {
     const { result } = renderHook(() => useIdempotencyKey());
     const k1 = result.current.key;
-    act(() => { result.current.markConsumed(); });
+    let consumedKey = '';
+    act(() => {
+      consumedKey = result.current.markConsumed();
+    });
     expect(result.current.key).not.toBe(k1);
+    expect(consumedKey).toBe(result.current.key);
   });
 });

@@ -11,6 +11,10 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 import { MilestoneDetailContent } from './MilestoneDetailContent';
 
+// #514 B2d — Milestone detail panel mirroring MilestoneDetailPanel in
+// docs/design-prototype/screen-milestones.jsx, mounted in the existing
+// ListShell detail slot (never a new shell).
+// Timeline section is deliberately omitted: Timeline is Slice C (TaskGantt).
 export interface MilestoneDetailPanelProps {
   milestoneId: string;
   onClose: () => void;

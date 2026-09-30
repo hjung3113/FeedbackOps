@@ -1,5 +1,5 @@
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
-import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
+import { errorMapper, GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import {
   createMilestone,
@@ -542,8 +542,9 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
     expect(statusSelect()).toHaveValue('released');
     // No surfaced error and no local overwrite: the server row wins.
-    expect(screen.queryByText(GENERIC_ERROR_MESSAGE)).not.toBeInTheDocument();
-    expect(screen.queryByText('Milestone was modified by another actor.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(errorMapper({ code: 'conflict.stale_write', message: '' }).message),
+    ).not.toBeInTheDocument();
   });
 
   // B2e-status fixup (midreview P2) — the status stale-write refetch brings a

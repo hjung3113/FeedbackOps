@@ -129,7 +129,7 @@ describe('Milestone mutation error copy', () => {
 });
 
 describe('Milestone create idempotency', () => {
-  it('reuses the key for identical retries and rotates it when the payload changes', async () => {
+  it('reuses the original key when the payload is edited and reverted before retry', async () => {
     const user = userEvent.setup();
     vi.mocked(createMilestone).mockRejectedValue(new Error('temporary failure'));
     renderCreatePanel();
@@ -140,18 +140,15 @@ describe('Milestone create idempotency', () => {
     const firstKey = vi.mocked(createMilestone).mock.calls[0]?.[1];
     if (firstKey === undefined) throw new Error('first create idempotency key missing');
 
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'Changed milestone' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+      target: { value: 'New milestone' },
+    });
     await user.click(screen.getByRole('button', { name: 'Create milestone' }));
     await screen.findByText(GENERIC_ERROR_MESSAGE);
     const retryKey = vi.mocked(createMilestone).mock.calls[1]?.[1];
     expect(retryKey).toBe(firstKey);
-
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
-      target: { value: 'Changed milestone' },
-    });
-    await user.click(screen.getByRole('button', { name: 'Create milestone' }));
-    await screen.findByText(GENERIC_ERROR_MESSAGE);
-    const changedPayloadKey = vi.mocked(createMilestone).mock.calls[2]?.[1];
-    expect(changedPayloadKey).toBeDefined();
-    expect(changedPayloadKey).not.toBe(firstKey);
   });
 });

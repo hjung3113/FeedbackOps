@@ -1,6 +1,9 @@
 import type { MilestoneStatusFilter, TaskDto } from '@fops/shared';
 import type { PanelSection } from '@fops/ui';
 
+// Nav order mirrors the prototype (Overview, Timeline, Tasks, Evidence,
+// Activity); Timeline stays Slice C. MilestoneDetailContent appends the
+// child-row count to the Tasks entry once the milestone query resolves.
 export const SECTIONS: PanelSection[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'tasks', label: 'Tasks' },
@@ -18,6 +21,9 @@ export const PRIORITY_SEVERITY: Record<
   urgent: 'critical',
 };
 
+// B2e-status (ADR-0050) — the persisted set is exactly these four values and
+// PATCH is free among them. Labels verbatim from MILESTONE_STATUS_META in
+// screen-milestones.jsx.
 export const STATUS_OPTIONS: ReadonlyArray<{ value: MilestoneStatusFilter; label: string }> = [
   { value: 'planning', label: 'Planning' },
   { value: 'in_progress', label: 'In progress' },
