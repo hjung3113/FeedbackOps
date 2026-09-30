@@ -77,6 +77,7 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       label: 'High severity',
       href: '/vocs?view=triage&tab=high',
       section: 'VIEWS',
+      parentId: 'triage',
       icon: <Flag className="h-4 w-4" />,
       countKey: 'voc.tab.high',
     },
@@ -85,6 +86,7 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       label: 'Unassigned',
       href: '/vocs?view=triage&tab=unassigned',
       section: 'VIEWS',
+      parentId: 'triage',
       icon: <User className="h-4 w-4" />,
       countKey: 'voc.tab.unassigned',
       urgent: true,
@@ -94,6 +96,7 @@ export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = 
       label: 'No follow-up',
       href: '/vocs?view=triage&tab=no-link',
       section: 'VIEWS',
+      parentId: 'triage',
       icon: <Link2 className="h-4 w-4" />,
       countKey: 'voc.tab.no-link',
     },
@@ -207,10 +210,59 @@ export function isSidebarEntryActive(
       return false;
     }
   }
-  if (entrySearch === undefined || !entrySearch.includes('view=')) return true;
+  const entryParams = new URLSearchParams(entrySearch);
+  if (entryParams.has('action')) return false;
+
+  const currentParams = new URLSearchParams(searchStr);
+  const isCreatingVoc = entryPath === '/vocs' && currentParams.get('action') === 'create';
+  for (const [key, expectedValue] of entryParams) {
+    // #606 follows the route behavior despite the prototype highlight: Create is an action,
+    // and its route keeps the default Inbox destination current.
+    const actualValue = key === 'view' && isCreatingVoc ? 'inbox' : currentParams.get(key);
+    if (actualValue !== expectedValue) return false;
+  }
+  return true;
+}
+
+export function getSidebarEntryStates(
+  entries: SidebarNavEntry[],
+  pathname: string,
+  searchStr: string,
+): SidebarNavEntry[] {
+  const matchingEntries = entries.filter((entry) =>
+    isSidebarEntryActive(entry, pathname, searchStr),
+  );
+  const currentEntries = matchingEntries.filter(
+    (entry) =>
+      !matchingEntries.some(
+        (candidate) =>
+          candidate.id !== entry.id && isMoreSpecificSidebarEntry(candidate, entry),
+      ),
+  );
+  const currentIds = new Set(currentEntries.map((entry) => entry.id));
+  const contextualIds = new Set(
+    currentEntries.flatMap((entry) => (entry.parentId === undefined ? [] : [entry.parentId])),
+  );
+
+  return entries.map((entry) => ({
+    ...entry,
+    active: currentIds.has(entry.id),
+    contextActive: contextualIds.has(entry.id),
+  }));
+}
+
+function isMoreSpecificSidebarEntry(candidate: SidebarNavEntry, entry: SidebarNavEntry): boolean {
+  const [candidatePath = '', candidateSearch] = candidate.href.split('?');
+  const [entryPath, entrySearch] = entry.href.split('?');
+  if (candidatePath !== entryPath) return candidatePath.startsWith(`${entryPath}/`);
+
+  const candidateParams = new URLSearchParams(candidateSearch);
+  const entryParams = new URLSearchParams(entrySearch);
+  const candidateParamCount = [...candidateParams].length;
+  const entryParamCount = [...entryParams].length;
   return (
-    new URLSearchParams(entrySearch).get('view') ===
-    new URLSearchParams(searchStr).get('view')
+    candidateParamCount > entryParamCount &&
+    [...entryParams].every(([key, value]) => candidateParams.get(key) === value)
   );
 }
 
@@ -274,10 +326,7 @@ export function AuthedLayout() {
     () =>
       activeDomain === 'home'
         ? homeSidebarEntries(homeSummary.data, location.pathname === '/home')
-        : NAV_TREE[activeDomain].map((entry) => ({
-            ...entry,
-            active: isSidebarEntryActive(entry, location.pathname, location.searchStr),
-          })),
+        : getSidebarEntryStates(NAV_TREE[activeDomain], location.pathname, location.searchStr),
     [activeDomain, homeSummary.data, location.pathname, location.searchStr],
   );
   const changeManagedSystem = React.useCallback(

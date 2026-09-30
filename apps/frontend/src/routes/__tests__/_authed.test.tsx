@@ -4,9 +4,16 @@
 // mounting routeTree.gen.ts.
 
 import { redirect } from '@tanstack/react-router';
+import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthenticatedError, fetchMe } from '../../lib/api';
-import { NAV_TREE, SIDEBAR_ENTRIES, isSidebarEntryActive } from '../_authed';
+import { AppSidebar } from '../../lib/layout/AppSidebar';
+import {
+  NAV_TREE,
+  SIDEBAR_ENTRIES,
+  getSidebarEntryStates,
+  isSidebarEntryActive,
+} from '../_authed';
 
 // Re-implement only the redirect/error branch expectations in isolation.
 async function beforeLoad({ location }: { location: { href: string } }) {
@@ -133,5 +140,73 @@ describe('_authed sidebar navigation tree', () => {
     const findingsEntry = NAV_TREE.findings[0];
     if (findingsEntry === undefined) throw new Error('missing findings nav entry');
     expect(isSidebarEntryActive(findingsEntry, '/findings/finding-a', '')).toBe(true);
+  });
+});
+
+describe('_authed VOC sidebar current destination', () => {
+  it.each([
+    { route: 'Inbox', pathname: '/vocs', searchStr: '?view=inbox', expectedId: 'inbox' },
+    { route: 'Triage', pathname: '/vocs', searchStr: '?view=triage', expectedId: 'triage' },
+    {
+      route: 'High severity triage',
+      pathname: '/vocs',
+      searchStr: '?view=triage&tab=high',
+      expectedId: 'high-severity',
+    },
+    {
+      route: 'Unassigned triage',
+      pathname: '/vocs',
+      searchStr: '?view=triage&tab=unassigned',
+      expectedId: 'unassigned',
+    },
+    {
+      route: 'No follow-up triage',
+      pathname: '/vocs',
+      searchStr: '?view=triage&tab=no-link',
+      expectedId: 'no-link',
+    },
+    { route: 'My VOCs', pathname: '/vocs', searchStr: '?view=my', expectedId: 'my-vocs' },
+    {
+      route: 'Clusters',
+      pathname: '/voc-clusters',
+      searchStr: '',
+      expectedId: 'voc-clusters',
+    },
+    {
+      route: 'New VOC action',
+      pathname: '/vocs',
+      searchStr: '?action=create',
+      expectedId: 'inbox',
+    },
+  ])('marks only $expectedId current for $route', ({ pathname, searchStr, expectedId }) => {
+    localStorage.removeItem('appSidebarCollapsed');
+    render(
+      <AppSidebar
+        entries={getSidebarEntryStates(NAV_TREE.voc, pathname, searchStr)}
+      />,
+    );
+
+    const navLinks = NAV_TREE.voc.map((entry) => screen.getByTestId(`sidebar-nav-${entry.id}`));
+    const currentLinks = navLinks.filter((entry) => entry.getAttribute('aria-current') === 'page');
+    expect(currentLinks).toHaveLength(1);
+    expect(currentLinks[0]).toBe(screen.getByTestId(`sidebar-nav-${expectedId}`));
+    expect(currentLinks[0]).toHaveClass('bg-surface-row-selected');
+
+    for (const entry of navLinks) {
+      expect(entry.classList.contains('bg-surface-row-selected')).toBe(
+        entry.getAttribute('aria-current') === 'page',
+      );
+    }
+
+    const createEntry = screen.getByTestId('sidebar-nav-create');
+    expect(createEntry).not.toHaveAttribute('aria-current', 'page');
+    expect(createEntry).not.toHaveClass('bg-surface-row-selected');
+
+    if (['high-severity', 'unassigned', 'no-link'].includes(expectedId)) {
+      const triageEntry = screen.getByTestId('sidebar-nav-triage');
+      expect(triageEntry).not.toHaveAttribute('aria-current', 'page');
+      expect(triageEntry).not.toHaveClass('bg-surface-row-selected');
+      expect(triageEntry).toHaveClass('text-text-primary');
+    }
   });
 });
