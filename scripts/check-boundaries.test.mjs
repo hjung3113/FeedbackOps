@@ -251,6 +251,35 @@ runCase(
 );
 
 runCase(
+  'rule 10 rejects Core owner-table imports outside owner modules and in test-support',
+  {
+    ...zero,
+    [join(MODULES, 'findings', 'creation.ts')]:
+      "import { managedSystems as coreManagedSystems } from '../../db/schema/core.js';\n",
+    [join('apps', 'backend', 'src', 'test-support', 'seed.ts')]:
+      "import { analyticsAreas } from '../db/schema/core';\n",
+  },
+  false,
+  [
+    'apps/backend/src/modules/findings/creation.ts:1',
+    'apps/backend/src/test-support/seed.ts:1',
+  ],
+);
+
+runCase(
+  'rule 10 allows Core owner-table imports in owner modules and skips tests',
+  {
+    ...zero,
+    [join(MODULES, 'analytics-areas', 'schema-import.ts')]:
+      "import { analyticsAreas } from '../../db/schema/core.js';\n",
+    [join(MODULES, 'tasks', '__tests__', 'fixture.test.ts')]:
+      "import { managedSystems } from '../../../db/schema/core.js';\n",
+  },
+  true,
+  'boundaries: OK',
+);
+
+runCase(
   'rule 10 rejects raw Core owner-table SQL outside the owner modules',
   {
     ...ownerTableSql,
@@ -266,6 +295,22 @@ runCase(
     'apps/backend/src/modules/findings/creation.ts:1',
     'apps/backend/src/modules/tasks/service.ts:1',
     'apps/backend/src/modules/tasks/service.ts:2',
+  ],
+);
+
+runCase(
+  'rule 10 rejects comma joins and USING references to Core owner tables',
+  {
+    ...zero,
+    [join(MODULES, 'tasks', 'comma-join.ts')]:
+      'const rows = await tx.execute(sql`select * from voc.vocs v, core.managed_systems ms`);\n',
+    [join(MODULES, 'tasks', 'using.ts')]:
+      'await tx.execute(sql`delete from voc.vocs using core.analytics_areas`);\n',
+  },
+  false,
+  [
+    'apps/backend/src/modules/tasks/comma-join.ts:1',
+    'apps/backend/src/modules/tasks/using.ts:1',
   ],
 );
 

@@ -10,7 +10,8 @@
 //   7. Files outside modules/voc MUST NOT import from modules/voc/jobs/.
 //   8. Non-VOC frontend features and src/lib MUST NOT import VOC hooks/lib internals.
 //   9. Backend modules MUST NOT import another module's __tests__/_seed-helpers.
-//  10. Backend modules outside Core owners MUST NOT name Core owner tables in raw SQL.
+//  10. Modules outside Core owners/tests MUST NOT use owner tables in raw SQL or import owner symbols;
+//      src/test-support also MUST NOT import owner symbols from db/schema/core.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -66,9 +67,9 @@ const RULES = [
     msg: "backend modules must not import another module's __tests__/_seed-helpers; shared helpers live in src/test-support",
   },
   {
-    scope: 'apps/backend/src/modules',
-    kind: 'foreign-core-owner-table-sql',
-    msg: 'backend modules must access Managed Systems and Analytics Areas through their owner surfaces',
+    scope: 'apps/backend/src',
+    kind: 'foreign-core-owner-table-access',
+    msg: 'backend code must access Managed Systems and Analytics Areas through their owner surfaces',
   },
 ];
 
@@ -132,6 +133,53 @@ function collectImportSpecifiers(file, content) {
         specifier: node.argument.literal.text,
         line: source.getLineAndCharacterOfPosition(node.argument.literal.getStart(source)).line + 1,
       });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return out;
+}
+
+function collectCoreOwnerTableImports(file, content) {
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+  const out = [];
+  const coreSchemaPath = /(?:^|\/)db\/schema\/core(?:\.js)?$/;
+  const ownerTables = new Set(['managedSystems', 'analyticsAreas']);
+  const visit = (node) => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      coreSchemaPath.test(node.moduleSpecifier.text.replaceAll('\\', '/'))
+    ) {
+      const namedBindings = node.importClause?.namedBindings;
+      if (namedBindings && ts.isNamedImports(namedBindings)) {
+        for (const element of namedBindings.elements) {
+          const importedName = (element.propertyName ?? element.name).text;
+          if (ownerTables.has(importedName)) {
+            out.push({
+              name: importedName,
+              line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+            });
+          }
+        }
+      }
+    } else if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      coreSchemaPath.test(node.moduleSpecifier.text.replaceAll('\\', '/')) &&
+      node.exportClause &&
+      ts.isNamedExports(node.exportClause)
+    ) {
+      for (const element of node.exportClause.elements) {
+        const importedName = (element.propertyName ?? element.name).text;
+        if (ownerTables.has(importedName)) {
+          out.push({
+            name: importedName,
+            line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+          });
+        }
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -256,30 +304,44 @@ for (const rule of RULES) {
       }
       continue;
     }
-    if (rule.kind === 'foreign-core-owner-table-sql') {
+    if (rule.kind === 'foreign-core-owner-table-access') {
       const srcSegment = moduleSegment(file);
-      const relativeParts = relative(join(ROOT, rule.scope), file).split(sep);
+      const modulesRoot = join(ROOT, 'apps/backend/src/modules');
+      const testSupportRoot = join(ROOT, 'apps/backend/src/test-support');
+      const isModuleFile = isWithinPath(modulesRoot, file);
+      const isTestSupportFile = isWithinPath(testSupportRoot, file);
+      const relativeParts = relative(
+        isModuleFile ? modulesRoot : testSupportRoot,
+        file,
+      ).split(sep);
       if (
-        !srcSegment ||
-        srcSegment === 'managed-systems' ||
-        srcSegment === 'analytics-areas' ||
+        (!isModuleFile && !isTestSupportFile) ||
+        (isModuleFile &&
+          (srcSegment === 'managed-systems' || srcSegment === 'analytics-areas')) ||
         relativeParts.includes('__tests__') ||
         /\.test\./.test(basename(file))
       ) {
         continue;
       }
-      const tableReference =
-        new RegExp(
-          String.raw`\b(?:from|join|update|into|delete\s+from|truncate(?:\s+table)?|references|alter\s+table|create\s+table|drop\s+table)\s+` +
-            String.raw`["']?core["']?\s*\.\s*["']?(managed_systems|analytics_areas)["']?`,
-          'gi',
-        );
-      for (const match of content.matchAll(tableReference)) {
-        const line = content.slice(0, match.index).split('\n').length;
+      for (const { name, line } of collectCoreOwnerTableImports(file, content)) {
         violations++;
-        console.error(
-          `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (references core.${match[1]})`,
-        );
+        console.error(`[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (imports ${name})`);
+      }
+      if (isModuleFile) {
+        const tableReference =
+          new RegExp(
+            String.raw`\b(?:(?:from|join|update|into|using|delete\s+from|` +
+              String.raw`truncate(?:\s+table)?|references|alter\s+table|create\s+table|drop\s+table)\s+|,\s*)` +
+              String.raw`["']?core["']?\s*\.\s*["']?(managed_systems|analytics_areas)\b["']?`,
+            'gi',
+          );
+        for (const match of content.matchAll(tableReference)) {
+          const line = content.slice(0, match.index).split('\n').length;
+          violations++;
+          console.error(
+            `[boundary] ${relative(ROOT, file)}:${line}: ${rule.msg} (references core.${match[1]})`,
+          );
+        }
       }
       continue;
     }
