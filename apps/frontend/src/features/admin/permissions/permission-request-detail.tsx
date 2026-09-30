@@ -1,6 +1,7 @@
 import { Button, FieldRow, OutlineBadge, PanelSectionTitle } from '@fops/ui';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
+import { shortId } from '@/lib/identity';
 
 import { PermissionRequestDecisionForm } from './permission-request-decision-form.js';
 import {
@@ -11,10 +12,12 @@ import {
 export function PermissionRequestDetail({
   request,
   actorName,
+  managedSystemName,
   onClose,
 }: {
   request: AdminPermissionRequestRow;
   actorName?: string | undefined;
+  managedSystemName?: string | undefined;
   onClose: () => void;
 }) {
   return (
@@ -25,7 +28,8 @@ export function PermissionRequestDetail({
       <header className="flex h-[50px] items-center gap-3 border-b border-border-subtle px-6">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-text-muted">Permission Request</p>
-          <p className="font-mono text-sm text-text-primary">{request.id.slice(0, 8)}</p>
+          <p className="text-sm font-medium text-text-primary">{request.requested_capability}</p>
+          <p className="font-mono text-xs text-text-muted">{shortId(request.id)}</p>
         </div>
         <OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>
         <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="패널 닫기">
@@ -38,9 +42,9 @@ export function PermissionRequestDetail({
             <PanelSectionTitle>요청 정보</PanelSectionTitle>
             <FieldRow label="요청자" className="px-0">
               <span className="flex flex-col gap-0.5">
-                <span>{actorName ?? 'Unknown requester'}</span>
+                <span>{actorName ?? '알 수 없는 사용자'}</span>
                 <span className="font-mono text-xs text-text-muted">
-                  {request.requester_actor_id}
+                  {shortId(request.requester_actor_id)}
                 </span>
               </span>
             </FieldRow>
@@ -48,7 +52,18 @@ export function PermissionRequestDetail({
               <span>{request.requested_capability}</span>
             </FieldRow>
             <FieldRow label="범위" className="px-0">
-              <span>{request.requested_managed_system_id ?? '워크스페이스 전체'}</span>
+              <span className="flex flex-col gap-0.5">
+                <span>
+                  {request.requested_managed_system_id
+                    ? (managedSystemName ?? 'Managed System')
+                    : '워크스페이스 전체'}
+                </span>
+                {request.requested_managed_system_id && !managedSystemName && (
+                  <span className="font-mono text-xs text-text-muted">
+                    {shortId(request.requested_managed_system_id)}
+                  </span>
+                )}
+              </span>
             </FieldRow>
             <FieldRow label="상태" className="px-0">
               <OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>
@@ -61,7 +76,7 @@ export function PermissionRequestDetail({
             <PanelSectionTitle>요청 사유</PanelSectionTitle>
             <p className="whitespace-pre-wrap text-sm text-text-primary">{request.reason}</p>
           </section>
-          <PermissionRequestDecisionForm request={request} />
+          <PermissionRequestDecisionForm request={request} managedSystemName={managedSystemName} />
         </div>
       </div>
     </aside>

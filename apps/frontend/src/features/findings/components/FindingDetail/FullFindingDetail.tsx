@@ -5,6 +5,7 @@ import { ProgressNotesSection } from '@/features/cross-system/progress-notes/Pro
 import { useRequestTaskFromFinding } from '@/features/findings/hooks/useRequestTaskFromFinding';
 import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { shortId } from '@/lib/identity';
 import type { FindingDto, FindingStatus } from '@fops/shared';
 import {
   Button,
@@ -23,7 +24,7 @@ import { AddEvidenceModal } from './AddEvidenceModal';
 import { EvidenceHighlightsSection } from './EvidenceHighlights';
 import { LinkEvidenceModal } from './LinkEvidenceModal';
 import { LinkTaskModal } from './LinkTaskModal';
-import { FitBadge, SectionDivider, shortId } from './detail-primitives';
+import { FitBadge, SectionDivider } from './detail-primitives';
 import { useFindingDetailController } from './useFindingDetailController';
 
 // ── Source type label map ────────────────────────────────────────────────────

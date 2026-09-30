@@ -5,6 +5,7 @@ import * as React from 'react';
 import { type PermissionRequestDecisionAction, useIdempotencyKey } from '@/lib/api';
 import type { AdminPermissionRequestRow } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
+import { shortId } from '@/lib/identity';
 
 import { useWorkspaceSettings } from '../settings/use-workspace-settings.js';
 import { useDecidePermissionRequest } from './useDecidePermissionRequest.js';
@@ -22,8 +23,10 @@ const ACTIONS: Array<{
 
 export function PermissionRequestDecisionForm({
   request,
+  managedSystemName,
 }: {
   request: AdminPermissionRequestRow;
+  managedSystemName?: string | undefined;
 }) {
   const [action, setAction] = React.useState<PermissionRequestDecisionAction | null>(null);
   const [reason, setReason] = React.useState('');
@@ -170,7 +173,17 @@ export function PermissionRequestDecisionForm({
               actor: {me.data?.actor.id ?? '—'} · subject: {request.requester_actor_id}
             </span>
             <span>capability: {request.requested_capability}</span>
-            <span>scope: {request.requested_managed_system_id ?? '워크스페이스 전체'}</span>
+            <span>
+              scope:{' '}
+              {request.requested_managed_system_id
+                ? (managedSystemName ?? 'Managed System')
+                : '워크스페이스 전체'}
+            </span>
+            {request.requested_managed_system_id && !managedSystemName && (
+              <span className="font-mono text-text-muted">
+                {shortId(request.requested_managed_system_id)}
+              </span>
+            )}
             <span>policy_citation: {policyCitation || '— (필수)'}</span>
             <span>
               no_peer_reviewer:{' '}

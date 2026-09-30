@@ -5,6 +5,7 @@ import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
+import { shortId } from '@/lib/identity';
 import type { TaskDetailDto, TaskStatus } from '@fops/shared';
 import {
   Button,
@@ -42,10 +43,6 @@ const SECTIONS: PanelSection[] = [
   { id: 'context', label: 'Context' },
   { id: 'notes', label: 'Progress notes' },
 ];
-
-function shortId(id: string): string {
-  return `${id.slice(0, 8)}...`;
-}
 
 function optionalDisplayId(value: { id: string; display_id?: string | null }): string {
   return value.display_id?.trim() ? value.display_id : shortId(value.id);

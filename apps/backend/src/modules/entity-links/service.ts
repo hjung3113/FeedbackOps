@@ -42,11 +42,20 @@ export interface EntityLinksServiceDeps {
   providers: EntityLinkProviderRegistry;
 }
 
-function toAllowedDto(row: EntityLinkRow, targetSummary?: EntityLinkTargetSummary): EntityLinkDto {
+interface EndpointSummaries {
+  sourceSummary?: EntityLinkTargetSummary;
+  targetSummary?: EntityLinkTargetSummary;
+}
+
+function toAllowedDto(
+  row: EntityLinkRow,
+  { sourceSummary, targetSummary }: EndpointSummaries = {},
+): EntityLinkDto {
   return {
     id: row.id,
     source_type: row.source_type,
     source_id: row.source_id,
+    ...(sourceSummary !== undefined ? { source_summary: sourceSummary } : {}),
     target_type: row.target_type,
     target_id: row.target_id,
     ...(targetSummary !== undefined ? { target_summary: targetSummary } : {}),
@@ -99,9 +108,9 @@ function toDtoForDecision(
   row: EntityLinkRow,
   decision: LinkVisibilityDecision,
   summary?: TaskReporterSummary,
-  targetSummary?: EntityLinkTargetSummary,
+  endpointSummaries?: EndpointSummaries,
 ): EntityLinkDto {
-  if (decision === 'allowed') return toAllowedDto(row, targetSummary);
+  if (decision === 'allowed') return toAllowedDto(row, endpointSummaries);
   if (decision === 'hidden' || decision === 'denied') return toAuditMetadataDto(row, decision);
   if (summary !== undefined) return toSummaryVisibleDto(row, summary);
   throw new HttpError(
@@ -343,6 +352,36 @@ async function getTargetInternalSummary(
   return summary ?? undefined;
 }
 
+async function getSourceInternalSummary(
+  providers: EntityLinkProviderRegistry,
+  db: Db | Tx,
+  actor: EntityLinksActor,
+  row: Pick<EntityLinkRow, 'source_type' | 'source_id'>,
+): Promise<EntityLinkTargetSummary | undefined> {
+  const summary = await providerFor(providers, row.source_type).getInternalSummary(
+    db,
+    actor.workspace_id,
+    row.source_id,
+  );
+  return summary ?? undefined;
+}
+
+async function getEndpointInternalSummaries(
+  providers: EntityLinkProviderRegistry,
+  db: Db | Tx,
+  actor: EntityLinksActor,
+  row: EntityLinkRow,
+): Promise<EndpointSummaries> {
+  const [sourceSummary, targetSummary] = await Promise.all([
+    getSourceInternalSummary(providers, db, actor, row),
+    getTargetInternalSummary(providers, db, actor, row),
+  ]);
+  return {
+    ...(sourceSummary !== undefined ? { sourceSummary } : {}),
+    ...(targetSummary !== undefined ? { targetSummary } : {}),
+  };
+}
+
 export function createEntityLinksService(deps: EntityLinksServiceDeps) {
   async function createLink(args: {
     actor: EntityLinksActor;
@@ -450,10 +489,15 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
 
     const result = args.tx ? await persist(args.tx) : await deps.db.transaction(persist);
 
-    const targetSummary = await getTargetInternalSummary(deps.providers, db, actor, result.row);
+    const endpointSummaries = await getEndpointInternalSummaries(
+      deps.providers,
+      db,
+      actor,
+      result.row,
+    );
 
     return {
-      link: toAllowedDto(result.row, targetSummary),
+      link: toAllowedDto(result.row, endpointSummaries),
       status: result.inserted ? 201 : 200,
     };
   }
@@ -539,11 +583,11 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         reporterSummaries,
         sourceReadabilityByEndpoint,
       );
-      const targetSummary =
+      const endpointSummaries =
         decision === 'allowed'
-          ? await getTargetInternalSummary(deps.providers, deps.db, actor, row)
+          ? await getEndpointInternalSummaries(deps.providers, deps.db, actor, row)
           : undefined;
-      items.push(toDtoForDecision(row, decision, summary, targetSummary));
+      items.push(toDtoForDecision(row, decision, summary, endpointSummaries));
     }
     return items;
   }
@@ -588,11 +632,11 @@ export function createEntityLinksService(deps: EntityLinksServiceDeps) {
         reporterSummaries,
         sourceReadabilityByEndpoint,
       );
-      const targetSummary =
+      const endpointSummaries =
         decision === 'allowed'
-          ? await getTargetInternalSummary(deps.providers, deps.db, actor, row)
+          ? await getEndpointInternalSummaries(deps.providers, deps.db, actor, row)
           : undefined;
-      items.push(toDtoForDecision(row, decision, summary, targetSummary));
+      items.push(toDtoForDecision(row, decision, summary, endpointSummaries));
     }
     return items;
   }

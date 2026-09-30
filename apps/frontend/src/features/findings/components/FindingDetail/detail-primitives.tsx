@@ -3,10 +3,6 @@
 import { OutlineBadge } from '@fops/ui';
 import type * as React from 'react';
 
-export function shortId(id: string): string {
-  return `${id.slice(0, 8)}…`;
-}
-
 export function FitBadge({
   children,
   className,

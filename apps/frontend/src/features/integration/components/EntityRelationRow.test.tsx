@@ -45,4 +45,57 @@ describe('EntityRelationRow', () => {
     expect(screen.getByText('TASK-1000')).toBeInTheDocument();
     expect(screen.queryByText('30000000')).not.toBeInTheDocument();
   });
+
+  it('uses the entity type as a safe source label when no source summary is available', () => {
+    render(<EntityRelationRow link={LINK} />);
+
+    expect(screen.getByText('Finding')).toHaveClass('text-text-primary');
+    expect(screen.getByText('20000000')).toHaveClass('text-text-muted');
+  });
+
+  it('leads with source and target display ids for allowed links', () => {
+    const link = {
+      ...LINK,
+      source_summary: {
+        type: 'finding' as const,
+        id: LINK.source_id,
+        display_id: 'FIN-12',
+        title: '매출 리포트 지연',
+        summary: '응답 시간이 늘어남',
+        severity: 'high',
+        confidence: null,
+        status: 'active',
+        primary_managed_system_id: LINK.managed_system_id,
+        evidence_count: 1,
+      },
+    } as EntityLinkDto;
+
+    render(<EntityRelationRow link={link} />);
+
+    expect(screen.getByText('FIN-12')).toBeInTheDocument();
+    expect(screen.getByText('TASK-1000')).toBeInTheDocument();
+    expect(screen.queryByText('20000000')).not.toBeInTheDocument();
+  });
+
+  it('uses a safe label and omits endpoint identities for hidden links', () => {
+    const hidden: EntityLinkDto = {
+      id: LINK.id,
+      source_type: 'finding',
+      target_type: 'task',
+      relation_type: 'requested_task',
+      status: 'active',
+      managed_system_id: LINK.managed_system_id,
+      created_by: LINK.created_by,
+      created_at: LINK.created_at,
+      updated_at: LINK.updated_at,
+      visibility_state: 'hidden',
+    };
+
+    render(<EntityRelationRow link={hidden} />);
+
+    expect(screen.getByText('접근할 수 없는 항목')).toBeInTheDocument();
+    expect(screen.queryByText('매출 리포트 지연')).not.toBeInTheDocument();
+    expect(screen.queryByText('20000000')).not.toBeInTheDocument();
+    expect(screen.queryByText('30000000')).not.toBeInTheDocument();
+  });
 });

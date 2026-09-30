@@ -118,6 +118,9 @@ GET /entity-links?scope=workspace
   otherwise they are visibility_state=hidden.
 - hidden inventory rows expose audit metadata but never source_id, target_id, or
   synthesized endpoint summaries.
+- allowed rows may include optional provider-backed source_summary and
+  target_summary fields; neither summary is resolved for hidden or denied rows.
+- summary_visible rows expose only the reporter-safe summary contract.
 ```
 
 Slice 5 provider registry (Finding From VOC, ADR-0024):

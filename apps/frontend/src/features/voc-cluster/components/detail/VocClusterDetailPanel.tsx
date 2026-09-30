@@ -29,8 +29,10 @@ import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterD
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
+import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { shortId } from '@/lib/identity';
 
-import { ClusterStatusBadge, formatClusterDate, shortId } from '../../lib/presentation';
+import { ClusterStatusBadge, formatClusterDate } from '../../lib/presentation';
 import { AddVocModal } from '../modals/AddVocModal';
 import { CreateFindingFromClusterModal } from '../modals/CreateFindingFromClusterModal';
 import { LinkExistingFindingModal } from '../modals/LinkExistingFindingModal';
@@ -44,7 +46,7 @@ function clusterDisplayId(data: {
   id: string;
   display_id?: string | null;
 }): string {
-  return data.display_id?.trim() ? data.display_id : shortId(data.id);
+  return data.display_id?.trim() ? data.display_id : 'VOC Cluster';
 }
 
 function memberDisplay(member: VocClusterMemberPresentation): {
@@ -74,6 +76,12 @@ export function VocClusterDetailPanel({
   const presentation = data as (typeof data & VocClusterDetailPresentation) | undefined;
   const managedSystem = useManagedSystem(data?.primary_managed_system_id);
   const { data: me } = useMe();
+  const workspaceActors = useWorkspaceActors({ retry: false, staleTime: 0 });
+  const actorNamesById = Object.fromEntries(
+    (workspaceActors.actors ?? []).map((actor) => [actor.id, actor.display_name]),
+  );
+  const ownerName = data?.owner_user_id ? actorNamesById[data.owner_user_id] : undefined;
+  const confirmerName = data?.confirmed_by ? actorNamesById[data.confirmed_by] : undefined;
   const canMutate = me?.actor.role_level === 'admin' || me?.actor.role_level === 'developer';
 
   const [addVocOpen, setAddVocOpen] = useState(false);
@@ -392,11 +400,27 @@ export function VocClusterDetailPanel({
               <span data-testid="cluster-detail-confidence">{data.confidence ?? '미지정'}</span>
             </FieldRow>
             <FieldRow label="Owner" className="px-0">
-              <span data-testid="cluster-detail-owner">{data.owner_user_id ?? '담당자 없음'}</span>
+              <span className="flex flex-col gap-0.5" data-testid="cluster-detail-owner">
+                <span>
+                  {data.owner_user_id ? (ownerName ?? '알 수 없는 사용자') : '담당자 없음'}
+                </span>
+                {data.owner_user_id && !ownerName && (
+                  <span className="font-mono text-xs text-text-muted">
+                    {shortId(data.owner_user_id)}
+                  </span>
+                )}
+              </span>
             </FieldRow>
             <FieldRow label="Confirmed by" className="px-0">
-              <span data-testid="cluster-detail-confirmed-by">
-                {data.confirmed_by ?? '대기 중'}
+              <span className="flex flex-col gap-0.5" data-testid="cluster-detail-confirmed-by">
+                <span>
+                  {data.confirmed_by ? (confirmerName ?? '알 수 없는 사용자') : '대기 중'}
+                </span>
+                {data.confirmed_by && !confirmerName && (
+                  <span className="font-mono text-xs text-text-muted">
+                    {shortId(data.confirmed_by)}
+                  </span>
+                )}
               </span>
             </FieldRow>
             <FieldRow label="Confirmed at" className="px-0">

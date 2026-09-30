@@ -691,6 +691,8 @@ describe.skipIf(!runIntegration)('Slice 8 exit criteria: survey evidence visibil
       'managed_system_id',
       'relation_type',
       'source_id',
+      // #589: allowed links also carry the authorized source summary.
+      'source_summary',
       'source_type',
       'status',
       'target_id',
