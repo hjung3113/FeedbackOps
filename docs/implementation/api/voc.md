@@ -12,6 +12,11 @@ GET /vocs/:id
 GET /vocs/:id/conversation
 PATCH /vocs/:id
 PATCH /vocs/:id/description
+GET /vocs/:id/public-update-candidates
+POST /vocs/:id/apply-public-update-candidate
+GET /vocs/:id/recommendations
+POST /vocs/:id/recommendations/:candidate_id/confirm
+POST /vocs/:id/recommendations/:candidate_id/dismiss
 POST /vocs/:id/create-finding
 POST /vocs/:id/request-task
 POST /vocs/:id/public-updates

@@ -13,13 +13,13 @@ GET /me/permissions/scope?capability={capability}
 
 POST /permission-requests
 GET /permission-requests          # admin-only workspace list (#87)
+GET /permissions/requests         # canonical review-console list
 GET /permission-requests/mine     # caller's open requests
 POST /permissions/requests/:id/approve
 POST /permissions/requests/:id/reject
 POST /permissions/requests/:id/need-more-info
 POST /permissions/requests/:id/deny
 POST /permission-requests/:id/submit-more-info
-POST /permission-requests/:id/revoke    # 미구현 as of Slice 6 — permission grant/request revoke workflow not started
 ```
 
 ### `POST /permission-requests/:id/submit-more-info`

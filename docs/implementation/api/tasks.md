@@ -182,8 +182,8 @@ errors:
   - User or Developer outside Managed System scope: 403 permission.denied
 ```
 
-Standalone `POST /tasks` is not yet implemented even though standalone Tasks
-are a valid nullable-source data shape.
+There is no standalone Task create route; Task creation is through conversion of
+an approved Task Request.
 
 ## Task Request Create From VOC / VOC Cluster Contract
 
@@ -224,7 +224,6 @@ idempotency behavior: Idempotency-Key required; hash includes body, source id,
 
 ```text
 GET /task-requests
-GET /task-requests/:id
 POST /task-requests/:id/approve
 POST /task-requests/:id/reject
 POST /task-requests/:id/request-more-evidence
@@ -233,10 +232,10 @@ POST /task-requests/:id/link-task
 
 GET /tasks
 GET /tasks/:id
+PATCH /tasks/:id
 GET /tasks/:id/comments
 POST /tasks/:id/comments
 POST /tasks/:id/milestone
-POST /tasks    # not implemented
 ```
 
 ## Progress notes

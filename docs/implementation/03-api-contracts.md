@@ -13,6 +13,8 @@ This file owns global API rules, standard error codes, the endpoint contract tem
 | Domain file | Sections |
 |---|---|
 | [`api/navigation.md`](api/navigation.md) | Navigation Count Contract |
+| [`api/auth.md`](api/auth.md) | Authentication |
+| [`api/attachments.md`](api/attachments.md) | Attachments |
 | [`api/dashboard.md`](api/dashboard.md) | Dashboard Summary Contract |
 | [`api/voc.md`](api/voc.md) | VOC; VOC Create And Conversation Contract; PATCH /vocs/:id/description — Reporter pre-triage edit (Slice 3 #17); VOC Similarity Projection; Task release side effect (Issue #165) |
 | [`api/voc-clusters.md`](api/voc-clusters.md) | VOC Cluster |
@@ -20,9 +22,10 @@ This file owns global API rules, standard error codes, the endpoint contract tem
 | [`api/tasks.md`](api/tasks.md) | Task Request Create From Finding Contract; Task Request Review Contract; Task Conversion Contract; Task Request Create From VOC / VOC Cluster Contract; Task; Progress notes; PATCH /tasks/:id — Task status transition (Slice 7 #138) |
 | [`api/milestones.md`](api/milestones.md) | Milestone Create Contract; Milestone List Contract; Milestone Detail Contract; Milestone Update Contract; Status; Not implemented |
 | [`api/surveys.md`](api/surveys.md) | Survey; GET /me/survey-responses — the session Actor's own response history; Forbidden Endpoint |
-| [`api/core.md`](api/core.md) | Core / Managed System / Analytics Area |
+| [`api/core.md`](api/core.md) | Core / Health / Managed System / Analytics Area |
 | [`api/permissions.md`](api/permissions.md) | Permission |
 | [`api/notifications.md`](api/notifications.md) | Notifications Inbox |
+| [`api/saved-views.md`](api/saved-views.md) | Saved Views |
 | [`api/entity-links.md`](api/entity-links.md) | Entity Links |
 | [`api/next-actions.md`](api/next-actions.md) | Next Action Contract |
 | [`api/cross-system.md`](api/cross-system.md) | Reporter Summary Contract; Cross-System Endpoint Decisions |
@@ -125,9 +128,8 @@ Milestone's create body field is `primary_managed_system_id`
 this section means by managed_system_id; there is no Milestone create body
 field named `managed_system_id`.
 
-Standalone `POST /tasks` creates internal work from the Tasks surface. VOC and
-Finding follow-up must create Task Request first; approved Task Requests are
-then converted to Tasks.
+VOC and Finding follow-up must create Task Request first; approved Task Requests
+are then converted to Tasks.
 
 Task Request stores the source link, evidence summary, requested outcome,
 Primary Managed System, requester, reviewer decision, and review notes.

@@ -26,10 +26,10 @@ DELETE /survey-responses/:id/approved-excerpts/:approved_excerpt_id
 POST /survey-responses/:id/create-finding
 POST /survey-responses/:id/mark-no-follow-up
 POST /survey-responses/:id/reopen-follow-up
-POST /survey-findings/:id/request-task (not implemented)
-POST /survey-findings/:id/link-task (not implemented)
-# future: POST /survey-findings/:id/link-milestone
 ```
+
+`GET /me/survey-responses` exists for the external analytics platform (#548); it
+is not a FeedbackOps screen surface.
 
 Current reachable Finding task paths are in the `/findings/:id` family.
 

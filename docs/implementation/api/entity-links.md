@@ -22,7 +22,7 @@ The `(survey_response, finding, generated_finding)` and `(survey_response,
 finding, evidence_of)` tuples are also command-only. Generic POST rejects them,
 generic endpoint and workspace lists omit their rows, and generic PATCH/detach
 returns the same non-disclosing `404 not_found.record` envelope as an absent
-link. Only Finding-domain commands may write these tuples; the forthcoming
+link. Only Finding-domain commands may write these tuples; the shipped
 `POST /survey-responses/:id/create-finding` command writes
 `generated_finding`. `created_finding` is not a Survey Response lineage
 relation.
