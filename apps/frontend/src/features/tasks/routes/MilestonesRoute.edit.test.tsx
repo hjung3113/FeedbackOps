@@ -1,5 +1,5 @@
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
-import { errorMapper, GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
+import { GENERIC_ERROR_MESSAGE, errorMapper } from '@/lib/api/errorMapper';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import {
   createMilestone,
