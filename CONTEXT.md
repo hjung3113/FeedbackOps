@@ -203,7 +203,7 @@ The stored audience policy carried by an **Entity Link** (and by other visibilit
 _Avoid_: Access level, role, permission scope
 
 **UI Visibility Decision**:
-The backend-computed rendering state for a linked object: `allowed | hidden | summary_visible | denied`. This Entity Link vocabulary is distinct from Permission Decision states (`request_access | summary_visible | denied | blocked_not_requestable`) and permission frontend states (`approved | blocked_non_requestable | request_access | pending_request | hidden_existence | rejected | expired | revoked | summary_visible`); they are not one shared enum and are not stored.
+The backend-computed rendering state for a linked object; the current effective Entity Link set is `allowed | hidden | summary_visible | denied`. `request_access` remains reserved and is not emitted until a requestable link target exists (ADR-0023 §B). It is derived from stored **Visibility**, the requesting **Actor**'s role, source/target readability, summary availability, and reporter identity. This Entity Link vocabulary is distinct from Permission Decision states (`request_access | summary_visible | denied | blocked_not_requestable`) and permission frontend states (`approved | blocked_non_requestable | request_access | pending_request | hidden_existence | rejected | expired | revoked | summary_visible`); they are not one shared enum and are not stored.
 _Avoid_: Visibility, permission, frontend filter
 
 **Dashboard**:

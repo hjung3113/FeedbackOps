@@ -364,7 +364,7 @@ Rules:
 - Reviewer may be Admin or Developer within the same Managed System scope.
 - Self-approval by the same scoped Developer requires explicit `task_request.self_approve` capability.
 - Self-approval stores self_approved, reason, source_entity, and managed_system_id audit metadata.
-- reviewer_id may be resolved from Managed System defaults.
+- Managed System default resolution for `reviewer_actor_id` is not implemented.
 ```
 
 ## Task
@@ -539,7 +539,7 @@ enum:
 Rules:
 
 ```text
-- Task Done does not automatically map to 해결됨.
+- Task status `done` does not automatically map to Reporter-Facing VOC Status `resolved`.
 - Released can create a review candidate for Admin or same-scope Developer to write a Public Update.
 - Reporter-Facing VOC Status must not expose raw Task Status.
 ```
@@ -563,8 +563,8 @@ Rules:
 
 ```text
 - Task status is internal.
-- Converted Task starts in Backlog.
-- Backlog Task may have an assignee, but execution starts at Todo or Doing.
+- Converted Task starts in `backlog`.
+- A `backlog` Task may have an assignee, but execution starts at `todo` or `doing`.
 - Reporter-visible summaries use explicit summary contracts, not raw Task internals.
 ```
 
