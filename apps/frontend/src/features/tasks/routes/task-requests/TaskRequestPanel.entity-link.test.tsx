@@ -244,6 +244,8 @@ describe('TaskRequestPanel converted Task entity link', () => {
     );
     await act(async () => {
       await queryClient.refetchQueries({ queryKey: key });
+      // React Query notifies observers on a timeout; let the panel re-render.
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(queryClient.getQueryState(key)?.status).toBe('error');
@@ -251,7 +253,7 @@ describe('TaskRequestPanel converted Task entity link', () => {
     expect(screen.queryByRole('link', { name: /TASK-901/ })).not.toBeInTheDocument();
   });
 
-  it.each([
+  it.each<[string, { source_id?: string; target_summary_id?: string; status?: 'detached' }]>([
     ['another request as source', { source_id: '10000000-0000-0000-0000-00000000aaaa' }],
     ['a summary for another Task', { target_summary_id: '10000000-0000-0000-0000-00000000bbbb' }],
     ['a detached link', { status: 'detached' as const }],
