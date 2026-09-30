@@ -357,7 +357,7 @@ describe('AppSidebar', () => {
       />,
     );
     expect(screen.queryByTestId('scope-union-badge')).not.toBeInTheDocument();
-    expect(screen.getByTestId('scope-workspace-wide-badge')).toBeVisible();
+    expect(screen.getByTestId('scope-name')).toHaveTextContent('All Managed Systems');
     expect(screen.getByTestId('scope-selector')).toHaveAccessibleName(
       'All Managed Systems, workspace-wide',
     );

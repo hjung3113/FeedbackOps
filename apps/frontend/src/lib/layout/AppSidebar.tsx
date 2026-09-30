@@ -184,7 +184,6 @@ export function AppSidebar({
                 <span className="min-w-0 flex-1 truncate" data-testid="scope-name" title={scopeName}>{scopeName}</span>
                 {scopeControlEnabled && isUnion && <ScopeBadge testId="scope-union-badge" label="union" />}
                 {scopeControlEnabled && selectedSystem && !selectedSystem.granted && <ScopeBadge testId="scope-out-of-scope-badge" label="out of scope" urgent />}
-                {scopeControlEnabled && selectedSystem === undefined && isAdmin && <ScopeBadge testId="scope-workspace-wide-badge" label="workspace-wide" />}
               </span>
               {scopeControlEnabled && isUnion && grantedSystems.length > 0 && <span className="block truncate text-[10px] text-text-muted">{grantedSystems.map((system) => system.name).join(' · ')}</span>}
             </span>
