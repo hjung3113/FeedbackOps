@@ -15,7 +15,7 @@ import {
 } from '../../fixtures/milestones';
 import { json } from './shared';
 import type { MockApiHandler } from './shared';
-import type { MockApiContext } from '../types';
+import type { MockApiContext } from './types';
 
 export function createMilestoneHandlers(context: MockApiContext): MockApiHandler[] {
   if (!context.options.milestones) return [];

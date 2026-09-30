@@ -15,7 +15,7 @@ import { permissionSettingsFixture } from '../../fixtures/permissions';
 import { IDS } from '../../fixtures/voc-clusters';
 import { errorEnvelope, json } from './shared';
 import type { MockApiHandler } from './shared';
-import type { MockApiContext } from '../types';
+import type { MockApiContext } from './types';
 
 export function createAdminMutationHandlers(context: MockApiContext): MockApiHandler[] {
   const { options } = context;

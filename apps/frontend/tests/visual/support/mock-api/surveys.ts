@@ -24,7 +24,7 @@ import {
 } from '../../fixtures/surveys';
 import { errorEnvelope, json } from './shared';
 import type { MockApiHandler } from './shared';
-import type { MockApiContext } from '../types';
+import type { MockApiContext } from './types';
 
 export function createSurveyActorHandlers(context: MockApiContext): MockApiHandler[] {
   if (!context.options.surveyScenario) return [];

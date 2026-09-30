@@ -1,7 +1,7 @@
 import { homeMyWorkRequestsFixture, homeOpenPermissionRequestsFixture } from '../../fixtures/home';
 import { json } from './shared';
 import type { MockApiHandler } from './shared';
-import type { MockApiContext } from '../types';
+import type { MockApiContext } from './types';
 
 export function createHomeRequestHandlers(context: MockApiContext): MockApiHandler[] {
   const { home } = context.options;

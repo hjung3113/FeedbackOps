@@ -22,7 +22,7 @@ import {
 } from '../../fixtures/voc-reporter-task-summary';
 import { json } from './shared';
 import type { MockApiHandler } from './shared';
-import type { MockApiContext } from '../types';
+import type { MockApiContext } from './types';
 
 export function createVocHandlers(context: MockApiContext): MockApiHandler[] {
   const { options } = context;
