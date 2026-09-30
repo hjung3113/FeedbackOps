@@ -70,7 +70,10 @@ export function TaskRequestPanel({
         ? link.result
         : null;
   const convertedTaskLink = useTaskRequestConvertedTaskLink(item.id, item.status === 'converted');
-  const taskForOutcome = convertedTaskLink.isSuccess ? convertedTaskLink.data : resultingTask;
+  // The mutation result is only the immediate value; once the canonical read has
+  // answered (null included), a later refetch error must not bring it back.
+  const taskForOutcome =
+    convertedTaskLink.data !== undefined ? convertedTaskLink.data : resultingTask;
   const showDecisionSummary = item.status === 'converted' || item.status === 'rejected';
   const sourceFindingQuery = useFindingDetail(
     item.source_type === 'finding' ? item.source_id : null,

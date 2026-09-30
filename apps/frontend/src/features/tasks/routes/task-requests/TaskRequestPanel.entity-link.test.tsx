@@ -31,6 +31,7 @@ vi.mock('./useTaskRequestConversion', async (importOriginal) => ({
 vi.mock('./useTaskRequestLink', () => ({ useTaskRequestLink: useLink }));
 
 import { TaskRequestPanel } from './TaskRequestPanel';
+import { convertedTaskSummaryFromEntityLinks } from './useTaskRequestConvertedTaskLink';
 
 const request: TaskRequestDto = {
   id: '10000000-0000-0000-0000-000000000001',
@@ -89,6 +90,7 @@ function renderPanel(item: TaskRequestDto) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return queryClient;
 }
 
 beforeEach(() => {
@@ -194,11 +196,98 @@ describe('TaskRequestPanel converted Task entity link', () => {
       ],
     });
 
-    renderPanel(request);
+    const queryClient = renderPanel(request);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryState(['entity-links', 'task-request', request.id, 'converted_to'])
+          ?.status,
+      ).toBe('success'),
+    );
     expect(screen.queryByRole('link', { name: /TASK-901/ })).not.toBeInTheDocument();
     expect(screen.queryByText('연결된 Task')).not.toBeInTheDocument();
+  });
+
+  it('keeps the canonical answer over the mutation result when a later refetch fails', async () => {
+    useConversion.mockReturnValue({
+      open: false,
+      canConvert: false,
+      setOpen: vi.fn(),
+      result: {
+        id: taskId,
+        workspace_id: request.workspace_id,
+        display_id: 'TASK-901',
+        primary_managed_system_id: request.primary_managed_system_id,
+        title: '로그인 오류 수정',
+        status: 'backlog',
+        priority: 'medium',
+        assignee_actor_id: null,
+        due_date: null,
+        milestone_id: null,
+        analytics_area_id: null,
+        source_task_request_id: request.id,
+        created_by: request.requester_actor_id,
+        created_at: request.created_at,
+        updated_at: request.updated_at,
+      },
+    });
+    mockEntityLinkRead({ items: [] });
+    const queryClient = renderPanel(request);
+    const key = ['entity-links', 'task-request', request.id, 'converted_to'];
+    await waitFor(() => expect(queryClient.getQueryState(key)?.status).toBe('success'));
+    expect(screen.queryByText('연결된 Task')).not.toBeInTheDocument();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => new Response('{}', { status: 500 })),
+    );
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: key });
+    });
+
+    expect(queryClient.getQueryState(key)?.status).toBe('error');
+    expect(screen.queryByText('연결된 Task')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /TASK-901/ })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['another request as source', { source_id: '10000000-0000-0000-0000-00000000aaaa' }],
+    ['a summary for another Task', { target_summary_id: '10000000-0000-0000-0000-00000000bbbb' }],
+    ['a detached link', { status: 'detached' as const }],
+  ])('ignores an allowed row with %s', (_label, change) => {
+    const summary = {
+      type: 'task' as const,
+      id: change.target_summary_id ?? taskId,
+      display_id: 'TASK-901',
+      title: '로그인 오류 수정',
+      status: 'backlog',
+      priority: 'medium',
+      primary_managed_system_id: request.primary_managed_system_id,
+      assignee_actor_id: null,
+      due_date: null,
+    };
+    const response: ListEntityLinksResponse = {
+      items: [
+        {
+          id: '50000000-0000-0000-0000-000000000001',
+          source_type: 'task_request',
+          source_id: change.source_id ?? request.id,
+          target_type: 'task',
+          target_id: taskId,
+          relation_type: 'converted_to',
+          visibility: 'internal_only',
+          status: change.status ?? 'active',
+          managed_system_id: request.primary_managed_system_id,
+          created_by: request.requester_actor_id,
+          created_at: request.created_at,
+          updated_at: null,
+          visibility_state: 'allowed',
+          target_summary: summary,
+        },
+      ],
+    };
+    expect(convertedTaskSummaryFromEntityLinks(request.id, response)).toBeNull();
   });
 
   it('does not request converted Task links for a non-converted request', async () => {
