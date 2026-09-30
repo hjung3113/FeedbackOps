@@ -1,7 +1,7 @@
 import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { surveyQuestionKindSchema } from '@fops/shared';
 import { Button, Input } from '@fops/ui';
-import { Check, Eye, Megaphone } from 'lucide-react';
+import { Check, Megaphone } from 'lucide-react';
 import type { QuestionKind, Survey } from '../../types';
 import { SurveyManagedSystemPill } from '../SurveyManagedSystemPill';
 import { SurveyStatusBadge, surveyStatusLabel } from '../SurveyStatusBadge';
@@ -136,10 +136,7 @@ export function SurveyBuilder({
             </Button>
           </>
         )}
-        <Button variant="subtle" size="sm" onClick={() => setPreview(true)}>
-          <Eye className="h-4 w-4" />
-          미리보기
-        </Button>
+        <PreviewPane survey={{ ...survey, questions }} open={preview} onOpenChange={setPreview} />
         {editable && (
           <Button variant="default" size="sm" onClick={() => setLaunchOpen(true)}>
             <Megaphone className="h-4 w-4" />
@@ -197,9 +194,6 @@ export function SurveyBuilder({
           managedSystemResolved={managedSystemNamesById !== undefined}
         />
       </div>
-      {preview && (
-        <PreviewPane survey={{ ...survey, questions }} onClose={() => setPreview(false)} />
-      )}
       <SurveyStatusConfirmationDialog
         open={launchOpen}
         target="open"

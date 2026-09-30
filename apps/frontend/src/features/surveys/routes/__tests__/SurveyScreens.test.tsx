@@ -722,6 +722,28 @@ describe('Survey screens', () => {
     expect(screen.getByRole('button', { name: '초안 저장' })).toBeEnabled();
   });
 
+  it('keeps real builder title and question edits after opening and closing preview', async () => {
+    renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Survey title' }), {
+      target: { value: '저장 전 제목' },
+    });
+    fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
+      target: { value: '저장 전 질문' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await screen.findByRole('dialog', { name: 'Respondent preview' });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('textbox', { name: 'Survey title' })).toHaveValue('저장 전 제목');
+    expect(screen.getByDisplayValue('저장 전 질문')).toBeInTheDocument();
+    expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
+    expect(apiClient).not.toHaveBeenCalled();
+    expect(apiRequest).not.toHaveBeenCalled();
+  });
+
   it('AC-2 saves one changed question once and marks the draft saved', async () => {
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
     fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
