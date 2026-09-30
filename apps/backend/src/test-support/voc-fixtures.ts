@@ -74,6 +74,45 @@ export async function insertPublicUpdate(
   return id;
 }
 
+export async function insertPublicUpdateReviewCandidateDirectly(
+  dbHandle: DbHandle,
+  input: {
+    workspaceId: string;
+    primaryManagedSystemId: string;
+    vocId: string;
+    taskId: string;
+    triggeredByActorId: string;
+  },
+): Promise<{ id: string; sourceEntityLinkId: string }> {
+  const result = await dbHandle.pool.query<{ id: string; source_entity_link_id: string }>(
+    `with inserted_link as (
+       insert into core.entity_links (
+         workspace_id, source_type, source_id, target_type, target_id,
+         relation_type, visibility, status, managed_system_id, created_by
+       )
+       values ($1, 'voc', $2, 'task', $3, 'evidence_of', 'internal_only', 'active', $4, $5)
+       returning id
+     )
+     insert into voc.public_update_review_candidates (
+       workspace_id, voc_id, source_task_id, source_entity_link_id,
+       release_event_id, correlation_id, triggered_by_actor_id
+     )
+     select $1, $2, $3, inserted_link.id, gen_random_uuid(), gen_random_uuid(), $5
+       from inserted_link
+     returning id, source_entity_link_id`,
+    [
+      input.workspaceId,
+      input.vocId,
+      input.taskId,
+      input.primaryManagedSystemId,
+      input.triggeredByActorId,
+    ],
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error('insertPublicUpdateReviewCandidateDirectly failed');
+  return { id: row.id, sourceEntityLinkId: row.source_entity_link_id };
+}
+
 // ── Cleanup helpers ──────────────────────────────────────────────────────────
 
 /** Cleans all VOC read-test fixtures from product tables. Scopes by MS slug prefix.

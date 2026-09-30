@@ -587,5 +587,40 @@ export function createRequestService(deps: RequestServiceDeps) {
     }));
   }
 
-  return { createRequest, submitMoreInfoRequest, findOpenRequestSummary, listMine, listAllActive };
+  async function resolveNotificationReference(actor: ActorContext, requestId: string) {
+    const rows = await db
+      .select({
+        id: permissionRequests.id,
+        requesterActorId: permissionRequests.requesterActorId,
+        requestedCapability: permissionRequests.requestedCapability,
+      })
+      .from(permissionRequests)
+      .where(
+        and(
+          eq(permissionRequests.id, requestId),
+          eq(permissionRequests.workspaceId, actor.workspace_id),
+        ),
+      )
+      .limit(1);
+    const request = rows[0];
+    if (!request) return null;
+
+    if (request.requesterActorId !== actor.actor_id) {
+      const decision = await checkService.checkCapability(actor, 'workspace.admin', {
+        workspace_id: actor.workspace_id,
+      });
+      if (decision.allow !== true) return null;
+    }
+
+    return { id: request.id, requested_capability: request.requestedCapability };
+  }
+
+  return {
+    createRequest,
+    submitMoreInfoRequest,
+    findOpenRequestSummary,
+    listMine,
+    listAllActive,
+    resolveNotificationReference,
+  };
 }

@@ -190,7 +190,10 @@ function NotificationRow({
 }): React.ReactElement {
   const target = notificationTarget(notification);
   const targetLocation = target === null ? null : new URL(target, 'http://feedbackops.local');
-  const mainClassName = 'flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left';
+  const mainClassName = [
+    'flex min-w-0 flex-1 items-center gap-3 pl-4 pr-2 text-left',
+    notification.subject_ref ? 'py-1' : 'py-3',
+  ].join(' ');
   const interactiveClassName = `${mainClassName} hover:bg-surface-row-hover`;
   const mainContent = (
     <>
@@ -210,6 +213,18 @@ function NotificationRow({
           </span>
           <span className="truncate text-sm text-text-primary">{notification.summary}</span>
         </span>
+        {notification.subject_ref ? (
+          <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-text-muted">
+            {notification.subject_ref.visibility_state === 'allowed' ? (
+              <>
+                <span className="shrink-0 font-mono">{notification.subject_ref.display_id}</span>
+                <span className="truncate">{notification.subject_ref.title}</span>
+              </>
+            ) : (
+              <span>{HOME_INBOX_COPY.subjectUnavailable}</span>
+            )}
+          </span>
+        ) : null}
       </span>
       <time className="shrink-0 text-xs text-text-muted" dateTime={notification.created_at}>
         {formatRelativeTime(notification.created_at)}

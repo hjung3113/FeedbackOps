@@ -47,8 +47,21 @@ titles, and other free text stay in their domain records and audit events.
   order.
 - Returns `{ items, page, unread_count }`. Each item contains `id`,
   `event_type`, `subject_type`, `subject_id`, `summary`, `detail`,
-  `created_at`, `read_at`, and `archived_at`. `page` contains `has_more` and,
-  when another page exists, the next `cursor`.
+  `created_at`, `read_at`, `archived_at`, and `subject_ref`. `page` contains
+  `has_more` and, when another page exists, the next `cursor`.
+- `subject_ref` is optional in the shared DTO for compatibility with older
+  clients and fixtures. New API responses always include either
+  `{ visibility_state: 'allowed', display_id, title }` or
+  `{ visibility_state: 'unavailable' }`.
+- Subject text is resolved at read time for the current Actor. VOC and public
+  update review candidate references use the canonical VOC read decision;
+  Task and Task Request references use their Entity Link provider read gate;
+  Permission Request references are available only to the requester or a
+  workspace admin. Missing, archived, hidden, denied, summary-only, or unknown
+  subjects return only `{ visibility_state: 'unavailable' }`.
+- Notification rows continue to store subject ids and event summaries only.
+  They do not store a historical subject title or display id, so later reads
+  reflect current authorization and current subject text.
 - `event_type` is one of `voc.assigned_to_me`, `voc.reporter_replied`,
   `voc.severity_set_high_or_critical`, `task_request.approved`,
   `task_request.rejected`, `task_request.needs_more_evidence`,
