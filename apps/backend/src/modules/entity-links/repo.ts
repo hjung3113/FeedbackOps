@@ -276,7 +276,15 @@ export async function selectLinksByWorkspace(
     summaryPredicates.push(sql`managed_system_id = ${input.managedSystemId}`);
   }
 
-  const predicates = [...summaryPredicates];
+  const listVisiblePredicates = [
+    sql`source_type <> 'survey_response'`,
+    sql`NOT (
+      source_type = 'voc_cluster'
+      AND target_type = 'finding'
+      AND relation_type = 'evidence_of'
+    )`,
+  ];
+  const predicates = [...summaryPredicates, ...listVisiblePredicates];
   if (input.statuses !== undefined && input.statuses.length > 0) {
     predicates.push(sql`status::text = ANY(${sqlTextArray(input.statuses)})`);
   }
@@ -297,15 +305,7 @@ export async function selectLinksByWorkspace(
     ORDER BY created_at DESC, id DESC
     LIMIT ${input.limit + 1}
   `);
-  const statusCountPredicates = [
-    ...summaryPredicates,
-    sql`source_type <> 'survey_response'`,
-    sql`NOT (
-      source_type = 'voc_cluster'
-      AND target_type = 'finding'
-      AND relation_type = 'evidence_of'
-    )`,
-  ];
+  const statusCountPredicates = [...summaryPredicates, ...listVisiblePredicates];
   const statusCountsQuery =
     input.cursor === undefined && input.statuses === undefined
       ? (db as Db).execute<Record<string, unknown>>(sql`

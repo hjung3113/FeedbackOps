@@ -20,11 +20,16 @@ export interface EntityLinkInventoryPage {
   page?: { has_more: boolean; cursor?: string; status_counts?: EntityLinkStatusCounts };
 }
 
+export function entityLinkInventoryQueryKey(params: EntityLinkInventoryParams) {
+  const { status, relationType, managedSystemId } = params;
+  return ['entity-links', 'inventory', status, relationType, managedSystemId] as const;
+}
+
 export function useEntityLinkInventory(params: EntityLinkInventoryParams, enabled = true) {
   const { status, relationType, managedSystemId } = params;
 
   return useInfiniteQuery({
-    queryKey: ['entity-links', 'inventory', status, relationType, managedSystemId] as const,
+    queryKey: entityLinkInventoryQueryKey(params),
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ signal, pageParam }): Promise<EntityLinkInventoryPage> => {
       const qs = new URLSearchParams();

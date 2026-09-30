@@ -81,6 +81,12 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
 
   async function cleanupEntityLinkFixtures(): Promise<void> {
     if (!migrateHandle) return;
+    const managedSystems =
+      `select id from core.managed_systems where workspace_id = $1 and slug like $2`;
+    const surveys = `select id from survey.surveys
+      where workspace_id = $1 and primary_managed_system_id in (${managedSystems})`;
+    const responses = `select id from survey.survey_responses
+      where workspace_id = $1 and survey_id in (${surveys})`;
     await migrateHandle.pool.query(
       `delete from core.entity_links
         where workspace_id = $1
@@ -94,6 +100,12 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
         where workspace_id = $1
           and event_type in ('entity_link.created', 'entity_link.detached', 'finding_created_from_voc')`,
       [WORKSPACE_ID],
+    );
+    await migrateHandle.pool.query(
+      `delete from finding.evidence_highlights
+        where workspace_id = $1
+          and primary_managed_system_id in (${managedSystems})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
       `delete from task.tasks
@@ -117,6 +129,30 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
           and primary_managed_system_id in (
             select id from core.managed_systems where workspace_id = $1 and slug like $2
           )`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.survey_response_excerpt_approvals
+        where workspace_id = $1 and survey_id in (${surveys})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.survey_response_answers
+        where workspace_id = $1 and response_id in (${responses})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.survey_responses
+        where workspace_id = $1 and survey_id in (${surveys})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.survey_questions
+        where workspace_id = $1 and survey_id in (${surveys})`,
+      [WORKSPACE_ID, `${SLUG_PREFIX}%`],
+    );
+    await migrateHandle.pool.query(
+      `delete from survey.surveys where workspace_id = $1 and id in (${surveys})`,
       [WORKSPACE_ID, `${SLUG_PREFIX}%`],
     );
     await migrateHandle.pool.query(
@@ -1208,6 +1244,51 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     expect(invalidLimit.statusCode).toBe(422);
   });
 
+  it('GET workspace inventory filters command-only tuples before applying the page limit', async () => {
+    const { msA, sourceVoc, targetVoc } = await seedVocPair();
+    const visible = await postEntityLink(adminCookie, sourceVoc.id, targetVoc.id);
+    expect(visible.statusCode).toBe(201);
+    const visibleId = visible.json<{ id: string }>().id;
+    const finding = await seedFindingDirectly({ managedSystemId: msA, sourceVocId: sourceVoc.id });
+    const commandResponses = await Promise.all([seedSurveyResponse(msA), seedSurveyResponse(msA)]);
+    const commandOnlyIds = await Promise.all(
+      commandResponses.map(({ responseId }) =>
+        seedEntityLinkDirectly({
+          sourceType: 'survey_response',
+          sourceId: responseId,
+          targetType: 'finding',
+          targetId: finding.id,
+          relationType: 'generated_finding',
+          managedSystemId: msA,
+          visibility: 'internal_only',
+        }),
+      ),
+    );
+    await migrateHandle.pool.query(
+      `update core.entity_links
+          set created_at = case id
+            when $1::uuid then '2026-09-03T00:00:00.000000+00:00'::timestamptz
+            when $2::uuid then '2026-09-02T00:00:00.000000+00:00'::timestamptz
+            when $3::uuid then '2026-09-01T00:00:00.000000+00:00'::timestamptz
+          end
+        where id = any($4::uuid[])`,
+      [commandOnlyIds[0], commandOnlyIds[1], visibleId, [...commandOnlyIds, visibleId]],
+    );
+
+    const first = await getEntityLinks(
+      adminCookie,
+      `?scope=workspace&managed_system_id=${msA}&limit=1`,
+    );
+    expect(first.statusCode).toBe(200);
+    const body = first.json<{
+      items: Array<{ id: string }>;
+      page: { has_more: boolean; cursor?: string };
+    }>();
+    expect(body.items.map((item) => item.id)).toEqual([visibleId]);
+    expect(body.page.has_more).toBe(false);
+    expect(body.page.cursor).toBeUndefined();
+  });
+
   it('GET workspace inventory resolves repeated endpoint subjects and summaries once per page', async () => {
     const { msA, sourceVoc, targetVoc } = await seedVocPair();
     const targetTwo = await insertVocDirectly(
@@ -1333,6 +1414,153 @@ describe.skipIf(!runIntegration)('POST/GET /entity-links (#112)', () => {
     });
     expect(hiddenRow?.source_id).toBeUndefined();
     expect(hiddenRow?.target_id).toBeUndefined();
+  });
+
+  it('GET workspace inventory preserves endpoint visibility payloads across one-row pages', async () => {
+    const msA = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-paged-visibility-a`,
+      'Paged Visibility MS-A',
+    );
+    const msB = await insertMsDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      `${uid(SLUG_PREFIX)}-paged-visibility-b`,
+      'Paged Visibility MS-B',
+    );
+    const sourceVoc = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      reporterId,
+      'Paged Visibility Source',
+    );
+    const hiddenTarget = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msB,
+      adminActorId,
+      'Paged Visibility Hidden Target',
+    );
+    const deniedTarget = await insertVocDirectly(
+      migrateHandle,
+      WORKSPACE_ID,
+      msA,
+      adminActorId,
+      'Paged Visibility Denied Target',
+    );
+    const reporterTask = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: msA,
+      title: 'Reporter safe paged Task',
+      status: 'doing',
+      createdBy: adminActorId,
+    });
+    const linkIds = {
+      hidden: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetId: hiddenTarget.id,
+        managedSystemId: msA,
+        visibility: 'internal_only',
+      }),
+      denied: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetId: deniedTarget.id,
+        managedSystemId: msA,
+        visibility: 'admin_only',
+      }),
+      reporterSummary: await seedEntityLinkDirectly({
+        sourceId: sourceVoc.id,
+        targetType: 'task',
+        targetId: reporterTask.id,
+        relationType: 'evidence_of',
+        managedSystemId: msA,
+        visibility: 'summary_visible',
+      }),
+    };
+    await migrateHandle.pool.query(
+      `update core.entity_links
+          set created_at = case id
+            when $1::uuid then '2026-09-03T00:00:00.000000+00:00'::timestamptz
+            when $2::uuid then '2026-09-02T00:00:00.000000+00:00'::timestamptz
+            when $3::uuid then '2026-09-01T00:00:00.000000+00:00'::timestamptz
+          end
+        where id = any($4::uuid[])`,
+      [linkIds.hidden, linkIds.denied, linkIds.reporterSummary, Object.values(linkIds)],
+    );
+
+    const { id: developerId, externalId } = await insertDevActor(
+      dbHandle,
+      WORKSPACE_ID,
+      uid('paged-visibility'),
+    );
+    await grantCapability(dbHandle, WORKSPACE_ID, developerId, 'voc.read', msA, adminActorId);
+    const developerCookie = await loginAs(app, externalId);
+    const reporterCookie = await loginAs(app, 'mock-user-1');
+
+    async function expectPagedPayloadsMatchEndpointRead(cookie: string) {
+      const unpaged = await getEntityLinks(cookie, `?source_type=voc&source_id=${sourceVoc.id}`);
+      expect(unpaged.statusCode).toBe(200);
+      const unpagedItems = unpaged.json<{ items: Array<Record<string, unknown>> }>().items;
+      const serializedById = new Map(
+        unpagedItems.map((item) => [item.id as string, JSON.stringify(item)]),
+      );
+
+      const pageItems: Array<Record<string, unknown>> = [];
+      let cursor: string | undefined;
+      for (let index = 0; index < 3; index += 1) {
+        const page = await getEntityLinks(
+          cookie,
+          `?scope=workspace&managed_system_id=${msA}&limit=1${
+            cursor !== undefined ? `&cursor=${encodeURIComponent(cursor)}` : ''
+          }`,
+        );
+        expect(page.statusCode).toBe(200);
+        const body = page.json<{
+          items: Array<Record<string, unknown>>;
+          page: { has_more: boolean; cursor?: string };
+        }>();
+        expect(body.items).toHaveLength(1);
+        const item = body.items[0];
+        if (!item) throw new Error('expected one Entity Link on each visibility page');
+        pageItems.push(item);
+        cursor = body.page.cursor;
+        expect(body.page.has_more).toBe(index < 2);
+      }
+
+      expect(pageItems.map((item) => item.id)).toEqual([
+        linkIds.hidden,
+        linkIds.denied,
+        linkIds.reporterSummary,
+      ]);
+      for (const item of pageItems) {
+        expect(JSON.stringify(item)).toBe(serializedById.get(item.id as string));
+      }
+      return pageItems;
+    }
+
+    const developerPages = await expectPagedPayloadsMatchEndpointRead(developerCookie);
+    expect(developerPages.map((item) => item.visibility_state)).toEqual([
+      'hidden',
+      'denied',
+      'hidden',
+    ]);
+
+    const reporterPages = await expectPagedPayloadsMatchEndpointRead(reporterCookie);
+    expect(reporterPages.map((item) => item.visibility_state)).toEqual([
+      'hidden',
+      'hidden',
+      'summary_visible',
+    ]);
+    expect(reporterPages[2]).toMatchObject({
+      visibility_state: 'summary_visible',
+      summary: {
+        target_type: 'task',
+        public_title: 'Reporter safe paged Task',
+        reporter_facing_status: '진행 중',
+      },
+    });
   });
 
   it('GET workspace inventory hides voc↔voc rows from a triage-only actor (ADR-0047)', async () => {

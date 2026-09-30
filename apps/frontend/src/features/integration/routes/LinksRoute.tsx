@@ -2,12 +2,15 @@ import { resolveActors } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
 import type { EntityLinkRelationType, EntityLinkStatus } from '@fops/shared';
 import { Button, ListFilterButton, ListToolbar, type ListToolbarTab, SearchInput } from '@fops/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { RefreshCw } from 'lucide-react';
 import * as React from 'react';
 import { EntityLinksInventoryTable } from '../components/EntityLinksInventoryTable';
-import { useEntityLinkInventory } from '../hooks/useEntityLinkInventory';
+import {
+  entityLinkInventoryQueryKey,
+  useEntityLinkInventory,
+} from '../hooks/useEntityLinkInventory';
 
 type StatusFilter = EntityLinkStatus;
 
@@ -54,6 +57,7 @@ const FILTER_CATEGORIES = [
 
 export function LinksRoute() {
   const search = useSearch({ strict: false }) as LinksSearch;
+  const queryClient = useQueryClient();
   // `from` is what types the search reducer. Without it useNavigate() hands the
   // reducer the router-wide search union (12 keys), which is not assignable to
   // this route's 3-key reducer signature — that mismatch was the long-standing
@@ -67,11 +71,34 @@ export function LinksRoute() {
     [search.type],
   );
 
-  const inventory = useEntityLinkInventory({
-    ...(search.status !== undefined ? { status: search.status } : {}),
-    ...(search.type !== undefined ? { relationType: search.type } : {}),
-    ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
-  });
+  const inventoryParams = React.useMemo(
+    () => ({
+      ...(search.status !== undefined ? { status: search.status } : {}),
+      ...(search.type !== undefined ? { relationType: search.type } : {}),
+      ...(search.managedSystem !== undefined ? { managedSystemId: search.managedSystem } : {}),
+    }),
+    [search.managedSystem, search.status, search.type],
+  );
+  const previousInventoryParams = React.useRef(inventoryParams);
+  React.useEffect(() => {
+    const previous = previousInventoryParams.current;
+    previousInventoryParams.current = inventoryParams;
+    if (
+      previous.status === inventoryParams.status &&
+      previous.relationType === inventoryParams.relationType &&
+      previous.managedSystemId === inventoryParams.managedSystemId
+    ) {
+      return;
+    }
+
+    const queryKey = entityLinkInventoryQueryKey(inventoryParams);
+    const cachedPages = queryClient.getQueryData<{ pages: unknown[] }>(queryKey)?.pages;
+    if (cachedPages && cachedPages.length > 1) {
+      void queryClient.resetQueries({ queryKey, exact: true });
+    }
+  }, [inventoryParams, queryClient]);
+
+  const inventory = useEntityLinkInventory(inventoryParams);
   const inventoryItems = React.useMemo(
     () => inventory.data?.pages.flatMap((page) => page.items) ?? [],
     [inventory.data],
