@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This inventory defines the reusable components that should exist before domain screens are built.
+This inventory defines the reusable components that should exist before domain screens are built. The complete shipped `@fops/ui` export inventory is `packages/ui/src/index.ts`; this document describes reusable component contracts and required states.
 
 Component ownership paths live in `docs/tech-stack/component-stack.md`.
 Screen mapping lives in `docs/frontend/ui-design-system.md`.

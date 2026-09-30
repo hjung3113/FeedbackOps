@@ -31,7 +31,7 @@ It does not own Task status, Survey Response conversion, Finding persistence, or
 
 - Triage is a primary workspace, not just an Inbox filter.
 - Unassigned VOC is a first-class operational failure mode.
-- VOC creation requires Managed System, allows optional Product Area under the selected Managed System, allows optional Source Context, and must not ask Reporter for severity.
+- VOC creation requires Managed System, allows optional Analytics Area under the selected Managed System, allows optional Source Context, and must not ask Reporter for severity.
 - Use list/detail layout and URL-selected detail state.
 - Linked Findings, Tasks, and Evidence render through backend-approved summaries and `LinkedEntityTrail`.
 

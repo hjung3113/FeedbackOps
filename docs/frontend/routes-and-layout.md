@@ -28,7 +28,6 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /tasks?view=milestones&managedSystem=:managedSystemId|all&selected=:milestoneId
 /integration
 /findings?managedSystem=:managedSystemId|all&selected=:findingId
-/integration/evidence?managedSystem=:managedSystemId|all
 /integration/coverage?managedSystem=:managedSystemId|all
 /integration/links?managedSystem=:managedSystemId|all
 /admin/managed-systems
@@ -49,7 +48,7 @@ Route naming rules:
 ```text
 - Home is the user-facing navigation label for `/`.
 - Findings routes at top-level `/findings`. Feature code lives in `features/findings/`, not under Integration.
-- Evidence, Coverage, and Links stay under `/integration/*`.
+- The Evidence route is planned, not built. Coverage and Links are the shipped routes under `/integration/*`.
 - Task Requests are Tasks intake routes, not top-level routes.
 - Analytics Areas and Permission Requests are Admin routes, not top-level work routes.
 - Managed Systems are MVP scope, filters, defaults, and dashboard grouping; they do not create per-Managed-System route trees.
@@ -97,7 +96,7 @@ Admin:
 - Primary nav includes Admin, Managed System Registry, Analytics Areas, Permission Requests, and settings.
 ```
 
-Current sidebar entries live in `SIDEBAR_ENTRIES` (`apps/frontend/src/routes/_authed.tsx`) — that array is authoritative; this paragraph describes it. Entries are grouped under the section labels `VOC` (Inbox, Triage, My VOCs, Clusters, Findings, New VOC), `TASKS` (Task Requests, Tasks, My Tasks), and `MANAGED SYSTEMS` (Managed Systems, Analytics Areas). Per the AGENTS.md two-consumer rule, each feature adds its entry in the slice that owns it.
+Current sidebar entries live in `NAV_TREE` (`apps/frontend/src/routes/_authed.tsx`), which is authoritative. Its section labels are `VOC`, `VIEWS`, `FINDINGS`, `TASKS` (including Milestones), `INTEGRATION`, `SURVEYS`, and `ADMIN`. Per the AGENTS.md two-consumer rule, each feature adds its entry in the slice that owns it.
 
 The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login also clears that cache before routing so a new Actor never sees prior Actor data.
 
@@ -253,7 +252,7 @@ Example:
 Desktop >= 1024px:
 - LeftSidebar: 240px default, 56px collapsed.
 - MainRegion: fills remaining width.
-- RightDetailPanel: 420px default, 360px min, 520px max.
+- RightDetailPanel: 440px default, 360px min, 520px max.
 
 Tablet 768px-1023px:
 - LeftSidebar may collapse by default.

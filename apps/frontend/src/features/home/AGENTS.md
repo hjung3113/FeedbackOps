@@ -8,7 +8,8 @@ Home is not a chart-only dashboard and must not duplicate source-system workflow
 
 ## Route Boundary
 
-- Owns `/`.
+- Owns `/home`.
+- `/` is an entry-only route that redirects authenticated actors to `/home` and unauthenticated actors to `/login`.
 - May deep-link into VOC, Tasks, Surveys, Integration, or Admin routes with action intent.
 - Must preserve AppShell and permission-aware summaries for direct route access.
 
