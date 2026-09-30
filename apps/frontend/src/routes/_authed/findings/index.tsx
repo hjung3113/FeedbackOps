@@ -60,8 +60,9 @@ export function FindingsListPage(): React.ReactElement {
   );
 
   // Stale/invalid `selected` (deleted, or filtered away): once the list has
-  // loaded, replace-drop it so Back is not trapped in the invalid URL. While
-  // loading — or when the list failed — the deep-linked selection is kept.
+  // settled (loaded, no refetch in flight), replace-drop it so Back is not trapped
+  // in the invalid URL. While loading or refetching, or when the list failed, the
+  // deep-linked selection is kept.
   const reconcileSelection = React.useCallback((): void => {
     void navigate({
       to: '/findings',

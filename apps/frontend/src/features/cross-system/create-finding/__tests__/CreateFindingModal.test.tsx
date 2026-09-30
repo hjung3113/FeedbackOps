@@ -43,10 +43,12 @@ const AREAS = [
   area(IDS.replacementArea, '서비스 안정성 분석', 'service-reliability'),
 ];
 
-function renderModal(sourceAnalyticsAreaId: string | null) {
-  const client = new QueryClient({
+function renderModal(
+  sourceAnalyticsAreaId: string | null,
+  client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
+  }),
+) {
   return render(
     <QueryClientProvider client={client}>
       <CreateFindingModal
@@ -143,7 +145,13 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
       `/vocs?view=triage&managedSystem=${IDS.managedSystem}` +
       `&selected=${IDS.voc}&tab=high&filter.severity=critical`;
     useLocation.mockReturnValue({ pathname: '/vocs', href: origin });
-    renderModal(null);
+    // A Findings list cached before the create must be refetched on landing (#587 warm cache).
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const findingsListKey = ['findings', { managedSystemId: undefined, execution: undefined }];
+    client.setQueryData(findingsListKey, { items: [] });
+    renderModal(null, client);
     submitValidForm();
 
     await submittedBody();
@@ -156,6 +164,7 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
         },
       }),
     );
+    expect(client.getQueryState(findingsListKey)?.isInvalidated).toBe(true);
   });
 
   it('keeps pristine fields clear and shows Korean errors after empty submit', async () => {
