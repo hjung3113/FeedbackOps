@@ -729,7 +729,6 @@ describe('MilestonesRoute create options (Astra finding 4)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New milestone' }));
     expect(await screen.findByTestId('milestone-create-panel')).toBeInTheDocument();
 
-    const systemSelect = screen.getByRole('combobox', { name: 'Managed System' });
     const areaSelect = screen.getByRole('combobox', { name: 'Analytics Area' });
     await chooseOption('Managed System', 'Power BI');
     await chooseOption('Analytics Area', 'Product Usage');

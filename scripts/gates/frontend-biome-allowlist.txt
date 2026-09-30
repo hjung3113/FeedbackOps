@@ -330,3 +330,4 @@ apps/frontend/src/features/admin/permissions/useDecidePermissionRequest.ts organ
 apps/frontend/src/lib/api/permissions.ts format -- pre-existing on develop (measured 2026-09-30); #590 adds the approval expiration
 apps/frontend/src/routes/_authed/admin/managed-systems.test.tsx format -- pre-existing on develop (measured 2026-10-01); #613 only changes the request-button selector
 apps/frontend/src/routes/_authed/admin/analytics-areas.test.tsx format -- pre-existing on develop (measured 2026-10-01); #613 only changes the request-button selector
+packages/ui/src/index.ts format -- pre-existing on develop (measured 2026-10-01); #616 only adds the DatePicker export
