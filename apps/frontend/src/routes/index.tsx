@@ -3,11 +3,13 @@
 // mock-login picker in development).
 
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { UnauthenticatedError, fetchMe } from '../lib/api';
+import { UnauthenticatedError } from '../lib/api';
+import { ensureMe } from '../lib/auth/useMe';
+import type { AppRouterContext } from './__root';
 
-export async function rootBeforeLoad(): Promise<never> {
+export async function rootBeforeLoad({ context }: { context: AppRouterContext }): Promise<never> {
   try {
-    await fetchMe();
+    await ensureMe(context.queryClient);
   } catch (err) {
     if (err instanceof UnauthenticatedError) {
       throw redirect({ to: '/login' });

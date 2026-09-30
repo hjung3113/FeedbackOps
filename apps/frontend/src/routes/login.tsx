@@ -22,6 +22,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { mockLogin } from '../lib/api';
+import { ME_QUERY_KEY } from '../lib/auth/useMe';
 import { sanitizeLoginReturnTo } from '../lib/login-return-to';
 
 export const Route = createFileRoute('/login')({
@@ -100,9 +101,10 @@ function MockLoginPicker() {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: mockLogin,
-    onSuccess: () => {
+    onSuccess: (me) => {
       // An actor boundary must drop all prior actor-scoped data before navigation.
       queryClient.clear();
+      queryClient.setQueryData(ME_QUERY_KEY, me);
       navigate({ to: '/' });
     },
   });

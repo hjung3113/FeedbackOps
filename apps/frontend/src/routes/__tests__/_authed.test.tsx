@@ -1,21 +1,14 @@
-// _authed beforeLoad branch tests (Slice 3 #18 cycle-2 P3-B).
-//
-// The beforeLoad of _authed:
-//   1. On UnauthenticatedError → throws redirect to /login.
-//   2. On non-auth error (network failure, etc.) → re-throws so caller
-//      sees it (router error boundary / fail-closed).
-//   3. On fetchMe success → resolves (AuthedLayout mounts).
-//
-// We exercise the beforeLoad as a pure async function rather than
-// mounting the full router, to avoid routeTree.gen.ts timing issues.
+// Focused auth-branch examples from Slice 3 #18 cycle-2 P3-B.
+// The route's query-cache and navigation behavior is covered by
+// _authed-me-cache.test.tsx; this file keeps the original branch cases without
+// mounting routeTree.gen.ts.
 
 import { redirect } from '@tanstack/react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UnauthenticatedError, fetchMe } from '../../lib/api';
 import { NAV_TREE, SIDEBAR_ENTRIES, isSidebarEntryActive } from '../_authed';
 
-// Re-implement beforeLoad logic verbatim from _authed.tsx so we can
-// exercise it in isolation without the TanStack file-route type brands.
+// Re-implement only the redirect/error branch expectations in isolation.
 async function beforeLoad({ location }: { location: { href: string } }) {
   try {
     await fetchMe();

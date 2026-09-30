@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Outlet,
   createFileRoute,
@@ -23,11 +23,13 @@ import {
 } from 'lucide-react';
 import * as React from 'react';
 import { homeSidebarEntries } from '../features/home/homeNavigation';
-import { UnauthenticatedError, fetchDashboardSummary, fetchMe } from '../lib/api';
+import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
+import { ensureMe, useMe } from '../lib/auth/useMe';
 import { AppFrame } from '../lib/layout/AppFrame';
 import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
+import type { AppRouterContext } from './__root';
 
 export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = {
   voc: [
@@ -213,22 +215,41 @@ export function isSidebarEntryActive(
 }
 
 export const Route = createFileRoute('/_authed')({
-  beforeLoad: async ({ location }) => {
-    try {
-      await fetchMe();
-    } catch (err) {
-      if (err instanceof UnauthenticatedError)
-        throw redirect({ to: '/login', search: { redirectTo: location.href } });
-      throw err;
-    }
-  },
+  beforeLoad: authenticatedBeforeLoad,
   component: AuthedLayout,
 });
 
-function AuthedLayout() {
+export async function authenticatedBeforeLoad({
+  context,
+  location,
+}: {
+  context: AppRouterContext;
+  location: { href: string };
+}): Promise<void> {
+  try {
+    await ensureMe(context.queryClient);
+  } catch (err) {
+    if (err instanceof UnauthenticatedError)
+      throw redirect({ to: '/login', search: { redirectTo: location.href } });
+    throw err;
+  }
+}
+
+export function AuthedLayout() {
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate({ from: '/vocs' });
+  const queryClient = useQueryClient();
+  const me = useMe();
   const activeDomain = railForPathname(location.pathname);
+  React.useEffect(() => {
+    if (!(me.error instanceof UnauthenticatedError)) return;
+    queryClient.clear();
+    void navigate({
+      to: '/login',
+      search: { redirectTo: location.href },
+      replace: true,
+    });
+  }, [location.href, me.error, navigate, queryClient]);
   // Every domain except Admin already reads/scopes by its own `managedSystem`
   // URL param (docs/frontend/routes-and-layout.md §URL State Rules): VOC,
   // VOC Clusters, Findings, Tasks (every view), Surveys, Integration

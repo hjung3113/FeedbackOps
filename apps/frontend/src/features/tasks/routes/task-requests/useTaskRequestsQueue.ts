@@ -1,5 +1,6 @@
-import { fetchMe, fetchTaskRequests, resolveActors } from '@/lib/api';
+import { fetchTaskRequests, resolveActors } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { useMe } from '@/lib/auth/useMe';
 import type { TaskRequestDto, TaskRequestStatus } from '@fops/shared';
 import type { ListToolbarTab } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -54,11 +55,7 @@ export function useTaskRequestsQueue({
         ...(managedSystem !== undefined ? { managed_system_id: managedSystem } : {}),
       }),
   });
-  const meQuery = useQuery({
-    queryKey: ['me'] as const,
-    queryFn: ({ signal }) => fetchMe(signal),
-    staleTime: 60 * 1000,
-  });
+  const meQuery = useMe();
   const managedSystemsQuery = useQuery({
     queryKey: ['managed-systems', 'all'] as const,
     queryFn: ({ signal }) => fetchManagedSystems({ includeArchived: true, signal }),
