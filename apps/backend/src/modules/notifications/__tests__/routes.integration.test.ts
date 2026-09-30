@@ -10,6 +10,7 @@ import { SESSION_COOKIE_NAME } from '../../../middleware/require-session.js';
 import { buildServer } from '../../../server.js';
 import { insertMsDirectly } from '../../../test-support/core-fixtures.js';
 import {
+  denyCapability,
   grantCapability,
   insertPermissionRequestRow,
 } from '../../../test-support/permissions-fixtures.js';
@@ -35,6 +36,14 @@ const SUBJECT_REFERENCE_CASES: Array<{
   { subjectType: 'public_update_review_candidate', eventType: 'task.released' },
 ];
 
+const VOC_SUBJECT_REFERENCE_CASES = [
+  { scenario: 'reporter without a grant', expected: 'allowed' },
+  { scenario: 'effective-scope summary-only access', expected: 'unavailable' },
+  { scenario: 'explicit deny', expected: 'unavailable' },
+  { scenario: 'archived VOC', expected: 'unavailable' },
+  { scenario: 'subject in another workspace', expected: 'unavailable' },
+] as const;
+
 interface ActorSession {
   id: string;
   cookie: string;
@@ -55,6 +64,7 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
   let actorC: ActorSession;
   let actorD: ActorSession;
   let subjectManagedSystemId = '';
+  let foreignSubjectManagedSystemId = '';
   const actorIds: string[] = [];
   const sessionIds: string[] = [];
   const rateLimitKeys: string[] = [];
@@ -67,6 +77,7 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
   const reviewCandidateIds: string[] = [];
   const entityLinkIds: string[] = [];
   const permissionGrantIds: string[] = [];
+  const permissionDenyIds: string[] = [];
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -132,6 +143,13 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
       );
       permissionGrantIds.length = 0;
     }
+    if (permissionDenyIds.length > 0) {
+      await migrateDb.pool.query(
+        'delete from permission.permission_denies where id = any($1::uuid[])',
+        [permissionDenyIds],
+      );
+      permissionDenyIds.length = 0;
+    }
   }
 
   afterEach(async () => {
@@ -143,6 +161,12 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
       ]);
       subjectManagedSystemId = '';
     }
+    if (foreignSubjectManagedSystemId) {
+      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+        foreignSubjectManagedSystemId,
+      ]);
+      foreignSubjectManagedSystemId = '';
+    }
   });
 
   afterAll(async () => {
@@ -152,6 +176,11 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     if (subjectManagedSystemId) {
       await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
         subjectManagedSystemId,
+      ]);
+    }
+    if (foreignSubjectManagedSystemId) {
+      await migrateDb.pool.query('delete from core.managed_systems where id = $1', [
+        foreignSubjectManagedSystemId,
       ]);
     }
     if (actorIds.length > 0) {
@@ -353,6 +382,33 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
     };
   }
 
+  async function seedVocSubject(
+    workspaceId: string,
+    managedSystemId: string,
+    reporterId: string,
+    title: string,
+  ): Promise<{ id: string; displayId: string; title: string }> {
+    const voc = await insertVocDirectly(migrateDb, workspaceId, managedSystemId, reporterId, title);
+    vocIds.push(voc.id);
+    const result = await migrateDb.pool.query<{ display_id: string; title: string }>(
+      'select display_id, title from voc.vocs where id = $1',
+      [voc.id],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error('notification VOC fixture missing');
+    return { id: voc.id, displayId: row.display_id, title: row.title };
+  }
+
+  function expectUnavailableSubjectReference(
+    item: { subject_ref?: unknown } | undefined,
+    subject: { displayId: string; title: string },
+  ): void {
+    expect(item?.subject_ref).toEqual({ visibility_state: 'unavailable' });
+    const subjectReferenceJson = JSON.stringify(item?.subject_ref ?? null);
+    expect(subjectReferenceJson).not.toContain(subject.displayId);
+    expect(subjectReferenceJson).not.toContain(subject.title);
+  }
+
   it.each(SUBJECT_REFERENCE_CASES)(
     'resolves $subjectType notification subjects using current read access',
     async ({ subjectType, eventType }) => {
@@ -402,6 +458,126 @@ describe.skipIf(!runIntegration)('notification inbox routes', () => {
       expect(unavailableItem?.subject_ref).toEqual({ visibility_state: 'unavailable' });
       expect(JSON.stringify(unavailableItem?.subject_ref)).not.toContain(subject.displayId);
       expect(JSON.stringify(unavailableItem?.subject_ref)).not.toContain(subject.title);
+    },
+  );
+
+  it.each(VOC_SUBJECT_REFERENCE_CASES)(
+    'returns $expected for a VOC subject with $scenario',
+    async ({ scenario, expected }) => {
+      const isReporter = scenario === 'reporter without a grant';
+      actorD = await createActorSession(WORKSPACE_ID, 'd', isReporter ? 'user' : 'developer');
+      subjectManagedSystemId = await insertMsDirectly(
+        migrateDb,
+        WORKSPACE_ID,
+        `${TEST_PREFIX}-subject`,
+        'Notification subject test system',
+      );
+
+      let subjectWorkspaceId = WORKSPACE_ID;
+      let subjectManagedSystemIdForCase = subjectManagedSystemId;
+      let reporterId = actorD.id;
+      if (scenario === 'subject in another workspace') {
+        subjectWorkspaceId = await createWorkspace();
+        foreignSubjectManagedSystemId = await insertMsDirectly(
+          migrateDb,
+          subjectWorkspaceId,
+          `${TEST_PREFIX}-foreign-subject`,
+          'Foreign notification subject test system',
+        );
+        subjectManagedSystemIdForCase = foreignSubjectManagedSystemId;
+        reporterId = (await createActorSession(subjectWorkspaceId, 'foreign-reporter')).id;
+      } else if (!isReporter) {
+        reporterId = (await createActorSession(WORKSPACE_ID, 'subject-reporter')).id;
+      }
+
+      const subject = await seedVocSubject(
+        subjectWorkspaceId,
+        subjectManagedSystemIdForCase,
+        reporterId,
+        `${TEST_PREFIX} VOC subject ${scenario}`,
+      );
+
+      if (scenario === 'effective-scope summary-only access') {
+        permissionGrantIds.push(
+          await grantCapability(
+            migrateDb,
+            WORKSPACE_ID,
+            actorD.id,
+            'voc.triage',
+            subjectManagedSystemIdForCase,
+            actorA.id,
+          ),
+        );
+      } else if (scenario === 'explicit deny') {
+        permissionGrantIds.push(
+          await grantCapability(
+            migrateDb,
+            WORKSPACE_ID,
+            actorD.id,
+            'voc.read',
+            subjectManagedSystemIdForCase,
+            actorA.id,
+          ),
+        );
+        permissionDenyIds.push(
+          await denyCapability(
+            migrateDb,
+            WORKSPACE_ID,
+            actorD.id,
+            'voc.read',
+            subjectManagedSystemIdForCase,
+            actorA.id,
+          ),
+        );
+      } else if (scenario === 'archived VOC') {
+        permissionGrantIds.push(
+          await grantCapability(
+            migrateDb,
+            WORKSPACE_ID,
+            actorD.id,
+            'voc.read',
+            subjectManagedSystemIdForCase,
+            actorA.id,
+          ),
+        );
+        await migrateDb.pool.query('update voc.vocs set archived_at = now() where id = $1', [
+          subject.id,
+        ]);
+      }
+
+      if (isReporter) {
+        const grantCount = await migrateDb.pool.query<{ count: string }>(
+          'select count(*)::text as count from permission.permission_grants where actor_id = $1 and capability in ($2, $3)',
+          [actorD.id, 'voc.read', 'voc.triage'],
+        );
+        expect(grantCount.rows[0]?.count).toBe('0');
+      }
+
+      const notification = await insertNotification(actorD, {
+        createdAt: new Date().toISOString(),
+        eventType: 'voc.reporter_replied',
+        subjectType: 'voc',
+        subjectId: subject.id,
+      });
+      const response = await app.inject({
+        method: 'GET',
+        url: '/notifications',
+        headers: cookieHeader(actorD),
+      });
+      expect(response.statusCode).toBe(200);
+      const item = response
+        .json<{ items: Array<{ id: string; subject_ref?: unknown }> }>()
+        .items.find((row) => row.id === notification.id);
+
+      if (expected === 'allowed') {
+        expect(item?.subject_ref).toEqual({
+          visibility_state: 'allowed',
+          display_id: subject.displayId,
+          title: subject.title,
+        });
+      } else {
+        expectUnavailableSubjectReference(item, subject);
+      }
     },
   );
 

@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { populatedInboxNotifications } from '../fixtures/notifications';
+import {
+  populatedInboxNotifications,
+  subjectReferenceInboxNotifications,
+} from '../fixtures/notifications';
 import { createPermissionRequestsScenario } from '../fixtures/permissions';
 import { IDS } from '../fixtures/voc-clusters';
 import { VOC_REPORTER_TASK_SUMMARY_IDS } from '../fixtures/voc-reporter-task-summary';
@@ -65,7 +68,11 @@ export async function installMockApi(
     permissionRequests,
     savedViews,
     notificationItems:
-      options.notifications === 'populated' ? [...populatedInboxNotifications.items] : [],
+      options.notifications === 'populated'
+        ? [...populatedInboxNotifications.items]
+        : options.notifications === 'subject-references'
+          ? [...subjectReferenceInboxNotifications.items]
+          : [],
     role,
     reporterActorId,
   };

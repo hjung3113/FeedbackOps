@@ -37,8 +37,8 @@ export interface InstallOptions {
   savedViews?: boolean;
   /** Home action dashboard fixture state. */
   home?: HomeVisualScenario;
-  /** Populated Home Inbox state; the default notification response remains empty. */
-  notifications?: 'populated';
+  /** Schema-validated Home Inbox notification scenario; the default response remains empty. */
+  notifications?: 'populated' | 'subject-references';
   /** #513 coverage page fixture state: summary, systems, and analytics areas. */
   coverage?: 'populated' | 'empty';
   /** #532 Integration Action Dashboard summary and Managed System fixtures. */
