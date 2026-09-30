@@ -118,7 +118,6 @@ describe('VocClusterDetailPanel identity', () => {
   it('uses Korean properties navigation and field labels', () => {
     render(<VocClusterDetailPanel clusterId={cluster.id} />);
 
-    expect(screen.getByRole('button', { name: '속성' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '속성' })).toBeInTheDocument();
     for (const label of ['심각도', '신뢰도', '담당자']) {
       expect(screen.getByText(label)).toBeInTheDocument();

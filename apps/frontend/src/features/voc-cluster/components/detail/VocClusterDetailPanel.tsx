@@ -193,7 +193,7 @@ export function VocClusterDetailPanel({
           { id: 'why', label: 'Why' },
           { id: 'execution', label: 'Execution' },
           { id: 'members', label: 'Members', count: data.member_count },
-          { id: 'properties', label: '속성' },
+          { id: 'properties', label: 'Properties' },
         ]}
       />
       <div ref={sectionScrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-6">

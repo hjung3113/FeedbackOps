@@ -180,7 +180,11 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 <dt className="text-text-muted">권한</dt>
                 <dd className="text-text-primary">{getCapabilityDisplayLabel(props.capability)}</dd>
                 <dt className="text-text-muted">Managed System</dt>
-                <dd className="font-mono text-text-primary">
+                <dd
+                  className={
+                    props.managedSystemId ? 'font-mono text-text-primary' : 'text-text-primary'
+                  }
+                >
                   {props.managedSystemId ?? '워크스페이스 전체'}
                 </dd>
                 <dt className="text-text-muted">사유</dt>
@@ -243,7 +247,11 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                     {getCapabilityDisplayLabel(props.capability)}
                   </dd>
                   <dt className="text-text-muted">Managed System</dt>
-                  <dd className="font-mono text-text-primary">
+                  <dd
+                    className={
+                      props.managedSystemId ? 'font-mono text-text-primary' : 'text-text-primary'
+                    }
+                  >
                     {props.managedSystemId ?? '워크스페이스 전체'}
                   </dd>
                 </dl>
