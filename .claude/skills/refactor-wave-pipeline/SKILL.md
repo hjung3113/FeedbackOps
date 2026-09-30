@@ -5,6 +5,10 @@ description: Run a DAG wave from .review/refactor-dag-final.md (or any GitHub-is
 
 # Refactor wave pipeline
 
+> **2026-09-30:** for waves where each issue lands as its own PR (e.g. the #578 review remediation), use
+> `issue-wave-conductor` instead. The model routing below is historical; current routing lives in memory
+> `project_model_routing_tiers` (luna implements, gpt-6.1-sol reviews).
+
 Executes one wave of the FeedbackOps refactor DAG (`.review/refactor-dag-final.md`,
 issues `hjung3113/FeedbackOps#452`-`#497`) end to end. One wave = a set of
 GitHub issues with no file overlap (per the DAG) that land in **one PR**.
