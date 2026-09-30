@@ -77,6 +77,8 @@ Task를 `released`로 옮겨도 연결된 VOC가 저절로 `resolved`가 되지 
 
 `My VOCs`(`/vocs?view=my`)에 내가 올린 것만 모입니다.
 
+**내게 온 알림을 보려면** `Home`(`/home?tab=inbox`)의 `Inbox` 탭이나 왼쪽 레일의 종 모양 버튼을 누릅니다. `Unread` / `All`을 선택해 읽지 않은 알림만 보거나 읽음 여부와 상관없이 확인하고, 읽음 처리하거나 보관할 수 있습니다.
+
 **리포터에게 보이는 상태**는 여덟 단계입니다:
 
 ```
@@ -213,6 +215,10 @@ backlog → todo → doing → review → done → released
 
 `My Tasks`(`/tasks?view=my`)에 내게 배정된 것만 모입니다.
 
+Milestone은 관련 Task를 묶는 계획 단위입니다. `Milestones`(`/tasks?view=milestones`)에서 만들고, 열어 연결된 Task 목록을 확인합니다.
+
+**필요 권한:** Admin 또는 해당 Managed System에 `finding.manage`가 있는 Developer.
+
 Task 상세의 **Linked context**에서 이 작업이 어느 Finding에서 나왔는지 보이고, 클릭하면 그 Finding으로 갑니다.
 
 > **다시 강조 — `released`로 옮겨도 VOC 리포터 상태는 바뀌지 않습니다.** 리포터에게 알리려면 해당 VOC로 가서 [공개 업데이트](#4-리포터에게-상황을-알려야-한다)를 쓰세요. 번거로워 보이지만, 이것이 "배포했으니 해결됐다"고 잘못 통보하는 것을 막습니다.
@@ -245,6 +251,12 @@ draft  ──►  open  ──►  closed
 **개별 응답 원문**을 보려면 `survey.read_personal_responses`가, 내려받으려면 `survey.export`가 따로 필요합니다. **이 둘만은 Admin도 역할로 우회할 수 없고 명시적 권한을 받아야 합니다.** 개인이 식별될 수 있는 데이터라서 그렇습니다.
 
 자유 응답을 Finding 근거로 쓰려면 **가림 처리 후 승인**을 거쳐야 발췌가 붙습니다.
+
+### 저조한 응답의 후속 조치
+
+응답 수가 익명성 기준 이상인 닫힌 `Outcome` 설문에 미해결 저조 평점 응답이 있으면 결과 화면에 후속 조치 안내가 나타납니다. `survey.read_personal_responses` 권한이 있으면 `Follow-up 검토`를 눌러 응답별 화면을 엽니다.
+
+응답에 승인된 발췌가 있으면 Finding을 만들 수 있습니다. 후속 조치가 필요 없으면 `후속 조치 없음…`을 선택하고 사유를 기록합니다. Finding 생성과 두 가지 결정에는 해당 Managed System의 `finding.manage`가 필요합니다. 나중에 판단을 바꾸려면 `다시 열기…`를 선택하고 새 사유를 기록합니다.
 
 ---
 
