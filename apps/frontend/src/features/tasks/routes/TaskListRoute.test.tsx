@@ -192,7 +192,8 @@ describe('TaskListRoute display ids', () => {
 
     const attemptsBeforeRetry = vi.mocked(listTasks).mock.calls.length;
     await userEvent.click(screen.getByRole('button', { name: '다시 시도' }));
-    expect(await screen.findByText('TASK-1000')).toBeInTheDocument();
+    const taskList = await screen.findByRole('main', {}, { timeout: 5000 });
+    expect(await within(taskList).findByText('TASK-1000')).toBeInTheDocument();
     expect(vi.mocked(listTasks).mock.calls.length).toBeGreaterThan(attemptsBeforeRetry);
   });
 

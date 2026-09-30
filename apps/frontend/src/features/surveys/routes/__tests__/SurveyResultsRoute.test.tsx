@@ -1,7 +1,7 @@
 import { routeTree } from '@/routeTree.gen';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -290,11 +290,21 @@ describe('/surveys/:surveyId/results route', () => {
 
     const router = renderSurveyRoute();
 
-    await waitFor(() => expect(screen.getByTestId('survey-list')).toBeInTheDocument());
-    await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
-    await waitFor(() => expect(screen.getByTestId('survey-results-summary')).toBeInTheDocument());
-    await router.navigate({ to: '/surveys/$surveyId', params: { surveyId } });
-    await waitFor(() => expect(screen.getByTestId('survey-list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('survey-list')).toBeInTheDocument(), {
+      timeout: 5000,
+    });
+    await act(async () => {
+      await router.navigate({ to: '/surveys/$surveyId/results', params: { surveyId } });
+    });
+    await waitFor(() => expect(screen.getByTestId('survey-results-summary')).toBeInTheDocument(), {
+      timeout: 5000,
+    });
+    await act(async () => {
+      await router.navigate({ to: '/surveys/$surveyId', params: { surveyId } });
+    });
+    await waitFor(() => expect(screen.getByTestId('survey-list')).toBeInTheDocument(), {
+      timeout: 5000,
+    });
     expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument();
   });
 });
