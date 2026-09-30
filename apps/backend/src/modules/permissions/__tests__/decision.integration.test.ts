@@ -313,23 +313,28 @@ describe.skipIf(!runIntegration)('permission request decisions', () => {
     ).toMatchObject({ allow: true, via: 'managed_system_scope' });
   });
 
+  // Relative to the run so the cases never age into the past-expiration (422) branch.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const REQUESTED_EXPIRATION = new Date(Date.now() + 90 * DAY_MS).toISOString();
+  const CHANGED_EXPIRATION = new Date(Date.now() + 120 * DAY_MS).toISOString();
+
   it.each([
     {
       label: 'keeps the requested expiration when the body omits expiration',
       body: {},
-      requestedExpiration: '2026-12-31T23:59:59.000Z',
-      grantedExpiration: '2026-12-31T23:59:59.000Z',
+      requestedExpiration: REQUESTED_EXPIRATION,
+      grantedExpiration: REQUESTED_EXPIRATION,
     },
     {
       label: 'uses the changed expiration on the grant',
-      body: { expiration: '2027-01-31T23:59:59.000Z' },
-      requestedExpiration: '2026-12-31T23:59:59.000Z',
-      grantedExpiration: '2027-01-31T23:59:59.000Z',
+      body: { expiration: CHANGED_EXPIRATION },
+      requestedExpiration: REQUESTED_EXPIRATION,
+      grantedExpiration: CHANGED_EXPIRATION,
     },
     {
       label: 'clears the grant expiration when the body sends null',
       body: { expiration: null },
-      requestedExpiration: '2026-12-31T23:59:59.000Z',
+      requestedExpiration: REQUESTED_EXPIRATION,
       grantedExpiration: null,
     },
   ])(
