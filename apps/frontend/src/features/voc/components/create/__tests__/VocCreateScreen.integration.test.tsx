@@ -315,7 +315,7 @@ describe('VocCreateScreen integration', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'VOC 제출' })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: 'VOC 제출' }));
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('V-1을 접수했습니다.'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('접수 완료: V-1'));
   });
 
   test('AC-E14 renders help and submits independent source and Analytics Area values without a warning dialog', async () => {
