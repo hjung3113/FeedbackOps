@@ -15,6 +15,7 @@ import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilestonesRoute } from './MilestonesRoute';
+import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
 
 // #514 B2e — create and edit. Create is the same property block in a create
 // state, opened by the New milestone toolbar control; the body carries the
@@ -503,7 +504,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     // select is controlled by it, not by the local choice.
     await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
     expect(statusSelect()).toHaveValue('released');
-    expect(screen.queryByText('Status update failed.')).not.toBeInTheDocument();
+    expect(screen.queryByText(GENERIC_ERROR_MESSAGE)).not.toBeInTheDocument();
   });
 
   it('shows the error and keeps the prior status when the PATCH fails', async () => {
@@ -516,7 +517,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
 
     fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
 
-    expect(await screen.findByText('Status update failed.')).toBeInTheDocument();
+    expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
     // The old status is not overwritten locally: the select stays on it and
     // no refetch masks the failure.
     expect(statusSelect()).toHaveValue('in_progress');
@@ -541,7 +542,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     await waitFor(() => expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(2));
     expect(statusSelect()).toHaveValue('released');
     // No surfaced error and no local overwrite: the server row wins.
-    expect(screen.queryByText('Status update failed.')).not.toBeInTheDocument();
+    expect(screen.queryByText(GENERIC_ERROR_MESSAGE)).not.toBeInTheDocument();
     expect(screen.queryByText('Milestone was modified by another actor.')).not.toBeInTheDocument();
   });
 
@@ -613,7 +614,7 @@ describe('MilestonesRoute status (#514 B2e-status)', () => {
     });
     fireEvent.change(statusSelect(), { target: { value: 'blocked' } });
 
-    expect(await screen.findByText('Status update failed.')).toBeInTheDocument();
+    expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
     expect(statusSelect()).toHaveValue('in_progress');
     expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Local draft');
     expect(vi.mocked(getMilestone)).toHaveBeenCalledTimes(1);
@@ -645,7 +646,7 @@ describe('MilestonesRoute create retry (Astra finding 3)', () => {
     await openCreateForm();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
-    expect(await screen.findByText('Failed to fetch')).toBeInTheDocument();
+    expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
 
     // Same logical payload, resubmitted by the user after the lost response.
     fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
@@ -674,7 +675,7 @@ describe('MilestonesRoute create retry (Astra finding 3)', () => {
     await openCreateForm();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create milestone' }));
-    expect(await screen.findByText('Failed to fetch')).toBeInTheDocument();
+    expect(await screen.findByText(GENERIC_ERROR_MESSAGE)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Title'), {
       target: { value: 'Launch review hardening v2' },
