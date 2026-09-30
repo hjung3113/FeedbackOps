@@ -12,9 +12,9 @@ import {
 } from '@tanstack/react-router';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import type { AppRouterContext } from './__root';
 import { rootBeforeLoad } from './index';
 import { LoginPage } from './login';
-import type { AppRouterContext } from './__root';
 
 // We rebuild the route options here rather than importing the file route's
 // runtime beforeLoad — TanStack's createFileRoute carries generated type
