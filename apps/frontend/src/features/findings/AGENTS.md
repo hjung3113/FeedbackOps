@@ -26,9 +26,9 @@ It does not own source object lifecycles or backend authorization truth.
 - `apps/frontend/src/features/findings/components/FindingDetail/FullFindingDetail.tsx` — detail fields, actions, and status labels.
 - `apps/frontend/src/features/findings/components/FindingDetail/useFindingDetailController.ts` — detail action and status state.
 - `apps/frontend/src/features/findings/hooks/useFindingStatusMutation.ts` — Finding status mutation.
-- `apps/frontend/src/features/findings/hooks/useEvidenceHighlights.ts` — evidence highlight reads.
+- `apps/frontend/src/features/findings/components/FindingDetail/AddEvidenceModal.tsx` — add-evidence (highlight) dialog.
 - `apps/frontend/src/features/findings/hooks/useEvidenceMutations.ts` — evidence link mutations.
-- `apps/frontend/src/features/findings/components/FindingDetail/LinkEvidenceModal.tsx` — add-evidence dialog.
+- `apps/frontend/src/features/findings/components/FindingDetail/LinkEvidenceModal.tsx` — link-existing-evidence modal.
 - `apps/frontend/src/features/findings/components/FindingDetail/LinkTaskModal.tsx` — link-Task dialog.
 - `apps/frontend/src/lib/copy/permission-reasons.ts` — shared permission-blocked copy, including the Finding list.
 
