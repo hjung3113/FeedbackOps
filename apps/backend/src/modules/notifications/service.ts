@@ -156,10 +156,12 @@ export function createNotificationService(deps: {
         id,
       });
       if (!row) throw notFound();
-      return (await toDtosForActor(actor, [row]))[0] ?? {
-        ...toDto(row),
-        subject_ref: { visibility_state: 'unavailable' },
-      };
+      return (
+        (await toDtosForActor(actor, [row]))[0] ?? {
+          ...toDto(row),
+          subject_ref: { visibility_state: 'unavailable' },
+        }
+      );
     },
 
     async archive(actor: NotificationActor, id: string): Promise<NotificationDto> {
@@ -169,10 +171,12 @@ export function createNotificationService(deps: {
         id,
       });
       if (!row) throw notFound();
-      return (await toDtosForActor(actor, [row]))[0] ?? {
-        ...toDto(row),
-        subject_ref: { visibility_state: 'unavailable' },
-      };
+      return (
+        (await toDtosForActor(actor, [row]))[0] ?? {
+          ...toDto(row),
+          subject_ref: { visibility_state: 'unavailable' },
+        }
+      );
     },
   };
 }
