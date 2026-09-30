@@ -41,6 +41,12 @@ describe('AppSidebar', () => {
     expect(screen.getByTestId('sidebar-nav-my').getAttribute('aria-current')).toBe('page');
   });
 
+  it('does not render a footer wrapper for a non-admin actor', () => {
+    render(<AppSidebar entries={entries} canAccessWorkspaceAdmin={false} />);
+
+    expect(screen.queryByTestId('sidebar-footer')).not.toBeInTheDocument();
+  });
+
   it('collapse toggle persists to localStorage', () => {
     render(<AppSidebar entries={entries} />);
     expect(screen.getByTestId('app-sidebar').getAttribute('data-collapsed')).toBe('false');
@@ -202,6 +208,7 @@ describe('AppSidebar', () => {
       <AppSidebar
         entries={entries}
         defaultCollapsed={true}
+        canAccessWorkspaceAdmin={true}
         footerItems={[
           {
             id: 'workspace-settings',

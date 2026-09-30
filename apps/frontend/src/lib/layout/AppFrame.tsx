@@ -3,6 +3,7 @@ import { DetailPanelSlotContext, cn } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { createSavedView, deleteSavedView, fetchCapabilityScope, fetchManagedSystems, fetchNavCounts, fetchSavedViews, type SavedView, type SavedViewSurface } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
+import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
 import { AppRail, type RailDomain } from './AppRail';
 import { AppSidebar, type SidebarNavEntry } from './AppSidebar';
@@ -42,6 +43,12 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
   }, [managedSystemId, syncManagedSystemFromUrl]);
   const me = useMe();
   const actor = me.data?.actor;
+  const workspaceAdminCheck = usePermissionCheck({ capability: 'workspace.admin' });
+  const canAccessWorkspaceAdmin = workspaceAdminCheck.data?.state === 'approved';
+  // ADR-0056 makes Admin discovery capability-based; route PermissionGates remain authoritative.
+  const visibleSidebarEntries = canAccessWorkspaceAdmin
+    ? sidebarEntries
+    : sidebarEntries.filter((entry) => entry.section !== 'ADMIN');
   const actorId = typeof actor?.id === 'string' ? actor.id : undefined;
   const roleLevel = actor?.role_level;
   const isAdmin = typeof roleLevel === 'string' && roleLevel.toLowerCase() === 'admin';
@@ -110,12 +117,13 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     void deleteSavedView(id).then(() => savedViewsQuery.refetch());
   }, [savedViewsQuery]);
   const sidebarProps = {
-    entries: sidebarEntries,
+    entries: visibleSidebarEntries,
     systemLabel: systemMeta[activeDomain].label,
     systemSubtitle: systemMeta[activeDomain].subtitle,
     managedSystems,
     scopeControlEnabled,
     isAdmin,
+    canAccessWorkspaceAdmin,
     onManagedSystemChange: changeManagedSystem,
     ...(counts !== undefined ? { counts } : {}),
     ...(selectedManagedSystemId !== undefined ? { selectedManagedSystemId } : {}),
@@ -156,7 +164,7 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
   return (
     <DetailPanelSlotContext.Provider value={ctxValue}>
       <div className={cn('flex h-screen bg-surface-canvas text-text-primary', className)} data-app-frame>
-        <AppRail activeDomain={activeDomain} />
+        <AppRail activeDomain={activeDomain} canAccessWorkspaceAdmin={canAccessWorkspaceAdmin} />
         <AppSidebar {...sidebarProps} />
         <main className="flex-1 min-w-0 flex flex-col" data-testid="app-main">
           {children}

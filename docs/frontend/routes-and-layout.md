@@ -79,26 +79,26 @@ Task route views:
 - `managedSystem` and `param` on that URL are the list's scope and selection, not a personal filter.
 ```
 
-## Role Level Navigation Contract
+## Capability-Based Admin Navigation Contract
 
-Navigation is Role Level-based display only; backend permission checks remain authoritative.
+Navigation is a discovery surface; backend permission checks remain authoritative (ADR-0056).
 
 ```text
-User:
-- Primary nav: Submit VOC, My VOCs, Surveys.
-- Hidden by default: Triage, Findings, Task Requests, Tasks, Integration, Admin.
-- Home may show only backend-provided user-safe queues.
-
-Developer:
-- Primary nav: Home, VOC Triage, Tasks intake, Tasks, Integration, Surveys when assigned. My Work is not a nav entry (ADR-0038).
-- Linked VOC/Finding context appears only as backend-approved summaries.
-- Managed System scope controls which work is visible and actionable.
-
-Admin:
-- Primary nav includes Admin, Managed System Registry, Analytics Areas, Permission Requests, and settings.
+- Domain destinations (Home, VOC, Findings, Tasks, Integration, Surveys) stay visible to every Actor.
+  Their route data and actions remain permission-gated by their owning contracts.
+- The Admin rail entry, ADMIN sidebar entries (Managed Systems, Analytics Areas, Permission requests,
+  Workspace settings), and Workspace settings footer link appear only after `workspace.admin` is
+  approved by `/me/permissions/check`.
+- Keep those Admin entries hidden while the capability check is pending, failed, or not approved.
+- Direct links to Admin routes still render their route-level blocked panel when the Actor is not approved; navigation visibility does not replace `PermissionGate`.
 ```
 
-Current sidebar entries live in `NAV_TREE` (`apps/frontend/src/routes/_authed.tsx`), which is authoritative. Its section labels are `VOC`, `VIEWS`, `FINDINGS`, `TASKS` (including Milestones), `INTEGRATION`, `SURVEYS`, and `ADMIN`. Per the AGENTS.md two-consumer rule, each feature adds its entry in the slice that owns it. The Home rail's entries come from `homeSidebarEntries` (`apps/frontend/src/features/home/homeNavigation.tsx`).
+Current sidebar entries live in `NAV_TREE` (`apps/frontend/src/routes/_authed.tsx`), which owns route
+labels and destinations. `AppFrame` filters its `ADMIN` entries using the same `workspace.admin` check
+as the Admin page gates. The other section labels are `VOC`, `VIEWS`, `FINDINGS`, `TASKS` (including
+Milestones), `INTEGRATION`, and `SURVEYS`. Per the AGENTS.md two-consumer rule, each feature adds its
+entry in the slice that owns it. The Home rail's entries come from `homeSidebarEntries`
+(`apps/frontend/src/features/home/homeNavigation.tsx`).
 
 The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login clears prior Actor data and seeds the `['me']` identity from the login response before routing so a new Actor never sees prior Actor data.
 

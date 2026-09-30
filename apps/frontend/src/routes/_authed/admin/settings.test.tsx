@@ -284,7 +284,8 @@ describe('/admin/settings route', () => {
   });
 
   test('removes the placeholder destination from the default settings navigation', () => {
-    render(<AppSidebar entries={[]} />);
+    // #612: the footer link renders only for an actor approved for workspace.admin.
+    render(<AppSidebar entries={[]} canAccessWorkspaceAdmin={true} />);
     const settings = screen.getByTestId('sidebar-footer-workspace-settings');
     expect(settings).toHaveAttribute('href', '/admin/settings');
     expect(settings).not.toHaveAttribute('href', '/admin/placeholder');

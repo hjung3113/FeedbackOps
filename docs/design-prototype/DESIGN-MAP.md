@@ -242,7 +242,7 @@ Acceptance use:
 
 | Component | File | Backing spec |
 |---|---|---|
-| `GlobalRail`, `Sidebar`, `Topbar` | `shell.jsx` | routes · 12 ux §Role-level navigation. Sidebar scope switcher renders `union` chip + grants list when `all` is bounded (Pack 8). |
+| `GlobalRail`, `Sidebar`, `Topbar` | `shell.jsx` | routes · 12 ux §Role-level navigation; nav visibility superseded by ADR-0056. Sidebar scope switcher renders `union` chip + grants list when `all` is bounded (Pack 8). |
 
 ### Screen-specific composites
 
