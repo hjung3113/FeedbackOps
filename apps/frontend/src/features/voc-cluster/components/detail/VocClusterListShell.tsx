@@ -3,11 +3,14 @@
 // detail route (path `clusterId`) both host this shell; selection storage is the
 // route's concern. Screens live in features/voc-cluster per AGENTS ownership.
 
-import { Button, ListShell, ObjectRow, Skeleton } from '@fops/ui';
+import { ListStateMessage } from '@/components/ListStateMessage';
+import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
+import { isPermissionDenied } from '@/lib/api';
+import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { Button, ListShell, ObjectRow, PermissionBlockedPanel, Skeleton } from '@fops/ui';
+import { RotateCw } from 'lucide-react';
 import * as React from 'react';
 import { useState } from 'react';
-
-import { useVocClusterList } from '@/features/voc-cluster/hooks/useVocClusterList';
 
 import { ClusterStatusBadge, formatClusterDate } from '../../lib/presentation';
 import type { VocClusterListPresentation } from '../types';
@@ -67,6 +70,8 @@ export function VocClusterListShell({
           allClusters={clusters}
           isPending={listQuery.isPending}
           isError={listQuery.isError}
+          error={listQuery.error}
+          onRetry={() => void listQuery.refetch()}
           selectedId={selectedId}
           onSelect={onSelect}
           activeTab={activeTab}
@@ -95,6 +100,8 @@ function ClusterListBody({
   allClusters,
   isPending,
   isError,
+  error,
+  onRetry,
   selectedId,
   onSelect,
   activeTab,
@@ -104,6 +111,8 @@ function ClusterListBody({
   allClusters: VocClusterListPresentation[];
   isPending: boolean;
   isError: boolean;
+  error: unknown;
+  onRetry: () => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   activeTab: 'all' | 'confirmed' | 'no-finding';
@@ -161,17 +170,52 @@ function ClusterListBody({
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
+        ) : isError && isPermissionDenied(error) ? (
+          <PermissionBlockedPanel
+            state="denied"
+            category="VOC Cluster list"
+            reason={PERMISSION_BLOCKED_REASONS.vocClusterList}
+            className="m-4"
+          />
         ) : isError ? (
-          <p className="p-4 text-sm text-accent-danger" data-testid="cluster-list-error">
-            데이터를 불러오지 못했습니다.
-          </p>
-        ) : clusters.length === 0 ? (
-          <div
-            className="p-8 text-center text-sm text-text-muted"
-            data-testid="cluster-empty-state"
-          >
-            생성된 클러스터가 없습니다.
+          <div data-testid="cluster-list-error">
+            <ListStateMessage
+              variant="error"
+              title="데이터를 불러오지 못했습니다."
+              body=""
+              actionContent={
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  aria-label="다시 시도"
+                  title="다시 시도"
+                  onClick={onRetry}
+                >
+                  <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              }
+            />
           </div>
+        ) : allClusters.length === 0 ? (
+          <div data-testid="cluster-empty-state">
+            <ListStateMessage
+              variant="empty"
+              title="생성된 클러스터가 없습니다."
+              body=""
+            />
+          </div>
+        ) : clusters.length === 0 ? (
+          // #609's filter reset follows the contract; the prototype suggests changing scope instead.
+          <ListStateMessage
+            variant="filtered"
+            title="현재 조건에 맞는 VOC Cluster가 없습니다"
+            body={`선택한 조건: ${activeTab === 'confirmed' ? '확정' : 'Finding 없음'}`}
+            action={{
+              label: '필터 초기화',
+              onClick: () => onTabChange('all'),
+            }}
+          />
         ) : (
           <div data-testid="cluster-list">
             {clusters.map((cluster) => (

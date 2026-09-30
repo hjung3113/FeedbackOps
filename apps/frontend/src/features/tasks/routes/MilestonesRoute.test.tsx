@@ -204,7 +204,7 @@ describe('MilestonesRoute list (#514 B2c)', () => {
 
     renderWithClient(<MilestonesRoute />);
 
-    expect(await screen.findByText('표시할 milestone 이 없습니다.')).toBeInTheDocument();
+    expect(await screen.findByText('표시할 Milestone이 없습니다.')).toBeInTheDocument();
   });
 
   it('renders display id, title, In progress label, and why excerpt without raw UUIDs', async () => {
@@ -504,4 +504,84 @@ describe('MilestonesRoute counts suppression (R5)', () => {
     // The selected record's independent detail read is unchanged.
     expect(screen.getByRole('heading', { name: 'SSO Stabilization' })).toBeInTheDocument();
   });
+});
+
+describe('MilestonesRoute list states (#609)', () => {
+  beforeEach(() => {
+    vi.mocked(listMilestones).mockReset();
+    vi.mocked(listMilestones).mockImplementation(async () => ({ items: MILESTONES }));
+    vi.mocked(fetchAnalyticsAreas).mockReset();
+    vi.mocked(fetchAnalyticsAreas).mockImplementation(async () => ({
+      items: [
+        {
+          id: IDS.areaProduct,
+          workspace_id: IDS.workspace,
+          managed_system_id: IDS.msPowerBi,
+          slug: 'product-usage',
+          name: 'Product Usage',
+          owner_team_id: null,
+          archived_at: null,
+          archived_by_actor_id: null,
+          created_at: '2026-07-01T00:00:00.000Z',
+          updated_at: '2026-07-01T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+    }));
+  });
+
+  it.each(['empty', 'filtered', 'error'] as const)(
+    'shows the %s state and recovers from retryable or filtered reads',
+    async (state) => {
+      let shouldFailReleasedRead = state === 'error';
+      const releasedMilestone = MILESTONES.find((milestone) => milestone.status === 'released');
+      vi.mocked(listMilestones).mockImplementation(async (options) => {
+        if (options?.status === 'released') {
+          if (shouldFailReleasedRead) {
+            shouldFailReleasedRead = false;
+            throw new Error('temporary read failure');
+          }
+          return {
+            items: state === 'filtered' ? [] : releasedMilestone ? [releasedMilestone] : [],
+          };
+        }
+        return { items: state === 'empty' ? [] : MILESTONES };
+      });
+
+      const user = userEvent.setup();
+      renderWithClient(<MilestonesRoute managedSystem={IDS.msPowerBi} />);
+
+      if (state === 'empty') {
+        expect(await screen.findByTestId('list-state-message')).toHaveAttribute(
+          'data-variant',
+          'empty',
+        );
+        expect(screen.getByText('표시할 Milestone이 없습니다.')).toBeInTheDocument();
+        return;
+      }
+
+      await screen.findByText('MLS-1021');
+      await user.click(screen.getByRole('tab', { name: /^Released/ }));
+      expect(await screen.findByTestId('list-state-message')).toHaveAttribute(
+        'data-variant',
+        state,
+      );
+
+      if (state === 'filtered') {
+        await user.type(screen.getByRole('textbox', { name: 'Milestone 검색' }), 'SSO');
+        expect(screen.getByText('선택한 조건: Released · 검색: SSO')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: '필터 초기화' }));
+        await screen.findByText('MLS-1021');
+        expect(screen.getByRole('textbox', { name: 'Milestone 검색' })).toHaveValue('');
+        expect(
+          vi
+            .mocked(listMilestones)
+            .mock.calls.every(([query]) => query?.managed_system_id === IDS.msPowerBi),
+        ).toBe(true);
+      } else {
+        await user.click(screen.getByRole('button', { name: '다시 시도' }));
+        expect(await screen.findByText('MLS-1018')).toBeInTheDocument();
+      }
+    },
+  );
 });
