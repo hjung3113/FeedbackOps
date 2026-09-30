@@ -1,5 +1,6 @@
 import { useMe } from '@/lib/auth/useMe';
 import { useVocDetail } from '@/lib/cross-system/useVocDetail';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import type { VocDetailEnvelope, VocSummaryEnvelope } from '@fops/shared';
 import { Skeleton } from '@fops/ui';
 import * as React from 'react';
@@ -55,7 +56,12 @@ export function VocDetailPanel({
   // `null` while the scope-exit effect clears `selected`: rendering the old
   // record for that tick is the bug this panel is closing over.
 }: VocDetailPanelProps): React.ReactElement | null {
-  const { data, isLoading, isError, error } = useVocDetail(vocId);
+  const { data, isLoading, isError, isSuccess, isFetching, error } = useVocDetail(vocId);
+  const documentTitleRecord =
+    isSuccess && !isFetching && data?.id === vocId && 'title' in data
+      ? formatRecordDocumentTitle({ displayId: data.display_id, title: data.title })
+      : null;
+  useDocumentTitle(documentTitleRecord);
   const { data: me } = useMe();
   const selectedScopeExcludesVoc =
     managedSystemId !== undefined &&

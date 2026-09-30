@@ -6,6 +6,7 @@ import { useSurveyManageGate } from '@/features/surveys/routes/SurveyPermissionG
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystemNames';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { parseRouteSearch } from '@/lib/router/search';
 import { EmptyState, ListShell, PermissionBlockedPanel } from '@fops/ui';
 import { Outlet, createFileRoute, useMatchRoute, useNavigate } from '@tanstack/react-router';
@@ -41,6 +42,17 @@ export function SurveyDetailRoute() {
   const isOutcomeReviewRoute = isResultsRoute || isFollowUpRoute;
   const query = useSurvey(surveyId);
   const gate = useSurveyManageGate(query.data?.primary_managed_system_id);
+  const documentTitleRecord =
+    !isOutcomeReviewRoute &&
+    query.isSuccess &&
+    !query.isFetching &&
+    (!search.builder || gate.canManage)
+      ? formatRecordDocumentTitle({
+          displayId: query.data.display_id,
+          title: query.data.title,
+        })
+      : null;
+  useDocumentTitle(documentTitleRecord);
   const list = useSurveys();
   const managedSystemNames = useManagedSystemNamesResult({ enabled: !isOutcomeReviewRoute });
   const managedSystemNamesById = managedSystemNames.isSuccess

@@ -1,6 +1,7 @@
+import { DocumentTitleProvider } from '@/lib/router/document-title';
 import type { QueryClient } from '@tanstack/react-query';
 import { Outlet, createRootRouteWithContext } from '@tanstack/react-router';
-import { OctagonAlert, TriangleAlert, Info, Loader2, CircleCheck } from 'lucide-react';
+import { CircleCheck, Info, Loader2, OctagonAlert, TriangleAlert } from 'lucide-react';
 import { Toaster } from 'sonner';
 
 export interface AppRouterContext {
@@ -14,7 +15,9 @@ export const Route = createRootRouteWithContext<AppRouterContext>()({
 function RootLayout() {
   return (
     <div className="min-h-full bg-surface-canvas text-text-primary">
-      <Outlet />
+      <DocumentTitleProvider>
+        <Outlet />
+      </DocumentTitleProvider>
       <Toaster
         position="bottom-center"
         richColors

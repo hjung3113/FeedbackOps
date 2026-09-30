@@ -3,6 +3,7 @@
 // Mirrors VocDetailPanel structure per domain-module-boundaries §Frontend Boundary Rules.
 
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { Button, EmptyState, PermissionBlockedPanel, Skeleton } from '@fops/ui';
 import { useNavigate } from '@tanstack/react-router';
 import type * as React from 'react';
@@ -53,7 +54,12 @@ function FindingNotFound(): React.ReactElement {
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 
 export function FindingDetailPanel({ findingId }: FindingDetailPanelProps): React.ReactElement {
-  const { data, isLoading, isError, error } = useFindingDetail(findingId);
+  const { data, isLoading, isError, isSuccess, isFetching, error } = useFindingDetail(findingId);
+  useDocumentTitle(
+    isSuccess && !isFetching && data?.id === findingId
+      ? formatRecordDocumentTitle({ displayId: data.display_id, title: data.title })
+      : null,
+  );
 
   // 1. Loading
   if (isLoading) {

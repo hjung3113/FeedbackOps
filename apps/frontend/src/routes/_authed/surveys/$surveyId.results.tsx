@@ -4,6 +4,7 @@ import { useOutcomeFollowUp } from '@/features/surveys/hooks/useOutcomeFollowUp'
 import { useSurvey, useSurveyResults } from '@/features/surveys/hooks/useSurveys';
 import { useSurveyReadGate } from '@/features/surveys/routes/SurveyPermissionGate';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { EmptyState, PermissionBlockedPanel } from '@fops/ui';
 import { createFileRoute } from '@tanstack/react-router';
 
@@ -19,6 +20,14 @@ export function SurveyResultsRoute() {
   const followUpRead = useOutcomeFollowUp(
     surveyId,
     gate.canRead && survey.data?.type === 'outcome',
+  );
+  useDocumentTitle(
+    survey.isSuccess && !survey.isFetching && gate.canRead
+      ? formatRecordDocumentTitle({
+          displayId: survey.data.display_id,
+          title: survey.data.title,
+        })
+      : null,
   );
 
   if (survey.isLoading || gate.gateState === 'loading') {

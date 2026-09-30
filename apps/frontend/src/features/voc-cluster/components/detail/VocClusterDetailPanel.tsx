@@ -31,6 +31,7 @@ import { useMe } from '@/lib/auth/useMe';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { shortId } from '@/lib/identity';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 
 import { ClusterStatusBadge, formatClusterDate } from '../../lib/presentation';
 import { AddVocModal } from '../modals/AddVocModal';
@@ -72,7 +73,12 @@ export function VocClusterDetailPanel({
   clusterId: string;
   onClose?: () => void;
 }): React.ReactElement {
-  const { data, isLoading, isError, error } = useVocClusterDetail(clusterId);
+  const { data, isLoading, isError, isSuccess, isFetching, error } = useVocClusterDetail(clusterId);
+  useDocumentTitle(
+    isSuccess && !isFetching && data?.id === clusterId
+      ? formatRecordDocumentTitle({ displayId: data.display_id, title: data.title })
+      : null,
+  );
   const presentation = data as (typeof data & VocClusterDetailPresentation) | undefined;
   const managedSystem = useManagedSystem(data?.primary_managed_system_id);
   const { data: me } = useMe();

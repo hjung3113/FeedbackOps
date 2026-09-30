@@ -1,6 +1,7 @@
 import { getMilestone } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import {
   DetailPanelHeader,
   DetailPanelHeaderActions,
@@ -41,6 +42,16 @@ export function MilestoneDetailPanel({
     queryFn: ({ signal }) => getMilestone(milestoneId, signal),
     staleTime: 30 * 1000,
   });
+  useDocumentTitle(
+    milestoneQuery.isSuccess &&
+      !milestoneQuery.isFetching &&
+      milestoneQuery.data?.id === milestoneId
+      ? formatRecordDocumentTitle({
+          displayId: milestoneQuery.data.display_id,
+          title: milestoneQuery.data.title,
+        })
+      : null,
+  );
   const error = milestoneQuery.error;
   // React Query keeps the last success when a refetch fails, and exposes both
   // data and error. A settled read error is the detail permission contract:

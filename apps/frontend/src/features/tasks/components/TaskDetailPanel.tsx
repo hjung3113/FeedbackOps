@@ -6,6 +6,7 @@ import { useMe } from '@/lib/auth/useMe';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { shortId } from '@/lib/identity';
+import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import type { TaskDetailDto, TaskStatus } from '@fops/shared';
 import {
   Button,
@@ -74,6 +75,14 @@ export function TaskDetailPanel({
     queryFn: ({ signal }) => getTask(taskId, signal),
     staleTime: 30 * 1000,
   });
+  useDocumentTitle(
+    taskQuery.isSuccess && !taskQuery.isFetching && taskQuery.data?.id === taskId
+      ? formatRecordDocumentTitle({
+          displayId: taskQuery.data.display_id,
+          title: taskQuery.data.title,
+        })
+      : null,
+  );
   // #514 B3b: the Milestone row is a read — GET /milestones/:id only. The
   // assign/unassign POST has no control in this panel.
   const milestoneId = taskQuery.data?.milestone_id ?? null;
