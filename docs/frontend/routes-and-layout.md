@@ -114,7 +114,10 @@ Routes may exist without being visible in navigation. Direct route access must r
 
 - Authenticated unknown paths render a centered `PageShell` inside `AppFrame`, with a localized not-found message, Home link, and back action.
 - Unknown paths check the current identity before showing AppShell; a 401 still redirects to `/login` and preserves the requested URL.
-- Route errors render a localized `ListStateMessage` inside AppShell, offer retry, and keep raw error details in the console only. A `/me` rate-limit error uses the existing "잠시 후 다시 시도하세요." message.
+- Route errors render a localized `ListStateMessage` inside AppShell when identity is available, offer
+  retry, and keep raw error details in the console only. A `/me` rate-limit error uses the existing
+  "잠시 후 다시 시도하세요." message in a standalone state, and retry re-runs the authenticated guard.
+- While the authenticated guard is resolving, the route shows a centered "불러오는 중…" state after the router's pending delay.
 - Search validation drops invalid and unrecognized fields independently, preserving valid fields so each route uses its omitted defaults.
 
 ## Home Queue Contract

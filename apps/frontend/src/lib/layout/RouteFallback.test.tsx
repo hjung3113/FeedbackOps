@@ -7,15 +7,15 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MeRequestError } from '@/lib/api/auth';
-import { ME_QUERY_KEY } from '@/lib/auth/useMe';
+import { ensureMe, ME_QUERY_KEY } from '@/lib/auth/useMe';
 import type { AppRouterContext } from '@/routes/__root';
 import {
   AuthenticatedRouteErrorFallback,
+  AuthenticatedRoutePendingFallback,
   RouteErrorFallback,
   RouteNotFoundFallback,
 } from './RouteFallback';
@@ -49,6 +49,8 @@ function buildRouter(
   initialPath: string,
   brokenLoader: () => Promise<unknown> = async () => undefined,
   authenticatedError?: unknown,
+  authenticatedGuard?: () => Promise<void>,
+  pendingTimings?: { pendingMs: number; pendingMinMs: number },
 ) {
   const rootRoute = createRootRouteWithContext<AppRouterContext>()({
     component: () => <Outlet />,
@@ -58,6 +60,7 @@ function buildRouter(
     id: '_authed',
     beforeLoad: async () => {
       if (authenticatedError !== undefined) throw authenticatedError;
+      await authenticatedGuard?.();
     },
     component: () => (
       <div data-testid="app-frame">
@@ -65,6 +68,8 @@ function buildRouter(
       </div>
     ),
     errorComponent: AuthenticatedRouteErrorFallback,
+    pendingComponent: AuthenticatedRoutePendingFallback,
+    ...(pendingTimings ?? {}),
   });
   const homeRoute = createRoute({
     getParentRoute: () => authenticatedRoute,
@@ -139,6 +144,30 @@ describe('router fallback screens', () => {
     expect(screen.queryByTestId('app-frame')).not.toBeInTheDocument();
   });
 
+  it('shows a pending state while the authenticated guard resolves slowly', async () => {
+    const queryClient = createQueryClient();
+    let resolveGuard!: () => void;
+    const guard = new Promise<void>((resolve) => {
+      resolveGuard = resolve;
+    });
+    const router = buildRouter(
+      queryClient,
+      '/home',
+      async () => undefined,
+      undefined,
+      () => guard,
+      { pendingMs: 0, pendingMinMs: 0 },
+    );
+
+    renderRouter(router, queryClient);
+
+    const pendingState = await screen.findByRole('status', {}, { timeout: 3000 });
+    expect(pendingState).toHaveTextContent('불러오는 중…');
+
+    await act(async () => resolveGuard());
+    expect(await screen.findByText('Home route')).toBeInTheDocument();
+  });
+
   it('shows a localized loader error in the app frame and retries the route', async () => {
     const queryClient = createQueryClient();
     queryClient.setQueryData(ME_QUERY_KEY, ME);
@@ -165,12 +194,26 @@ describe('router fallback screens', () => {
 
   it('maps a typed /me rate-limit error to the localized retry state', async () => {
     const queryClient = createQueryClient();
-    queryClient.setQueryData(ME_QUERY_KEY, ME);
+    let fetchCount = 0;
+    const fetchMock = vi.fn(async () => {
+      fetchCount += 1;
+      if (fetchCount <= 3) {
+        return new Response('{}', { status: 429, headers: { 'retry-after': '0' } });
+      }
+      return new Response(JSON.stringify(ME), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
     const router = buildRouter(
       queryClient,
-      '/broken',
+      '/home',
       async () => undefined,
-      new MeRequestError(429, '0'),
+      undefined,
+      async () => {
+        await ensureMe(queryClient);
+      },
     );
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -178,6 +221,19 @@ describe('router fallback screens', () => {
 
     expect(await screen.findByText('로그인 상태를 확인할 수 없습니다')).toBeInTheDocument();
     expect(screen.getByText('잠시 후 다시 시도하세요.')).toBeInTheDocument();
-    expect(screen.getByTestId('app-frame')).toBeInTheDocument();
+    expect(screen.queryByTestId('app-frame')).not.toBeInTheDocument();
+    const fetchCountAtFallback = fetchMock.mock.calls.length;
+    expect(fetchCountAtFallback).toBe(3);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(fetchCountAtFallback);
+
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    expect(await screen.findByText('Home route')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });

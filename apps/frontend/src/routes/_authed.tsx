@@ -26,7 +26,10 @@ import { homeSidebarEntries } from '../features/home/homeNavigation';
 import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
 import { ensureMe, useMe } from '../lib/auth/useMe';
-import { AuthenticatedRouteErrorFallback } from '../lib/layout/RouteFallback';
+import {
+  AuthenticatedRouteErrorFallback,
+  AuthenticatedRoutePendingFallback,
+} from '../lib/layout/RouteFallback';
 import { AppFrame } from '../lib/layout/AppFrame';
 import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
@@ -276,6 +279,7 @@ export const Route = createFileRoute('/_authed')({
   beforeLoad: authenticatedBeforeLoad,
   component: AuthedLayout,
   errorComponent: AuthenticatedRouteErrorFallback,
+  pendingComponent: AuthenticatedRoutePendingFallback,
 });
 
 export async function authenticatedBeforeLoad({

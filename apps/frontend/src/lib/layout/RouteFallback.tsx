@@ -5,7 +5,7 @@ import { useMe } from '@/lib/auth/useMe';
 import { ROUTER_FALLBACK_COPY } from '@/lib/copy/router';
 import { Button, PageShell } from '@fops/ui';
 import { Link, useRouter, useRouterState } from '@tanstack/react-router';
-import { type ReactNode, useEffect, useRef } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { AppFrame } from './AppFrame';
 
 interface RouterErrorFallbackProps {
@@ -35,26 +35,93 @@ function CenteredPage({ children }: { children: ReactNode }) {
   );
 }
 
+export function AuthenticatedRoutePendingFallback() {
+  return (
+    <PageShell contentClassName="flex min-h-screen items-center justify-center">
+      <p className="text-sm text-text-muted" role="status">
+        불러오는 중…
+      </p>
+    </PageShell>
+  );
+}
+
+function MeRateLimitedRouteErrorFallback({ error }: { error: MeRequestError }) {
+  const router = useRouter();
+
+  useEffect(() => {
+    console.error('FeedbackOps route error', error);
+  }, [error]);
+
+  const retry = () => {
+    void router.invalidate().catch((retryError: unknown) => {
+      console.error('FeedbackOps route retry failed', retryError);
+    });
+  };
+
+  return (
+    <CenteredPage>
+      <ListStateMessage
+        variant="error"
+        title={ROUTER_FALLBACK_COPY.error.meRateLimitedTitle}
+        body={ROUTER_FALLBACK_COPY.error.meRateLimitedBody}
+        action={{ label: ROUTER_FALLBACK_COPY.error.action, onClick: retry }}
+      />
+    </CenteredPage>
+  );
+}
+
 export function RouteErrorFallback({ error, withShell = false }: RouterErrorFallbackProps) {
+  if (error instanceof MeRequestError && error.status === 429) {
+    return <MeRateLimitedRouteErrorFallback error={error} />;
+  }
+
+  return <RouteErrorFallbackWithIdentity error={error} withShell={withShell} />;
+}
+
+function RouteErrorFallbackWithIdentity({
+  error,
+  withShell,
+}: Required<RouterErrorFallbackProps>) {
   const router = useRouter();
   const location = useRouterState({ select: (state) => state.location });
   const me = useMe();
   const isLoginRoute = location.pathname === '/login';
   const isUnauthenticated =
     error instanceof UnauthenticatedError || me.error instanceof UnauthenticatedError;
-  const isMeRateLimited = error instanceof MeRequestError && error.status === 429;
+  const [redirectInFlight, setRedirectInFlight] = useState(
+    () => isUnauthenticated && !isLoginRoute,
+  );
 
   useEffect(() => {
     console.error('FeedbackOps route error', error);
   }, [error]);
 
   useEffect(() => {
-    if (isLoginRoute || !isUnauthenticated) return;
-    void router.navigate({
-      to: '/login',
-      search: { redirectTo: location.href },
-      replace: true,
-    });
+    if (isLoginRoute || !isUnauthenticated) {
+      setRedirectInFlight(false);
+      return;
+    }
+
+    let active = true;
+    setRedirectInFlight(true);
+    void router
+      .navigate({
+        to: '/login',
+        search: { redirectTo: location.href },
+        replace: true,
+      })
+      .then(() => {
+        if (active && router.state.location.pathname !== '/login') {
+          setRedirectInFlight(false);
+        }
+      })
+      .catch((navigationError: unknown) => {
+        console.error('FeedbackOps login redirect failed', navigationError);
+        if (active) setRedirectInFlight(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [isLoginRoute, isUnauthenticated, location.href, router]);
 
   const retry = () => {
@@ -63,28 +130,20 @@ export function RouteErrorFallback({ error, withShell = false }: RouterErrorFall
     });
   };
 
-  // #584 keeps raw prototype diagnostics out of user-facing route errors.
   const message = (
     <CenteredPage>
       <ListStateMessage
         variant="error"
-        title={
-          isMeRateLimited
-            ? ROUTER_FALLBACK_COPY.error.meRateLimitedTitle
-            : ROUTER_FALLBACK_COPY.error.title
-        }
-        body={
-          isMeRateLimited
-            ? ROUTER_FALLBACK_COPY.error.meRateLimitedBody
-            : ROUTER_FALLBACK_COPY.error.body
-        }
+        title={ROUTER_FALLBACK_COPY.error.title}
+        body={ROUTER_FALLBACK_COPY.error.body}
         action={{ label: ROUTER_FALLBACK_COPY.error.action, onClick: retry }}
       />
     </CenteredPage>
   );
 
   if (isLoginRoute) return message;
-  if (isUnauthenticated || (!me.data && me.isPending)) return null;
+  if (isUnauthenticated && redirectInFlight) return null;
+  if (!me.data) return message;
   return withShell ? <FallbackFrame>{message}</FallbackFrame> : message;
 }
 
@@ -96,28 +155,9 @@ export function RouteNotFoundFallback() {
   const router = useRouter();
   const location = useRouterState({ select: (state) => state.location });
   const me = useMe();
-  const redirectedFrom = useRef<string | null>(null);
   const isKnownRoute = router.getMatchedRoutes(location.pathname).foundRoute !== undefined;
 
-  useEffect(() => {
-    if (
-      isKnownRoute ||
-      !(me.error instanceof UnauthenticatedError) ||
-      redirectedFrom.current === location.href
-    ) {
-      return;
-    }
-    redirectedFrom.current = location.href;
-    void router.navigate({
-      to: '/login',
-      search: { redirectTo: location.href },
-      replace: true,
-    });
-  }, [isKnownRoute, location.href, me.error, router]);
-
-  if (isKnownRoute || me.error instanceof UnauthenticatedError || (!me.data && me.isPending)) {
-    return null;
-  }
+  if (isKnownRoute || (!me.data && me.isPending)) return <AuthenticatedRoutePendingFallback />;
   if (!me.data && me.error) return <AuthenticatedRouteErrorFallback error={me.error} />;
 
   return (
