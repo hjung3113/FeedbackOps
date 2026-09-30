@@ -1,10 +1,10 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { homeSidebarEntries } from '@/features/home/homeNavigation';
 import { MeRequestError, UnauthenticatedError } from '@/lib/api/auth';
 import { ME_QUERY_KEY, useMe } from '@/lib/auth/useMe';
 import { ROUTER_FALLBACK_COPY } from '@/lib/copy/router';
 import { Button, PageShell } from '@fops/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter, useRouterState } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useState } from 'react';
 import { AppFrame } from './AppFrame';
@@ -187,12 +187,7 @@ export function RouteNotFoundFallback() {
             <Button asChild variant="primary" size="sm">
               <Link to="/home">{ROUTER_FALLBACK_COPY.notFound.home}</Link>
             </Button>
-            <Button
-              type="button"
-              variant="subtle"
-              size="sm"
-              onClick={() => router.history.back()}
-            >
+            <Button type="button" variant="subtle" size="sm" onClick={() => router.history.back()}>
               {ROUTER_FALLBACK_COPY.notFound.back}
             </Button>
           </div>

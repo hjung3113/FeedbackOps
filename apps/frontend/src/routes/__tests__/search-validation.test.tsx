@@ -142,7 +142,7 @@ describe('route search validation', () => {
       router.options.parseSearch(`?${search.toString()}`),
     );
 
-    expect(matches.at(-1)!.search).toEqual(routeCase.expected);
+    expect(matches.at(-1)?.search).toEqual(routeCase.expected);
   });
 
   it('renders the default Tasks view after an invalid view value', () => {

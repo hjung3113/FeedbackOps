@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { createRouter, type RouterHistory } from '@tanstack/react-router';
+import { type RouterHistory, createRouter } from '@tanstack/react-router';
 
 import { RouteErrorFallback, RouteNotFoundFallback } from '@/lib/layout/RouteFallback';
 import { routeTree } from '@/routeTree.gen';
