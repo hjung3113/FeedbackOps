@@ -94,7 +94,7 @@ export function FullDetailView({
     : showsSimilarVocSection
       ? [
           ...STATIC_DETAIL_SECTIONS.slice(0, 4),
-          { id: 'similar', label: SAME_MANAGED_SYSTEM_VOC_LABEL },
+          { id: 'similar', label: SAME_MANAGED_SYSTEM_VOC_LABEL, overflow: true },
           ...STATIC_DETAIL_SECTIONS.slice(4),
         ]
       : STATIC_DETAIL_SECTIONS;
