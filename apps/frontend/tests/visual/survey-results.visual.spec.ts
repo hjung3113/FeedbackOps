@@ -2,6 +2,7 @@ import {
   surveyResultVisualFixture,
   surveyResultsFixtureFor,
   surveyResultsFixtureSchema,
+  surveyResultsSurveyFixture,
   surveyResultsVisualScenarios,
 } from './fixtures/survey-results';
 import { installMockApi } from './support/mock-api';
@@ -14,6 +15,17 @@ test('survey results fixtures reject an unsupported create_voc action', () => {
     next_actions: [{ id: 'create_voc', availability: 'allowed', intent: 'open_finding_draft' }],
   });
   expect(result.success).toBe(false);
+});
+
+test('survey result questions resolve to survey prompts', () => {
+  const prompts = new Map(
+    surveyResultsSurveyFixture.questions.map((question) => [question.id, question.prompt]),
+  );
+  const resultQuestions = surveyResultsFixtureFor('populated').questions;
+
+  expect(resultQuestions.every((question) => Boolean(prompts.get(question.question_id)))).toBe(
+    true,
+  );
 });
 
 test.describe('/surveys/:surveyId/results visual harness', () => {

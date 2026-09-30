@@ -8,19 +8,6 @@ export const surveyResultVisualFixture = surveyVisualFixtureSchema.parse({
   status: 'closed' as const,
 });
 
-export const surveyResultsNonOutcomeVisualFixture = surveyVisualFixtureSchema.parse({
-  ...surveyResultVisualFixture,
-  type: 'discovery' as const,
-});
-
-export const surveyResultVisualListFixture = z
-  .array(surveyVisualFixtureSchema)
-  .parse([surveyResultVisualFixture]);
-
-export const surveyResultsNonOutcomeVisualListFixture = z
-  .array(surveyVisualFixtureSchema)
-  .parse([surveyResultsNonOutcomeVisualFixture]);
-
 const ids = {
   choice: '11111111-1111-4111-8111-111111111111',
   rating: '22222222-2222-4222-8222-222222222222',
@@ -29,6 +16,73 @@ const ids = {
   response: '66666666-6666-4666-8666-666666666666',
   finding: '55555555-5555-4555-8555-555555555555',
 };
+
+export const surveyResultsSurveyFixture = surveyVisualFixtureSchema.parse({
+  ...surveyResultVisualFixture,
+  questions: [
+    {
+      id: ids.choice,
+      survey_id: surveyResultVisualFixture.id,
+      kind: 'single_choice',
+      prompt: '리포트를 사용할 때 가장 불편한 점은 무엇인가요?',
+      is_required: true,
+      options: [{ key: 'slow', label: '느린 로딩' }],
+      rating_min: null,
+      rating_max: null,
+      rating_low_label: null,
+      rating_high_label: null,
+      sort_order: 0,
+      branch_depth: 0,
+      branch_parent_question_id: null,
+      branch_trigger_option_key: null,
+    },
+    {
+      id: ids.rating,
+      survey_id: surveyResultVisualFixture.id,
+      kind: 'rating',
+      prompt: '리포트 내보내기 속도에 만족하시나요?',
+      is_required: true,
+      options: null,
+      rating_min: 1,
+      rating_max: 5,
+      rating_low_label: '매우 불만족',
+      rating_high_label: '매우 만족',
+      sort_order: 1,
+      branch_depth: 0,
+      branch_parent_question_id: null,
+      branch_trigger_option_key: null,
+    },
+    {
+      id: ids.text,
+      survey_id: surveyResultVisualFixture.id,
+      kind: 'text',
+      prompt: '리포트 사용 경험에서 개선할 점이 있나요?',
+      is_required: false,
+      options: null,
+      rating_min: null,
+      rating_max: null,
+      rating_low_label: null,
+      rating_high_label: null,
+      sort_order: 2,
+      branch_depth: 0,
+      branch_parent_question_id: null,
+      branch_trigger_option_key: null,
+    },
+  ],
+});
+
+export const surveyResultsNonOutcomeVisualFixture = surveyVisualFixtureSchema.parse({
+  ...surveyResultsSurveyFixture,
+  type: 'discovery' as const,
+});
+
+export const surveyResultVisualListFixture = z
+  .array(surveyVisualFixtureSchema)
+  .parse([surveyResultsSurveyFixture]);
+
+export const surveyResultsNonOutcomeVisualListFixture = z
+  .array(surveyVisualFixtureSchema)
+  .parse([surveyResultsNonOutcomeVisualFixture]);
 
 export const surveyResultsVisualScenarios = z
   .array(
