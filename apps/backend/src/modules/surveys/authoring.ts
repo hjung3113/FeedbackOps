@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { SurveyType } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
@@ -34,7 +35,7 @@ import {
 import type { SurveysActor, SurveysServiceDeps } from './service.js';
 
 export type CreateSurveyInput = {
-  type: 'discovery' | 'validation' | 'outcome';
+  type: SurveyType;
   title: string;
   description?: string;
   primary_managed_system_id: string;

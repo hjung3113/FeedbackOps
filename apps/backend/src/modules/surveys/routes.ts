@@ -1,6 +1,8 @@
 import {
   createFindingFromSurveyResponseRequestSchema,
   outcomeFollowUpDecisionRequestSchema,
+  surveyQuestionKindSchema,
+  surveyTypeSchema,
 } from '@fops/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -20,7 +22,7 @@ const options = z
   .max(50);
 const create = z
   .object({
-    type: z.enum(['discovery', 'validation', 'outcome']),
+    type: surveyTypeSchema,
     title: z.string().min(1),
     description: z.string().optional(),
     primary_managed_system_id: uuid,
@@ -31,7 +33,7 @@ const create = z
   .strict();
 const update = z
   .object({
-    type: z.enum(['discovery', 'validation', 'outcome']).optional(),
+    type: surveyTypeSchema.optional(),
     title: z.string().min(1).optional(),
     description: z.string().optional(),
     primary_managed_system_id: uuid.optional(),
@@ -44,7 +46,7 @@ const update = z
 const reorder = z.object({ question_ids: z.array(uuid) }).strict();
 const question = z
   .object({
-    kind: z.enum(['single_choice', 'multiple_choice', 'rating', 'text']),
+    kind: surveyQuestionKindSchema,
     prompt: z.string().min(1),
     is_required: z.boolean().optional(),
     options: options.optional(),

@@ -1,9 +1,10 @@
+import type { SurveyQuestionKind } from '@fops/shared';
 import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 
 export type SurveyResultAggregateRow = {
   question_id: string;
-  question_kind: 'single_choice' | 'multiple_choice' | 'rating' | 'text';
+  question_kind: SurveyQuestionKind;
   bucket_key: string | null;
   bucket_count: number;
 };

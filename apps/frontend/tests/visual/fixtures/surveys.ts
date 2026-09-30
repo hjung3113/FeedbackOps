@@ -1,12 +1,12 @@
 import type { ManagedSystemDto } from '@/lib/api/managed-systems';
-import { listActorsResponseSchema } from '@fops/shared';
+import { listActorsResponseSchema, surveyQuestionKindSchema, surveyTypeSchema } from '@fops/shared';
 import { z } from 'zod';
 import { managedSystemVisualSchema } from './managed-system-owner';
 
 const questionSchema = z.object({
   id: z.string().uuid(),
   survey_id: z.string().uuid(),
-  kind: z.enum(['single_choice', 'multiple_choice', 'rating', 'text']),
+  kind: surveyQuestionKindSchema,
   prompt: z.string(),
   is_required: z.boolean(),
   options: z.array(z.object({ key: z.string(), label: z.string() })).nullable(),
@@ -23,7 +23,7 @@ export const surveyVisualFixtureSchema = z.object({
   id: z.string().uuid(),
   display_id: z.string(),
   title: z.string(),
-  type: z.enum(['discovery', 'validation', 'outcome']),
+  type: surveyTypeSchema,
   status: z.enum(['draft', 'open', 'closed']),
   description: z.string().nullable(),
   primary_managed_system_id: z.string().uuid(),

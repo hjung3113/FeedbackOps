@@ -1,8 +1,13 @@
-import type { SurveyDto, SurveyQuestionDto } from '@fops/shared';
+import type {
+  SurveyType as SharedSurveyType,
+  SurveyDto,
+  SurveyQuestionDto,
+  SurveyQuestionKind,
+} from '@fops/shared';
 
-export type SurveyType = 'discovery' | 'validation' | 'outcome';
+export type SurveyType = SharedSurveyType;
 export type SurveyStatus = 'draft' | 'open' | 'closed';
-export type QuestionKind = 'single_choice' | 'multiple_choice' | 'rating' | 'text';
+export type QuestionKind = SurveyQuestionKind;
 
 /**
  * Wire-validated aliases (#398): these are the shared runtime schemas'
