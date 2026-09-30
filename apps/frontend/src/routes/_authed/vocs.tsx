@@ -39,6 +39,8 @@ const vocSearchSchema = z
 
 type VocSearch = z.infer<typeof vocSearchSchema>;
 
+export const VOC_DEFAULT_VIEW = 'inbox' as const;
+
 export const Route = createFileRoute('/_authed/vocs')({
   validateSearch: (raw) => vocSearchSchema.parse(raw),
   component: VocRouteShell,
@@ -90,7 +92,7 @@ export function VocRouteShell() {
     );
   }
   // inbox / my / default
-  const view = search.view ?? 'inbox';
+  const view = search.view ?? VOC_DEFAULT_VIEW;
   return <InboxShell view={view} />;
 }
 

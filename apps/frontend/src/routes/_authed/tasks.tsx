@@ -16,19 +16,22 @@ export const tasksSearchSchema = z
 
 type TasksSearch = z.infer<typeof tasksSearchSchema>;
 
+export const TASKS_DEFAULT_VIEW = 'my' as const;
+
 export const Route = createFileRoute('/_authed/tasks')({
   validateSearch: (raw) => tasksSearchSchema.parse(raw),
   component: TasksRouteShell,
 });
 
 export function TasksRouteView({ search }: { search: TasksSearch }) {
+  const view = search.view ?? TASKS_DEFAULT_VIEW;
   const managedSystemProps =
     search.managedSystem !== undefined ? { managedSystem: search.managedSystem } : {};
   const selectedParamProps = search.param !== undefined ? { selectedParam: search.param } : {};
-  if (search.view === 'requests') {
+  if (view === 'requests') {
     return <TaskRequestsRoute {...managedSystemProps} {...selectedParamProps} />;
   }
-  if (search.view === 'board') {
+  if (view === 'board') {
     return (
       <TaskBoardRoute
         {...managedSystemProps}
@@ -37,7 +40,7 @@ export function TasksRouteView({ search }: { search: TasksSearch }) {
       />
     );
   }
-  if (search.view === 'milestones') {
+  if (view === 'milestones') {
     return <MilestonesRoute {...managedSystemProps} {...selectedParamProps} />;
   }
   return <TaskListRoute {...managedSystemProps} {...selectedParamProps} />;

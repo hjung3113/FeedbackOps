@@ -138,8 +138,15 @@ describe('_authed sidebar navigation tree', () => {
   });
 });
 
-describe('_authed VOC sidebar current destination', () => {
+describe('_authed sidebar current destination', () => {
   it.each([
+    { route: 'Default Inbox', pathname: '/vocs', searchStr: '', expectedId: 'inbox' },
+    {
+      route: 'Default Inbox with selected VOC',
+      pathname: '/vocs',
+      searchStr: '?selected=11111111-1111-4111-8111-111111111111',
+      expectedId: 'inbox',
+    },
     { route: 'Inbox', pathname: '/vocs', searchStr: '?view=inbox', expectedId: 'inbox' },
     { route: 'Triage', pathname: '/vocs', searchStr: '?view=triage', expectedId: 'triage' },
     {
@@ -173,11 +180,18 @@ describe('_authed VOC sidebar current destination', () => {
       searchStr: '?action=create',
       expectedId: 'inbox',
     },
+    {
+      route: 'Default Task list',
+      pathname: '/tasks',
+      searchStr: '',
+      expectedId: 'my-tasks',
+    },
   ])('marks only $expectedId current for $route', ({ pathname, searchStr, expectedId }) => {
     localStorage.removeItem('appSidebarCollapsed');
-    render(<AppSidebar entries={getSidebarEntryStates(NAV_TREE.voc, pathname, searchStr)} />);
+    const entries = pathname === '/tasks' ? NAV_TREE.tasks : NAV_TREE.voc;
+    render(<AppSidebar entries={getSidebarEntryStates(entries, pathname, searchStr)} />);
 
-    const navLinks = NAV_TREE.voc.map((entry) => screen.getByTestId(`sidebar-nav-${entry.id}`));
+    const navLinks = entries.map((entry) => screen.getByTestId(`sidebar-nav-${entry.id}`));
     const currentLinks = navLinks.filter((entry) => entry.getAttribute('aria-current') === 'page');
     expect(currentLinks).toHaveLength(1);
     expect(currentLinks[0]).toBe(screen.getByTestId(`sidebar-nav-${expectedId}`));
@@ -189,15 +203,19 @@ describe('_authed VOC sidebar current destination', () => {
       );
     }
 
-    const createEntry = screen.getByTestId('sidebar-nav-create');
-    expect(createEntry).not.toHaveAttribute('aria-current', 'page');
-    expect(createEntry).not.toHaveClass('bg-surface-row-selected');
+    const createEntry = screen.queryByTestId('sidebar-nav-create');
+    if (createEntry !== null) {
+      expect(createEntry).not.toHaveAttribute('aria-current', 'page');
+      expect(createEntry).not.toHaveClass('bg-surface-row-selected');
+    }
 
     if (['high-severity', 'unassigned', 'no-link'].includes(expectedId)) {
       const triageEntry = screen.getByTestId('sidebar-nav-triage');
       expect(triageEntry).not.toHaveAttribute('aria-current', 'page');
       expect(triageEntry).not.toHaveClass('bg-surface-row-selected');
       expect(triageEntry).toHaveClass('text-text-primary');
+    } else if (expectedId !== 'triage' && entries.some((entry) => entry.id === 'triage')) {
+      expect(screen.getByTestId('sidebar-nav-triage')).not.toHaveClass('font-medium');
     }
   });
 });

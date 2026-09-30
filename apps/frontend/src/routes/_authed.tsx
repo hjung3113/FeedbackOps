@@ -30,6 +30,13 @@ import { AppFrame } from '../lib/layout/AppFrame';
 import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
 import type { AppRouterContext } from './__root';
+import { TASKS_DEFAULT_VIEW } from './_authed/tasks';
+import { VOC_DEFAULT_VIEW } from './_authed/vocs';
+
+const SIDEBAR_ROUTE_DEFAULT_VIEWS: Record<string, string> = {
+  '/vocs': VOC_DEFAULT_VIEW,
+  '/tasks': TASKS_DEFAULT_VIEW,
+};
 
 export const NAV_TREE: Record<Exclude<RailDomain, 'home'>, SidebarNavEntry[]> = {
   voc: [
@@ -204,7 +211,7 @@ export function isSidebarEntryActive(
   pathname: string,
   searchStr: string,
 ): boolean {
-  const [entryPath, entrySearch] = entry.href.split('?');
+  const [entryPath = '', entrySearch] = entry.href.split('?');
   if (entryPath !== pathname) {
     if (entry.id === 'integration-dashboard' || !pathname.startsWith(`${entryPath}/`)) {
       return false;
@@ -214,11 +221,11 @@ export function isSidebarEntryActive(
   if (entryParams.has('action')) return false;
 
   const currentParams = new URLSearchParams(searchStr);
-  const isCreatingVoc = entryPath === '/vocs' && currentParams.get('action') === 'create';
+  const defaultView = SIDEBAR_ROUTE_DEFAULT_VIEWS[entryPath];
   for (const [key, expectedValue] of entryParams) {
-    // #606 follows the route behavior despite the prototype highlight: Create is an action,
-    // and its route keeps the default Inbox destination current.
-    const actualValue = key === 'view' && isCreatingVoc ? 'inbox' : currentParams.get(key);
+    // #606 follows each route's default view; New VOC is an action, so its URL resolves to Inbox.
+    const actualValue =
+      key === 'view' ? (currentParams.get(key) ?? defaultView) : currentParams.get(key);
     if (actualValue !== expectedValue) return false;
   }
   return true;
