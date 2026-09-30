@@ -14,6 +14,8 @@ vi.mock('@/lib/api/analytics-areas', () => ({ fetchAnalyticsAreas: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 import { type AnalyticsAreaDto, fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
+import { findingSeveritySchema } from '@fops/shared';
 import { CreateFindingModal } from '../CreateFindingModal';
 
 const IDS = {
@@ -95,6 +97,22 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
         }),
     ) as typeof globalThis.fetch;
   });
+
+  it.each(findingSeveritySchema.options)(
+    'renders a display label for severity %s',
+    async (severity) => {
+      renderModal(null);
+      await screen.findByTestId('create-finding-aa-picker');
+      fireEvent.keyDown(screen.getByRole('combobox', { name: '심각도' }), {
+        key: 'ArrowDown',
+      });
+
+      expect(
+        await screen.findByRole('option', { name: FINDING_SEVERITY_LABELS[severity] }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: severity })).not.toBeInTheDocument();
+    },
+  );
 
   afterEach(() => {
     globalThis.fetch = originalFetch;

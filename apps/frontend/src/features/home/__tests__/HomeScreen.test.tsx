@@ -461,8 +461,14 @@ describe('HomeScreen route content', () => {
     });
     renderHome();
     await screen.findByTestId('home-open-requests-list');
-    expect(screen.getByText('workspace.admin')).toBeInTheDocument();
-    expect(screen.getByText('finding.manage')).toBeInTheDocument();
+    const requests = within(screen.getByTestId('home-open-requests-list'));
+    expect(requests.getByText('워크스페이스 관리자 권한')).toBeInTheDocument();
+    expect(requests.getByText('Finding 관리')).toBeInTheDocument();
+    expect(requests.queryByText('workspace.admin')).not.toBeInTheDocument();
+    expect(requests.getByText(/대기 중 ·/)).toBeInTheDocument();
+    expect(requests.getByText(/추가 정보 필요 ·/)).toBeInTheDocument();
+    expect(requests.queryByText(/pending ·/)).not.toBeInTheDocument();
+    expect(requests.queryByText(/needs_more_info ·/)).not.toBeInTheDocument();
   });
 
   it('renders the empty state without the request list after the query resolves', async () => {

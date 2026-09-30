@@ -160,8 +160,8 @@ describe('/surveys/:surveyId route', () => {
         <SurveyDetailRoute />
       </QueryClientProvider>,
     );
-    const settings = screen.getByText('Survey settings').closest('aside');
-    if (!settings) throw new Error('Expected the builder Survey settings rail');
+    const settings = screen.getByText('설문 설정').closest('aside');
+    if (!settings) throw new Error('Expected the builder 설문 설정 rail');
     expect(within(settings).getByText('Revenue Analytics')).toBeInTheDocument();
   });
 

@@ -1,3 +1,5 @@
+import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
+import { triageStateEnumSchema } from '@fops/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -83,15 +85,16 @@ describe('<TriageBlock>', () => {
     expect(screen.queryByText(areaId.slice(0, 8))).not.toBeInTheDocument();
   });
 
-  it('renders triage_state value', () => {
+  it.each(triageStateEnumSchema.options)('renders a display label for triage state %s', (state) => {
     render(
       <TriageBlock
-        voc={{ ...DETAIL_ENVELOPE, triage_state: 'triaged' }}
+        voc={{ ...DETAIL_ENVELOPE, triage_state: state }}
         canTriage={false}
         onOpenTriage={vi.fn()}
       />,
     );
-    expect(screen.getByText('triaged')).toBeInTheDocument();
+    expect(screen.getByText(TRIAGE_STATE_LABELS[state])).toBeInTheDocument();
+    expect(screen.queryByText(state, { exact: true })).not.toBeInTheDocument();
   });
 
   it('opens the triage console once when authorized', () => {

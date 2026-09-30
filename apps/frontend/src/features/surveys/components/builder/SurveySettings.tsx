@@ -12,7 +12,7 @@ export function SurveySettings({
 }) {
   return (
     <aside className="border-l border-border-subtle p-4">
-      <p className="text-xs uppercase text-text-muted">Survey settings</p>
+      <p className="text-xs uppercase text-text-muted">설문 설정</p>
       <p className="mt-3 text-sm">Managed System</p>
       <SurveyManagedSystemPill name={managedSystemName} resolved={managedSystemResolved} />
       <p className="mt-5 text-sm">응답 익명성</p>

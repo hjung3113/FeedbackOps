@@ -9,6 +9,7 @@ import {
   type TaskPriority,
   type TaskRequestDto,
   convertTaskRequestRequestSchema,
+  taskPrioritySchema,
 } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
@@ -21,7 +22,7 @@ export interface UseTaskRequestConversionArgs {
   currentRole: string | null;
 }
 
-export const TASK_PRIORITIES: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
+export const TASK_PRIORITIES: readonly TaskPriority[] = taskPrioritySchema.options;
 
 export interface UseTaskRequestConversionResult {
   open: boolean;

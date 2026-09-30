@@ -1,4 +1,6 @@
 import type { FrontendPermissionState } from '@/lib/api';
+import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
+import { surveyTypeSchema } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -129,5 +131,23 @@ describe('SurveyList empty state', () => {
       '담당 관리자에게 문의하세요.',
     );
     expect(screen.queryByTestId('request-access-survey.manage')).not.toBeInTheDocument();
+  });
+});
+
+describe('SurveyList type labels', () => {
+  it.each(surveyTypeSchema.options)('renders a display label for survey type %s', (type) => {
+    render(
+      <SurveyList
+        surveys={[{ ...survey, type }]}
+        isLoading={false}
+        error={null}
+        onSelect={vi.fn()}
+        onCreate={vi.fn()}
+        canCreate
+      />,
+    );
+
+    expect(screen.getByText(SURVEY_TYPE_LABELS[type])).toBeInTheDocument();
+    expect(screen.queryByText(type, { exact: true })).not.toBeInTheDocument();
   });
 });

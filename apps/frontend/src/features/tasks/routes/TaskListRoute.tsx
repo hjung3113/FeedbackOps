@@ -1,7 +1,8 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { listTasks } from '@/lib/api';
-import { isPermissionDenied } from '@/lib/api/types';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { isPermissionDenied } from '@/lib/api/types';
+import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import type { TaskDto } from '@fops/shared';
@@ -126,7 +127,7 @@ export function TaskListRoute({
               badges={<InternalTaskBadge status={task.status} />}
               meta={
                 <>
-                  <span>{task.priority}</span>
+                  <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
                   {dot()}
                   <span>
                     {task.assignee_actor_id

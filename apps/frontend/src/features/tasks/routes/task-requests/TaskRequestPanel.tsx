@@ -1,4 +1,9 @@
 import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
+import {
+  FINDING_STATUS_LABELS,
+  TASK_PRIORITY_LABELS,
+  TASK_REQUEST_STATUS_LABELS,
+} from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
 import type { TaskPriority, TaskRequestDto } from '@fops/shared';
 import {
@@ -7,6 +12,7 @@ import {
   DetailPanelHeaderActions,
   DetailPanelSectionNav,
   FieldRow,
+  InternalTaskBadge,
   ManagedSystemPill,
   ObjectRow,
   OutlineBadge,
@@ -19,7 +25,7 @@ import { Check, FileSearch, Link2, XCircle } from 'lucide-react';
 import * as React from 'react';
 
 import { TaskRequestDecisionDialog } from './TaskRequestDecisionDialog';
-import { type NameMaps, STATUS_LABELS, TaskRequestBadge, dot } from './TaskRequestRow';
+import { type NameMaps, TaskRequestBadge, dot } from './TaskRequestRow';
 import { formatDate } from './predicates';
 import { TASK_PRIORITIES, useTaskRequestConversion } from './useTaskRequestConversion';
 import { useTaskRequestDecision } from './useTaskRequestDecision';
@@ -95,7 +101,7 @@ export function TaskRequestPanel({
         </div>
 
         <section data-anchor="decision" className="border-t border-border-subtle px-4 py-4">
-          <PanelSectionTitle>Review decision</PanelSectionTitle>
+          <PanelSectionTitle>검토 결정</PanelSectionTitle>
           <div className="flex flex-col gap-2">
             <Button
               type="button"
@@ -106,7 +112,7 @@ export function TaskRequestPanel({
               onClick={decision.approve}
             >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
-              Approve
+              승인
             </Button>
             <div className="grid grid-cols-2 gap-2">
               <Button
@@ -120,7 +126,7 @@ export function TaskRequestPanel({
                 }}
               >
                 <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Link existing
+                기존 Task 연결
               </Button>
               <Button
                 type="button"
@@ -131,13 +137,13 @@ export function TaskRequestPanel({
                 onClick={decision.requestEvidence}
               >
                 <FileSearch className="h-3.5 w-3.5" aria-hidden="true" />
-                Need evidence
+                근거 추가 요청
               </Button>
             </div>
             {link.open && (
               <div className="max-h-52 overflow-y-auto rounded border border-border-subtle bg-surface-card">
                 {link.isTasksLoading && (
-                  <div className="p-3 text-xs text-text-muted">Loading Tasks...</div>
+                  <div className="p-3 text-xs text-text-muted">Task 불러오는 중...</div>
                 )}
                 {link.inScopeTasks?.map((task) => (
                   <ObjectRow
@@ -147,22 +153,23 @@ export function TaskRequestPanel({
                     density="compact"
                     severity="low"
                     onClick={() => link.link(task.id)}
-                    badges={<OutlineBadge>{task.status}</OutlineBadge>}
+                    badges={<InternalTaskBadge status={task.status} />}
                     meta={
                       <>
-                        <span>{task.priority}</span>
+                        <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
                         {dot()}
                         <span>
                           {task.assignee_actor_id
-                            ? (names.actorsById[task.assignee_actor_id]?.display_name ?? 'Assigned')
-                            : 'Unassigned'}
+                            ? (names.actorsById[task.assignee_actor_id]?.display_name ??
+                              '담당자 지정됨')
+                            : '미배정'}
                         </span>
                       </>
                     }
                   />
                 ))}
                 {link.inScopeTasks?.length === 0 && (
-                  <div className="p-3 text-xs text-text-muted">No in-scope Tasks.</div>
+                  <div className="p-3 text-xs text-text-muted">범위 내 Task가 없습니다.</div>
                 )}
               </div>
             )}
@@ -177,7 +184,7 @@ export function TaskRequestPanel({
               }}
             >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
-              Convert to Task
+              Task로 전환
             </Button>
             {conversion.open && (
               <form
@@ -185,7 +192,7 @@ export function TaskRequestPanel({
                 onSubmit={conversion.submit}
               >
                 <label className="flex flex-col gap-1 text-xs text-text-muted">
-                  Title
+                  제목
                   <input
                     ref={conversion.titleInputRef}
                     className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
@@ -218,7 +225,7 @@ export function TaskRequestPanel({
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="flex flex-col gap-1 text-xs text-text-muted">
-                    Priority
+                    우선순위
                     <select
                       className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
                       value={conversion.priority}
@@ -228,13 +235,13 @@ export function TaskRequestPanel({
                     >
                       {TASK_PRIORITIES.map((priority) => (
                         <option key={priority} value={priority}>
-                          {priority}
+                          {TASK_PRIORITY_LABELS[priority]}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label className="flex flex-col gap-1 text-xs text-text-muted">
-                    Due date
+                    마감일
                     <input
                       type="date"
                       className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
@@ -244,13 +251,13 @@ export function TaskRequestPanel({
                   </label>
                 </div>
                 <label className="flex flex-col gap-1 text-xs text-text-muted">
-                  Assignee
+                  담당자
                   <select
                     className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
                     value={conversion.assigneeId}
                     onChange={(event) => conversion.setAssigneeId(event.target.value)}
                   >
-                    <option value="">Unassigned</option>
+                    <option value="">미배정</option>
                     {Object.values(names.actorsById).map((actor) => (
                       <option key={actor.id} value={actor.id}>
                         {actor.display_name}
@@ -265,7 +272,7 @@ export function TaskRequestPanel({
                     value={conversion.analyticsAreaId}
                     onChange={(event) => conversion.setAnalyticsAreaId(event.target.value)}
                   >
-                    <option value="">None</option>
+                    <option value="">없음</option>
                     {conversion.analyticsAreas?.map((area) => (
                       <option key={area.id} value={area.id}>
                         {area.name}
@@ -280,7 +287,7 @@ export function TaskRequestPanel({
                     value={conversion.milestoneId}
                     onChange={(event) => conversion.setMilestoneId(event.target.value)}
                   >
-                    <option value="">None</option>
+                    <option value="">없음</option>
                     {conversion.milestones?.map((milestone) => (
                       <option key={milestone.id} value={milestone.id}>
                         {milestone.title}
@@ -298,7 +305,7 @@ export function TaskRequestPanel({
                       conversion.milestoneSelectionUnavailable) &&
                       conversion.milestoneId !== '' && (
                         <option value={conversion.milestoneId} disabled>
-                          Unavailable
+                          확인할 수 없음
                         </option>
                       )}
                   </select>
@@ -317,7 +324,7 @@ export function TaskRequestPanel({
                     >
                       {conversion.milestonePickerError.denied
                         ? conversion.milestonePickerError.message
-                        : 'Milestone list unavailable.'}
+                        : 'Milestone 목록을 불러올 수 없습니다.'}
                     </span>
                   )}
                 </label>
@@ -329,7 +336,7 @@ export function TaskRequestPanel({
                   disabled={!conversion.canConvert}
                   data-testid="task-request-convert-submit"
                 >
-                  Convert to Task
+                  Task로 전환
                 </Button>
               </form>
             )}
@@ -343,25 +350,29 @@ export function TaskRequestPanel({
               onClick={decision.reject}
             >
               <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-              Reject
+              반려
             </Button>
           </div>
         </section>
 
         {item.source_type === 'finding' && (
           <section data-anchor="source" className="border-t border-border-subtle px-4 py-4">
-            <PanelSectionTitle>Source finding</PanelSectionTitle>
+            <PanelSectionTitle>출처 Finding</PanelSectionTitle>
             <div className="flex flex-col gap-2 rounded border border-border-subtle bg-surface-card p-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-text-muted">FROM</span>
+                <span className="text-xs text-text-muted">출처</span>
                 <OutlineBadge>Finding</OutlineBadge>
               </div>
               <div className="flex flex-col gap-1">
                 <div className="text-sm font-medium text-text-primary">
-                  {sourceFindingQuery.data?.title ?? 'Source finding'}
+                  {sourceFindingQuery.data?.title ?? '출처 Finding'}
                 </div>
                 <div className="flex items-center gap-2">
-                  <OutlineBadge>{sourceFindingQuery.data?.status ?? 'finding'}</OutlineBadge>
+                  {sourceFindingQuery.data && (
+                    <OutlineBadge>
+                      {FINDING_STATUS_LABELS[sourceFindingQuery.data.status]}
+                    </OutlineBadge>
+                  )}
                   <span className="font-mono text-xs text-text-muted">
                     {sourceFindingQuery.data?.display_id ?? 'Finding'}
                   </span>
@@ -378,7 +389,7 @@ export function TaskRequestPanel({
         )}
 
         <section data-anchor="properties" className="border-t border-border-subtle px-4 py-4">
-          <PanelSectionTitle>Properties</PanelSectionTitle>
+          <PanelSectionTitle>속성</PanelSectionTitle>
           <FieldRow label="Managed System">
             <span className="flex flex-col gap-1">
               <ManagedSystemPill
@@ -393,17 +404,17 @@ export function TaskRequestPanel({
               )}
             </span>
           </FieldRow>
-          <FieldRow label="Reviewer">
+          <FieldRow label="검토자">
             {reviewer ? (
               <UserChip
                 user={{ display_name: reviewer.display_name }}
                 {...(reviewer.email !== undefined ? { sub: reviewer.email } : {})}
               />
             ) : (
-              <span className="text-xs text-text-muted">No reviewer</span>
+              <span className="text-xs text-text-muted">검토자 없음</span>
             )}
           </FieldRow>
-          <FieldRow label="Self-approval">
+          <FieldRow label="본인 승인">
             <span className="rounded border border-border-subtle px-2 py-0.5 text-xs text-text-muted">
               requires scoped capability
             </span>
@@ -426,7 +437,7 @@ export function TaskRequestPanel({
                   {reviewer?.display_name ?? 'Reviewer'}
                 </strong>
                 {' · '}
-                {STATUS_LABELS[item.status]}
+                {TASK_REQUEST_STATUS_LABELS[item.status]}
                 {' · '}
                 {formatDate(item.decided_at)}
               </div>

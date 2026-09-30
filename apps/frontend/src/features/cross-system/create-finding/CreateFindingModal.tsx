@@ -4,10 +4,12 @@
 
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
+import { FINDING_SEVERITY_LABELS } from '@/lib/copy/enum-labels';
 import {
   type CreateFindingRequest,
   type FindingSeverity,
   createFindingRequestSchema,
+  findingSeveritySchema,
 } from '@fops/shared';
 import {
   AnalyticsAreaPicker,
@@ -46,12 +48,10 @@ export interface CreateFindingModalProps {
 
 // ── Severity options ──────────────────────────────────────────────────────────
 
-const SEVERITY_OPTIONS: { value: FindingSeverity; label: string }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'critical', label: 'Critical' },
-];
+const SEVERITY_OPTIONS = findingSeveritySchema.options.map((value) => ({
+  value,
+  label: FINDING_SEVERITY_LABELS[value],
+}));
 
 type TextFieldName = 'title' | 'summary';
 type TextFieldInteraction = 'untouched' | 'edited' | 'edited-blurred';

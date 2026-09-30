@@ -160,7 +160,8 @@ describe('<RequestAccessButton>', () => {
     expect(screen.getByText(CAPABILITY)).toBeInTheDocument();
     expect(screen.getByText(MANAGED_SYSTEM_ID)).toBeInTheDocument();
     expect(screen.getByText(REASON)).toBeInTheDocument();
-    expect(screen.getByText('pending')).toBeInTheDocument();
+    expect(screen.getByText('대기 중')).toBeInTheDocument();
+    expect(screen.queryByText('pending')).not.toBeInTheDocument();
     expect(screen.getByText(CREATED_AT)).toBeInTheDocument();
   });
 

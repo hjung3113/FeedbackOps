@@ -1,6 +1,11 @@
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
-import { type MilestoneDto, convertTaskRequestRequestSchema } from '@fops/shared';
+import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import {
+  type MilestoneDto,
+  convertTaskRequestRequestSchema,
+  taskPrioritySchema,
+} from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -131,7 +136,7 @@ function renderRoute(requestedOutcome = requestedOutcome225) {
 async function openConvertForm() {
   renderRoute();
   await screen.findByText('REQ-42');
-  fireEvent.click(screen.getByRole('button', { name: 'Convert to Task' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Task로 전환' }));
   return screen.findByTestId('task-request-convert-title-input');
 }
 
@@ -165,7 +170,7 @@ describe('TaskRequestsRoute conversion title', () => {
   it('AC-C6c leaves a 69-character requested outcome unchanged', async () => {
     renderRoute(requestedOutcome69);
     await screen.findByText('REQ-42');
-    fireEvent.click(screen.getByRole('button', { name: 'Convert to Task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Task로 전환' }));
     expect(await screen.findByTestId('task-request-convert-title-input')).toHaveValue(
       requestedOutcome69,
     );
@@ -189,6 +194,21 @@ describe('TaskRequestsRoute conversion title', () => {
   });
 });
 
+describe('TaskRequestsRoute conversion priority labels', () => {
+  it.each(taskPrioritySchema.options)(
+    'renders a display label for priority %s',
+    async (priority) => {
+      await openConvertForm();
+
+      const select = screen.getByRole('combobox', { name: '우선순위' });
+      expect(
+        within(select).getByRole('option', { name: TASK_PRIORITY_LABELS[priority] }),
+      ).toBeInTheDocument();
+      expect(within(select).queryByRole('option', { name: priority })).not.toBeInTheDocument();
+    },
+  );
+});
+
 describe('TaskRequestsRoute conversion milestone picker', () => {
   beforeEach(() => {
     api.convertTaskRequest.mockResolvedValue({ display_id: 'TASK-7' });
@@ -203,7 +223,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     const optionNames = within(select)
       .getAllByRole('option')
       .map((option) => option.textContent);
-    expect(optionNames).toEqual(['None', milestoneForRequestSystem.title]);
+    expect(optionNames).toEqual(['없음', milestoneForRequestSystem.title]);
     expect(optionNames).not.toContain(milestoneForOtherSystem.title);
     expect(vi.mocked(listMilestones)).toHaveBeenCalledWith(
       expect.objectContaining({ managed_system_id: taskRequest.primary_managed_system_id }),
@@ -299,7 +319,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     });
 
     // A generic outage is not a permission denial.
-    expect(await screen.findByText('Milestone list unavailable.')).toBeInTheDocument();
+    expect(await screen.findByText('Milestone 목록을 불러올 수 없습니다.')).toBeInTheDocument();
     expect(screen.queryByText('finding.manage required')).not.toBeInTheDocument();
 
     // None is an explicit choice, not a retained selection: the form stays
@@ -348,7 +368,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     // The held selection keeps a disabled, identity-free slot: the select
     // shows what is actually held instead of pretending it is None.
     const unavailable = within(select).getByRole('option', {
-      name: 'Unavailable',
+      name: '확인할 수 없음',
     }) as HTMLOptionElement;
     expect(unavailable).toBeDisabled();
     expect(unavailable.value).toBe(milestoneForRequestSystem.id);
@@ -360,9 +380,9 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     // is the unavailable slot, not None itself (userEvent, not a fabricated
     // same-value change).
     const user = userEvent.setup();
-    await user.selectOptions(select, within(select).getByRole('option', { name: 'None' }));
+    await user.selectOptions(select, within(select).getByRole('option', { name: '없음' }));
     expect(select).toHaveValue('');
-    expect(within(select).queryByRole('option', { name: 'Unavailable' })).not.toBeInTheDocument();
+    expect(within(select).queryByRole('option', { name: '확인할 수 없음' })).not.toBeInTheDocument();
 
     // The deliberate None converts with an explicit null payload.
     const callsBeforeSubmit = api.convertTaskRequest.mock.calls.length;
@@ -411,7 +431,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
       ).not.toBeInTheDocument();
     });
     const unavailable = within(select).getByRole('option', {
-      name: 'Unavailable',
+      name: '확인할 수 없음',
     }) as HTMLOptionElement;
     expect(unavailable).toBeDisabled();
     expect(unavailable.value).toBe(milestoneForRequestSystem.id);
@@ -425,7 +445,7 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     expect(api.convertTaskRequest.mock.calls.length).toBe(callsBeforeSubmit);
 
     const user = userEvent.setup();
-    await user.selectOptions(select, within(select).getByRole('option', { name: 'None' }));
+    await user.selectOptions(select, within(select).getByRole('option', { name: '없음' }));
     expect(select).toHaveValue('');
     fireEvent.click(screen.getByTestId('task-request-convert-submit'));
     await waitFor(() => {
@@ -448,7 +468,7 @@ async function openConvertFormReturnsClient() {
     </QueryClientProvider>,
   );
   await screen.findByText('REQ-42');
-  fireEvent.click(screen.getByRole('button', { name: 'Convert to Task' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Task로 전환' }));
   await screen.findByTestId('task-request-convert-title-input');
   return { queryClient };
 }

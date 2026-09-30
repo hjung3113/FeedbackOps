@@ -3,6 +3,7 @@ import { useFindingDetail } from '@/features/findings/hooks/useFindingDetail';
 import { useRequestTaskFromFinding } from '@/features/findings/hooks/useRequestTaskFromFinding';
 import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { SURVEY_RESULT_KIND_LABELS } from '@/lib/copy/enum-labels';
 import type { OutcomeFollowUpReadDto, SurveyResultDto } from '@fops/shared';
 import { Button, EmptyState } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
@@ -48,7 +49,7 @@ function QuestionResult({
       <div className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
         <span>Q{index + 1}</span>
         <span className="rounded border border-border-subtle px-1.5 py-0.5 text-xs capitalize">
-          {result.kind}
+          {SURVEY_RESULT_KIND_LABELS[result.kind]}
         </span>
         <span>{result.answer_count} responses</span>
       </div>

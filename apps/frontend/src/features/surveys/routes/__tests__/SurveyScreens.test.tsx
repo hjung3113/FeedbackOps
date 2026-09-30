@@ -1,4 +1,6 @@
+import { SURVEY_QUESTION_KIND_LABELS } from '@/lib/copy/enum-labels';
 import { CreateSurveyDialog } from '@/routes/_authed/surveys/index';
+import { surveyQuestionKindSchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   RouterProvider,
@@ -360,7 +362,7 @@ describe('Survey screens', () => {
       expect(screen.getByText(`${label} 상태 — 질문 변경은 잠겨 있습니다.`)).toBeInTheDocument();
       expect(screen.queryByText(status, { exact: true })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '새 질문 추가' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '초안 저장' })).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Survey title')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('질문 드래그 핸들')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Q1 위로 이동' })).not.toBeInTheDocument();
@@ -408,12 +410,32 @@ describe('Survey screens', () => {
     expect(screen.queryByText('첫 질문을 추가하세요')).not.toBeInTheDocument();
   });
 
+  it.each(surveyQuestionKindSchema.options)(
+    'renders a display label for question kind %s',
+    (kind) => {
+      renderWithQuery(
+        <SurveyBuilder
+          survey={{
+            ...survey,
+            questions: [{ ...question('question-1', '도움이 되었나요?', 0), kind }],
+          }}
+          canManage
+          onBack={vi.fn()}
+        />,
+      );
+
+      const picker = screen.getByRole('combobox', { name: '질문 유형' });
+      expect(picker).toHaveTextContent(SURVEY_QUESTION_KIND_LABELS[kind]);
+      expect(picker).not.toHaveTextContent(kind);
+    },
+  );
+
   it('creates a rating question with its default bounds from an empty builder', async () => {
     renderWithQuery(
       <SurveyBuilder survey={{ ...survey, questions: [] }} canManage onBack={vi.fn()} />,
     );
     fireEvent.click(screen.getByRole('button', { name: /^척도/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
 
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
@@ -449,7 +471,7 @@ describe('Survey screens', () => {
 
     expect(await screen.findByText('Q3 사용성 진단')).toBeInTheDocument();
     expect(screen.getByText('SRV-1')).toBeInTheDocument();
-    expect(screen.getByText('discovery')).toBeInTheDocument();
+    expect(screen.getByText('탐색')).toBeInTheDocument();
     expect(screen.getByText('Draft')).toBeInTheDocument();
     expect(screen.getByText('담당자 · 담당자 미지정')).toBeInTheDocument();
     expect(screen.getByText('Q1. 도움이 되었나요?')).toBeInTheDocument();
@@ -665,7 +687,7 @@ describe('Survey screens', () => {
 
     expect(apiClient).not.toHaveBeenCalled();
     expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '초안 저장' })).toBeEnabled();
   });
 
   it('AC-2 saves one changed question once and marks the draft saved', async () => {
@@ -674,7 +696,7 @@ describe('Survey screens', () => {
       target: { value: '저장된 질문 프롬프트' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
 
     await waitFor(() =>
       expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(1),
@@ -683,7 +705,7 @@ describe('Survey screens', () => {
       prompt: '저장된 질문 프롬프트',
     });
     await waitFor(() => expect(screen.getByText(/^Saved at /)).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '초안 저장' })).toBeDisabled();
   });
 
   it('AC-3 saves the distinct survey title with one scalar PATCH', async () => {
@@ -692,7 +714,7 @@ describe('Survey screens', () => {
       target: { value: '제목 전용 픽스처' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
 
     await waitFor(() => expect(calls('PATCH', '/surveys/survey-1')).toHaveLength(1));
     expect(calls('PATCH', '/surveys/survey-1')[0]?.[2].body).toEqual({
@@ -718,7 +740,7 @@ describe('Survey screens', () => {
     fireEvent.dragStart(screen.getByTestId('survey-question-row-question-3'), { dataTransfer });
     fireEvent.dragOver(screen.getByTestId('survey-question-row-question-1'), { dataTransfer });
     fireEvent.drop(screen.getByTestId('survey-question-row-question-1'), { dataTransfer });
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
 
     await waitFor(() =>
       expect(calls('PATCH', '/surveys/survey-1/questions/reorder')).toHaveLength(1),
@@ -737,7 +759,7 @@ describe('Survey screens', () => {
     renderWithQuery(<SurveyBuilder survey={{ ...survey, questions }} canManage onBack={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Q1 아래로 이동' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
 
     await waitFor(() =>
       expect(calls('PATCH', '/surveys/survey-1/questions/reorder')).toHaveLength(1),
@@ -756,14 +778,14 @@ describe('Survey screens', () => {
       target: { value: '재시도 보존 프롬프트' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() => expect(screen.getByText('저장하지 못했습니다.')).toBeInTheDocument());
     expect(screen.getByDisplayValue('재시도 보존 프롬프트')).toBeInTheDocument();
     expect(screen.getByText('저장되지 않은 변경 사항')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '초안 저장' })).toBeEnabled();
     const firstBody = calls('PATCH', '/surveys/survey-1/questions/question-1')[0]?.[2].body;
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() =>
       expect(calls('PATCH', '/surveys/survey-1/questions/question-1')).toHaveLength(2),
     );
@@ -797,8 +819,8 @@ describe('Survey screens', () => {
     fireEvent.click(screen.getByTestId('survey-empty-create-button'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('제목'), { target: { value: '신규 설문 제목' } });
-    fireEvent.click(screen.getByRole('combobox', { name: 'Survey type' }));
-    fireEvent.click(screen.getByRole('option', { name: 'validation' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '설문 유형' }));
+    fireEvent.click(screen.getByRole('option', { name: '검증' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'Managed System' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Tableau' }));
     fireEvent.click(screen.getByRole('combobox', { name: '응답 익명 보호' }));
@@ -836,14 +858,14 @@ describe('Survey screens', () => {
     'sends a strict PATCH payload when changing to %s',
     async (kind) => {
       renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
-      fireEvent.click(screen.getByRole('combobox', { name: 'Question kind' }));
-      fireEvent.click(screen.getByRole('option', { name: kind }));
+      fireEvent.click(screen.getByRole('combobox', { name: '질문 유형' }));
+      fireEvent.click(screen.getByRole('option', { name: SURVEY_QUESTION_KIND_LABELS[kind] }));
       if (kind === 'single_choice') {
         fireEvent.change(screen.getByDisplayValue('도움이 되었나요?'), {
           target: { value: '수정된 단일 선택' },
         });
       }
-      fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+      fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
       await waitFor(() =>
         expect(apiClient).toHaveBeenCalledWith(
           'PATCH',
@@ -866,7 +888,7 @@ describe('Survey screens', () => {
       target: { value: '수정된 질문' },
     });
     expect(apiClient).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
         'POST',
@@ -883,7 +905,7 @@ describe('Survey screens', () => {
     const lastDeleteButton = deleteButtons.at(-1);
     if (!lastDeleteButton) throw new Error('Expected a question delete button');
     fireEvent.click(lastDeleteButton);
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
         'DELETE',
@@ -903,7 +925,7 @@ describe('Survey screens', () => {
     });
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() => expect(resolveCreate).toBeDefined());
     fireEvent.change(screen.getByDisplayValue('새 질문'), { target: { value: 'POST 중 수정' } });
     await act(async () => resolveCreate?.({ data: { id: 'question-created' } }));
@@ -919,7 +941,7 @@ describe('Survey screens', () => {
   it('creates a single-choice question from the populated builder add button', async () => {
     renderWithQuery(<SurveyBuilder survey={survey} canManage onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '새 질문 추가' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
 
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith(
@@ -950,7 +972,7 @@ describe('Survey screens', () => {
     );
     fireEvent.click(screen.getByText('Q2'));
     fireEvent.change(screen.getByLabelText('분기 부모 질문'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() =>
       expect(calls('PATCH', '/surveys/survey-1/questions/question-2')).toHaveLength(1),
     );
@@ -1002,7 +1024,7 @@ describe('Survey screens', () => {
     );
     fireEvent.click(screen.getByText('Q2'));
     fireEvent.change(screen.getByLabelText('분기 부모 질문'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: '초안 저장' }));
     await waitFor(() => expect(resolvePatch).toBeDefined());
     // The busyQuestionIds lock existed only because the in-flight recreate
     // invalidated the id an edit would target. With a stable id, edits during
@@ -1044,7 +1066,7 @@ describe('Survey screens', () => {
     fireEvent.change(screen.getByLabelText('분기 조건 옵션'), {
       target: { value: 'yes' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: '미리보기' }));
     const preview = screen.getByRole('dialog');
     expect(within(preview).queryByText(/Q2\. 추가 질문/)).not.toBeInTheDocument();
     fireEvent.click(within(preview).getByLabelText('예'));

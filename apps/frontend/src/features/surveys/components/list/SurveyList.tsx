@@ -1,6 +1,7 @@
 import { ListStateMessage } from '@/components/ListStateMessage';
 import { RequestAccessButton } from '@/features/admin/permissions/request-access-button';
 import type { FrontendPermissionState } from '@/lib/api';
+import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { Button, Input, Skeleton, UserAvatar } from '@fops/ui';
 import { Grid2X2, List, Plus } from 'lucide-react';
 import * as React from 'react';
@@ -206,7 +207,7 @@ export function SurveyList({
                     <span aria-hidden="true">·</span>
                     <SurveyStatusBadge status={survey.status} />
                     <span aria-hidden="true">·</span>
-                    <span>{survey.type}</span>
+                    <span>{SURVEY_TYPE_LABELS[survey.type]}</span>
                     <span aria-hidden="true">·</span>
                     <SurveyManagedSystemPill
                       name={managedSystemNamesById?.get(survey.primary_managed_system_id)}

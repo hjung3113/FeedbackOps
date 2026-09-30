@@ -5,6 +5,7 @@ import { ProgressNotesSection } from '@/features/cross-system/progress-notes/Pro
 import { useRequestTaskFromFinding } from '@/features/findings/hooks/useRequestTaskFromFinding';
 import { TaskRequestDraftCard } from '@/features/tasks/components/TaskRequestDraftCard';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
+import { FINDING_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
 import type { FindingDto, FindingStatus } from '@fops/shared';
 import {
@@ -34,14 +35,6 @@ const SOURCE_TYPE_LABEL: Record<string, string> = {
   voc_cluster: 'VOC Cluster',
   survey: 'Survey',
   manual: 'Manual',
-};
-
-const FINDING_STATUS_LABEL: Record<FindingDto['status'], string> = {
-  draft: '초안',
-  active: '진행 중',
-  not_actionable: '조치 불필요',
-  converted: 'Task 전환됨',
-  archived: '보관됨',
 };
 
 const CONFIDENCE_LABEL: Record<NonNullable<FindingDto['confidence']>, string> = {
@@ -163,7 +156,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
               )}
             </FieldRow>
             <FieldRow label="상태" className="px-0">
-              <FitBadge>{FINDING_STATUS_LABEL[finding.status]}</FitBadge>
+              <FitBadge>{FINDING_STATUS_LABELS[finding.status]}</FitBadge>
             </FieldRow>
             <FieldRow label="생성자" className="px-0">
               <UserChip
@@ -269,7 +262,7 @@ export function FullFindingDetail({ finding }: FullFindingDetailProps): React.Re
               canCompose={canManage}
               actorNamesById={actorsById}
               renderStatusBadge={(status: FindingStatus) => (
-                <FitBadge>{FINDING_STATUS_LABEL[status]}</FitBadge>
+                <FitBadge>{FINDING_STATUS_LABELS[status]}</FitBadge>
               )}
             />
           </div>

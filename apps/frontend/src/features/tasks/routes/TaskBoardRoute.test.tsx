@@ -1,11 +1,13 @@
+import { ApiError } from '@/lib/api/types';
+import { TASK_PRIORITY_LABELS } from '@/lib/copy/enum-labels';
+import { TasksRouteView, tasksSearchSchema } from '@/routes/_authed/tasks';
+import { taskPrioritySchema } from '@fops/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskBoardRoute } from './TaskBoardRoute';
-import { TasksRouteView, tasksSearchSchema } from '@/routes/_authed/tasks';
-import { ApiError } from '@/lib/api/types';
-import { toast } from 'sonner';
 
 const task = {
   id: '10000000-0000-0000-0000-000000000001', workspace_id: '90000000-0000-0000-0000-000000000009', display_id: 'TASK-1000',
@@ -89,6 +91,20 @@ describe('TaskBoardRoute', () => {
     }
     expect(screen.getAllByText('비어있음').length).toBe(6);
   });
+
+  it.each(taskPrioritySchema.options)(
+    'shows a display label for priority %s in filters',
+    async (priority) => {
+      api.listTasks.mockResolvedValue({ items: [task] });
+      renderBoard();
+      await screen.findByText('TASK-1000');
+      fireEvent.click(screen.getByRole('button', { name: '필터' }));
+
+      expect(screen.getByText('우선순위')).toBeInTheDocument();
+      expect(screen.getAllByText(TASK_PRIORITY_LABELS[priority]).length).toBeGreaterThan(0);
+      expect(screen.queryByText(priority, { exact: true })).not.toBeInTheDocument();
+    },
+  );
 
   it('renders permission denied instead of the board unavailable copy for a 403', async () => {
     api.listTasks.mockRejectedValue(new ApiError(403, { code: 'permission.denied', message: 'finding.manage capability required' }));
@@ -198,8 +214,8 @@ describe('TaskBoardRoute', () => {
     expect(api.listTasks).toHaveBeenCalledWith(expect.objectContaining({ public_update: 'missing' }));
     expect(draggableOptions).toContainEqual(expect.objectContaining({ id: gap.id, disabled: false }));
     draggableOptions.length = 0;
-    fireEvent.click(screen.getByRole('button', { name: 'Group by' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Priority' }));
+    fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
+    fireEvent.click(screen.getByRole('radio', { name: '우선순위' }));
     await waitFor(() => expect(draggableOptions).toContainEqual(expect.objectContaining({ id: gap.id, disabled: true })));
 
     cleanup();
@@ -219,13 +235,13 @@ describe('TaskBoardRoute', () => {
     await screen.findByText('TASK-1000');
     expect(draggableOptions).toContainEqual(expect.objectContaining({ id: task.id, disabled: false }));
     draggableOptions.length = 0;
-    fireEvent.click(screen.getByRole('button', { name: 'Group by' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Priority' }));
-    await waitFor(() => expect(screen.getByLabelText('High column')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '그룹화' }));
+    fireEvent.click(screen.getByRole('radio', { name: '우선순위' }));
+    await waitFor(() => expect(screen.getByLabelText('높음 column')).toBeInTheDocument());
     await waitFor(() => expect(draggableOptions).toContainEqual(expect.objectContaining({ id: task.id, disabled: true })));
     fireEvent.click(screen.getByRole('button', { name: 'simulate drag to doing' }));
     expect(api.updateTaskStatus).not.toHaveBeenCalled();
-    expect(toast.warning).toHaveBeenCalledWith('Group by Status 일 때만 드래그로 상태를 변경할 수 있습니다.');
+    expect(toast.warning).toHaveBeenCalledWith('상태로 그룹화한 경우에만 드래그로 상태를 변경할 수 있습니다.');
   });
 
   it('restores the board selected detail from the URL parameter', async () => {

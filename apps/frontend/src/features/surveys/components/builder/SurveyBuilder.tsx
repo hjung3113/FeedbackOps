@@ -1,3 +1,4 @@
+import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { surveyQuestionKindSchema } from '@fops/shared';
 import { Button, Input } from '@fops/ui';
 import { Check, Eye, Megaphone } from 'lucide-react';
@@ -108,7 +109,7 @@ export function SurveyBuilder({
           )}
           <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-text-muted">
             <SurveyStatusBadge status={survey.status} />
-            <span className="shrink-0">{survey.type}</span>
+            <span className="shrink-0">{SURVEY_TYPE_LABELS[survey.type]}</span>
             <SurveyManagedSystemPill
               name={managedSystemNamesById?.get(survey.primary_managed_system_id)}
               resolved={managedSystemNamesById !== undefined}
@@ -131,13 +132,13 @@ export function SurveyBuilder({
               onClick={() => void save()}
             >
               <Check className="h-4 w-4" />
-              Save draft
+              초안 저장
             </Button>
           </>
         )}
         <Button variant="subtle" size="sm" onClick={() => setPreview(true)}>
           <Eye className="h-4 w-4" />
-          Preview
+          미리보기
         </Button>
         {editable && (
           <Button variant="default" size="sm" onClick={() => setLaunchOpen(true)}>

@@ -1,3 +1,4 @@
+import { SURVEY_TYPE_LABELS } from '@/lib/copy/enum-labels';
 import { Button, DetailPanelHeader, EmptyState, PanelTitleBlock } from '@fops/ui';
 import { Link } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
@@ -48,7 +49,7 @@ export function SurveyDetail({
               <>
                 <SurveyStatusBadge status={survey.status} />
                 <span className="inline-flex items-center rounded border border-border-subtle px-1.5 py-0.5 text-xs text-text-secondary">
-                  {survey.type}
+                  {SURVEY_TYPE_LABELS[survey.type]}
                 </span>
                 <SurveyManagedSystemPill
                   name={managedSystemNamesById?.get(survey.primary_managed_system_id)}

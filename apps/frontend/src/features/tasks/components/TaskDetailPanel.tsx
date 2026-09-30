@@ -3,6 +3,7 @@ import { getTask } from '@/lib/api';
 import { getMilestone } from '@/lib/api/milestones';
 import { isPermissionDenied } from '@/lib/api/types';
 import { useMe } from '@/lib/auth/useMe';
+import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { PERMISSION_BLOCKED_REASONS } from '@/lib/copy/permission-reasons';
 import { usePermissionCheck } from '@/lib/cross-system/usePermissionCheck';
 import { shortId } from '@/lib/identity';
@@ -158,23 +159,23 @@ export function TaskDetailPanel({
         </div>
 
         <div data-anchor="properties" className="border-t border-border-subtle py-2">
-          <PanelSectionTitle className="px-4">Properties</PanelSectionTitle>
-          <FieldRow label="Status">
+          <PanelSectionTitle className="px-4">속성</PanelSectionTitle>
+          <FieldRow label="상태">
             <InternalTaskBadge status={task.status} />
           </FieldRow>
-          <FieldRow label="Priority">
+          <FieldRow label="우선순위">
             <SeverityBadge severity={PRIORITY_SEVERITY[task.priority]} />
           </FieldRow>
-          <FieldRow label="Assignee">
+          <FieldRow label="담당자">
             {task.assignee_actor_id ? (
               <span className="text-sm text-text-primary">
-                {actorNamesById.get(task.assignee_actor_id) ?? 'Assigned'}
+                {actorNamesById.get(task.assignee_actor_id) ?? '담당자 지정됨'}
               </span>
             ) : (
-              <span className="text-accent-danger">Unassigned</span>
+              <span className="text-accent-danger">미배정</span>
             )}
           </FieldRow>
-          <FieldRow label="Due">
+          <FieldRow label="마감일">
             {task.due_date ?? <span className="text-text-muted">-</span>}
           </FieldRow>
           <FieldRow label="Managed System">
@@ -208,7 +209,9 @@ export function TaskDetailPanel({
               <div className="flex flex-wrap gap-2">
                 <OutlineBadge>Evidence · {sourceFinding.evidence_count}</OutlineBadge>
                 {source?.task_request && (
-                  <OutlineBadge>Task Request · {source.task_request.status}</OutlineBadge>
+                  <OutlineBadge>
+                    Task Request · {TASK_REQUEST_STATUS_LABELS[source.task_request.status]}
+                  </OutlineBadge>
                 )}
               </div>
             </div>

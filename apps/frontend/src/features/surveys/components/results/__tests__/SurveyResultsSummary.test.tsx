@@ -849,7 +849,7 @@ describe('SurveyResultsSummary', () => {
     expect(apiRequest).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Request Task' }));
     const draft = await screen.findByTestId('request-task-draft');
-    expect(draft).toHaveTextContent('From FND-510 · Finding');
+    expect(draft).toHaveTextContent('출처 FND-510 · Finding');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(
       apiRequest.mock.calls.some(
@@ -925,7 +925,7 @@ describe('SurveyResultsSummary', () => {
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(
       firstFinding.summary,
     );
-    await user.click(within(firstDraft).getByRole('button', { name: 'Close draft' }));
+    await user.click(within(firstDraft).getByRole('button', { name: '초안 닫기' }));
 
     await user.click(secondButton);
     await waitFor(() =>
@@ -1003,14 +1003,14 @@ describe('SurveyResultsSummary', () => {
       firstLoad.resolve({ data: firstFinding });
       await firstLoad.promise;
     });
-    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
 
     await act(async () => {
       secondLoad.resolve({ data: secondFinding });
       await secondLoad.promise;
     });
-    await screen.findByRole('region', { name: 'Task Request draft' });
-    expect(screen.getAllByRole('region', { name: 'Task Request draft' })).toHaveLength(1);
+    await screen.findByRole('region', { name: 'Task Request 초안' });
+    expect(screen.getAllByRole('region', { name: 'Task Request 초안' })).toHaveLength(1);
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(
       secondFinding.summary,
     );
@@ -1061,10 +1061,10 @@ describe('SurveyResultsSummary', () => {
     const button = screen.getByRole('button', { name: 'Request Task' });
     await user.click(button);
     expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
-    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
 
     await user.click(button);
-    await screen.findByRole('region', { name: 'Task Request draft' });
+    await screen.findByRole('region', { name: 'Task Request 초안' });
     expect(screen.getByTestId('request-task-evidence-summary-input')).toHaveValue(finding.summary);
     expect(
       apiRequest.mock.calls.filter(([, path]) => path === `/findings/${ids.finding}`),
@@ -1096,7 +1096,7 @@ describe('SurveyResultsSummary', () => {
 
     await user.click(screen.getByRole('button', { name: 'Request Task' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Finding could not be loaded.');
-    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
 
     await act(async () => {
       await queryClient.refetchQueries({ queryKey: ['finding', ids.finding], type: 'all' });
@@ -1105,7 +1105,7 @@ describe('SurveyResultsSummary', () => {
       apiRequest.mock.calls.filter(([, path]) => path === `/findings/${ids.finding}`),
     ).toHaveLength(2);
     expect(queryClient.getQueryData(['finding', ids.finding])).toEqual(finding);
-    expect(screen.queryByRole('region', { name: 'Task Request draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Task Request 초안' })).not.toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Finding could not be loaded.');
   });
 });

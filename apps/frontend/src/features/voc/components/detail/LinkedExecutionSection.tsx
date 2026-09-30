@@ -1,14 +1,15 @@
 // LinkedExecutionSection — linked finding/task block (Slice 3 always empty).
 
-import type { VocDetailEnvelope } from '@fops/shared';
+import type { TaskStatus, VocDetailEnvelope } from '@fops/shared';
 import { EmptyState, OutlineBadge, PanelSectionTitle, PermissionBlockedPanel } from '@fops/ui';
 import type * as React from 'react';
 
+import { TASK_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { getPermissionDecision } from '@/lib/cross-system/getPermissionDecision';
 
 export interface LinkedExecutionSectionProps {
   voc: VocDetailEnvelope;
-  linkedTask?: { title: string; status: string } | null;
+  linkedTask?: { title: string; status: TaskStatus } | null;
   /** A reporter-safe Task summary renders in the following related-entity section. */
   hasReporterTaskSummary?: boolean;
 }
@@ -50,7 +51,7 @@ export function LinkedExecutionSection({
       {linkedTask !== null ? (
         <div className="flex items-center justify-between gap-3 rounded-sm border border-border-subtle bg-surface-card px-3 py-2">
           <span className="text-sm font-medium text-text-primary">{linkedTask.title}</span>
-          <OutlineBadge>{linkedTask.status}</OutlineBadge>
+          <OutlineBadge>{TASK_STATUS_LABELS[linkedTask.status]}</OutlineBadge>
         </div>
       ) : !hasReporterTaskSummary ? (
         <EmptyState size="sm" title="연결된 실행 없음" />

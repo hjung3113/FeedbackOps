@@ -1,0 +1,90 @@
+import type {
+  EntityLinkRelationType,
+  FindingSeverity,
+  FindingStatus,
+  SurveyQuestionKind,
+  SurveyQuestionResult,
+  SurveyType,
+  TaskPriority,
+  TaskRequestStatus,
+  TaskStatus,
+  TriageStateEnum,
+} from '@fops/shared';
+
+// #613 applies the Korean-first enum-label decisions from #579/#580 over prototype raw values.
+export const TRIAGE_STATE_LABELS: Record<TriageStateEnum, string> = {
+  untriaged: '미분류',
+  triaged: '분류 완료',
+  needs_more_information: '추가 정보 필요',
+  dismissed_not_actionable: '조치 불필요',
+};
+
+export const SURVEY_TYPE_LABELS: Record<SurveyType, string> = {
+  discovery: '탐색',
+  validation: '검증',
+  outcome: '결과',
+};
+
+export const SURVEY_QUESTION_KIND_LABELS: Record<SurveyQuestionKind, string> = {
+  single_choice: '단일 선택',
+  multiple_choice: '복수 선택',
+  rating: '평점',
+  text: '서술형',
+};
+
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  low: '낮음',
+  medium: '보통',
+  high: '높음',
+  urgent: '긴급',
+};
+
+export const FINDING_SEVERITY_LABELS: Record<FindingSeverity, string> = {
+  low: '낮음',
+  medium: '보통',
+  high: '높음',
+  critical: '심각',
+};
+
+export const FINDING_STATUS_LABELS: Record<FindingStatus, string> = {
+  draft: '초안',
+  active: '진행 중',
+  not_actionable: '조치 불필요',
+  converted: 'Task 전환됨',
+  archived: '보관됨',
+};
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  backlog: 'Backlog',
+  todo: 'Todo',
+  doing: 'Doing',
+  review: 'Review',
+  done: 'Done',
+  released: 'Released',
+  reopened: 'Reopened',
+};
+
+export const TASK_REQUEST_STATUS_LABELS: Record<TaskRequestStatus, string> = {
+  pending_review: 'Pending',
+  needs_more_evidence: 'Needs evidence',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  converted: 'Converted',
+};
+
+export const ENTITY_LINK_RELATION_LABELS: Record<EntityLinkRelationType, string> = {
+  related_to: '관련 항목',
+  created_finding: '생성한 Finding',
+  generated_finding: '생성된 Finding',
+  evidence_of: '근거',
+  requested_task: '요청한 Task',
+  converted_to: '전환된 항목',
+};
+
+type SurveyResultKind = Extract<SurveyQuestionResult, { visibility: 'visible' }>['kind'];
+
+export const SURVEY_RESULT_KIND_LABELS: Record<SurveyResultKind, string> = {
+  choice: '선택형',
+  rating: '평점',
+  text: '서술형',
+} as const;

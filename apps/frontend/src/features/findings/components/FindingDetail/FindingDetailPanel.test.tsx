@@ -126,8 +126,8 @@ describe('FindingDetailPanel', () => {
     renderWithClient(<FindingDetailPanel findingId="10000000-0000-0000-0000-000000000001" />);
 
     await user.click(screen.getByTestId('request-task-btn'));
-    const draft = await screen.findByRole('region', { name: 'Task Request draft' });
-    expect(draft).toHaveTextContent('From FIN-179 · Finding');
+    const draft = await screen.findByRole('region', { name: 'Task Request 초안' });
+    expect(draft).toHaveTextContent('출처 FIN-179 · Finding');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await user.type(
       screen.getByTestId('request-task-requested-outcome-input'),

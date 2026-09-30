@@ -1,5 +1,6 @@
 // TriageBlock — read-only triage fields; edits happen in the triage console (#363).
 
+import { TRIAGE_STATE_LABELS } from '@/lib/copy/enum-labels';
 import type { VocDetailEnvelope } from '@fops/shared';
 import { Button, FieldRow, PanelSectionTitle, SeverityBadge, UserChip } from '@fops/ui';
 import type * as React from 'react';
@@ -64,7 +65,7 @@ export function TriageBlock({
 
       {/* 트리아지 상태 */}
       <FieldRow label="트리아지 상태">
-        <span className="text-sm text-text-primary">{voc.triage_state}</span>
+        <span className="text-sm text-text-primary">{TRIAGE_STATE_LABELS[voc.triage_state]}</span>
       </FieldRow>
     </div>
   );

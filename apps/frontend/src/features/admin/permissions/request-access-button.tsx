@@ -36,6 +36,7 @@ import {
   type CreatePermissionRequestSuccess,
   createPermissionRequest,
 } from '../../../lib/api';
+import { permissionRequestStatusLabel } from './permission-requests-search.js';
 
 export interface RequestAccessButtonProps {
   capability: string;
@@ -59,7 +60,7 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<{
     id: string;
-    status: string;
+    status: CreatePermissionRequestSuccess['status'];
     createdAt: string;
     reason: string;
     expiration?: string;
@@ -184,7 +185,9 @@ export function RequestAccessButton(props: RequestAccessButtonProps) {
                 <dt className="text-text-muted">Reason</dt>
                 <dd className="text-text-primary">{submitted.reason}</dd>
                 <dt className="text-text-muted">Status</dt>
-                <dd className="capitalize text-text-primary">{submitted.status}</dd>
+                <dd className="text-text-primary">
+                  {permissionRequestStatusLabel[submitted.status]}
+                </dd>
                 <dt className="text-text-muted">Created</dt>
                 <dd className="text-text-primary">{submitted.createdAt}</dd>
                 {submitted.expiration ? (

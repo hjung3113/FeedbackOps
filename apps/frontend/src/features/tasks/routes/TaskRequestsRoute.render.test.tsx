@@ -128,7 +128,7 @@ describe('TaskRequestsRoute display ids', () => {
   it('omits the unsupported Impact property from Task Request detail', async () => {
     renderWithClient(<TaskRequestsRoute />);
 
-    await screen.findByText('Self-approval');
+    await screen.findByText('본인 승인');
     expect(screen.queryByText('Impact')).not.toBeInTheDocument();
   });
 

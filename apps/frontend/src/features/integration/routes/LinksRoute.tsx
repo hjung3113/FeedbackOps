@@ -1,5 +1,6 @@
 import { resolveActors } from '@/lib/api';
 import { fetchManagedSystems } from '@/lib/api/managed-systems';
+import { ENTITY_LINK_RELATION_LABELS } from '@/lib/copy/enum-labels';
 import type { EntityLinkRelationType, EntityLinkStatus } from '@fops/shared';
 import { Button, ListFilterButton, ListToolbar, type ListToolbarTab, SearchInput } from '@fops/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -50,8 +51,8 @@ const STATUS_TAB_VALUES: StatusFilter[] = ['active', 'stale', 'detached', 'revok
 const FILTER_CATEGORIES = [
   {
     key: 'type',
-    label: 'Rel type',
-    options: [{ value: 'related_to', label: 'related_to' }],
+    label: '관계 유형',
+    options: [{ value: 'related_to', label: ENTITY_LINK_RELATION_LABELS.related_to }],
   },
 ];
 
@@ -110,7 +111,9 @@ export function LinksRoute() {
       const statusLabel = STATUS_TABS.find((tab) => tab.value === search.status)?.label;
       conditions.push(`상태: ${statusLabel ?? search.status}`);
     }
-    if (search.type !== undefined) conditions.push(`관계 유형: ${search.type}`);
+    if (search.type !== undefined) {
+      conditions.push(`관계 유형: ${ENTITY_LINK_RELATION_LABELS[search.type]}`);
+    }
     return conditions.length > 0 ? conditions.join(' · ') : undefined;
   }, [search.status, search.type]);
   const needsUnfilteredCheck =

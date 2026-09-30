@@ -28,6 +28,7 @@ import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useReque
 import { useVocClusterDetail } from '@/features/voc-cluster/hooks/useVocClusterDetail';
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
+import { FINDING_STATUS_LABELS } from '@/lib/copy/enum-labels';
 import { useManagedSystem } from '@/lib/cross-system/useManagedSystem';
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { shortId } from '@/lib/identity';
@@ -261,7 +262,7 @@ export function VocClusterDetailPanel({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <OutlineBadge data-testid={`finding-status-badge-${finding.status}`}>
-                        {finding.status}
+                        {FINDING_STATUS_LABELS[finding.status]}
                       </OutlineBadge>
                     </div>
                     <div className="min-w-0">
