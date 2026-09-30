@@ -68,7 +68,9 @@ test.describe('/admin/permissions/requests visual harness', () => {
     await list.getByText('workspace.read', { exact: true }).click();
     await expect(list.getByText(`만료 ${requestedDate}`, { exact: true })).toBeVisible();
     await expect(detail.getByText(requestedDate, { exact: true })).toBeVisible();
-    await expect(detail).toContainText('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+    // #589: an unknown Managed System scope shows a type label + short id, never the full UUID.
+    await expect(detail).toContainText('Managed System');
+    await expect(detail).not.toContainText('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
     await detail.getByRole('button', { name: '승인', exact: true }).click();
 
     const keepOption = detail.getByRole('radio', {
