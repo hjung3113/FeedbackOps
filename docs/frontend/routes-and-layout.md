@@ -11,6 +11,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 
 ```text
 /
+/home?tab=dashboard|inbox&managedSystem=:managedSystemId
 /vocs?view=triage&triage=unassigned&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=inbox&managedSystem=:managedSystemId|all&selected=:vocId
 /vocs?view=my&selected=:vocId
@@ -46,7 +47,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 Route naming rules:
 
 ```text
-- Home is the user-facing navigation label for `/`.
+- Home is the user-facing navigation label for `/home`; `/` is an entry-only redirect.
 - Findings routes at top-level `/findings`. Feature code lives in `features/findings/`, not under Integration.
 - The Evidence route is planned, not built. Coverage and Links are the shipped routes under `/integration/*`.
 - Task Requests are Tasks intake routes, not top-level routes.
@@ -96,13 +97,13 @@ Admin:
 - Primary nav includes Admin, Managed System Registry, Analytics Areas, Permission Requests, and settings.
 ```
 
-Current sidebar entries live in `NAV_TREE` (`apps/frontend/src/routes/_authed.tsx`), which is authoritative. Its section labels are `VOC`, `VIEWS`, `FINDINGS`, `TASKS` (including Milestones), `INTEGRATION`, `SURVEYS`, and `ADMIN`. Per the AGENTS.md two-consumer rule, each feature adds its entry in the slice that owns it.
+Current sidebar entries live in `NAV_TREE` (`apps/frontend/src/routes/_authed.tsx`), which is authoritative. Its section labels are `VOC`, `VIEWS`, `FINDINGS`, `TASKS` (including Milestones), `INTEGRATION`, `SURVEYS`, and `ADMIN`. Per the AGENTS.md two-consumer rule, each feature adds its entry in the slice that owns it. The Home rail's entries come from `homeSidebarEntries` (`apps/frontend/src/features/home/homeNavigation.tsx`).
 
 The bottom avatar in the global rail opens an account menu with the current Actor display name and Role Level plus logout. Logout revokes the session, clears the client query cache, then routes to `/login`; successful login also clears that cache before routing so a new Actor never sees prior Actor data.
 
 In production (`import.meta.env.PROD`), `/login` performs one full-page replace to `/auth/login?return_to=…`, preserving a safe internal `redirectTo` (what the `_authed` guard sends on a 401; `return_to` or `redirect` when absent) unchanged after validation against the backend OIDC rules, with `/home` as the fallback. Non-production keeps the mock-login picker; callback failures return backend JSON errors rather than redirecting to `/login`.
 
-Count badges and global Managed System scope selection shipped in #143 (GlobalRail multi-domain IA, closed). Counts: backend aggregation in `apps/backend/src/modules/nav/service.ts`, fetched via `apps/frontend/src/lib/api/nav.ts` and passed through `AppFrame`, rendered as badges in `AppSidebar` (`SIDEBAR_ENTRIES` count keys). Scope selector: `AppSidebar`'s `ManagedSystemScopeOption` control (`data-testid="scope-selector"`), backed by the `['managed-systems', 'scope-selector']` query in `AppFrame`.
+Count badges and global Managed System scope selection shipped in #143 (GlobalRail multi-domain IA, closed). Counts: backend aggregation in `apps/backend/src/modules/nav/service.ts`, fetched via `apps/frontend/src/lib/api/nav.ts` and passed through `AppFrame`, rendered as badges in `AppSidebar` (`NAV_TREE` count keys). Scope selector: `AppSidebar`'s `ManagedSystemScopeOption` control (`data-testid="scope-selector"`), backed by the `['managed-systems', 'scope-selector']` query in `AppFrame`.
 
 Routes may exist without being visible in navigation. Direct route access must restore AppShell and render allowed content, summary-visible content, request-access state, not_found, or permission_denied according to backend response.
 

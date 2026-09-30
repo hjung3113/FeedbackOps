@@ -73,11 +73,11 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 
 | Role | Size | Line Height | Letter Spacing | Token |
 |------|------|-------------|----------------|-------|
-| caption | 10px | 1.4 | -0.1px | `--text-caption` |
+| caption | 10px | 1.4 | -0.13px | `--text-caption` |
 | body | 14px | 1.4 | -0.13px | `--text-body` |
-| heading | 24px | 1.33 | -0.22px | `--text-heading` |
+| heading | 24px | 1.2 | -0.22px | `--text-heading` |
 | heading-lg | 32px | 1.2 | -0.22px | `--text-heading-lg` |
-| display | 48px | 1 | -0.22px | `--text-display` |
+| display | 48px | 1.2 | -0.22px | `--text-display` |
 
 ### Panel Title Block Scale (PR #59)
 
@@ -120,6 +120,8 @@ FeedbackOps presents a focused light-mode experience, inspired by Samsung's ente
 | inputs | 6px |
 | buttons | 6px |
 | default | 6px |
+
+Token names: `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`, and `--radius-pill`.
 
 ### Shadows
 
@@ -277,7 +279,7 @@ Quick Color Reference:
 
 ### CSS Custom Properties
 
-The shipped CSS custom-property names and values are defined in `packages/ui/src/styles/tokens.css`. This file is the implementation source for the token names and values in this reference.
+The shipped CSS custom-property names and values are defined in `packages/ui/src/styles/tokens.css`. `tokens.css` is the implementation source for the token names and values in this reference.
 
 ### Frontend Stylesheet
 
