@@ -77,7 +77,7 @@ Task를 `released`로 옮겨도 연결된 VOC가 저절로 `resolved`가 되지 
 
 `My VOCs`(`/vocs?view=my`)에 내가 올린 것만 모입니다.
 
-**내게 온 알림을 보려면** `Home`(`/home?tab=inbox`)의 `Inbox` 탭이나 왼쪽 레일의 종 모양 버튼을 누릅니다. `Unread` / `All`을 선택해 읽지 않은 알림만 보거나 읽음 여부와 상관없이 확인하고, 읽음 처리하거나 보관할 수 있습니다.
+**내게 온 알림을 보려면** `Home`(`/home?tab=inbox`)의 `Inbox` 탭이나 왼쪽 레일의 종 모양 버튼을 누릅니다. `Unread` / `All`을 선택해 읽지 않은 알림만 보거나 읽음 여부와 상관없이 확인하고, 읽음 처리하거나 보관할 수 있습니다. 이 알림함은 VOC 목록의 `Inbox` 보기(`/vocs?view=inbox`)와 다릅니다.
 
 **리포터에게 보이는 상태**는 여덟 단계입니다:
 
@@ -217,7 +217,7 @@ backlog → todo → doing → review → done → released
 
 Milestone은 관련 Task를 묶는 계획 단위입니다. `Milestones`(`/tasks?view=milestones`)에서 만들고, 열어 연결된 Task 목록을 확인합니다.
 
-**필요 권한:** Admin 또는 해당 Managed System에 `finding.manage`가 있는 Developer.
+**Milestone 필요 권한:** Admin 또는 해당 Managed System에 `finding.manage`가 있는 Developer.
 
 Task 상세의 **Linked context**에서 이 작업이 어느 Finding에서 나왔는지 보이고, 클릭하면 그 Finding으로 갑니다.
 
