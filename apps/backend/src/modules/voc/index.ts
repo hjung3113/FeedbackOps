@@ -9,6 +9,9 @@ export type {
   CountVocsQuery,
   VocCountReader,
   VocDetailReader,
+  VocGroupedCountArgs,
+  VocGroupedCountReader,
+  VocGroupedCountRow,
   VocReferenceReader,
 } from './read-contract.js';
 export { isVocVisibleToActor, type Scope } from './authorization.js';

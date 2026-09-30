@@ -16,7 +16,7 @@ import { isAuthorizationAbsence } from '../permissions/read-utility.js';
 import type { RequestService } from '../permissions/request-service.js';
 import { type Scope, actorScopeForCapability } from '../permissions/scope-service.js';
 import { actorSurveyReadScope, checkSurveyRead } from '../surveys/authorization.js';
-import type { CountVocsQuery, VocCountReader } from '../voc/index.js';
+import type { VocGroupedCountReader, VocGroupedCountRow } from '../voc/index.js';
 import * as repo from './repo.js';
 
 export interface DashboardActor {
@@ -29,7 +29,7 @@ type DashboardDeps = {
   db: Db;
   checkService: CheckService;
   requestService: Pick<RequestService, 'listAllActive'>;
-  vocReadService: VocCountReader;
+  vocReadService: VocGroupedCountReader;
 };
 
 function inRequestedScope(scope: Scope, managedSystemId?: string): Scope | undefined {
@@ -58,6 +58,26 @@ function includesManagedSystem(scope: Scope | undefined, managedSystemId: string
 type SystemCoverage = NonNullable<DashboardSummary['by_managed_system'][number]['coverage']>;
 type SystemQueues = NonNullable<DashboardSummary['by_managed_system'][number]['action_queues']>;
 type SystemKpis = NonNullable<DashboardSummary['by_managed_system'][number]['kpis']>;
+
+type AggregatedVocCounts = {
+  total: number;
+  unassigned: number;
+  highNoLink: number;
+  highSeverity: number;
+  withTask: number;
+  withAnalyticsArea: number;
+};
+
+function emptyAggregatedVocCounts(): AggregatedVocCounts {
+  return {
+    total: 0,
+    unassigned: 0,
+    highNoLink: 0,
+    highSeverity: 0,
+    withTask: 0,
+    withAnalyticsArea: 0,
+  };
+}
 
 function coverageCell(value: number, total: number) {
   const coveragePercent = percent(value, total);
@@ -99,35 +119,45 @@ export function createDashboardService(deps: DashboardDeps) {
     // `all` is the public selector for no backing filter; repositories receive
     // undefined so they apply the actor's resolved scope rather than cast it as a UUID.
     const selectedManagedSystemId = managedSystemId === 'all' ? undefined : managedSystemId;
-    const voc = (tab?: CountVocsQuery['tab']) =>
-      authorizationAbsent(() =>
-        deps.vocReadService.countVocs({
-          actor,
-          query: {
-            view: 'inbox',
-            ...(selectedManagedSystemId !== undefined
-              ? { managed_system_id: selectedManagedSystemId }
-              : {}),
-            ...(tab !== undefined ? { tab } : {}),
-          },
-        }),
-      );
-
-    const countSystemVocs = (
-      systemId: string,
-      query: Pick<CountVocsQuery, 'tab' | 'filter.severity' | 'analyticsAreaId'> = {},
-    ) =>
-      deps.vocReadService.countVocs({
-        actor,
-        query: { view: 'inbox', managed_system_id: systemId, ...query },
-      });
-
     const [findingScopeRaw, taskScopeRaw, surveyScopeRaw, vocScopeRaw] = await Promise.all([
       actorFindingReadScope(deps.db, actor, { requireElevatedRole: true }),
       actorScopeForCapability(deps.db, actor, 'finding.manage'),
       actorSurveyReadScope(deps.db, deps.checkService, actor),
       actorScopeForCapability(deps.db, actor, 'voc.read'),
     ]);
+    // Reuse this scope in the grouped VOC read so metric counts do not resolve it again.
+    const groupedVocCounts = await authorizationAbsent(() =>
+      deps.vocReadService.countGroupedVocs({
+        actor,
+        readScope: vocScopeRaw,
+        ...(selectedManagedSystemId !== undefined ? { managedSystemId: selectedManagedSystemId } : {}),
+      }),
+    );
+    const vocCountsBySystem = new Map<string, AggregatedVocCounts>();
+    const vocCountsByArea = new Map<string, Map<string, VocGroupedCountRow>>();
+    for (const count of groupedVocCounts ?? []) {
+      const systemCounts =
+        vocCountsBySystem.get(count.managed_system_id) ?? emptyAggregatedVocCounts();
+      systemCounts.total += count.total;
+      systemCounts.unassigned += count.unassigned;
+      systemCounts.highNoLink += count.high_no_link;
+      systemCounts.highSeverity += count.high_severity;
+      systemCounts.withTask += count.with_task;
+      if (count.analytics_area_id !== null) {
+        systemCounts.withAnalyticsArea += count.total;
+        const areas =
+          vocCountsByArea.get(count.managed_system_id) ?? new Map<string, VocGroupedCountRow>();
+        areas.set(count.analytics_area_id, count);
+        vocCountsByArea.set(count.managed_system_id, areas);
+      }
+      vocCountsBySystem.set(count.managed_system_id, systemCounts);
+    }
+    const sumGroupedVocCounts = (select: (row: VocGroupedCountRow) => number) =>
+      groupedVocCounts?.reduce((total, row) => total + select(row), 0);
+    const openVoc = sumGroupedVocCounts((row) => row.total);
+    const unassigned = sumGroupedVocCounts((row) => row.unassigned);
+    const highUnlinked = sumGroupedVocCounts((row) => row.high_no_link);
+    const totalHigh = sumGroupedVocCounts((row) => row.high_severity);
     const findingScope = inRequestedScope(findingScopeRaw, selectedManagedSystemId);
     const taskScope = inRequestedScope(taskScopeRaw, selectedManagedSystemId);
     const surveyScope = inRequestedScope(surveyScopeRaw, selectedManagedSystemId);
@@ -146,11 +176,6 @@ export function createDashboardService(deps: DashboardDeps) {
     const coverage: DashboardSummary['coverage'] = [];
     const kpis: DashboardSummary['kpis'] = {};
 
-    const [openVoc, unassigned, highUnlinked] = await Promise.all([
-      voc(),
-      voc('unassigned'),
-      voc('high-no-link'),
-    ]);
     if (openVoc !== undefined) kpis.open_voc = openVoc;
     if (unassigned !== undefined)
       queues.push({
@@ -313,70 +338,48 @@ export function createDashboardService(deps: DashboardDeps) {
       });
     }
 
-    if (openVoc !== undefined) {
-      const selectedVocScope = vocScope;
-      if (
-        selectedVocScope !== undefined &&
-        (selectedVocScope.kind === 'all' || selectedVocScope.managedSystemIds.length > 0)
-      ) {
-        const [vocTask, analytics] = await Promise.all([
-          repo.countVocsWithTask(
-            deps.db,
-            actor.workspace_id,
-            selectedVocScope,
-            selectedManagedSystemId,
-          ),
-          repo.countAnalyticsAreaVocCoverage(
-            deps.db,
-            actor.workspace_id,
-            selectedVocScope,
-            selectedManagedSystemId,
-          ),
-        ]);
-        const vocTaskPercent = percent(vocTask.value, vocTask.total);
-        coverage.push({
-          id: 'voc-task',
-          ...vocTask,
-          percent: vocTaskPercent,
-          status: coverageStatus(vocTaskPercent),
-        });
-        const analyticsPercent = percent(analytics.value, analytics.total);
-        coverage.push({
-          id: 'analytics-area',
-          ...analytics,
-          percent: analyticsPercent,
-          status: coverageStatus(analyticsPercent),
-        });
-        kpis.coverage_percent = vocTaskPercent;
-      }
+    if (
+      openVoc !== undefined &&
+      vocScope !== undefined &&
+      (vocScope.kind === 'all' || vocScope.managedSystemIds.length > 0)
+    ) {
+      const vocTaskValue = sumGroupedVocCounts((row) => row.with_task) ?? 0;
+      const analyticsAreaValue =
+        groupedVocCounts?.reduce(
+          (total, row) => total + (row.analytics_area_id !== null ? row.total : 0),
+          0,
+        ) ?? 0;
+      const vocTaskPercent = percent(vocTaskValue, openVoc);
+      coverage.push({
+        id: 'voc-task',
+        value: vocTaskValue,
+        total: openVoc,
+        percent: vocTaskPercent,
+        status: coverageStatus(vocTaskPercent),
+      });
+      const analyticsPercent = percent(analyticsAreaValue, openVoc);
+      coverage.push({
+        id: 'analytics-area',
+        value: analyticsAreaValue,
+        total: openVoc,
+        percent: analyticsPercent,
+        status: coverageStatus(analyticsPercent),
+      });
+      kpis.coverage_percent = vocTaskPercent;
     }
 
     // milestone-outcome has no MVP Milestone table or backing filter. Omit it.
     // high-followup has the same absence rule as the high-severity queue.
-    if (highUnlinked !== undefined && openVoc !== undefined) {
-      const totalHigh = await authorizationAbsent(() =>
-        deps.vocReadService.countVocs({
-          actor,
-          query: {
-            view: 'inbox',
-            ...(selectedManagedSystemId !== undefined
-              ? { managed_system_id: selectedManagedSystemId }
-              : {}),
-            'filter.severity': ['high', 'critical'],
-          },
-        }),
-      );
-      if (totalHigh !== undefined) {
-        const followed = totalHigh - highUnlinked;
-        const highPercent = percent(followed, totalHigh);
-        coverage.push({
-          id: 'high-followup',
-          value: followed,
-          total: totalHigh,
-          percent: highPercent,
-          status: coverageStatus(highPercent),
-        });
-      }
+    if (highUnlinked !== undefined && openVoc !== undefined && totalHigh !== undefined) {
+      const followed = totalHigh - highUnlinked;
+      const highPercent = percent(followed, totalHigh);
+      coverage.push({
+        id: 'high-followup',
+        value: followed,
+        total: totalHigh,
+        percent: highPercent,
+        status: coverageStatus(highPercent),
+      });
     }
 
     const managedSystemIds = await managedSystemUnion(
@@ -393,51 +396,37 @@ export function createDashboardService(deps: DashboardDeps) {
       const rowQueues: SystemQueues = {};
 
       if (includesManagedSystem(vocScope, systemId)) {
-        const [systemVoc, unassigned, highUnlinked, totalHigh, vocTask, analytics] =
-          await Promise.all([
-            countSystemVocs(systemId),
-            countSystemVocs(systemId, { tab: 'unassigned' }),
-            countSystemVocs(systemId, { tab: 'high-no-link' }),
-            countSystemVocs(systemId, { 'filter.severity': ['high', 'critical'] }),
-            repo.countVocsWithTask(deps.db, actor.workspace_id, vocScope, systemId),
-            repo.countAnalyticsAreaVocCoverage(deps.db, actor.workspace_id, vocScope, systemId),
-          ]);
-        rowKpis.open_voc = systemVoc;
-        rowKpis.coverage_percent = percent(vocTask.value, vocTask.total);
-        rowCoverage['voc-task'] = coverageCell(vocTask.value, systemVoc);
-        rowCoverage['analytics-area'] = coverageCell(analytics.value, systemVoc);
-        rowQueues['unassigned-voc'] = unassigned;
-        rowQueues['high-severity-unlinked'] = highUnlinked;
-        rowCoverage['high-followup'] = coverageCell(totalHigh - highUnlinked, totalHigh);
+        const systemCounts = vocCountsBySystem.get(systemId) ?? emptyAggregatedVocCounts();
+        rowKpis.open_voc = systemCounts.total;
+        rowKpis.coverage_percent = percent(systemCounts.withTask, systemCounts.total);
+        rowCoverage['voc-task'] = coverageCell(systemCounts.withTask, systemCounts.total);
+        rowCoverage['analytics-area'] = coverageCell(
+          systemCounts.withAnalyticsArea,
+          systemCounts.total,
+        );
+        rowQueues['unassigned-voc'] = systemCounts.unassigned;
+        rowQueues['high-severity-unlinked'] = systemCounts.highNoLink;
+        rowCoverage['high-followup'] = coverageCell(
+          systemCounts.highSeverity - systemCounts.highNoLink,
+          systemCounts.highSeverity,
+        );
 
-        const areaIds = await repo.listVocAnalyticsAreaIds(deps.db, actor.workspace_id, systemId);
-        if (areaIds.length > 0) {
-          row.analytics_areas = await Promise.all(
-            areaIds.map(async (areaId) => {
-              const [areaVoc, areaUnassigned, areaHighUnlinked, areaTotalHigh, areaVocTask] =
-                await Promise.all([
-                  countSystemVocs(systemId, { analyticsAreaId: areaId }),
-                  countSystemVocs(systemId, { tab: 'unassigned', analyticsAreaId: areaId }),
-                  countSystemVocs(systemId, { tab: 'high-no-link', analyticsAreaId: areaId }),
-                  countSystemVocs(systemId, {
-                    'filter.severity': ['high', 'critical'],
-                    analyticsAreaId: areaId,
-                  }),
-                  repo.countVocsWithTask(deps.db, actor.workspace_id, vocScope, systemId, areaId),
-                ]);
-              return {
-                analytics_area_id: areaId,
-                coverage: {
-                  'voc-task': coverageCell(areaVocTask.value, areaVoc),
-                  'high-followup': coverageCell(areaTotalHigh - areaHighUnlinked, areaTotalHigh),
-                },
-                action_queues: {
-                  'unassigned-voc': areaUnassigned,
-                  'high-severity-unlinked': areaHighUnlinked,
-                },
-              };
-            }),
-          );
+        const areaCounts = vocCountsByArea.get(systemId);
+        if (areaCounts !== undefined && areaCounts.size > 0) {
+          row.analytics_areas = [...areaCounts].map(([areaId, area]) => ({
+            analytics_area_id: areaId,
+            coverage: {
+              'voc-task': coverageCell(area.with_task, area.total),
+              'high-followup': coverageCell(
+                area.high_severity - area.high_no_link,
+                area.high_severity,
+              ),
+            },
+            action_queues: {
+              'unassigned-voc': area.unassigned,
+              'high-severity-unlinked': area.high_no_link,
+            },
+          }));
         }
       }
 

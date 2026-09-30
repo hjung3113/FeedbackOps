@@ -603,6 +603,167 @@ describe.skipIf(!runIntegration)('GET /dashboard/summary (#217)', () => {
     expect(seed.msA).not.toBe(seed.msB);
   });
 
+  it('pins grouped VOC counts for every Managed System and Analytics Area', async () => {
+    const before = (await get(adminCookie)).json<Summary>();
+    const seed = await createDashboardScope();
+    const createArea = async (managedSystemId: string, name: string) => {
+      const result = await migrateHandle.pool.query<{ id: string }>(
+        `insert into core.analytics_areas (workspace_id, managed_system_id, slug, name)
+         values ($1, $2, $3, $4) returning id`,
+        [WORKSPACE_ID, managedSystemId, uid('dashboard-grouped-area'), name],
+      );
+      const id = result.rows[0]?.id;
+      if (!id) throw new Error('analytics area seed failed');
+      return id;
+    };
+    const [areaA1, areaA2, areaB1, areaB2] = await Promise.all([
+      createArea(seed.msA, 'Dashboard A one'),
+      createArea(seed.msA, 'Dashboard A two'),
+      createArea(seed.msB, 'Dashboard B one'),
+      createArea(seed.msB, 'Dashboard B two'),
+    ]);
+    const createVoc = async (
+      managedSystemId: string,
+      analyticsAreaId: string | null,
+      title: string,
+      severity: 'low' | 'high' | 'critical',
+      assigned: boolean,
+    ) => {
+      const voc = await insertVocDirectly(
+        migrateHandle,
+        WORKSPACE_ID,
+        managedSystemId,
+        reporterActorId,
+        title,
+        { severity, ...(assigned ? { ownerUserId: adminActorId } : {}) },
+      );
+      if (analyticsAreaId !== null) {
+        await migrateHandle.pool.query('update voc.vocs set analytics_area_id = $1 where id = $2', [
+          analyticsAreaId,
+          voc.id,
+        ]);
+      }
+      return voc.id;
+    };
+
+    const vocA1High = await createVoc(seed.msA, areaA1, 'A1 high unassigned', 'high', false);
+    const vocA1Task = await createVoc(seed.msA, areaA1, 'A1 task assigned', 'low', true);
+    const vocA2High = await createVoc(seed.msA, areaA2, 'A2 high task', 'high', true);
+    await createVoc(seed.msA, areaA2, 'A2 unassigned', 'low', false);
+    await createVoc(seed.msA, null, 'A without area', 'low', false);
+    const vocB1High = await createVoc(seed.msB, areaB1, 'B1 high unlinked', 'high', true);
+    const vocB1Task = await createVoc(seed.msB, areaB1, 'B1 task assigned', 'low', true);
+    const vocB2High = await createVoc(seed.msB, areaB2, 'B2 critical unassigned', 'critical', false);
+    const vocB2Task = await createVoc(seed.msB, areaB2, 'B2 task unassigned', 'low', false);
+    await createVoc(seed.msB, null, 'B without area', 'low', true);
+    const taskA = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: seed.msA,
+      createdBy: adminActorId,
+      title: 'Dashboard A grouped task',
+    });
+    const taskB = await insertTaskRow(migrateHandle, {
+      workspaceId: WORKSPACE_ID,
+      primaryManagedSystemId: seed.msB,
+      createdBy: adminActorId,
+      title: 'Dashboard B grouped task',
+    });
+    await link('voc', vocA1Task, 'task', taskA.id, 'evidence_of', seed.msA);
+    await link('voc', vocA2High, 'task', taskA.id, 'evidence_of', seed.msA);
+    await link('voc', vocB1Task, 'task', taskB.id, 'evidence_of', seed.msB);
+    await link('voc', vocB2Task, 'task', taskB.id, 'evidence_of', seed.msB);
+
+    const body = (await get(adminCookie)).json<Summary>();
+    expectDelta(body.kpis.open_voc, before.kpis.open_voc, 10, 'grouped open_voc');
+    expectQueueDelta(body, before, 'unassigned-voc', 5);
+    expectQueueDelta(body, before, 'high-severity-unlinked', 3);
+    expectCoverageDelta(body, before, 'voc-task', 4, 10);
+    expectCoverageDelta(body, before, 'analytics-area', 8, 10);
+    expectCoverageDelta(body, before, 'high-followup', 1, 4);
+
+    const rowA = systemRow(body, seed.msA);
+    const rowB = systemRow(body, seed.msB);
+    expect(rowA).toMatchObject({
+      kpis: { open_voc: 5, coverage_percent: 40 },
+      coverage: {
+        'voc-task': { value: 2, total: 5, percent: 40 },
+        'analytics-area': { value: 4, total: 5, percent: 80 },
+        'high-followup': { value: 1, total: 2, percent: 50 },
+      },
+      action_queues: { 'unassigned-voc': 3, 'high-severity-unlinked': 1 },
+    });
+    expect(rowB).toMatchObject({
+      kpis: { open_voc: 5, coverage_percent: 40 },
+      coverage: {
+        'voc-task': { value: 2, total: 5, percent: 40 },
+        'analytics-area': { value: 4, total: 5, percent: 80 },
+        'high-followup': { value: 0, total: 2, percent: 0 },
+      },
+      action_queues: { 'unassigned-voc': 2, 'high-severity-unlinked': 2 },
+    });
+
+    const expectArea = (
+      row: SystemRow | undefined,
+      analyticsAreaId: string,
+      counts: {
+        task: number;
+        highFollowup: number;
+        highTotal: number;
+        unassigned: number;
+        highUnlinked: number;
+      },
+    ) => {
+      expect(row?.analytics_areas).toHaveLength(2);
+      expect(
+        row?.analytics_areas?.find((area) => area.analytics_area_id === analyticsAreaId),
+      ).toMatchObject({
+        coverage: {
+          'voc-task': { value: counts.task, total: 2, percent: counts.task * 50 },
+          'high-followup': {
+            value: counts.highFollowup,
+            total: counts.highTotal,
+            percent:
+              counts.highTotal === 0
+                ? 0
+                : Math.round((counts.highFollowup / counts.highTotal) * 100),
+          },
+        },
+        action_queues: {
+          'unassigned-voc': counts.unassigned,
+          'high-severity-unlinked': counts.highUnlinked,
+        },
+      });
+    };
+    expectArea(rowA, areaA1, {
+      task: 1,
+      highFollowup: 0,
+      highTotal: 1,
+      unassigned: 1,
+      highUnlinked: 1,
+    });
+    expectArea(rowA, areaA2, {
+      task: 1,
+      highFollowup: 1,
+      highTotal: 1,
+      unassigned: 1,
+      highUnlinked: 0,
+    });
+    expectArea(rowB, areaB1, {
+      task: 1,
+      highFollowup: 0,
+      highTotal: 1,
+      unassigned: 0,
+      highUnlinked: 1,
+    });
+    expectArea(rowB, areaB2, {
+      task: 1,
+      highFollowup: 0,
+      highTotal: 1,
+      unassigned: 2,
+      highUnlinked: 1,
+    });
+  });
+
   it('keeps bad-outcome-no-followup present at zero for an admin with no outcome surveys', async () => {
     const surveys = await migrateHandle.pool.query<{ count: string }>(
       `select count(*)::text as count from survey.surveys where workspace_id = $1`,
@@ -1130,7 +1291,7 @@ describe.skipIf(!runIntegration)('dashboard authorization absence', () => {
       checkService: { checkCapability: async () => ({ allow: true, via: 'role' }) } as never,
       requestService: { listAllActive: async () => ({ count: 0, requests: [] }) },
       vocReadService: {
-        countVocs: async () => {
+        countGroupedVocs: async () => {
           throw new HttpError('internal.unexpected', 'dashboard dependency failed');
         },
       },

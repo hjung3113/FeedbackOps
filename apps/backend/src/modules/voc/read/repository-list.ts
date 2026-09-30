@@ -10,6 +10,7 @@ import type { Tx } from '../../../db/tx.js';
 import { allManagedSystemIds } from '../../managed-systems/read-projections.js';
 import type { Scope } from '../authorization.js';
 import { SEVERITY_ORDINAL, SORT_CONFIG } from '../cursor.js';
+import type { VocGroupedCountRow } from '../read-contract.js';
 import { type VocReadRow, mapVocRow } from './repository-shared.js';
 
 // ── listVocsForRead ──────────────────────────────────────────────────────────
@@ -145,6 +146,65 @@ export async function countVocsForRead(db: Db | Tx, args: VocListPredicateArgs):
   `);
   return Number(result.rows[0]?.count ?? 0);
 }
+
+export async function countGroupedVocsForRead(
+  db: Db | Tx,
+  args: Pick<VocListPredicateArgs, 'workspaceId' | 'scopeFilter'>,
+): Promise<VocGroupedCountRow[]> {
+  const baseArgs: VocListPredicateArgs = { ...args, view: 'inbox' };
+  const baseWheres = buildVocListPredicate(baseArgs);
+  if (baseWheres === null) return [];
+
+  // Derive each FILTER clause from the canonical list predicate to keep tab semantics aligned.
+  const additionalPredicate = (query: Pick<VocListPredicateArgs, 'tab' | 'filterSeverity'>) => {
+    const wheres = buildVocListPredicate({ ...baseArgs, ...query });
+    if (wheres === null) return sql`false`;
+    return sql.join(wheres.slice(baseWheres.length), sql` AND `);
+  };
+  const hasTaskLink = sql`EXISTS (
+    SELECT 1 FROM ${entityLinks}
+    WHERE ${entityLinks.workspaceId} = ${vocs.workspaceId}
+      AND ${entityLinks.status} = 'active'
+      AND ${entityLinks.sourceType} = 'voc'
+      AND ${entityLinks.sourceId} = ${vocs.id}
+      AND ${entityLinks.targetType} = 'task'
+  )`;
+  const result = await (db as Db).execute<{
+    managed_system_id: string;
+    analytics_area_id: string | null;
+    total: number | string;
+    unassigned: number | string;
+    high_no_link: number | string;
+    high_severity: number | string;
+    with_task: number | string;
+  }>(sql`
+    SELECT
+      ${vocs.primaryManagedSystemId}::text AS managed_system_id,
+      ${vocs.analyticsAreaId}::text AS analytics_area_id,
+      count(*)::int AS total,
+      count(*) FILTER (WHERE ${additionalPredicate({ tab: 'unassigned' })})::int AS unassigned,
+      count(*) FILTER (WHERE ${additionalPredicate({ tab: 'high-no-link' })})::int AS high_no_link,
+      count(*) FILTER (
+        WHERE ${additionalPredicate({ filterSeverity: ['high', 'critical'] })}
+      )::int AS high_severity,
+      count(*) FILTER (WHERE ${hasTaskLink})::int AS with_task
+    FROM ${vocs}
+    WHERE ${sql.join(baseWheres, sql` AND `)}
+    GROUP BY ${vocs.primaryManagedSystemId}, ${vocs.analyticsAreaId}
+    ORDER BY ${vocs.primaryManagedSystemId}::text, ${vocs.analyticsAreaId}::text
+  `);
+
+  return result.rows.map((row) => ({
+    managed_system_id: row.managed_system_id,
+    analytics_area_id: row.analytics_area_id,
+    total: Number(row.total),
+    unassigned: Number(row.unassigned),
+    high_no_link: Number(row.high_no_link),
+    high_severity: Number(row.high_severity),
+    with_task: Number(row.with_task),
+  }));
+}
+
 // Severity ordinal CASE expression for SQL (ordinal 1..4 for low..critical;
 // NULL is excluded from CASE so it evaluates to SQL NULL).
 // WHY: using ELSE 0 made nulls sort first in DESC (0 < any ordinal).

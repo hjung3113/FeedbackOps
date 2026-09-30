@@ -55,6 +55,7 @@ export function createVocReadService(deps: VocReadServiceDeps) {
   return {
     listVocs: listReaders.listVocs,
     countVocs: listReaders.countVocs,
+    countGroupedVocs: listReaders.countGroupedVocs,
     getVocDetail: detailReaders.getVocDetail,
     resolveVocReference: referenceReader.resolveVocReference,
     getConversation: conversationReader.getConversation,

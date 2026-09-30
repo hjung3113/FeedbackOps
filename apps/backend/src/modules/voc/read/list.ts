@@ -8,7 +8,7 @@ import {
   actorTriageScope,
 } from '../authorization.js';
 import { decodeCursor, encodeCursor } from '../cursor.js';
-import type { CountVocsQuery } from '../read-contract.js';
+import type { CountVocsQuery, VocGroupedCountArgs } from '../read-contract.js';
 import type { ReadActorContext, VocReadServiceDeps } from '../read-service.js';
 import * as repoRead from '../repo-read.js';
 import { mapRowToListItem } from './mappers.js';
@@ -50,6 +50,24 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       ...(filterReporterFacingStatus !== undefined ? { filterReporterFacingStatus } : {}),
       ...(filterOwner !== undefined ? { filterOwner } : {}),
       ...(analyticsAreaId !== undefined ? { analyticsAreaId } : {}),
+    });
+  }
+
+  async function countGroupedVocs(args: VocGroupedCountArgs) {
+    const { scopeFilter } = resolveVocListScope({
+      actor: args.actor,
+      query: {
+        view: 'inbox',
+        ...(args.managedSystemId !== undefined
+          ? { managed_system_id: args.managedSystemId }
+          : {}),
+      },
+      readScope: args.readScope,
+      triageScope: undefined,
+    });
+    return repoRead.countGroupedVocsForRead(deps.db, {
+      workspaceId: args.actor.workspace_id,
+      scopeFilter,
     });
   }
   // ── listVocs ───────────────────────────────────────────────────────────────
@@ -239,5 +257,5 @@ export function createVocListReaders(deps: VocReadServiceDeps) {
       ...(out_of_scope_summary !== undefined ? { out_of_scope_summary } : {}),
     };
   }
-  return { listVocs, countVocs };
+  return { listVocs, countVocs, countGroupedVocs };
 }
