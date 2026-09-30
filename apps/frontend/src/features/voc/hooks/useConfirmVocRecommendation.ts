@@ -11,6 +11,7 @@ import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/r
 import type { ConfirmVocRecommendationResponse } from '@fops/shared';
 
 import { type ApiError, apiClient } from '@/lib/api';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 import { vocRecommendationsQueryKey } from './useVocRecommendations';
 
@@ -39,6 +40,7 @@ export function useConfirmVocRecommendation(
       return res.data;
     },
     onSuccess: async (data) => {
+      invalidateNavCounts(qc);
       await qc.invalidateQueries({ queryKey: vocRecommendationsQueryKey(vocId) });
       await qc.invalidateQueries({ queryKey: ['voc-clusters'] });
       await qc.invalidateQueries({ queryKey: ['voc-cluster', data.voc_cluster_id] });

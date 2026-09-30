@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { apiClient, ApiError } from '@/lib/api';
 import type { FindingDto, PatchFindingRequest } from '@fops/shared';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 export interface UseFindingStatusMutationArgs {
   findingId: string;
@@ -24,6 +25,7 @@ export function useFindingStatusMutation(
       return res.data;
     },
     onSuccess: (data) => {
+      invalidateNavCounts(queryClient);
       queryClient.setQueryData(['finding', findingId], data);
       void queryClient.invalidateQueries({ queryKey: ['finding', findingId] });
       onSuccess?.(data);

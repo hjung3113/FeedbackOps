@@ -3,6 +3,7 @@
 
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { apiClient, type ApiError } from '@/lib/api';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 export interface AddClusterMemberVariables {
   clusterId: string;
@@ -20,6 +21,7 @@ export function useAddClusterMember(): UseMutationResult<
       await apiClient('POST', `/voc-clusters/${clusterId}/vocs`, { body: { voc_id: vocId } });
     },
     onSuccess: async (_data, { clusterId }) => {
+      invalidateNavCounts(qc);
       await qc.invalidateQueries({ queryKey: ['voc-cluster', clusterId] });
     },
   });

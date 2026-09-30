@@ -6,6 +6,7 @@ import {
 } from '@/lib/api';
 import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { TaskRequestDto } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
@@ -99,6 +100,7 @@ export function useTaskRequestDecision({
       decisionSubmittingRef.current = false;
       setIsDecisionSubmitting(false);
       setDecisionDialog(null);
+      invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       toast('Task Request updated.');
     },

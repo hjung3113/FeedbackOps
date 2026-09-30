@@ -58,6 +58,7 @@ export function useVocCreateController({
   const mutation = useVocCreateMutation({
     idempotencyKey,
     onSuccess: (data) => {
+      toast.success(`접수 완료: ${data.display_id}`);
       markConsumed();
       form.reset(form.getValues()); // clear dirty so DirtyConfirmation won't fire
       // Synchronously notify the route (which holds the blocker ref) that the

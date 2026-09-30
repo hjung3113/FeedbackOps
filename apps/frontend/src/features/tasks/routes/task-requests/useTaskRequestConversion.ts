@@ -2,6 +2,7 @@ import { convertTaskRequest, fetchPermissionCheck } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
   type MilestoneDto,
   type TaskDto,
@@ -162,6 +163,7 @@ export function useTaskRequestConversion({
       );
     },
     onSuccess: (task) => {
+      invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast(`Converted to Task ${task.display_id}.`);

@@ -3,6 +3,7 @@ import { DetailPanelSlotContext, cn } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { createSavedView, deleteSavedView, fetchCapabilityScope, fetchManagedSystems, fetchNavCounts, fetchSavedViews, type SavedView, type SavedViewSurface } from '@/lib/api';
 import { useMe } from '@/lib/auth/useMe';
+import { NAV_COUNTS_QUERY_KEY } from '@/lib/query/navCounts';
 import { AppRail, type RailDomain } from './AppRail';
 import { AppSidebar, type SidebarNavEntry } from './AppSidebar';
 
@@ -58,7 +59,7 @@ export function AppFrame({ sidebarEntries, activeDomain, managedSystemId, syncMa
     retry: false,
   });
   const countsQuery = useQuery({
-    queryKey: ['nav-counts', selectedManagedSystemId] as const,
+    queryKey: [...NAV_COUNTS_QUERY_KEY, selectedManagedSystemId] as const,
     queryFn: ({ signal }) => fetchNavCounts({
       signal,
       ...(selectedManagedSystemId !== undefined ? { managedSystemId: selectedManagedSystemId } : {}),

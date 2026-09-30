@@ -1,6 +1,7 @@
 import { fetchPermissionCheck, linkExistingTask, listTasks } from '@/lib/api';
 import { GENERIC_ERROR_MESSAGE } from '@/lib/api/errorMapper';
 import type { ApiError } from '@/lib/api/types';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { TaskDto, TaskRequestDto } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
@@ -72,6 +73,7 @@ export function useTaskRequestLink({
       return linkExistingTask(item.id, { task_id: taskId }, crypto.randomUUID());
     },
     onSuccess: (task) => {
+      invalidateNavCounts(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['task-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast(`Linked Task ${task.display_id}.`);

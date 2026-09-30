@@ -1,6 +1,7 @@
 import { type ApiError, apiClient } from '@/lib/api';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { CreateFindingRequest, FindingDto } from '@fops/shared';
-import { type UseMutationResult, useMutation } from '@tanstack/react-query';
+import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export interface UseCreateFindingFromVocMutationArgs {
   idempotencyKey: string;
@@ -23,6 +24,7 @@ export function useCreateFindingFromVocMutation(
   args: UseCreateFindingFromVocMutationArgs,
 ): CreateFindingFromVocMutationResult {
   const { idempotencyKey, onSuccess, onError } = args;
+  const queryClient = useQueryClient();
   return useMutation<FindingDto, ApiError, CreateFindingFromVocMutationVariables>({
     mutationFn: async ({ vocId, body }) => {
       const res = await apiClient<FindingDto>('POST', `/vocs/${vocId}/create-finding`, {
@@ -31,7 +33,10 @@ export function useCreateFindingFromVocMutation(
       });
       return res.data;
     },
-    ...(onSuccess ? { onSuccess } : {}),
+    onSuccess: (data) => {
+      invalidateNavCounts(queryClient);
+      onSuccess?.(data);
+    },
     ...(onError ? { onError } : {}),
   });
 }

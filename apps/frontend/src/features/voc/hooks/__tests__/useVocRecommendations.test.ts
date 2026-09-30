@@ -136,6 +136,7 @@ describe('#168 recommendation hooks', () => {
     });
     expect(capturedUrl).toBe(`/vocs/${VOC_ID}/recommendations/${CANDIDATE_ID}/confirm`);
     expect(invalidated).toEqual([
+      ['nav-counts'],
       ['voc-recommendations', VOC_ID],
       ['voc-clusters'],
       ['voc-cluster', CLUSTER_ID],

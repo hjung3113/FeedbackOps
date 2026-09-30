@@ -1,4 +1,5 @@
 import { type ApiError, ApiParseError, apiClient, apiRequest } from '@/lib/api';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
   type SurveyResultDto,
   listSurveysResponseSchema,
@@ -65,7 +66,10 @@ export function useCreateSurvey() {
   const queryClient = useQueryClient();
   return useMutation<Survey, ApiError, CreateSurveyInput>({
     mutationFn: async (body) => (await apiClient<Survey>('POST', '/surveys', { body })).data,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: surveyKeys.list }),
+    onSuccess: () => {
+      invalidateNavCounts(queryClient);
+      void queryClient.invalidateQueries({ queryKey: surveyKeys.list });
+    },
   });
 }
 
