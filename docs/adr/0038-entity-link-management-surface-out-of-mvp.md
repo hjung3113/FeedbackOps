@@ -33,8 +33,11 @@ A disabled control that points at an unbuilt feature is a promise, not a state. 
 
 ## Amendment 2026-09-30 (#594)
 
-Issues #113 and #114 (PRs #117 and #118) shipped the entity-link detach
-lifecycle and Integration Links inventory. The no-lifecycle statements above
-describe the earlier scope:
-`PATCH /entity-links/:id` now detaches a link, and the Integration Links route
-lists the inventory. The `My Work` exclusion remains in force.
+Before this ADR was accepted on 2026-08-02, issues #113 and #114 (PRs #117
+and #118, merged 2026-06-18 and 2026-06-20) had already shipped a
+reason-required `PATCH /entity-links/:id` detach endpoint and a read-only
+Integration Links inventory with status filters. The Context's "no detach
+action exists" was therefore inaccurate for the API at the time. No product
+UI invokes the detach endpoint, so the Consequence that an incorrect link
+cannot be detached through the product in MVP remains true. The `My Work`
+exclusion remains in force.

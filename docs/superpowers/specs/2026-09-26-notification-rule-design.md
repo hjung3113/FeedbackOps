@@ -1,5 +1,9 @@
 # RESEARCH-1 — Notification Rule (pre-issue)
 
+## Status
+
+Implemented by Issue #509 under ADR-0014 (code-driven catalogue; amendments 2026-09-29).
+
 Date: 2026-09-26. Read-only survey. Nothing in `apps/` or `docs/` was edited.
 
 The roadmap item is named "Notification Rule" (`docs/design/13-mvp-roadmap.md`, Phase 1). ADR-0014 already rejected a rules engine. This note does not reopen that decision. The slice to build is the code-driven catalogue ADR-0014 locked, not user-configurable rules.

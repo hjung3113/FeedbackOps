@@ -1,5 +1,9 @@
 # RESEARCH-5 — Dashboard coverage / unlinked-data 고도화
 
+## Status
+
+Issue #513 shipped D, B and the coverage page (A); C deferred.
+
 This item still needs a user decision. It does not need a choice among four equal readings of one undefined line.
 
 `docs/design/13-mvp-roadmap.md` Phase 1 lists "Dashboard coverage / unlinked data 고도화" and does not define it. That string appears nowhere else. `GET /dashboard/summary` already returns coverage percents, a good/warn/bad band, and an unlinked high-severity queue count. Picking an enhancement and designing it from that bullet alone would guess.
