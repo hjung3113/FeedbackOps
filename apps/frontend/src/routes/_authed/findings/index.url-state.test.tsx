@@ -302,9 +302,7 @@ describe('/findings URL state', () => {
 
     await screen.findByTestId('finding-detail-panel');
 
-    expect(
-      screen.queryByRole('link', { name: '원래 VOC로 돌아가기' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '원래 VOC로 돌아가기' })).not.toBeInTheDocument();
   });
 
   test('row click pushes selected and Back returns to no selection', async () => {

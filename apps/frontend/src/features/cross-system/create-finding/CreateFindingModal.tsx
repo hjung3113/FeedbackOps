@@ -106,15 +106,14 @@ export function CreateFindingModal({
         ? '제목을 입력해 주세요.'
         : undefined
     : undefined;
-  const summaryError = showSummaryError && form.formState.errors.summary
-    ? '요약을 입력해 주세요.'
-    : undefined;
-  const severityError = showSeverityError && form.formState.errors.severity
-    ? '심각도를 선택해 주세요.'
-    : undefined;
-  const analyticsAreaError = showAnalyticsAreaError && form.formState.errors.analytics_area_id
-    ? '올바른 Analytics Area를 선택해 주세요.'
-    : undefined;
+  const summaryError =
+    showSummaryError && form.formState.errors.summary ? '요약을 입력해 주세요.' : undefined;
+  const severityError =
+    showSeverityError && form.formState.errors.severity ? '심각도를 선택해 주세요.' : undefined;
+  const analyticsAreaError =
+    showAnalyticsAreaError && form.formState.errors.analytics_area_id
+      ? '올바른 Analytics Area를 선택해 주세요.'
+      : undefined;
 
   const analyticsAreasQuery = useQuery({
     queryKey: ['analytics-areas', managedSystemId] as const,
