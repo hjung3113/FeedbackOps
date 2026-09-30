@@ -38,9 +38,7 @@ function CenteredPage({ children }: { children: ReactNode }) {
 export function AuthenticatedRoutePendingFallback() {
   return (
     <PageShell contentClassName="flex min-h-screen items-center justify-center">
-      <p className="text-sm text-text-muted" role="status">
-        불러오는 중…
-      </p>
+      <output className="text-sm text-text-muted">불러오는 중…</output>
     </PageShell>
   );
 }
@@ -78,10 +76,7 @@ export function RouteErrorFallback({ error, withShell = false }: RouterErrorFall
   return <RouteErrorFallbackWithIdentity error={error} withShell={withShell} />;
 }
 
-function RouteErrorFallbackWithIdentity({
-  error,
-  withShell,
-}: Required<RouterErrorFallbackProps>) {
+function RouteErrorFallbackWithIdentity({ error, withShell }: Required<RouterErrorFallbackProps>) {
   const router = useRouter();
   const location = useRouterState({ select: (state) => state.location });
   const me = useMe();

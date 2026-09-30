@@ -11,7 +11,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import type * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ensureMe, ME_QUERY_KEY } from '@/lib/auth/useMe';
+import { ME_QUERY_KEY, ensureMe } from '@/lib/auth/useMe';
 import type { AppRouterContext } from '@/routes/__root';
 import {
   AuthenticatedRouteErrorFallback,
