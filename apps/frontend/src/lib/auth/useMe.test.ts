@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MeRequestError } from '../api/auth';
-import { ME_QUERY_KEY, ensureMe, meQueryOptions } from './useMe';
+import { ME_QUERY_KEY, ensureMe } from './useMe';
 
 const ME = {
   actor: {
@@ -71,15 +71,15 @@ describe('ensureMe', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it('keeps the cached identity when a stale background refresh is rate limited', async () => {
+  it('keeps a stale cached identity while ensureMe refreshes it in the background', async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(ME_QUERY_KEY, ME, { updatedAt: Date.now() - 6 * 60 * 1000 });
     const fetchMock = vi.fn(async () => jsonResponse(429, {}, { 'retry-after': '0' }));
     globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
-    await expect(queryClient.fetchQuery(meQueryOptions())).rejects.toBeInstanceOf(MeRequestError);
+    await expect(ensureMe(queryClient)).resolves.toEqual(ME);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(queryClient.getQueryData(ME_QUERY_KEY)).toEqual(ME);
   });
 });

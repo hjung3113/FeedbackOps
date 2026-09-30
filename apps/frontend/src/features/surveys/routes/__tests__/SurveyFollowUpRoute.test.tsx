@@ -210,11 +210,12 @@ function renderSurveyRoute(read: unknown = holderRead, resultData: unknown = res
   }));
   useSurveyResults.mockReturnValue({ data: resultData, isLoading: false, isError: false });
 
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
+    context: { queryClient },
     history: createMemoryHistory({ initialEntries: [`/surveys/${surveyId}/follow-up`] }),
   });
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
   const tree = (
     <QueryClientProvider client={queryClient}>

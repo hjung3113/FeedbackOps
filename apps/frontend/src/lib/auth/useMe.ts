@@ -48,7 +48,7 @@ export function meQueryOptions() {
 }
 
 export function ensureMe(queryClient: QueryClient): Promise<MeResponse> {
-  return queryClient.ensureQueryData(meQueryOptions());
+  return queryClient.ensureQueryData({ ...meQueryOptions(), revalidateIfStale: true });
 }
 
 export function useMe(): UseQueryResult<MeResponse> {

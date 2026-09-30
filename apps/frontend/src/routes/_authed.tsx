@@ -1,4 +1,4 @@
-import { QueryClient, useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Outlet,
   createFileRoute,
@@ -25,7 +25,7 @@ import * as React from 'react';
 import { homeSidebarEntries } from '../features/home/homeNavigation';
 import { UnauthenticatedError, fetchDashboardSummary } from '../lib/api';
 import type { SavedView } from '../lib/api';
-import { ensureMe } from '../lib/auth/useMe';
+import { ensureMe, useMe } from '../lib/auth/useMe';
 import { AppFrame } from '../lib/layout/AppFrame';
 import { type RailDomain, railForPathname } from '../lib/layout/AppRail';
 import type { SidebarNavEntry } from '../lib/layout/AppSidebar';
@@ -227,7 +227,7 @@ export async function authenticatedBeforeLoad({
   location: { href: string };
 }): Promise<void> {
   try {
-    await ensureMe(context.queryClient ?? new QueryClient());
+    await ensureMe(context.queryClient);
   } catch (err) {
     if (err instanceof UnauthenticatedError)
       throw redirect({ to: '/login', search: { redirectTo: location.href } });
@@ -235,10 +235,21 @@ export async function authenticatedBeforeLoad({
   }
 }
 
-function AuthedLayout() {
+export function AuthedLayout() {
   const location = useRouterState({ select: (state) => state.location });
   const navigate = useNavigate({ from: '/vocs' });
+  const queryClient = useQueryClient();
+  const me = useMe();
   const activeDomain = railForPathname(location.pathname);
+  React.useEffect(() => {
+    if (!(me.error instanceof UnauthenticatedError)) return;
+    queryClient.clear();
+    void navigate({
+      to: '/login',
+      search: { redirectTo: location.href },
+      replace: true,
+    });
+  }, [location.href, me.error, navigate, queryClient]);
   // Every domain except Admin already reads/scopes by its own `managedSystem`
   // URL param (docs/frontend/routes-and-layout.md §URL State Rules): VOC,
   // VOC Clusters, Findings, Tasks (every view), Surveys, Integration

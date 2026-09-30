@@ -66,11 +66,12 @@ const survey = {
 };
 
 function renderSurveyRoute() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
+    context: { queryClient },
     history: createMemoryHistory({ initialEntries: [`/surveys/${surveyId}`] }),
   });
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
   render(
     <QueryClientProvider client={queryClient}>

@@ -2,20 +2,14 @@
 // shell at /home; unauthenticated actors enter /login (OIDC in production,
 // mock-login picker in development).
 
-import { QueryClient } from '@tanstack/react-query';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { UnauthenticatedError } from '../lib/api';
 import { ensureMe } from '../lib/auth/useMe';
 import type { AppRouterContext } from './__root';
 
-export async function rootBeforeLoad({
-  context,
-}: { context?: Partial<AppRouterContext> } = {}): Promise<never> {
-  // Tests that call the entry guard without a router context get an isolated
-  // cache; the app always supplies its shared QueryClient through RouterContext.
-  const queryClient = context?.queryClient ?? new QueryClient();
+export async function rootBeforeLoad({ context }: { context: AppRouterContext }): Promise<never> {
   try {
-    await ensureMe(queryClient);
+    await ensureMe(context.queryClient);
   } catch (err) {
     if (err instanceof UnauthenticatedError) {
       throw redirect({ to: '/login' });

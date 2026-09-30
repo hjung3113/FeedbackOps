@@ -4,8 +4,7 @@ import { OctagonAlert, TriangleAlert, Info, Loader2, CircleCheck } from 'lucide-
 import { Toaster } from 'sonner';
 
 export interface AppRouterContext {
-  // The app always supplies this; optional for standalone routeTree test routers.
-  queryClient?: QueryClient;
+  queryClient: QueryClient;
 }
 
 export const Route = createRootRouteWithContext<AppRouterContext>()({

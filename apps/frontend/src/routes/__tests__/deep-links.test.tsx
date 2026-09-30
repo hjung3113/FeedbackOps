@@ -7,6 +7,7 @@ import {
   DASHBOARD_RELEASED_TASKS_ROUTE,
   DASHBOARD_UNASSIGNED_VOC_ROUTE,
 } from '@fops/shared';
+import { QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { describe, expect, test } from 'vitest';
 
@@ -14,7 +15,7 @@ import { HOME_COVERAGE_HREF } from '@/features/home/HomeScreen';
 import { routeTree } from '@/routeTree.gen';
 import { ALL_SIDEBAR_ENTRIES } from '../_authed';
 
-const router = createRouter({ routeTree });
+const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
 const dashboardLinks = [
   DASHBOARD_UNASSIGNED_VOC_ROUTE,
   DASHBOARD_HIGH_SEVERITY_UNLINKED_ROUTE,
