@@ -50,6 +50,7 @@ export function DatePicker({
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
   onBlur,
+  onInvalid,
   placeholder = 'YYYY-MM-DD',
   ...inputProps
 }: DatePickerProps) {
@@ -206,6 +207,11 @@ export function DatePicker({
             onBlur={(event) => {
               setHasBlurred(true);
               onBlur?.(event);
+            }}
+            onInvalid={(event) => {
+              // A native form submit attempt reports the error even without a blur.
+              setHasBlurred(true);
+              onInvalid?.(event);
             }}
             pattern="\d{4}-\d{2}-\d{2}"
             placeholder={placeholder}

@@ -61,6 +61,27 @@ describe('DatePicker', () => {
     },
   );
 
+  it('shows the error when a native form submit is attempted without a blur', () => {
+    const onSubmit = vi.fn((event: { preventDefault: () => void }) => event.preventDefault());
+    render(
+      <form onSubmit={onSubmit}>
+        <DatePicker aria-label="날짜" value="" onChange={vi.fn()} />
+      </form>,
+    );
+    const input = screen.getByRole('textbox', { name: '날짜' });
+    input.focus();
+    fireEvent.change(input, { target: { value: '2026-0' } });
+    expect(screen.queryByText('날짜를 YYYY-MM-DD 형식으로 입력하세요.')).not.toBeInTheDocument();
+
+    act(() => {
+      (input.closest('form') as HTMLFormElement).requestSubmit();
+    });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(input).toHaveFocus();
+    expect(input).toHaveAccessibleDescription('날짜를 YYYY-MM-DD 형식으로 입력하세요.');
+  });
+
   it('emits a selected calendar date unchanged', () => {
     const onChange = vi.fn();
     render(<DatePicker aria-label="날짜" value="2026-06-12" onChange={onChange} />);
