@@ -8,7 +8,7 @@ export const PERMISSION_BLOCKED_REASONS = {
     'Task Request 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
   entityLinks: 'Entity link 목록을 볼 권한이 없습니다.',
   findingsList: 'Finding 목록을 볼 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
-  vocTriage: 'VOC triage 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
+  vocTriage: 'VOC Triage 권한이 없습니다. 워크스페이스 관리자에게 권한을 요청하세요.',
   vocInbox: 'VOC Inbox를 볼 권한이 없습니다. 내가 접수한 VOC는 My VOCs에서 확인할 수 있습니다.',
   vocInboxManagedSystem: '선택한 Managed System의 VOC를 볼 권한이 없습니다.',
   findingDetail:
