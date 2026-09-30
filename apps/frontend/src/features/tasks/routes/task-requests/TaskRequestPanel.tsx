@@ -5,7 +5,7 @@ import {
   TASK_REQUEST_STATUS_LABELS,
 } from '@/lib/copy/enum-labels';
 import { shortId } from '@/lib/identity';
-import type { TaskPriority, TaskRequestDto } from '@fops/shared';
+import type { TaskDto, TaskPriority, TaskRequestDto } from '@fops/shared';
 import {
   Button,
   DetailPanelHeader,
@@ -21,6 +21,7 @@ import {
   PanelTitleBlock,
   UserChip,
 } from '@fops/ui';
+import { Link } from '@tanstack/react-router';
 import { Check, FileSearch, Link2, XCircle } from 'lucide-react';
 import * as React from 'react';
 
@@ -53,13 +54,22 @@ export function TaskRequestPanel({
   const decision = useTaskRequestDecision({ item, currentActorId, currentRole });
   const conversion = useTaskRequestConversion({ item, currentRole });
   const link = useTaskRequestLink({ item, currentRole });
+  const resultingTask: TaskDto | null =
+    conversion.result?.source_task_request_id === item.id
+      ? conversion.result
+      : link.resultTaskRequestId === item.id
+        ? link.result
+        : null;
+  const showDecisionSummary = item.status === 'converted' || item.status === 'rejected';
   const sourceFindingQuery = useFindingDetail(
     item.source_type === 'finding' ? item.source_id : null,
   );
 
   const sections: PanelSection[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'decision', label: 'Decision' },
+    showDecisionSummary
+      ? { id: 'outcome', label: '결정 요약' }
+      : { id: 'decision', label: 'Decision' },
     item.source_type === 'finding' ? { id: 'source', label: 'Source' } : null,
     { id: 'properties', label: 'Properties' },
     { id: 'audit', label: 'Audit' },
@@ -100,200 +110,270 @@ export function TaskRequestPanel({
           />
         </div>
 
-        <section data-anchor="decision" className="border-t border-border-subtle px-4 py-4">
-          <PanelSectionTitle>검토 결정</PanelSectionTitle>
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              variant="primary"
-              className="w-full"
-              loading={decision.isPending}
-              disabled={!decision.canApprove}
-              onClick={decision.approve}
-            >
-              <Check className="h-3.5 w-3.5" aria-hidden="true" />
-              승인
-            </Button>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={!link.canLinkExisting}
-                onClick={() => {
-                  link.setOpen((open) => !open);
-                  conversion.setOpen(false);
-                }}
-              >
-                <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
-                기존 Task 연결
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                loading={decision.isPending}
-                disabled={!decision.canRequestEvidence}
-                onClick={decision.requestEvidence}
-              >
-                <FileSearch className="h-3.5 w-3.5" aria-hidden="true" />
-                근거 추가 요청
-              </Button>
-            </div>
-            {link.open && (
-              <div className="max-h-52 overflow-y-auto rounded border border-border-subtle bg-surface-card">
-                {link.isTasksLoading && (
-                  <div className="p-3 text-xs text-text-muted">Task 불러오는 중...</div>
-                )}
-                {link.inScopeTasks?.map((task) => (
-                  <ObjectRow
-                    key={task.id}
-                    id={task.display_id}
-                    title={task.title}
-                    density="compact"
-                    severity="low"
-                    onClick={() => link.link(task.id)}
-                    badges={<InternalTaskBadge status={task.status} />}
-                    meta={
-                      <>
-                        <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
-                        {dot()}
-                        <span>
-                          {task.assignee_actor_id
-                            ? (names.actorsById[task.assignee_actor_id]?.display_name ??
-                              '담당자 지정됨')
-                            : '미배정'}
-                        </span>
-                      </>
-                    }
-                  />
-                ))}
-                {link.inScopeTasks?.length === 0 && (
-                  <div className="p-3 text-xs text-text-muted">범위 내 Task가 없습니다.</div>
-                )}
+        {showDecisionSummary ? (
+          <section data-anchor="outcome" className="border-t border-border-subtle px-4 py-4">
+            <PanelSectionTitle>결정 요약</PanelSectionTitle>
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <TaskRequestBadge status={item.status} />
+                <span className="text-xs text-text-muted">
+                  검토자{' '}
+                  <strong className="text-text-secondary">
+                    {reviewer?.display_name ?? '알 수 없는 사용자'}
+                  </strong>
+                  {item.decided_at && <> · {formatDate(item.decided_at)}</>}
+                </span>
               </div>
-            )}
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={!conversion.canConvert}
-              onClick={() => {
-                conversion.setOpen((open) => !open);
-                link.setOpen(false);
-              }}
-            >
-              <Check className="h-3.5 w-3.5" aria-hidden="true" />
-              Task로 전환
-            </Button>
-            {conversion.open && (
-              <form
-                className="flex flex-col gap-2 rounded border border-border-subtle bg-surface-card p-3"
-                onSubmit={conversion.submit}
-              >
-                <label className="flex flex-col gap-1 text-xs text-text-muted">
-                  제목
-                  <input
-                    ref={conversion.titleInputRef}
-                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
-                    value={conversion.title}
-                    aria-invalid={conversion.titleError !== null}
-                    aria-describedby={
-                      conversion.titleError
-                        ? 'task-request-convert-title-count task-request-convert-title-error'
-                        : 'task-request-convert-title-count'
-                    }
-                    data-testid="task-request-convert-title-input"
-                    onChange={(event) => conversion.setTitle(event.target.value)}
-                  />
-                  <span
-                    id="task-request-convert-title-count"
-                    data-testid="task-request-convert-title-count"
+              {item.decision_reason && (
+                <div className="rounded border border-border-subtle bg-surface-card px-3 py-2">
+                  <span className="text-xs text-text-muted">사유</span>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-text-primary">
+                    {item.decision_reason}
+                  </p>
+                </div>
+              )}
+              {item.status === 'converted' && resultingTask && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-text-muted">연결된 Task</span>
+                  <Link
+                    to="/tasks"
+                    search={{ view: 'backlog', param: resultingTask.id }}
+                    className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
                   >
-                    {conversion.title.length}/{conversion.titleMaxLength}
-                  </span>
-                  {conversion.titleError && (
-                    <span
-                      id="task-request-convert-title-error"
-                      role="alert"
-                      className="text-xs text-accent-danger"
-                      data-testid="task-request-convert-title-error"
-                    >
-                      {conversion.titleError}
+                    <span>{resultingTask.title}</span>
+                    <span className="font-mono text-xs text-text-muted">
+                      {resultingTask.display_id}
                     </span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </section>
+        ) : (
+          <section data-anchor="decision" className="border-t border-border-subtle px-4 py-4">
+            <PanelSectionTitle>검토 결정</PanelSectionTitle>
+            <div className="flex flex-col gap-2">
+              {resultingTask && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-text-muted">연결된 Task</span>
+                  <Link
+                    to="/tasks"
+                    search={{ view: 'backlog', param: resultingTask.id }}
+                    className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
+                  >
+                    <span>{resultingTask.title}</span>
+                    <span className="font-mono text-xs text-text-muted">
+                      {resultingTask.display_id}
+                    </span>
+                  </Link>
+                </div>
+              )}
+              {!resultingTask && decision.canApprove && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="w-full"
+                  loading={decision.isPending}
+                  onClick={decision.approve}
+                >
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  승인
+                </Button>
+              )}
+              {!resultingTask && conversion.canConvert && (
+                <Button
+                  type="button"
+                  variant={conversion.open ? 'secondary' : 'primary'}
+                  size={conversion.open ? 'sm' : 'md'}
+                  className="w-full"
+                  onClick={() => {
+                    conversion.setOpen((open) => !open);
+                    link.setOpen(false);
+                  }}
+                >
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  Task로 전환
+                </Button>
+              )}
+              {!resultingTask && (link.canLinkExisting || decision.canRequestEvidence) && (
+                <div
+                  className={
+                    link.canLinkExisting && decision.canRequestEvidence
+                      ? 'grid grid-cols-2 gap-2'
+                      : 'flex flex-col gap-2'
+                  }
+                >
+                  {link.canLinkExisting && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        link.setOpen((open) => !open);
+                        conversion.setOpen(false);
+                      }}
+                    >
+                      <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      기존 Task 연결
+                    </Button>
                   )}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
+                  {decision.canRequestEvidence && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                      loading={decision.isPending}
+                      onClick={decision.requestEvidence}
+                    >
+                      <FileSearch className="h-3.5 w-3.5" aria-hidden="true" />
+                      근거 추가 요청
+                    </Button>
+                  )}
+                </div>
+              )}
+              {!resultingTask && link.open && (
+                <div className="max-h-52 overflow-y-auto rounded border border-border-subtle bg-surface-card">
+                  {link.isTasksLoading && (
+                    <div className="p-3 text-xs text-text-muted">Task 불러오는 중...</div>
+                  )}
+                  {link.inScopeTasks?.map((task) => (
+                    <ObjectRow
+                      key={task.id}
+                      id={task.display_id}
+                      title={task.title}
+                      density="compact"
+                      severity="low"
+                      onClick={() => link.link(task.id)}
+                      badges={<InternalTaskBadge status={task.status} />}
+                      meta={
+                        <>
+                          <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
+                          {dot()}
+                          <span>
+                            {task.assignee_actor_id
+                              ? (names.actorsById[task.assignee_actor_id]?.display_name ??
+                                '담당자 지정됨')
+                              : '미배정'}
+                          </span>
+                        </>
+                      }
+                    />
+                  ))}
+                  {link.inScopeTasks?.length === 0 && (
+                    <div className="p-3 text-xs text-text-muted">범위 내 Task가 없습니다.</div>
+                  )}
+                </div>
+              )}
+              {!resultingTask && conversion.open && (
+                <form
+                  className="flex flex-col gap-2 rounded border border-border-subtle bg-surface-card p-3"
+                  onSubmit={conversion.submit}
+                >
                   <label className="flex flex-col gap-1 text-xs text-text-muted">
-                    우선순위
+                    제목
+                    <input
+                      ref={conversion.titleInputRef}
+                      className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                      value={conversion.title}
+                      aria-invalid={conversion.titleError !== null}
+                      aria-describedby={
+                        conversion.titleError
+                          ? 'task-request-convert-title-count task-request-convert-title-error'
+                          : 'task-request-convert-title-count'
+                      }
+                      data-testid="task-request-convert-title-input"
+                      onChange={(event) => conversion.setTitle(event.target.value)}
+                    />
+                    <span
+                      id="task-request-convert-title-count"
+                      data-testid="task-request-convert-title-count"
+                    >
+                      {conversion.title.length}/{conversion.titleMaxLength}
+                    </span>
+                    {conversion.titleError && (
+                      <span
+                        id="task-request-convert-title-error"
+                        role="alert"
+                        className="text-xs text-accent-danger"
+                        data-testid="task-request-convert-title-error"
+                      >
+                        {conversion.titleError}
+                      </span>
+                    )}
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex flex-col gap-1 text-xs text-text-muted">
+                      우선순위
+                      <select
+                        className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                        value={conversion.priority}
+                        onChange={(event) =>
+                          conversion.setPriority(event.target.value as TaskPriority)
+                        }
+                      >
+                        {TASK_PRIORITIES.map((priority) => (
+                          <option key={priority} value={priority}>
+                            {TASK_PRIORITY_LABELS[priority]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-text-muted">
+                      마감일
+                      <input
+                        type="date"
+                        className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                        value={conversion.dueDate}
+                        onChange={(event) => conversion.setDueDate(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <label className="flex flex-col gap-1 text-xs text-text-muted">
+                    담당자
                     <select
                       className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
-                      value={conversion.priority}
-                      onChange={(event) =>
-                        conversion.setPriority(event.target.value as TaskPriority)
-                      }
+                      value={conversion.assigneeId}
+                      onChange={(event) => conversion.setAssigneeId(event.target.value)}
                     >
-                      {TASK_PRIORITIES.map((priority) => (
-                        <option key={priority} value={priority}>
-                          {TASK_PRIORITY_LABELS[priority]}
+                      <option value="">미배정</option>
+                      {Object.values(names.actorsById).map((actor) => (
+                        <option key={actor.id} value={actor.id}>
+                          {actor.display_name}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label className="flex flex-col gap-1 text-xs text-text-muted">
-                    마감일
-                    <input
-                      type="date"
+                    Analytics Area
+                    <select
                       className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
-                      value={conversion.dueDate}
-                      onChange={(event) => conversion.setDueDate(event.target.value)}
-                    />
+                      value={conversion.analyticsAreaId}
+                      onChange={(event) => conversion.setAnalyticsAreaId(event.target.value)}
+                    >
+                      <option value="">없음</option>
+                      {conversion.analyticsAreas?.map((area) => (
+                        <option key={area.id} value={area.id}>
+                          {area.name}
+                        </option>
+                      ))}
+                    </select>
                   </label>
-                </div>
-                <label className="flex flex-col gap-1 text-xs text-text-muted">
-                  담당자
-                  <select
-                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
-                    value={conversion.assigneeId}
-                    onChange={(event) => conversion.setAssigneeId(event.target.value)}
-                  >
-                    <option value="">미배정</option>
-                    {Object.values(names.actorsById).map((actor) => (
-                      <option key={actor.id} value={actor.id}>
-                        {actor.display_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-text-muted">
-                  Analytics Area
-                  <select
-                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
-                    value={conversion.analyticsAreaId}
-                    onChange={(event) => conversion.setAnalyticsAreaId(event.target.value)}
-                  >
-                    <option value="">없음</option>
-                    {conversion.analyticsAreas?.map((area) => (
-                      <option key={area.id} value={area.id}>
-                        {area.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-text-muted">
-                  Milestone
-                  <select
-                    className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
-                    value={conversion.milestoneId}
-                    onChange={(event) => conversion.setMilestoneId(event.target.value)}
-                  >
-                    <option value="">없음</option>
-                    {conversion.milestones?.map((milestone) => (
-                      <option key={milestone.id} value={milestone.id}>
-                        {milestone.title}
-                      </option>
-                    ))}
-                    {/* R2 + R4 (midreview/Astra) — while a held selection is
+                  <label className="flex flex-col gap-1 text-xs text-text-muted">
+                    Milestone
+                    <select
+                      className="rounded border border-border-subtle bg-surface-detail px-2 py-1.5 text-sm text-text-primary"
+                      value={conversion.milestoneId}
+                      onChange={(event) => conversion.setMilestoneId(event.target.value)}
+                    >
+                      <option value="">없음</option>
+                      {conversion.milestones?.map((milestone) => (
+                        <option key={milestone.id} value={milestone.id}>
+                          {milestone.title}
+                        </option>
+                      ))}
+                      {/* R2 + R4 (midreview/Astra) — while a held selection is
                         unavailable (its list read failed terminally, or a
                         successful refreshed list omitted it), the select must
                         not silently display None: the held id keeps a
@@ -301,59 +381,61 @@ export function TaskRequestPanel({
                         matches the internal state and choosing None is a
                         real, reachable change. The retained identity is never
                         rendered. */}
-                    {(conversion.milestonePickerError !== null ||
-                      conversion.milestoneSelectionUnavailable) &&
-                      conversion.milestoneId !== '' && (
-                        <option value={conversion.milestoneId} disabled>
-                          확인할 수 없음
-                        </option>
-                      )}
-                  </select>
-                  {/* R2 (Astra P2-3) — a settled picker read error is shown in
+                      {(conversion.milestonePickerError !== null ||
+                        conversion.milestoneSelectionUnavailable) &&
+                        conversion.milestoneId !== '' && (
+                          <option value={conversion.milestoneId} disabled>
+                            확인할 수 없음
+                          </option>
+                        )}
+                    </select>
+                    {/* R2 (Astra P2-3) — a settled picker read error is shown in
                       place of the retained options: the server's denial reason
                       for a permission failure, the same 'Milestone list
                       unavailable.' copy the Milestone list route uses for a
                       generic outage. */}
-                  {conversion.milestonePickerError !== null && (
-                    <span
-                      className={
-                        conversion.milestonePickerError.denied
-                          ? 'text-xs text-accent-danger'
-                          : 'text-xs text-text-muted'
-                      }
-                    >
-                      {conversion.milestonePickerError.denied
-                        ? conversion.milestonePickerError.message
-                        : 'Milestone 목록을 불러올 수 없습니다.'}
-                    </span>
-                  )}
-                </label>
+                    {conversion.milestonePickerError !== null && (
+                      <span
+                        className={
+                          conversion.milestonePickerError.denied
+                            ? 'text-xs text-accent-danger'
+                            : 'text-xs text-text-muted'
+                        }
+                      >
+                        {conversion.milestonePickerError.denied
+                          ? conversion.milestonePickerError.message
+                          : 'Milestone 목록을 불러올 수 없습니다.'}
+                      </span>
+                    )}
+                  </label>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    loading={conversion.isPending}
+                    disabled={!conversion.canConvert}
+                    data-testid="task-request-convert-submit"
+                  >
+                    Task로 전환
+                  </Button>
+                </form>
+              )}
+              {!resultingTask && decision.canReject && (
                 <Button
-                  type="submit"
-                  variant="primary"
+                  type="button"
+                  variant="destructive"
                   size="sm"
-                  loading={conversion.isPending}
-                  disabled={!conversion.canConvert}
-                  data-testid="task-request-convert-submit"
+                  className="w-full"
+                  loading={decision.isPending}
+                  onClick={decision.reject}
                 >
-                  Task로 전환
+                  <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                  반려
                 </Button>
-              </form>
-            )}
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              className="w-full"
-              loading={decision.isPending}
-              disabled={!decision.canReject}
-              onClick={decision.reject}
-            >
-              <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-              반려
-            </Button>
-          </div>
-        </section>
+              )}
+            </div>
+          </section>
+        )}
 
         {item.source_type === 'finding' && (
           <section data-anchor="source" className="border-t border-border-subtle px-4 py-4">
