@@ -304,7 +304,12 @@ function ActionQueueCard({
       >
         {queue.count}
       </div>
-      <footer className="mt-4 flex items-center justify-between border-t border-border-subtle pt-3">
+      <footer
+        className={[
+          'mt-4 flex flex-wrap items-center justify-between gap-2',
+          'border-t border-border-subtle pt-3',
+        ].join(' ')}
+      >
         {queue.secondary_action && copy.secondaryAction ? (
           <a
             className="text-xs text-text-secondary hover:text-text-primary"
@@ -315,10 +320,15 @@ function ActionQueueCard({
         ) : (
           <span />
         )}
-        <Button asChild variant="primary" size="sm">
+        <Button
+          asChild
+          variant="primary"
+          size="sm"
+          className="ml-auto max-w-full h-auto min-h-8 py-1 whitespace-normal"
+        >
           <a href={queue.next_action.route}>
-            {copy.primaryAction}
-            <ArrowRight className="h-3.5 w-3.5" />
+            <span className="min-w-0 break-words">{copy.primaryAction}</span>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0" />
           </a>
         </Button>
       </footer>
