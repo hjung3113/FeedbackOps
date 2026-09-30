@@ -133,6 +133,65 @@ describe('CreateFindingModal Analytics Area inheritance', () => {
     expect(body).not.toHaveProperty('analytics_area_id');
   });
 
+  it('navigates to the selected Finding and retains the exact VOC origin URL', async () => {
+    const origin =
+      `/vocs?view=triage&managedSystem=${IDS.managedSystem}` +
+      `&selected=${IDS.voc}&tab=high&filter.severity=critical`;
+    const currentUrl =
+      `${window.location.pathname}${window.location.search}` + window.location.hash;
+    window.history.replaceState({}, '', origin);
+
+    try {
+      renderModal(null);
+      submitValidForm();
+
+      await submittedBody();
+      await waitFor(() =>
+        expect(navigate).toHaveBeenCalledWith({
+          to: '/findings',
+          search: {
+            selected: '10000000-0000-4000-8000-000000000050',
+            returnTo: origin,
+          },
+        }),
+      );
+    } finally {
+      window.history.replaceState({}, '', currentUrl || '/');
+    }
+  });
+
+  it('keeps pristine fields clear and shows Korean errors after empty submit', async () => {
+    renderModal(null);
+    await screen.findByTestId('create-finding-aa-picker');
+
+    const title = screen.getByLabelText(/제목/);
+    const summary = screen.getByLabelText(/요약/);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(title).not.toHaveAttribute('aria-invalid', 'true');
+    expect(summary).not.toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Finding 생성' }));
+
+    expect(await screen.findByText('제목을 입력해 주세요.')).toBeInTheDocument();
+    expect(screen.getByText('요약을 입력해 주세요.')).toBeInTheDocument();
+    expect(title).toHaveValue('');
+    expect(summary).toHaveValue('');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('shows the touched field error on blur and preserves its value', async () => {
+    renderModal(null);
+    const title = screen.getByLabelText(/제목/);
+    const summary = screen.getByLabelText(/요약/);
+    fireEvent.change(title, { target: { value: '   ' } });
+    fireEvent.blur(title);
+
+    expect(await screen.findByText('제목을 입력해 주세요.')).toBeInTheDocument();
+    expect(screen.queryByText('요약을 입력해 주세요.')).not.toBeInTheDocument();
+    expect(title).toHaveValue('   ');
+    expect(summary).not.toHaveAttribute('aria-invalid', 'true');
+  });
+
   it.each([
     ['제목', 'title', '   ', '유효한 요약'],
     ['요약', 'summary', '   ', '유효한 제목'],

@@ -144,6 +144,13 @@ describe('TaskRequestsRoute decision dialogs', () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 
+  it('shows a Korean required marker in the decision dialog', async () => {
+    await openDialog('Reject', 'Reject Task Request');
+
+    expect(screen.getByText('필수 입력 항목입니다.')).toBeInTheDocument();
+    expect(screen.queryByText('Required.')).not.toBeInTheDocument();
+  });
+
   it('approves another actor request without an optional reason', async () => {
     await openDialog('Approve', 'Approve Task Request');
     fireEvent.click(screen.getByRole('button', { name: 'Approve Task Request' }));

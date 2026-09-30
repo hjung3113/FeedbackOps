@@ -192,6 +192,36 @@ describe('/findings URL state', () => {
     expect(router.state.location.search).toEqual({ selected: F1_ID });
   });
 
+  test('selected Finding exposes a return link to the exact VOC context', async () => {
+    const origin =
+      `/vocs?view=triage&managedSystem=${MS_1}` +
+      `&selected=${F2_ID}&tab=high&filter.severity=critical`;
+    const router = renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(origin)}`,
+    );
+
+    await screen.findByTestId('finding-detail-panel');
+
+    expect(screen.getByRole('link', { name: '원래 VOC로 돌아가기' })).toHaveAttribute(
+      'href',
+      origin,
+    );
+    expect(router.state.location.search).toEqual({ selected: F1_ID, returnTo: origin });
+  });
+
+  test('ignores an external return URL', async () => {
+    const returnTo = 'https://example.com/vocs?view=inbox';
+    renderUrlState(
+      { requested: [] },
+      `/findings?selected=${F1_ID}&returnTo=${encodeURIComponent(returnTo)}`,
+    );
+
+    await screen.findByTestId('finding-detail-panel');
+
+    expect(screen.queryByRole('link', { name: '원래 VOC로 돌아가기' })).not.toBeInTheDocument();
+  });
+
   test('row click pushes selected and Back returns to no selection', async () => {
     const router = renderUrlState({ requested: [] }, '/findings');
     await waitFor(() =>
@@ -408,6 +438,10 @@ describe('/findings URL state', () => {
     expect(findingsSearchSchema.parse({})).toEqual({});
     expect(findingsSearchSchema.parse({ managedSystem: 'all' })).toEqual({
       managedSystem: 'all',
+    });
+    expect(findingsSearchSchema.parse({ selected: F1_ID, returnTo: '/vocs?view=inbox' })).toEqual({
+      selected: F1_ID,
+      returnTo: '/vocs?view=inbox',
     });
   });
 

@@ -28,7 +28,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 /tasks?view=board&managedSystem=:managedSystemId|all&selected=:taskId
 /tasks?view=milestones&managedSystem=:managedSystemId|all&selected=:milestoneId
 /integration
-/findings?managedSystem=:managedSystemId|all&selected=:findingId
+/findings?managedSystem=:managedSystemId|all&selected=:findingId&execution=none&returnTo=:encodedVocUrl
 /integration/coverage?managedSystem=:managedSystemId|all
 /integration/links?managedSystem=:managedSystemId|all
 /admin/managed-systems
@@ -39,6 +39,7 @@ Reusable component contracts live in `docs/frontend/ui-design-system.md`.
 
 | Deep-link route | Search keys | Omitted defaults |
 |---|---|---|
+| `/findings` | `managedSystem`, `selected`, `execution`, `returnTo` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected; `execution` when unfiltered; `returnTo` unless the selected Finding was opened from a VOC flow |
 | `/surveys` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
 | `/voc-clusters` | `managedSystem`, `selected` | `managedSystem` for the caller's effective scope union (`all` is also accepted); `selected` when none is selected |
 | `/admin/analytics-areas` | `managedSystem`, `includeArchived`, `selected` | `managedSystem` for all Managed Systems; `includeArchived` when archived records are hidden; `selected` when none is selected |
@@ -158,6 +159,8 @@ as the other surfaces.
 - In `view=milestones`, desktop selection opens Milestone Detail in RightDetailPanel; the list remains the primary context.
 - Mobile selection uses a drill-in route; back returns to the previous list filters.
 - Browser refresh on a selected URL restores AppShell, list context, and selected detail when data is accessible.
+- Finding creation from a selected VOC may carry `returnTo` with the same-origin `/vocs` URL; the selected Finding detail offers an action that restores the VOC view, scope, filters, and selection.
+- The standalone `/findings/$findingId` deep link has a back action to `/findings?selected=:findingId`.
 - Closing a detail panel preserves filters, sort, and scroll position when possible.
 - CommandMenu actions must route to the same panel, drawer, or page as visible UI buttons.
 ```

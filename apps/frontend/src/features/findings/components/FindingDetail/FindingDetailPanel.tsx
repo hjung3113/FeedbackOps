@@ -42,8 +42,8 @@ function FindingNotFound(): React.ReactElement {
       title="Finding을 찾을 수 없습니다."
       body="해당 Finding은 삭제되었거나 접근 권한이 없습니다."
       action={
-        <Button variant="outline" size="sm" onClick={() => void navigate({ to: '/vocs' })}>
-          VOC 목록으로
+        <Button variant="outline" size="sm" onClick={() => void navigate({ to: '/findings' })}>
+          Findings 목록으로
         </Button>
       }
       className="px-6"

@@ -1,6 +1,6 @@
 // CreateFindingModal — small modal form for creating a Finding from a VOC.
 // Fields: title, summary, severity. Mirrors EditDescriptionModal pattern.
-// On success: navigates to /findings/:newId.
+// On success: selects the new Finding in /findings and keeps the VOC origin.
 
 import { type ApiError, errorMapper, useIdempotencyKey } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
@@ -63,6 +63,7 @@ export function CreateFindingModal({
   onClose,
 }: CreateFindingModalProps): React.ReactElement {
   const navigate = useNavigate();
+  const dialogTitleRef = React.useRef<HTMLHeadingElement>(null);
   const { key: idempotencyKey, markConsumed } = useIdempotencyKey();
 
   const mutation = useCreateFindingFromVocMutation({ idempotencyKey });
@@ -77,6 +78,32 @@ export function CreateFindingModal({
     },
     mode: 'onBlur',
   });
+  const showTitleError = Boolean(form.formState.touchedFields.title || form.formState.isSubmitted);
+  const showSummaryError = Boolean(
+    form.formState.touchedFields.summary || form.formState.isSubmitted,
+  );
+  const showSeverityError = Boolean(
+    form.formState.touchedFields.severity || form.formState.isSubmitted,
+  );
+  const showAnalyticsAreaError = Boolean(
+    form.formState.touchedFields.analytics_area_id || form.formState.isSubmitted,
+  );
+  const titleError = showTitleError
+    ? form.formState.errors.title?.type === 'too_big'
+      ? '제목은 200자 이내로 입력해 주세요.'
+      : form.formState.errors.title
+        ? '제목을 입력해 주세요.'
+        : undefined
+    : undefined;
+  const summaryError = showSummaryError && form.formState.errors.summary
+    ? '요약을 입력해 주세요.'
+    : undefined;
+  const severityError = showSeverityError && form.formState.errors.severity
+    ? '심각도를 선택해 주세요.'
+    : undefined;
+  const analyticsAreaError = showAnalyticsAreaError && form.formState.errors.analytics_area_id
+    ? '올바른 Analytics Area를 선택해 주세요.'
+    : undefined;
 
   const analyticsAreasQuery = useQuery({
     queryKey: ['analytics-areas', managedSystemId] as const,
@@ -116,7 +143,17 @@ export function CreateFindingModal({
           form.reset();
           mutation.reset();
           onClose();
-          void navigate({ to: '/findings/$findingId', params: { findingId: finding.id } });
+          const returnTo =
+            window.location.pathname === '/vocs'
+              ? `${window.location.pathname}${window.location.search}`
+              : undefined;
+          void navigate({
+            to: '/findings',
+            search: {
+              selected: finding.id,
+              ...(returnTo !== undefined ? { returnTo } : {}),
+            },
+          });
         },
         onError: (err: ApiError) => {
           toast.error(errorMapper(err.envelope).message);
@@ -134,9 +171,17 @@ export function CreateFindingModal({
         if (!isOpen) closeAndReset();
       }}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-lg"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          dialogTitleRef.current?.focus();
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>Finding 생성</DialogTitle>
+          <DialogTitle ref={dialogTitleRef} tabIndex={-1}>
+            Finding 생성
+          </DialogTitle>
         </DialogHeader>
 
         <form
@@ -154,11 +199,11 @@ export function CreateFindingModal({
               id="finding-title"
               placeholder="Finding을 한 줄로 요약하세요."
               {...form.register('title')}
-              aria-invalid={Boolean(form.formState.errors.title)}
+              aria-invalid={titleError !== undefined}
             />
-            {form.formState.errors.title?.message && (
+            {titleError && (
               <p className="text-xs text-text-danger" role="alert">
-                {form.formState.errors.title.message}
+                {titleError}
               </p>
             )}
           </div>
@@ -173,11 +218,11 @@ export function CreateFindingModal({
               placeholder="어떤 문제가 있고 왜 실행해야 하는지 설명하세요."
               rows={4}
               {...form.register('summary')}
-              aria-invalid={Boolean(form.formState.errors.summary)}
+              aria-invalid={summaryError !== undefined}
             />
-            {form.formState.errors.summary?.message && (
+            {summaryError && (
               <p className="text-xs text-text-danger" role="alert">
-                {form.formState.errors.summary.message}
+                {summaryError}
               </p>
             )}
           </div>
@@ -193,7 +238,7 @@ export function CreateFindingModal({
                 form.setValue('severity', val as FindingSeverity, { shouldValidate: true })
               }
             >
-              <SelectTrigger id="finding-severity">
+              <SelectTrigger id="finding-severity" aria-invalid={severityError !== undefined}>
                 <SelectValue placeholder="심각도 선택" />
               </SelectTrigger>
               <SelectContent>
@@ -204,9 +249,9 @@ export function CreateFindingModal({
                 ))}
               </SelectContent>
             </Select>
-            {form.formState.errors.severity?.message && (
+            {severityError && (
               <p className="text-xs text-text-danger" role="alert">
-                {form.formState.errors.severity.message}
+                {severityError}
               </p>
             )}
           </div>
@@ -240,6 +285,11 @@ export function CreateFindingModal({
             <p className="text-xs text-text-muted">
               소스 VOC의 Analytics Area를 승계하며 생성 전에 변경할 수 있습니다.
             </p>
+            {analyticsAreaError && (
+              <p className="text-xs text-text-danger" role="alert">
+                {analyticsAreaError}
+              </p>
+            )}
           </div>
         </form>
 
