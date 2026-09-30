@@ -35,6 +35,7 @@ import { TaskRequestDecisionDialog } from './TaskRequestDecisionDialog';
 import { type NameMaps, TaskRequestBadge, dot } from './TaskRequestRow';
 import { formatDate } from './predicates';
 import { TASK_PRIORITIES, useTaskRequestConversion } from './useTaskRequestConversion';
+import { useTaskRequestConvertedTaskLink } from './useTaskRequestConvertedTaskLink';
 import { useTaskRequestDecision } from './useTaskRequestDecision';
 import { useTaskRequestLink } from './useTaskRequestLink';
 
@@ -68,6 +69,11 @@ export function TaskRequestPanel({
       : link.resultTaskRequestId === item.id
         ? link.result
         : null;
+  const convertedTaskLink = useTaskRequestConvertedTaskLink(item.id, item.status === 'converted');
+  // The mutation result is only the immediate value; once the canonical read has
+  // answered (null included), a later refetch error must not bring it back.
+  const taskForOutcome =
+    convertedTaskLink.data !== undefined ? convertedTaskLink.data : resultingTask;
   const showDecisionSummary = item.status === 'converted' || item.status === 'rejected';
   const sourceFindingQuery = useFindingDetail(
     item.source_type === 'finding' ? item.source_id : null,
@@ -140,17 +146,17 @@ export function TaskRequestPanel({
                   </p>
                 </div>
               )}
-              {item.status === 'converted' && resultingTask && (
+              {item.status === 'converted' && taskForOutcome && (
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-text-muted">연결된 Task</span>
                   <Link
                     to="/tasks"
-                    search={{ view: 'backlog', param: resultingTask.id }}
+                    search={{ view: 'backlog', param: taskForOutcome.id }}
                     className="inline-flex items-center gap-2 rounded-sm border border-border-subtle bg-surface-card px-2.5 py-1.5 text-sm text-accent-primary hover:bg-surface-row-hover"
                   >
-                    <span>{resultingTask.title}</span>
+                    <span>{taskForOutcome.title}</span>
                     <span className="font-mono text-xs text-text-muted">
-                      {resultingTask.display_id}
+                      {taskForOutcome.display_id}
                     </span>
                   </Link>
                 </div>
