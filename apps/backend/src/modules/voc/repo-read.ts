@@ -11,6 +11,7 @@ export type { VocReadRow } from './read/repository-shared.js';
 
 export {
   buildVocListPredicate,
+  countGroupedVocsForRead,
   countVocsForRead,
   listVocsForRead,
   outOfScopeSummary,
