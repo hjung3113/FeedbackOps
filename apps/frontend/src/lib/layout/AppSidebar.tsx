@@ -229,13 +229,15 @@ export function AppSidebar({
           )}
         </div>
       </nav>
-      <div className="border-t border-border-subtle p-2">
-        <div className="flex flex-col gap-0.5">
-          {visibleFooterItems.map((item) => (
-            <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />
-          ))}
+      {visibleFooterItems.length > 0 && (
+        <div className="border-t border-border-subtle p-2" data-testid="sidebar-footer">
+          <div className="flex flex-col gap-0.5">
+            {visibleFooterItems.map((item) => (
+              <SidebarFooterLink key={item.id} item={item} collapsed={collapsed} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

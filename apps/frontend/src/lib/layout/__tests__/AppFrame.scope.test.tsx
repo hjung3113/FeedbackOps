@@ -1,4 +1,5 @@
 import { NAV_TREE } from '@/routes/_authed';
+import { permissionCheckQueryKey } from '@/lib/cross-system/usePermissionCheck';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -212,6 +213,9 @@ describe('AppFrame managed-system scope', () => {
             url.startsWith('/me/permissions/check') && !url.includes('capability=workspace.admin'),
         ),
       ).toHaveLength(0);
+      expect(
+        requestedUrls.filter((u) => u === '/me/permissions/check?capability=workspace.admin'),
+      ).toHaveLength(1);
       fireEvent.click(screen.getByTestId('scope-selector'));
       expect(await screen.findAllByLabelText('Outside your grants')).toHaveLength(2);
       expect(
@@ -334,9 +338,13 @@ describe('AppFrame capability navigation', () => {
         await waitFor(() =>
           expect(requestedUrls).toContain('/me/permissions/check?capability=workspace.admin'),
         );
-        await act(async () => {
-          await Promise.resolve();
-        });
+        await waitFor(() =>
+          expect(
+            client.getQueryState(
+              permissionCheckQueryKey({ capability: 'workspace.admin' }),
+            )?.status,
+          ).toBe('success'),
+        );
 
         for (const label of ['Home', 'VOC', 'Findings', 'Tasks', 'Integration', 'Surveys']) {
           expect(screen.getByRole('link', { name: label })).toBeInTheDocument();

@@ -6,7 +6,9 @@ Date: 2026-09-30
 
 Accepted.
 
-Amends ADR-0040 and ADR-0041 only within their navigation territory; their other decisions remain unchanged.
+Related to ADR-0040 (entry points must not promise missing destinations) and ADR-0041 (Admin permission-request UX);
+changes no decision in either. Supersedes the prototype's Role Level rail/sidebar visibility
+(`docs/design-prototype/shell.jsx:6-29`) and the former `docs/frontend/routes-and-layout.md` §Role Level Navigation Contract.
 
 ## Context
 
