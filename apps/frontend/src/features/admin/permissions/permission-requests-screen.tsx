@@ -1,6 +1,7 @@
 import { Button, ListShell, ObjectRow, OutlineBadge } from '@fops/ui';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
+import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { shortId } from '@/lib/identity';
 
 import { PermissionRequestDetail } from './permission-request-detail.js';
@@ -122,12 +123,14 @@ function PermissionRequestRow({
   return (
     <ObjectRow
       id="권한 요청"
-      title={request.requested_capability}
+      title={`${actorName ?? '알 수 없는 사용자'} · ${getCapabilityDisplayLabel(request.requested_capability)}`}
       selected={selected}
       onClick={onSelect}
       badges={<OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>}
       meta={
         <>
+          <span className="font-mono text-text-muted">{request.requested_capability}</span>
+          <span>·</span>
           <span>
             {request.requested_managed_system_id
               ? (managedSystemName ?? 'Managed System')
@@ -145,10 +148,11 @@ function PermissionRequestRow({
         </>
       }
       trailing={
-        <span className="text-right text-xs text-text-muted">
-          <span className="block text-text-primary">{actorName ?? '알 수 없는 사용자'}</span>
-          {!actorName && <span className="font-mono">{shortId(request.requester_actor_id)}</span>}
-        </span>
+        !actorName && (
+          <span className="text-right text-xs text-text-muted">
+            <span className="font-mono">{shortId(request.requester_actor_id)}</span>
+          </span>
+        )
       }
     />
   );

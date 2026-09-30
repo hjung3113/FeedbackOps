@@ -52,12 +52,12 @@ describe('PermissionRequestsScreen identity', () => {
     consoleState.managedSystemNames = { '30000000-0000-0000-0000-000000000003': 'Billing Ops' };
   });
 
-  it('leads with the capability and readable requester/scope names', () => {
+  it('leads with the requester and readable capability while retaining the raw key as metadata', () => {
     render(<PermissionRequestsScreen />);
 
-    expect(screen.getByRole('button', { name: /finding.manage/ })).toBeInTheDocument();
+    expect(screen.getByText('김하나 · Finding 관리')).toBeInTheDocument();
+    expect(screen.getByText('finding.manage')).toHaveClass('font-mono', 'text-text-muted');
     expect(screen.getByText('권한 요청')).toBeInTheDocument();
-    expect(screen.getByText('김하나')).toBeInTheDocument();
     expect(screen.getByText('Billing Ops')).toBeInTheDocument();
     expect(screen.queryByText('20000000')).not.toBeInTheDocument();
     expect(screen.queryByText('30000000')).not.toBeInTheDocument();
@@ -70,7 +70,7 @@ describe('PermissionRequestsScreen identity', () => {
 
     render(<PermissionRequestsScreen />);
 
-    expect(screen.getByText('알 수 없는 사용자')).toBeInTheDocument();
+    expect(screen.getByText('알 수 없는 사용자 · Finding 관리')).toBeInTheDocument();
     expect(screen.getByText('Managed System')).toBeInTheDocument();
     expect(screen.getByText('20000000')).toHaveClass('font-mono');
     expect(screen.getByText('30000000')).toHaveClass('font-mono');

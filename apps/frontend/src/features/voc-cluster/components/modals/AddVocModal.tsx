@@ -117,7 +117,7 @@ export function AddVocModal({
                     disabled={candidate.included}
                     onClick={() => setVocId(candidate.voc_id)}
                     data-testid={`add-voc-candidate-${candidate.voc_id}`}
-                    className="justify-start"
+                    className="h-auto min-h-8 justify-start py-1 whitespace-normal"
                   >
                     <span className="flex flex-col items-start">
                       <span>

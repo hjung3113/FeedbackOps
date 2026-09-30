@@ -1,6 +1,6 @@
+import type { EntityLinkDto } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { EntityLinkDto } from '@fops/shared';
 import { EntityRelationRow } from './EntityRelationRow';
 
 vi.mock('@fops/ui', async () => {
@@ -77,25 +77,35 @@ describe('EntityRelationRow', () => {
     expect(screen.queryByText('20000000')).not.toBeInTheDocument();
   });
 
-  it('uses a safe label and omits endpoint identities for hidden links', () => {
-    const hidden: EntityLinkDto = {
-      id: LINK.id,
-      source_type: 'finding',
-      target_type: 'task',
-      relation_type: 'requested_task',
-      status: 'active',
-      managed_system_id: LINK.managed_system_id,
-      created_by: LINK.created_by,
-      created_at: LINK.created_at,
-      updated_at: LINK.updated_at,
-      visibility_state: 'hidden',
-    };
+  it.each(['hidden', 'denied'] as const)(
+    'uses a safe label and omits endpoint identities for %s links with adversarial summaries',
+    (visibility_state) => {
+      const restricted = {
+        ...LINK,
+        source_summary: {
+          type: 'finding',
+          id: '20000000-0000-0000-0000-000000000002',
+          display_id: 'FIN-12',
+          title: '매출 리포트 지연',
+          summary: '응답 시간이 늘어남',
+          severity: 'high',
+          confidence: null,
+          status: 'active',
+          primary_managed_system_id: LINK.managed_system_id,
+          evidence_count: 1,
+        },
+        visibility_state,
+      } as unknown as EntityLinkDto;
 
-    render(<EntityRelationRow link={hidden} />);
+      render(<EntityRelationRow link={restricted} />);
 
-    expect(screen.getByText('접근할 수 없는 항목')).toBeInTheDocument();
-    expect(screen.queryByText('매출 리포트 지연')).not.toBeInTheDocument();
-    expect(screen.queryByText('20000000')).not.toBeInTheDocument();
-    expect(screen.queryByText('30000000')).not.toBeInTheDocument();
-  });
+      expect(screen.getByText('접근할 수 없는 항목')).toBeInTheDocument();
+      expect(screen.queryByText('매출 리포트 지연')).not.toBeInTheDocument();
+      expect(screen.queryByText('매출 리포트 쿼리 플랜 개선')).not.toBeInTheDocument();
+      expect(screen.queryByText('FIN-12')).not.toBeInTheDocument();
+      expect(screen.queryByText('TASK-1000')).not.toBeInTheDocument();
+      expect(screen.queryByText('20000000')).not.toBeInTheDocument();
+      expect(screen.queryByText('30000000')).not.toBeInTheDocument();
+    },
+  );
 });

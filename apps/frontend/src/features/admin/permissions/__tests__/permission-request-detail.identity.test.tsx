@@ -19,7 +19,7 @@ const REQUEST: AdminPermissionRequestRow = {
 };
 
 describe('PermissionRequestDetail identity', () => {
-  it('shows readable capability, requester, and scope names with muted id details', () => {
+  it('leads with requester and readable capability in a two-line header', () => {
     render(
       <PermissionRequestDetail
         request={REQUEST}
@@ -29,12 +29,17 @@ describe('PermissionRequestDetail identity', () => {
       />,
     );
 
-    expect(screen.getAllByText('finding.manage').length).toBeGreaterThan(0);
+    expect(screen.getByText('김하나 · Finding 관리')).toBeInTheDocument();
+    expect(screen.getByText('finding.manage')).toHaveClass('font-mono', 'text-text-muted');
     expect(screen.getByText('김하나')).toBeInTheDocument();
     expect(screen.getByText('Billing Ops')).toBeInTheDocument();
-    expect(screen.getByText('10000000')).toHaveClass('text-text-muted');
+    expect(screen.getByText('10000000').closest('header')).toBeNull();
+    expect(screen.getByText('10000000')).toHaveClass('font-mono', 'text-xs', 'text-text-muted');
     expect(screen.getByText('20000000')).toHaveClass('text-text-muted');
     expect(screen.queryByText('30000000')).not.toBeInTheDocument();
+
+    const header = screen.getByText('Permission Request').closest('header');
+    expect(header?.querySelectorAll('p')).toHaveLength(2);
   });
 
   it('uses safe labels when actor and Managed System names are unavailable', () => {

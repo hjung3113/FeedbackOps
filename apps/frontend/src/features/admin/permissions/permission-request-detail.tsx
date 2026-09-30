@@ -1,6 +1,7 @@
 import { Button, FieldRow, OutlineBadge, PanelSectionTitle } from '@fops/ui';
 
 import type { AdminPermissionRequestRow } from '@/lib/api';
+import { getCapabilityDisplayLabel } from '@/lib/copy/capabilities';
 import { shortId } from '@/lib/identity';
 
 import { PermissionRequestDecisionForm } from './permission-request-decision-form.js';
@@ -28,8 +29,11 @@ export function PermissionRequestDetail({
       <header className="flex h-[50px] items-center gap-3 border-b border-border-subtle px-6">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-text-muted">Permission Request</p>
-          <p className="text-sm font-medium text-text-primary">{request.requested_capability}</p>
-          <p className="font-mono text-xs text-text-muted">{shortId(request.id)}</p>
+          <p className="truncate text-sm font-medium text-text-primary">
+            {actorName ?? '알 수 없는 사용자'}
+            {' · '}
+            {getCapabilityDisplayLabel(request.requested_capability)}
+          </p>
         </div>
         <OutlineBadge>{permissionRequestStatusLabel[request.status]}</OutlineBadge>
         <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="패널 닫기">
@@ -48,8 +52,16 @@ export function PermissionRequestDetail({
                 </span>
               </span>
             </FieldRow>
+            <FieldRow label="요청 ID" className="px-0">
+              <span className="font-mono text-xs text-text-muted">{shortId(request.id)}</span>
+            </FieldRow>
             <FieldRow label="요청 권한" className="px-0">
-              <span>{request.requested_capability}</span>
+              <span className="flex flex-col gap-0.5">
+                <span>{getCapabilityDisplayLabel(request.requested_capability)}</span>
+                <span className="font-mono text-xs text-text-muted">
+                  {request.requested_capability}
+                </span>
+              </span>
             </FieldRow>
             <FieldRow label="범위" className="px-0">
               <span className="flex flex-col gap-0.5">
