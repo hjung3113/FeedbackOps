@@ -2,6 +2,7 @@ import { convertTaskRequest, fetchPermissionCheck } from '@/lib/api';
 import { fetchAnalyticsAreas } from '@/lib/api/analytics-areas';
 import { listMilestones } from '@/lib/api/milestones';
 import { ApiError } from '@/lib/api/types';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import {
   type MilestoneDto,
   type TaskDto,
@@ -10,7 +11,6 @@ import {
   convertTaskRequestRequestSchema,
 } from '@fops/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { invalidateNavCounts } from '@/lib/query/navCounts';
 import * as React from 'react';
 import { toast } from 'sonner';
 

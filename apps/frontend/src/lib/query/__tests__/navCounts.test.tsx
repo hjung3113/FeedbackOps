@@ -1,6 +1,6 @@
-import type { FormEvent, PropsWithChildren } from 'react';
 import { QueryClient, QueryClientProvider, type UseMutationResult } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import type { FormEvent, PropsWithChildren } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiClientMock = vi.hoisted(() => vi.fn());
@@ -27,31 +27,19 @@ vi.mock('@/features/voc/lib/triage-transport', async (importOriginal) => ({
   patchVocTriage: triageMutationMock,
 }));
 
-import {
-  useCreateFindingFromVocMutation,
-} from '@/features/cross-system/create-finding/useCreateFindingFromVocMutation';
+import { useCreateFindingFromVocMutation } from '@/features/cross-system/create-finding/useCreateFindingFromVocMutation';
 import { useFindingStatusMutation } from '@/features/findings/hooks/useFindingStatusMutation';
 import { useRequestTaskFromFinding } from '@/features/findings/hooks/useRequestTaskFromFinding';
-import {
-  useCreateFindingFromSurveyResponse,
-} from '@/features/surveys/hooks/useCreateFindingFromSurveyResponse';
+import { useCreateFindingFromSurveyResponse } from '@/features/surveys/hooks/useCreateFindingFromSurveyResponse';
 import { useCreateSurvey } from '@/features/surveys/hooks/useSurveys';
-import {
-  useTaskRequestConversion,
-} from '@/features/tasks/routes/task-requests/useTaskRequestConversion';
-import {
-  useTaskRequestDecision,
-} from '@/features/tasks/routes/task-requests/useTaskRequestDecision';
+import { useTaskRequestConversion } from '@/features/tasks/routes/task-requests/useTaskRequestConversion';
+import { useTaskRequestDecision } from '@/features/tasks/routes/task-requests/useTaskRequestDecision';
 import { useTaskRequestLink } from '@/features/tasks/routes/task-requests/useTaskRequestLink';
 import { useAddClusterMember } from '@/features/voc-cluster/hooks/useAddClusterMember';
 import { useConfirmCluster } from '@/features/voc-cluster/hooks/useConfirmCluster';
-import {
-  useCreateFindingFromCluster,
-} from '@/features/voc-cluster/hooks/useCreateFindingFromCluster';
+import { useCreateFindingFromCluster } from '@/features/voc-cluster/hooks/useCreateFindingFromCluster';
 import { useCreateVocCluster } from '@/features/voc-cluster/hooks/useCreateVocCluster';
-import {
-  useLinkExistingFindingToVocCluster,
-} from '@/features/voc-cluster/hooks/useLinkExistingFindingToVocCluster';
+import { useLinkExistingFindingToVocCluster } from '@/features/voc-cluster/hooks/useLinkExistingFindingToVocCluster';
 import { useRemoveClusterMember } from '@/features/voc-cluster/hooks/useRemoveClusterMember';
 import { useRequestTaskFromCluster } from '@/features/voc-cluster/hooks/useRequestTaskFromCluster';
 import { useConfirmVocRecommendation } from '@/features/voc/hooks/useConfirmVocRecommendation';
@@ -275,9 +263,9 @@ describe('nav count mutation invalidation', () => {
 
       act(() => result.current.approve());
       await act(async () => {
-        result.current.submitDecision(
-          { preventDefault: () => undefined } as unknown as FormEvent<HTMLFormElement>,
-        );
+        result.current.submitDecision({
+          preventDefault: () => undefined,
+        } as unknown as FormEvent<HTMLFormElement>);
       });
       await waitFor(() => {
         if (fails) expect(result.current.error).not.toBeNull();
@@ -308,9 +296,9 @@ describe('nav count mutation invalidation', () => {
       );
 
       act(() => {
-        result.current.submit(
-          { preventDefault: () => undefined } as unknown as FormEvent<HTMLFormElement>,
-        );
+        result.current.submit({
+          preventDefault: () => undefined,
+        } as unknown as FormEvent<HTMLFormElement>);
       });
       await waitFor(() => {
         if (fails) expect(result.current.error).not.toBeNull();
@@ -321,34 +309,31 @@ describe('nav count mutation invalidation', () => {
     },
   );
 
-  it.each(mutationOutcomes)(
-    'Task Request link refreshes counts on $outcome',
-    async ({ fails }) => {
-      if (fails) taskRequestMutationMock.mockRejectedValue(new Error('link failed'));
-      const queryClient = createQueryClient();
-      const { result } = renderHook(
-        () =>
-          useTaskRequestLink({
-            item: {
-              id: 'request-1',
-              status: 'approved',
-              requester_actor_id: 'requester-1',
-              primary_managed_system_id: 'managed-system-1',
-            } as never,
-            currentRole: 'admin',
-          }),
-        { wrapper: createWrapper(queryClient) },
-      );
+  it.each(mutationOutcomes)('Task Request link refreshes counts on $outcome', async ({ fails }) => {
+    if (fails) taskRequestMutationMock.mockRejectedValue(new Error('link failed'));
+    const queryClient = createQueryClient();
+    const { result } = renderHook(
+      () =>
+        useTaskRequestLink({
+          item: {
+            id: 'request-1',
+            status: 'approved',
+            requester_actor_id: 'requester-1',
+            primary_managed_system_id: 'managed-system-1',
+          } as never,
+          currentRole: 'admin',
+        }),
+      { wrapper: createWrapper(queryClient) },
+    );
 
-      act(() => result.current.link('task-1'));
-      await waitFor(() => {
-        if (fails) expect(result.current.error).not.toBeNull();
-        else expect(result.current.result).not.toBeNull();
-      });
+    act(() => result.current.link('task-1'));
+    await waitFor(() => {
+      if (fails) expect(result.current.error).not.toBeNull();
+      else expect(result.current.result).not.toBeNull();
+    });
 
-      expect(isScopedNavCountInvalidated(queryClient, 'managed-system-1')).toBe(!fails);
-    },
-  );
+    expect(isScopedNavCountInvalidated(queryClient, 'managed-system-1')).toBe(!fails);
+  });
 
   it('invalidates every managed-system scope under the shared key root', () => {
     const queryClient = createQueryClient();

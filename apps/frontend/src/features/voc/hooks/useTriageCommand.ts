@@ -12,6 +12,7 @@
 //   - compensation restores the row only after the compensating PATCH
 //     resolves.
 
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { VocListItem } from '@fops/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
@@ -27,7 +28,6 @@ import { buildTriageSnapshot } from '../lib/triage-payload';
 import { patchVocTriage } from '../lib/triage-transport';
 import type { TriageInput, TriageOutput, TriageSnapshot } from '../lib/triage-types';
 import { type CallToken, useUndoableMutation } from './useUndoableMutation';
-import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 export interface UseTriageCommandArgs {
   voc: VocListItem;

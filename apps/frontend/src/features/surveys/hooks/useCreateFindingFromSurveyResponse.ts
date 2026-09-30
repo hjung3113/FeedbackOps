@@ -1,8 +1,8 @@
 import { type ApiError, apiClient } from '@/lib/api';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { CreateFindingFromSurveyResponseRequest, FindingDto } from '@fops/shared';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
 import { surveyKeys } from './useSurveys';
-import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 export interface CreateFindingFromSurveyResponseVariables {
   responseId: string;

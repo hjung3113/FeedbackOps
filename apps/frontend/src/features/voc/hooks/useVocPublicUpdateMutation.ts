@@ -18,10 +18,10 @@
 
 import { apiClient } from '@/lib/api/client';
 import type { ApiError } from '@/lib/api/types';
+import { invalidateNavCounts } from '@/lib/query/navCounts';
 import type { ReporterFacingStatusEnum, VocDetailEnvelope } from '@fops/shared';
 import type { TipTapDoc } from '@fops/ui';
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invalidateNavCounts } from '@/lib/query/navCounts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
