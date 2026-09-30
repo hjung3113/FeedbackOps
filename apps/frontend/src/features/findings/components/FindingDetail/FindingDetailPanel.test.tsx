@@ -153,9 +153,7 @@ describe('FindingDetailPanel', () => {
     expect(
       within(secondaryGroup).getByRole('button', { name: '기존 Evidence 연결' }),
     ).toBeVisible();
-    expect(
-      within(secondaryGroup).getByRole('button', { name: '조치 불필요 표시' }),
-    ).toBeVisible();
+    expect(within(secondaryGroup).getByRole('button', { name: '조치 불필요 표시' })).toBeVisible();
   });
 
   it('submits a Task Request from the inline draft card with the Finding contract fields', async () => {
