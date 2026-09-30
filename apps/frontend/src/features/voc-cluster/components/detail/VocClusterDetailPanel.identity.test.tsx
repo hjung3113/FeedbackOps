@@ -1,6 +1,6 @@
 import type { VocClusterDto } from '@fops/shared';
-import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const clusterState = vi.hoisted(() => ({
@@ -59,7 +59,7 @@ vi.mock('@/lib/cross-system/useWorkspaceActors', () => ({
 }));
 vi.mock('@/lib/auth/useMe', () => ({ useMe: () => ({ data: { actor: { role_level: 'user' } } }) }));
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  Link: ({ children }: { children: ReactNode }) => <a href="/">{children}</a>,
   useNavigate: () => vi.fn(),
 }));
 
