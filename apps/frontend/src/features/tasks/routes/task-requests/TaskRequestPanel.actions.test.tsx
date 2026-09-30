@@ -24,8 +24,8 @@ vi.mock('./useTaskRequestConversion', async (importOriginal) => ({
 }));
 vi.mock('./useTaskRequestLink', () => ({ useTaskRequestLink: useLink }));
 
-import { TaskRequestPanel } from './TaskRequestPanel';
 import { TASK_REQUEST_STATUS_LABELS as STATUS_LABELS } from '@/lib/copy/enum-labels';
+import { TaskRequestPanel } from './TaskRequestPanel';
 import { formatDate } from './predicates';
 
 const request: TaskRequestDto = {
@@ -228,9 +228,9 @@ describe('TaskRequestPanel next actions', () => {
       .filter((button) => button.classList.contains('bg-accent-primary'));
 
     expect(primaryActions).toEqual([submit]);
-    expect(
-      within(decisionSection).getAllByRole('button', { name: 'Task로 전환' })[0],
-    ).toHaveClass('bg-surface-raised');
+    expect(within(decisionSection).getAllByRole('button', { name: 'Task로 전환' })[0]).toHaveClass(
+      'bg-surface-raised',
+    );
   });
 
   it.each([
