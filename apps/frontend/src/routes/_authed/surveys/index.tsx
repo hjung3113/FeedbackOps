@@ -9,6 +9,7 @@ import { useManagedSystemNamesResult } from '@/lib/cross-system/useManagedSystem
 import { useWorkspaceActors } from '@/lib/cross-system/useWorkspaceActors';
 import { formatRecordDocumentTitle, useDocumentTitle } from '@/lib/router/document-title';
 import { parseRouteSearch } from '@/lib/router/search';
+import { surveyTypeSchema } from '@fops/shared';
 import {
   Button,
   Dialog,
@@ -28,7 +29,6 @@ import { ListShell } from '@fops/ui';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import * as React from 'react';
-import { surveyTypeSchema } from '@fops/shared';
 import { z } from 'zod';
 
 // Selection + Managed System scope are URL state (docs/frontend/routes-and-layout.md

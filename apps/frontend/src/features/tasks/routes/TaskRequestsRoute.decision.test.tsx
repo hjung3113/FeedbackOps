@@ -184,9 +184,7 @@ describe('TaskRequestsRoute decision dialogs', () => {
     await openDialog('승인', 'Task Request 승인');
     fireEvent.click(screen.getByTestId('task-request-decision-cancel'));
     await waitFor(() =>
-      expect(
-        screen.queryByRole('dialog', { name: 'Task Request 승인' }),
-      ).not.toBeInTheDocument(),
+      expect(screen.queryByRole('dialog', { name: 'Task Request 승인' })).not.toBeInTheDocument(),
     );
     expect(api.approveTaskRequest).not.toHaveBeenCalled();
   });

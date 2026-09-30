@@ -382,7 +382,9 @@ describe('TaskRequestsRoute conversion milestone picker', () => {
     const user = userEvent.setup();
     await user.selectOptions(select, within(select).getByRole('option', { name: '없음' }));
     expect(select).toHaveValue('');
-    expect(within(select).queryByRole('option', { name: '확인할 수 없음' })).not.toBeInTheDocument();
+    expect(
+      within(select).queryByRole('option', { name: '확인할 수 없음' }),
+    ).not.toBeInTheDocument();
 
     // The deliberate None converts with an explicit null payload.
     const callsBeforeSubmit = api.convertTaskRequest.mock.calls.length;

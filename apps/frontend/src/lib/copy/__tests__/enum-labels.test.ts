@@ -1,16 +1,4 @@
 import {
-  ENTITY_LINK_RELATION_LABELS,
-  FINDING_SEVERITY_LABELS,
-  FINDING_STATUS_LABELS,
-  SURVEY_QUESTION_KIND_LABELS,
-  SURVEY_RESULT_KIND_LABELS,
-  SURVEY_TYPE_LABELS,
-  TASK_PRIORITY_LABELS,
-  TASK_REQUEST_STATUS_LABELS,
-  TASK_STATUS_LABELS,
-  TRIAGE_STATE_LABELS,
-} from '../enum-labels';
-import {
   entityLinkRelationTypeSchema,
   findingSeveritySchema,
   findingStatusSchema,
@@ -22,6 +10,18 @@ import {
   triageStateEnumSchema,
 } from '@fops/shared';
 import { describe, expect, it } from 'vitest';
+import {
+  ENTITY_LINK_RELATION_LABELS,
+  FINDING_SEVERITY_LABELS,
+  FINDING_STATUS_LABELS,
+  SURVEY_QUESTION_KIND_LABELS,
+  SURVEY_RESULT_KIND_LABELS,
+  SURVEY_TYPE_LABELS,
+  TASK_PRIORITY_LABELS,
+  TASK_REQUEST_STATUS_LABELS,
+  TASK_STATUS_LABELS,
+  TRIAGE_STATE_LABELS,
+} from '../enum-labels';
 
 function expectCompleteLabels<T extends string>(values: readonly T[], labels: Record<T, string>) {
   expect(Object.keys(labels).sort()).toEqual([...values].sort());

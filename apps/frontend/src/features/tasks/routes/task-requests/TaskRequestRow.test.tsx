@@ -1,5 +1,5 @@
 import { TASK_REQUEST_STATUS_LABELS } from '@/lib/copy/enum-labels';
-import { taskRequestStatusSchema, type TaskRequestDto } from '@fops/shared';
+import { type TaskRequestDto, taskRequestStatusSchema } from '@fops/shared';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
