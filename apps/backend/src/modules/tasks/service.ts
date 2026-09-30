@@ -13,18 +13,22 @@ import {
   type TaskDto,
   registeredEntityLinkPairSchema,
 } from '@fops/shared';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { type PgBoss, fromDrizzle } from 'pg-boss';
 import { z } from 'zod';
 
 import type { Db } from '../../db/client.js';
-import { actors } from '../../db/schema/core.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
 import { encodeCommentCursor } from '../../lib/pg-timestamp.js';
+import {
+  commentMentionErrors,
+  findRichContentNodes,
+  validateRichContentMentions,
+} from '../../lib/rich-content/mentions.js';
 import { sanitizeRichContentOrThrow } from '../../lib/rich-content/sanitize-or-throw.js';
 import { assertActiveAnalyticsAreaForManagedSystem } from '../analytics-areas/index.js';
-import { findWorkspaceActor } from '../auth/index.js';
+import { findWorkspaceActor, findWorkspaceActorIds } from '../auth/index.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
 import {
@@ -148,67 +152,17 @@ function sanitizeCommentBody(doc: unknown): unknown {
   });
 }
 
-interface MentionNode {
-  attrs?: Record<string, unknown>;
-}
-
-function findNodesOfType(doc: unknown, type: string): MentionNode[] {
-  const results: MentionNode[] = [];
-  const stack: MentionNode[] = [doc as MentionNode];
-  while (stack.length > 0) {
-    const node = stack.pop() as MentionNode & { type?: string; content?: unknown[] };
-    if (!node || typeof node !== 'object') continue;
-    if (node.type === type) results.push(node);
-    if (Array.isArray(node.content)) {
-      for (const child of node.content) stack.push(child as MentionNode);
-    }
-  }
-  return results;
-}
-
-function dedupe(values: string[]): string[] {
-  return [...new Set(values)];
-}
-
-function setsEqual(left: Set<string>, right: Set<string>): boolean {
-  if (left.size !== right.size) return false;
-  for (const value of left) if (!right.has(value)) return false;
-  return true;
-}
-
 async function validateCommentMentions(
   tx: Tx,
   workspaceId: string,
   sanitizedBody: unknown,
   mentions: string[] | undefined,
 ): Promise<string[]> {
-  const mentionNodes = findNodesOfType(sanitizedBody, 'mention');
-  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-  for (const node of mentionNodes) {
-    const actorId = node.attrs?.actor_id;
-    if (typeof actorId !== 'string' || !uuidRegex.test(actorId)) {
-      throw new HttpError('validation.failed', 'mention node attrs.actor_id must be a valid UUID', {
-        fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }],
-      });
-    }
-  }
+  const mentionIds = validateRichContentMentions(sanitizedBody, mentions, commentMentionErrors);
 
-  const bodyMentionIds = dedupe(mentionNodes.map((node) => node.attrs?.actor_id as string));
-  const requestMentionIds = dedupe(mentions ?? []);
-  if (!setsEqual(new Set(bodyMentionIds), new Set(requestMentionIds))) {
-    throw new HttpError(
-      'validation.failed',
-      'mentions[] must exactly match the set of actor_ids referenced by mention nodes in body_rich_content',
-      { fields: [{ path: ['mentions'], code: 'invalid' }] },
-    );
-  }
-
-  if (requestMentionIds.length > 0) {
-    const foundRows = await tx
-      .select({ id: actors.id })
-      .from(actors)
-      .where(and(eq(actors.workspaceId, workspaceId), inArray(actors.id, requestMentionIds)));
-    if (foundRows.length !== requestMentionIds.length) {
+  if (mentionIds.length > 0) {
+    const foundActorIds = await findWorkspaceActorIds(tx, workspaceId, mentionIds);
+    if (foundActorIds.size !== mentionIds.length) {
       throw new HttpError(
         'validation.failed',
         'one or more mention actor_ids do not belong to this workspace',
@@ -216,7 +170,7 @@ async function validateCommentMentions(
       );
     }
   }
-  return requestMentionIds;
+  return mentionIds;
 }
 
 function statusChangeBody(reason: string | undefined): unknown {
@@ -527,7 +481,7 @@ export function createTasksService(deps: TasksServiceDeps) {
             sanitizedBody,
             args.input.mentions,
           );
-          if (findNodesOfType(sanitizedBody, 'attachmentRef').length > 0) {
+          if (findRichContentNodes(sanitizedBody, 'attachmentRef').length > 0) {
             throw new HttpError('validation.failed', 'attachments are not supported for comments', {
               fields: [{ path: ['body_rich_content'], code: 'attachment_not_supported' }],
             });

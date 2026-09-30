@@ -14,8 +14,6 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { and, eq, inArray } from 'drizzle-orm';
-
 import type {
   InternalCommentRequest,
   PublicUpdateRequest,
@@ -23,15 +21,18 @@ import type {
   VocDetailEnvelope,
 } from '@fops/shared';
 import type { Db } from '../../db/client.js';
-import { actors } from '../../db/schema/core.js';
 import type { Tx } from '../../db/tx.js';
 import { HttpError } from '../../lib/errors.js';
+import {
+  commentMentionErrors,
+  validateRichContentMentions,
+} from '../../lib/rich-content/mentions.js';
 import {
   LinkAttachmentsRejected,
   linkAttachments,
   linkRejectedFields,
 } from '../attachments/index.js';
-import { listWorkspaceAdminActorIds } from '../auth/index.js';
+import { findWorkspaceActorIds, listWorkspaceAdminActorIds } from '../auth/index.js';
 import type { RoleLevel } from '../auth/session-service.js';
 import type { AuditService } from '../core/audit/audit-service.js';
 import type { IdempotencyService } from '../core/idempotency/idempotency-service.js';
@@ -39,14 +40,11 @@ import type { NotificationNotifier } from '../notifications/index.js';
 import type { CheckService } from '../permissions/check-service.js';
 import {
   checkTriageCapability,
-  dedupe,
-  findNodesOfType,
   isTriggerActorMismatchError,
   lockVocForConversationCommand,
   mapTriageDenyToHttpError,
   runConversationCommand,
   sanitizeOrThrow,
-  setsEqual,
 } from './conversation/frame.js';
 import type { VocReadService } from './read-service.js';
 import {
@@ -448,44 +446,17 @@ export function createConversationService(deps: {
     // 3. Sanitize body.
     const sanitizedBody = sanitizeOrThrow('internal-comment', input.body_rich_content);
 
-    // 4. Validate mentions[] — set-equality with body mention nodes (codex cycle-1 fix).
-    //    Extract deduped actor_ids from `mention` nodes in sanitized doc.
-    //    Reject malformed mention nodes (missing / non-string / non-UUID attrs.actor_id)
-    //    rather than silently dropping them — codex cycle-2 fix.
-    const mentionNodes = findNodesOfType(sanitizedBody, 'mention');
-    const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    for (const n of mentionNodes) {
-      const id = n.attrs?.actor_id;
-      if (typeof id !== 'string' || !UUID_RE.test(id)) {
-        throw new HttpError(
-          'validation.failed',
-          'mention node attrs.actor_id must be a valid UUID',
-          { fields: [{ path: ['body_rich_content'], code: 'invalid_mention_actor_id' }] },
-        );
-      }
-    }
-    const bodyMentionIds = dedupe(mentionNodes.map((n) => n.attrs!.actor_id as string));
-
-    const requestMentionIds = dedupe(input.mentions ?? []);
-
-    // Set-equality: both sides must contain the same IDs.
-    if (!setsEqual(new Set(bodyMentionIds), new Set(requestMentionIds))) {
-      throw new HttpError(
-        'validation.failed',
-        'mentions[] must exactly match the set of actor_ids referenced by mention nodes in body_rich_content',
-        { fields: [{ path: ['mentions'], code: 'invalid' }] },
-      );
-    }
+    // 4. Validate mentions[] against the sanitized body, then verify workspace membership.
+    const mentionIds = validateRichContentMentions(
+      sanitizedBody,
+      input.mentions,
+      commentMentionErrors,
+    );
 
     // 5. Verify every mentioned actor_id resolves to an actor in the same workspace.
-    if (requestMentionIds.length > 0) {
-      const foundRows = await tx
-        .select({ id: actors.id })
-        .from(actors)
-        .where(
-          and(eq(actors.workspaceId, actor.workspace_id), inArray(actors.id, requestMentionIds)),
-        );
-      if (foundRows.length !== requestMentionIds.length) {
+    if (mentionIds.length > 0) {
+      const foundActorIds = await findWorkspaceActorIds(tx, actor.workspace_id, mentionIds);
+      if (foundActorIds.size !== mentionIds.length) {
         throw new HttpError(
           'validation.failed',
           'one or more mention actor_ids do not belong to this workspace',
@@ -533,7 +504,7 @@ export function createConversationService(deps: {
         voc_id: vocId,
         internal_comment_id: inserted.id,
         actor_id: actor.actor_id,
-        mentions: requestMentionIds,
+        mentions: mentionIds,
         attachment_ids: input.attachment_ids ?? [],
       },
     });

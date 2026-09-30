@@ -46,36 +46,6 @@ export function runConversationCommand<TBody>(args: {
   return runIdempotentCommand({ ...args, status: 201 });
 }
 
-// ── Internal TipTap doc-walking helper ────────────────────────────────────────
-
-interface TipTapNode {
-  type: string;
-  content?: TipTapNode[];
-  attrs?: Record<string, unknown>;
-}
-
-/**
- * Walks a TipTap doc and returns all nodes of the given type.
- * No existing helper in lib/rich-content/ — defined locally per AGENTS.md
- * "smallest change" rule.
- */
-export function findNodesOfType(doc: unknown, type: string): TipTapNode[] {
-  // Iterative walk with explicit stack (cycle-2 M3 fix — recursion blew V8
-  // default frame budget on deeply nested adversarial docs even at 50 KB
-  // payload).
-  const results: TipTapNode[] = [];
-  const stack: TipTapNode[] = [doc as TipTapNode];
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    if (!node || typeof node !== 'object') continue;
-    if (node.type === type) results.push(node);
-    if (Array.isArray(node.content)) {
-      for (const child of node.content) stack.push(child);
-    }
-  }
-  return results;
-}
-
 // ── Permission helper (reused from service.ts pattern) ────────────────────────
 
 /**
@@ -133,20 +103,6 @@ export function sanitizeOrThrow(
     doc,
     fieldPath: ['body_rich_content'],
   });
-}
-
-// ── Private helpers ───────────────────────────────────────────────────────────
-
-export function dedupe<T>(arr: T[]): T[] {
-  return [...new Set(arr)];
-}
-
-export function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
-  if (a.size !== b.size) return false;
-  for (const item of a) {
-    if (!b.has(item)) return false;
-  }
-  return true;
 }
 
 /**
