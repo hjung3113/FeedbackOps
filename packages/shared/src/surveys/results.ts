@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { surveyQuestionKindSchema } from './dto.js';
 
 const nonnegativeCountSchema = z.number().int().nonnegative();
 
@@ -60,7 +59,7 @@ const ratingSurveyQuestionResultSchema = z
   .object({
     question_id: z.string().uuid(),
     visibility: z.literal('visible'),
-    kind: z.literal(surveyQuestionKindSchema.enum.rating),
+    kind: z.literal('rating'),
     answer_count: nonnegativeCountSchema,
     distribution: z
       .object({
@@ -76,7 +75,7 @@ const textSurveyQuestionResultSchema = z
   .object({
     question_id: z.string().uuid(),
     visibility: z.literal('visible'),
-    kind: z.literal(surveyQuestionKindSchema.enum.text),
+    kind: z.literal('text'),
     answer_count: nonnegativeCountSchema,
     distribution: z.null(),
     // The service keeps returning [] until approved-excerpt storage lands.
